@@ -14,52 +14,64 @@ export interface CabType {
 
 export const cabTypes: CabType[] = [
   {
-    id: 'hatchback',
-    name: 'Hatchback',
-    description: 'Economic and fuel-efficient option for city travel',
-    image: '/hatchback.png',
-    price: 1199,
-    pricePerKm: 10,
-    capacity: 4,
-    luggage: 2,
-    ac: true,
-    features: ['AC', 'Water Bottle', 'GPS Navigation', 'Clean Hygiene', 'Sanitized']
-  },
-  {
     id: 'sedan',
     name: 'Sedan',
-    description: 'Comfort and space for business travel or longer trips',
+    description: 'Comfortable sedan for up to 4 people',
     image: '/sedan.png',
-    price: 1399,
+    price: 399,
     pricePerKm: 12,
     capacity: 4,
     luggage: 3,
     ac: true,
-    features: ['AC', 'Water Bottle', 'GPS Navigation', 'Clean Hygiene', 'Sanitized', 'WiFi']
+    features: ['AC', 'Sanitized', 'Door Step Pickup', 'Clean Hygiene']
   },
   {
     id: 'suv',
     name: 'SUV',
-    description: 'Spacious option for groups or travel with more luggage',
+    description: 'Spacious SUV for up to 6 people',
     image: '/suv.png',
-    price: 1899,
+    price: 599,
     pricePerKm: 15,
     capacity: 6,
     luggage: 4,
     ac: true,
-    features: ['AC', 'Water Bottle', 'GPS Navigation', 'Clean Hygiene', 'Sanitized', 'WiFi', 'Entertainment']
+    features: ['AC', 'Sanitized', 'Door Step Pickup', 'Clean Hygiene', 'Entertainment']
+  },
+  {
+    id: 'innova',
+    name: 'Innova',
+    description: 'Premium Innova for comfortable journey',
+    image: '/innova.png',
+    price: 799,
+    pricePerKm: 18,
+    capacity: 6,
+    luggage: 4,
+    ac: true,
+    features: ['AC', 'Sanitized', 'Door Step Pickup', 'Clean Hygiene', 'Entertainment', 'Mineral Water']
+  },
+  {
+    id: 'tempo',
+    name: 'Tempo Traveller',
+    description: 'Spacious traveller for large groups',
+    image: '/tempo.png',
+    price: 1299,
+    pricePerKm: 22,
+    capacity: 12,
+    luggage: 8,
+    ac: true,
+    features: ['AC', 'Sanitized', 'Door Step Pickup', 'Clean Hygiene', 'Entertainment', 'Mineral Water', 'Extra Legroom']
   },
   {
     id: 'luxury',
     name: 'Luxury',
     description: 'Premium vehicles for a sophisticated travel experience',
     image: '/luxury.png',
-    price: 2899,
-    pricePerKm: 20,
+    price: 1899,
+    pricePerKm: 28,
     capacity: 4,
     luggage: 3,
     ac: true,
-    features: ['AC', 'Water Bottle', 'GPS Navigation', 'Clean Hygiene', 'Sanitized', 'WiFi', 'Entertainment', 'Premium Service']
+    features: ['AC', 'Sanitized', 'Door Step Pickup', 'Clean Hygiene', 'Entertainment', 'Premium Service', 'Mineral Water', 'Professional Driver']
   }
 ];
 
@@ -74,15 +86,15 @@ export interface PromoCode {
 
 export const promoCodes: PromoCode[] = [
   {
-    code: 'FIRSTRIDE',
-    description: 'Save 25% on your first ride',
-    discount: 25,
-    maxDiscount: 500,
+    code: 'CABFIRST',
+    description: 'Save 15% on your first ride',
+    discount: 15,
+    maxDiscount: 300,
     validUntil: new Date('2023-12-31')
   },
   {
-    code: 'WEEKEND10',
-    description: 'Flat 10% off on weekend bookings',
+    code: 'MMTCAB',
+    description: 'Flat ₹200 off on weekend bookings',
     discount: 10,
     minBookingAmount: 1000,
     validUntil: new Date('2023-12-31')
