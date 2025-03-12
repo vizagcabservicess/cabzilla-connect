@@ -1,38 +1,78 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
 import { DateTimePicker } from "@/components/DateTimePicker";
 import { CabOptions } from "@/components/CabOptions";
-import { Location } from "@/lib/locationData";
-import { CabType, cabTypes } from "@/lib/cabData";
-import { CarTaxiFront } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Location, vizagLocations, apDestinations, getDistanceBetweenLocations, getEstimatedTravelTime, formatTravelTime } from "@/lib/locationData";
+import { CabType, cabTypes, calculateFare } from "@/lib/cabData";
+import { CarTaxiFront, Clock } from "lucide-react";
+import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
+import { Input } from "@/components/ui/input";
 
 type TripType = "outstation" | "local" | "airport";
 
 const CabsPage = () => {
   const navigate = useNavigate();
+  const { tripType: urlTripType } = useParams<{ tripType?: string }>();
+  
+  const [tripType, setTripType] = useState<TripType>(
+    (urlTripType as TripType) || "outstation"
+  );
+  
   const [pickup, setPickup] = useState<Location | null>(null);
   const [dropoff, setDropoff] = useState<Location | null>(null);
   const [pickupDate, setPickupDate] = useState<Date | undefined>(new Date());
   const [selectedCab, setSelectedCab] = useState<CabType | null>(null);
-  const [tripType, setTripType] = useState<TripType>("outstation");
-  
-  // Default distance - in a real app, this would be calculated based on pickup and dropoff
-  const distance = 18; // 18 km
+  const [distance, setDistance] = useState<number>(0);
+  const [travelTime, setTravelTime] = useState<number>(0);
+  const [totalPrice, setTotalPrice] = useState<number>(0);
   
   const handleTripTypeChange = (type: TripType) => {
     setTripType(type);
-    // Reset form when trip type changes
+    navigate(`/cabs/${type}`);
     setSelectedCab(null);
+    
+    if (type === "airport") {
+      const airport = vizagLocations.find(loc => loc.id === 'vizag_airport');
+      setPickup(airport || null);
+    } else if (type === "local") {
+      setPickup(null);
+      setDropoff(null);
+    }
   };
+  
+  useEffect(() => {
+    if (pickup && dropoff) {
+      const calculatedDistance = getDistanceBetweenLocations(pickup.id, dropoff.id);
+      setDistance(calculatedDistance);
+      
+      const estimatedTime = getEstimatedTravelTime(calculatedDistance);
+      setTravelTime(estimatedTime);
+      
+      if (selectedCab) {
+        const fare = calculateFare(selectedCab, calculatedDistance, tripType);
+        setTotalPrice(fare);
+      }
+    } else {
+      setDistance(0);
+      setTravelTime(0);
+      setTotalPrice(0);
+    }
+  }, [pickup, dropoff, selectedCab, tripType]);
+  
+  useEffect(() => {
+    if (selectedCab && distance > 0) {
+      const fare = calculateFare(selectedCab, distance, tripType);
+      setTotalPrice(fare);
+    } else {
+      setTotalPrice(0);
+    }
+  }, [selectedCab, distance, tripType]);
   
   const handleBookNow = () => {
     if (pickup && dropoff && pickupDate && selectedCab) {
-      // In a real app, you would save the booking details to state/context
       const bookingDetails = {
         tripType,
         pickup,
@@ -40,15 +80,14 @@ const CabsPage = () => {
         pickupDate,
         selectedCab,
         distance,
-        totalPrice: selectedCab.price + (distance * selectedCab.pricePerKm)
+        travelTime,
+        totalPrice
       };
       
-      // Save booking details to session storage
       sessionStorage.setItem("bookingDetails", JSON.stringify(bookingDetails));
       
       navigate("/booking-confirmation");
     } else {
-      // Show validation errors
       toast({
         title: "Missing information",
         description: "Please fill all the required fields",
@@ -61,23 +100,22 @@ const CabsPage = () => {
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       
-      {/* Page Header with Banner */}
       <div className="bg-blue-600 text-white">
         <div className="container mx-auto px-4 py-8">
           <div className="max-w-5xl mx-auto">
-            <h1 className="text-2xl md:text-3xl font-bold mb-2">Book Outstation and Local Cabs</h1>
+            <h1 className="text-2xl md:text-3xl font-bold mb-2">Book Cabs in Visakhapatnam</h1>
             <p className="mb-0 text-blue-100">
-              AC cabs for intercity travel, local & airport transfers with safety assured
+              {tripType === "outstation" && "Outstation cabs for intercity travel across Andhra Pradesh"}
+              {tripType === "local" && "Local cabs for travel within Visakhapatnam"}
+              {tripType === "airport" && "Airport transfers to and from Visakhapatnam International Airport"}
             </p>
           </div>
         </div>
       </div>
       
-      {/* Main Content */}
       <div className="container mx-auto px-4 py-6">
         <div className="max-w-5xl mx-auto">
           <div className="bg-white rounded-lg shadow-md overflow-hidden">
-            {/* Booking Form Header */}
             <div className="bg-blue-50 p-4 border-b border-blue-100">
               <div className="flex space-x-6">
                 <label className="relative inline-flex items-center cursor-pointer">
@@ -118,21 +156,24 @@ const CabsPage = () => {
               </div>
             </div>
             
-            {/* Form Inputs */}
             <div className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <LocationInput 
                   label="PICKUP LOCATION" 
-                  placeholder="Enter pickup location" 
+                  placeholder={tripType === "airport" ? "Visakhapatnam Airport (fixed)" : "Enter pickup location in Visakhapatnam"} 
                   value={pickup} 
-                  onChange={setPickup} 
+                  onChange={setPickup}
+                  isPickupLocation={true}
+                  readOnly={tripType === "airport"}
+                  className={tripType === "airport" ? "opacity-75" : ""}
                 />
                 
                 <LocationInput 
                   label="DROP LOCATION" 
-                  placeholder="Enter drop location" 
+                  placeholder={tripType === "local" ? "Select location in Visakhapatnam" : "Select destination in Andhra Pradesh"} 
                   value={dropoff} 
-                  onChange={setDropoff} 
+                  onChange={setDropoff}
+                  isPickupLocation={false} 
                 />
                 
                 <DateTimePicker 
@@ -142,8 +183,8 @@ const CabsPage = () => {
                   minDate={new Date()} 
                 />
                 
-                <div className="md:flex">
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 mt-6 md:mt-9 w-full flex">
+                <div className="md:flex items-center space-y-4 md:space-y-0 md:space-x-4">
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 mt-6 md:mt-9 flex-1 flex">
                     <div className="text-amber-500 mr-2">
                       <CarTaxiFront size={18} />
                     </div>
@@ -151,21 +192,45 @@ const CabsPage = () => {
                       <p>Est. one-way distance: <span className="font-semibold">{distance} km</span></p>
                     </div>
                   </div>
+                  
+                  {distance > 0 && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-md p-3 md:mt-9 flex-1 flex">
+                      <div className="text-blue-500 mr-2">
+                        <Clock size={18} />
+                      </div>
+                      <div className="text-xs text-gray-700">
+                        <p>Est. travel time: <span className="font-semibold">{formatTravelTime(travelTime)}</span></p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
               
-              {/* Divider */}
               <div className="border-t border-gray-200 my-6"></div>
               
-              {/* Cabs List */}
               <CabOptions 
                 cabTypes={cabTypes} 
                 selectedCab={selectedCab} 
                 onSelectCab={setSelectedCab} 
-                distance={distance} 
+                distance={distance}
+                tripType={tripType}
               />
               
-              {/* Book Now Button */}
+              {selectedCab && distance > 0 && (
+                <div className="mt-6 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-800">Fare Summary</h3>
+                      <p className="text-sm text-gray-600">All inclusive price</p>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-gray-900">₹{totalPrice}</div>
+                      <p className="text-xs text-gray-500">Includes taxes & toll charges</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               <div className="mt-8 flex justify-center">
                 <Button 
                   onClick={handleBookNow}
@@ -178,9 +243,8 @@ const CabsPage = () => {
             </div>
           </div>
           
-          {/* Why Book With Us Section */}
           <div className="mt-12">
-            <h2 className="text-xl font-bold text-gray-800 mb-6 text-center">Why Book Outstation Cabs with Us?</h2>
+            <h2 className="text-xl font-bold text-gray-800 mb-6 text-center">Why Book Cabs with Us?</h2>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="bg-white p-6 rounded-lg shadow-sm text-center">
@@ -224,7 +288,6 @@ const CabsPage = () => {
             </div>
           </div>
           
-          {/* FAQ Section */}
           <div className="mt-12 bg-white p-6 rounded-lg shadow-sm">
             <h2 className="text-xl font-bold text-gray-800 mb-4">Frequently Asked Questions</h2>
             
@@ -261,7 +324,6 @@ const CabsPage = () => {
         </div>
       </div>
       
-      {/* Footer */}
       <footer className="bg-gray-100 py-10 mt-16">
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row justify-between mb-8">

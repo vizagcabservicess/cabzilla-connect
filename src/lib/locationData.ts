@@ -1,4 +1,3 @@
-
 export interface Location {
   id: string;
   name: string;
@@ -6,9 +5,181 @@ export interface Location {
   state: string;
   type: 'airport' | 'train_station' | 'bus_station' | 'hotel' | 'landmark' | 'other';
   popularityScore: number;
+  isPickupLocation?: boolean;
+  isDropLocation?: boolean;
 }
 
+export const vizagLocations: Location[] = [
+  {
+    id: 'vizag_rtc',
+    name: 'Vizag RTC Complex',
+    city: 'Visakhapatnam',
+    state: 'Andhra Pradesh',
+    type: 'bus_station',
+    popularityScore: 95,
+    isPickupLocation: true
+  },
+  {
+    id: 'vizag_railway',
+    name: 'Visakhapatnam Railway Station',
+    city: 'Visakhapatnam',
+    state: 'Andhra Pradesh',
+    type: 'train_station',
+    popularityScore: 98,
+    isPickupLocation: true
+  },
+  {
+    id: 'vizag_airport',
+    name: 'Visakhapatnam International Airport',
+    city: 'Visakhapatnam',
+    state: 'Andhra Pradesh',
+    type: 'airport',
+    popularityScore: 99,
+    isPickupLocation: true
+  },
+  {
+    id: 'rk_beach',
+    name: 'RK Beach',
+    city: 'Visakhapatnam',
+    state: 'Andhra Pradesh',
+    type: 'landmark',
+    popularityScore: 92,
+    isPickupLocation: true
+  },
+  {
+    id: 'jagadamba_junction',
+    name: 'Jagadamba Junction',
+    city: 'Visakhapatnam',
+    state: 'Andhra Pradesh',
+    type: 'landmark',
+    popularityScore: 90,
+    isPickupLocation: true
+  },
+  {
+    id: 'mvp_colony',
+    name: 'MVP Colony',
+    city: 'Visakhapatnam',
+    state: 'Andhra Pradesh',
+    type: 'landmark',
+    popularityScore: 88,
+    isPickupLocation: true
+  },
+  {
+    id: 'gajuwaka',
+    name: 'Gajuwaka',
+    city: 'Visakhapatnam',
+    state: 'Andhra Pradesh',
+    type: 'landmark',
+    popularityScore: 85,
+    isPickupLocation: true
+  },
+  {
+    id: 'nad_junction',
+    name: 'NAD Junction',
+    city: 'Visakhapatnam',
+    state: 'Andhra Pradesh',
+    type: 'landmark',
+    popularityScore: 83,
+    isPickupLocation: true
+  }
+];
+
+export const apDestinations: Location[] = [
+  {
+    id: 'araku_valley',
+    name: 'Araku Valley',
+    city: 'Araku Valley',
+    state: 'Andhra Pradesh',
+    type: 'landmark',
+    popularityScore: 95,
+    isDropLocation: true
+  },
+  {
+    id: 'srikakulam',
+    name: 'Srikakulam',
+    city: 'Srikakulam',
+    state: 'Andhra Pradesh',
+    type: 'landmark',
+    popularityScore: 88,
+    isDropLocation: true
+  },
+  {
+    id: 'rajahmundry',
+    name: 'Rajahmundry',
+    city: 'Rajahmundry',
+    state: 'Andhra Pradesh',
+    type: 'landmark',
+    popularityScore: 90,
+    isDropLocation: true
+  },
+  {
+    id: 'vijayawada',
+    name: 'Vijayawada',
+    city: 'Vijayawada',
+    state: 'Andhra Pradesh',
+    type: 'landmark',
+    popularityScore: 92,
+    isDropLocation: true
+  },
+  {
+    id: 'tirupati',
+    name: 'Tirupati',
+    city: 'Tirupati',
+    state: 'Andhra Pradesh',
+    type: 'landmark',
+    popularityScore: 94,
+    isDropLocation: true
+  },
+  {
+    id: 'kakinada',
+    name: 'Kakinada',
+    city: 'Kakinada',
+    state: 'Andhra Pradesh',
+    type: 'landmark',
+    popularityScore: 87,
+    isDropLocation: true
+  },
+  {
+    id: 'guntur',
+    name: 'Guntur',
+    city: 'Guntur',
+    state: 'Andhra Pradesh',
+    type: 'landmark',
+    popularityScore: 89,
+    isDropLocation: true
+  },
+  {
+    id: 'ongole',
+    name: 'Ongole',
+    city: 'Ongole',
+    state: 'Andhra Pradesh',
+    type: 'landmark',
+    popularityScore: 83,
+    isDropLocation: true
+  },
+  {
+    id: 'kadapa',
+    name: 'Kadapa',
+    city: 'Kadapa',
+    state: 'Andhra Pradesh',
+    type: 'landmark',
+    popularityScore: 82,
+    isDropLocation: true
+  },
+  {
+    id: 'nellore',
+    name: 'Nellore',
+    city: 'Nellore',
+    state: 'Andhra Pradesh',
+    type: 'landmark',
+    popularityScore: 84,
+    isDropLocation: true
+  }
+];
+
 export const popularLocations: Location[] = [
+  ...vizagLocations,
+  ...apDestinations,
   {
     id: 'del_airport',
     name: 'Indira Gandhi International Airport',
@@ -32,122 +203,109 @@ export const popularLocations: Location[] = [
     state: 'Karnataka',
     type: 'airport',
     popularityScore: 95
-  },
-  {
-    id: 'hyd_airport',
-    name: 'Rajiv Gandhi International Airport',
-    city: 'Hyderabad',
-    state: 'Telangana',
-    type: 'airport',
-    popularityScore: 92
-  },
-  {
-    id: 'ccu_airport',
-    name: 'Netaji Subhas Chandra Bose International Airport',
-    city: 'Kolkata',
-    state: 'West Bengal',
-    type: 'airport',
-    popularityScore: 90
-  },
-  {
-    id: 'maa_airport',
-    name: 'Chennai International Airport',
-    city: 'Chennai',
-    state: 'Tamil Nadu',
-    type: 'airport',
-    popularityScore: 88
-  },
-  {
-    id: 'ndls',
-    name: 'New Delhi Railway Station',
-    city: 'New Delhi',
-    state: 'Delhi',
-    type: 'train_station',
-    popularityScore: 85
-  },
-  {
-    id: 'cstm',
-    name: 'Chhatrapati Shivaji Terminus',
-    city: 'Mumbai',
-    state: 'Maharashtra',
-    type: 'train_station',
-    popularityScore: 84
-  },
-  {
-    id: 'koramangala',
-    name: 'Koramangala',
-    city: 'Bengaluru',
-    state: 'Karnataka',
-    type: 'landmark',
-    popularityScore: 82
-  },
-  {
-    id: 'indiranagar',
-    name: 'Indiranagar',
-    city: 'Bengaluru',
-    state: 'Karnataka',
-    type: 'landmark',
-    popularityScore: 80
-  },
-  {
-    id: 'bandra',
-    name: 'Bandra',
-    city: 'Mumbai',
-    state: 'Maharashtra',
-    type: 'landmark',
-    popularityScore: 78
-  },
-  {
-    id: 'andheri',
-    name: 'Andheri',
-    city: 'Mumbai',
-    state: 'Maharashtra',
-    type: 'landmark',
-    popularityScore: 76
-  },
-  {
-    id: 'gurgaon',
-    name: 'Gurgaon',
-    city: 'Gurgaon',
-    state: 'Haryana',
-    type: 'landmark',
-    popularityScore: 75
-  },
-  {
-    id: 'taj_hotel',
-    name: 'Taj Palace Hotel',
-    city: 'New Delhi',
-    state: 'Delhi',
-    type: 'hotel',
-    popularityScore: 72
-  },
-  {
-    id: 'leela_palace',
-    name: 'The Leela Palace',
-    city: 'Bengaluru',
-    state: 'Karnataka',
-    type: 'hotel',
-    popularityScore: 70
   }
 ];
 
-export const searchLocations = (query: string): Location[] => {
-  if (!query || query.length < 2) return [];
+export const searchLocations = (query: string, isPickup: boolean = false): Location[] => {
+  if (!query || query.length < 2) {
+    if (isPickup) {
+      return vizagLocations.sort((a, b) => b.popularityScore - a.popularityScore);
+    }
+    if (!isPickup) {
+      return apDestinations.sort((a, b) => b.popularityScore - a.popularityScore);
+    }
+    return [];
+  }
   
   const lowerQuery = query.toLowerCase();
   
-  return popularLocations
-    .filter(
-      location => 
-        location.name.toLowerCase().includes(lowerQuery) || 
-        location.city.toLowerCase().includes(lowerQuery)
-    )
+  let filteredLocations = popularLocations.filter(
+    location => 
+      location.name.toLowerCase().includes(lowerQuery) || 
+      location.city.toLowerCase().includes(lowerQuery)
+  );
+  
+  if (isPickup) {
+    filteredLocations = filteredLocations.filter(loc => 
+      loc.isPickupLocation !== false && 
+      (loc.city === 'Visakhapatnam' || loc.isPickupLocation)
+    );
+  } else {
+    filteredLocations = filteredLocations.filter(loc => 
+      loc.isDropLocation !== false
+    );
+  }
+  
+  return filteredLocations
     .sort((a, b) => b.popularityScore - a.popularityScore)
     .slice(0, 10);
 };
 
 export const getDistanceBetweenLocations = (fromId: string, toId: string): number => {
-  // This is a mock function - in a real app this would call a distance API
-  // For now, we'll return a random distance between 5-50 km
-  return Math.floor(Math.random() * 45) + 5;
+  const distances: Record<string, Record<string, number>> = {
+    'vizag_airport': {
+      'araku_valley': 115,
+      'srikakulam': 125,
+      'rajahmundry': 190,
+      'vijayawada': 350,
+      'tirupati': 790,
+      'kakinada': 170,
+      'guntur': 370,
+      'ongole': 460,
+      'kadapa': 660,
+      'nellore': 590
+    },
+    'vizag_railway': {
+      'araku_valley': 112,
+      'srikakulam': 120,
+      'rajahmundry': 185,
+      'vijayawada': 345,
+      'tirupati': 785,
+      'kakinada': 165,
+      'guntur': 365,
+      'ongole': 455,
+      'kadapa': 655,
+      'nellore': 585
+    },
+    'vizag_rtc': {
+      'araku_valley': 110,
+      'srikakulam': 118,
+      'rajahmundry': 183,
+      'vijayawada': 343,
+      'tirupati': 783,
+      'kakinada': 163,
+      'guntur': 363,
+      'ongole': 453,
+      'kadapa': 653,
+      'nellore': 583
+    }
+  };
+  
+  if (distances[fromId] && distances[fromId][toId]) {
+    return distances[fromId][toId];
+  }
+  
+  if (fromId.includes('vizag') && toId.includes('vizag')) {
+    return Math.floor(Math.random() * 20) + 5;
+  }
+  
+  return Math.floor(Math.random() * 700) + 100;
+};
+
+export const getEstimatedTravelTime = (distance: number): number => {
+  const averageSpeed = 55;
+  return Math.ceil((distance / averageSpeed) * 60);
+};
+
+export const formatTravelTime = (minutes: number): string => {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  
+  if (hours === 0) {
+    return `${mins} min`;
+  } else if (mins === 0) {
+    return `${hours} hr`;
+  } else {
+    return `${hours} hr ${mins} min`;
+  }
 };

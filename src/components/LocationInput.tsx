@@ -1,7 +1,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Search, MapPin, X } from 'lucide-react';
-import { Location, searchLocations } from '@/lib/locationData';
+import { Location, searchLocations, vizagLocations, apDestinations } from '@/lib/locationData';
 import { cn } from '@/lib/utils';
 
 interface LocationInputProps {
@@ -10,6 +10,8 @@ interface LocationInputProps {
   value: Location | null;
   onChange: (location: Location | null) => void;
   className?: string;
+  isPickupLocation?: boolean;
+  readOnly?: boolean;
 }
 
 export function LocationInput({ 
@@ -17,7 +19,9 @@ export function LocationInput({
   placeholder, 
   value, 
   onChange,
-  className 
+  className,
+  isPickupLocation = false,
+  readOnly = false
 }: LocationInputProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
@@ -25,6 +29,15 @@ export function LocationInput({
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
+
+  // Initialize with popular locations based on whether it's pickup (Vizag) or drop (AP)
+  useEffect(() => {
+    if (isPickupLocation) {
+      setResults(vizagLocations);
+    } else {
+      setResults(apDestinations);
+    }
+  }, [isPickupLocation]);
 
   // Reset search query when value changes externally
   useEffect(() => {
@@ -37,16 +50,24 @@ export function LocationInput({
 
   // Handle search
   useEffect(() => {
-    if (searchQuery.length > 1) {
-      const locations = searchLocations(searchQuery);
+    if (searchQuery.length > 1 || (!searchQuery && (isPickupLocation || !isPickupLocation))) {
+      const locations = searchLocations(searchQuery, isPickupLocation);
       setResults(locations);
       setIsOpen(true);
       setFocusedIndex(-1);
+    } else if (!searchQuery) {
+      // If empty query, show default locations
+      if (isPickupLocation) {
+        setResults(vizagLocations);
+      } else {
+        setResults(apDestinations);
+      }
+      setIsOpen(false);
     } else {
       setResults([]);
       setIsOpen(false);
     }
-  }, [searchQuery]);
+  }, [searchQuery, isPickupLocation]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -103,8 +124,29 @@ export function LocationInput({
   const handleClear = () => {
     onChange(null);
     setSearchQuery('');
-    setIsOpen(false);
+    setIsOpen(true);
     inputRef.current?.focus();
+    
+    // Reset to default locations
+    if (isPickupLocation) {
+      setResults(vizagLocations);
+    } else {
+      setResults(apDestinations);
+    }
+  };
+  
+  const handleInputFocus = () => {
+    if (!readOnly) {
+      setIsOpen(true);
+      // Show default locations on focus
+      if (results.length === 0) {
+        if (isPickupLocation) {
+          setResults(vizagLocations);
+        } else {
+          setResults(apDestinations);
+        }
+      }
+    }
   };
 
   return (
@@ -118,15 +160,19 @@ export function LocationInput({
         <input
           ref={inputRef}
           type="text"
-          className="w-full pl-10 pr-10 py-3 shadow-input"
+          className={cn(
+            "w-full pl-10 pr-10 py-3 shadow-input", 
+            readOnly ? "bg-gray-100 cursor-not-allowed" : ""
+          )}
           placeholder={placeholder}
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          onFocus={() => searchQuery.length > 1 && setIsOpen(true)}
+          onChange={(e) => !readOnly && setSearchQuery(e.target.value)}
+          onFocus={handleInputFocus}
           onKeyDown={handleKeyDown}
+          readOnly={readOnly}
         />
         
-        {searchQuery && (
+        {searchQuery && !readOnly && (
           <button 
             type="button"
             onClick={handleClear}
@@ -137,13 +183,13 @@ export function LocationInput({
         )}
       </div>
 
-      {isOpen && results.length > 0 && (
+      {isOpen && results.length > 0 && !readOnly && (
         <div 
           ref={resultsRef}
           className="absolute z-30 left-0 right-0 mt-1 bg-white rounded-md shadow-elevated max-h-60 overflow-y-auto"
         >
           <div className="p-2 text-xs text-cabGray-500 border-b border-cabGray-100">
-            {results.length} location{results.length !== 1 ? 's' : ''} found
+            {isPickupLocation ? "Popular pickup locations in Visakhapatnam" : "Popular destinations in Andhra Pradesh"}
           </div>
           {results.map((location, index) => (
             <div 

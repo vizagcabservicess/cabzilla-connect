@@ -98,6 +98,13 @@ export const promoCodes: PromoCode[] = [
     discount: 10,
     minBookingAmount: 1000,
     validUntil: new Date('2023-12-31')
+  },
+  {
+    code: 'VIZAG100',
+    description: '₹100 off on rides in Visakhapatnam',
+    discount: 100,
+    minBookingAmount: 500,
+    validUntil: new Date('2023-12-31')
   }
 ];
 
@@ -110,14 +117,29 @@ export function calculateFare(cabType: CabType, distance: number, tripType: Trip
   // Adjust pricing based on trip type
   if (tripType === 'local') {
     // Local trips have lower base fare but higher per km rate
-    baseFare = Math.round(cabType.price * 0.7);
+    baseFare = Math.round(cabType.price * 0.6);
     pricePerKm = Math.round(cabType.pricePerKm * 1.2);
   } else if (tripType === 'airport') {
     // Airport transfers have higher base fare but standard per km rate
     baseFare = Math.round(cabType.price * 1.2);
+  } else if (tripType === 'outstation') {
+    // For outstation trips, add surcharge for long distances
+    if (distance > 300) {
+      pricePerKm = Math.round(cabType.pricePerKm * 1.1); // 10% extra for long distances
+    }
   }
   
-  return baseFare + (distance * pricePerKm);
+  // Calculate toll charges for outstation trips (simplified)
+  let tollCharges = 0;
+  if (tripType === 'outstation' && distance > 100) {
+    tollCharges = Math.floor(distance / 100) * 100; // ₹100 per 100km for tolls
+  }
+  
+  const distanceCost = distance * pricePerKm;
+  const totalFare = baseFare + distanceCost + tollCharges;
+  
+  // Round to nearest 10 for cleaner pricing
+  return Math.ceil(totalFare / 10) * 10;
 }
 
 export function formatPrice(price: number): string {
