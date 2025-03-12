@@ -6,9 +6,12 @@ import { DateTimePicker } from "@/components/DateTimePicker";
 import { CabOptions } from "@/components/CabOptions";
 import { Location } from "@/lib/locationData";
 import { CabType, cabTypes } from "@/lib/cabData";
-import { MapPin, Calendar, CarTaxiFront } from "lucide-react";
+import { CarTaxiFront } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/use-toast";
+
+type TripType = "outstation" | "local" | "airport";
 
 const CabsPage = () => {
   const navigate = useNavigate();
@@ -16,17 +19,41 @@ const CabsPage = () => {
   const [dropoff, setDropoff] = useState<Location | null>(null);
   const [pickupDate, setPickupDate] = useState<Date | undefined>(new Date());
   const [selectedCab, setSelectedCab] = useState<CabType | null>(null);
+  const [tripType, setTripType] = useState<TripType>("outstation");
   
   // Default distance - in a real app, this would be calculated based on pickup and dropoff
   const distance = 18; // 18 km
   
+  const handleTripTypeChange = (type: TripType) => {
+    setTripType(type);
+    // Reset form when trip type changes
+    setSelectedCab(null);
+  };
+  
   const handleBookNow = () => {
     if (pickup && dropoff && pickupDate && selectedCab) {
       // In a real app, you would save the booking details to state/context
+      const bookingDetails = {
+        tripType,
+        pickup,
+        dropoff,
+        pickupDate,
+        selectedCab,
+        distance,
+        totalPrice: selectedCab.price + (distance * selectedCab.pricePerKm)
+      };
+      
+      // Save booking details to session storage
+      sessionStorage.setItem("bookingDetails", JSON.stringify(bookingDetails));
+      
       navigate("/booking-confirmation");
     } else {
       // Show validation errors
-      alert("Please fill all the required fields");
+      toast({
+        title: "Missing information",
+        description: "Please fill all the required fields",
+        variant: "destructive"
+      });
     }
   };
 
@@ -54,20 +81,38 @@ const CabsPage = () => {
             <div className="bg-blue-50 p-4 border-b border-blue-100">
               <div className="flex space-x-6">
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="radio" name="trip-type" className="sr-only peer" defaultChecked />
+                  <input 
+                    type="radio" 
+                    name="trip-type" 
+                    className="sr-only peer" 
+                    checked={tripType === "outstation"}
+                    onChange={() => handleTripTypeChange("outstation")}
+                  />
                   <div className="w-5 h-5 border border-blue-500 rounded-full peer peer-checked:bg-blue-500 peer-checked:border-0 transition-all"></div>
                   <span className="ml-2 text-sm font-medium text-gray-700">Outstation</span>
                 </label>
                 
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="radio" name="trip-type" className="sr-only peer" />
-                  <div className="w-5 h-5 border border-gray-300 rounded-full peer transition-all"></div>
+                  <input 
+                    type="radio" 
+                    name="trip-type" 
+                    className="sr-only peer"
+                    checked={tripType === "local"}
+                    onChange={() => handleTripTypeChange("local")}
+                  />
+                  <div className="w-5 h-5 border border-gray-300 rounded-full peer peer-checked:bg-blue-500 peer-checked:border-0 transition-all"></div>
                   <span className="ml-2 text-sm font-medium text-gray-700">Local</span>
                 </label>
                 
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="radio" name="trip-type" className="sr-only peer" />
-                  <div className="w-5 h-5 border border-gray-300 rounded-full peer transition-all"></div>
+                  <input 
+                    type="radio" 
+                    name="trip-type" 
+                    className="sr-only peer"
+                    checked={tripType === "airport"}
+                    onChange={() => handleTripTypeChange("airport")}
+                  />
+                  <div className="w-5 h-5 border border-gray-300 rounded-full peer peer-checked:bg-blue-500 peer-checked:border-0 transition-all"></div>
                   <span className="ml-2 text-sm font-medium text-gray-700">Airport</span>
                 </label>
               </div>

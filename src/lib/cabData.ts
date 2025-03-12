@@ -101,8 +101,23 @@ export const promoCodes: PromoCode[] = [
   }
 ];
 
-export function calculateFare(cabType: CabType, distance: number): number {
-  return cabType.price + (distance * cabType.pricePerKm);
+export type TripType = 'outstation' | 'local' | 'airport';
+
+export function calculateFare(cabType: CabType, distance: number, tripType: TripType = 'outstation'): number {
+  let baseFare = cabType.price;
+  let pricePerKm = cabType.pricePerKm;
+  
+  // Adjust pricing based on trip type
+  if (tripType === 'local') {
+    // Local trips have lower base fare but higher per km rate
+    baseFare = Math.round(cabType.price * 0.7);
+    pricePerKm = Math.round(cabType.pricePerKm * 1.2);
+  } else if (tripType === 'airport') {
+    // Airport transfers have higher base fare but standard per km rate
+    baseFare = Math.round(cabType.price * 1.2);
+  }
+  
+  return baseFare + (distance * pricePerKm);
 }
 
 export function formatPrice(price: number): string {
