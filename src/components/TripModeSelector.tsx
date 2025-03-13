@@ -1,8 +1,6 @@
 
 import { TripMode } from "@/lib/cabData";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label } from "@/components/ui/label";
-import { RotateCw, ArrowRight } from "lucide-react";
+import { ArrowRight, RotateCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface TripModeSelectorProps {
@@ -27,6 +25,7 @@ export function TripModeSelector({ value, onChange, className }: TripModeSelecto
         >
           <ArrowRight className="mr-2 h-4 w-4" />
           <span className="text-sm font-medium">One Way</span>
+          <span className="ml-1 text-xs text-blue-600">₹13/km</span>
         </button>
         
         <button
@@ -40,6 +39,7 @@ export function TripModeSelector({ value, onChange, className }: TripModeSelecto
         >
           <RotateCw className="mr-2 h-4 w-4" />
           <span className="text-sm font-medium">Round Trip</span>
+          <span className="ml-1 text-xs text-blue-600">₹14/km</span>
         </button>
       </div>
     </div>

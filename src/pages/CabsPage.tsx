@@ -230,7 +230,7 @@ const CabsPage = () => {
                   className={tripType === "airport" ? "opacity-75" : ""}
                 />
                 
-                {tripType === "local" ? (
+                {tripType === 'local' ? (
                   <LocalTripSelector 
                     tripPurpose={tripPurpose}
                     onTripPurposeChange={setTripPurpose}
@@ -301,6 +301,8 @@ const CabsPage = () => {
                 onSelectCab={setSelectedCab} 
                 distance={distance}
                 tripType={tripType}
+                tripMode={tripMode}
+                hourlyPackage={hourlyPackage}
               />
               
               {selectedCab && distance > 0 && (

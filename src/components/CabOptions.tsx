@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { CabType, formatPrice, calculateFare, TripType } from '@/lib/cabData';
+import { CabType, formatPrice, calculateFare, TripType, TripMode, hourlyPackages } from '@/lib/cabData';
 import { Users, Briefcase, Tag, Info, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -10,6 +10,8 @@ interface CabOptionsProps {
   onSelectCab: (cab: CabType) => void;
   distance: number;
   tripType?: TripType;
+  tripMode?: TripMode;
+  hourlyPackage?: string;
 }
 
 export function CabOptions({ 
@@ -17,7 +19,9 @@ export function CabOptions({
   selectedCab, 
   onSelectCab,
   distance,
-  tripType = 'outstation'
+  tripType = 'outstation',
+  tripMode = 'one-way',
+  hourlyPackage
 }: CabOptionsProps) {
   const [expandedCab, setExpandedCab] = useState<string | null>(null);
 
@@ -38,7 +42,9 @@ export function CabOptions({
       
       <div className="space-y-3">
         {cabTypes.map((cab) => {
-          const fare = calculateFare(cab, distance, tripType);
+          const fare = calculateFare(cab, distance, tripType, tripMode, hourlyPackage);
+          const selectedHourlyPackage = tripType === 'local' && hourlyPackage ? 
+            hourlyPackages.find(pkg => pkg.id === hourlyPackage) : null;
           
           return (
             <div 
@@ -71,6 +77,16 @@ export function CabOptions({
                     <div className="text-lg font-bold text-blue-600">
                       {formatPrice(fare)}
                     </div>
+                    {tripType === 'local' && selectedHourlyPackage && (
+                      <div className="text-xs text-green-600">
+                        {selectedHourlyPackage.name} Package
+                      </div>
+                    )}
+                    {tripType === 'outstation' && (
+                      <div className="text-xs text-blue-600">
+                        {tripMode === 'one-way' ? '₹13/km' : '₹14/km'}
+                      </div>
+                    )}
                     <div className="flex items-center text-xs text-gray-400">
                       <span className="text-green-600 mr-1 text-[10px]">✓</span>
                       Includes taxes & fees
@@ -138,12 +154,19 @@ export function CabOptions({
                     <div className="text-xs text-gray-600 space-y-1">
                       <div className="flex justify-between">
                         <span>Base fare</span>
-                        <span>{formatPrice(tripType === 'local' ? cab.price * 0.7 : tripType === 'airport' ? cab.price * 1.2 : cab.price)}</span>
+                        <span>{formatPrice(cab.price)}</span>
                       </div>
-                      <div className="flex justify-between">
-                        <span>Distance fare ({distance} km @ {formatPrice(tripType === 'local' ? cab.pricePerKm * 1.2 : cab.pricePerKm)}/km)</span>
-                        <span>{formatPrice(distance * (tripType === 'local' ? cab.pricePerKm * 1.2 : cab.pricePerKm))}</span>
-                      </div>
+                      {tripType === 'local' && selectedHourlyPackage ? (
+                        <div className="flex justify-between">
+                          <span>{selectedHourlyPackage.name} Package</span>
+                          <span>{formatPrice(fare)}</span>
+                        </div>
+                      ) : (
+                        <div className="flex justify-between">
+                          <span>Distance fare ({Math.max(distance, 250)} km @ {tripMode === 'one-way' ? '₹13' : '₹14'}/km)</span>
+                          <span>{formatPrice(Math.max(distance, 250) * (tripMode === 'one-way' ? 13 : 14))}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between font-medium pt-1 border-t border-gray-200 mt-1">
                         <span>Total fare</span>
                         <span className="text-blue-600">{formatPrice(fare)}</span>
