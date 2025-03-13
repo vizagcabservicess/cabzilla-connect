@@ -5,6 +5,7 @@ import { DateTimePicker } from "@/components/DateTimePicker";
 import { CabOptions } from "@/components/CabOptions";
 import { TripModeSelector } from "@/components/TripModeSelector";
 import { LocalTripSelector } from "@/components/LocalTripSelector";
+import { TabTripSelector } from "@/components/TabTripSelector";
 import { 
   Location, 
   vizagLocations, 
@@ -208,53 +209,16 @@ const CabsPage = () => {
       <div className="container mx-auto px-4 py-6">
         <div className="max-w-5xl mx-auto">
           <div className="bg-white rounded-lg shadow-md overflow-hidden">
-            <div className="bg-blue-50 p-4 border-b border-blue-100">
-              <div className="flex space-x-6">
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input 
-                    type="radio" 
-                    name="trip-type" 
-                    className="sr-only peer" 
-                    checked={tripType === "outstation"}
-                    onChange={() => handleTripTypeChange("outstation")}
-                  />
-                  <div className="w-5 h-5 border border-blue-500 rounded-full peer peer-checked:bg-blue-500 peer-checked:border-0 transition-all"></div>
-                  <span className="ml-2 text-sm font-medium text-gray-700">Outstation</span>
-                </label>
-                
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input 
-                    type="radio" 
-                    name="trip-type" 
-                    className="sr-only peer"
-                    checked={tripType === "local"}
-                    onChange={() => handleTripTypeChange("local")}
-                  />
-                  <div className="w-5 h-5 border border-gray-300 rounded-full peer peer-checked:bg-blue-500 peer-checked:border-0 transition-all"></div>
-                  <span className="ml-2 text-sm font-medium text-gray-700">Local</span>
-                </label>
-                
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input 
-                    type="radio" 
-                    name="trip-type" 
-                    className="sr-only peer"
-                    checked={tripType === "airport"}
-                    onChange={() => handleTripTypeChange("airport")}
-                  />
-                  <div className="w-5 h-5 border border-gray-300 rounded-full peer peer-checked:bg-blue-500 peer-checked:border-0 transition-all"></div>
-                  <span className="ml-2 text-sm font-medium text-gray-700">Airport</span>
-                </label>
-              </div>
+            <div className="p-4">
+              <TabTripSelector 
+                selectedTab={tripType}
+                tripMode={tripMode}
+                onTabChange={handleTripTypeChange}
+                onTripModeChange={setTripMode}
+              />
             </div>
             
             <div className="p-6">
-              {tripType === "outstation" && (
-                <div className="mb-6">
-                  <TripModeSelector value={tripMode} onChange={setTripMode} />
-                </div>
-              )}
-            
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <LocationInput 
                   label="PICKUP LOCATION" 
@@ -361,7 +325,7 @@ const CabsPage = () => {
               <div className="mt-8 flex justify-center">
                 <Button 
                   onClick={handleBookNow}
-                  className="bg-red-500 hover:bg-red-600 text-white px-8 py-6 rounded-md font-semibold text-lg"
+                  className="bg-gradient-to-r from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 text-white px-12 py-6 rounded-md font-semibold text-lg"
                   disabled={
                     (tripType !== 'local' && (!pickup || !dropoff)) || 
                     !pickupDate || 
@@ -369,7 +333,7 @@ const CabsPage = () => {
                     isCalculatingDistance
                   }
                 >
-                  Book Now
+                  SEARCH
                 </Button>
               </div>
             </div>
@@ -380,10 +344,8 @@ const CabsPage = () => {
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="bg-white p-6 rounded-lg shadow-sm text-center">
-                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-50 flex items-center justify-center text-blue-500">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8">
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"></path>
-                  </svg>
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-xl">
+                  CZ
                 </div>
                 <h3 className="font-semibold text-gray-800 mb-2">Safety Assured</h3>
                 <p className="text-sm text-gray-600">
@@ -392,11 +354,8 @@ const CabsPage = () => {
               </div>
               
               <div className="bg-white p-6 rounded-lg shadow-sm text-center">
-                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-50 flex items-center justify-center text-blue-500">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <path d="m16.24 7.76-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z"></path>
-                  </svg>
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-xl">
+                  CZ
                 </div>
                 <h3 className="font-semibold text-gray-800 mb-2">Transparent Pricing</h3>
                 <p className="text-sm text-gray-600">
@@ -405,12 +364,8 @@ const CabsPage = () => {
               </div>
               
               <div className="bg-white p-6 rounded-lg shadow-sm text-center">
-                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-50 flex items-center justify-center text-blue-500">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8">
-                    <path d="M3 11.5h18"></path>
-                    <path d="M5 7.5l4 4-4 4"></path>
-                    <path d="M19 17.5l-4-4 4-4"></path>
-                  </svg>
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-xl">
+                  CZ
                 </div>
                 <h3 className="font-semibold text-gray-800 mb-2">Flexibility</h3>
                 <p className="text-sm text-gray-600">

@@ -2,30 +2,46 @@
 import { TripMode } from "@/lib/cabData";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import { RotateCw, ArrowRight } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface TripModeSelectorProps {
   value: TripMode;
   onChange: (value: TripMode) => void;
+  className?: string;
 }
 
-export function TripModeSelector({ value, onChange }: TripModeSelectorProps) {
+export function TripModeSelector({ value, onChange, className }: TripModeSelectorProps) {
   return (
-    <div className="mb-4">
+    <div className={cn("mb-4", className)}>
       <p className="text-xs font-medium text-gray-700 mb-2">TRIP TYPE</p>
-      <RadioGroup 
-        value={value} 
-        onValueChange={(val) => onChange(val as TripMode)}
-        className="flex space-x-6"
-      >
-        <div className="flex items-center space-x-2">
-          <RadioGroupItem value="one-way" id="one-way" />
-          <Label htmlFor="one-way" className="cursor-pointer">One Way</Label>
-        </div>
-        <div className="flex items-center space-x-2">
-          <RadioGroupItem value="round-trip" id="round-trip" />
-          <Label htmlFor="round-trip" className="cursor-pointer">Round Trip</Label>
-        </div>
-      </RadioGroup>
+      <div className="flex space-x-4">
+        <button
+          onClick={() => onChange("one-way")}
+          className={cn(
+            "flex items-center px-4 py-2 rounded-md border border-gray-200 transition-all",
+            value === "one-way" 
+              ? "bg-blue-50 border-blue-200 text-blue-700" 
+              : "bg-white text-gray-600 hover:bg-gray-50"
+          )}
+        >
+          <ArrowRight className="mr-2 h-4 w-4" />
+          <span className="text-sm font-medium">One Way</span>
+        </button>
+        
+        <button
+          onClick={() => onChange("round-trip")}
+          className={cn(
+            "flex items-center px-4 py-2 rounded-md border border-gray-200 transition-all",
+            value === "round-trip" 
+              ? "bg-blue-50 border-blue-200 text-blue-700" 
+              : "bg-white text-gray-600 hover:bg-gray-50"
+          )}
+        >
+          <RotateCw className="mr-2 h-4 w-4" />
+          <span className="text-sm font-medium">Round Trip</span>
+        </button>
+      </div>
     </div>
   );
 }

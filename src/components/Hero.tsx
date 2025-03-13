@@ -1,16 +1,16 @@
-
 import { useState, useEffect } from 'react';
 import { LocationInput } from './LocationInput';
 import { DateTimePicker } from './DateTimePicker';
 import { CabOptions } from './CabOptions';
 import { BookingSummary } from './BookingSummary';
 import { Location, getDistanceBetweenLocations } from '@/lib/locationData';
-import { CabType, cabTypes, TripMode, LocalTripPurpose, hourlyPackages } from '@/lib/cabData';
+import { CabType, cabTypes, TripMode, LocalTripPurpose, hourlyPackages, TripType } from '@/lib/cabData';
 import { ChevronRight, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { addDays } from 'date-fns';
 import { TripModeSelector } from './TripModeSelector';
 import { LocalTripSelector } from './LocalTripSelector';
+import { TabTripSelector } from './TabTripSelector';
 import { 
   Select,
   SelectContent,
@@ -28,7 +28,7 @@ export function Hero() {
   const [distance, setDistance] = useState<number>(0);
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [isFormValid, setIsFormValid] = useState<boolean>(false);
-  const [tripType, setTripType] = useState<'outstation' | 'local' | 'airport'>('outstation');
+  const [tripType, setTripType] = useState<TripType>('outstation');
   const [tripMode, setTripMode] = useState<TripMode>('one-way');
   const [tripPurpose, setTripPurpose] = useState<LocalTripPurpose>('business');
   const [hourlyPackage, setHourlyPackage] = useState(hourlyPackages[0].id);
@@ -72,7 +72,7 @@ export function Hero() {
     }
   };
   
-  const handleTripTypeChange = (type: 'outstation' | 'local' | 'airport') => {
+  const handleTripTypeChange = (type: TripType) => {
     setTripType(type);
     
     // Reset values
@@ -110,44 +110,12 @@ export function Hero() {
         <div className="max-w-6xl mx-auto">
           {currentStep === 1 ? (
             <div className="bg-white rounded-xl shadow-card border border-cabGray-100 p-5 md:p-8 animate-slide-up">
-              <div className="mb-6">
-                <Label className="text-sm text-cabGray-700 mb-2 block">RIDE TYPE</Label>
-                <div className="flex space-x-4">
-                  <label className="flex items-center cursor-pointer space-x-2">
-                    <input 
-                      type="radio" 
-                      className="form-radio h-4 w-4 text-cabBlue-500" 
-                      checked={tripType === 'outstation'} 
-                      onChange={() => handleTripTypeChange('outstation')}
-                    />
-                    <span className="text-cabGray-800">Outstation</span>
-                  </label>
-                  <label className="flex items-center cursor-pointer space-x-2">
-                    <input 
-                      type="radio" 
-                      className="form-radio h-4 w-4 text-cabBlue-500" 
-                      checked={tripType === 'local'} 
-                      onChange={() => handleTripTypeChange('local')}
-                    />
-                    <span className="text-cabGray-800">Local</span>
-                  </label>
-                  <label className="flex items-center cursor-pointer space-x-2">
-                    <input 
-                      type="radio" 
-                      className="form-radio h-4 w-4 text-cabBlue-500" 
-                      checked={tripType === 'airport'} 
-                      onChange={() => handleTripTypeChange('airport')}
-                    />
-                    <span className="text-cabGray-800">Airport</span>
-                  </label>
-                </div>
-              </div>
-              
-              {tripType === 'outstation' && (
-                <div className="mb-6">
-                  <TripModeSelector value={tripMode} onChange={setTripMode} />
-                </div>
-              )}
+              <TabTripSelector 
+                selectedTab={tripType}
+                tripMode={tripMode}
+                onTabChange={handleTripTypeChange}
+                onTripModeChange={setTripMode}
+              />
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <LocationInput
@@ -188,9 +156,9 @@ export function Hero() {
                 <Button
                   onClick={handleContinue}
                   disabled={!isFormValid}
-                  className="px-6"
+                  className="px-10 py-6 bg-gradient-to-r from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 text-white font-semibold text-lg rounded-md"
                 >
-                  Continue <ChevronRight size={18} className="ml-1" />
+                  SEARCH <ChevronRight size={18} className="ml-1" />
                 </Button>
               </div>
             </div>
