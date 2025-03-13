@@ -118,6 +118,7 @@ export interface HourlyPackage {
   hours: number;
   kilometers: number;
   multiplier: number;
+  basePrice: number;
 }
 
 export const hourlyPackages: HourlyPackage[] = [
@@ -126,28 +127,32 @@ export const hourlyPackages: HourlyPackage[] = [
     name: '04 Hours / 40 KM',
     hours: 4,
     kilometers: 40,
-    multiplier: 1.0
+    multiplier: 1.0,
+    basePrice: 1200
   },
   {
     id: '6hrs-60km',
     name: '06 Hours / 60 KM',
     hours: 6,
     kilometers: 60,
-    multiplier: 1.5
+    multiplier: 1.5,
+    basePrice: 1800
   },
   {
     id: '8hrs-80km',
     name: '08 Hours / 80 KM',
     hours: 8,
     kilometers: 80,
-    multiplier: 1.7
+    multiplier: 1.7,
+    basePrice: 2400
   },
   {
     id: '10hrs-100km',
     name: '10 Hours / 100 KM',
     hours: 10,
     kilometers: 100,
-    multiplier: 2.1
+    multiplier: 2.1,
+    basePrice: 3000
   }
 ];
 
@@ -156,18 +161,20 @@ export function calculateFare(
   distance: number, 
   tripType: TripType = 'outstation',
   tripMode: TripMode = 'one-way',
-  hourlyPackageId?: string
+  hourlyPackageId?: string,
+  pickupDate?: Date,
+  returnDate?: Date
 ): number {
   let baseFare = cabType.price;
   let totalFare = 0;
   
   if (tripType === 'local' && hourlyPackageId) {
-    // Local packages based on selected hourly package
+    // Local packages based on selected hourly package - no base fare
     const selectedPackage = hourlyPackages.find(pkg => pkg.id === hourlyPackageId);
     
     if (selectedPackage) {
-      // Apply the package multiplier to the base fare
-      totalFare = Math.round(baseFare * selectedPackage.multiplier);
+      // For hourly packages, use the package's basePrice directly
+      totalFare = selectedPackage.basePrice;
       
       // Additional charge for extra kilometers
       if (distance > selectedPackage.kilometers) {
@@ -175,9 +182,10 @@ export function calculateFare(
       }
     } else {
       // Fallback to default 4 hours package
-      totalFare = baseFare;
-      if (distance > 40) {
-        totalFare += (distance - 40) * cabType.pricePerKm;
+      const defaultPackage = hourlyPackages[0];
+      totalFare = defaultPackage.basePrice;
+      if (distance > defaultPackage.kilometers) {
+        totalFare += (distance - defaultPackage.kilometers) * cabType.pricePerKm;
       }
     }
   } else if (tripType === 'airport') {
@@ -188,11 +196,34 @@ export function calculateFare(
     const minimumDistance = Math.max(distance, 250);
     
     if (tripMode === 'one-way') {
-      // One-way trip calculation with 13 per km
-      totalFare = baseFare + (minimumDistance * 13);
+      // One-way trip calculation:
+      // Base fare for first 300 km
+      if (minimumDistance <= 300) {
+        totalFare = baseFare;
+      } else {
+        // Base fare for first 300 km + additional km at ₹13/km
+        totalFare = baseFare + ((minimumDistance - 300) * 13);
+      }
     } else {
-      // Round-trip calculation with 14 per km
-      totalFare = baseFare + (minimumDistance * 14);
+      // Round-trip calculation with ₹14 per km
+      totalFare = baseFare;
+      
+      // Calculate number of days for round trip
+      let numberOfDays = 1;
+      
+      if (pickupDate && returnDate) {
+        const pickupTime = new Date(pickupDate).getTime();
+        const returnTime = new Date(returnDate).getTime();
+        const differenceInMs = returnTime - pickupTime;
+        const differenceInDays = Math.ceil(differenceInMs / (1000 * 60 * 60 * 24));
+        numberOfDays = Math.max(1, differenceInDays);
+      }
+      
+      // Multiply base fare by number of days
+      totalFare = baseFare * numberOfDays;
+      
+      // Add distance fare at ₹14/km
+      totalFare += (minimumDistance * 14);
     }
     
     // Add driver allowance for outstation

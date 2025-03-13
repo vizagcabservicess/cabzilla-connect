@@ -25,7 +25,9 @@ export function TripModeSelector({ value, onChange, className }: TripModeSelecto
         >
           <ArrowRight className="mr-2 h-4 w-4" />
           <span className="text-sm font-medium">One Way</span>
-          <span className="ml-1 text-xs text-blue-600">₹13/km</span>
+          <span className="ml-1 text-xs text-blue-600">
+            First 300km included, then ₹13/km
+          </span>
         </button>
         
         <button

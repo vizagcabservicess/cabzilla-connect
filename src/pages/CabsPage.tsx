@@ -47,6 +47,7 @@ const CabsPage = () => {
   const [pickup, setPickup] = useState<Location | null>(null);
   const [dropoff, setDropoff] = useState<Location | null>(null);
   const [pickupDate, setPickupDate] = useState<Date | undefined>(new Date());
+  const [returnDate, setReturnDate] = useState<Date | undefined>(undefined);
   const [selectedCab, setSelectedCab] = useState<CabType | null>(null);
   const [distance, setDistance] = useState<number>(0);
   const [travelTime, setTravelTime] = useState<number>(0);
@@ -171,6 +172,15 @@ const CabsPage = () => {
       return;
     }
     
+    if (tripType === 'outstation' && tripMode === 'round-trip' && !returnDate) {
+      toast({
+        title: "Missing information",
+        description: "Please select a return date for your round trip",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     const bookingDetails = {
       tripType,
       tripMode: tripType === 'outstation' ? tripMode : undefined,
@@ -179,6 +189,7 @@ const CabsPage = () => {
       pickup,
       dropoff: tripType === 'local' ? null : dropoff,
       pickupDate,
+      returnDate: tripMode === 'round-trip' ? returnDate : undefined,
       selectedCab,
       distance,
       travelTime,
@@ -254,6 +265,15 @@ const CabsPage = () => {
                   minDate={new Date()} 
                 />
                 
+                {tripType === 'outstation' && tripMode === 'round-trip' && (
+                  <DateTimePicker 
+                    label="RETURN DATE & TIME" 
+                    date={returnDate} 
+                    onDateChange={setReturnDate} 
+                    minDate={pickupDate} 
+                  />
+                )}
+                
                 <div className="md:flex items-center space-y-4 md:space-y-0 md:space-x-4">
                   <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 mt-6 md:mt-9 flex-1 flex">
                     <div className="text-amber-500 mr-2">
@@ -287,7 +307,7 @@ const CabsPage = () => {
                     <MapPin size={16} className="mr-2 mt-0.5 flex-shrink-0" />
                     <span>
                       Note: Outstation trips have a minimum billing distance of 250 KM, even if actual distance is less.
-                      {tripMode === 'round-trip' ? " The same pricing applies for round trips." : ""}
+                      {tripMode === 'round-trip' ? " Round trip rates are ₹14/km." : " One-way trips are ₹13/km after first 300 km."}
                     </span>
                   </p>
                 </div>
@@ -303,6 +323,8 @@ const CabsPage = () => {
                 tripType={tripType}
                 tripMode={tripMode}
                 hourlyPackage={hourlyPackage}
+                returnDate={returnDate}
+                pickupDate={pickupDate}
               />
               
               {selectedCab && distance > 0 && (
@@ -331,6 +353,7 @@ const CabsPage = () => {
                   disabled={
                     (tripType !== 'local' && (!pickup || !dropoff)) || 
                     !pickupDate || 
+                    (tripType === 'outstation' && tripMode === 'round-trip' && !returnDate) ||
                     !selectedCab || 
                     isCalculatingDistance
                   }
