@@ -5,10 +5,20 @@ import { DateTimePicker } from './DateTimePicker';
 import { CabOptions } from './CabOptions';
 import { BookingSummary } from './BookingSummary';
 import { Location, getDistanceBetweenLocations } from '@/lib/locationData';
-import { CabType, cabTypes } from '@/lib/cabData';
+import { CabType, cabTypes, TripMode, LocalTripPurpose, hourlyPackages } from '@/lib/cabData';
 import { ChevronRight, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { addDays } from 'date-fns';
+import { TripModeSelector } from './TripModeSelector';
+import { LocalTripSelector } from './LocalTripSelector';
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 export function Hero() {
   const [pickupLocation, setPickupLocation] = useState<Location | null>(null);
@@ -18,18 +28,34 @@ export function Hero() {
   const [distance, setDistance] = useState<number>(0);
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [isFormValid, setIsFormValid] = useState<boolean>(false);
+  const [tripType, setTripType] = useState<'outstation' | 'local' | 'airport'>('outstation');
+  const [tripMode, setTripMode] = useState<TripMode>('one-way');
+  const [tripPurpose, setTripPurpose] = useState<LocalTripPurpose>('business');
+  const [hourlyPackage, setHourlyPackage] = useState(hourlyPackages[0].id);
   
   // Validate form when any input changes
   useEffect(() => {
-    if (pickupLocation && dropLocation && pickupDate) {
+    if (
+      pickupLocation && 
+      ((tripType !== 'local' && dropLocation) || tripType === 'local') && 
+      pickupDate
+    ) {
       setIsFormValid(true);
       
       // Calculate distance between locations
-      const calculatedDistance = getDistanceBetweenLocations(
-        pickupLocation.id,
-        dropLocation.id
-      );
-      setDistance(calculatedDistance);
+      if (tripType === 'local') {
+        // For local trips, use the hourly package kilometers
+        const selectedPackage = hourlyPackages.find(pkg => pkg.id === hourlyPackage);
+        if (selectedPackage) {
+          setDistance(selectedPackage.kilometers);
+        }
+      } else if (pickupLocation && dropLocation) {
+        const calculatedDistance = getDistanceBetweenLocations(
+          pickupLocation.id,
+          dropLocation.id
+        );
+        setDistance(calculatedDistance);
+      }
       
       // Auto-select the first cab option if none selected
       if (!selectedCab && cabTypes.length > 0) {
@@ -38,11 +64,21 @@ export function Hero() {
     } else {
       setIsFormValid(false);
     }
-  }, [pickupLocation, dropLocation, pickupDate, selectedCab]);
+  }, [pickupLocation, dropLocation, pickupDate, selectedCab, tripType, hourlyPackage]);
   
   const handleContinue = () => {
     if (currentStep === 1 && isFormValid) {
       setCurrentStep(2);
+    }
+  };
+  
+  const handleTripTypeChange = (type: 'outstation' | 'local' | 'airport') => {
+    setTripType(type);
+    
+    // Reset values
+    if (type === 'local') {
+      setDropLocation(null);
+      setHourlyPackage(hourlyPackages[0].id);
     }
   };
   
@@ -74,20 +110,70 @@ export function Hero() {
         <div className="max-w-6xl mx-auto">
           {currentStep === 1 ? (
             <div className="bg-white rounded-xl shadow-card border border-cabGray-100 p-5 md:p-8 animate-slide-up">
+              <div className="mb-6">
+                <Label className="text-sm text-cabGray-700 mb-2 block">RIDE TYPE</Label>
+                <div className="flex space-x-4">
+                  <label className="flex items-center cursor-pointer space-x-2">
+                    <input 
+                      type="radio" 
+                      className="form-radio h-4 w-4 text-cabBlue-500" 
+                      checked={tripType === 'outstation'} 
+                      onChange={() => handleTripTypeChange('outstation')}
+                    />
+                    <span className="text-cabGray-800">Outstation</span>
+                  </label>
+                  <label className="flex items-center cursor-pointer space-x-2">
+                    <input 
+                      type="radio" 
+                      className="form-radio h-4 w-4 text-cabBlue-500" 
+                      checked={tripType === 'local'} 
+                      onChange={() => handleTripTypeChange('local')}
+                    />
+                    <span className="text-cabGray-800">Local</span>
+                  </label>
+                  <label className="flex items-center cursor-pointer space-x-2">
+                    <input 
+                      type="radio" 
+                      className="form-radio h-4 w-4 text-cabBlue-500" 
+                      checked={tripType === 'airport'} 
+                      onChange={() => handleTripTypeChange('airport')}
+                    />
+                    <span className="text-cabGray-800">Airport</span>
+                  </label>
+                </div>
+              </div>
+              
+              {tripType === 'outstation' && (
+                <div className="mb-6">
+                  <TripModeSelector value={tripMode} onChange={setTripMode} />
+                </div>
+              )}
+              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <LocationInput
                   label="Pickup Location"
                   placeholder="Enter pickup location"
                   value={pickupLocation}
                   onChange={setPickupLocation}
+                  isPickupLocation={true}
                 />
                 
-                <LocationInput
-                  label="Drop Location"
-                  placeholder="Enter drop location"
-                  value={dropLocation}
-                  onChange={setDropLocation}
-                />
+                {tripType === 'local' ? (
+                  <LocalTripSelector 
+                    tripPurpose={tripPurpose}
+                    onTripPurposeChange={setTripPurpose}
+                    hourlyPackage={hourlyPackage}
+                    onHourlyPackageChange={setHourlyPackage}
+                  />
+                ) : (
+                  <LocationInput
+                    label="Drop Location"
+                    placeholder="Enter drop location"
+                    value={dropLocation}
+                    onChange={setDropLocation}
+                    isPickupLocation={false}
+                  />
+                )}
                 
                 <DateTimePicker
                   label="Pickup Date & Time"
@@ -130,11 +216,25 @@ export function Hero() {
                       <p className="text-xs text-cabGray-600">{pickupLocation?.city}, {pickupLocation?.state}</p>
                     </div>
                     
-                    <div>
-                      <p className="text-xs text-cabGray-500 mb-1">DROP LOCATION</p>
-                      <p className="font-medium text-cabGray-800">{dropLocation?.name}</p>
-                      <p className="text-xs text-cabGray-600">{dropLocation?.city}, {dropLocation?.state}</p>
-                    </div>
+                    {tripType === 'local' ? (
+                      <div>
+                        <p className="text-xs text-cabGray-500 mb-1">TRIP DETAILS</p>
+                        <p className="font-medium text-cabGray-800">
+                          {tripPurpose === 'business' && 'Business Trip'}
+                          {tripPurpose === 'personal' && 'Personal Trip'}
+                          {tripPurpose === 'city-tour' && 'City Tour'}
+                        </p>
+                        <p className="text-xs text-cabGray-600">
+                          {hourlyPackages.find(pkg => pkg.id === hourlyPackage)?.name}
+                        </p>
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="text-xs text-cabGray-500 mb-1">DROP LOCATION</p>
+                        <p className="font-medium text-cabGray-800">{dropLocation?.name}</p>
+                        <p className="text-xs text-cabGray-600">{dropLocation?.city}, {dropLocation?.state}</p>
+                      </div>
+                    )}
                     
                     <div className="md:col-span-2 border-t border-cabGray-100 pt-3 mt-2">
                       <div className="flex items-center justify-between">
@@ -172,6 +272,7 @@ export function Hero() {
                     selectedCab={selectedCab}
                     onSelectCab={setSelectedCab}
                     distance={distance}
+                    tripType={tripType}
                   />
                 </div>
               </div>
@@ -184,6 +285,10 @@ export function Hero() {
                   selectedCab={selectedCab}
                   distance={distance}
                   totalPrice={totalPrice}
+                  tripType={tripType}
+                  tripMode={tripMode}
+                  tripPurpose={tripPurpose}
+                  hourlyPackage={hourlyPackage}
                 />
               </div>
             </div>

@@ -1,3 +1,4 @@
+
 export interface CabType {
   id: string;
   name: string;
@@ -108,45 +109,84 @@ export const promoCodes: PromoCode[] = [
 ];
 
 export type TripType = 'outstation' | 'local' | 'airport';
+export type TripMode = 'one-way' | 'round-trip';
+export type LocalTripPurpose = 'business' | 'personal' | 'city-tour';
 
-export function calculateFare(cabType: CabType, distance: number, tripType: TripType = 'outstation'): number {
+export interface HourlyPackage {
+  id: string;
+  name: string;
+  hours: number;
+  kilometers: number;
+  multiplier: number;
+}
+
+export const hourlyPackages: HourlyPackage[] = [
+  {
+    id: '4hrs-40km',
+    name: '04 Hours / 40 KM',
+    hours: 4,
+    kilometers: 40,
+    multiplier: 1.0
+  },
+  {
+    id: '6hrs-60km',
+    name: '06 Hours / 60 KM',
+    hours: 6,
+    kilometers: 60,
+    multiplier: 1.5
+  },
+  {
+    id: '8hrs-80km',
+    name: '08 Hours / 80 KM',
+    hours: 8,
+    kilometers: 80,
+    multiplier: 1.7
+  },
+  {
+    id: '10hrs-100km',
+    name: '10 Hours / 100 KM',
+    hours: 10,
+    kilometers: 100,
+    multiplier: 2.1
+  }
+];
+
+export function calculateFare(
+  cabType: CabType, 
+  distance: number, 
+  tripType: TripType = 'outstation',
+  tripMode: TripMode = 'one-way',
+  hourlyPackageId?: string
+): number {
   let baseFare = cabType.price;
   let pricePerKm = cabType.pricePerKm;
   let totalFare = 0;
   
-  if (tripType === 'local') {
-    // Local packages based on hours/km
-    if (distance <= 40) {
-      // 4 hours / 40 KM package
+  if (tripType === 'local' && hourlyPackageId) {
+    // Local packages based on selected hourly package
+    const selectedPackage = hourlyPackages.find(pkg => pkg.id === hourlyPackageId);
+    
+    if (selectedPackage) {
+      // Apply the package multiplier to the base fare
+      totalFare = Math.round(baseFare * selectedPackage.multiplier);
+      
+      // Additional charge for extra kilometers
+      if (distance > selectedPackage.kilometers) {
+        totalFare += (distance - selectedPackage.kilometers) * pricePerKm;
+      }
+    } else {
+      // Fallback to default 4 hours package
       totalFare = baseFare;
       if (distance > 40) {
         totalFare += (distance - 40) * pricePerKm;
-      }
-    } else if (distance <= 60) {
-      // 6 hours / 60 KM package
-      totalFare = Math.round(baseFare * 1.5); // 1.5x of 4 hours package
-      if (distance > 60) {
-        totalFare += (distance - 60) * pricePerKm;
-      }
-    } else if (distance <= 80) {
-      // 8 hours / 80 KM package
-      totalFare = Math.round(baseFare * 1.7); // 1.7x of 4 hours package
-      if (distance > 80) {
-        totalFare += (distance - 80) * pricePerKm;
-      }
-    } else {
-      // 10 hours / 100 KM package
-      totalFare = Math.round(baseFare * 2.1); // 2.1x of 4 hours package
-      if (distance > 100) {
-        totalFare += (distance - 100) * pricePerKm;
       }
     }
   } else if (tripType === 'airport') {
     // Airport transfers have standard per km rate
     totalFare = Math.round(baseFare * 0.8) + (distance * pricePerKm);
   } else if (tripType === 'outstation') {
-    // Outstation trips require minimum 300 km per day
-    const minimumDistance = Math.max(distance, 300);
+    // Ensure minimum distance of 250 KM for outstation trips
+    const minimumDistance = Math.max(distance, 250);
     totalFare = minimumDistance * pricePerKm;
     
     // Add driver allowance for outstation
@@ -157,6 +197,9 @@ export function calculateFare(cabType: CabType, distance: number, tripType: Trip
       const tollCharges = Math.floor(distance / 100) * 100;
       totalFare += tollCharges;
     }
+    
+    // For round trips, we don't change the pricing logic as per requirement
+    // Just ensure the minimum distance is applied
   }
   
   // Round to nearest 10 for cleaner pricing

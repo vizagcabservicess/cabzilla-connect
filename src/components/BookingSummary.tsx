@@ -1,10 +1,10 @@
 
 import { useState } from 'react';
-import { CabType, PromoCode, formatPrice } from '@/lib/cabData';
+import { CabType, PromoCode, formatPrice, TripType, TripMode, LocalTripPurpose, hourlyPackages } from '@/lib/cabData';
 import { Location } from '@/lib/locationData';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Tag, X, CheckCircle, Calendar, MapPin, Users } from 'lucide-react';
+import { Tag, X, CheckCircle, Calendar, MapPin, Users, ArrowRight, ArrowLeftRight, Clock, Briefcase } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
@@ -16,6 +16,11 @@ interface BookingSummaryProps {
   selectedCab: CabType | null;
   distance: number;
   totalPrice: number;
+  tripType?: TripType;
+  tripMode?: TripMode;
+  tripPurpose?: LocalTripPurpose;
+  hourlyPackage?: string;
+  travelTime?: number;
 }
 
 export function BookingSummary({
@@ -24,7 +29,12 @@ export function BookingSummary({
   pickupDate,
   selectedCab,
   distance,
-  totalPrice
+  totalPrice,
+  tripType = 'outstation',
+  tripMode = 'one-way',
+  tripPurpose,
+  hourlyPackage,
+  travelTime = 0
 }: BookingSummaryProps) {
   const [promoCode, setPromoCode] = useState('');
   const [appliedPromo, setAppliedPromo] = useState<PromoCode | null>(null);
@@ -100,6 +110,14 @@ export function BookingSummary({
   const discountAmount = calculateDiscount();
   const finalPrice = totalPrice - discountAmount;
   
+  const getSelectedPackageInfo = () => {
+    if (tripType === 'local' && hourlyPackage) {
+      const selectedPackage = hourlyPackages.find(pkg => pkg.id === hourlyPackage);
+      return selectedPackage ? `${selectedPackage.name}` : '';
+    }
+    return '';
+  };
+  
   const handleBookNow = () => {
     // Create a booking object with all the details
     const bookingDetails = {
@@ -108,10 +126,15 @@ export function BookingSummary({
       pickupDate,
       selectedCab,
       distance,
+      tripType,
+      tripMode,
+      tripPurpose,
+      hourlyPackage,
       appliedPromo,
       totalPrice,
       discountAmount,
-      finalPrice
+      finalPrice,
+      travelTime
     };
     
     // Save to sessionStorage (to access on confirmation page)
@@ -121,7 +144,7 @@ export function BookingSummary({
     navigate('/booking-confirmation');
   };
   
-  if (!pickupLocation || !dropLocation || !pickupDate || !selectedCab) {
+  if (!pickupLocation || (!dropLocation && tripType !== 'local') || !pickupDate || !selectedCab) {
     return null;
   }
   
@@ -129,6 +152,24 @@ export function BookingSummary({
     <div className="bg-white rounded-lg shadow-card border border-cabGray-100 overflow-hidden">
       <div className="p-5 border-b border-cabGray-100">
         <h3 className="text-xl font-semibold text-cabGray-800">Booking Summary</h3>
+        {tripType === 'outstation' && (
+          <div className="mt-1 text-sm text-cabBlue-600 font-medium flex items-center">
+            {tripMode === 'one-way' ? (
+              <>
+                <ArrowRight size={14} className="mr-1" /> One Way Trip
+              </>
+            ) : (
+              <>
+                <ArrowLeftRight size={14} className="mr-1" /> Round Trip
+              </>
+            )}
+          </div>
+        )}
+        {tripType === 'local' && hourlyPackage && (
+          <div className="mt-1 text-sm text-cabBlue-600 font-medium flex items-center">
+            <Clock size={14} className="mr-1" /> {getSelectedPackageInfo()}
+          </div>
+        )}
       </div>
       
       <div className="p-5 space-y-4">
@@ -141,14 +182,31 @@ export function BookingSummary({
           </div>
         </div>
         
-        <div className="flex items-start space-x-3">
-          <MapPin className="text-cabBlue-500 mt-1 flex-shrink-0" size={18} />
-          <div>
-            <p className="text-xs text-cabGray-500">DROP-OFF</p>
-            <p className="font-medium text-cabGray-800">{dropLocation.name}</p>
-            <p className="text-xs text-cabGray-600">{dropLocation.city}, {dropLocation.state}</p>
+        {tripType === 'local' ? (
+          <div className="flex items-start space-x-3">
+            <Briefcase className="text-cabBlue-500 mt-1 flex-shrink-0" size={18} />
+            <div>
+              <p className="text-xs text-cabGray-500">TRIP PURPOSE</p>
+              <p className="font-medium text-cabGray-800">
+                {tripPurpose === 'business' && 'Business Trip'}
+                {tripPurpose === 'personal' && 'Personal Trip'}
+                {tripPurpose === 'city-tour' && 'City Tour'}
+              </p>
+              <p className="text-xs text-cabGray-600">{getSelectedPackageInfo()}</p>
+            </div>
           </div>
-        </div>
+        ) : (
+          dropLocation && (
+            <div className="flex items-start space-x-3">
+              <MapPin className="text-cabBlue-500 mt-1 flex-shrink-0" size={18} />
+              <div>
+                <p className="text-xs text-cabGray-500">DROP-OFF</p>
+                <p className="font-medium text-cabGray-800">{dropLocation.name}</p>
+                <p className="text-xs text-cabGray-600">{dropLocation.city}, {dropLocation.state}</p>
+              </div>
+            </div>
+          )
+        )}
         
         <div className="flex items-start space-x-3">
           <Calendar className="text-cabBlue-500 mt-1 flex-shrink-0" size={18} />
@@ -177,10 +235,29 @@ export function BookingSummary({
             <span className="text-cabGray-600">Base fare</span>
             <span className="text-cabGray-800">₹{selectedCab.price.toLocaleString('en-IN')}</span>
           </div>
-          <div className="flex justify-between text-sm mt-1">
-            <span className="text-cabGray-600">Distance ({distance} km)</span>
-            <span className="text-cabGray-800">₹{(distance * selectedCab.pricePerKm).toLocaleString('en-IN')}</span>
-          </div>
+          
+          {tripType === 'local' ? (
+            <div className="flex justify-between text-sm mt-1">
+              <span className="text-cabGray-600">{getSelectedPackageInfo()}</span>
+              <span className="text-cabGray-800">
+                ₹{Math.round(selectedCab.price * (hourlyPackages.find(pkg => pkg.id === hourlyPackage)?.multiplier || 1)).toLocaleString('en-IN')}
+              </span>
+            </div>
+          ) : (
+            <div className="flex justify-between text-sm mt-1">
+              <span className="text-cabGray-600">
+                Distance ({distance} km) {tripType === 'outstation' && '(min. 250 km)'}
+              </span>
+              <span className="text-cabGray-800">₹{(distance * selectedCab.pricePerKm).toLocaleString('en-IN')}</span>
+            </div>
+          )}
+          
+          {tripType === 'outstation' && (
+            <div className="flex justify-between text-sm mt-1">
+              <span className="text-cabGray-600">Driver allowance</span>
+              <span className="text-cabGray-800">₹250</span>
+            </div>
+          )}
           
           {appliedPromo && (
             <div className="flex justify-between text-sm mt-1 text-green-600">

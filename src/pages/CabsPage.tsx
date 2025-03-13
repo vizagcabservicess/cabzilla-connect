@@ -3,23 +3,45 @@ import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
 import { DateTimePicker } from "@/components/DateTimePicker";
 import { CabOptions } from "@/components/CabOptions";
-import { Location, vizagLocations, apDestinations, getDistanceBetweenLocations, getEstimatedTravelTime, formatTravelTime } from "@/lib/locationData";
-import { CabType, cabTypes, calculateFare } from "@/lib/cabData";
-import { CarTaxiFront, Clock } from "lucide-react";
+import { TripModeSelector } from "@/components/TripModeSelector";
+import { LocalTripSelector } from "@/components/LocalTripSelector";
+import { 
+  Location, 
+  vizagLocations, 
+  apDestinations, 
+  getDistanceBetweenLocations, 
+  getEstimatedTravelTime, 
+  formatTravelTime 
+} from "@/lib/locationData";
+import { 
+  CabType, 
+  cabTypes, 
+  calculateFare, 
+  TripType, 
+  TripMode, 
+  LocalTripPurpose,
+  hourlyPackages 
+} from "@/lib/cabData";
+import { calculateDistanceMatrix } from "@/lib/distanceService";
+import { CarTaxiFront, Clock, MapPin } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
 import { Input } from "@/components/ui/input";
-
-type TripType = "outstation" | "local" | "airport";
+import { useToast } from "@/components/ui/use-toast";
 
 const CabsPage = () => {
   const navigate = useNavigate();
   const { tripType: urlTripType } = useParams<{ tripType?: string }>();
+  const { toast } = useToast();
   
   const [tripType, setTripType] = useState<TripType>(
     (urlTripType as TripType) || "outstation"
   );
+  
+  const [tripMode, setTripMode] = useState<TripMode>("one-way");
+  const [tripPurpose, setTripPurpose] = useState<LocalTripPurpose>("business");
+  const [hourlyPackage, setHourlyPackage] = useState(hourlyPackages[0].id);
   
   const [pickup, setPickup] = useState<Location | null>(null);
   const [dropoff, setDropoff] = useState<Location | null>(null);
@@ -28,6 +50,7 @@ const CabsPage = () => {
   const [distance, setDistance] = useState<number>(0);
   const [travelTime, setTravelTime] = useState<number>(0);
   const [totalPrice, setTotalPrice] = useState<number>(0);
+  const [isCalculatingDistance, setIsCalculatingDistance] = useState<boolean>(false);
   
   const handleTripTypeChange = (type: TripType) => {
     setTripType(type);
@@ -40,60 +63,129 @@ const CabsPage = () => {
     } else if (type === "local") {
       setPickup(null);
       setDropoff(null);
+      setHourlyPackage(hourlyPackages[0].id);
     }
   };
   
   useEffect(() => {
-    if (pickup && dropoff) {
-      const calculatedDistance = getDistanceBetweenLocations(pickup.id, dropoff.id);
-      setDistance(calculatedDistance);
-      
-      const estimatedTime = getEstimatedTravelTime(calculatedDistance);
-      setTravelTime(estimatedTime);
-      
-      if (selectedCab) {
-        const fare = calculateFare(selectedCab, calculatedDistance, tripType);
-        setTotalPrice(fare);
+    const fetchDistance = async () => {
+      if (tripType === 'local') {
+        const selectedPackage = hourlyPackages.find(pkg => pkg.id === hourlyPackage);
+        if (selectedPackage) {
+          setDistance(selectedPackage.kilometers);
+          const estimatedTime = getEstimatedTravelTime(selectedPackage.kilometers);
+          setTravelTime(estimatedTime);
+        }
+        return;
       }
-    } else {
-      setDistance(0);
-      setTravelTime(0);
-      setTotalPrice(0);
-    }
-  }, [pickup, dropoff, selectedCab, tripType]);
+      
+      if (pickup && dropoff) {
+        setIsCalculatingDistance(true);
+        
+        try {
+          const result = await calculateDistanceMatrix(pickup, dropoff);
+          
+          if (result.status === 'OK') {
+            setDistance(result.distance);
+            setTravelTime(result.duration);
+            
+            toast({
+              title: "Distance calculated",
+              description: `Distance: ${result.distance} km, estimated travel time: ${formatTravelTime(result.duration)}`,
+              duration: 3000,
+            });
+          } else {
+            const calculatedDistance = getDistanceBetweenLocations(pickup.id, dropoff.id);
+            setDistance(calculatedDistance);
+            
+            const estimatedTime = getEstimatedTravelTime(calculatedDistance);
+            setTravelTime(estimatedTime);
+            
+            toast({
+              title: "Distance calculation",
+              description: "Using estimated distance calculation",
+              variant: "default",
+              duration: 3000,
+            });
+          }
+        } catch (error) {
+          console.error("Error fetching distance:", error);
+          toast({
+            title: "Error calculating distance",
+            description: "Falling back to estimated distance",
+            variant: "destructive",
+            duration: 3000,
+          });
+          
+          const calculatedDistance = getDistanceBetweenLocations(pickup.id, dropoff.id);
+          setDistance(calculatedDistance);
+          
+          const estimatedTime = getEstimatedTravelTime(calculatedDistance);
+          setTravelTime(estimatedTime);
+        } finally {
+          setIsCalculatingDistance(false);
+        }
+      } else {
+        setDistance(0);
+        setTravelTime(0);
+      }
+    };
+    
+    fetchDistance();
+  }, [pickup, dropoff, tripType, hourlyPackage]);
   
   useEffect(() => {
     if (selectedCab && distance > 0) {
-      const fare = calculateFare(selectedCab, distance, tripType);
+      const fare = calculateFare(
+        selectedCab, 
+        distance, 
+        tripType, 
+        tripMode, 
+        tripType === 'local' ? hourlyPackage : undefined
+      );
       setTotalPrice(fare);
     } else {
       setTotalPrice(0);
     }
-  }, [selectedCab, distance, tripType]);
+  }, [selectedCab, distance, tripType, tripMode, hourlyPackage]);
+  
+  const handleHourlyPackageChange = (packageId: string) => {
+    setHourlyPackage(packageId);
+    
+    const selectedPackage = hourlyPackages.find(pkg => pkg.id === packageId);
+    if (selectedPackage) {
+      setDistance(selectedPackage.kilometers);
+      const estimatedTime = getEstimatedTravelTime(selectedPackage.kilometers);
+      setTravelTime(estimatedTime);
+    }
+  };
   
   const handleBookNow = () => {
-    if (pickup && dropoff && pickupDate && selectedCab) {
-      const bookingDetails = {
-        tripType,
-        pickup,
-        dropoff,
-        pickupDate,
-        selectedCab,
-        distance,
-        travelTime,
-        totalPrice
-      };
-      
-      sessionStorage.setItem("bookingDetails", JSON.stringify(bookingDetails));
-      
-      navigate("/booking-confirmation");
-    } else {
+    if ((tripType !== 'local' && (!pickup || !dropoff)) || !pickupDate || !selectedCab) {
       toast({
         title: "Missing information",
         description: "Please fill all the required fields",
         variant: "destructive"
       });
+      return;
     }
+    
+    const bookingDetails = {
+      tripType,
+      tripMode: tripType === 'outstation' ? tripMode : undefined,
+      tripPurpose: tripType === 'local' ? tripPurpose : undefined,
+      hourlyPackage: tripType === 'local' ? hourlyPackage : undefined,
+      pickup,
+      dropoff: tripType === 'local' ? null : dropoff,
+      pickupDate,
+      selectedCab,
+      distance,
+      travelTime,
+      totalPrice
+    };
+    
+    sessionStorage.setItem("bookingDetails", JSON.stringify(bookingDetails));
+    navigate("/booking-confirmation");
   };
 
   return (
@@ -157,6 +249,12 @@ const CabsPage = () => {
             </div>
             
             <div className="p-6">
+              {tripType === "outstation" && (
+                <div className="mb-6">
+                  <TripModeSelector value={tripMode} onChange={setTripMode} />
+                </div>
+              )}
+            
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <LocationInput 
                   label="PICKUP LOCATION" 
@@ -168,13 +266,22 @@ const CabsPage = () => {
                   className={tripType === "airport" ? "opacity-75" : ""}
                 />
                 
-                <LocationInput 
-                  label="DROP LOCATION" 
-                  placeholder={tripType === "local" ? "Select location in Visakhapatnam" : "Select destination in Andhra Pradesh"} 
-                  value={dropoff} 
-                  onChange={setDropoff}
-                  isPickupLocation={false} 
-                />
+                {tripType === "local" ? (
+                  <LocalTripSelector 
+                    tripPurpose={tripPurpose}
+                    onTripPurposeChange={setTripPurpose}
+                    hourlyPackage={hourlyPackage}
+                    onHourlyPackageChange={handleHourlyPackageChange}
+                  />
+                ) : (
+                  <LocationInput 
+                    label="DROP LOCATION" 
+                    placeholder={tripType === "local" ? "Select location in Visakhapatnam" : "Select destination in Andhra Pradesh"} 
+                    value={dropoff} 
+                    onChange={setDropoff}
+                    isPickupLocation={false} 
+                  />
+                )}
                 
                 <DateTimePicker 
                   label="PICKUP DATE & TIME" 
@@ -189,7 +296,11 @@ const CabsPage = () => {
                       <CarTaxiFront size={18} />
                     </div>
                     <div className="text-xs text-gray-700">
-                      <p>Est. one-way distance: <span className="font-semibold">{distance} km</span></p>
+                      {isCalculatingDistance ? (
+                        <p>Calculating distance...</p>
+                      ) : (
+                        <p>Est. {tripMode === 'round-trip' ? 'round-trip' : 'one-way'} distance: <span className="font-semibold">{distance} km</span></p>
+                      )}
                     </div>
                   </div>
                   
@@ -206,6 +317,18 @@ const CabsPage = () => {
                 </div>
               </div>
               
+              {tripType === "outstation" && (
+                <div className="mb-6 bg-blue-50 p-3 rounded-md border border-blue-100 text-sm text-blue-800">
+                  <p className="flex items-start">
+                    <MapPin size={16} className="mr-2 mt-0.5 flex-shrink-0" />
+                    <span>
+                      Note: Outstation trips have a minimum billing distance of 250 KM, even if actual distance is less.
+                      {tripMode === 'round-trip' ? " The same pricing applies for round trips." : ""}
+                    </span>
+                  </p>
+                </div>
+              )}
+              
               <div className="border-t border-gray-200 my-6"></div>
               
               <CabOptions 
@@ -221,7 +344,11 @@ const CabsPage = () => {
                   <div className="flex justify-between items-center">
                     <div>
                       <h3 className="text-lg font-semibold text-gray-800">Fare Summary</h3>
-                      <p className="text-sm text-gray-600">All inclusive price</p>
+                      <p className="text-sm text-gray-600">
+                        {tripType === "local" 
+                          ? `${hourlyPackages.find(pkg => pkg.id === hourlyPackage)?.name || ''} Package` 
+                          : `${tripMode === 'round-trip' ? 'Round Trip' : 'One Way'}`}
+                      </p>
                     </div>
                     <div className="text-right">
                       <div className="text-2xl font-bold text-gray-900">₹{totalPrice}</div>
@@ -235,7 +362,12 @@ const CabsPage = () => {
                 <Button 
                   onClick={handleBookNow}
                   className="bg-red-500 hover:bg-red-600 text-white px-8 py-6 rounded-md font-semibold text-lg"
-                  disabled={!pickup || !dropoff || !pickupDate || !selectedCab}
+                  disabled={
+                    (tripType !== 'local' && (!pickup || !dropoff)) || 
+                    !pickupDate || 
+                    !selectedCab || 
+                    isCalculatingDistance
+                  }
                 >
                   Book Now
                 </Button>
