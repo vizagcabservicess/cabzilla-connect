@@ -143,13 +143,15 @@ const CabsPage = () => {
         distance, 
         tripType, 
         tripMode, 
-        tripType === 'local' ? hourlyPackage : undefined
+        tripType === 'local' ? hourlyPackage : undefined,
+        pickupDate,
+        returnDate
       );
       setTotalPrice(fare);
     } else {
       setTotalPrice(0);
     }
-  }, [selectedCab, distance, tripType, tripMode, hourlyPackage]);
+  }, [selectedCab, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate]);
   
   const handleHourlyPackageChange = (packageId: string) => {
     setHourlyPackage(packageId);
@@ -322,7 +324,7 @@ const CabsPage = () => {
                 distance={distance}
                 tripType={tripType}
                 tripMode={tripMode}
-                hourlyPackage={hourlyPackage}
+                hourlyPackage={tripType === 'local' ? hourlyPackage : undefined}
                 returnDate={returnDate}
                 pickupDate={pickupDate}
               />
