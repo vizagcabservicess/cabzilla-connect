@@ -3,10 +3,14 @@ export interface Location {
   name: string;
   city: string;
   state: string;
+  lat: number;
+  lng: number; 
   type: 'airport' | 'train_station' | 'bus_station' | 'hotel' | 'landmark' | 'other';
   popularityScore: number;
   isPickupLocation?: boolean;
   isDropLocation?: boolean;
+  
+
 }
 
 export const vizagLocations: Location[] = [
@@ -17,7 +21,9 @@ export const vizagLocations: Location[] = [
     state: 'Andhra Pradesh',
     type: 'bus_station',
     popularityScore: 95,
-    isPickupLocation: true
+    isPickupLocation: true,
+    lat: 17.7215, 
+    lng: 83.2248 
   },
   {
     id: 'vizag_railway',
@@ -26,7 +32,9 @@ export const vizagLocations: Location[] = [
     state: 'Andhra Pradesh',
     type: 'train_station',
     popularityScore: 98,
-    isPickupLocation: true
+    isPickupLocation: true,
+    lat: 17.7215, 
+    lng: 83.2248 
   },
   {
     id: 'vizag_airport',
@@ -35,7 +43,9 @@ export const vizagLocations: Location[] = [
     state: 'Andhra Pradesh',
     type: 'airport',
     popularityScore: 99,
-    isPickupLocation: true
+    isPickupLocation: true,
+    lat: 17.7215, 
+    lng: 83.2248 
   },
   {
     id: 'rk_beach',
@@ -44,7 +54,9 @@ export const vizagLocations: Location[] = [
     state: 'Andhra Pradesh',
     type: 'landmark',
     popularityScore: 92,
-    isPickupLocation: true
+    isPickupLocation: true,
+    lat: 17.7175,
+    lng: 83.3162
   },
   {
     id: 'jagadamba_junction',
@@ -53,7 +65,9 @@ export const vizagLocations: Location[] = [
     state: 'Andhra Pradesh',
     type: 'landmark',
     popularityScore: 90,
-    isPickupLocation: true
+    isPickupLocation: true,
+    lat: 17.7215, 
+    lng: 83.2248 
   },
   {
     id: 'mvp_colony',
@@ -62,7 +76,9 @@ export const vizagLocations: Location[] = [
     state: 'Andhra Pradesh',
     type: 'landmark',
     popularityScore: 88,
-    isPickupLocation: true
+    isPickupLocation: true,
+    lat: 17.7215, 
+    lng: 83.2248 
   },
   {
     id: 'gajuwaka',
@@ -80,7 +96,9 @@ export const vizagLocations: Location[] = [
     state: 'Andhra Pradesh',
     type: 'landmark',
     popularityScore: 83,
-    isPickupLocation: true
+    isPickupLocation: true,
+    lat: 17.7215, 
+    lng: 83.2248 
   }
 ];
 
@@ -92,7 +110,9 @@ export const apDestinations: Location[] = [
     state: 'Andhra Pradesh',
     type: 'landmark',
     popularityScore: 95,
-    isDropLocation: true
+    isDropLocation: true,
+    lat: 17.7215, 
+    lng: 83.2248 
   },
   {
     id: 'srikakulam',
@@ -101,7 +121,9 @@ export const apDestinations: Location[] = [
     state: 'Andhra Pradesh',
     type: 'landmark',
     popularityScore: 88,
-    isDropLocation: true
+    isDropLocation: true,
+    lat: 17.7215, 
+    lng: 83.2248 
   },
   {
     id: 'rajahmundry',
@@ -110,7 +132,9 @@ export const apDestinations: Location[] = [
     state: 'Andhra Pradesh',
     type: 'landmark',
     popularityScore: 90,
-    isDropLocation: true
+    isDropLocation: true,
+    lat: 17.7215, 
+    lng: 83.2248 
   },
   {
     id: 'vijayawada',
@@ -119,7 +143,9 @@ export const apDestinations: Location[] = [
     state: 'Andhra Pradesh',
     type: 'landmark',
     popularityScore: 92,
-    isDropLocation: true
+    isDropLocation: true,
+    lat: 17.7215, 
+    lng: 83.2248 
   },
   {
     id: 'tirupati',
@@ -128,7 +154,9 @@ export const apDestinations: Location[] = [
     state: 'Andhra Pradesh',
     type: 'landmark',
     popularityScore: 94,
-    isDropLocation: true
+    isDropLocation: true,
+    lat: 17.7215, 
+    lng: 83.2248 
   },
   {
     id: 'kakinada',
@@ -137,7 +165,9 @@ export const apDestinations: Location[] = [
     state: 'Andhra Pradesh',
     type: 'landmark',
     popularityScore: 87,
-    isDropLocation: true
+    isDropLocation: true,
+    lat: 17.7215, 
+    lng: 83.2248 
   },
   {
     id: 'guntur',
@@ -146,7 +176,9 @@ export const apDestinations: Location[] = [
     state: 'Andhra Pradesh',
     type: 'landmark',
     popularityScore: 89,
-    isDropLocation: true
+    isDropLocation: true,
+    lat: 17.7215, 
+    lng: 83.2248 
   },
   {
     id: 'ongole',
@@ -155,7 +187,9 @@ export const apDestinations: Location[] = [
     state: 'Andhra Pradesh',
     type: 'landmark',
     popularityScore: 83,
-    isDropLocation: true
+    isDropLocation: true,
+    lat: 17.7215, 
+    lng: 83.2248 
   },
   {
     id: 'kadapa',
@@ -164,7 +198,9 @@ export const apDestinations: Location[] = [
     state: 'Andhra Pradesh',
     type: 'landmark',
     popularityScore: 82,
-    isDropLocation: true
+    isDropLocation: true,
+    lat: 17.7215, 
+    lng: 83.2248 
   },
   {
     id: 'nellore',
@@ -173,37 +209,14 @@ export const apDestinations: Location[] = [
     state: 'Andhra Pradesh',
     type: 'landmark',
     popularityScore: 84,
-    isDropLocation: true
+    isDropLocation: true,
+    lat: 17.7215, 
+    lng: 83.2248 
   }
 ];
 
 export const popularLocations: Location[] = [
-  ...vizagLocations,
-  ...apDestinations,
-  {
-    id: 'del_airport',
-    name: 'Indira Gandhi International Airport',
-    city: 'New Delhi',
-    state: 'Delhi',
-    type: 'airport',
-    popularityScore: 100
-  },
-  {
-    id: 'bom_airport',
-    name: 'Chhatrapati Shivaji International Airport',
-    city: 'Mumbai',
-    state: 'Maharashtra',
-    type: 'airport',
-    popularityScore: 98
-  },
-  {
-    id: 'blr_airport',
-    name: 'Kempegowda International Airport',
-    city: 'Bengaluru',
-    state: 'Karnataka',
-    type: 'airport',
-    popularityScore: 95
-  }
+ 
 ];
 
 export const searchLocations = (query: string, isPickup: boolean = false): Location[] => {

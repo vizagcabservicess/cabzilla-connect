@@ -53,7 +53,7 @@ export function Navbar() {
             className="flex items-center space-x-2 text-cabBlue-600 hover:text-cabBlue-800 transition-colors"
           >
             <Phone size={18} />
-            <span>1800-123-456</span>
+            <span>+91 9966363662</span>
           </a>
           <Button>Login</Button>
         </div>
@@ -77,11 +77,11 @@ export function Navbar() {
             
             <div className="pt-4 border-t border-cabGray-200">
               <a 
-                href="tel:+1800123456" 
+                href="tel:+919966363662" 
                 className="flex items-center space-x-2 text-cabBlue-600 py-2"
               >
                 <Phone size={18} />
-                <span>1800-123-456</span>
+                <span>+91 9966363662</span>
               </a>
               <Button className="w-full mt-4">Login</Button>
             </div>

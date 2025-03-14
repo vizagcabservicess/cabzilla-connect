@@ -1,6 +1,5 @@
-
 import { useState } from 'react';
-import { CabType, formatPrice, calculateFare, TripType, TripMode, hourlyPackages } from '@/lib/cabData';
+import { CabType, formatPrice, TripType, TripMode } from '@/lib/cabData';
 import { Users, Briefcase, Tag, Info, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { differenceInDays } from 'date-fns';
@@ -12,19 +11,17 @@ interface CabOptionsProps {
   distance: number;
   tripType?: TripType;
   tripMode?: TripMode;
-  hourlyPackage?: string;
   pickupDate?: Date;
   returnDate?: Date;
 }
 
-export function CabOptions({ 
-  cabTypes, 
-  selectedCab, 
+export function CabOptions({
+  cabTypes,
+  selectedCab,
   onSelectCab,
   distance,
   tripType = 'outstation',
   tripMode = 'one-way',
-  hourlyPackage,
   pickupDate,
   returnDate
 }: CabOptionsProps) {
@@ -37,29 +34,39 @@ export function CabOptions({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-lg font-semibold text-gray-800">
-          Select a cab type
-        </h3>
-        <div className="text-xs text-gray-500">
-          {cabTypes.length} cab types available
-        </div>
+        <h3 className="text-lg font-semibold text-gray-800">Select a cab type</h3>
+        <div className="text-xs text-gray-500">{cabTypes.length} cab types available</div>
       </div>
       
       <div className="space-y-3">
         {cabTypes.map((cab) => {
-          const fare = calculateFare(
-            cab, 
-            distance, 
-            tripType, 
-            tripMode, 
-            hourlyPackage,
-            pickupDate,
-            returnDate
-          );
+          let baseRate = 0, perKmRate = 0, nightHaltCharge = 0;
+          switch (cab.name.toLowerCase()) {
+            case "sedan":
+              baseRate = 4200;
+              perKmRate = 14;
+              nightHaltCharge = 700;
+              break;
+            case "ertiga":
+              baseRate = 5400;
+              perKmRate = 18;
+              nightHaltCharge = 1000;
+              break;
+            case "innova crysta":
+              baseRate = 6000;
+              perKmRate = 20;
+              nightHaltCharge = 1000;
+              break;
+          }
           
-          const selectedHourlyPackage = tripType === 'local' && hourlyPackage ? 
-            hourlyPackages.find(pkg => pkg.id === hourlyPackage) : null;
-          
+          let days = returnDate ? Math.max(1, differenceInDays(returnDate, pickupDate) + 1) : 1;
+          let minKm = days * 300;
+          let effectiveDistance = tripMode === "one-way" ? distance * 2 : distance;
+          let totalBaseFare = days * baseRate;
+          let totalDistanceFare = Math.max(effectiveDistance - minKm, 0) * perKmRate;
+          let totalNightHalt = tripMode === "round-trip" ? (days - 1) * nightHaltCharge : 0;
+          let totalFare = totalBaseFare + totalDistanceFare + totalNightHalt;
+
           return (
             <div 
               key={cab.id}
@@ -77,187 +84,34 @@ export function CabOptions({
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center space-x-3">
                     <div className="w-12 h-12 bg-gray-100 rounded-md flex items-center justify-center">
-                      {/* Replace with actual image when available */}
                       <span className="text-gray-500 text-xs">{cab.name.charAt(0)}</span>
                     </div>
-                    
                     <div>
                       <h4 className="font-semibold text-base text-gray-800">{cab.name}</h4>
                       <p className="text-xs text-gray-500">{cab.description}</p>
                     </div>
                   </div>
-                  
                   <div className="flex flex-col items-end">
                     <div className="text-lg font-bold text-blue-600">
-                      {formatPrice(fare)}
+                      {formatPrice(totalFare)}
                     </div>
-                    {tripType === 'local' && selectedHourlyPackage && (
-                      <div className="text-xs text-green-600">
-                        {selectedHourlyPackage.name} Package - {formatPrice(selectedHourlyPackage.basePrice)}
-                      </div>
-                    )}
                     {tripType === 'outstation' && (
                       <div className="text-xs text-blue-600">
                         {tripMode === 'one-way' 
-                          ? '₹3900 for 300km, then ₹13/km' 
-                          : `₹${cab.price}/day + ₹14/km`}
+                          ? `₹${baseRate} for 300km, then ₹${perKmRate}/km` 
+                          : `₹${baseRate}/day + ₹${perKmRate}/km`}
                       </div>
                     )}
                     <div className="flex items-center text-xs text-gray-400">
                       <span className="text-green-600 mr-1 text-[10px]">✓</span>
-                      Includes taxes & fees
+                      Includes taxes & fees (Tolls & Permits Extra)
                     </div>
-                  </div>
-                </div>
-                
-                <div className="flex mt-1 space-x-4 text-xs border-t pt-2 border-gray-100">
-                  <div className="flex items-center text-gray-600">
-                    <Users size={12} className="mr-1" />
-                    <span>{cab.capacity} seater</span>
-                  </div>
-                  <div className="flex items-center text-gray-600">
-                    <Briefcase size={12} className="mr-1" />
-                    <span>{cab.luggage} bags</span>
-                  </div>
-                  
-                  {cab.ac && (
-                    <div className="flex items-center text-gray-600">
-                      <span className="mr-1 text-[10px]">✓</span>
-                      <span>AC</span>
-                    </div>
-                  )}
-                  
-                  <div className="flex items-center text-gray-600">
-                    <span className="mr-1 text-[10px]">✓</span>
-                    <span>Free cancellation</span>
                   </div>
                 </div>
               </div>
-              
-              <button
-                className={cn(
-                  "w-full text-blue-500 text-xs py-1.5 text-center border-t border-gray-100 hover:bg-blue-50 transition-colors",
-                  expandedCab === cab.id && "bg-blue-50"
-                )}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleExpand(cab.id);
-                }}
-              >
-                <div className="flex items-center justify-center">
-                  <Info size={12} className="mr-1" />
-                  {expandedCab === cab.id ? "Hide details" : "More details"}
-                </div>
-              </button>
-              
-              {expandedCab === cab.id && (
-                <div className="p-3 bg-blue-50 border-t border-gray-200 animate-fade-in">
-                  <h5 className="font-medium text-gray-700 text-xs mb-2">Amenities & Features</h5>
-                  <div className="flex flex-wrap gap-2">
-                    {cab.features.map((feature, index) => (
-                      <div 
-                        key={index}
-                        className="bg-white border border-gray-200 rounded-full px-3 py-1 text-xs flex items-center"
-                      >
-                        <Check size={10} className="mr-1 text-green-500" />
-                        {feature}
-                      </div>
-                    ))}
-                  </div>
-                  
-                  <div className="mt-3 pt-2 border-t border-gray-200">
-                    <h5 className="font-medium text-gray-700 text-xs mb-1">Pricing breakdown</h5>
-                    <div className="text-xs text-gray-600 space-y-1">
-                      {tripType === 'local' && selectedHourlyPackage ? (
-                        <>
-                          <div className="flex justify-between">
-                            <span>{selectedHourlyPackage.name} Package</span>
-                            <span>{formatPrice(selectedHourlyPackage.basePrice)}</span>
-                          </div>
-                          {distance > selectedHourlyPackage.kilometers && (
-                            <div className="flex justify-between">
-                              <span>Extra {distance - selectedHourlyPackage.kilometers} km @ ₹{cab.pricePerKm}/km</span>
-                              <span>{formatPrice((distance - selectedHourlyPackage.kilometers) * cab.pricePerKm)}</span>
-                            </div>
-                          )}
-                        </>
-                      ) : tripType === 'outstation' && tripMode === 'one-way' ? (
-                        <>
-                          <div className="flex justify-between">
-                            <span>Base fare (first 300 km)</span>
-                            <span>{formatPrice(cab.price)}</span>
-                          </div>
-                          {Math.max(distance, 250) > 300 && (
-                            <div className="flex justify-between">
-                              <span>Additional {Math.max(distance, 250) - 300} km @ ₹13/km</span>
-                              <span>{formatPrice((Math.max(distance, 250) - 300) * 13)}</span>
-                            </div>
-                          )}
-                          <div className="flex justify-between">
-                            <span>Driver allowance</span>
-                            <span>₹250</span>
-                          </div>
-                        </>
-                      ) : tripType === 'outstation' && tripMode === 'round-trip' ? (
-                        <>
-                          {pickupDate && returnDate ? (
-                            <div className="flex justify-between">
-                              <span>
-                                Base fare ({Math.max(1, differenceInDays(returnDate, pickupDate) + 1)} days @ {formatPrice(cab.price)}/day)
-                              </span>
-                              <span>
-                                {formatPrice(cab.price * Math.max(1, differenceInDays(returnDate, pickupDate) + 1))}
-                              </span>
-                            </div>
-                          ) : (
-                            <div className="flex justify-between">
-                              <span>Base fare (per day)</span>
-                              <span>{formatPrice(cab.price)}</span>
-                            </div>
-                          )}
-                          <div className="flex justify-between">
-                            <span>Distance fare ({Math.max(distance, 250)} km @ ₹14/km)</span>
-                            <span>{formatPrice(Math.max(distance, 250) * 14)}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Driver allowance</span>
-                            <span>₹250</span>
-                          </div>
-                        </>
-                      ) : (
-                        <div className="flex justify-between">
-                          <span>Distance fare ({distance} km)</span>
-                          <span>{formatPrice(distance * cab.pricePerKm)}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between font-medium pt-1 border-t border-gray-200 mt-1">
-                        <span>Total fare</span>
-                        <span className="text-blue-600">{formatPrice(fare)}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           );
         })}
-      </div>
-      
-      <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 mt-4">
-        <div className="flex items-start">
-          <div className="text-amber-500 mr-2">
-            <Info size={16} />
-          </div>
-          <div className="text-xs text-gray-700">
-            <p className="font-medium mb-1">Fare Inclusions & Terms</p>
-            <ul className="list-disc pl-4 space-y-1">
-              <li>Fares include all taxes and fees</li>
-              <li>Waiting time: First 15 minutes free, thereafter ₹100/hr</li>
-              <li>Night charges (10 PM - 6 AM): Additional 10% on total fare</li>
-              <li>Free cancellation: Up to 2 hours before pickup</li>
-            </ul>
-          </div>
-        </div>
       </div>
     </div>
   );
