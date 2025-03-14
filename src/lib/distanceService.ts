@@ -7,40 +7,98 @@ export interface DistanceResult {
   status: "OK" | "FAILED";
 }
 
-// Function to fetch actual distance using Google Distance Matrix API
+// Function to fetch actual distance using Google Maps API directly
 export async function calculateDistanceMatrix(
   origin: Location,
   destination: Location
 ): Promise<DistanceResult> {
-  const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-
-  if (!API_KEY) {
-    console.error("❌ Google API Key is missing. Check .env file.");
-    return { distance: 0, duration: 0, status: "FAILED" };
+  console.log(`🔍 Calculating distance between: ${origin.name} → ${destination.name}`);
+  
+  // Make sure Google Maps API is loaded
+  if (typeof window.google === 'undefined' || !window.google.maps) {
+    console.error("❌ Google Maps API not loaded yet");
+    return fallbackDistanceCalculation(origin, destination);
   }
-
-  console.log(`🚀 Calculating distance between: ${origin.name} → ${destination.name}`);
-
-  // Use fallback calculation if Google API fails
+  
   try {
-    // Since we're getting a CORS error with the direct API call,
-    // let's use a fallback calculation for now
-    const calculatedDistance = getApproximateDistance(
-      origin.lat, origin.lng,
-      destination.lat, destination.lng
-    );
+    // Create a Distance Matrix Service instance
+    const distanceService = new window.google.maps.DistanceMatrixService();
     
-    const estimatedDuration = calculateEstimatedDuration(calculatedDistance);
+    // Request the distance
+    const response = await new Promise<google.maps.DistanceMatrixResponse>((resolve, reject) => {
+      distanceService.getDistanceMatrix(
+        {
+          origins: [{ lat: origin.lat, lng: origin.lng }],
+          destinations: [{ lat: destination.lat, lng: destination.lng }],
+          travelMode: window.google.maps.TravelMode.DRIVING,
+          unitSystem: window.google.maps.UnitSystem.METRIC,
+          avoidHighways: false,
+          avoidTolls: false,
+        },
+        (response, status) => {
+          if (status === 'OK') {
+            resolve(response);
+          } else {
+            reject(new Error(`Distance Matrix request failed: ${status}`));
+          }
+        }
+      );
+    });
     
-    return {
-      distance: calculatedDistance,
-      duration: estimatedDuration,
-      status: "OK",
-    };
+    // Extract distance and duration from the response
+    if (
+      response.rows &&
+      response.rows.length > 0 &&
+      response.rows[0].elements &&
+      response.rows[0].elements.length > 0
+    ) {
+      const element = response.rows[0].elements[0];
+      
+      if (element.status === 'OK') {
+        // Convert distance from meters to kilometers
+        const distanceInKm = element.distance.value / 1000;
+        // Convert duration from seconds to minutes
+        const durationInMinutes = Math.ceil(element.duration.value / 60);
+        
+        console.log(`✅ Distance Matrix result: ${distanceInKm.toFixed(1)} km, ${durationInMinutes} minutes`);
+        
+        return {
+          distance: Math.round(distanceInKm), // Round to nearest km
+          duration: durationInMinutes,
+          status: "OK",
+        };
+      }
+    }
+    
+    // If we couldn't get a proper response, use fallback
+    console.warn("⚠️ Invalid Distance Matrix response, using fallback");
+    return fallbackDistanceCalculation(origin, destination);
+    
   } catch (error) {
-    console.error("❌ Distance calculation error:", error);
-    return { distance: 0, duration: 0, status: "FAILED" };
+    console.error("❌ Error in Distance Matrix API:", error);
+    return fallbackDistanceCalculation(origin, destination);
   }
+}
+
+// Fallback calculation function that uses the Haversine formula
+function fallbackDistanceCalculation(
+  origin: Location,
+  destination: Location
+): DistanceResult {
+  console.log("📊 Using fallback distance calculation");
+  
+  const distance = getApproximateDistance(
+    origin.lat, origin.lng,
+    destination.lat, destination.lng
+  );
+  
+  const duration = calculateEstimatedDuration(distance);
+  
+  return {
+    distance,
+    duration,
+    status: "OK",
+  };
 }
 
 // Haversine formula to calculate distance between two points on Earth

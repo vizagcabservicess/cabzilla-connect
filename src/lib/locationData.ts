@@ -9,8 +9,6 @@ export interface Location {
   popularityScore: number;
   isPickupLocation?: boolean;
   isDropLocation?: boolean;
-  
-
 }
 
 export const vizagLocations: Location[] = [
@@ -87,7 +85,9 @@ export const vizagLocations: Location[] = [
     state: 'Andhra Pradesh',
     type: 'landmark',
     popularityScore: 85,
-    isPickupLocation: true
+    isPickupLocation: true,
+    lat: 17.7337,
+    lng: 83.1385
   },
   {
     id: 'nad_junction',
@@ -216,7 +216,6 @@ export const apDestinations: Location[] = [
 ];
 
 export const popularLocations: Location[] = [
- 
 ];
 
 export const searchLocations = (query: string, isPickup: boolean = false): Location[] => {

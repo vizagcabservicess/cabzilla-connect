@@ -10,9 +10,10 @@ interface GoogleMapComponentProps {
 }
 
 const GoogleMapComponent = ({ pickupLocation, dropLocation }: GoogleMapComponentProps) => {
-  const { isLoaded } = useGoogleMaps();
+  const { isLoaded, google } = useGoogleMaps();
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [directionsRequested, setDirectionsRequested] = useState(false);
 
   const mapContainerStyle = {
     width: "100%",
@@ -28,6 +29,14 @@ const GoogleMapComponent = ({ pickupLocation, dropLocation }: GoogleMapComponent
     
     if (status === 'OK' && result) {
       setDirections(result);
+      
+      // Extract and log the actual distance from the directions result
+      const route = result.routes[0];
+      if (route && route.legs && route.legs.length > 0) {
+        const leg = route.legs[0];
+        console.log("Actual distance from Google:", leg.distance?.text);
+        console.log("Actual duration from Google:", leg.duration?.text);
+      }
     } else {
       console.error("Directions request failed with status:", status);
     }
@@ -35,15 +44,23 @@ const GoogleMapComponent = ({ pickupLocation, dropLocation }: GoogleMapComponent
 
   useEffect(() => {
     // Reset directions when locations change
-    if (mapLoaded && pickupLocation && dropLocation) {
+    if (pickupLocation && dropLocation) {
       setDirections(null);
+      setDirectionsRequested(false);
     }
-  }, [pickupLocation, dropLocation, mapLoaded]);
+  }, [pickupLocation, dropLocation]);
 
   const onMapLoad = useCallback(() => {
     console.log("Map loaded successfully");
     setMapLoaded(true);
   }, []);
+
+  // Handle directions request
+  useEffect(() => {
+    if (mapLoaded && pickupLocation && dropLocation && !directionsRequested && google) {
+      setDirectionsRequested(true);
+    }
+  }, [mapLoaded, pickupLocation, dropLocation, directionsRequested, google]);
 
   if (!isLoaded) {
     return <div className="p-4 text-center bg-gray-100 rounded-lg">Loading map...</div>;
@@ -56,12 +73,12 @@ const GoogleMapComponent = ({ pickupLocation, dropLocation }: GoogleMapComponent
       zoom={12}
       onLoad={onMapLoad}
     >
-      {pickupLocation && dropLocation && mapLoaded && !directions && (
+      {pickupLocation && dropLocation && mapLoaded && !directions && directionsRequested && (
         <DirectionsService
           options={{
             origin: { lat: pickupLocation.lat, lng: pickupLocation.lng },
             destination: { lat: dropLocation.lat, lng: dropLocation.lng },
-            travelMode: google.maps.TravelMode.DRIVING,
+            travelMode: google?.maps.TravelMode.DRIVING || "DRIVING",
           }}
           callback={directionsCallback}
         />

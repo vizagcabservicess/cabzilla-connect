@@ -1,20 +1,25 @@
 
-import { ReactNode, createContext, useContext } from "react";
+import { ReactNode, createContext, useContext, useEffect, useState } from "react";
 import { useLoadScript } from "@react-google-maps/api";
 
 // Environment variable for Google Maps API Key
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 
-// Libraries to load - use the correct type
-const libraries = ["places"] as ["places"];
+// Libraries to load with correct typing
+const libraries: ["places"] = ["places"];
 
-// Context for Google Maps
-const GoogleMapsContext = createContext<{
+// Create a more comprehensive context
+interface GoogleMapsContextType {
   isLoaded: boolean;
   loadError: Error | undefined;
-}>({
+  google: typeof google | null;
+}
+
+// Context for Google Maps
+const GoogleMapsContext = createContext<GoogleMapsContextType>({
   isLoaded: false,
   loadError: undefined,
+  google: null
 });
 
 // Hook to use Google Maps context
@@ -22,20 +27,32 @@ export const useGoogleMaps = () => useContext(GoogleMapsContext);
 
 // Provider component for Google Maps
 export const GoogleMapsProvider = ({ children }: { children: ReactNode }) => {
+  const [googleInstance, setGoogleInstance] = useState<typeof google | null>(null);
+  
   // Load the Google Maps script
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: GOOGLE_MAPS_API_KEY,
     libraries,
   });
 
+  // Store the google object once loaded
+  useEffect(() => {
+    if (isLoaded && !loadError && window.google) {
+      setGoogleInstance(window.google);
+      console.log("✅ Google Maps API loaded successfully");
+    }
+  }, [isLoaded, loadError]);
+
   // Log load status
-  if (loadError) {
-    console.error("Error loading Google Maps API:", loadError);
-  }
+  useEffect(() => {
+    if (loadError) {
+      console.error("❌ Error loading Google Maps API:", loadError);
+    }
+  }, [loadError]);
 
   // Provide context values
   return (
-    <GoogleMapsContext.Provider value={{ isLoaded, loadError }}>
+    <GoogleMapsContext.Provider value={{ isLoaded, loadError, google: googleInstance }}>
       {children}
     </GoogleMapsContext.Provider>
   );
