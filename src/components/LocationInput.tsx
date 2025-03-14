@@ -1,10 +1,11 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Autocomplete } from "@react-google-maps/api";
-import { Search, X } from "lucide-react";
-import { Location } from "@/lib/locationData";
+import { Search, X, MapPin } from "lucide-react";
+import { Location, vizagLocations } from "@/lib/locationData";
 import { cn } from "@/lib/utils";
 import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
+import { useToast } from "@/components/ui/use-toast";
 
 interface LocationInputProps {
   label: string;
@@ -14,6 +15,7 @@ interface LocationInputProps {
   className?: string;
   readOnly?: boolean;
   isPickupLocation?: boolean;
+  isAirportTransfer?: boolean;
 }
 
 export function LocationInput({
@@ -24,11 +26,15 @@ export function LocationInput({
   className,
   readOnly = false,
   isPickupLocation = false,
+  isAirportTransfer = false,
 }: LocationInputProps) {
   const { isLoaded, google } = useGoogleMaps();
+  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState(value ? value.name : "");
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null);
+  const [suggestedLocations, setSuggestedLocations] = useState<Location[]>([]);
 
   // Set the initial search query when value changes
   useEffect(() => {
@@ -39,10 +45,38 @@ export function LocationInput({
 
   // Auto-fill airport for airport trips
   useEffect(() => {
-    if (label.includes("AIRPORT") && isPickupLocation) {
-      // This would be set by the parent component when airport trip type is selected
+    if (isAirportTransfer) {
+      const airport = vizagLocations.find(loc => loc.type === 'airport');
+      
+      if (airport && ((isPickupLocation && label.toLowerCase().includes("airport")) || 
+                     (!isPickupLocation && label.toLowerCase().includes("destination")))) {
+        onChange(airport);
+        setSearchQuery(airport.name);
+      }
     }
-  }, [label, isPickupLocation]);
+  }, [isAirportTransfer, isPickupLocation, label, onChange]);
+
+  // Filter location suggestions based on search query
+  useEffect(() => {
+    if (!isLoaded || readOnly || !searchQuery || searchQuery.length < 2) {
+      setSuggestedLocations([]);
+      return;
+    }
+
+    const query = searchQuery.toLowerCase();
+    const filteredLocations = vizagLocations.filter(
+      location => 
+        location.name.toLowerCase().includes(query) || 
+        location.city.toLowerCase().includes(query)
+    );
+
+    // For pickup locations, filter to only show Vizag locations
+    const locations = isPickupLocation 
+      ? filteredLocations.filter(loc => loc.city.toLowerCase() === 'visakhapatnam')
+      : filteredLocations;
+
+    setSuggestedLocations(locations.slice(0, 5));
+  }, [searchQuery, isPickupLocation, isLoaded, readOnly]);
 
   // Handle Google Places selection
   const onPlaceChanged = () => {
@@ -74,7 +108,11 @@ export function LocationInput({
             place.formatted_address.toLowerCase().includes("vizag");
           
           if (!isVizagArea) {
-            alert("Pickup locations must be within Visakhapatnam area.");
+            toast({
+              title: "Location not supported",
+              description: "Pickup locations must be within Visakhapatnam area.",
+              variant: "destructive",
+            });
             return;
           }
         }
@@ -93,6 +131,7 @@ export function LocationInput({
         
         onChange(selectedLocation);
         setSearchQuery(selectedLocation.name);
+        setShowSuggestions(false);
       }
     }
   };
@@ -110,24 +149,32 @@ export function LocationInput({
     return "other";
   };
   
+  // Select a suggested location
+  const handleSelectSuggestion = (location: Location) => {
+    onChange(location);
+    setSearchQuery(location.name);
+    setShowSuggestions(false);
+  };
+  
   // Clear search input
   const handleClear = () => {
     onChange(null);
     setSearchQuery("");
+    setShowSuggestions(false);
   };
 
   // If Google Maps hasn't loaded yet, show a simple input
   if (!isLoaded || !google) {
     return (
       <div className={cn("relative w-full", className)}>
-        <label className="input-label">{label}</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
         <div className="relative">
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-cabGray-500">
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
             <Search size={18} />
           </div>
           <input
             type="text"
-            className="w-full pl-10 pr-10 py-3 shadow-input bg-gray-100"
+            className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-md bg-gray-100"
             placeholder="Loading places..."
             disabled
           />
@@ -138,52 +185,94 @@ export function LocationInput({
 
   return (
     <div className={cn("relative w-full", className)}>
-      <label className="input-label">{label}</label>
+      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
 
-      <Autocomplete
-        onLoad={setAutocomplete}
-        onPlaceChanged={onPlaceChanged}
-        options={{
-          componentRestrictions: { country: "IN" },
-          // Set bounds to Visakhapatnam area for pickup locations
-          ...(isPickupLocation && {
-            bounds: {
-              north: 17.8,  // North boundary
-              south: 17.6,  // South boundary
-              east: 83.35,  // East boundary
-              west: 83.15   // West boundary
-            },
-            strictBounds: true
-          }),
-          types: ['geocode', 'establishment'],
-        }}
-      >
-        <div className="relative">
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-cabGray-500">
-            <Search size={18} />
-          </div>
-
-          <input
-            ref={inputRef}
-            type="text"
-            className={cn("w-full pl-10 pr-10 py-3 shadow-input", readOnly ? "bg-gray-100 cursor-not-allowed" : "")}
-            placeholder={placeholder}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            readOnly={readOnly}
-          />
-
-          {searchQuery && !readOnly && (
-            <button
-              type="button"
-              onClick={handleClear}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-cabGray-400 hover:text-cabGray-600 transition-colors"
-            >
-              <X size={18} />
-            </button>
-          )}
+      <div className="relative">
+        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+          <Search size={18} />
         </div>
-      </Autocomplete>
+
+        {isAirportTransfer && ((isPickupLocation && label.toLowerCase().includes("airport")) || 
+                             (!isPickupLocation && label.toLowerCase().includes("destination"))) ? (
+          // Fixed airport input for airport transfers
+          <input
+            type="text"
+            className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-md bg-gray-100"
+            value={searchQuery}
+            readOnly
+          />
+        ) : (
+          <Autocomplete
+            onLoad={setAutocomplete}
+            onPlaceChanged={onPlaceChanged}
+            options={{
+              componentRestrictions: { country: "IN" },
+              // Set bounds to Visakhapatnam area for pickup locations
+              ...(isPickupLocation && {
+                bounds: {
+                  north: 18.0, // North boundary
+                  south: 17.5, // South boundary
+                  east: 83.5,  // East boundary
+                  west: 83.0   // West boundary
+                },
+                strictBounds: true
+              }),
+              types: ['geocode', 'establishment'],
+            }}
+          >
+            <input
+              ref={inputRef}
+              type="text"
+              className={cn(
+                "w-full pl-10 pr-10 py-3 border border-gray-300 rounded-md", 
+                readOnly ? "bg-gray-100 cursor-not-allowed" : ""
+              )}
+              placeholder={placeholder}
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setShowSuggestions(true);
+              }}
+              onFocus={() => setShowSuggestions(true)}
+              onBlur={() => {
+                // Delay hiding suggestions to allow clicking on them
+                setTimeout(() => setShowSuggestions(false), 200);
+              }}
+              readOnly={readOnly}
+            />
+          </Autocomplete>
+        )}
+
+        {searchQuery && !readOnly && (
+          <button
+            type="button"
+            onClick={handleClear}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X size={18} />
+          </button>
+        )}
+
+        {/* Suggested Locations */}
+        {showSuggestions && suggestedLocations.length > 0 && (
+          <div className="absolute z-10 w-full mt-1 bg-white shadow-lg rounded-md border border-gray-200 max-h-60 overflow-auto">
+            {suggestedLocations.map((location) => (
+              <button
+                key={location.id}
+                className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-start"
+                onClick={() => handleSelectSuggestion(location)}
+                type="button"
+              >
+                <MapPin size={16} className="mr-2 mt-1 flex-shrink-0 text-blue-500" />
+                <div>
+                  <div className="font-medium">{location.name}</div>
+                  <div className="text-xs text-gray-500">{location.city}, {location.state}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

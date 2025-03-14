@@ -70,12 +70,66 @@ export async function calculateDistanceMatrix(
       }
     }
     
-    // If we couldn't get a proper response, use fallback
-    console.warn("⚠️ Invalid Distance Matrix response, using fallback");
-    return fallbackDistanceCalculation(origin, destination);
+    // If we couldn't get a proper response, try direct route calculation as backup
+    console.warn("⚠️ Distance Matrix failed, trying DirectionsService...");
+    return await calculateDirectionsDistance(origin, destination);
     
   } catch (error) {
     console.error("❌ Error in Distance Matrix API:", error);
+    try {
+      // If Distance Matrix fails, try DirectionsService as a fallback
+      return await calculateDirectionsDistance(origin, destination);
+    } catch (directionsError) {
+      console.error("❌ Both distance calculation methods failed:", directionsError);
+      return fallbackDistanceCalculation(origin, destination);
+    }
+  }
+}
+
+// Secondary method using DirectionsService
+async function calculateDirectionsDistance(
+  origin: Location,
+  destination: Location
+): Promise<DistanceResult> {
+  console.log("🗺️ Trying DirectionsService for distance calculation");
+  
+  try {
+    const directionsService = new window.google.maps.DirectionsService();
+    
+    const result = await new Promise<google.maps.DirectionsResult>((resolve, reject) => {
+      directionsService.route(
+        {
+          origin: { lat: origin.lat, lng: origin.lng },
+          destination: { lat: destination.lat, lng: destination.lng },
+          travelMode: window.google.maps.TravelMode.DRIVING,
+        },
+        (response, status) => {
+          if (status === 'OK' && response) {
+            resolve(response);
+          } else {
+            reject(new Error(`Directions request failed: ${status}`));
+          }
+        }
+      );
+    });
+    
+    if (result.routes && result.routes.length > 0 && result.routes[0].legs && result.routes[0].legs.length > 0) {
+      const leg = result.routes[0].legs[0];
+      const distanceInKm = leg.distance ? leg.distance.value / 1000 : 0;
+      const durationInMinutes = leg.duration ? Math.ceil(leg.duration.value / 60) : 0;
+      
+      console.log(`✅ DirectionsService result: ${distanceInKm.toFixed(1)} km, ${durationInMinutes} minutes`);
+      
+      return {
+        distance: Math.round(distanceInKm),
+        duration: durationInMinutes,
+        status: "OK",
+      };
+    }
+    
+    throw new Error("Invalid response from DirectionsService");
+  } catch (error) {
+    console.error("❌ Error in DirectionsService:", error);
     return fallbackDistanceCalculation(origin, destination);
   }
 }

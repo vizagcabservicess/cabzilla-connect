@@ -55,22 +55,59 @@ const CabsPage = () => {
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState<boolean>(false);
   const [bookingComplete, setBookingComplete] = useState<boolean>(false);
 
+  // Set initial airport values for airport transfers
+  useEffect(() => {
+    if (tripType === "airport") {
+      // For airport transfers, find the airport location
+      const airport = vizagLocations.find(loc => loc.type === 'airport');
+      if (airport) {
+        // If pickup is at airport, set pickup to airport, otherwise set dropoff to airport
+        if (!pickup && !dropoff) {
+          setPickup(airport);
+        }
+      }
+    }
+  }, [tripType, pickup, dropoff]);
+
   const handleTripTypeChange = (type: TripType) => {
     setTripType(type);
     navigate(`/cabs/${type}`);
     setSelectedCab(null);
+    setDistance(0);
+    setTravelTime(0);
+    setShowMap(false);
 
     if (type === "airport") {
       // For airport transfers, automatically set the airport as one of the locations
       const airport = vizagLocations.find(loc => loc.type === 'airport');
       if (airport) {
         setPickup(airport);
+        setDropoff(null);
       }
     } else if (type === "local") {
       // For local trips, reset locations and set hourly package
       setPickup(null);
       setDropoff(null);
       setHourlyPackage(hourlyPackages[0].id);
+    } else {
+      // For outstation, just reset locations
+      setPickup(null);
+      setDropoff(null);
+    }
+  };
+
+  // Direct distance update from GoogleMapComponent
+  const handleMapDistanceCalculated = (mapDistance: number, mapDuration: number) => {
+    console.log(`Map calculated: ${mapDistance} km, ${mapDuration} min`);
+    if (mapDistance > 0 && mapDistance !== distance) {
+      setDistance(mapDistance);
+      setTravelTime(mapDuration);
+      
+      toast({
+        title: "✅ Distance Updated",
+        description: `Distance: ${mapDistance} km, Time: ${formatTravelTime(mapDuration)}`,
+        duration: 3000,
+      });
     }
   };
 
@@ -145,6 +182,19 @@ const CabsPage = () => {
       setTotalPrice(0);
     }
   }, [selectedCab, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate]);
+
+  // Handle hourly package change for local trips
+  const handleHourlyPackageChange = (packageId: string) => {
+    setHourlyPackage(packageId);
+    
+    // Update distance based on selected package
+    const selectedPackage = hourlyPackages.find((pkg) => pkg.id === packageId);
+    if (selectedPackage) {
+      setDistance(selectedPackage.kilometers);
+      const estimatedTime = selectedPackage.hours * 60; // Convert hours to minutes
+      setTravelTime(estimatedTime);
+    }
+  };
 
   // Handle search button click
   const handleSearch = () => {
@@ -260,6 +310,7 @@ const CabsPage = () => {
                   value={pickup} 
                   onChange={setPickup}
                   isPickupLocation={true}
+                  isAirportTransfer={tripType === "airport"}
                   readOnly={tripType === "airport" && !!pickup && pickup.type === "airport"}
                 />
                 
@@ -269,6 +320,7 @@ const CabsPage = () => {
                   value={dropoff} 
                   onChange={setDropoff}
                   isPickupLocation={false}
+                  isAirportTransfer={tripType === "airport"}
                   readOnly={tripType === "airport" && !!dropoff && dropoff.type === "airport"} 
                 />
 
@@ -286,6 +338,31 @@ const CabsPage = () => {
                     onDateChange={setReturnDate} 
                     minDate={pickupDate} 
                   />
+                )}
+
+                {tripType === "local" && (
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">SELECT PACKAGE</label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                      {hourlyPackages.map((pkg) => (
+                        <button
+                          key={pkg.id}
+                          type="button"
+                          className={`p-3 border rounded-md text-left ${
+                            hourlyPackage === pkg.id
+                              ? "border-blue-500 bg-blue-50"
+                              : "border-gray-300 hover:bg-gray-50"
+                          }`}
+                          onClick={() => handleHourlyPackageChange(pkg.id)}
+                        >
+                          <div className="font-medium">{pkg.name}</div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            Base price: ₹{pkg.basePrice}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 )}
 
                 <div className="text-xl font-bold text-gray-900 mt-4 mb-2">
@@ -317,6 +394,7 @@ const CabsPage = () => {
                     <GoogleMapComponent 
                       pickupLocation={pickup} 
                       dropLocation={dropoff} 
+                      onDistanceCalculated={handleMapDistanceCalculated}
                     />
                   </div>
                 )}

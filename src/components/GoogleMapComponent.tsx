@@ -7,9 +7,14 @@ import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
 interface GoogleMapComponentProps {
   pickupLocation: Location;
   dropLocation: Location;
+  onDistanceCalculated?: (distance: number, duration: number) => void;
 }
 
-const GoogleMapComponent = ({ pickupLocation, dropLocation }: GoogleMapComponentProps) => {
+const GoogleMapComponent = ({ 
+  pickupLocation, 
+  dropLocation,
+  onDistanceCalculated 
+}: GoogleMapComponentProps) => {
   const { isLoaded, google } = useGoogleMaps();
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -34,13 +39,26 @@ const GoogleMapComponent = ({ pickupLocation, dropLocation }: GoogleMapComponent
       const route = result.routes[0];
       if (route && route.legs && route.legs.length > 0) {
         const leg = route.legs[0];
+        const distanceValue = leg.distance?.value || 0;
+        const durationValue = leg.duration?.value || 0;
+        
         console.log("Actual distance from Google:", leg.distance?.text);
         console.log("Actual duration from Google:", leg.duration?.text);
+        
+        // Convert meters to kilometers and round to nearest integer
+        const distanceInKm = Math.round(distanceValue / 1000);
+        // Convert seconds to minutes
+        const durationInMinutes = Math.round(durationValue / 60);
+        
+        // Call the callback with the actual distance and duration
+        if (onDistanceCalculated) {
+          onDistanceCalculated(distanceInKm, durationInMinutes);
+        }
       }
     } else {
       console.error("Directions request failed with status:", status);
     }
-  }, []);
+  }, [onDistanceCalculated]);
 
   useEffect(() => {
     // Reset directions when locations change
