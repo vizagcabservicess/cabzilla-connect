@@ -27,15 +27,16 @@ import {
   hourlyPackages 
 } from "@/lib/cabData";
 import { calculateDistanceMatrix } from "@/lib/distanceService";
-import { CarTaxiFront, Clock, MapPin } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
+import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
 
 const CabsPage = () => {
   const navigate = useNavigate();
   const { tripType: urlTripType } = useParams<{ tripType?: string }>();
   const { toast } = useToast();
+  const { isLoaded: mapsLoaded } = useGoogleMaps();
   
   const [tripType, setTripType] = useState<TripType>((urlTripType as TripType) || "outstation");
   const [tripMode, setTripMode] = useState<TripMode>("one-way");
@@ -119,7 +120,7 @@ const CabsPage = () => {
     };
   
     fetchDistance();
-  }, [pickup, dropoff, tripType, hourlyPackage]);
+  }, [pickup, dropoff, tripType, hourlyPackage, toast]);
         
   
 
@@ -188,10 +189,11 @@ const CabsPage = () => {
                 selectedCab={selectedCab} 
                 onSelectCab={setSelectedCab} 
                 distance={distance} 
-                hourlyPackage={tripType === "local" ? hourlyPackage : undefined}
+                // Pass hourlyPackage only when tripType is local
+                {...(tripType === "local" ? { hourlyPackage } : {})}
               />
 
-              {showMap && pickup && dropoff && (
+              {showMap && pickup && dropoff && mapsLoaded && (
                 <div className="mt-6 w-full overflow-hidden rounded-lg shadow-md">
                   <h3 className="text-lg font-semibold mb-2">Route Map</h3>
                   <GoogleMapComponent 

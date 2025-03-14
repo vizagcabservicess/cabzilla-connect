@@ -5,8 +5,8 @@ import { useLoadScript } from "@react-google-maps/api";
 // Environment variable for Google Maps API Key
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 
-// Libraries to load
-const libraries: ("places" | "visualization" | "drawing" | "geometry" | "localContext")[] = ["places"];
+// Libraries to load - use the correct type
+const libraries = ["places"] as ["places"];
 
 // Context for Google Maps
 const GoogleMapsContext = createContext<{
