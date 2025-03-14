@@ -78,7 +78,7 @@ const GoogleMapComponent = ({ pickupLocation, dropLocation }: GoogleMapComponent
           options={{
             origin: { lat: pickupLocation.lat, lng: pickupLocation.lng },
             destination: { lat: dropLocation.lat, lng: dropLocation.lng },
-            travelMode: google?.maps.TravelMode.DRIVING || "DRIVING",
+            travelMode: google?.maps.TravelMode.DRIVING,
           }}
           callback={directionsCallback}
         />

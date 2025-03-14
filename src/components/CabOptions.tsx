@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { CabType, formatPrice, TripType, TripMode } from '@/lib/cabData';
 import { Users, Briefcase, Tag, Info, Check } from 'lucide-react';
@@ -13,6 +14,7 @@ interface CabOptionsProps {
   tripMode?: TripMode;
   pickupDate?: Date;
   returnDate?: Date;
+  hourlyPackage?: string;
 }
 
 export function CabOptions({
@@ -23,7 +25,8 @@ export function CabOptions({
   tripType = 'outstation',
   tripMode = 'one-way',
   pickupDate,
-  returnDate
+  returnDate,
+  hourlyPackage
 }: CabOptionsProps) {
   const [expandedCab, setExpandedCab] = useState<string | null>(null);
 
