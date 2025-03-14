@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -6,6 +7,7 @@ import { CabOptions } from "@/components/CabOptions";
 import { TripModeSelector } from "@/components/TripModeSelector";
 import { LocalTripSelector } from "@/components/LocalTripSelector";
 import { TabTripSelector } from "@/components/TabTripSelector";
+import GoogleMapComponent from "@/components/GoogleMapComponent";
 
 import { 
   Location, 
@@ -24,11 +26,10 @@ import {
   LocalTripPurpose,
   hourlyPackages 
 } from "@/lib/cabData";
-import { calculateDistanceMatrix } from "@/lib/distanceService"; // ✅ Import Google Maps Distance API
+import { calculateDistanceMatrix } from "@/lib/distanceService";
 import { CarTaxiFront, Clock, MapPin } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { toast } from "@/components/ui/use-toast";
 import { useToast } from "@/components/ui/use-toast";
 
 const CabsPage = () => {
@@ -50,6 +51,7 @@ const CabsPage = () => {
   const [travelTime, setTravelTime] = useState<number>(0);
   const [totalPrice, setTotalPrice] = useState<number>(0);
   const [isCalculatingDistance, setIsCalculatingDistance] = useState<boolean>(false);
+  const [showMap, setShowMap] = useState<boolean>(false);
 
   const handleTripTypeChange = (type: TripType) => {
     setTripType(type);
@@ -90,6 +92,7 @@ const CabsPage = () => {
           if (result.status === "OK") {
             setDistance(result.distance);
             setTravelTime(result.duration);
+            setShowMap(true);
   
             toast({
               title: "✅ Distance Updated",
@@ -176,12 +179,29 @@ const CabsPage = () => {
                 <DateTimePicker label="RETURN DATE & TIME" date={returnDate} onDateChange={setReturnDate} minDate={pickupDate} />
               )}
 
-<div className="text-xl font-bold text-gray-900">
-  {isCalculatingDistance ? "Calculating..." : `${distance} km`}
-</div>
-              <CabOptions cabTypes={cabTypes} selectedCab={selectedCab} onSelectCab={setSelectedCab} distance={distance} />
+              <div className="text-xl font-bold text-gray-900">
+                {isCalculatingDistance ? "Calculating..." : `${distance} km`}
+              </div>
+              
+              <CabOptions 
+                cabTypes={cabTypes} 
+                selectedCab={selectedCab} 
+                onSelectCab={setSelectedCab} 
+                distance={distance} 
+                hourlyPackage={tripType === "local" ? hourlyPackage : undefined}
+              />
 
-              <Button onClick={() => console.log("Booking...")} className="bg-blue-600 text-white px-12 py-6 rounded-md">
+              {showMap && pickup && dropoff && (
+                <div className="mt-6 w-full overflow-hidden rounded-lg shadow-md">
+                  <h3 className="text-lg font-semibold mb-2">Route Map</h3>
+                  <GoogleMapComponent 
+                    pickupLocation={pickup} 
+                    dropLocation={dropoff} 
+                  />
+                </div>
+              )}
+
+              <Button onClick={() => console.log("Booking...")} className="bg-blue-600 text-white px-12 py-6 rounded-md mt-6">
                 SEARCH
               </Button>
             </div>

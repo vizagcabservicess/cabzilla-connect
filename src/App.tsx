@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -7,16 +8,13 @@ import Index from "./pages/Index";
 import BookingConfirmation from "./pages/BookingConfirmation";
 import NotFound from "./pages/NotFound";
 import CabsPage from "./pages/CabsPage";
-import { LoadScript } from "@react-google-maps/api";
-
-// Fix for environment variable loading in Vite
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "YOUR_HARD_CODED_API_KEY";
+import { GoogleMapsProvider } from "./providers/GoogleMapsProvider";
 
 const queryClient = new QueryClient();
 
 const App = () => (
-  <LoadScript googleMapsApiKey={GOOGLE_MAPS_API_KEY} libraries={["places"]}>
-    <QueryClientProvider client={queryClient}>
+  <QueryClientProvider client={queryClient}>
+    <GoogleMapsProvider>
       <TooltipProvider>
         <Toaster />
         <Sonner />
@@ -30,8 +28,8 @@ const App = () => (
           </Routes>
         </BrowserRouter>
       </TooltipProvider>
-    </QueryClientProvider>
-  </LoadScript>
+    </GoogleMapsProvider>
+  </QueryClientProvider>
 );
 
 export default App;

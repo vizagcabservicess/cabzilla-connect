@@ -1,20 +1,44 @@
-import { GoogleMap, LoadScript } from "@react-google-maps/api";
 
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "YOUR_DEFAULT_API_KEY"; 
+import { ReactNode, createContext, useContext } from "react";
+import { useLoadScript } from "@react-google-maps/api";
 
-const GoogleMapComponent = ({ pickupLocation, dropLocation }) => {
-  const mapContainerStyle = {
-    width: "100%",
-    height: "400px",
-  };
+// Environment variable for Google Maps API Key
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 
-  const defaultCenter = { lat: 17.6868, lng: 83.2185 }; // Visakhapatnam
+// Libraries to load
+const libraries: ("places" | "visualization" | "drawing" | "geometry" | "localContext")[] = ["places"];
 
+// Context for Google Maps
+const GoogleMapsContext = createContext<{
+  isLoaded: boolean;
+  loadError: Error | undefined;
+}>({
+  isLoaded: false,
+  loadError: undefined,
+});
+
+// Hook to use Google Maps context
+export const useGoogleMaps = () => useContext(GoogleMapsContext);
+
+// Provider component for Google Maps
+export const GoogleMapsProvider = ({ children }: { children: ReactNode }) => {
+  // Load the Google Maps script
+  const { isLoaded, loadError } = useLoadScript({
+    googleMapsApiKey: GOOGLE_MAPS_API_KEY,
+    libraries,
+  });
+
+  // Log load status
+  if (loadError) {
+    console.error("Error loading Google Maps API:", loadError);
+  }
+
+  // Provide context values
   return (
-    <LoadScript googleMapsApiKey={GOOGLE_MAPS_API_KEY}>
-      <GoogleMap mapContainerStyle={mapContainerStyle} center={defaultCenter} zoom={12} />
-    </LoadScript>
+    <GoogleMapsContext.Provider value={{ isLoaded, loadError }}>
+      {children}
+    </GoogleMapsContext.Provider>
   );
 };
 
-export default GoogleMapComponent;
+export default GoogleMapsProvider;
