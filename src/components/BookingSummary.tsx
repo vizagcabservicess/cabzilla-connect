@@ -1,12 +1,17 @@
-
 import { useState, useEffect } from 'react';
-import { CabType, PromoCode, formatPrice, TripType, TripMode, extraCharges, oneWayRates } from '@/lib/cabData';
+import { CabType, formatPrice, TripType, TripMode, extraCharges, oneWayRates } from '@/lib/cabData';
 import { Location, isVizagLocation } from '@/lib/locationData';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tag, X, CheckCircle, Calendar, MapPin, Users, ArrowRight, ArrowLeftRight } from 'lucide-react';
 import { format, differenceInCalendarDays } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
+
+interface PromoCode {
+  code: string;
+  discount: number;
+  validUntil: Date;
+}
 
 interface BookingSummaryProps {
   pickupLocation: Location | null;
@@ -37,7 +42,6 @@ export function BookingSummary({
   const [bookingId, setBookingId] = useState<string>('');
 
   useEffect(() => {
-    // Generate a random booking ID for reference
     const generateBookingId = () => {
       const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
       let result = 'BK';
@@ -54,14 +58,11 @@ export function BookingSummary({
     return null;
   }
 
-  // Calculate trip duration in days (only for round trips)
   const days = tripMode === "round-trip" && returnDate
     ? Math.max(1, differenceInCalendarDays(returnDate, pickupDate) + 1)
     : 1;
 
-  // Generate fare breakdown based on trip type
   const renderFareBreakdown = () => {
-    // Airport transfer
     if (tripType === 'airport') {
       return (
         <>
@@ -80,7 +81,6 @@ export function BookingSummary({
       );
     }
     
-    // Local hourly package
     if (tripType === 'local') {
       const cabId = selectedCab.id as keyof typeof extraCharges;
       const extraRates = extraCharges[cabId];
@@ -102,17 +102,11 @@ export function BookingSummary({
       );
     }
     
-    // Outstation
     if (tripType === 'outstation') {
-      // Base km allocation
       const allocatedKm = 300;
-
-      // Chargeable distance 
-      // For one-way trips, we calculate fare based on double the distance
       const effectiveDistance = tripMode === "one-way" ? distance * 2 : distance * 2;
       const extraKm = Math.max(effectiveDistance - (allocatedKm * 2), 0);
 
-      // Vehicle Pricing Data
       let baseRate = 0, perKmRate = 0, driverAllowance = 250, nightHaltCharge = 0;
 
       switch (selectedCab.name.toLowerCase()) {
@@ -133,11 +127,9 @@ export function BookingSummary({
           break;
       }
 
-      // Get one-way rate for this cab type
       const oneWayRate = selectedCab ? 
         oneWayRates[selectedCab.id as keyof typeof oneWayRates] || 13 : 13;
 
-      // Calculate Final Prices
       const totalBaseFare = tripMode === "one-way" ? baseRate : days * baseRate;
       const totalDistanceFare = extraKm * (tripMode === "one-way" ? oneWayRate : perKmRate);
       const totalNightHalt = tripMode === "round-trip" ? (days - 1) * nightHaltCharge : 0;

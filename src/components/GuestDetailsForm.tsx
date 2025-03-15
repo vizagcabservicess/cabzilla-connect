@@ -58,8 +58,11 @@ export function GuestDetailsForm({ onSubmit, totalPrice }: GuestDetailsFormProps
       duration: 5000,
     });
     
-    // Switch to the contact tab
+    // Switch to the contact tab with prefilled data
     setAuthTab("contact");
+    
+    // The prefill data will be handled by the EditableContactDetailsForm component
+    localStorage.setItem('contactDetails', JSON.stringify(guestDetails));
   };
 
   return (

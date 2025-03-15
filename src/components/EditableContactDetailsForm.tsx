@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { PaymentGateway } from "@/components/PaymentGateway";
-import { CheckCircle, Edit2, X } from 'lucide-react';
+import { CheckCircle, Edit2, X, Save } from 'lucide-react';
 
 interface ContactDetails {
   name: string;
@@ -29,6 +29,7 @@ export function EditableContactDetailsForm({
   const [phone, setPhone] = useState(prefillData?.phone || '');
   const [showPaymentGateway, setShowPaymentGateway] = useState(false);
   const [isEditing, setIsEditing] = useState(!prefillData);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const { toast } = useToast();
 
   // Load saved contact details from localStorage if available
@@ -47,6 +48,22 @@ export function EditableContactDetailsForm({
       }
     }
   }, [prefillData]);
+
+  // Track changes to form fields
+  useEffect(() => {
+    if (!isEditing) return;
+    
+    // Check if current values differ from original values
+    const originalName = prefillData?.name || '';
+    const originalEmail = prefillData?.email || '';
+    const originalPhone = prefillData?.phone || '';
+    
+    setHasUnsavedChanges(
+      name !== originalName || 
+      email !== originalEmail || 
+      phone !== originalPhone
+    );
+  }, [name, email, phone, prefillData, isEditing]);
 
   const validateContactDetails = (): boolean => {
     if (!name || !email || !phone) {
@@ -90,10 +107,11 @@ export function EditableContactDetailsForm({
     localStorage.setItem('contactDetails', JSON.stringify(contactDetails));
 
     setIsEditing(false);
+    setHasUnsavedChanges(false);
     
     toast({
       title: "Contact Details Saved",
-      description: "Your contact information has been saved.",
+      description: "Your contact information has been saved successfully.",
     });
   };
 
@@ -113,6 +131,29 @@ export function EditableContactDetailsForm({
     localStorage.setItem('contactDetails', JSON.stringify(contactDetails));
     
     onSubmit(contactDetails);
+  };
+
+  const handleCancelEdit = () => {
+    if (prefillData) {
+      setName(prefillData.name);
+      setEmail(prefillData.email);
+      setPhone(prefillData.phone);
+    } else {
+      // If no prefill data, try to reset to saved localStorage data
+      const savedDetails = localStorage.getItem('contactDetails');
+      if (savedDetails) {
+        try {
+          const parsedDetails = JSON.parse(savedDetails);
+          setName(parsedDetails.name || '');
+          setEmail(parsedDetails.email || '');
+          setPhone(parsedDetails.phone || '');
+        } catch (error) {
+          console.error('Error parsing saved contact details:', error);
+        }
+      }
+    }
+    setIsEditing(false);
+    setHasUnsavedChanges(false);
   };
 
   return (
@@ -180,14 +221,7 @@ export function EditableContactDetailsForm({
                 <Button 
                   type="button" 
                   variant="outline" 
-                  onClick={() => {
-                    if (prefillData) {
-                      setName(prefillData.name);
-                      setEmail(prefillData.email);
-                      setPhone(prefillData.phone);
-                      setIsEditing(false);
-                    }
-                  }}
+                  onClick={handleCancelEdit}
                   className="flex items-center gap-1"
                 >
                   <X size={16} />
@@ -197,9 +231,10 @@ export function EditableContactDetailsForm({
                   type="button" 
                   onClick={handleSaveDetails}
                   className="flex items-center gap-1"
+                  disabled={!hasUnsavedChanges}
                 >
-                  <CheckCircle size={16} />
-                  Save Details
+                  <Save size={16} />
+                  Save Changes
                 </Button>
               </div>
             ) : (

@@ -26,21 +26,21 @@ export function RadioGroupTripMode({
         <div className="flex items-center space-x-2 border rounded-md px-4 py-3 
           hover:bg-gray-50 cursor-pointer w-full transition-colors
           bg-white text-gray-600 
-          data-[state=checked]:bg-blue-50 data-[state=checked]:border-blue-200 data-[state=checked]:text-blue-700"
+          data-[state=checked]:bg-blue-50 data-[state=checked]:border-blue-500 data-[state=checked]:text-blue-700"
           onClick={() => onChange('one-way')}
         >
           <RadioGroupItem value="one-way" id="one-way" className="sr-only" />
           <ArrowRight className="h-4 w-4" />
           <div className="grid">
             <Label htmlFor="one-way" className="text-sm font-medium cursor-pointer">One Way</Label>
-            <p className="text-xs text-blue-600">Double distance for fare calculation</p>
+            <p className="text-xs text-blue-600">Base fare for 300km included</p>
           </div>
         </div>
         
         <div className="flex items-center space-x-2 border rounded-md px-4 py-3
           hover:bg-gray-50 cursor-pointer w-full transition-colors
           bg-white text-gray-600
-          data-[state=checked]:bg-blue-50 data-[state=checked]:border-blue-200 data-[state=checked]:text-blue-700"
+          data-[state=checked]:bg-blue-50 data-[state=checked]:border-blue-500 data-[state=checked]:text-blue-700"
           onClick={() => onChange('round-trip')}
         >
           <RadioGroupItem value="round-trip" id="round-trip" className="sr-only" />
