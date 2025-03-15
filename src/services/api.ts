@@ -11,9 +11,9 @@ import {
   VehiclePricingUpdateRequest
 } from '@/types/api';
 
-// Base API URL - should be changed to your Hostinger domain
+// Base API URL - update to your Hostinger domain
 const API_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://yourdomain.com/api' 
+  ? 'https://yourdomain.com/api' // Replace 'yourdomain.com' with your actual Hostinger domain
   : 'http://localhost:8000/api';
 
 // Helper for handling API responses
