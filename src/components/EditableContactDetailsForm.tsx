@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,24 +16,31 @@ interface EditableContactDetailsFormProps {
   onSubmit: (details: ContactDetails) => void;
   totalPrice: number;
   prefillData?: ContactDetails;
+  initialData?: ContactDetails;
+  isReadOnly?: boolean;
+  isSaving?: boolean;
 }
 
 export function EditableContactDetailsForm({ 
   onSubmit, 
   totalPrice, 
-  prefillData 
+  prefillData,
+  initialData,
+  isReadOnly = false,
+  isSaving = false
 }: EditableContactDetailsFormProps) {
-  const [name, setName] = useState(prefillData?.name || '');
-  const [email, setEmail] = useState(prefillData?.email || '');
-  const [phone, setPhone] = useState(prefillData?.phone || '');
+  const contactData = initialData || prefillData;
+  
+  const [name, setName] = useState(contactData?.name || '');
+  const [email, setEmail] = useState(contactData?.email || '');
+  const [phone, setPhone] = useState(contactData?.phone || '');
   const [showPaymentGateway, setShowPaymentGateway] = useState(false);
-  const [isEditing, setIsEditing] = useState(!prefillData);
+  const [isEditing, setIsEditing] = useState(!contactData && !isReadOnly);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const { toast } = useToast();
 
-  // Load saved contact details from localStorage if available
   useEffect(() => {
-    if (!prefillData) {
+    if (!contactData) {
       const savedDetails = localStorage.getItem('contactDetails');
       if (savedDetails) {
         try {
@@ -47,23 +53,21 @@ export function EditableContactDetailsForm({
         }
       }
     }
-  }, [prefillData]);
+  }, [contactData]);
 
-  // Track changes to form fields
   useEffect(() => {
     if (!isEditing) return;
     
-    // Check if current values differ from original values
-    const originalName = prefillData?.name || '';
-    const originalEmail = prefillData?.email || '';
-    const originalPhone = prefillData?.phone || '';
+    const originalName = contactData?.name || '';
+    const originalEmail = contactData?.email || '';
+    const originalPhone = contactData?.phone || '';
     
     setHasUnsavedChanges(
       name !== originalName || 
       email !== originalEmail || 
       phone !== originalPhone
     );
-  }, [name, email, phone, prefillData, isEditing]);
+  }, [name, email, phone, contactData, isEditing]);
 
   const validateContactDetails = (): boolean => {
     if (!name || !email || !phone) {
@@ -75,7 +79,6 @@ export function EditableContactDetailsForm({
       return false;
     }
 
-    // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       toast({
@@ -86,7 +89,6 @@ export function EditableContactDetailsForm({
       return false;
     }
 
-    // Validate phone number format (basic check for 10 digits)
     if (!/^\d{10}$/.test(phone)) {
       toast({
         title: "Invalid Phone Number",
@@ -102,7 +104,6 @@ export function EditableContactDetailsForm({
   const handleSaveDetails = () => {
     if (!validateContactDetails()) return;
 
-    // Save contact details to localStorage for future use
     const contactDetails = { name, email, phone };
     localStorage.setItem('contactDetails', JSON.stringify(contactDetails));
 
@@ -120,26 +121,23 @@ export function EditableContactDetailsForm({
 
     if (!validateContactDetails()) return;
 
-    // Show payment gateway after contact details validation
     setShowPaymentGateway(true);
   };
 
   const handlePaymentComplete = () => {
     const contactDetails = { name, email, phone };
     
-    // Save contact details to localStorage for future use
     localStorage.setItem('contactDetails', JSON.stringify(contactDetails));
     
     onSubmit(contactDetails);
   };
 
   const handleCancelEdit = () => {
-    if (prefillData) {
-      setName(prefillData.name);
-      setEmail(prefillData.email);
-      setPhone(prefillData.phone);
+    if (contactData) {
+      setName(contactData.name);
+      setEmail(contactData.email);
+      setPhone(contactData.phone);
     } else {
-      // If no prefill data, try to reset to saved localStorage data
       const savedDetails = localStorage.getItem('contactDetails');
       if (savedDetails) {
         try {
