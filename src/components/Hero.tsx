@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { LocationInput } from './LocationInput';
 import { DateTimePicker } from './DateTimePicker';
@@ -13,7 +12,7 @@ import {
   Location
 } from '@/lib/locationData';
 import { CabType, cabTypes, TripMode, TripType, hourlyPackages, getLocalPackagePrice } from '@/lib/cabData';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { addDays, differenceInCalendarDays, isSameDay } from 'date-fns';
 import { TabTripSelector } from './TabTripSelector';
@@ -22,9 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { GuestDetailsForm } from './GuestDetailsForm';
-import { SocialLogin } from './SocialLogin';
 import { useNavigate } from 'react-router-dom';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // Available hourly packages with updated pricing structure
 const hourlyPackageOptions = [
@@ -78,7 +75,6 @@ export function Hero() {
   const [tripMode, setTripMode] = useState<TripMode>(savedData.tripMode);
   const [hourlyPackage, setHourlyPackage] = useState<string>(savedData.hourlyPackage);
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState<boolean>(false);
-  const [authTab, setAuthTab] = useState<string>("contact");
   const [isCalculatingDistance, setIsCalculatingDistance] = useState<boolean>(false);
   
   // Check if both locations are in Vizag for possible trip type redirection
@@ -229,7 +225,7 @@ export function Hero() {
         totalPrice += extraKm * extraKmRate;
       }
     }
-    // Outstation trip pricing with updated logic for one-way trips
+    // Outstation trip pricing with updated logic for BOTH one-way and round-trip
     else if (tripType === 'outstation') {
       // Get pricing factors based on cab type
       let basePrice = 0, perKmRate = 0, driverAllowance = 250, nightHaltCharge = 0;
@@ -250,10 +246,32 @@ export function Hero() {
           perKmRate = 20;
           nightHaltCharge = 1000;
           break;
+        default:
+          basePrice = selectedCab.price;
+          perKmRate = selectedCab.pricePerKm;
+          nightHaltCharge = 700;
       }
       
-      if (tripMode === 'round-trip' && returnDate) {
-        const days = Math.max(1, differenceInCalendarDays(returnDate, pickupDate) + 1);
+      if (tripMode === 'one-way') {
+        // Apply the same calculation logic for one-way as we do for round-trip
+        // But just for a single day without night halt
+        const days = 1;
+        const totalMinKm = days * 300; // 300km included in base fare
+        
+        // No need to double the distance for one-way
+        const effectiveDistance = distance;
+        
+        // Calculate extra km beyond base allocation
+        const extraKm = Math.max(effectiveDistance - totalMinKm, 0);
+        
+        // Calculate fare components
+        const totalBaseFare = basePrice;
+        const totalDistanceFare = extraKm * perKmRate;
+        const totalDriverAllowance = driverAllowance;
+        
+        totalPrice = totalBaseFare + totalDistanceFare + totalDriverAllowance;
+      } else { // round-trip calculation remains the same
+        const days = Math.max(1, differenceInCalendarDays(returnDate || pickupDate, pickupDate) + 1);
         const totalMinKm = days * 300;
         const effectiveDistance = distance * 2; // Double the distance for round-trip
         const extraKm = Math.max(effectiveDistance - totalMinKm, 0);
@@ -263,14 +281,6 @@ export function Hero() {
         const totalNightHalt = (days - 1) * nightHaltCharge;
         
         totalPrice = totalBaseFare + totalDistanceFare + totalDriverAllowance + totalNightHalt;
-      } else { // one-way with revised calculation
-        // Double the distance for fare calculation for one-way trips
-        const effectiveDistance = distance * 2;
-        const minKm = 300 * 2; // 600km for calculation
-        const extraKm = Math.max(effectiveDistance - minKm, 0);
-        const distanceFare = extraKm * 13; // Use ₹13/km for extra km
-        
-        totalPrice = basePrice + distanceFare + driverAllowance;
       }
     }
     
@@ -301,64 +311,11 @@ export function Hero() {
       }
     }, 100);
   };
-  
-  // Handle guest details submission
-  const handleGuestDetailsSubmit = (guestDetails: any) => {
-    // Create booking data
-    const bookingData = {
-      pickupLocation,
-      dropLocation,
-      pickupDate: pickupDate?.toISOString(),
-      returnDate: returnDate?.toISOString(),
-      selectedCab,
-      distance,
-      totalPrice,
-      discountAmount: 0,
-      finalPrice: totalPrice,
-      guestDetails,
-      tripType,
-      tripMode,
-    };
 
-    // Store booking details in session storage
-    sessionStorage.setItem('bookingDetails', JSON.stringify(bookingData));
-    
-    // Show success message
-    toast({
-      title: "Booking Confirmed!",
-      description: "Your cab has been booked successfully",
-      duration: 3000,
-    });
-    
-    // Redirect to booking confirmation page
-    navigate("/booking-confirmation");
-  };
-
-  // Handle social login success
-  const handleLoginSuccess = (userData: any) => {
-    toast({
-      title: "Login Successful",
-      description: `Welcome, ${userData.name}!`,
-      duration: 3000,
-    });
-    
-    // Auto-fill the guest details form with user data
-    const guestDetails = {
-      name: userData.name,
-      email: userData.email,
-      phone: "", // Social login typically doesn't provide phone number
-      // Add more fields as needed
-    };
-    
-    // Show another toast prompting the user to complete their phone number
-    toast({
-      title: "One More Step",
-      description: "Please enter your phone number to complete the booking.",
-      duration: 5000,
-    });
-    
-    // Switch to the contact tab
-    setAuthTab("contact");
+  // Go back from the guest details form to the cab selection
+  const handleBackToSelection = () => {
+    setShowGuestDetailsForm(false);
+    setCurrentStep(2);
   };
 
   return (
@@ -563,31 +520,23 @@ export function Hero() {
         ) : (
           <div className="grid md:grid-cols-2 gap-6">
             <div>
-              <div className="bg-white rounded-xl shadow-card border p-6">
-                <h3 className="text-xl font-semibold mb-6">Complete Your Booking</h3>
+              <div className="bg-white rounded-xl shadow-card border p-6 mb-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-semibold">Complete Your Booking</h3>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleBackToSelection}
+                    className="flex items-center gap-1"
+                  >
+                    <ArrowLeft size={16} /> Back
+                  </Button>
+                </div>
                 
-                <Tabs value={authTab} onValueChange={setAuthTab} className="w-full">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="contact">Contact Details</TabsTrigger>
-                    <TabsTrigger value="social">Social Login</TabsTrigger>
-                  </TabsList>
-                  
-                  <TabsContent value="contact" className="mt-4">
-                    <GuestDetailsForm 
-                      onSubmit={handleGuestDetailsSubmit}
-                      totalPrice={totalPrice}
-                    />
-                  </TabsContent>
-                  
-                  <TabsContent value="social" className="mt-4">
-                    <div className="space-y-4">
-                      <p className="text-sm text-gray-600">
-                        Login with your social account to quickly complete your booking.
-                      </p>
-                      <SocialLogin onLoginSuccess={handleLoginSuccess} />
-                    </div>
-                  </TabsContent>
-                </Tabs>
+                <GuestDetailsForm 
+                  onSubmit={handleGuestDetailsSubmit}
+                  totalPrice={totalPrice}
+                />
               </div>
             </div>
             

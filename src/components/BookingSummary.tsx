@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { CabType, formatPrice, TripType, TripMode, extraCharges, oneWayRates } from '@/lib/cabData';
 import { Location, isVizagLocation } from '@/lib/locationData';
@@ -133,13 +132,9 @@ export function BookingSummary({
           nightHaltCharge = 700;
       }
 
-      const oneWayRate = selectedCab ? 
-        oneWayRates[selectedCab.id as keyof typeof oneWayRates] || 13 : 13;
-
       const totalBaseFare = tripMode === "one-way" ? baseRate : days * baseRate;
-      const totalDistanceFare = extraKm > 0 
-        ? extraKm * (tripMode === "one-way" ? oneWayRate : perKmRate)
-        : 0;
+      const totalDistanceFare = extraKm > 0 ? extraKm * perKmRate : 0;
+      const totalDriverAllowance = tripMode === "one-way" ? driverAllowance : days * driverAllowance;
       const totalNightHalt = tripMode === "round-trip" ? (days - 1) * nightHaltCharge : 0;
       
       return (
@@ -153,7 +148,7 @@ export function BookingSummary({
           <div className="flex justify-between text-sm mt-1">
             <span className="text-gray-600">
               {tripMode === "one-way" 
-                ? `Total distance: ${distance} km`
+                ? `Total distance: ${totalDistance} km`
                 : `Total distance: ${totalDistance} km (${distance} km each way)`}
             </span>
             <span className="text-gray-600"></span>
@@ -161,14 +156,14 @@ export function BookingSummary({
           {extraKm > 0 && (
             <div className="flex justify-between text-sm mt-1">
               <span className="text-gray-600">
-                Extra distance fare ({extraKm} km × ₹{tripMode === "one-way" ? oneWayRate : perKmRate})
+                Extra distance fare ({extraKm} km × ₹{perKmRate})
               </span>
               <span className="text-gray-800">₹{totalDistanceFare.toLocaleString('en-IN')}</span>
             </div>
           )}
           <div className="flex justify-between text-sm mt-1">
             <span className="text-gray-600">Driver allowance</span>
-            <span className="text-gray-800">₹{driverAllowance}</span>
+            <span className="text-gray-800">₹{totalDriverAllowance}</span>
           </div>
           {tripMode === 'round-trip' && days > 1 && (
             <div className="flex justify-between text-sm mt-1">
