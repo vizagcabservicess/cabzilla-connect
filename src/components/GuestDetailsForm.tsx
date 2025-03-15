@@ -30,9 +30,10 @@ export function GuestDetailsForm({
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSubmit = async (details: any) => {
-    if (bookingId && isEditMode) {
-      setIsSaving(true);
-      try {
+    setIsSaving(true);
+    
+    try {
+      if (bookingId && isEditMode) {
         // If editing an existing booking
         const updatedData = {
           passengerName: details.name,
@@ -50,19 +51,22 @@ export function GuestDetailsForm({
         });
         
         setIsEditMode(false);
-      } catch (error) {
-        toast({
-          title: "Update Failed",
-          description: error instanceof Error ? error.message : "Something went wrong",
-          variant: "destructive",
-          duration: 5000,
-        });
-      } finally {
-        setIsSaving(false);
+      } else {
+        // For new bookings, we need to submit to the API before calling onSubmit
+        // This ensures the booking is saved to the database
+        
+        // Call the parent onSubmit to get data flowing to the next step
+        onSubmit(details);
       }
-    } else {
-      // For new bookings
-      onSubmit(details);
+    } catch (error) {
+      toast({
+        title: "Operation Failed",
+        description: error instanceof Error ? error.message : "Something went wrong",
+        variant: "destructive",
+        duration: 5000,
+      });
+    } finally {
+      setIsSaving(false);
     }
   };
 

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -79,34 +78,71 @@ const ToursPage = () => {
     setShowGuestDetailsForm(true);
   };
   
-  const handleGuestDetailsSubmit = (guestDetails: any) => {
-    const selectedTourDetails = availableTours.find(tour => tour.id === selectedTour);
-    
-    if (!selectedTourDetails) return;
-    
-    const fare = getTourFare(selectedTour!, selectedCab!.id);
-    
-    const bookingData = {
-      tourId: selectedTour,
-      tourName: selectedTourDetails.name,
-      pickupLocation: pickupLocation,
-      tourDistance: selectedTourDetails.distance,
-      pickupDate: pickupDate?.toISOString(),
-      selectedCab,
-      totalPrice: fare,
-      guestDetails,
-      bookingType: 'tour',
-    };
-    
-    sessionStorage.setItem('bookingDetails', JSON.stringify(bookingData));
-    
-    toast({
-      title: "Tour Booking Confirmed!",
-      description: "Your tour has been booked successfully",
-      variant: "default",
-    });
-    
-    navigate("/booking-confirmation");
+  const handleGuestDetailsSubmit = async (guestDetails: any) => {
+    try {
+      const selectedTourDetails = availableTours.find(tour => tour.id === selectedTour);
+      
+      if (!selectedTourDetails || !selectedCab || !pickupLocation || !pickupDate) {
+        toast({
+          title: "Missing information",
+          description: "Please complete all required fields",
+          variant: "destructive",
+          duration: 3000,
+        });
+        return;
+      }
+      
+      const fare = getTourFare(selectedTour!, selectedCab!.id);
+      
+      const bookingData: BookingRequest = {
+        pickupLocation: pickupLocation.name,
+        dropLocation: '', // Tours don't have specific drop locations
+        pickupDate: pickupDate.toISOString(),
+        returnDate: null, // Tours are considered one-way
+        cabType: selectedCab.name,
+        distance: selectedTourDetails.distance,
+        tripType: 'tour',
+        tripMode: 'one-way', // Tours are considered one-way
+        totalAmount: fare,
+        passengerName: guestDetails.name,
+        passengerPhone: guestDetails.phone,
+        passengerEmail: guestDetails.email,
+        tourId: selectedTour
+      };
+      
+      const response = await bookingAPI.createBooking(bookingData);
+      console.log('Tour booking created:', response);
+      
+      const bookingDataForStorage = {
+        tourId: selectedTour,
+        tourName: selectedTourDetails.name,
+        pickupLocation: pickupLocation,
+        tourDistance: selectedTourDetails.distance,
+        pickupDate: pickupDate?.toISOString(),
+        selectedCab,
+        totalPrice: fare,
+        guestDetails,
+        bookingType: 'tour',
+      };
+      
+      sessionStorage.setItem('bookingDetails', JSON.stringify(bookingDataForStorage));
+      
+      toast({
+        title: "Tour Booking Confirmed!",
+        description: "Your tour has been booked successfully",
+        variant: "default",
+      });
+      
+      navigate("/booking-confirmation");
+    } catch (error) {
+      console.error('Error creating tour booking:', error);
+      toast({
+        title: "Booking Failed",
+        description: error instanceof Error ? error.message : "Failed to create booking. Please try again.",
+        variant: "destructive",
+        duration: 5000,
+      });
+    }
   };
   
   return (

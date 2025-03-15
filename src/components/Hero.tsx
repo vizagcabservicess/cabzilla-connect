@@ -239,31 +239,60 @@ export function Hero() {
 
   const totalPrice = calculatePrice();
 
-  const handleGuestDetailsSubmit = (guestDetails: any) => {
-    const bookingData = {
-      pickupLocation,
-      dropLocation,
-      pickupDate: pickupDate?.toISOString(),
-      returnDate: returnDate?.toISOString(),
-      selectedCab,
-      distance,
-      totalPrice,
-      discountAmount: 0,
-      finalPrice: totalPrice,
-      guestDetails,
-      tripType,
-      tripMode,
-    };
+  const handleGuestDetailsSubmit = async (guestDetails: any) => {
+    try {
+      const bookingData: BookingRequest = {
+        pickupLocation: pickupLocation?.name || '',
+        dropLocation: dropLocation?.name || '',
+        pickupDate: pickupDate?.toISOString() || '',
+        returnDate: returnDate?.toISOString() || null,
+        cabType: selectedCab?.name || '',
+        distance: distance,
+        tripType: tripType,
+        tripMode: tripMode,
+        totalAmount: totalPrice,
+        passengerName: guestDetails.name,
+        passengerPhone: guestDetails.phone,
+        passengerEmail: guestDetails.email,
+        hourlyPackage: tripType === 'local' ? hourlyPackage : null
+      };
 
-    sessionStorage.setItem('bookingDetails', JSON.stringify(bookingData));
-    
-    toast({
-      title: "Booking Confirmed!",
-      description: "Your cab has been booked successfully",
-      duration: 3000,
-    });
-    
-    navigate("/booking-confirmation");
+      const bookingDataForStorage = {
+        pickupLocation,
+        dropLocation,
+        pickupDate: pickupDate?.toISOString(),
+        returnDate: returnDate?.toISOString(),
+        selectedCab,
+        distance,
+        totalPrice,
+        discountAmount: 0,
+        finalPrice: totalPrice,
+        guestDetails,
+        tripType,
+        tripMode,
+      };
+      sessionStorage.setItem('bookingDetails', JSON.stringify(bookingDataForStorage));
+
+      const response = await bookingAPI.createBooking(bookingData);
+      
+      console.log('Booking created:', response);
+      
+      toast({
+        title: "Booking Confirmed!",
+        description: "Your cab has been booked successfully",
+        duration: 3000,
+      });
+      
+      navigate("/booking-confirmation");
+    } catch (error) {
+      console.error('Error creating booking:', error);
+      toast({
+        title: "Booking Failed",
+        description: error instanceof Error ? error.message : "Failed to create booking. Please try again.",
+        variant: "destructive",
+        duration: 5000,
+      });
+    }
   };
 
   const handleBookNow = () => {

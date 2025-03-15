@@ -44,6 +44,7 @@ $requiredFields = [
 foreach ($requiredFields as $field) {
     if (!isset($data[$field]) || empty($data[$field])) {
         sendJsonResponse(['status' => 'error', 'message' => "Field $field is required"], 400);
+        exit;
     }
 }
 
@@ -67,6 +68,11 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
 
 // Connect to database
 $conn = getDbConnection();
+if (!$conn) {
+    logError("Database connection failed");
+    sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed'], 500);
+    exit;
+}
 
 // Generate a unique booking number
 $bookingNumber = generateBookingNumber();
@@ -83,6 +89,7 @@ $stmt = $conn->prepare($sql);
 if (!$stmt) {
     logError("Prepare statement failed", ['error' => $conn->error]);
     sendJsonResponse(['status' => 'error', 'message' => 'Database prepare error: ' . $conn->error], 500);
+    exit;
 }
 
 // Get values
@@ -103,7 +110,7 @@ $tourId = isset($data['tourId']) ? $data['tourId'] : null;
 $status = 'pending'; // Default status for new bookings
 
 $stmt->bind_param(
-    "issssssdssdsssssss",
+    "issssssdssdsssiss",
     $userId, $bookingNumber, $pickupLocation, $dropLocation, $pickupDate,
     $returnDate, $cabType, $distance, $tripType, $tripMode,
     $totalAmount, $passengerName, $passengerPhone, $passengerEmail,
@@ -113,6 +120,7 @@ $stmt->bind_param(
 if (!$stmt->execute()) {
     logError("Execute statement failed", ['error' => $stmt->error]);
     sendJsonResponse(['status' => 'error', 'message' => 'Failed to create booking: ' . $stmt->error], 500);
+    exit;
 }
 
 $bookingId = $conn->insert_id;
@@ -120,10 +128,27 @@ logError("Booking created", ['booking_id' => $bookingId, 'booking_number' => $bo
 
 // Get the created booking
 $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
+if (!$stmt) {
+    logError("Prepare statement failed for select", ['error' => $conn->error]);
+    sendJsonResponse(['status' => 'error', 'message' => 'Database prepare error: ' . $conn->error], 500);
+    exit;
+}
+
 $stmt->bind_param("i", $bookingId);
-$stmt->execute();
+if (!$stmt->execute()) {
+    logError("Execute statement failed for select", ['error' => $stmt->error]);
+    sendJsonResponse(['status' => 'error', 'message' => 'Failed to retrieve booking: ' . $stmt->error], 500);
+    exit;
+}
+
 $result = $stmt->get_result();
 $booking = $result->fetch_assoc();
+
+if (!$booking) {
+    logError("No booking found after insertion", ['booking_id' => $bookingId]);
+    sendJsonResponse(['status' => 'error', 'message' => 'Booking was created but could not be retrieved'], 500);
+    exit;
+}
 
 // Format the booking data for response
 $formattedBooking = [
