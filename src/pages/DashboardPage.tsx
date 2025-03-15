@@ -32,7 +32,18 @@ export default function DashboardPage() {
         console.log('Fetching user bookings...');
         const data = await bookingAPI.getUserBookings();
         console.log('Bookings received:', data);
-        setBookings(data);
+        
+        if (data && Array.isArray(data)) {
+          setBookings(data);
+        } else {
+          console.error('Invalid data format received:', data);
+          setError('Received invalid data format from server');
+          toast({
+            title: "Error",
+            description: "Invalid data format received from server",
+            variant: "destructive",
+          });
+        }
       } catch (error) {
         console.error('Error fetching bookings:', error);
         setError('Failed to load your bookings. Please try again later.');
@@ -103,7 +114,7 @@ export default function DashboardPage() {
                   <CardHeader>
                     <div className="flex justify-between items-start">
                       <div>
-                        <CardTitle>Booking #{booking.bookingNumber}</CardTitle>
+                        <CardTitle className="text-xl">Booking #{booking.bookingNumber}</CardTitle>
                         <CardDescription>{booking.tripType.toUpperCase()} - {booking.tripMode}</CardDescription>
                       </div>
                       <Badge className={getStatusColor(booking.status)}>{booking.status}</Badge>
@@ -174,7 +185,7 @@ export default function DashboardPage() {
                   <CardHeader>
                     <div className="flex justify-between items-start">
                       <div>
-                        <CardTitle>Booking #{booking.bookingNumber}</CardTitle>
+                        <CardTitle className="text-xl">Booking #{booking.bookingNumber}</CardTitle>
                         <CardDescription>{booking.tripType.toUpperCase()} - {booking.tripMode}</CardDescription>
                       </div>
                       <Badge className={getStatusColor(booking.status)}>{booking.status}</Badge>
