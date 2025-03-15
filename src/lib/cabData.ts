@@ -120,6 +120,62 @@ export const oneWayRates = {
   luxury: 25
 };
 
+// Available tours for the tours tab
+export const availableTours = [
+  { id: 'araku', name: 'Araku Day Tour', distance: 250, image: '/araku.jpg' },
+  { id: 'vizag', name: 'Vizag City Tour', distance: 120, image: '/vizag.jpg' },
+  { id: 'lambasingi', name: 'Lambasingi Tour', distance: 290, image: '/lambasingi.jpg' },
+  { id: 'srikakulam', name: 'Srikakulam Pilgrim Tour', distance: 370, image: '/srikakulam.jpg' },
+  { id: 'annavaram', name: 'Annavaram Tour', distance: 320, image: '/annavaram.jpg' },
+  { id: 'vanajangi', name: 'Vanajangi Tour', distance: 280, image: '/vanajangi.jpg' }
+];
+
+// Tour fare matrix for different cab types
+export const tourFares = {
+  'araku': {
+    sedan: 5000,
+    ertiga: 6500,
+    innova: 8000,
+    tempo: 12000,
+    luxury: 15000
+  },
+  'vizag': {
+    sedan: 3000,
+    ertiga: 4000,
+    innova: 5500,
+    tempo: 8000,
+    luxury: 10000
+  },
+  'lambasingi': {
+    sedan: 5500,
+    ertiga: 7000,
+    innova: 8500,
+    tempo: 12500,
+    luxury: 16000
+  },
+  'srikakulam': {
+    sedan: 6500,
+    ertiga: 8000,
+    innova: 9500,
+    tempo: 14000,
+    luxury: 18000
+  },
+  'annavaram': {
+    sedan: 6000,
+    ertiga: 7500,
+    innova: 9000,
+    tempo: 13500,
+    luxury: 17000
+  },
+  'vanajangi': {
+    sedan: 5500,
+    ertiga: 7000,
+    innova: 8500,
+    tempo: 12500,
+    luxury: 16000
+  }
+};
+
 export const getLocalPackagePrice = (packageId: string, cabType: string): number => {
   const pkg = hourlyPackages.find(p => p.id === packageId);
   if (!pkg) return 0;
@@ -147,12 +203,21 @@ export function calculateFare(
   tripMode: TripMode = 'one-way',
   hourlyPackageId?: string,
   pickupDate?: Date,
-  returnDate?: Date
+  returnDate?: Date,
+  tourId?: string
 ): number {
   let baseFare = cabType.price;
   let totalFare = 0;
   
-  if (tripType === 'local' && hourlyPackageId) {
+  if (tripType === 'tour' && tourId) {
+    // Use predefined tour fare if available
+    const tourFareMatrix = tourFares[tourId as keyof typeof tourFares];
+    if (tourFareMatrix) {
+      return tourFareMatrix[cabType.id as keyof typeof tourFareMatrix] || baseFare;
+    }
+    return baseFare;
+  }
+  else if (tripType === 'local' && hourlyPackageId) {
     const basePackagePrice = getLocalPackagePrice(hourlyPackageId, cabType.name);
     totalFare = basePackagePrice;
     
@@ -176,22 +241,11 @@ export function calculateFare(
     const minimumDistance = Math.max(distance, 250);
     
     if (tripMode === 'one-way') {
-      const effectiveDistance = minimumDistance * 2;
-      const minKm = 300 * 2;
-      
-      const oneWayRate = oneWayRates[cabType.id as keyof typeof oneWayRates] || 13;
-      
-      if (effectiveDistance <= minKm) {
-        totalFare = baseFare;
-      } else {
-        const extraKm = effectiveDistance - minKm;
-        totalFare = baseFare + (extraKm * oneWayRate);
-      }
-      
-      totalFare += 250;
-    } else {
+      // For one-way, only use the base fare that covers 300km without extra charges
       totalFare = baseFare;
-      
+      totalFare += 250; // Driver allowance
+    } else {
+      // Calculate round-trip fare with days, distance charges and night halt
       let numberOfDays = 1;
       
       if (pickupDate && returnDate) {
@@ -202,21 +256,52 @@ export function calculateFare(
         numberOfDays = Math.max(1, differenceInDays);
       }
       
+      // Base fare per day
       totalFare = baseFare * numberOfDays;
       
+      // Calculate distance charges for round-trip
+      const allocatedKm = 300; // km included in base fare per day
+      const totalAllocatedKm = allocatedKm * numberOfDays;
       const effectiveDistance = minimumDistance * 2;
       
-      totalFare += (effectiveDistance * cabType.pricePerKm);
+      // Add charges for extra kilometers if any
+      if (effectiveDistance > totalAllocatedKm) {
+        const extraKm = effectiveDistance - totalAllocatedKm;
+        totalFare += (extraKm * cabType.pricePerKm);
+      }
       
+      // Add driver allowance for each day
       totalFare += 250 * numberOfDays;
+      
+      // Add night halt charges for multi-day trips
+      if (numberOfDays > 1) {
+        let nightHaltCharge = 700; // Default
+        
+        // Set night halt charge based on vehicle type
+        switch (cabType.name.toLowerCase()) {
+          case "sedan":
+            nightHaltCharge = 700;
+            break;
+          case "ertiga":
+          case "innova crysta":
+            nightHaltCharge = 1000;
+            break;
+          default:
+            nightHaltCharge = 700;
+        }
+        
+        totalFare += (numberOfDays - 1) * nightHaltCharge;
+      }
     }
     
+    // Add toll charges for both one-way and round-trip
     if (distance > 100) {
       const tollCharges = Math.floor(distance / 100) * 100;
       totalFare += tollCharges;
     }
   }
   
+  // Round the fare to the nearest 10
   return Math.ceil(totalFare / 10) * 10;
 }
 

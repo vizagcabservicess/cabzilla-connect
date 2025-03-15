@@ -19,6 +19,10 @@ export const router = createBrowserRouter([
     element: <BookingConfirmationPage />,
   },
   {
+    path: '/tours',
+    element: <CabsPage />,
+  },
+  {
     path: '*',
     element: <NotFound />,
   },
