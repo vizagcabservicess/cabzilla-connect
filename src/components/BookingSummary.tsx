@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { CabType, formatPrice, TripType, TripMode, extraCharges, oneWayRates } from '@/lib/cabData';
 import { Location, isVizagLocation } from '@/lib/locationData';
@@ -104,10 +105,10 @@ export function BookingSummary({
     
     if (tripType === 'outstation') {
       const allocatedKm = 300;
+      // For both one-way and round-trip, calculate total distance appropriately
       const effectiveDistance = tripMode === "one-way" ? distance : distance * 2;
-      const totalDistance = tripMode === "one-way" ? distance : distance * 2;
-      const extraKm = Math.max(effectiveDistance - (allocatedKm * (tripMode === "one-way" ? 1 : days)), 0);
-
+      const totalDistance = effectiveDistance; // Show actual distance
+      
       let baseRate = 0, perKmRate = 0, driverAllowance = 250, nightHaltCharge = 0;
 
       switch (selectedCab.name.toLowerCase()) {
@@ -132,10 +133,20 @@ export function BookingSummary({
           nightHaltCharge = 700;
       }
 
-      const totalBaseFare = tripMode === "one-way" ? baseRate : days * baseRate;
-      const totalDistanceFare = extraKm > 0 ? extraKm * perKmRate : 0;
-      const totalDriverAllowance = tripMode === "one-way" ? driverAllowance : days * driverAllowance;
-      const totalNightHalt = tripMode === "round-trip" ? (days - 1) * nightHaltCharge : 0;
+      // Calculate number of days
+      const totalDays = tripMode === "round-trip" ? days : 1;
+      
+      // Calculate distance covered by base fare
+      const totalBaseFare = tripMode === "one-way" ? baseRate : totalDays * baseRate;
+      const baseCoveredKm = allocatedKm * totalDays;
+      
+      // Calculate extra distance and fare
+      const extraKm = Math.max(effectiveDistance - baseCoveredKm, 0);
+      const totalDistanceFare = extraKm * perKmRate;
+      
+      // Calculate other expenses
+      const totalDriverAllowance = tripMode === "one-way" ? driverAllowance : totalDays * driverAllowance;
+      const totalNightHalt = tripMode === "round-trip" ? (totalDays - 1) * nightHaltCharge : 0;
       
       return (
         <>

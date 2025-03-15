@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -51,17 +50,13 @@ const CabsPage = () => {
   const [isCalculatingDistance, setIsCalculatingDistance] = useState<boolean>(false);
   const [showMap, setShowMap] = useState<boolean>(false);
   
-  // New states for booking flow
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState<boolean>(false);
   const [bookingComplete, setBookingComplete] = useState<boolean>(false);
 
-  // Set initial airport values for airport transfers
   useEffect(() => {
     if (tripType === "airport") {
-      // For airport transfers, find the airport location
       const airport = vizagLocations.find(loc => loc.type === 'airport');
       if (airport) {
-        // If pickup is at airport, set pickup to airport, otherwise set dropoff to airport
         if (!pickup && !dropoff) {
           setPickup(airport);
         }
@@ -78,25 +73,21 @@ const CabsPage = () => {
     setShowMap(false);
 
     if (type === "airport") {
-      // For airport transfers, automatically set the airport as one of the locations
       const airport = vizagLocations.find(loc => loc.type === 'airport');
       if (airport) {
         setPickup(airport);
         setDropoff(null);
       }
     } else if (type === "local") {
-      // For local trips, reset locations and set hourly package
       setPickup(null);
       setDropoff(null);
       setHourlyPackage(hourlyPackages[0].id);
     } else {
-      // For outstation, just reset locations
       setPickup(null);
       setDropoff(null);
     }
   };
 
-  // Direct distance update from GoogleMapComponent
   const handleMapDistanceCalculated = (mapDistance: number, mapDuration: number) => {
     console.log(`Map calculated: ${mapDistance} km, ${mapDuration} min`);
     if (mapDistance > 0 && mapDistance !== distance) {
@@ -111,15 +102,13 @@ const CabsPage = () => {
     }
   };
 
-  // Distance Calculation Logic
   useEffect(() => {
     const fetchDistance = async () => {
       if (tripType === "local") {
-        // For local trips, use the package's kilometers
         const selectedPackage = hourlyPackages.find((pkg) => pkg.id === hourlyPackage);
         if (selectedPackage) {
           setDistance(selectedPackage.kilometers);
-          const estimatedTime = selectedPackage.hours * 60; // Convert hours to minutes
+          const estimatedTime = selectedPackage.hours * 60;
           setTravelTime(estimatedTime);
         }
         return;
@@ -165,7 +154,6 @@ const CabsPage = () => {
     fetchDistance();
   }, [pickup, dropoff, tripType, hourlyPackage, toast]);
 
-  // Calculate fare when relevant parameters change
   useEffect(() => {
     if (selectedCab && distance > 0) {
       const fare = calculateFare(
@@ -183,20 +171,17 @@ const CabsPage = () => {
     }
   }, [selectedCab, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate]);
 
-  // Handle hourly package change for local trips
   const handleHourlyPackageChange = (packageId: string) => {
     setHourlyPackage(packageId);
     
-    // Update distance based on selected package
     const selectedPackage = hourlyPackages.find((pkg) => pkg.id === packageId);
     if (selectedPackage) {
       setDistance(selectedPackage.kilometers);
-      const estimatedTime = selectedPackage.hours * 60; // Convert hours to minutes
+      const estimatedTime = selectedPackage.hours * 60;
       setTravelTime(estimatedTime);
     }
   };
 
-  // Handle search button click
   const handleSearch = () => {
     if (!pickup || !dropoff) {
       toast({
@@ -234,13 +219,10 @@ const CabsPage = () => {
       return;
     }
 
-    // All validations passed, show guest details form
     setShowGuestDetailsForm(true);
   };
 
-  // Handle guest details submission
   const handleGuestDetailsSubmit = (guestDetails: any) => {
-    // Create booking data
     const bookingData = {
       pickupLocation: pickup,
       dropLocation: dropoff,
@@ -256,21 +238,21 @@ const CabsPage = () => {
       tripMode,
     };
 
-    // Store booking details in session storage
     sessionStorage.setItem('bookingDetails', JSON.stringify(bookingData));
     
-    // Show success message
     toast({
       title: "Booking Confirmed!",
       description: "Your cab has been booked successfully",
       variant: "default",
     });
     
-    // Redirect to booking confirmation page
     navigate("/booking-confirmation");
   };
 
-  // Show loading state when Google Maps is not loaded
+  const handleBackToSelection = () => {
+    setShowGuestDetailsForm(false);
+  };
+
   if (!isLoaded) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -419,6 +401,7 @@ const CabsPage = () => {
                 <GuestDetailsForm 
                   onSubmit={handleGuestDetailsSubmit}
                   totalPrice={totalPrice}
+                  onBack={handleBackToSelection}
                 />
               </div>
               

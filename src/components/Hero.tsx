@@ -23,13 +23,11 @@ import { useToast } from "@/components/ui/use-toast";
 import { GuestDetailsForm } from './GuestDetailsForm';
 import { useNavigate } from 'react-router-dom';
 
-// Available hourly packages with updated pricing structure
 const hourlyPackageOptions = [
   { value: "8hrs-80km", label: "8 Hours / 80 KM" },
   { value: "10hrs-100km", label: "10 Hours / 100 KM" }
 ];
 
-// Airport location (Visakhapatnam Airport)
 const airportLocation = vizagLocations.find(loc => loc.type === 'airport');
 
 export function Hero() {
@@ -37,7 +35,6 @@ export function Hero() {
   const navigate = useNavigate();
   const bookingSummaryRef = useRef<HTMLDivElement>(null);
   
-  // Load saved data from session storage
   const loadFromSessionStorage = () => {
     const pickupData = sessionStorage.getItem('pickupLocation');
     const dropData = sessionStorage.getItem('dropLocation');
@@ -76,11 +73,9 @@ export function Hero() {
   const [hourlyPackage, setHourlyPackage] = useState<string>(savedData.hourlyPackage);
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState<boolean>(false);
   const [isCalculatingDistance, setIsCalculatingDistance] = useState<boolean>(false);
-  
-  // Check if both locations are in Vizag for possible trip type redirection
+
   useEffect(() => {
     if (pickupLocation && dropLocation && tripType === 'outstation') {
-      // If both locations are in Vizag, redirect to Airport Transfers
       if (areBothLocationsInVizag(pickupLocation, dropLocation)) {
         toast({
           title: "Trip Type Updated",
@@ -92,21 +87,14 @@ export function Hero() {
     }
   }, [pickupLocation, dropLocation, tripType, toast]);
 
-  // Handle trip type change
   useEffect(() => {
-    // If trip type changes, save it to session storage
     sessionStorage.setItem('tripType', tripType);
     sessionStorage.setItem('tripMode', tripMode);
     
-    // Set airport as pickup/drop based on trip type for airport transfers
     if (tripType === 'airport' && airportLocation) {
-      // We'll let the user choose whether airport is pickup or drop
-      // by not forcing a specific location here
     }
     
-    // For local trips, we don't need drop location
     if (tripType === 'local') {
-      // Default to first location in Vizag if no pickup location is set
       if (!pickupLocation) {
         const defaultLocation = vizagLocations.find(loc => loc.id.includes('vizag'));
         if (defaultLocation) {
@@ -119,7 +107,6 @@ export function Hero() {
     }
   }, [tripType, tripMode, pickupLocation]);
 
-  // Save locations to session storage whenever they change
   useEffect(() => {
     if (pickupLocation) {
       sessionStorage.setItem('pickupLocation', JSON.stringify(pickupLocation));
@@ -129,7 +116,6 @@ export function Hero() {
     }
   }, [pickupLocation, dropLocation]);
 
-  // Save dates to session storage whenever they change
   useEffect(() => {
     if (pickupDate) {
       sessionStorage.setItem('pickupDate', pickupDate.toISOString());
@@ -141,29 +127,10 @@ export function Hero() {
     }
   }, [pickupDate, returnDate]);
 
-  // Save hourly package to session storage
   useEffect(() => {
     sessionStorage.setItem('hourlyPackage', hourlyPackage);
   }, [hourlyPackage]);
 
-  // Calculate distance when locations change
-  useEffect(() => {
-    if (tripType === 'local') {
-      // For local trips, distance depends on the package
-      const packageDistance = hourlyPackage === '8hrs-80km' ? 80 : 100;
-      setDistance(packageDistance);
-    } else if (pickupLocation && dropLocation) {
-      setIsCalculatingDistance(true);
-      // This is a placeholder until Google Maps calculates the actual distance
-      setTimeout(() => {
-        setIsCalculatingDistance(false);
-      }, 1000);
-    } else {
-      setDistance(0);
-    }
-  }, [pickupLocation, dropLocation, tripType, hourlyPackage]);
-
-  // Update form validity
   useEffect(() => {
     if (tripType === 'local' && pickupLocation && pickupDate) {
       setIsFormValid(true);
@@ -196,38 +163,29 @@ export function Hero() {
     }
   };
 
-  // Handle distance calculation from Google Maps
   const handleDistanceCalculated = (calculatedDistance: number, calculatedDuration: number) => {
     setDistance(calculatedDistance);
     setDuration(calculatedDuration);
     setIsCalculatingDistance(false);
   };
 
-  // Calculate price based on trip type, cab, and distance
   const calculatePrice = () => {
     if (!selectedCab) return 0;
     
     let totalPrice = 0;
     
-    // Airport transfer pricing
     if (tripType === 'airport') {
       totalPrice = calculateAirportFare(selectedCab.name, distance);
-    }
-    // Local trip pricing with updated structure
-    else if (tripType === 'local') {
+    } else if (tripType === 'local') {
       totalPrice = getLocalPackagePrice(hourlyPackage, selectedCab.name);
       
-      // Add cost for extra kilometers if applicable
       const packageKm = hourlyPackage === '8hrs-80km' ? 80 : 100;
       if (distance > packageKm) {
         const extraKm = distance - packageKm;
         const extraKmRate = selectedCab.pricePerKm;
         totalPrice += extraKm * extraKmRate;
       }
-    }
-    // Outstation trip pricing with updated logic for BOTH one-way and round-trip
-    else if (tripType === 'outstation') {
-      // Get pricing factors based on cab type
+    } else if (tripType === 'outstation') {
       let basePrice = 0, perKmRate = 0, driverAllowance = 250, nightHaltCharge = 0;
       
       switch (selectedCab.name.toLowerCase()) {
@@ -253,27 +211,19 @@ export function Hero() {
       }
       
       if (tripMode === 'one-way') {
-        // Apply the same calculation logic for one-way as we do for round-trip
-        // But just for a single day without night halt
         const days = 1;
-        const totalMinKm = days * 300; // 300km included in base fare
-        
-        // No need to double the distance for one-way
+        const totalMinKm = days * 300;
         const effectiveDistance = distance;
-        
-        // Calculate extra km beyond base allocation
         const extraKm = Math.max(effectiveDistance - totalMinKm, 0);
-        
-        // Calculate fare components
         const totalBaseFare = basePrice;
         const totalDistanceFare = extraKm * perKmRate;
         const totalDriverAllowance = driverAllowance;
         
         totalPrice = totalBaseFare + totalDistanceFare + totalDriverAllowance;
-      } else { // round-trip calculation remains the same
+      } else {
         const days = Math.max(1, differenceInCalendarDays(returnDate || pickupDate, pickupDate) + 1);
         const totalMinKm = days * 300;
-        const effectiveDistance = distance * 2; // Double the distance for round-trip
+        const effectiveDistance = distance * 2;
         const extraKm = Math.max(effectiveDistance - totalMinKm, 0);
         const totalBaseFare = days * basePrice;
         const totalDistanceFare = extraKm * perKmRate;
@@ -284,12 +234,38 @@ export function Hero() {
       }
     }
     
-    return Math.ceil(totalPrice / 10) * 10; // Round to nearest 10
+    return Math.ceil(totalPrice / 10) * 10;
   };
 
   const totalPrice = calculatePrice();
 
-  // Handle booking now button click
+  const handleGuestDetailsSubmit = (guestDetails: any) => {
+    const bookingData = {
+      pickupLocation,
+      dropLocation,
+      pickupDate: pickupDate?.toISOString(),
+      returnDate: returnDate?.toISOString(),
+      selectedCab,
+      distance,
+      totalPrice,
+      discountAmount: 0,
+      finalPrice: totalPrice,
+      guestDetails,
+      tripType,
+      tripMode,
+    };
+
+    sessionStorage.setItem('bookingDetails', JSON.stringify(bookingData));
+    
+    toast({
+      title: "Booking Confirmed!",
+      description: "Your cab has been booked successfully",
+      duration: 3000,
+    });
+    
+    navigate("/booking-confirmation");
+  };
+
   const handleBookNow = () => {
     if (!isFormValid || !selectedCab) {
       toast({
@@ -303,7 +279,6 @@ export function Hero() {
     
     setShowGuestDetailsForm(true);
     
-    // Add a short delay to allow state update
     setTimeout(() => {
       const contactSection = document.querySelector('form');
       if (contactSection) {
@@ -312,7 +287,6 @@ export function Hero() {
     }, 100);
   };
 
-  // Go back from the guest details form to the cab selection
   const handleBackToSelection = () => {
     setShowGuestDetailsForm(false);
     setCurrentStep(2);
@@ -395,7 +369,6 @@ export function Hero() {
                       label="RETURN DATE & TIME"
                       date={returnDate}
                       onDateChange={setReturnDate}
-                      // Allow same-day returns by using pickupDate as minDate
                       minDate={pickupDate}
                     />
                   )}
@@ -467,7 +440,6 @@ export function Hero() {
                       </div>
                     </div>
                     
-                    {/* Display the map only for outstation and airport trips */}
                     {(tripType === 'outstation' || tripType === 'airport') && pickupLocation && dropLocation && (
                       <div className="mt-6">
                         <GoogleMapComponent
@@ -523,19 +495,12 @@ export function Hero() {
               <div className="bg-white rounded-xl shadow-card border p-6 mb-4">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-xl font-semibold">Complete Your Booking</h3>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={handleBackToSelection}
-                    className="flex items-center gap-1"
-                  >
-                    <ArrowLeft size={16} /> Back
-                  </Button>
                 </div>
                 
                 <GuestDetailsForm 
                   onSubmit={handleGuestDetailsSubmit}
                   totalPrice={totalPrice}
+                  onBack={handleBackToSelection}
                 />
               </div>
             </div>

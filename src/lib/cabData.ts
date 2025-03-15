@@ -238,12 +238,49 @@ export function calculateFare(
     totalFare = calculateAirportFare(cabType.name, distance);
   } 
   else if (tripType === 'outstation') {
+    // Set minimum distance
     const minimumDistance = Math.max(distance, 250);
     
+    // Get pricing factors based on cab type
+    let basePrice = 0, perKmRate = 0, driverAllowance = 250, nightHaltCharge = 0;
+    
+    switch (cabType.name.toLowerCase()) {
+      case "sedan":
+        basePrice = 4200;
+        perKmRate = 14;
+        nightHaltCharge = 700;
+        break;
+      case "ertiga":
+        basePrice = 5400;
+        perKmRate = 18;
+        nightHaltCharge = 1000;
+        break;
+      case "innova crysta":
+        basePrice = 6000;
+        perKmRate = 20;
+        nightHaltCharge = 1000;
+        break;
+      default:
+        basePrice = cabType.price;
+        perKmRate = cabType.pricePerKm;
+        nightHaltCharge = 700;
+    }
+    
     if (tripMode === 'one-way') {
-      // For one-way, only use the base fare that covers 300km without extra charges
-      totalFare = baseFare;
-      totalFare += 250; // Driver allowance
+      // Base fare for one-way
+      totalFare = basePrice;
+      
+      // Calculate base included kilometers
+      const allocatedKm = 300;
+      
+      // Calculate extra kilometers if any
+      if (minimumDistance > allocatedKm) {
+        const extraKm = minimumDistance - allocatedKm;
+        totalFare += extraKm * perKmRate;
+      }
+      
+      // Add driver allowance
+      totalFare += driverAllowance;
     } else {
       // Calculate round-trip fare with days, distance charges and night halt
       let numberOfDays = 1;
@@ -257,7 +294,7 @@ export function calculateFare(
       }
       
       // Base fare per day
-      totalFare = baseFare * numberOfDays;
+      totalFare = basePrice * numberOfDays;
       
       // Calculate distance charges for round-trip
       const allocatedKm = 300; // km included in base fare per day
@@ -267,29 +304,14 @@ export function calculateFare(
       // Add charges for extra kilometers if any
       if (effectiveDistance > totalAllocatedKm) {
         const extraKm = effectiveDistance - totalAllocatedKm;
-        totalFare += (extraKm * cabType.pricePerKm);
+        totalFare += (extraKm * perKmRate);
       }
       
       // Add driver allowance for each day
-      totalFare += 250 * numberOfDays;
+      totalFare += driverAllowance * numberOfDays;
       
       // Add night halt charges for multi-day trips
       if (numberOfDays > 1) {
-        let nightHaltCharge = 700; // Default
-        
-        // Set night halt charge based on vehicle type
-        switch (cabType.name.toLowerCase()) {
-          case "sedan":
-            nightHaltCharge = 700;
-            break;
-          case "ertiga":
-          case "innova crysta":
-            nightHaltCharge = 1000;
-            break;
-          default:
-            nightHaltCharge = 700;
-        }
-        
         totalFare += (numberOfDays - 1) * nightHaltCharge;
       }
     }
