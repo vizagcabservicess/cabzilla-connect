@@ -1,4 +1,3 @@
-
 export interface CabType {
   id: string;
   name: string;
@@ -108,7 +107,7 @@ export const promoCodes: PromoCode[] = [
   }
 ];
 
-export type TripType = 'outstation' | 'local' | 'airport';
+export type TripType = 'outstation' | 'local' | 'airport' | 'tour';
 export type TripMode = 'one-way' | 'round-trip';
 export type LocalTripPurpose = 'business' | 'personal' | 'city-tour';
 
@@ -121,7 +120,6 @@ export interface HourlyPackage {
   basePrice: number;
 }
 
-// Updated hourly packages with new pricing structure
 export const hourlyPackages: HourlyPackage[] = [
   {
     id: '8hrs-80km',
@@ -141,14 +139,12 @@ export const hourlyPackages: HourlyPackage[] = [
   }
 ];
 
-// Extra charges per hour and km for different cab types
 export const extraCharges = {
   sedan: { perHour: 300, perKm: 14 },
   ertiga: { perHour: 350, perKm: 18 },
   innova: { perHour: 400, perKm: 20 }
 };
 
-// Get base price for a local package based on cab type
 export const getLocalPackagePrice = (packageId: string, cabType: string): number => {
   const pkg = hourlyPackages.find(p => p.id === packageId);
   if (!pkg) return 0;
@@ -169,6 +165,14 @@ export const getLocalPackagePrice = (packageId: string, cabType: string): number
   return pkg.basePrice; // Fallback
 };
 
+export const oneWayRates = {
+  sedan: 13,
+  ertiga: 16,
+  innova: 18,
+  tempo: 22,
+  luxury: 25
+};
+
 export function calculateFare(
   cabType: CabType, 
   distance: number, 
@@ -181,17 +185,13 @@ export function calculateFare(
   let baseFare = cabType.price;
   let totalFare = 0;
   
-  // Calculate based on trip type
   if (tripType === 'local' && hourlyPackageId) {
-    // Get base package price for selected cab
     const basePackagePrice = getLocalPackagePrice(hourlyPackageId, cabType.name);
     totalFare = basePackagePrice;
     
-    // Find package details
     const selectedPackage = hourlyPackages.find(pkg => pkg.id === hourlyPackageId);
     
     if (selectedPackage && distance > selectedPackage.kilometers) {
-      // Calculate extra km charges
       const extraKm = distance - selectedPackage.kilometers;
       const extraChargeRates = extraCharges[cabType.id as keyof typeof extraCharges];
       if (extraChargeRates) {
@@ -202,33 +202,29 @@ export function calculateFare(
     }
   } 
   else if (tripType === 'airport') {
-    // Use the new airport fare calculation function from locationData
     const { calculateAirportFare } = require('./locationData');
     totalFare = calculateAirportFare(cabType.name, distance);
   } 
   else if (tripType === 'outstation') {
-    // Ensure minimum distance of 250 KM for outstation trips
     const minimumDistance = Math.max(distance, 250);
     
     if (tripMode === 'one-way') {
-      // One-way trip calculation with revised logic:
-      // For one-way trips, double the distance for fare calculation but use reduced rate of ₹13/km
-      const effectiveDistance = minimumDistance * 2; // Double the distance for one-way calculation
+      const effectiveDistance = minimumDistance * 2;
+      const minKm = 300 * 2;
       
-      if (effectiveDistance <= 600) { // 300km * 2
+      const oneWayRate = oneWayRates[cabType.id as keyof typeof oneWayRates] || 13;
+      
+      if (effectiveDistance <= minKm) {
         totalFare = baseFare;
       } else {
-        // Base fare for first 600 km + additional km at ₹13/km
-        totalFare = baseFare + ((effectiveDistance - 600) * 13);
+        const extraKm = effectiveDistance - minKm;
+        totalFare = baseFare + (extraKm * oneWayRate);
       }
       
-      // Add driver allowance for outstation
       totalFare += 250;
     } else {
-      // Round-trip calculation with ₹14 per km
       totalFare = baseFare;
       
-      // Calculate number of days for round trip
       let numberOfDays = 1;
       
       if (pickupDate && returnDate) {
@@ -239,27 +235,21 @@ export function calculateFare(
         numberOfDays = Math.max(1, differenceInDays);
       }
       
-      // Multiply base fare by number of days
       totalFare = baseFare * numberOfDays;
       
-      // Double the distance for round-trip calculation
       const effectiveDistance = minimumDistance * 2;
       
-      // Add distance fare at ₹14/km
-      totalFare += (effectiveDistance * 14);
+      totalFare += (effectiveDistance * cabType.pricePerKm);
       
-      // Add driver allowance for outstation
       totalFare += 250 * numberOfDays;
     }
     
-    // Add toll charges (simplified calculation)
     if (distance > 100) {
       const tollCharges = Math.floor(distance / 100) * 100;
       totalFare += tollCharges;
     }
   }
   
-  // Round to nearest 10 for cleaner pricing
   return Math.ceil(totalFare / 10) * 10;
 }
 

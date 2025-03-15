@@ -1,10 +1,10 @@
 
 import { useState, useEffect, useRef } from 'react';
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import { PaymentGateway } from "@/components/PaymentGateway";
+import { TabsContent, Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SocialLogin } from "@/components/SocialLogin";
+import { EditableContactDetailsForm } from "@/components/EditableContactDetailsForm";
 
 interface GuestDetailsFormProps {
   onSubmit: (details: any) => void;
@@ -12,12 +12,9 @@ interface GuestDetailsFormProps {
 }
 
 export function GuestDetailsForm({ onSubmit, totalPrice }: GuestDetailsFormProps) {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [showPaymentGateway, setShowPaymentGateway] = useState(false);
+  const [authTab, setAuthTab] = useState<string>("contact");
   const { toast } = useToast();
-  const formRef = useRef<HTMLFormElement>(null);
+  const formRef = useRef<HTMLDivElement>(null);
 
   // Highlight effect when the component mounts
   useEffect(() => {
@@ -39,105 +36,56 @@ export function GuestDetailsForm({ onSubmit, totalPrice }: GuestDetailsFormProps
     }
   }, []);
 
-  const handleContactDetailsSubmit = (event: React.FormEvent) => {
-    event.preventDefault();
-
-    if (!name || !email || !phone) {
-      toast({
-        title: "Missing Information",
-        description: "Please fill in all fields.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      toast({
-        title: "Invalid Email",
-        description: "Please enter a valid email address.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Validate phone number format (basic check for 10 digits)
-    if (!/^\d{10}$/.test(phone)) {
-      toast({
-        title: "Invalid Phone Number",
-        description: "Please enter a valid 10-digit phone number.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Show payment gateway after contact details validation
-    setShowPaymentGateway(true);
-  };
-
-  const handlePaymentComplete = () => {
+  // Handle social login success
+  const handleLoginSuccess = (userData: any) => {
+    toast({
+      title: "Login Successful",
+      description: `Welcome, ${userData.name}!`,
+      duration: 3000,
+    });
+    
+    // Auto-fill the guest details form with user data
     const guestDetails = {
-      name,
-      email,
-      phone,
+      name: userData.name,
+      email: userData.email,
+      phone: "", // Social login typically doesn't provide phone number
     };
-
-    onSubmit(guestDetails);
+    
+    // Show another toast prompting the user to complete their phone number
+    toast({
+      title: "One More Step",
+      description: "Please enter your phone number to complete the booking.",
+      duration: 5000,
+    });
+    
+    // Switch to the contact tab
+    setAuthTab("contact");
   };
 
   return (
-    <div className="space-y-6">
-      {!showPaymentGateway ? (
-        <form ref={formRef} onSubmit={handleContactDetailsSubmit} className="space-y-4 p-4 rounded-lg transition-all duration-300">
-          <h3 className="text-xl font-semibold mb-4">Contact Information</h3>
-          <div>
-            <Label htmlFor="name">Full Name</Label>
-            <Input
-              type="text"
-              id="name"
-              placeholder="Enter your full name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
+    <div ref={formRef} className="transition-all duration-300 rounded-lg">
+      <Tabs value={authTab} onValueChange={setAuthTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="contact">Contact Details</TabsTrigger>
+          <TabsTrigger value="social">Social Login</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="contact" className="mt-4">
+          <EditableContactDetailsForm 
+            onSubmit={onSubmit}
+            totalPrice={totalPrice}
+          />
+        </TabsContent>
+        
+        <TabsContent value="social" className="mt-4">
+          <div className="space-y-4 bg-white rounded-lg shadow-sm border p-6">
+            <p className="text-sm text-gray-600">
+              Login with your social account to quickly complete your booking.
+            </p>
+            <SocialLogin onLoginSuccess={handleLoginSuccess} />
           </div>
-          <div>
-            <Label htmlFor="email">Email Address</Label>
-            <Input
-              type="email"
-              id="email"
-              placeholder="Enter your email address"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <Label htmlFor="phone">Phone Number</Label>
-            <Input
-              type="tel"
-              id="phone"
-              placeholder="Enter your 10-digit phone number"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              required
-            />
-          </div>
-          <div className="flex justify-between items-center pt-2">
-            <div>
-              Total: 
-              <span className="font-semibold ml-1">₹{totalPrice.toLocaleString('en-IN')}</span>
-            </div>
-            <Button type="submit">Proceed to Payment</Button>
-          </div>
-        </form>
-      ) : (
-        <PaymentGateway 
-          totalAmount={totalPrice}
-          onPaymentComplete={handlePaymentComplete}
-        />
-      )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

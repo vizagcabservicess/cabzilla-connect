@@ -1,5 +1,6 @@
+
 import { useState, useEffect } from 'react';
-import { CabType, formatPrice, TripType, TripMode, getLocalPackagePrice } from '@/lib/cabData';
+import { CabType, formatPrice, TripType, TripMode, getLocalPackagePrice, oneWayRates } from '@/lib/cabData';
 import { Users, Briefcase, Tag, Info, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { differenceInDays } from 'date-fns';
@@ -96,13 +97,22 @@ export function CabOptions({
       }
       
       if (tripMode === "one-way") {
-        const effectiveDistance = distance * 2;
-        const minKm = 300 * 2;
+        // Updated one-way calculation to match the logic in cabData.ts
+        const minimumDistance = Math.max(distance, 250);
+        const effectiveDistance = minimumDistance * 2; // Double the distance for one-way
+        const minKm = 300 * 2; // 600km minimum for calculation
+        
+        // Get one-way rate for this cab type
+        const oneWayRate = oneWayRates[cab.id as keyof typeof oneWayRates] || 13;
         
         let totalBaseFare = baseRate;
-        let totalDistanceFare = Math.max(effectiveDistance - minKm, 0) * 13;
+        let totalDistanceFare = 0;
         
-        totalFare = totalBaseFare + totalDistanceFare + 250;
+        if (effectiveDistance > minKm) {
+          totalDistanceFare = (effectiveDistance - minKm) * oneWayRate;
+        }
+        
+        totalFare = totalBaseFare + totalDistanceFare + 250; // Driver allowance
       } else {
         let days = returnDate ? Math.max(1, differenceInDays(returnDate, pickupDate || new Date()) + 1) : 1;
         let minKm = days * 300;
@@ -140,7 +150,7 @@ export function CabOptions({
             fareDetails = packageInfo;
           } else if (tripType === 'outstation') {
             fareDetails = tripMode === 'one-way' 
-              ? `One way - double distance fare` 
+              ? `One way - return distance included in fare` 
               : `Round trip - ${distance * 2}km total`;
           }
 
