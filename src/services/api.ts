@@ -1,4 +1,3 @@
-
 import { 
   AuthResponse, 
   LoginRequest, 
@@ -11,20 +10,33 @@ import {
   VehiclePricingUpdateRequest
 } from '@/types/api';
 
-// Base API URL - update to your Hostinger domain
+// Base API URL - update to your actual deployed domain
 const API_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://yourdomain.com/api' // Replace 'yourdomain.com' with your actual Hostinger domain
+  ? window.location.origin + '/api' // This will use the current domain + /api
   : 'http://localhost:8000/api';
 
 // Helper for handling API responses
 const handleResponse = async (response: Response) => {
-  const data = await response.json();
-  
-  if (!response.ok) {
-    throw new Error(data.message || 'Something went wrong');
+  // Check if response is HTML instead of JSON (common error with PHP)
+  const contentType = response.headers.get('content-type');
+  if (contentType && contentType.indexOf('text/html') !== -1) {
+    const text = await response.text();
+    console.error('Received HTML instead of JSON:', text);
+    throw new Error('Server returned HTML instead of JSON. Check server configuration.');
   }
   
-  return data;
+  try {
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || data.error || 'Something went wrong');
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('API Response Error:', error);
+    throw new Error('Failed to parse response from server');
+  }
 };
 
 // Helper to get auth token from localStorage
@@ -33,43 +45,57 @@ const getAuthToken = () => localStorage.getItem('auth_token');
 // Auth API calls
 export const authAPI = {
   login: async (credentials: LoginRequest): Promise<AuthResponse> => {
-    const response = await fetch(`${API_URL}/login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(credentials),
-    });
-    
-    const data = await handleResponse(response);
-    
-    // Store token in localStorage if login successful
-    if (data.token) {
-      localStorage.setItem('auth_token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
+    try {
+      console.log('Login request to:', `${API_URL}/login`);
+      const response = await fetch(`${API_URL}/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(credentials),
+      });
+      
+      const data = await handleResponse(response);
+      console.log('Login response:', data);
+      
+      // Store token in localStorage if login successful
+      if (data.token) {
+        localStorage.setItem('auth_token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Login error:', error);
+      throw error;
     }
-    
-    return data;
   },
   
   signup: async (userData: SignupRequest): Promise<AuthResponse> => {
-    const response = await fetch(`${API_URL}/signup`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(userData),
-    });
-    
-    const data = await handleResponse(response);
-    
-    // Store token in localStorage if signup successful
-    if (data.token) {
-      localStorage.setItem('auth_token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
+    try {
+      console.log('Signup request to:', `${API_URL}/signup`);
+      const response = await fetch(`${API_URL}/signup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userData),
+      });
+      
+      const data = await handleResponse(response);
+      console.log('Signup response:', data);
+      
+      // Store token in localStorage if signup successful
+      if (data.token) {
+        localStorage.setItem('auth_token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Signup error:', error);
+      throw error;
     }
-    
-    return data;
   },
   
   logout: () => {

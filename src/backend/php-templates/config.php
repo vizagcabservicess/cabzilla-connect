@@ -1,5 +1,12 @@
 
 <?php
+// Turn on error reporting for debugging - remove in production
+ini_set('display_errors', 0);
+error_reporting(E_ALL);
+
+// Ensure all responses are JSON
+header('Content-Type: application/json');
+
 // Database configuration
 define('DB_HOST', 'localhost');
 define('DB_USERNAME', 'your_username');  // Change to your Hostinger database username
@@ -14,9 +21,7 @@ function getDbConnection() {
     $conn = new mysqli(DB_HOST, DB_USERNAME, DB_PASSWORD, DB_DATABASE);
     
     if ($conn->connect_error) {
-        header('HTTP/1.1 500 Internal Server Error');
-        echo json_encode(['error' => 'Database connection failed']);
-        exit;
+        sendJsonResponse(['error' => 'Database connection failed: ' . $conn->connect_error], 500);
     }
     
     return $conn;
@@ -24,8 +29,11 @@ function getDbConnection() {
 
 // Helper function to send JSON response
 function sendJsonResponse($data, $statusCode = 200) {
-    header('Content-Type: application/json');
-    http_response_code($statusCode);
+    // Make sure we're sending JSON
+    if (!headers_sent()) {
+        header('Content-Type: application/json');
+        http_response_code($statusCode);
+    }
     echo json_encode($data);
     exit;
 }
@@ -40,7 +48,7 @@ function generateJwtToken($userId, $email, $role) {
         'exp' => $expirationTime,
         'user_id' => $userId,
         'email' => $email,
-        'role' => $role
+        'role' => $role ?? 'user'
     ];
     
     $header = base64_encode(json_encode([
@@ -84,11 +92,11 @@ function verifyJwtToken($token) {
 function authenticate() {
     $headers = getallheaders();
     
-    if (!isset($headers['Authorization'])) {
+    if (!isset($headers['Authorization']) && !isset($headers['authorization'])) {
         sendJsonResponse(['error' => 'Authorization header missing'], 401);
     }
     
-    $authHeader = $headers['Authorization'];
+    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
     $token = str_replace('Bearer ', '', $authHeader);
     
     $payload = verifyJwtToken($token);
@@ -115,3 +123,26 @@ function generateBookingNumber() {
     $random = rand(1000, 9999);
     return $prefix . $timestamp . $random;
 }
+
+// Log errors to file for debugging
+function logError($message, $data = []) {
+    $logFile = __DIR__ . '/error.log';
+    $timestamp = date('Y-m-d H:i:s');
+    $logMessage = "[$timestamp] $message " . json_encode($data) . PHP_EOL;
+    error_log($logMessage, 3, $logFile);
+}
+
+// Set error handler to catch PHP errors
+set_error_handler(function($errno, $errstr, $errfile, $errline) {
+    logError("PHP Error [$errno]: $errstr in $errfile on line $errline");
+    sendJsonResponse(['error' => 'Server error occurred'], 500);
+});
+
+// Set exception handler
+set_exception_handler(function($exception) {
+    logError("Uncaught Exception: " . $exception->getMessage(), [
+        'file' => $exception->getFile(),
+        'line' => $exception->getLine()
+    ]);
+    sendJsonResponse(['error' => 'Server error occurred'], 500);
+});

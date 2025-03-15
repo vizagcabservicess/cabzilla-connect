@@ -1,0 +1,32 @@
+
+# Enable rewrite engine
+RewriteEngine On
+
+# Parse API routes to PHP files
+RewriteRule ^signup$ signup.php [L]
+RewriteRule ^login$ login.php [L]
+RewriteRule ^user/dashboard$ user/dashboard.php [L]
+RewriteRule ^book$ book.php [L]
+RewriteRule ^book/edit/([0-9]+)$ book-edit.php?id=$1 [L]
+RewriteRule ^admin/bookings$ admin/bookings.php [L]
+RewriteRule ^fares/tours$ fares/tours.php [L]
+RewriteRule ^fares/vehicles$ fares/vehicles.php [L]
+RewriteRule ^admin/fares/update$ admin/fares-update.php [L]
+RewriteRule ^admin/km-price/update$ admin/km-price-update.php [L]
+
+# Set content type
+<FilesMatch "\.(php)$">
+    Header set Content-Type "application/json"
+</FilesMatch>
+
+# Enable CORS
+<IfModule mod_headers.c>
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type, Authorization"
+    Header set Access-Control-Max-Age "3600"
+</IfModule>
+
+# Handle OPTIONS method for CORS preflight
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule .* / [R=200,L]

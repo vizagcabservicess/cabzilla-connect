@@ -2,6 +2,9 @@
 # Enable rewrite engine
 RewriteEngine On
 
+# Ensure API requests go directly to PHP files, not React frontend
+RewriteRule ^api/ - [L]
+
 # API routing rules
 RewriteRule ^api/signup$ api/signup.php [L]
 RewriteRule ^api/login$ api/login.php [L]
@@ -26,6 +29,11 @@ AddDefaultCharset UTF-8
 </IfModule>
 
 # Handle OPTIONS requests for CORS preflight
-RewriteEngine On
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* / [R=200,L]
+
+# Redirect all non-file/directory/API requests to index.html for React Router
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} !^/api
+RewriteRule ^ index.html [QSA,L]
