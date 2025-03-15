@@ -5,6 +5,10 @@ import CabsPage from './pages/CabsPage';
 import BookingConfirmationPage from './pages/BookingConfirmationPage';
 import NotFound from './pages/NotFound';
 import ToursPage from './pages/ToursPage';
+import LoginPage from './pages/LoginPage';
+import SignupPage from './pages/SignupPage';
+import DashboardPage from './pages/DashboardPage';
+import AdminDashboardPage from './pages/AdminDashboardPage';
 
 export const router = createBrowserRouter([
   {
@@ -22,6 +26,22 @@ export const router = createBrowserRouter([
   {
     path: '/tours',
     element: <ToursPage />,
+  },
+  {
+    path: '/login',
+    element: <LoginPage />,
+  },
+  {
+    path: '/signup',
+    element: <SignupPage />,
+  },
+  {
+    path: '/dashboard',
+    element: <DashboardPage />,
+  },
+  {
+    path: '/admin',
+    element: <AdminDashboardPage />,
   },
   {
     path: '*',
