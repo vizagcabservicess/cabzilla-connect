@@ -21,7 +21,7 @@ function getDbConnection() {
     $conn = new mysqli(DB_HOST, DB_USERNAME, DB_PASSWORD, DB_DATABASE);
     
     if ($conn->connect_error) {
-        sendJsonResponse(['error' => 'Database connection failed: ' . $conn->connect_error], 500);
+        sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed: ' . $conn->connect_error], 500);
     }
     
     return $conn;
@@ -34,6 +34,15 @@ function sendJsonResponse($data, $statusCode = 200) {
         header('Content-Type: application/json');
         http_response_code($statusCode);
     }
+    
+    // Ensure consistent response format
+    if (!is_array($data)) {
+        $data = ['status' => 'error', 'message' => 'Invalid response data'];
+    } else if (!isset($data['status'])) {
+        // If status is not set, set it based on the status code
+        $data['status'] = $statusCode < 400 ? 'success' : 'error';
+    }
+    
     echo json_encode($data);
     exit;
 }
@@ -93,7 +102,7 @@ function authenticate() {
     $headers = getallheaders();
     
     if (!isset($headers['Authorization']) && !isset($headers['authorization'])) {
-        sendJsonResponse(['error' => 'Authorization header missing'], 401);
+        sendJsonResponse(['status' => 'error', 'message' => 'Authorization header missing'], 401);
     }
     
     $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
@@ -101,7 +110,7 @@ function authenticate() {
     
     $payload = verifyJwtToken($token);
     if (!$payload) {
-        sendJsonResponse(['error' => 'Invalid or expired token'], 401);
+        sendJsonResponse(['status' => 'error', 'message' => 'Invalid or expired token'], 401);
     }
     
     return $payload;
@@ -110,7 +119,7 @@ function authenticate() {
 // Check if user is admin
 function checkAdmin($userData) {
     if (!isset($userData['role']) || $userData['role'] !== 'admin') {
-        sendJsonResponse(['error' => 'Access denied. Admin privileges required'], 403);
+        sendJsonResponse(['status' => 'error', 'message' => 'Access denied. Admin privileges required'], 403);
     }
     
     return true;
@@ -135,7 +144,7 @@ function logError($message, $data = []) {
 // Set error handler to catch PHP errors
 set_error_handler(function($errno, $errstr, $errfile, $errline) {
     logError("PHP Error [$errno]: $errstr in $errfile on line $errline");
-    sendJsonResponse(['error' => 'Server error occurred'], 500);
+    sendJsonResponse(['status' => 'error', 'message' => 'Server error occurred'], 500);
 });
 
 // Set exception handler
@@ -144,5 +153,5 @@ set_exception_handler(function($exception) {
         'file' => $exception->getFile(),
         'line' => $exception->getLine()
     ]);
-    sendJsonResponse(['error' => 'Server error occurred'], 500);
+    sendJsonResponse(['status' => 'error', 'message' => 'Server error occurred'], 500);
 });

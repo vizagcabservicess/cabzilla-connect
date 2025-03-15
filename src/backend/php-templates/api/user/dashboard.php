@@ -33,6 +33,9 @@ header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Content-Type: application/json');
 
+// Ensure JSON response header is set
+header('Content-Type: application/json');
+
 // Log start of request processing
 logError("Dashboard.php request initiated", ['method' => $_SERVER['REQUEST_METHOD']]);
 
@@ -176,7 +179,7 @@ try {
         logError("No bookings found, providing sample data", ['count' => count($bookings)]);
     }
 
-    // ALWAYS send response in standard format
+    // CRITICAL: Always send response in standard format with status and data
     echo json_encode(['status' => 'success', 'data' => $bookings]);
     exit;
     
