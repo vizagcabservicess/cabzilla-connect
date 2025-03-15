@@ -267,6 +267,9 @@ export function calculateFare(
     }
     
     if (tripMode === 'one-way') {
+      // Consider both ways distance for one-way trips
+      const effectiveDistance = minimumDistance * 2;
+      
       // Base fare for one-way
       totalFare = basePrice;
       
@@ -274,8 +277,8 @@ export function calculateFare(
       const allocatedKm = 300;
       
       // Calculate extra kilometers if any
-      if (minimumDistance > allocatedKm) {
-        const extraKm = minimumDistance - allocatedKm;
+      if (effectiveDistance > allocatedKm) {
+        const extraKm = effectiveDistance - allocatedKm;
         totalFare += extraKm * perKmRate;
       }
       

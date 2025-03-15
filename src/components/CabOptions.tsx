@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { CabType, formatPrice, TripType, TripMode, getLocalPackagePrice, oneWayRates } from '@/lib/cabData';
 import { Users, Briefcase, Tag, Info, Check } from 'lucide-react';
@@ -97,14 +96,15 @@ export function CabOptions({
       }
       
       if (tripMode === "one-way") {
-        // Base fare for one-way always includes 300km
+        // For one-way, we still calculate both ways distance
+        const effectiveDistance = distance * 2; // Consider both ways for one-way trips
         const allocatedKm = 300;
         const totalBaseFare = baseRate;
         let totalDistanceFare = 0;
         
         // Calculate extra kilometers beyond the base 300km
-        if (distance > allocatedKm) {
-          const extraKm = distance - allocatedKm;
+        if (effectiveDistance > allocatedKm) {
+          const extraKm = effectiveDistance - allocatedKm;
           const oneWayRate = oneWayRates[cab.id as keyof typeof oneWayRates] || 13;
           totalDistanceFare = extraKm * oneWayRate;
         }
