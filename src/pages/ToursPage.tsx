@@ -12,6 +12,8 @@ import { Location, vizagLocations } from "@/lib/locationData";
 import { CabType, cabTypes, availableTours, tourFares } from "@/lib/cabData";
 import { MapPin, Calendar, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { bookingAPI } from "@/services/api";
+import { BookingRequest } from "@/types/api";
 
 const ToursPage = () => {
   const navigate = useNavigate();

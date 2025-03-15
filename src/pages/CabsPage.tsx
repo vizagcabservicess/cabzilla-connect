@@ -7,7 +7,6 @@ import { TabTripSelector } from "@/components/TabTripSelector";
 import GoogleMapComponent from "@/components/GoogleMapComponent";
 import { GuestDetailsForm } from "@/components/GuestDetailsForm";
 import { BookingSummary } from "@/components/BookingSummary";
-
 import { 
   Location, 
   vizagLocations, 
@@ -28,6 +27,8 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
 import { Check, MapPin } from "lucide-react";
+import { bookingAPI } from "@/services/api";
+import { BookingRequest } from "@/types/api";
 
 const CabsPage = () => {
   const navigate = useNavigate();
