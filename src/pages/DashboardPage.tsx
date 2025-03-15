@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -7,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { toast } from "sonner";
-import { Book, CircleOff, RefreshCw, Calendar, MapPin, Car, ShieldAlert } from "lucide-react";
+import { Book, CircleOff, RefreshCw, Calendar, MapPin, Car, ShieldAlert, LogOut } from "lucide-react";
 import { bookingAPI, authAPI } from '@/services/api';
 import { Booking } from '@/types/api';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
@@ -24,11 +25,31 @@ export default function DashboardPage() {
   const [retryCount, setRetryCount] = useState(0);
   const user = authAPI.getCurrentUser();
 
+  // Check auth on page load
+  useEffect(() => {
+    if (!authAPI.isAuthenticated()) {
+      console.log('User not authenticated, redirecting to login');
+      toast.error('Please login to access your dashboard');
+      navigate('/login');
+      return;
+    }
+    
+    console.log('User authenticated, proceeding with dashboard');
+  }, [navigate]);
+
   const fetchBookings = useCallback(async (retry = 0) => {
     try {
       setIsLoading(true);
       setError(null);
       console.log('Fetching user bookings...', { retry });
+      
+      // Double-check authentication
+      if (!authAPI.isAuthenticated()) {
+        console.error('Auth token missing, redirecting to login');
+        toast.error('Your session has expired. Please login again.');
+        navigate('/login');
+        return;
+      }
       
       try {
         const data = await bookingAPI.getUserBookings();
@@ -44,6 +65,20 @@ export default function DashboardPage() {
         }
       } catch (error) {
         console.error('Error in fetch:', error);
+        
+        // Handle authentication errors
+        if (error instanceof Error && 
+            (error.message.includes('Invalid or expired token') || 
+             error.message.includes('Authentication failed') ||
+             error.message.includes('Not authenticated') ||
+             error.message.includes('401'))) {
+          console.log('Authentication error detected, clearing local storage');
+          localStorage.removeItem('auth_token');
+          toast.error('Your session has expired. Please login again.');
+          navigate('/login');
+          return;
+        }
+        
         throw error; // Re-throw to be caught by outer catch
       }
     } catch (error) {
@@ -76,19 +111,19 @@ export default function DashboardPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [uiToast]);
+  }, [navigate, uiToast]);
 
   useEffect(() => {
-    if (!authAPI.isAuthenticated()) {
-      navigate('/login');
-      return;
-    }
     fetchBookings();
-  }, [navigate, fetchBookings]);
+  }, [fetchBookings]);
 
   const handleRetry = () => {
     setRetryCount(0);
     fetchBookings();
+  };
+  
+  const handleLogout = () => {
+    authAPI.logout();
   };
 
   const getStatusColor = (status: string) => {
@@ -116,9 +151,15 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-bold">Dashboard</h1>
           <p className="text-gray-500">Welcome back, {user?.name || 'User'}</p>
         </div>
-        <Button onClick={() => navigate('/')} className="bg-blue-600 hover:bg-blue-700">
-          Book New Cab
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={() => navigate('/')} className="bg-blue-600 hover:bg-blue-700">
+            Book New Cab
+          </Button>
+          <Button onClick={handleLogout} variant="outline" className="text-red-600 border-red-200 hover:bg-red-50">
+            <LogOut className="h-4 w-4 mr-2" />
+            Logout
+          </Button>
+        </div>
       </div>
 
       {error && (

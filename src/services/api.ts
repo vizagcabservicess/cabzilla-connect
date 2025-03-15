@@ -13,11 +13,18 @@ import {
   DashboardMetrics
 } from '@/types/api';
 
-// Base API URL - use current domain
-const API_URL = `${window.location.origin}/api`;
+// Base API URL - use current domain if in production, otherwise use the defined API URL
+const API_URL = process.env.NODE_ENV === 'production' 
+  ? `${window.location.origin}/api`
+  : 'https://saddlebrown-oryx-227656.hostingersite.com/api';
+
+console.log('Using API URL:', API_URL);
 
 // Helper for handling API responses
 const handleResponse = async (response: Response) => {
+  console.log('Response status:', response.status);
+  console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+  
   if (!response.ok) {
     // Get error details from response
     const contentType = response.headers.get('content-type');
@@ -25,10 +32,13 @@ const handleResponse = async (response: Response) => {
     if (contentType && contentType.includes('application/json')) {
       try {
         const errorData = await response.json();
+        console.error('Error response:', errorData);
         throw new Error(errorData.message || errorData.error || `Server error: ${response.status}`);
       } catch (e) {
         if (e instanceof SyntaxError) {
           // JSON parse error
+          const text = await response.text();
+          console.error('Failed to parse error response:', text);
           throw new Error(`Server error: ${response.status}`);
         }
         throw e; // Re-throw the error from errorData
@@ -53,6 +63,7 @@ const handleResponse = async (response: Response) => {
     }
     
     const data = await response.json();
+    console.log('API response data:', data);
     return data;
   } catch (error) {
     console.error('API Response Parsing Error:', error);
@@ -64,13 +75,31 @@ const handleResponse = async (response: Response) => {
 };
 
 // Helper to get auth token from localStorage
-const getAuthToken = () => localStorage.getItem('auth_token');
+const getAuthToken = () => {
+  const token = localStorage.getItem('auth_token');
+  console.log('Retrieved auth token:', token ? `${token.substring(0, 10)}...` : 'null');
+  return token;
+};
+
+// Refresh token when it's close to expiration
+const refreshTokenIfNeeded = async () => {
+  // This would be implemented if we had a refresh token endpoint
+  // For now, we'll just check if the token exists
+  const token = getAuthToken();
+  if (!token) {
+    console.warn('No token found to refresh');
+    return false;
+  }
+  return true;
+};
 
 // Auth API calls
 export const authAPI = {
   login: async (credentials: LoginRequest): Promise<AuthResponse> => {
     try {
       console.log('Login request to:', `${API_URL}/login`);
+      console.log('Login credentials:', { email: credentials.email, passwordLength: credentials.password.length });
+      
       const response = await fetch(`${API_URL}/login`, {
         method: 'POST',
         headers: {
@@ -80,12 +109,17 @@ export const authAPI = {
       });
       
       const data = await handleResponse(response);
-      console.log('Login response:', data);
+      console.log('Login response:', { 
+        success: data.success,
+        hasToken: !!data.token,
+        hasUser: !!data.user
+      });
       
       // Store token in localStorage if login successful
       if (data.token) {
         localStorage.setItem('auth_token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
+        console.log('Token and user data stored in localStorage');
       }
       
       return data;
@@ -125,24 +159,34 @@ export const authAPI = {
   logout: () => {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('user');
+    console.log('User logged out, token and user data removed');
     window.location.href = '/';
   },
   
   getCurrentUser: () => {
     const userStr = localStorage.getItem('user');
-    return userStr ? JSON.parse(userStr) : null;
+    const user = userStr ? JSON.parse(userStr) : null;
+    console.log('Current user:', user ? { id: user.id, email: user.email, role: user.role } : 'none');
+    return user;
   },
   
   isAuthenticated: () => {
-    return !!localStorage.getItem('auth_token');
+    const isAuth = !!localStorage.getItem('auth_token');
+    console.log('Is authenticated:', isAuth);
+    return isAuth;
   },
   
   isAdmin: () => {
     const userStr = localStorage.getItem('user');
-    if (!userStr) return false;
+    if (!userStr) {
+      console.log('No user data found, not admin');
+      return false;
+    }
     
     const user = JSON.parse(userStr);
-    return user.role === 'admin';
+    const isAdmin = user.role === 'admin';
+    console.log('Is admin:', isAdmin);
+    return isAdmin;
   }
 };
 
@@ -150,9 +194,13 @@ export const authAPI = {
 export const bookingAPI = {
   getUserBookings: async (): Promise<Booking[]> => {
     const token = getAuthToken();
-    if (!token) throw new Error('Not authenticated');
+    if (!token) {
+      console.error('Not authenticated, cannot fetch bookings');
+      throw new Error('Not authenticated');
+    }
     
     console.log('Fetching user bookings...');
+    await refreshTokenIfNeeded();
     
     try {
       const response = await fetch(`${API_URL}/user/dashboard`, {
@@ -163,12 +211,11 @@ export const bookingAPI = {
       });
       
       // Log the raw response for debugging
-      console.log('Response status:', response.status);
-      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+      console.log('User bookings response status:', response.status);
       
       // Use the improved handleResponse function
       const responseData = await handleResponse(response);
-      console.log('User bookings response:', responseData);
+      console.log('User bookings response data:', responseData);
       
       // Handle the response structure consistently
       if (responseData && responseData.status === 'success' && Array.isArray(responseData.data)) {

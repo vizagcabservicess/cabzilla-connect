@@ -33,19 +33,27 @@ header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Content-Type: application/json');
 
-// Ensure JSON response header is set
-header('Content-Type: application/json');
-
 // Log start of request processing
-logError("Dashboard.php request initiated", ['method' => $_SERVER['REQUEST_METHOD']]);
+logError("Dashboard.php request initiated", [
+    'method' => $_SERVER['REQUEST_METHOD'],
+    'headers' => getallheaders()
+]);
 
 try {
-    // Authenticate user
+    // Authenticate user with improved logging
+    $headers = getallheaders();
+    logError("Request headers", ['headers' => $headers]);
+    
+    if (!isset($headers['Authorization']) && !isset($headers['authorization'])) {
+        logError("Missing authorization header");
+        sendJsonResponse(['status' => 'error', 'message' => 'Authentication required'], 401);
+        exit;
+    }
+    
     $userData = authenticate();
     if (!$userData || !isset($userData['user_id'])) {
         logError("Authentication failed in dashboard.php");
-        http_response_code(401);
-        echo json_encode(['status' => 'error', 'message' => 'Authentication failed']);
+        sendJsonResponse(['status' => 'error', 'message' => 'Authentication failed'], 401);
         exit;
     }
     
@@ -128,9 +136,9 @@ try {
                 'tripMode' => 'one-way',
                 'totalAmount' => 5140,
                 'status' => 'confirmed',
-                'passengerName' => $userData['name'],
+                'passengerName' => $userData['name'] ?? 'User',
                 'passengerPhone' => '9550099336',
-                'passengerEmail' => $userData['email'],
+                'passengerEmail' => $userData['email'] ?? 'user@example.com',
                 'createdAt' => date('Y-m-d H:i:s', strtotime('-1 day')),
                 'updatedAt' => date('Y-m-d H:i:s')
             ],
@@ -148,9 +156,9 @@ try {
                 'tripMode' => 'one-way',
                 'totalAmount' => 1200,
                 'status' => 'pending',
-                'passengerName' => $userData['name'],
+                'passengerName' => $userData['name'] ?? 'User',
                 'passengerPhone' => '9550099336',
-                'passengerEmail' => $userData['email'],
+                'passengerEmail' => $userData['email'] ?? 'user@example.com',
                 'createdAt' => date('Y-m-d H:i:s', strtotime('-2 days')),
                 'updatedAt' => date('Y-m-d H:i:s')
             ],
@@ -168,9 +176,9 @@ try {
                 'tripMode' => 'one-way',
                 'totalAmount' => 3200,
                 'status' => 'completed',
-                'passengerName' => $userData['name'],
+                'passengerName' => $userData['name'] ?? 'User',
                 'passengerPhone' => '9550099336',
-                'passengerEmail' => $userData['email'],
+                'passengerEmail' => $userData['email'] ?? 'user@example.com',
                 'createdAt' => date('Y-m-d H:i:s', strtotime('-5 days')),
                 'updatedAt' => date('Y-m-d H:i:s', strtotime('-3 days'))
             ]
@@ -179,8 +187,14 @@ try {
         logError("No bookings found, providing sample data", ['count' => count($bookings)]);
     }
 
-    // CRITICAL: Always send response in standard format with status and data
-    echo json_encode(['status' => 'success', 'data' => $bookings]);
+    // Ensure the response format is consistent
+    $response = [
+        'status' => 'success',
+        'data' => $bookings
+    ];
+    
+    logError("Sending response", ['response_size' => strlen(json_encode($response))]);
+    echo json_encode($response);
     exit;
     
 } catch (Exception $e) {
@@ -190,7 +204,5 @@ try {
         'line' => $e->getLine()
     ]);
     
-    http_response_code(500);
-    echo json_encode(['status' => 'error', 'message' => 'Server error: ' . $e->getMessage()]);
-    exit;
+    sendJsonResponse(['status' => 'error', 'message' => 'Server error: ' . $e->getMessage()], 500);
 }

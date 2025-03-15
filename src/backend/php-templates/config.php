@@ -50,7 +50,7 @@ function sendJsonResponse($data, $statusCode = 200) {
 // Helper function to generate JWT token
 function generateJwtToken($userId, $email, $role) {
     $issuedAt = time();
-    $expirationTime = $issuedAt + 60 * 60 * 24; // 24 hours
+    $expirationTime = $issuedAt + 60 * 60 * 24 * 7; // 7 days - increased from 24 hours
     
     $payload = [
         'iat' => $issuedAt,
@@ -60,41 +60,86 @@ function generateJwtToken($userId, $email, $role) {
         'role' => $role ?? 'user'
     ];
     
-    $header = base64_encode(json_encode([
+    $header = json_encode([
         'alg' => 'HS256',
         'typ' => 'JWT'
-    ]));
+    ]);
     
-    $payload = base64_encode(json_encode($payload));
-    $signature = hash_hmac('sha256', "$header.$payload", JWT_SECRET, true);
-    $signature = base64_encode($signature);
+    $base64UrlHeader = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($header));
+    $base64UrlPayload = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode(json_encode($payload)));
     
-    return "$header.$payload.$signature";
+    $signature = hash_hmac('sha256', "$base64UrlHeader.$base64UrlPayload", JWT_SECRET, true);
+    $base64UrlSignature = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($signature));
+    
+    return "$base64UrlHeader.$base64UrlPayload.$base64UrlSignature";
 }
 
-// Helper function to verify JWT token
+// Helper function to verify JWT token - improved for better base64 handling
 function verifyJwtToken($token) {
-    $parts = explode('.', $token);
-    if (count($parts) !== 3) {
+    try {
+        // Log token verification attempt for debugging
+        logError("Verifying token", ['token_length' => strlen($token)]);
+        
+        $parts = explode('.', $token);
+        if (count($parts) !== 3) {
+            logError("Invalid token format", ['parts_count' => count($parts)]);
+            return false;
+        }
+        
+        list($base64UrlHeader, $base64UrlPayload, $base64UrlSignature) = $parts;
+        
+        // Add padding to base64 strings if needed
+        $base64UrlHeader = addBase64Padding($base64UrlHeader);
+        $base64UrlPayload = addBase64Padding($base64UrlPayload);
+        $base64UrlSignature = addBase64Padding($base64UrlSignature);
+        
+        // Decode header and payload
+        $header = json_decode(base64_decode(strtr($base64UrlHeader, '-_', '+/')), true);
+        $payload = json_decode(base64_decode(strtr($base64UrlPayload, '-_', '+/')), true);
+        
+        if (!$header || !$payload) {
+            logError("Failed to decode header or payload", [
+                'header_decoded' => $header !== null,
+                'payload_decoded' => $payload !== null
+            ]);
+            return false;
+        }
+        
+        // Verify signature
+        $signature = base64_decode(strtr($base64UrlSignature, '-_', '+/'));
+        $expectedSignature = hash_hmac('sha256', "$base64UrlHeader.$base64UrlPayload", JWT_SECRET, true);
+        
+        if (!hash_equals($signature, $expectedSignature)) {
+            logError("Signature verification failed");
+            return false;
+        }
+        
+        // Check if token is expired
+        if (!isset($payload['exp']) || $payload['exp'] < time()) {
+            logError("Token expired or missing expiration", [
+                'has_exp' => isset($payload['exp']),
+                'current_time' => time(),
+                'exp_time' => $payload['exp'] ?? 'missing'
+            ]);
+            return false;
+        }
+        
+        logError("Token verified successfully", ['user_id' => $payload['user_id']]);
+        return $payload;
+        
+    } catch (Exception $e) {
+        logError("Exception in token verification: " . $e->getMessage());
         return false;
     }
-    
-    list($header, $payload, $signature) = $parts;
-    
-    $verifySignature = hash_hmac('sha256', "$header.$payload", JWT_SECRET, true);
-    $verifySignature = base64_encode($verifySignature);
-    
-    if ($signature !== $verifySignature) {
-        return false;
+}
+
+// Helper function to add padding to base64 strings
+function addBase64Padding($input) {
+    $padLength = 4 - (strlen($input) % 4);
+    if ($padLength < 4) {
+        $input .= str_repeat('=', $padLength);
     }
-    
-    $payload = json_decode(base64_decode($payload), true);
-    
-    if ($payload['exp'] < time()) {
-        return false;
-    }
-    
-    return $payload;
+    return $input;
 }
 
 // Check if user is authenticated
@@ -102,11 +147,19 @@ function authenticate() {
     $headers = getallheaders();
     
     if (!isset($headers['Authorization']) && !isset($headers['authorization'])) {
+        logError("Authorization header missing", ['headers' => array_keys($headers)]);
         sendJsonResponse(['status' => 'error', 'message' => 'Authorization header missing'], 401);
     }
     
     $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
-    $token = str_replace('Bearer ', '', $authHeader);
+    logError("Auth header", ['header' => $authHeader]);
+    
+    // Extract token from "Bearer <token>"
+    if (strpos($authHeader, 'Bearer ') === 0) {
+        $token = substr($authHeader, 7);
+    } else {
+        $token = $authHeader; // Try using the header value directly if "Bearer " prefix is missing
+    }
     
     $payload = verifyJwtToken($token);
     if (!$payload) {
