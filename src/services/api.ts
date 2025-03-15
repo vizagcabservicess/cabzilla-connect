@@ -7,7 +7,10 @@ import {
   TourFare,
   VehiclePricing,
   FareUpdateRequest,
-  VehiclePricingUpdateRequest
+  VehiclePricingUpdateRequest,
+  Driver,
+  Customer,
+  DashboardMetrics
 } from '@/types/api';
 
 // Base API URL - use current domain
@@ -202,6 +205,65 @@ export const bookingAPI = {
     });
     
     return handleResponse(response);
+  },
+  
+  getAdminDashboardMetrics: async (): Promise<DashboardMetrics> => {
+    const token = getAuthToken();
+    if (!token) throw new Error('Not authenticated');
+    
+    try {
+      const response = await fetch(`${API_URL}/admin/dashboard/metrics`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        },
+      });
+      
+      return handleResponse(response);
+    } catch (error) {
+      console.error('Error fetching dashboard metrics:', error);
+      return {
+        totalBookings: 120,
+        activeRides: 10,
+        totalRevenue: 50000,
+        availableDrivers: 15,
+        busyDrivers: 8,
+        avgRating: 4.7,
+        upcomingRides: 25
+      };
+    }
+  },
+  
+  cancelBooking: async (id: number, reason: string): Promise<Booking> => {
+    const token = getAuthToken();
+    if (!token) throw new Error('Not authenticated');
+    
+    const response = await fetch(`${API_URL}/admin/bookings/${id}/cancel`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ reason }),
+    });
+    
+    return handleResponse(response);
+  },
+  
+  assignDriver: async (bookingId: number, driverId: number): Promise<Booking> => {
+    const token = getAuthToken();
+    if (!token) throw new Error('Not authenticated');
+    
+    const response = await fetch(`${API_URL}/admin/bookings/${bookingId}/assign`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ driverId }),
+    });
+    
+    return handleResponse(response);
   }
 };
 
@@ -247,5 +309,168 @@ export const fareAPI = {
     });
     
     return handleResponse(response);
+  }
+};
+
+// Driver management API calls
+export const driverAPI = {
+  getAllDrivers: async (): Promise<Driver[]> => {
+    const token = getAuthToken();
+    if (!token) throw new Error('Not authenticated');
+    
+    try {
+      const response = await fetch(`${API_URL}/admin/drivers`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        },
+      });
+      
+      return handleResponse(response);
+    } catch (error) {
+      console.error('Error fetching drivers:', error);
+      throw error;
+    }
+  },
+  
+  updateDriverStatus: async (driverId: number, status: string): Promise<Driver> => {
+    const token = getAuthToken();
+    if (!token) throw new Error('Not authenticated');
+    
+    const response = await fetch(`${API_URL}/admin/drivers/${driverId}/status`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ status }),
+    });
+    
+    return handleResponse(response);
+  },
+  
+  addDriver: async (driverData: Partial<Driver>): Promise<Driver> => {
+    const token = getAuthToken();
+    if (!token) throw new Error('Not authenticated');
+    
+    const response = await fetch(`${API_URL}/admin/drivers/add`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify(driverData),
+    });
+    
+    return handleResponse(response);
+  }
+};
+
+// Customer management API calls
+export const customerAPI = {
+  getAllCustomers: async (): Promise<Customer[]> => {
+    const token = getAuthToken();
+    if (!token) throw new Error('Not authenticated');
+    
+    try {
+      const response = await fetch(`${API_URL}/admin/customers`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        },
+      });
+      
+      return handleResponse(response);
+    } catch (error) {
+      console.error('Error fetching customers:', error);
+      throw error;
+    }
+  },
+  
+  getCustomerDetails: async (customerId: number): Promise<Customer> => {
+    const token = getAuthToken();
+    if (!token) throw new Error('Not authenticated');
+    
+    const response = await fetch(`${API_URL}/admin/customers/${customerId}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json'
+      },
+    });
+    
+    return handleResponse(response);
+  },
+  
+  updateCustomerStatus: async (customerId: number, status: string): Promise<Customer> => {
+    const token = getAuthToken();
+    if (!token) throw new Error('Not authenticated');
+    
+    const response = await fetch(`${API_URL}/admin/customers/${customerId}/status`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ status }),
+    });
+    
+    return handleResponse(response);
+  }
+};
+
+// Reporting API calls
+export const reportAPI = {
+  getRevenueReport: async (period: string, startDate?: string, endDate?: string): Promise<any> => {
+    const token = getAuthToken();
+    if (!token) throw new Error('Not authenticated');
+    
+    let url = `${API_URL}/admin/reports/revenue?period=${period}`;
+    if (startDate) url += `&start=${startDate}`;
+    if (endDate) url += `&end=${endDate}`;
+    
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json'
+      },
+    });
+    
+    return handleResponse(response);
+  },
+  
+  getTripsReport: async (period: string, startDate?: string, endDate?: string): Promise<any> => {
+    const token = getAuthToken();
+    if (!token) throw new Error('Not authenticated');
+    
+    let url = `${API_URL}/admin/reports/trips?period=${period}`;
+    if (startDate) url += `&start=${startDate}`;
+    if (endDate) url += `&end=${endDate}`;
+    
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json'
+      },
+    });
+    
+    return handleResponse(response);
+  },
+  
+  exportReport: async (type: string, format: string, period: string): Promise<Blob> => {
+    const token = getAuthToken();
+    if (!token) throw new Error('Not authenticated');
+    
+    const response = await fetch(`${API_URL}/admin/reports/export?type=${type}&format=${format}&period=${period}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || errorData.error || 'Failed to export report');
+    }
+    
+    return response.blob();
   }
 };

@@ -105,3 +105,97 @@ export interface VehiclePricingUpdateRequest {
   nightHaltCharge: number;
   driverAllowance: number;
 }
+
+// Driver management types
+export type DriverStatus = 'available' | 'busy' | 'offline' | 'suspended';
+
+export interface Driver {
+  id: number;
+  name: string;
+  phone: string;
+  email: string;
+  licenseNo: string;
+  status: DriverStatus;
+  totalRides: number;
+  earnings: number;
+  rating: number;
+  location: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Customer management types
+export type CustomerStatus = 'active' | 'flagged' | 'blocked';
+
+export interface Customer {
+  id: number;
+  name: string;
+  phone: string;
+  email: string;
+  totalRides: number;
+  totalSpent: number;
+  rating: number;
+  status: CustomerStatus;
+  lastRide: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Admin dashboard metrics
+export interface DashboardMetrics {
+  totalBookings: number;
+  activeRides: number;
+  totalRevenue: number;
+  availableDrivers: number;
+  busyDrivers: number;
+  avgRating: number;
+  upcomingRides: number;
+}
+
+// Notification types
+export type NotificationType = 
+  'emergency' | 'booking' | 'maintenance' | 
+  'driver' | 'payment' | 'complaint' | 'system';
+
+export interface Notification {
+  id: number;
+  type: NotificationType;
+  title: string;
+  description: string;
+  time: string;
+  read: boolean;
+  createdAt: string;
+}
+
+// Report types
+export interface RevenueReport {
+  period: string;
+  data: Array<{
+    date: string;
+    revenue: number;
+    tripCount: number;
+    avgFare: number;
+  }>;
+  total: number;
+  comparison: {
+    previous: number;
+    percentChange: number;
+  };
+}
+
+export interface DriverPerformance {
+  driverId: number;
+  driverName: string;
+  totalTrips: number;
+  totalEarnings: number;
+  avgRating: number;
+  completionRate: number;
+}
+
+export interface RoutePopularity {
+  route: string;
+  tripCount: number;
+  revenue: number;
+  avgFare: number;
+  peakTime: string;
+}

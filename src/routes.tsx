@@ -44,6 +44,26 @@ export const router = createBrowserRouter([
     element: <AdminDashboardPage />,
   },
   {
+    path: '/admin/drivers',
+    element: <AdminDashboardPage />,
+  },
+  {
+    path: '/admin/customers',
+    element: <AdminDashboardPage />,
+  },
+  {
+    path: '/admin/reports',
+    element: <AdminDashboardPage />,
+  },
+  {
+    path: '/admin/pricing',
+    element: <AdminDashboardPage />,
+  },
+  {
+    path: '/admin/notifications',
+    element: <AdminDashboardPage />,
+  },
+  {
     path: '*',
     element: <NotFound />,
   },
