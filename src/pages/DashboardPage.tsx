@@ -38,22 +38,40 @@ export default function DashboardPage() {
           bookingAPI.getUserBookings(),
           {
             loading: 'Loading your bookings...',
-            success: (data) => `Found ${data.length} booking(s)`,
+            success: (data) => {
+              // Fixed: Properly check data is an array before setting it
+              if (Array.isArray(data)) {
+                return `Found ${data.length} booking(s)`;
+              }
+              throw new Error('Invalid data format received');
+            },
             error: 'Could not load your bookings'
           }
         );
         console.log('Bookings received:', data);
-        setBookings(data);
-        setRetryCount(0); // Reset retry count on success
+        
+        // Fixed: Make sure data is an array before setting state
+        if (Array.isArray(data)) {
+          setBookings(data);
+          setRetryCount(0); // Reset retry count on success
+        } else {
+          throw new Error('Invalid data format received');
+        }
       } else {
         // For retries, don't show the toast.promise
         const data = await bookingAPI.getUserBookings();
         console.log('Bookings received on retry:', data);
-        setBookings(data);
-        setRetryCount(0);
         
-        // Show success toast for retries
-        toast.success(`Successfully loaded ${data.length} booking(s)`);
+        // Fixed: Make sure data is an array before setting state
+        if (Array.isArray(data)) {
+          setBookings(data);
+          setRetryCount(0);
+          
+          // Show success toast for retries
+          toast.success(`Successfully loaded ${data.length} booking(s)`);
+        } else {
+          throw new Error('Invalid data format received');
+        }
       }
     } catch (error) {
       console.error('Error fetching bookings:', error);

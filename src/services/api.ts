@@ -171,17 +171,17 @@ export const bookingAPI = {
       });
       
       // Use the improved handleResponse function
-      const data = await handleResponse(response);
-      console.log('User bookings response:', data);
+      const responseData = await handleResponse(response);
+      console.log('User bookings response:', responseData);
       
       // Properly handle the response structure
-      if (data.status === 'success' && Array.isArray(data.data)) {
-        return data.data;
-      } else if (Array.isArray(data)) {
+      if (responseData.status === 'success' && Array.isArray(responseData.data)) {
+        return responseData.data;
+      } else if (Array.isArray(responseData)) {
         console.warn('API returned array directly instead of {status, data} object');
-        return data;
+        return responseData;
       } else {
-        console.error('Invalid data format received:', data);
+        console.error('Invalid data format received:', responseData);
         throw new Error('Invalid data format received from server. Expected {status: "success", data: [...]');
       }
     } catch (error) {
