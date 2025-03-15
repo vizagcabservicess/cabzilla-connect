@@ -1,5 +1,4 @@
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,9 +6,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/use-toast";
+import { book } from "lucide-react";
 import { bookingAPI, authAPI } from '@/services/api';
 import { Booking } from '@/types/api';
 import { formatDate } from '@/lib/utils';
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { CircleOff, RefreshCw } from "lucide-react";
+
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 2000; // 2 seconds
 
 export default function DashboardPage() {
   const { toast } = useToast();
@@ -17,48 +22,51 @@ export default function DashboardPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const user = authAPI.getCurrentUser();
+
+  const fetchBookings = useCallback(async (retry = 0) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      console.log('Fetching user bookings...');
+      const data = await bookingAPI.getUserBookings();
+      console.log('Bookings received:', data);
+      setBookings(data);
+      setRetryCount(0); // Reset retry count on success
+    } catch (error) {
+      console.error('Error fetching bookings:', error);
+      if (retry < MAX_RETRIES) {
+        // Wait before retrying
+        setTimeout(() => {
+          setRetryCount(retry + 1);
+          fetchBookings(retry + 1);
+        }, RETRY_DELAY);
+      } else {
+        setError('Failed to load your bookings. Please try again later.');
+        toast({
+          title: "Error",
+          description: "Could not load bookings. Please refresh the page.",
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
 
   useEffect(() => {
     if (!authAPI.isAuthenticated()) {
       navigate('/login');
       return;
     }
-
-    const fetchBookings = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        console.log('Fetching user bookings from dashboard page...');
-        const data = await bookingAPI.getUserBookings();
-        console.log('Bookings received in dashboard:', data);
-        
-        if (data && Array.isArray(data)) {
-          setBookings(data);
-        } else {
-          console.error('Invalid data format received in dashboard:', data);
-          setError('Received invalid data format from server');
-          toast({
-            title: "Error",
-            description: "Invalid data format received from server",
-            variant: "destructive",
-          });
-        }
-      } catch (error) {
-        console.error('Error fetching bookings in dashboard:', error);
-        setError('Failed to load your bookings. Please try again later.');
-        toast({
-          title: "Error",
-          description: error instanceof Error ? error.message : 'Failed to load your bookings',
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchBookings();
-  }, [navigate, toast]);
+  }, [navigate, fetchBookings]);
+
+  const handleRetry = () => {
+    setRetryCount(0);
+    fetchBookings();
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -78,6 +86,22 @@ export default function DashboardPage() {
     ['completed', 'cancelled'].includes(booking.status.toLowerCase())
   );
 
+  if (isLoading) {
+    return (
+      <div className="container mx-auto py-10 px-4">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-3xl font-bold">Dashboard</h1>
+            <p className="text-gray-500">Welcome back, {user?.name || 'User'}</p>
+          </div>
+        </div>
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto py-10 px-4">
       <div className="flex justify-between items-center mb-8">
@@ -89,11 +113,33 @@ export default function DashboardPage() {
       </div>
 
       {error && (
-        <Card className="mb-6 border-red-200 bg-red-50">
-          <CardContent className="pt-6">
-            <p className="text-red-800">{error}</p>
-          </CardContent>
-        </Card>
+        <Alert variant="destructive" className="mb-6">
+          <CircleOff className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription className="flex items-center justify-between">
+            <span>{error}</span>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleRetry}
+              className="ml-4"
+              disabled={isLoading}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {retryCount > 0 && !error && (
+        <Alert className="mb-6">
+          <RefreshCw className="h-4 w-4 animate-spin" />
+          <AlertTitle>Retrying...</AlertTitle>
+          <AlertDescription>
+            Attempt {retryCount} of {MAX_RETRIES}
+          </AlertDescription>
+        </Alert>
       )}
 
       <Tabs defaultValue="upcoming" className="w-full">

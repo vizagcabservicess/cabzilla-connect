@@ -8,17 +8,20 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     sendJsonResponse(['error' => 'Method not allowed'], 405);
 }
 
-// Authenticate user
-$userData = authenticate();
-$userId = $userData['user_id'];
-
-// Connect to database
-$conn = getDbConnection();
-
-// Log for debugging
-logError("Fetching bookings for user", ['user_id' => $userId]);
+// Log start of request processing
+logError("Dashboard.php request initiated", ['method' => $_SERVER['REQUEST_METHOD']]);
 
 try {
+    // Authenticate user
+    $userData = authenticate();
+    $userId = $userData['user_id'];
+
+    // Connect to database
+    $conn = getDbConnection();
+
+    // Log for debugging
+    logError("Fetching bookings for user", ['user_id' => $userId]);
+
     // Get user's bookings
     $stmt = $conn->prepare("SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC");
     $stmt->bind_param("i", $userId);
@@ -26,8 +29,8 @@ try {
     $result = $stmt->get_result();
 
     if (!$result) {
-        logError("Database error", ['error' => $conn->error]);
-        sendJsonResponse(['error' => 'Database error: ' . $conn->error], 500);
+        logError("Database error in dashboard.php", ['error' => $conn->error]);
+        throw new Exception('Database error: ' . $conn->error);
     }
 
     $bookings = [];
@@ -108,13 +111,31 @@ try {
         logError("No bookings found, providing sample data", ['count' => count($bookings)]);
     }
 
-    // Send response
-    sendJsonResponse($bookings);
+    // Add CORS headers
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Methods: GET');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization');
+
+    // Send response with proper JSON content type
+    header('Content-Type: application/json');
+    echo json_encode($bookings);
+    exit;
+    
 } catch (Exception $e) {
     logError("Exception in dashboard.php", [
         'message' => $e->getMessage(),
         'file' => $e->getFile(),
         'line' => $e->getLine()
     ]);
-    sendJsonResponse(['error' => 'Server error: ' . $e->getMessage()], 500);
+    
+    // Add CORS headers
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Methods: GET');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization');
+    
+    // Send error response with proper JSON content type
+    header('Content-Type: application/json');
+    http_response_code(500);
+    echo json_encode(['error' => 'Server error: ' . $e->getMessage()]);
+    exit;
 }

@@ -20,7 +20,7 @@ const API_URL = `${window.location.origin}/api`;
 const handleResponse = async (response: Response) => {
   // Check if response is HTML instead of JSON (common error with PHP)
   const contentType = response.headers.get('content-type');
-  if (contentType && contentType.indexOf('application/json') === -1) {
+  if (contentType && !contentType.includes('application/json')) {
     const text = await response.text();
     console.error('Received non-JSON response:', text);
     console.error('Content-Type received:', contentType);
@@ -151,7 +151,19 @@ export const bookingAPI = {
         },
       });
       
-      const data = await handleResponse(response);
+      // Check if response is HTML instead of JSON
+      const contentType = response.headers.get('content-type');
+      if (contentType && !contentType.includes('application/json')) {
+        console.error('Received non-JSON response:', await response.text());
+        throw new Error('Invalid response format from server');
+      }
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch bookings');
+      }
+      
+      const data = await response.json();
       console.log('User bookings response:', data);
       
       // Ensure the response is an array
