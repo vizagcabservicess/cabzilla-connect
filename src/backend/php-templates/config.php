@@ -1,4 +1,3 @@
-
 <?php
 // Turn on error reporting for debugging - remove in production
 ini_set('display_errors', 0);
@@ -7,24 +6,38 @@ error_reporting(E_ALL);
 // Ensure all responses are JSON
 header('Content-Type: application/json');
 
-// Database configuration
+// Database configuration - use correct database credentials from the hosting account
 define('DB_HOST', 'localhost');
-define('DB_USERNAME', 'your_username');  // Change to your Hostinger database username
-define('DB_PASSWORD', 'your_password');  // Change to your Hostinger database password
+define('DB_USERNAME', 'u644605165_bookinguser');  // Updated database username
+define('DB_PASSWORD', 'BookingPass123#');         // Updated database password
 define('DB_DATABASE', 'u644605165_db_booking');
 
-// JWT Secret Key for authentication
-define('JWT_SECRET', 'your_jwt_secret_key');  // Change this to a secure random string
+// JWT Secret Key for authentication - should be a strong secure key
+define('JWT_SECRET', 'hJ8iP2qR5sT7vZ9xB4nM6cF3jL1oA0eD');  // Secure JWT secret
 
-// Connect to database
+// Connect to database with improved error reporting
 function getDbConnection() {
-    $conn = new mysqli(DB_HOST, DB_USERNAME, DB_PASSWORD, DB_DATABASE);
-    
-    if ($conn->connect_error) {
-        sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed: ' . $conn->connect_error], 500);
+    try {
+        $conn = new mysqli(DB_HOST, DB_USERNAME, DB_PASSWORD, DB_DATABASE);
+        
+        if ($conn->connect_error) {
+            logError("Database connection failed", [
+                'error' => $conn->connect_error,
+                'host' => DB_HOST,
+                'database' => DB_DATABASE
+            ]);
+            throw new Exception('Database connection failed: ' . $conn->connect_error);
+        }
+        
+        // Set charset to ensure proper encoding
+        $conn->set_charset("utf8mb4");
+        return $conn;
+    } catch (Exception $e) {
+        logError("Exception in database connection", [
+            'message' => $e->getMessage()
+        ]);
+        throw $e;
     }
-    
-    return $conn;
 }
 
 // Helper function to send JSON response
@@ -161,10 +174,22 @@ function authenticate() {
         $token = $authHeader; // Try using the header value directly if "Bearer " prefix is missing
     }
     
+    // Additional logging for token verification
+    logError("Token before verification", [
+        'token_length' => strlen($token),
+        'token_parts' => count(explode('.', $token))
+    ]);
+    
     $payload = verifyJwtToken($token);
     if (!$payload) {
+        logError("Token verification failed", ['token' => substr($token, 0, 20) . '...']);
         sendJsonResponse(['status' => 'error', 'message' => 'Invalid or expired token'], 401);
     }
+    
+    logError("Authentication successful", [
+        'user_id' => $payload['user_id'],
+        'email' => $payload['email']
+    ]);
     
     return $payload;
 }

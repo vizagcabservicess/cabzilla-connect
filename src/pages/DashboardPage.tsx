@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { toast } from "sonner";
-import { Book, CircleOff, RefreshCw, Calendar, MapPin, Car, ShieldAlert, LogOut } from "lucide-react";
+import { Book, CircleOff, RefreshCw, Calendar, MapPin, Car, ShieldAlert, LogOut, Info } from "lucide-react";
 import { bookingAPI, authAPI } from '@/services/api';
 import { Booking } from '@/types/api';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
@@ -58,7 +58,11 @@ export default function DashboardPage() {
         if (Array.isArray(data)) {
           setBookings(data);
           setRetryCount(0); // Reset retry count on success
-          toast.success(`Found ${data.length} booking(s)`);
+          if (data.length === 0) {
+            toast.info('No bookings found. Book your first cab ride now!');
+          } else {
+            toast.success(`Found ${data.length} booking(s)`);
+          }
         } else {
           console.error('Invalid data format received:', data);
           throw new Error('Invalid data format received from server');
@@ -144,6 +148,17 @@ export default function DashboardPage() {
     ['completed', 'cancelled'].includes(booking.status.toLowerCase())
   );
 
+  // Empty state component for no bookings
+  const NoBookingsCard = () => (
+    <Card>
+      <CardContent className="flex flex-col items-center justify-center py-10">
+        <Book className="h-16 w-16 text-gray-300 mb-4" />
+        <p className="text-gray-500 mb-4">You don't have any bookings yet.</p>
+        <Button onClick={() => navigate('/')} className="bg-blue-600 hover:bg-blue-700">Book a Cab Now</Button>
+      </CardContent>
+    </Card>
+  );
+
   return (
     <div className="container mx-auto py-10 px-4">
       <div className="flex justify-between items-center mb-8">
@@ -188,6 +203,16 @@ export default function DashboardPage() {
           <AlertTitle>Retrying...</AlertTitle>
           <AlertDescription>
             Attempt {retryCount} of {MAX_RETRIES}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {bookings.length === 0 && !isLoading && !error && (
+        <Alert className="mb-6">
+          <Info className="h-4 w-4" />
+          <AlertTitle>No Bookings Found</AlertTitle>
+          <AlertDescription>
+            You haven't made any bookings yet. Book your first cab ride now!
           </AlertDescription>
         </Alert>
       )}
@@ -272,13 +297,7 @@ export default function DashboardPage() {
               ))}
             </div>
           ) : (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-10">
-                <Book className="h-16 w-16 text-gray-300 mb-4" />
-                <p className="text-gray-500 mb-4">You don't have any upcoming bookings.</p>
-                <Button onClick={() => navigate('/')} className="bg-blue-600 hover:bg-blue-700">Book a Cab Now</Button>
-              </CardContent>
-            </Card>
+            <NoBookingsCard />
           )}
         </TabsContent>
         
@@ -354,13 +373,7 @@ export default function DashboardPage() {
               ))}
             </div>
           ) : (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-10">
-                <Book className="h-16 w-16 text-gray-300 mb-4" />
-                <p className="text-gray-500 mb-4">You don't have any past bookings.</p>
-                <Button onClick={() => navigate('/')} className="bg-blue-600 hover:bg-blue-700">Book a Cab Now</Button>
-              </CardContent>
-            </Card>
+            <NoBookingsCard />
           )}
         </TabsContent>
       </Tabs>

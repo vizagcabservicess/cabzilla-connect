@@ -118,73 +118,9 @@ try {
     // Log count of real bookings found
     logError("Real bookings found", ['count' => count($bookings)]);
 
-    // Always provide sample data for demo purposes if no real bookings exist
+    // Return empty array if no bookings found instead of providing demo data
     if (empty($bookings)) {
-        // Create sample booking data with current user ID
-        $bookings = [
-            [
-                'id' => 1,
-                'userId' => $userId,
-                'bookingNumber' => 'BK' . rand(10000, 99999),
-                'pickupLocation' => 'Airport, Visakhapatnam',
-                'dropLocation' => 'Vijayawada, Andhra Pradesh',
-                'pickupDate' => date('Y-m-d H:i:s', strtotime('+2 days')),
-                'returnDate' => null,
-                'cabType' => 'Sedan',
-                'distance' => 349,
-                'tripType' => 'outstation',
-                'tripMode' => 'one-way',
-                'totalAmount' => 5140,
-                'status' => 'confirmed',
-                'passengerName' => $userData['name'] ?? 'User',
-                'passengerPhone' => '9550099336',
-                'passengerEmail' => $userData['email'] ?? 'user@example.com',
-                'createdAt' => date('Y-m-d H:i:s', strtotime('-1 day')),
-                'updatedAt' => date('Y-m-d H:i:s')
-            ],
-            [
-                'id' => 2,
-                'userId' => $userId,
-                'bookingNumber' => 'BK' . rand(10000, 99999),
-                'pickupLocation' => 'Rushikonda Beach',
-                'dropLocation' => 'RK Beach',
-                'pickupDate' => date('Y-m-d H:i:s', strtotime('+1 week')),
-                'returnDate' => null,
-                'cabType' => 'SUV',
-                'distance' => 15,
-                'tripType' => 'local',
-                'tripMode' => 'one-way',
-                'totalAmount' => 1200,
-                'status' => 'pending',
-                'passengerName' => $userData['name'] ?? 'User',
-                'passengerPhone' => '9550099336',
-                'passengerEmail' => $userData['email'] ?? 'user@example.com',
-                'createdAt' => date('Y-m-d H:i:s', strtotime('-2 days')),
-                'updatedAt' => date('Y-m-d H:i:s')
-            ],
-            [
-                'id' => 3,
-                'userId' => $userId,
-                'bookingNumber' => 'BK' . rand(10000, 99999),
-                'pickupLocation' => 'Araku Valley',
-                'dropLocation' => 'Visakhapatnam',
-                'pickupDate' => date('Y-m-d H:i:s', strtotime('-3 days')),
-                'returnDate' => null,
-                'cabType' => 'Innova',
-                'distance' => 115,
-                'tripType' => 'outstation',
-                'tripMode' => 'one-way',
-                'totalAmount' => 3200,
-                'status' => 'completed',
-                'passengerName' => $userData['name'] ?? 'User',
-                'passengerPhone' => '9550099336',
-                'passengerEmail' => $userData['email'] ?? 'user@example.com',
-                'createdAt' => date('Y-m-d H:i:s', strtotime('-5 days')),
-                'updatedAt' => date('Y-m-d H:i:s', strtotime('-3 days'))
-            ]
-        ];
-        
-        logError("No bookings found, providing sample data", ['count' => count($bookings)]);
+        logError("No bookings found, returning empty array");
     }
 
     // Ensure the response format is consistent
