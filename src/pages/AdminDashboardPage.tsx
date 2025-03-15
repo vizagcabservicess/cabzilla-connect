@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -76,7 +75,7 @@ export default function AdminDashboardPage() {
     
     try {
       setIsLoading(true);
-      const metricsData = await bookingAPI.getAdminDashboardMetrics(selectedPeriod);
+      const metricsData = await bookingAPI.getAdminDashboardMetrics();
       setMetrics(metricsData);
       
       // Simulate revenue data updates (in a real app, this would be fetched from the API)
@@ -101,7 +100,7 @@ export default function AdminDashboardPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [navigate, toast, revenueData, vehicleDistribution, selectedPeriod]);
+  }, [navigate, toast, revenueData, vehicleDistribution]);
 
   useEffect(() => {
     fetchDashboardData();
