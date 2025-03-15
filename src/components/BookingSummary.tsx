@@ -1,5 +1,6 @@
+
 import { useState } from 'react';
-import { CabType, PromoCode, formatPrice, TripType, TripMode } from '@/lib/cabData';
+import { CabType, PromoCode, formatPrice, TripType, TripMode, extraCharges } from '@/lib/cabData';
 import { Location } from '@/lib/locationData';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,7 +35,7 @@ export function BookingSummary({
   const [appliedPromo, setAppliedPromo] = useState<PromoCode | null>(null);
   const navigate = useNavigate();
 
-  if (!pickupLocation || !dropLocation || !pickupDate || !selectedCab) {
+  if (!pickupLocation || !pickupDate || !selectedCab) {
     return null;
   }
 
@@ -43,39 +44,112 @@ export function BookingSummary({
     ? Math.max(1, differenceInCalendarDays(returnDate, pickupDate) + 1)
     : 1;
 
-  // Base km allocation (One-Way: 300km, Round-Trip: 300km per day)
-  const allocatedKm = tripMode === "one-way" ? 300 : days * 300;
+  // Generate fare breakdown based on trip type
+  const renderFareBreakdown = () => {
+    // Airport transfer
+    if (tripType === 'airport') {
+      return (
+        <>
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-600">Base fare (airport transfer)</span>
+            <span className="text-gray-800">{formatPrice(totalPrice)}</span>
+          </div>
+          <div className="flex justify-between text-sm mt-1">
+            <span className="text-gray-600">Distance: {distance} km</span>
+            <span className="text-gray-600"></span>
+          </div>
+          <div className="text-xs text-blue-600 mt-1">
+            Note: Toll & parking charges extra
+          </div>
+        </>
+      );
+    }
+    
+    // Local hourly package
+    if (tripType === 'local') {
+      const cabId = selectedCab.id as keyof typeof extraCharges;
+      const extraRates = extraCharges[cabId];
+      
+      return (
+        <>
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-600">Package base fare</span>
+            <span className="text-gray-800">{formatPrice(totalPrice)}</span>
+          </div>
+          <div className="flex justify-between text-sm mt-1">
+            <span className="text-gray-600">Including {distance} km</span>
+            <span className="text-gray-600"></span>
+          </div>
+          <div className="text-xs text-blue-600 mt-1">
+            Extra charges: ₹{extraRates?.perHour}/hr, ₹{extraRates?.perKm}/km
+          </div>
+        </>
+      );
+    }
+    
+    // Outstation
+    if (tripType === 'outstation') {
+      // Base km allocation (One-Way: 300km, Round-Trip: 300km per day)
+      const allocatedKm = tripMode === "one-way" ? 300 : days * 300;
 
-  // Chargeable distance (One-Way uses round-trip distance for calculation)
-  const totalDistance = tripMode === "one-way" ? distance * 2 : distance;
-  const extraKm = Math.max(totalDistance - allocatedKm, 0);
+      // Chargeable distance (One-Way uses round-trip distance for calculation)
+      const totalDistance = tripMode === "one-way" ? distance * 2 : distance;
+      const extraKm = Math.max(totalDistance - allocatedKm, 0);
 
-  // Vehicle Pricing Data
-  let baseRate = 0, perKmRate = 0, driverAllowance = 250, nightHaltCharge = 0;
+      // Vehicle Pricing Data
+      let baseRate = 0, perKmRate = 0, driverAllowance = 250, nightHaltCharge = 0;
 
-  switch (selectedCab.name.toLowerCase()) {
-    case "sedan":
-      baseRate = 4200;
-      perKmRate = 14;
-      nightHaltCharge = 700;
-      break;
-    case "ertiga":
-      baseRate = 5400;
-      perKmRate = 18;
-      nightHaltCharge = 1000;
-      break;
-    case "innova crysta":
-      baseRate = 6000;
-      perKmRate = 20;
-      nightHaltCharge = 1000;
-      break;
-  }
+      switch (selectedCab.name.toLowerCase()) {
+        case "sedan":
+          baseRate = 4200;
+          perKmRate = 14;
+          nightHaltCharge = 700;
+          break;
+        case "ertiga":
+          baseRate = 5400;
+          perKmRate = 18;
+          nightHaltCharge = 1000;
+          break;
+        case "innova crysta":
+          baseRate = 6000;
+          perKmRate = 20;
+          nightHaltCharge = 1000;
+          break;
+      }
 
-  // Calculate Final Prices
-  const totalBaseFare = tripMode === "one-way" ? baseRate : days * baseRate;
-  const totalDistanceFare = extraKm * perKmRate;
-  const totalNightHalt = tripMode === "round-trip" ? (days - 1) * nightHaltCharge : 0;
-  const finalTotal = totalBaseFare + totalDistanceFare + totalNightHalt + driverAllowance;
+      // Calculate Final Prices
+      const totalBaseFare = tripMode === "one-way" ? baseRate : days * baseRate;
+      const totalDistanceFare = extraKm * perKmRate;
+      const totalNightHalt = tripMode === "round-trip" ? (days - 1) * nightHaltCharge : 0;
+      
+      return (
+        <>
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-600">
+              Base fare {tripMode === "round-trip" ? `(${days} days, ${allocatedKm} km)` : `(300 km included)`}
+            </span>
+            <span className="text-gray-800">₹{totalBaseFare.toLocaleString('en-IN')}</span>
+          </div>
+          <div className="flex justify-between text-sm mt-1">
+            <span className="text-gray-600">Distance fare ({extraKm} km)</span>
+            <span className="text-gray-800">₹{totalDistanceFare.toLocaleString('en-IN')}</span>
+          </div>
+          <div className="flex justify-between text-sm mt-1">
+            <span className="text-gray-600">Driver allowance</span>
+            <span className="text-gray-800">₹{driverAllowance}</span>
+          </div>
+          {tripMode === 'round-trip' && (
+            <div className="flex justify-between text-sm mt-1">
+              <span className="text-gray-600">Night halt charges</span>
+              <span className="text-gray-800">₹{totalNightHalt.toLocaleString('en-IN')}</span>
+            </div>
+          )}
+        </>
+      );
+    }
+    
+    return null;
+  };
 
   return (
     <div className="bg-white rounded-lg shadow-card border border-gray-200 overflow-hidden">
@@ -90,6 +164,16 @@ export function BookingSummary({
             )}
           </div>
         )}
+        {tripType === 'airport' && (
+          <div className="mt-1 text-sm text-blue-600 font-medium flex items-center">
+            <ArrowRight size={14} className="mr-1" /> Airport Transfer
+          </div>
+        )}
+        {tripType === 'local' && (
+          <div className="mt-1 text-sm text-blue-600 font-medium flex items-center">
+            <ArrowRight size={14} className="mr-1" /> Local Hourly Rental
+          </div>
+        )}
       </div>
 
       <div className="p-5 space-y-4">
@@ -100,13 +184,16 @@ export function BookingSummary({
             <p className="font-medium text-gray-800">{pickupLocation.name}</p>
           </div>
         </div>
-        <div className="flex items-start space-x-3">
-          <MapPin className="text-blue-500 mt-1 flex-shrink-0" size={18} />
-          <div>
-            <p className="text-xs text-gray-500">DROP-OFF</p>
-            <p className="font-medium text-gray-800">{dropLocation.name}</p>
+        
+        {dropLocation && (
+          <div className="flex items-start space-x-3">
+            <MapPin className="text-blue-500 mt-1 flex-shrink-0" size={18} />
+            <div>
+              <p className="text-xs text-gray-500">DROP-OFF</p>
+              <p className="font-medium text-gray-800">{dropLocation.name}</p>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="flex items-start space-x-3">
           <Calendar className="text-blue-500 mt-1 flex-shrink-0" size={18} />
@@ -137,34 +224,13 @@ export function BookingSummary({
         </div>
 
         <div className="border-t border-gray-200 pt-4 mt-4">
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-600">
-              Base fare {tripMode === "round-trip" ? `(${days} days, ${allocatedKm} km)` : `(300 km included)`}
-            </span>
-            <span className="text-gray-800">₹{totalBaseFare.toLocaleString('en-IN')}</span>
-          </div>
-          <div className="flex justify-between text-sm mt-1">
-            <span className="text-gray-600">Distance fare ({extraKm} km)</span>
-            <span className="text-gray-800">₹{totalDistanceFare.toLocaleString('en-IN')}</span>
-          </div>
-          <div className="flex justify-between text-sm mt-1">
-            <span className="text-gray-600">Driver allowance</span>
-            <span className="text-gray-800">₹{driverAllowance}</span>
-          </div>
-          {tripMode === 'round-trip' && (
-            <div className="flex justify-between text-sm mt-1">
-              <span className="text-gray-600">Night halt charges</span>
-              <span className="text-gray-800">₹{totalNightHalt.toLocaleString('en-IN')}</span>
-            </div>
-          )}
+          {renderFareBreakdown()}
         </div>
 
         <div className="border-t border-gray-200 pt-4 flex justify-between items-center">
           <span className="font-semibold text-gray-800">Total Amount</span>
-          <span className="font-semibold text-xl text-gray-800">₹{finalTotal.toLocaleString('en-IN')}</span>
+          <span className="font-semibold text-xl text-gray-800">{formatPrice(totalPrice)}</span>
         </div>
-
-        <Button className="w-full mt-4 py-6 text-base">Book Now</Button>
       </div>
     </div>
   );

@@ -216,7 +216,16 @@ export const apDestinations: Location[] = [
 ];
 
 export const popularLocations: Location[] = [
+  ...vizagLocations,
+  ...apDestinations
 ];
+
+// Helper function to check if a location is within Visakhapatnam
+export const isVizagLocation = (location: Location): boolean => {
+  return location.city.toLowerCase() === 'visakhapatnam' || 
+         location.name.toLowerCase().includes('visakhapatnam') ||
+         location.name.toLowerCase().includes('vizag');
+};
 
 export const searchLocations = (query: string, isPickup: boolean = false): Location[] => {
   if (!query || query.length < 2) {
@@ -239,8 +248,7 @@ export const searchLocations = (query: string, isPickup: boolean = false): Locat
   
   if (isPickup) {
     filteredLocations = filteredLocations.filter(loc => 
-      loc.isPickupLocation !== false && 
-      (loc.city === 'Visakhapatnam' || loc.isPickupLocation)
+      isVizagLocation(loc) && loc.isPickupLocation !== false
     );
   } else {
     filteredLocations = filteredLocations.filter(loc => 
@@ -253,6 +261,7 @@ export const searchLocations = (query: string, isPickup: boolean = false): Locat
     .slice(0, 10);
 };
 
+// Updated distance calculation with consistent values
 export const getDistanceBetweenLocations = (fromId: string, toId: string): number => {
   const distances: Record<string, Record<string, number>> = {
     'vizag_airport': {
@@ -302,6 +311,35 @@ export const getDistanceBetweenLocations = (fromId: string, toId: string): numbe
   }
   
   return Math.floor(Math.random() * 700) + 100;
+};
+
+// Calculate airport transfer fare based on distance and cab type
+export const calculateAirportFare = (cabType: string, distance: number): number => {
+  // Pricing tiers based on distance to/from airport
+  if (cabType.toLowerCase() === 'sedan') {
+    if (distance <= 15) return 840;
+    if (distance <= 20) return 1000;
+    if (distance <= 30) return 1200;
+    if (distance <= 35) return 1500;
+    return 1500 + (distance - 35) * 14; // Additional KM at ₹14/km
+  } 
+  else if (cabType.toLowerCase() === 'ertiga') {
+    if (distance <= 15) return 1200;
+    if (distance <= 20) return 1500;
+    if (distance <= 30) return 1800;
+    if (distance <= 35) return 2100;
+    return 2100 + (distance - 35) * 18; // Additional KM at ₹18/km
+  }
+  else if (cabType.toLowerCase() === 'innova crysta') {
+    if (distance <= 15) return 1500;
+    if (distance <= 20) return 1800;
+    if (distance <= 30) return 2100;
+    if (distance <= 35) return 2500;
+    return 2500 + (distance - 35) * 20; // Additional KM at ₹20/km
+  }
+  
+  // Default fallback
+  return distance * 20;
 };
 
 export const getEstimatedTravelTime = (distance: number): number => {

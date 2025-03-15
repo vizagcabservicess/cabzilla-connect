@@ -1,4 +1,3 @@
-
 export interface CabType {
   id: string;
   name: string;
@@ -19,7 +18,7 @@ export const cabTypes: CabType[] = [
     description: 'Comfortable sedan for up to 4 people',
     image: '/sedan.png',
     price: 3900,
-    pricePerKm: 13,
+    pricePerKm: 14,
     capacity: 4,
     luggage: 3,
     ac: true,
@@ -31,7 +30,7 @@ export const cabTypes: CabType[] = [
     description: 'Spacious SUV for up to 6 people',
     image: '/suv.png',
     price: 4800,
-    pricePerKm: 13,
+    pricePerKm: 18,
     capacity: 6,
     luggage: 4,
     ac: true,
@@ -43,7 +42,7 @@ export const cabTypes: CabType[] = [
     description: 'Premium Innova for comfortable journey',
     image: '/innova.png',
     price: 6000,
-    pricePerKm: 13,
+    pricePerKm: 20,
     capacity: 7,
     luggage: 4,
     ac: true,
@@ -121,29 +120,14 @@ export interface HourlyPackage {
   basePrice: number;
 }
 
+// Updated hourly packages with new pricing structure
 export const hourlyPackages: HourlyPackage[] = [
-  {
-    id: '4hrs-40km',
-    name: '04 Hours / 40 KM',
-    hours: 4,
-    kilometers: 40,
-    multiplier: 1.0,
-    basePrice: 1200
-  },
-  {
-    id: '6hrs-60km',
-    name: '06 Hours / 60 KM',
-    hours: 6,
-    kilometers: 60,
-    multiplier: 1.5,
-    basePrice: 1800
-  },
   {
     id: '8hrs-80km',
     name: '08 Hours / 80 KM',
     hours: 8,
     kilometers: 80,
-    multiplier: 1.7,
+    multiplier: 1.0,
     basePrice: 2400
   },
   {
@@ -151,10 +135,38 @@ export const hourlyPackages: HourlyPackage[] = [
     name: '10 Hours / 100 KM',
     hours: 10,
     kilometers: 100,
-    multiplier: 2.1,
+    multiplier: 1.25,
     basePrice: 3000
   }
 ];
+
+// Extra charges per hour and km for different cab types
+export const extraCharges = {
+  sedan: { perHour: 300, perKm: 14 },
+  ertiga: { perHour: 350, perKm: 18 },
+  innova: { perHour: 400, perKm: 20 }
+};
+
+// Get base price for a local package based on cab type
+export const getLocalPackagePrice = (packageId: string, cabType: string): number => {
+  const pkg = hourlyPackages.find(p => p.id === packageId);
+  if (!pkg) return 0;
+  
+  const cabLower = cabType.toLowerCase();
+  
+  if (packageId === '8hrs-80km') {
+    if (cabLower === 'sedan') return 2400;
+    if (cabLower === 'ertiga') return 3000;
+    if (cabLower === 'innova crysta') return 3500;
+  } 
+  else if (packageId === '10hrs-100km') {
+    if (cabLower === 'sedan') return 3000;
+    if (cabLower === 'ertiga') return 3500;
+    if (cabLower === 'innova crysta') return 4000;
+  }
+  
+  return pkg.basePrice; // Fallback
+};
 
 export function calculateFare(
   cabType: CabType, 
@@ -168,30 +180,32 @@ export function calculateFare(
   let baseFare = cabType.price;
   let totalFare = 0;
   
+  // Calculate based on trip type
   if (tripType === 'local' && hourlyPackageId) {
-    // Local packages based on selected hourly package - no base fare
+    // Get base package price for selected cab
+    const basePackagePrice = getLocalPackagePrice(hourlyPackageId, cabType.name);
+    totalFare = basePackagePrice;
+    
+    // Find package details
     const selectedPackage = hourlyPackages.find(pkg => pkg.id === hourlyPackageId);
     
-    if (selectedPackage) {
-      // For hourly packages, use the package's basePrice directly
-      totalFare = selectedPackage.basePrice;
-      
-      // Additional charge for extra kilometers
-      if (distance > selectedPackage.kilometers) {
-        totalFare += (distance - selectedPackage.kilometers) * cabType.pricePerKm;
-      }
-    } else {
-      // Fallback to default 4 hours package
-      const defaultPackage = hourlyPackages[0];
-      totalFare = defaultPackage.basePrice;
-      if (distance > defaultPackage.kilometers) {
-        totalFare += (distance - defaultPackage.kilometers) * cabType.pricePerKm;
+    if (selectedPackage && distance > selectedPackage.kilometers) {
+      // Calculate extra km charges
+      const extraKm = distance - selectedPackage.kilometers;
+      const extraChargeRates = extraCharges[cabType.id as keyof typeof extraCharges];
+      if (extraChargeRates) {
+        totalFare += extraKm * extraChargeRates.perKm;
+      } else {
+        totalFare += extraKm * cabType.pricePerKm;
       }
     }
-  } else if (tripType === 'airport') {
-    // Airport transfers have standard per km rate
-    totalFare = Math.round(baseFare * 0.8) + (distance * cabType.pricePerKm);
-  } else if (tripType === 'outstation') {
+  } 
+  else if (tripType === 'airport') {
+    // Use the new airport fare calculation function from locationData
+    const { calculateAirportFare } = require('./locationData');
+    totalFare = calculateAirportFare(cabType.name, distance);
+  } 
+  else if (tripType === 'outstation') {
     // Ensure minimum distance of 250 KM for outstation trips
     const minimumDistance = Math.max(distance, 250);
     

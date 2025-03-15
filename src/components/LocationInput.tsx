@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Autocomplete } from "@react-google-maps/api";
 import { Search, X, MapPin } from "lucide-react";
-import { Location, vizagLocations } from "@/lib/locationData";
+import { Location, vizagLocations, isVizagLocation } from "@/lib/locationData";
 import { cn } from "@/lib/utils";
 import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
 import { useToast } from "@/components/ui/use-toast";
@@ -48,8 +48,8 @@ export function LocationInput({
     if (isAirportTransfer) {
       const airport = vizagLocations.find(loc => loc.type === 'airport');
       
-      if (airport && ((isPickupLocation && label.toLowerCase().includes("airport")) || 
-                     (!isPickupLocation && label.toLowerCase().includes("destination")))) {
+      if (airport && ((isPickupLocation && label.toLowerCase().includes("pickup")) || 
+                     (!isPickupLocation && label.toLowerCase().includes("drop")))) {
         onChange(airport);
         setSearchQuery(airport.name);
       }
@@ -72,7 +72,7 @@ export function LocationInput({
 
     // For pickup locations, filter to only show Vizag locations
     const locations = isPickupLocation 
-      ? filteredLocations.filter(loc => loc.city.toLowerCase() === 'visakhapatnam')
+      ? filteredLocations.filter(loc => isVizagLocation(loc))
       : filteredLocations;
 
     setSuggestedLocations(locations.slice(0, 5));
@@ -100,7 +100,7 @@ export function LocationInput({
           }
         }
         
-        // If it's a pickup location, validate it's in Visakhapatnam area
+        // If it's a pickup location, strictly validate it's in Visakhapatnam area
         if (isPickupLocation) {
           const isVizagArea = 
             city.toLowerCase().includes("visakhapatnam") ||
