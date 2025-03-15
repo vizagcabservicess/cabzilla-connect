@@ -4,7 +4,14 @@ import { LocationInput } from './LocationInput';
 import { DateTimePicker } from './DateTimePicker';
 import { CabOptions } from './CabOptions';
 import { BookingSummary } from './BookingSummary';
-import { isVizagLocation, areBothLocationsInVizag, vizagLocations, apDestinations, calculateAirportFare } from '@/lib/locationData';
+import { 
+  isVizagLocation, 
+  areBothLocationsInVizag, 
+  vizagLocations, 
+  apDestinations, 
+  calculateAirportFare,
+  Location
+} from '@/lib/locationData';
 import { CabType, cabTypes, TripMode, TripType, hourlyPackages, getLocalPackagePrice } from '@/lib/cabData';
 import { ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -44,14 +51,14 @@ export function Hero() {
     const cabData = sessionStorage.getItem('selectedCab');
     
     return {
-      pickupLocation: pickupData ? JSON.parse(pickupData) : null,
-      dropLocation: dropData ? JSON.parse(dropData) : null,
+      pickupLocation: pickupData ? JSON.parse(pickupData) as Location : null,
+      dropLocation: dropData ? JSON.parse(dropData) as Location : null,
       pickupDate: pickupDateStr ? new Date(pickupDateStr) : addDays(new Date(), 1),
       returnDate: returnDateStr ? new Date(returnDateStr) : null,
       tripType: tripTypeData as TripType || 'outstation',
       tripMode: tripModeData as TripMode || 'one-way',
       hourlyPackage: hourlyPkgData || hourlyPackageOptions[0].value,
-      selectedCab: cabData ? JSON.parse(cabData) : null
+      selectedCab: cabData ? JSON.parse(cabData) as CabType : null
     };
   };
   
@@ -370,19 +377,7 @@ export function Hero() {
                     label="PICKUP LOCATION"
                     placeholder="Enter pickup location"
                     value={pickupLocation}
-                    onChange={(loc) => {
-                      // Only allow Vizag locations for pickup
-                      if (loc && !isVizagLocation(loc)) {
-                        toast({
-                          title: "Location Restricted",
-                          description: "Only Visakhapatnam locations are allowed for pickup.",
-                          variant: "destructive",
-                          duration: 3000,
-                        });
-                        return;
-                      }
-                      setPickupLocation(loc);
-                    }}
+                    onChange={setPickupLocation}
                     isPickupLocation={true}
                     isAirportTransfer={tripType === 'airport'}
                   />

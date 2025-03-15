@@ -15,6 +15,12 @@ interface GoogleMapsContextType {
   google: typeof google | null;
 }
 
+// Provider props interface
+interface GoogleMapsProviderProps {
+  children: ReactNode;
+  apiKey?: string;
+}
+
 // Context for Google Maps
 const GoogleMapsContext = createContext<GoogleMapsContextType>({
   isLoaded: false,
@@ -26,12 +32,15 @@ const GoogleMapsContext = createContext<GoogleMapsContextType>({
 export const useGoogleMaps = () => useContext(GoogleMapsContext);
 
 // Provider component for Google Maps
-export const GoogleMapsProvider = ({ children }: { children: ReactNode }) => {
+export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps) => {
   const [googleInstance, setGoogleInstance] = useState<typeof google | null>(null);
+  
+  // Use provided apiKey or fallback to environment variable
+  const googleMapsApiKey = apiKey || GOOGLE_MAPS_API_KEY;
   
   // Load the Google Maps script
   const { isLoaded, loadError } = useLoadScript({
-    googleMapsApiKey: GOOGLE_MAPS_API_KEY,
+    googleMapsApiKey,
     libraries,
   });
 

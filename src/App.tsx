@@ -1,3 +1,4 @@
+
 import { useEffect } from 'react';
 import { RouterProvider } from 'react-router-dom';
 import { router } from './routes';
@@ -13,7 +14,7 @@ function App() {
 
   return (
     <ThemeProvider defaultTheme="light" storageKey="vizag-cabs-theme">
-      <GoogleMapsProvider>
+      <GoogleMapsProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
         <RouterProvider router={router} />
         <Toaster />
       </GoogleMapsProvider>
