@@ -29,14 +29,14 @@ export default function DashboardPage() {
       try {
         setIsLoading(true);
         setError(null);
-        console.log('Fetching user bookings...');
+        console.log('Fetching user bookings from dashboard page...');
         const data = await bookingAPI.getUserBookings();
-        console.log('Bookings received:', data);
+        console.log('Bookings received in dashboard:', data);
         
         if (data && Array.isArray(data)) {
           setBookings(data);
         } else {
-          console.error('Invalid data format received:', data);
+          console.error('Invalid data format received in dashboard:', data);
           setError('Received invalid data format from server');
           toast({
             title: "Error",
@@ -45,7 +45,7 @@ export default function DashboardPage() {
           });
         }
       } catch (error) {
-        console.error('Error fetching bookings:', error);
+        console.error('Error fetching bookings in dashboard:', error);
         setError('Failed to load your bookings. Please try again later.');
         toast({
           title: "Error",
@@ -71,11 +71,11 @@ export default function DashboardPage() {
   };
 
   const upcomingBookings = bookings.filter(booking => 
-    ['pending', 'confirmed'].includes(booking.status)
+    ['pending', 'confirmed'].includes(booking.status.toLowerCase())
   );
   
   const pastBookings = bookings.filter(booking => 
-    ['completed', 'cancelled'].includes(booking.status)
+    ['completed', 'cancelled'].includes(booking.status.toLowerCase())
   );
 
   return (

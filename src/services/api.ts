@@ -142,10 +142,8 @@ export const bookingAPI = {
     if (!token) throw new Error('Not authenticated');
     
     console.log('Fetching user bookings...');
-    await addDemoDelay();
     
     try {
-      // First attempt
       const response = await fetch(`${API_URL}/user/dashboard`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -153,13 +151,21 @@ export const bookingAPI = {
         },
       });
       
-      let data;
-      try {
-        data = await handleResponse(response);
-        console.log('User bookings response:', data);
-      } catch (error) {
-        console.warn('First attempt failed, trying with demo data');
-        // If we get an error, provide demo data for testing
+      const data = await handleResponse(response);
+      console.log('User bookings response:', data);
+      
+      // Ensure the response is an array
+      if (!Array.isArray(data)) {
+        console.error('Expected array but got:', data);
+        throw new Error('Invalid data format received from server');
+      }
+      
+      // If we have real data, use it
+      if (data.length > 0) {
+        return data;
+      } else {
+        console.warn('No bookings found in API response, using demo data');
+        // If no bookings, provide demo data for development
         return [
           {
             id: 1,
@@ -203,14 +209,6 @@ export const bookingAPI = {
           }
         ];
       }
-      
-      // Ensure the response is an array
-      if (!Array.isArray(data)) {
-        console.error('Expected array but got:', data);
-        return [];
-      }
-      
-      return data;
     } catch (error) {
       console.error('Error fetching user bookings:', error);
       throw error;

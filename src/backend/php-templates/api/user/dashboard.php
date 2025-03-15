@@ -55,6 +55,9 @@ while ($row = $result->fetch_assoc()) {
     $bookings[] = $booking;
 }
 
+// Log count of real bookings found
+logError("Real bookings found", ['count' => count($bookings)]);
+
 // If no bookings found, provide sample data for demo purposes
 if (empty($bookings)) {
     // Create sample booking data
@@ -103,9 +106,6 @@ if (empty($bookings)) {
     
     logError("No bookings found, providing sample data", ['count' => count($bookings)]);
 }
-
-// Log for debugging
-logError("Retrieved bookings", ['count' => count($bookings)]);
 
 // Send response
 sendJsonResponse($bookings);
