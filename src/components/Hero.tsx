@@ -4,7 +4,7 @@ import { LocationInput } from './LocationInput';
 import { DateTimePicker } from './DateTimePicker';
 import { CabOptions } from './CabOptions';
 import { BookingSummary } from './BookingSummary';
-import { Location, getDistanceBetweenLocations, locationData } from '@/lib/locationData';
+import { Location, getDistanceBetweenLocations, vizagLocations, apDestinations } from '@/lib/locationData';
 import { CabType, cabTypes, TripMode, TripType } from '@/lib/cabData';
 import { ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,9 @@ const hourlyPackages = [
   { value: "12hr_120km", label: "12 Hours / 120 KM" }
 ];
 
+// Airport location (Visakhapatnam Airport)
+const airportLocation = vizagLocations.find(loc => loc.type === 'airport');
+
 export function Hero() {
   const [pickupLocation, setPickupLocation] = useState<Location | null>(null);
   const [dropLocation, setDropLocation] = useState<Location | null>(null);
@@ -35,18 +38,19 @@ export function Hero() {
   const [tripMode, setTripMode] = useState<TripMode>('one-way');
   const [hourlyPackage, setHourlyPackage] = useState<string>(hourlyPackages[0].value);
   
-  // Airport location (Visakhapatnam Airport)
-  const airportLocation = locationData.find(loc => loc.id === 'vizag_airport');
+  // Define airport transfer specific modes
+  const isToAirport = tripType === 'airport' && tripMode === 'one-way';
+  const isFromAirport = tripType === 'airport' && tripMode === 'round-trip';
 
   // Set valid pickup locations based on trip type
-  const validPickupLocations = tripType === 'airport' && tripMode === 'from_airport' 
-    ? locationData.filter(loc => loc.id === 'vizag_airport')
-    : locationData;
+  const validPickupLocations = isFromAirport 
+    ? vizagLocations.filter(loc => loc.id === 'vizag_airport')
+    : vizagLocations;
 
   // Set valid drop locations based on trip type
-  const validDropLocations = tripType === 'airport' && tripMode === 'to_airport'
-    ? locationData.filter(loc => loc.id === 'vizag_airport')
-    : locationData;
+  const validDropLocations = isToAirport
+    ? vizagLocations.filter(loc => loc.id === 'vizag_airport')
+    : apDestinations;
 
   // Handle trip type change
   useEffect(() => {
@@ -56,9 +60,9 @@ export function Hero() {
     
     // Set airport as pickup/drop based on trip mode for airport transfers
     if (tripType === 'airport') {
-      if (tripMode === 'to_airport') {
+      if (isToAirport) {
         setDropLocation(airportLocation || null);
-      } else if (tripMode === 'from_airport') {
+      } else if (isFromAirport) {
         setPickupLocation(airportLocation || null);
       }
     }
@@ -66,11 +70,11 @@ export function Hero() {
     // For local trips, we don't need drop location
     if (tripType === 'local') {
       // Default to first location in Vizag
-      const defaultLocation = locationData.find(loc => loc.id.includes('vizag'));
+      const defaultLocation = vizagLocations.find(loc => loc.id.includes('vizag'));
       setPickupLocation(defaultLocation || null);
       setDropLocation(null);
     }
-  }, [tripType, tripMode]);
+  }, [tripType, tripMode, isToAirport, isFromAirport]);
 
   // Calculate distance when locations change
   useEffect(() => {
@@ -258,8 +262,7 @@ export function Hero() {
                 placeholder="Enter pickup location"
                 value={pickupLocation}
                 onChange={setPickupLocation}
-                locations={validPickupLocations}
-                disabled={tripType === 'airport' && tripMode === 'from_airport'}
+                readOnly={isFromAirport}
               />
               
               {(tripType === 'outstation' || tripType === 'airport') && (
@@ -268,8 +271,7 @@ export function Hero() {
                   placeholder="Enter drop location"
                   value={dropLocation}
                   onChange={setDropLocation}
-                  locations={validDropLocations}
-                  disabled={tripType === 'airport' && tripMode === 'to_airport'}
+                  readOnly={isToAirport}
                 />
               )}
               
