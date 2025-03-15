@@ -33,7 +33,7 @@ export function RadioGroupTripMode({
           <ArrowRight className="h-4 w-4" />
           <div className="grid">
             <Label htmlFor="one-way" className="text-sm font-medium cursor-pointer">One Way</Label>
-            <p className="text-xs text-blue-600">Return kilometers included in price</p>
+            <p className="text-xs text-blue-600">Double distance for fare calculation</p>
           </div>
         </div>
         

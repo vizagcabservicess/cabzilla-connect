@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { CabType, PromoCode, formatPrice, TripType, TripMode, extraCharges } from '@/lib/cabData';
+import { CabType, PromoCode, formatPrice, TripType, TripMode, extraCharges, oneWayRates } from '@/lib/cabData';
 import { Location, isVizagLocation } from '@/lib/locationData';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -104,12 +104,13 @@ export function BookingSummary({
     
     // Outstation
     if (tripType === 'outstation') {
-      // Base km allocation (One-Way: 300km, Round-Trip: 300km per day)
-      const allocatedKm = tripMode === "one-way" ? 300 : days * 300;
+      // Base km allocation
+      const allocatedKm = 300;
 
-      // Chargeable distance (For round-trip, double the one-way distance)
-      const totalDistance = tripMode === "round-trip" ? distance * 2 : distance;
-      const extraKm = Math.max(totalDistance - allocatedKm, 0);
+      // Chargeable distance 
+      // For one-way trips, we calculate fare based on double the distance
+      const effectiveDistance = tripMode === "one-way" ? distance * 2 : distance * 2;
+      const extraKm = Math.max(effectiveDistance - (allocatedKm * 2), 0);
 
       // Vehicle Pricing Data
       let baseRate = 0, perKmRate = 0, driverAllowance = 250, nightHaltCharge = 0;
@@ -132,25 +133,35 @@ export function BookingSummary({
           break;
       }
 
+      // Get one-way rate for this cab type
+      const oneWayRate = selectedCab ? 
+        oneWayRates[selectedCab.id as keyof typeof oneWayRates] || 13 : 13;
+
       // Calculate Final Prices
       const totalBaseFare = tripMode === "one-way" ? baseRate : days * baseRate;
-      const totalDistanceFare = extraKm * perKmRate;
+      const totalDistanceFare = extraKm * (tripMode === "one-way" ? oneWayRate : perKmRate);
       const totalNightHalt = tripMode === "round-trip" ? (days - 1) * nightHaltCharge : 0;
       
       return (
         <>
           <div className="flex justify-between text-sm">
             <span className="text-gray-600">
-              Base fare {tripMode === "round-trip" ? `(${days} days, ${allocatedKm} km)` : `(300 km included)`}
+              Base fare {tripMode === "round-trip" ? `(${days} days, ${allocatedKm} km)` : `(${allocatedKm*2} km included)`}
             </span>
             <span className="text-gray-800">₹{totalBaseFare.toLocaleString('en-IN')}</span>
           </div>
           <div className="flex justify-between text-sm mt-1">
-            <span className="text-gray-600">Distance: {totalDistance} km</span>
+            <span className="text-gray-600">
+              {tripMode === "one-way" 
+                ? `Distance: ${distance} km (${effectiveDistance} km for fare)`
+                : `Distance: ${effectiveDistance} km`}
+            </span>
             <span className="text-gray-600"></span>
           </div>
           <div className="flex justify-between text-sm mt-1">
-            <span className="text-gray-600">Extra distance fare ({extraKm} km)</span>
+            <span className="text-gray-600">
+              Extra distance fare ({extraKm} km × ₹{tripMode === "one-way" ? oneWayRate : perKmRate})
+            </span>
             <span className="text-gray-800">₹{totalDistanceFare.toLocaleString('en-IN')}</span>
           </div>
           <div className="flex justify-between text-sm mt-1">

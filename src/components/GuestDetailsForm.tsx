@@ -16,19 +16,19 @@ export function GuestDetailsForm({ onSubmit, totalPrice }: GuestDetailsFormProps
   const { toast } = useToast();
   const formRef = useRef<HTMLDivElement>(null);
 
-  // Highlight effect when the component mounts
+  // Enhanced highlight effect when the component mounts
   useEffect(() => {
     if (formRef.current) {
-      // Scroll to form when component mounts
+      // Scroll to form when component mounts with smooth behavior
       formRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
       
-      // Add highlight effect
-      formRef.current.classList.add('animate-pulse', 'border-blue-500', 'border-2');
+      // Add highlight effect with pulsing animation
+      formRef.current.classList.add('animate-pulse', 'border-blue-500', 'border-2', 'bg-blue-50');
       
       // Remove highlight after a delay
       const timer = setTimeout(() => {
         if (formRef.current) {
-          formRef.current.classList.remove('animate-pulse', 'border-blue-500', 'border-2');
+          formRef.current.classList.remove('animate-pulse', 'border-blue-500', 'border-2', 'bg-blue-50');
         }
       }, 2000);
       

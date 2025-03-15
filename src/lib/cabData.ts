@@ -74,39 +74,6 @@ export const cabTypes: CabType[] = [
   }
 ];
 
-export interface PromoCode {
-  code: string;
-  description: string;
-  discount: number; // percentage
-  maxDiscount?: number;
-  minBookingAmount?: number;
-  validUntil: Date;
-}
-
-export const promoCodes: PromoCode[] = [
-  {
-    code: 'CABFIRST',
-    description: 'Save 15% on your first ride',
-    discount: 15,
-    maxDiscount: 300,
-    validUntil: new Date('2023-12-31')
-  },
-  {
-    code: 'MMTCAB',
-    description: 'Flat ₹200 off on weekend bookings',
-    discount: 10,
-    minBookingAmount: 1000,
-    validUntil: new Date('2023-12-31')
-  },
-  {
-    code: 'VIZAG100',
-    description: '₹100 off on rides in Visakhapatnam',
-    discount: 100,
-    minBookingAmount: 500,
-    validUntil: new Date('2023-12-31')
-  }
-];
-
 export type TripType = 'outstation' | 'local' | 'airport' | 'tour';
 export type TripMode = 'one-way' | 'round-trip';
 export type LocalTripPurpose = 'business' | 'personal' | 'city-tour';
@@ -145,6 +112,14 @@ export const extraCharges = {
   innova: { perHour: 400, perKm: 20 }
 };
 
+export const oneWayRates = {
+  sedan: 13,
+  ertiga: 16,
+  innova: 18,
+  tempo: 22,
+  luxury: 25
+};
+
 export const getLocalPackagePrice = (packageId: string, cabType: string): number => {
   const pkg = hourlyPackages.find(p => p.id === packageId);
   if (!pkg) return 0;
@@ -163,14 +138,6 @@ export const getLocalPackagePrice = (packageId: string, cabType: string): number
   }
   
   return pkg.basePrice; // Fallback
-};
-
-export const oneWayRates = {
-  sedan: 13,
-  ertiga: 16,
-  innova: 18,
-  tempo: 22,
-  luxury: 25
 };
 
 export function calculateFare(
