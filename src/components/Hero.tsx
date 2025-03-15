@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { LocationInput } from './LocationInput';
 import { DateTimePicker } from './DateTimePicker';
 import { CabOptions } from './CabOptions';
@@ -38,6 +38,7 @@ const airportLocation = vizagLocations.find(loc => loc.type === 'airport');
 export function Hero() {
   const { toast } = useToast();
   const navigate = useNavigate();
+  const bookingSummaryRef = useRef<HTMLDivElement>(null);
   
   // Load saved data from session storage
   const loadFromSessionStorage = () => {
@@ -228,7 +229,7 @@ export function Hero() {
         totalPrice += extraKm * extraKmRate;
       }
     }
-    // Outstation trip pricing
+    // Outstation trip pricing with updated logic for one-way trips
     else if (tripType === 'outstation') {
       // Get pricing factors based on cab type
       let basePrice = 0, perKmRate = 0, driverAllowance = 250, nightHaltCharge = 0;
@@ -262,9 +263,12 @@ export function Hero() {
         const totalNightHalt = (days - 1) * nightHaltCharge;
         
         totalPrice = totalBaseFare + totalDistanceFare + totalDriverAllowance + totalNightHalt;
-      } else { // one-way
-        const extraKm = Math.max(distance - 300, 0);
-        const distanceFare = extraKm * perKmRate;
+      } else { // one-way with revised calculation
+        // Double the distance for fare calculation for one-way trips
+        const effectiveDistance = distance * 2;
+        const minKm = 300 * 2; // 600km for calculation
+        const extraKm = Math.max(effectiveDistance - minKm, 0);
+        const distanceFare = extraKm * 13; // Use ₹13/km for extra km
         
         totalPrice = basePrice + distanceFare + driverAllowance;
       }
@@ -288,6 +292,14 @@ export function Hero() {
     }
     
     setShowGuestDetailsForm(true);
+    
+    // Add a short delay to allow state update
+    setTimeout(() => {
+      const contactSection = document.querySelector('form');
+      if (contactSection) {
+        contactSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
   };
   
   // Handle guest details submission
@@ -517,21 +529,25 @@ export function Hero() {
                       tripType={tripType} 
                       tripMode={tripMode}
                       hourlyPackage={hourlyPackage}
+                      pickupDate={pickupDate}
+                      returnDate={returnDate}
                     />
                   </div>
                 </div>
                 <div className="lg:col-span-1">
-                  <BookingSummary 
-                    pickupLocation={pickupLocation!} 
-                    dropLocation={dropLocation} 
-                    pickupDate={pickupDate} 
-                    returnDate={returnDate} 
-                    selectedCab={selectedCab!} 
-                    distance={distance} 
-                    tripType={tripType} 
-                    tripMode={tripMode} 
-                    totalPrice={totalPrice}
-                  />
+                  <div ref={bookingSummaryRef} id="booking-summary">
+                    <BookingSummary 
+                      pickupLocation={pickupLocation!} 
+                      dropLocation={dropLocation} 
+                      pickupDate={pickupDate} 
+                      returnDate={returnDate} 
+                      selectedCab={selectedCab!} 
+                      distance={distance} 
+                      tripType={tripType} 
+                      tripMode={tripMode} 
+                      totalPrice={totalPrice}
+                    />
+                  </div>
                   
                   <Button 
                     onClick={handleBookNow}

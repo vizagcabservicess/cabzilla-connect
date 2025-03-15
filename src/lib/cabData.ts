@@ -1,3 +1,4 @@
+
 export interface CabType {
   id: string;
   name: string;
@@ -210,14 +211,19 @@ export function calculateFare(
     const minimumDistance = Math.max(distance, 250);
     
     if (tripMode === 'one-way') {
-      // One-way trip calculation:
-      // Base fare for first 300 km
-      if (minimumDistance <= 300) {
+      // One-way trip calculation with revised logic:
+      // For one-way trips, double the distance for fare calculation but use reduced rate of ₹13/km
+      const effectiveDistance = minimumDistance * 2; // Double the distance for one-way calculation
+      
+      if (effectiveDistance <= 600) { // 300km * 2
         totalFare = baseFare;
       } else {
-        // Base fare for first 300 km + additional km at ₹13/km
-        totalFare = baseFare + ((minimumDistance - 300) * 13);
+        // Base fare for first 600 km + additional km at ₹13/km
+        totalFare = baseFare + ((effectiveDistance - 600) * 13);
       }
+      
+      // Add driver allowance for outstation
+      totalFare += 250;
     } else {
       // Round-trip calculation with ₹14 per km
       totalFare = baseFare;
@@ -236,12 +242,15 @@ export function calculateFare(
       // Multiply base fare by number of days
       totalFare = baseFare * numberOfDays;
       
+      // Double the distance for round-trip calculation
+      const effectiveDistance = minimumDistance * 2;
+      
       // Add distance fare at ₹14/km
-      totalFare += (minimumDistance * 14);
+      totalFare += (effectiveDistance * 14);
+      
+      // Add driver allowance for outstation
+      totalFare += 250 * numberOfDays;
     }
-    
-    // Add driver allowance for outstation
-    totalFare += 250; // Driver allowance after 10 PM
     
     // Add toll charges (simplified calculation)
     if (distance > 100) {
