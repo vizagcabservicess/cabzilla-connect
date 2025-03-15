@@ -1,307 +1,179 @@
 
 import { useEffect, useState } from 'react';
+import { Button } from "@/components/ui/button";
+import { useNavigate, useLocation } from 'react-router-dom';
+import { MapPin, Calendar, Car, CircleDollarSign, CheckCircle2, ArrowRight } from 'lucide-react';
 import { Navbar } from '@/components/Navbar';
-import { Button } from '@/components/ui/button';
-import { useNavigate } from 'react-router-dom';
-import { CheckCircle, Calendar, MapPin, Clock, Car, CreditCard, Download, Share2 } from 'lucide-react';
-import { format } from 'date-fns';
-import { CabType } from '@/lib/cabData';
-import { Location } from '@/lib/locationData';
-import { useToast } from '@/components/ui/use-toast';
 
-interface BookingDetails {
-  pickupLocation: Location;
-  dropLocation: Location;
-  pickupDate: string;
-  returnDate?: string;
-  selectedCab: CabType;
-  distance: number;
-  totalPrice: number;
-  discountAmount: number;
-  finalPrice: number;
-  guestDetails: any;
-  tripType: string;
-  tripMode: string;
-}
-
-const BookingConfirmationPage = () => {
-  const [booking, setBooking] = useState<BookingDetails | null>(null);
-  const [bookingId, setBookingId] = useState<string>('');
+export default function BookingConfirmationPage() {
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const location = useLocation();
+  const [bookingDetails, setBookingDetails] = useState<any>(null);
+  const [secondsRemaining, setSecondsRemaining] = useState(10);
+
+  // Check if this is a new booking, which would trigger automatic redirect
+  const isNewBooking = location.state?.newBooking === true;
 
   useEffect(() => {
-    // Generate a random booking ID
-    const generateBookingId = () => {
-      const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-      let result = 'BK';
-      for (let i = 0; i < 8; i++) {
-        result += characters.charAt(Math.floor(Math.random() * characters.length));
+    const bookingDetailsFromStorage = sessionStorage.getItem('bookingDetails');
+    if (bookingDetailsFromStorage) {
+      try {
+        const parsedDetails = JSON.parse(bookingDetailsFromStorage);
+        setBookingDetails(parsedDetails);
+      } catch (error) {
+        console.error('Error parsing booking details:', error);
       }
-      return result;
-    };
+    }
+  }, []);
 
+  // Auto redirect after 10 seconds if it's a new booking
+  useEffect(() => {
+    if (isNewBooking) {
+      const intervalId = setInterval(() => {
+        setSecondsRemaining(prev => {
+          if (prev <= 1) {
+            clearInterval(intervalId);
+            navigate('/dashboard', { state: { fromBooking: true } });
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(intervalId);
+    }
+  }, [isNewBooking, navigate]);
+
+  const formatDate = (dateString: string) => {
     try {
-      // Retrieve booking details from sessionStorage
-      const storedBooking = sessionStorage.getItem('bookingDetails');
-      if (storedBooking) {
-        const parsedBooking = JSON.parse(storedBooking);
-        setBooking(parsedBooking);
-        setBookingId(generateBookingId());
-      } else {
-        // If no booking details found, redirect to home
-        navigate('/');
-      }
+      const date = new Date(dateString);
+      return new Intl.DateTimeFormat('en-IN', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }).format(date);
     } catch (error) {
-      console.error('Error retrieving booking details:', error);
-      navigate('/');
-    }
-  }, [navigate]);
-
-  const handleDownloadInvoice = () => {
-    toast({
-      title: "Download Started",
-      description: "Your booking invoice is being prepared for download.",
-      duration: 3000,
-    });
-  };
-
-  const handleShareBooking = () => {
-    if (navigator.share) {
-      navigator.share({
-        title: 'My Cab Booking',
-        text: `I've booked a cab with booking ID: ${bookingId}. Pickup: ${booking?.pickupLocation.name}, Dropoff: ${booking?.dropLocation.name}.`,
-        url: window.location.href,
-      })
-      .then(() => {
-        toast({
-          title: "Shared Successfully",
-          description: "Your booking details have been shared.",
-          duration: 3000,
-        });
-      })
-      .catch((error) => {
-        toast({
-          title: "Sharing Failed",
-          description: "Unable to share booking details.",
-          variant: "destructive",
-          duration: 3000,
-        });
-      });
-    } else {
-      // Fallback for browsers that don't support navigator.share
-      toast({
-        title: "Share Feature Not Available",
-        description: "Your browser doesn't support direct sharing. Copy the booking ID and share manually.",
-        duration: 3000,
-      });
+      console.error('Error formatting date:', error);
+      return dateString;
     }
   };
 
-  if (!booking) {
+  if (!bookingDetails) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-cabGray-50">
-        <div className="text-cabGray-600">Loading booking details...</div>
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        <div className="container mx-auto px-4 py-12">
+          <div className="max-w-lg mx-auto text-center">
+            <h1 className="text-2xl font-bold mb-4">No Booking Found</h1>
+            <p className="text-gray-600 mb-6">We couldn't find any booking details. Please try again.</p>
+            <Button onClick={() => navigate('/')} className="mt-4">
+              Return to Home
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-cabGray-50">
+    <div className="min-h-screen bg-gray-50">
       <Navbar />
-      
-      <div className="container mx-auto px-4 pt-24 pb-16">
-        <div className="max-w-3xl mx-auto">
-          <div className="bg-white rounded-xl shadow-card border border-cabGray-100 overflow-hidden animate-fade-in">
-            <div className="bg-cabBlue-500 text-white p-8 text-center">
-              <div className="flex justify-center mb-4">
-                <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center">
-                  <CheckCircle size={32} />
-                </div>
+      <div className="container mx-auto px-4 py-12">
+        <div className="max-w-2xl mx-auto bg-white shadow-lg rounded-lg overflow-hidden">
+          <div className="bg-green-500 p-6 text-white text-center">
+            <CheckCircle2 className="h-16 w-16 mx-auto mb-4" />
+            <h1 className="text-2xl font-bold">Booking Confirmed!</h1>
+            <p className="mt-2">Your booking has been successfully confirmed.</p>
+            {bookingDetails.bookingNumber && (
+              <div className="mt-3 bg-white text-green-800 py-2 px-4 rounded-md inline-block font-bold">
+                Booking #: {bookingDetails.bookingNumber}
               </div>
-              <h2 className="text-2xl font-bold mb-2">Booking Confirmed!</h2>
-              <p className="text-white/80">Your cab has been booked successfully</p>
-              <div className="mt-4 text-sm bg-white/10 rounded-md py-2 px-4 inline-block">
-                Booking ID: <span className="font-mono font-bold">{bookingId}</span>
-              </div>
-            </div>
-            
-            <div className="p-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                <div className="space-y-1">
-                  <p className="text-xs text-cabGray-500">PICKUP LOCATION</p>
-                  <div className="flex items-start space-x-2">
-                    <MapPin size={18} className="text-cabBlue-500 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="font-medium text-cabGray-800">{booking.pickupLocation.name}</p>
-                      <p className="text-xs text-cabGray-600">
-                        {booking.pickupLocation.city}, {booking.pickupLocation.state}
-                      </p>
-                    </div>
+            )}
+          </div>
+          
+          <div className="p-6 space-y-6">
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="space-y-4">
+                <h2 className="text-lg font-semibold border-b pb-2">Trip Details</h2>
+                
+                <div className="flex items-start">
+                  <MapPin className="h-5 w-5 mr-3 text-gray-500 mt-0.5" />
+                  <div>
+                    <p className="text-sm text-gray-500">Pickup Location</p>
+                    <p className="font-medium">{bookingDetails.pickupLocation?.name || bookingDetails.pickupLocation}</p>
                   </div>
                 </div>
                 
-                <div className="space-y-1">
-                  <p className="text-xs text-cabGray-500">DROP LOCATION</p>
-                  <div className="flex items-start space-x-2">
-                    <MapPin size={18} className="text-cabBlue-500 mt-0.5 flex-shrink-0" />
+                {bookingDetails.dropLocation && (
+                  <div className="flex items-start">
+                    <MapPin className="h-5 w-5 mr-3 text-gray-500 mt-0.5" />
                     <div>
-                      <p className="font-medium text-cabGray-800">{booking.dropLocation.name}</p>
-                      <p className="text-xs text-cabGray-600">
-                        {booking.dropLocation.city}, {booking.dropLocation.state}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="space-y-1">
-                  <p className="text-xs text-cabGray-500">PICKUP DATE</p>
-                  <div className="flex items-start space-x-2">
-                    <Calendar size={18} className="text-cabBlue-500 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="font-medium text-cabGray-800">
-                        {format(new Date(booking.pickupDate), 'EEEE, MMMM d, yyyy')}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="space-y-1">
-                  <p className="text-xs text-cabGray-500">PICKUP TIME</p>
-                  <div className="flex items-start space-x-2">
-                    <Clock size={18} className="text-cabBlue-500 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="font-medium text-cabGray-800">
-                        {format(new Date(booking.pickupDate), 'h:mm a')}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                
-                {booking.returnDate && (
-                  <div className="space-y-1">
-                    <p className="text-xs text-cabGray-500">RETURN DATE & TIME</p>
-                    <div className="flex items-start space-x-2">
-                      <Calendar size={18} className="text-cabBlue-500 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <p className="font-medium text-cabGray-800">
-                          {format(new Date(booking.returnDate), 'EEEE, MMMM d, yyyy')}
-                        </p>
-                        <p className="text-xs text-cabGray-600">
-                          {format(new Date(booking.returnDate), 'h:mm a')}
-                        </p>
-                      </div>
+                      <p className="text-sm text-gray-500">Drop Location</p>
+                      <p className="font-medium">{bookingDetails.dropLocation?.name || bookingDetails.dropLocation}</p>
                     </div>
                   </div>
                 )}
                 
-                <div className="space-y-1">
-                  <p className="text-xs text-cabGray-500">CAB TYPE</p>
-                  <div className="flex items-start space-x-2">
-                    <Car size={18} className="text-cabBlue-500 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="font-medium text-cabGray-800">{booking.selectedCab.name}</p>
-                      <p className="text-xs text-cabGray-600">
-                        {booking.selectedCab.capacity} persons • {booking.selectedCab.luggage} bags
-                      </p>
-                    </div>
+                <div className="flex items-start">
+                  <Calendar className="h-5 w-5 mr-3 text-gray-500 mt-0.5" />
+                  <div>
+                    <p className="text-sm text-gray-500">Pickup Date & Time</p>
+                    <p className="font-medium">{formatDate(bookingDetails.pickupDate)}</p>
                   </div>
                 </div>
                 
-                <div className="space-y-1">
-                  <p className="text-xs text-cabGray-500">PAYMENT</p>
-                  <div className="flex items-start space-x-2">
-                    <CreditCard size={18} className="text-cabBlue-500 mt-0.5 flex-shrink-0" />
+                {bookingDetails.bookingType === 'tour' && bookingDetails.tourName && (
+                  <div className="flex items-start">
+                    <MapPin className="h-5 w-5 mr-3 text-gray-500 mt-0.5" />
                     <div>
-                      <p className="font-medium text-cabGray-800">₹{booking.finalPrice.toLocaleString('en-IN')}</p>
-                      <p className="text-xs text-cabGray-600">Pay at pickup (Cash/Card)</p>
+                      <p className="text-sm text-gray-500">Tour Package</p>
+                      <p className="font-medium">{bookingDetails.tourName}</p>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
               
-              <div className="border-t border-cabGray-100 pt-6 mt-6">
-                <h3 className="text-lg font-semibold text-cabGray-800 mb-4">Passenger Details</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-4">
+                <h2 className="text-lg font-semibold border-b pb-2">Booking Details</h2>
+                
+                <div className="flex items-start">
+                  <Car className="h-5 w-5 mr-3 text-gray-500 mt-0.5" />
                   <div>
-                    <p className="text-xs text-cabGray-500">NAME</p>
-                    <p className="font-medium text-cabGray-800">{booking.guestDetails.name}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-cabGray-500">PHONE</p>
-                    <p className="font-medium text-cabGray-800">{booking.guestDetails.phone}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-cabGray-500">EMAIL</p>
-                    <p className="font-medium text-cabGray-800">{booking.guestDetails.email}</p>
+                    <p className="text-sm text-gray-500">Vehicle Type</p>
+                    <p className="font-medium">{bookingDetails.selectedCab?.name}</p>
                   </div>
                 </div>
-              </div>
-              
-              <div className="border-t border-cabGray-100 pt-6 mt-6">
-                <h3 className="text-lg font-semibold text-cabGray-800 mb-4">Driver Details</h3>
-                <div className="flex items-center">
-                  <div className="w-16 h-16 bg-cabGray-200 rounded-full mr-4 flex items-center justify-center text-cabGray-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                  </div>
+                
+                <div className="flex items-start">
+                  <CircleDollarSign className="h-5 w-5 mr-3 text-gray-500 mt-0.5" />
                   <div>
-                    <p className="font-medium text-cabGray-800">Driver will be assigned 1 hour before pickup</p>
-                    <p className="text-sm text-cabGray-600">You'll receive driver details via SMS and email</p>
+                    <p className="text-sm text-gray-500">Total Amount</p>
+                    <p className="font-bold text-lg">₹{bookingDetails.totalPrice?.toLocaleString('en-IN')}</p>
                   </div>
                 </div>
               </div>
-              
-              <div className="border-t border-cabGray-100 pt-6 mt-6">
-                <h3 className="text-lg font-semibold text-cabGray-800 mb-4">Fare Details</h3>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-cabGray-600">Base fare</span>
-                    <span className="text-cabGray-800">₹{booking.selectedCab.price.toLocaleString('en-IN')}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-cabGray-600">Distance charge ({booking.distance} km)</span>
-                    <span className="text-cabGray-800">
-                      ₹{(booking.distance * booking.selectedCab.pricePerKm).toLocaleString('en-IN')}
-                    </span>
-                  </div>
-                  {booking.discountAmount > 0 && (
-                    <div className="flex justify-between text-sm text-green-600">
-                      <span>Discount</span>
-                      <span>-₹{booking.discountAmount.toLocaleString('en-IN')}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between font-medium pt-2 border-t border-cabGray-100">
-                    <span>Total Amount</span>
-                    <span>₹{booking.finalPrice.toLocaleString('en-IN')}</span>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="mt-8 flex flex-col md:flex-row gap-4 justify-center">
-                <Button 
-                  onClick={() => navigate('/')} 
-                  variant="outline" 
-                  className="md:mr-4"
-                >
-                  Back to Home
-                </Button>
-                <Button onClick={handleDownloadInvoice} className="flex items-center">
-                  <Download className="mr-2" size={18} /> Download Invoice
-                </Button>
-                <Button onClick={handleShareBooking} className="flex items-center" variant="outline">
-                  <Share2 className="mr-2" size={18} /> Share
-                </Button>
-              </div>
-              
-              <div className="mt-6 text-center text-cabGray-500 text-sm">
-                Need help with your booking? <a href="#" className="text-cabBlue-600 hover:underline">Contact Support</a>
-              </div>
+            </div>
+            
+            <div className="border-t pt-6 flex flex-col-reverse md:flex-row justify-between items-center gap-4">
+              {isNewBooking ? (
+                <p className="text-gray-600">
+                  Redirecting to your dashboard in {secondsRemaining} seconds...
+                </p>
+              ) : (
+                <p className="text-gray-600">
+                  A confirmation has been sent to your registered email and phone number.
+                </p>
+              )}
+              <Button onClick={() => navigate('/dashboard', { state: { fromBooking: true } })} size="lg" className="bg-blue-600 hover:bg-blue-700 flex items-center">
+                View My Bookings
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
             </div>
           </div>
         </div>
       </div>
     </div>
   );
-};
-
-export default BookingConfirmationPage;
+}

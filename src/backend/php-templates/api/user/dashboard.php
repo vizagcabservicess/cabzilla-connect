@@ -50,15 +50,18 @@ try {
         exit;
     }
     
+    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
+    $token = str_replace('Bearer ', '', $authHeader);
+    
     $userData = authenticate();
     if (!$userData || !isset($userData['user_id'])) {
-        logError("Authentication failed in dashboard.php");
+        logError("Authentication failed in dashboard.php", ['token' => substr($token, 0, 20) . '...']);
         sendJsonResponse(['status' => 'error', 'message' => 'Authentication failed'], 401);
         exit;
     }
     
     $userId = $userData['user_id'];
-    logError("User authenticated successfully", ['user_id' => $userId]);
+    logError("User authenticated successfully", ['user_id' => $userId, 'token' => substr($token, 0, 20) . '...']);
 
     // Connect to database
     $conn = getDbConnection();
@@ -67,7 +70,9 @@ try {
         throw new Exception('Database connection failed');
     }
 
-    // Get user's bookings
+    // Get user's bookings - adding more logging for debugging
+    logError("Preparing to fetch bookings for user", ['user_id' => $userId]);
+
     $stmt = $conn->prepare("SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC");
     if (!$stmt) {
         logError("Prepare statement failed", ['error' => $conn->error]);
@@ -88,6 +93,11 @@ try {
         logError("Get result failed", ['error' => $stmt->error]);
         throw new Exception('Database result error: ' . $stmt->error);
     }
+
+    // Debug: Log the SQL query for debugging
+    logError("SQL Query executed", [
+        'query' => "SELECT * FROM bookings WHERE user_id = {$userId} ORDER BY created_at DESC"
+    ]);
 
     $bookings = [];
     while ($row = $result->fetch_assoc()) {
@@ -116,7 +126,7 @@ try {
     }
 
     // Log count of real bookings found
-    logError("Real bookings found", ['count' => count($bookings)]);
+    logError("Real bookings found", ['count' => count($bookings), 'user_id' => $userId]);
 
     // Return empty array if no bookings found instead of providing demo data
     if (empty($bookings)) {

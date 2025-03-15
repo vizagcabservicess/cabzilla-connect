@@ -63,7 +63,8 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
         logError("Invalid token for booking", ['token' => substr($token, 0, 20) . '...']);
     }
 } else {
-    logError("Unauthenticated booking");
+    // For debugging - log the headers we received
+    logError("No authorization header found", ['headers' => $headers]);
 }
 
 // Connect to database
@@ -76,6 +77,9 @@ if (!$conn) {
 
 // Generate a unique booking number
 $bookingNumber = generateBookingNumber();
+
+// Debug log the user ID
+logError("User ID for booking", ['user_id' => $userId]);
 
 // Prepare the SQL query
 $sql = "INSERT INTO bookings 
@@ -124,7 +128,7 @@ if (!$stmt->execute()) {
 }
 
 $bookingId = $conn->insert_id;
-logError("Booking created", ['booking_id' => $bookingId, 'booking_number' => $bookingNumber]);
+logError("Booking created", ['booking_id' => $bookingId, 'booking_number' => $bookingNumber, 'user_id' => $userId]);
 
 // Get the created booking
 $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");

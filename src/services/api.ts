@@ -203,6 +203,8 @@ export const bookingAPI = {
     await refreshTokenIfNeeded();
     
     try {
+      console.log('Sending request with token:', `Bearer ${token.substring(0, 10)}...`);
+      
       const response = await fetch(`${API_URL}/user/dashboard`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -270,6 +272,8 @@ export const bookingAPI = {
   },
   
   createBooking: async (bookingData: BookingRequest): Promise<Booking> => {
+    console.log('Creating booking with data:', bookingData);
+    
     const token = getAuthToken();
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -277,15 +281,33 @@ export const bookingAPI = {
     
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
+      console.log('Adding auth token to booking request');
+    } else {
+      console.warn('No auth token available for booking request');
     }
     
-    const response = await fetch(`${API_URL}/book`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(bookingData),
-    });
-    
-    return handleResponse(response);
+    try {
+      const response = await fetch(`${API_URL}/book`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(bookingData),
+      });
+      
+      console.log('Booking response status:', response.status);
+      
+      const data = await handleResponse(response);
+      console.log('Booking creation response:', data);
+      
+      if (data && data.status === 'success' && data.data) {
+        return data.data;
+      } else {
+        console.error('Invalid booking response format:', data);
+        throw new Error('Invalid response format from booking API');
+      }
+    } catch (error) {
+      console.error('Error creating booking:', error);
+      throw error;
+    }
   },
   
   updateBooking: async (id: number, bookingData: Partial<BookingRequest>): Promise<Booking> => {

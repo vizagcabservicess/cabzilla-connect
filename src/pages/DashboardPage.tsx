@@ -1,6 +1,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -19,11 +19,15 @@ const RETRY_DELAY = 1500; // 1.5 seconds
 export default function DashboardPage() {
   const { toast: uiToast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const user = authAPI.getCurrentUser();
+  
+  // Check if coming from booking confirmation
+  const comingFromBooking = location.state?.fromBooking;
 
   // Check auth on page load
   useEffect(() => {
@@ -35,7 +39,12 @@ export default function DashboardPage() {
     }
     
     console.log('User authenticated, proceeding with dashboard');
-  }, [navigate]);
+    
+    // Show notification if coming from booking
+    if (comingFromBooking) {
+      toast.success('Booking successful! Your dashboard has been updated.');
+    }
+  }, [navigate, comingFromBooking]);
 
   const fetchBookings = useCallback(async (retry = 0) => {
     try {
@@ -167,6 +176,10 @@ export default function DashboardPage() {
           <p className="text-gray-500">Welcome back, {user?.name || 'User'}</p>
         </div>
         <div className="flex gap-2">
+          <Button onClick={handleRetry} variant="outline" className="mr-2" disabled={isLoading}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
           <Button onClick={() => navigate('/')} className="bg-blue-600 hover:bg-blue-700">
             Book New Cab
           </Button>

@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { EditableContactDetailsForm } from "@/components/EditableContactDetailsForm";
-import { ArrowLeft, Edit2 } from 'lucide-react';
+import { ArrowLeft, Edit2, Loader2 } from 'lucide-react';
 import { bookingAPI } from '@/services/api';
 import { BookingRequest } from '@/types/api';
 
@@ -14,6 +14,7 @@ interface GuestDetailsFormProps {
   initialData?: any;
   bookingId?: number;
   isEditing?: boolean;
+  isSubmitting?: boolean;
 }
 
 export function GuestDetailsForm({ 
@@ -22,7 +23,8 @@ export function GuestDetailsForm({
   onBack,
   initialData,
   bookingId,
-  isEditing = false
+  isEditing = false,
+  isSubmitting = false
 }: GuestDetailsFormProps) {
   const formRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
@@ -30,6 +32,8 @@ export function GuestDetailsForm({
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSubmit = async (details: any) => {
+    if (isSubmitting) return; // Prevent double submission
+    
     setIsSaving(true);
     
     try {
@@ -52,10 +56,7 @@ export function GuestDetailsForm({
         
         setIsEditMode(false);
       } else {
-        // For new bookings, we need to submit to the API before calling onSubmit
-        // This ensures the booking is saved to the database
-        
-        // Call the parent onSubmit to get data flowing to the next step
+        // For new bookings
         onSubmit(details);
       }
     } catch (error) {
@@ -79,6 +80,7 @@ export function GuestDetailsForm({
             size="sm" 
             onClick={onBack}
             className="flex items-center gap-1"
+            disabled={isSubmitting || isSaving}
           >
             <ArrowLeft size={16} /> Back
           </Button>
@@ -90,6 +92,7 @@ export function GuestDetailsForm({
             size="sm"
             onClick={() => setIsEditMode(true)}
             className="flex items-center gap-1 ml-auto"
+            disabled={isSubmitting || isSaving}
           >
             <Edit2 size={16} /> Edit Details
           </Button>
@@ -101,8 +104,15 @@ export function GuestDetailsForm({
         totalPrice={totalPrice}
         initialData={initialData}
         isReadOnly={bookingId !== undefined && !isEditMode}
-        isSaving={isSaving}
+        isSaving={isSaving || isSubmitting}
       />
+      
+      {(isSubmitting || isSaving) && (
+        <div className="mt-4 flex items-center justify-center bg-blue-50 p-2 rounded text-blue-700">
+          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          <p>Processing your booking...</p>
+        </div>
+      )}
     </div>
   );
 }

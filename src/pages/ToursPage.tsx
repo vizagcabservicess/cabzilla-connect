@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -24,6 +25,7 @@ const ToursPage = () => {
   const [pickupDate, setPickupDate] = useState<Date | undefined>(new Date());
   const [selectedCab, setSelectedCab] = useState<CabType | null>(null);
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const getTourFare = (tourId: string, cabId: string): number => {
     if (!tourId || !cabId) return 0;
@@ -82,6 +84,8 @@ const ToursPage = () => {
   
   const handleGuestDetailsSubmit = async (guestDetails: any) => {
     try {
+      setIsSubmitting(true);
+      
       const selectedTourDetails = availableTours.find(tour => tour.id === selectedTour);
       
       if (!selectedTourDetails || !selectedCab || !pickupLocation || !pickupDate) {
@@ -112,6 +116,8 @@ const ToursPage = () => {
         tourId: selectedTour
       };
       
+      console.log('Submitting tour booking:', bookingData);
+      
       const response = await bookingAPI.createBooking(bookingData);
       console.log('Tour booking created:', response);
       
@@ -125,6 +131,8 @@ const ToursPage = () => {
         totalPrice: fare,
         guestDetails,
         bookingType: 'tour',
+        bookingId: response.id,
+        bookingNumber: response.bookingNumber
       };
       
       sessionStorage.setItem('bookingDetails', JSON.stringify(bookingDataForStorage));
@@ -135,7 +143,8 @@ const ToursPage = () => {
         variant: "default",
       });
       
-      navigate("/booking-confirmation");
+      // Navigate to the confirmation page with state indicating we should redirect to dashboard after viewing
+      navigate("/booking-confirmation", { state: { newBooking: true } });
     } catch (error) {
       console.error('Error creating tour booking:', error);
       toast({
@@ -144,6 +153,8 @@ const ToursPage = () => {
         variant: "destructive",
         duration: 5000,
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
   
@@ -247,6 +258,7 @@ const ToursPage = () => {
                   onSubmit={handleGuestDetailsSubmit}
                   totalPrice={selectedTour && selectedCab ? 
                     getTourFare(selectedTour, selectedCab.id) : 0}
+                  isSubmitting={isSubmitting}
                 />
               </div>
               
