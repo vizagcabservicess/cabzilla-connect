@@ -8,9 +8,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from '@/components/ui/input';
-import { Search, Phone, Mail, Ban, Eye, AlertTriangle } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
+import { Search, Phone, Mail, Ban, Eye, AlertTriangle, MoreHorizontal, ShieldCheck, ArrowRightLeft } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export function CustomerManagement() {
+  const { toast } = useToast();
   // Sample customer data - in production, this would come from an API
   const [customers, setCustomers] = useState([
     { 
@@ -93,11 +103,41 @@ export function CustomerManagement() {
     }
   };
 
+  // Handler for flagging/unflagging customers
+  const toggleCustomerFlag = (customerId: number) => {
+    setCustomers(customers.map(customer => {
+      if (customer.id === customerId) {
+        const newStatus = customer.status === 'active' ? 'flagged' : 'active';
+        return { ...customer, status: newStatus };
+      }
+      return customer;
+    }));
+    
+    toast({
+      title: "Customer Status Updated",
+      description: "The customer's status has been updated successfully",
+    });
+  };
+  
+  // Handler for issuing refund (placeholder)
+  const issueRefund = (customerId: number) => {
+    toast({
+      title: "Refund Initiated",
+      description: "A refund process has been started for this customer",
+    });
+  };
+
+  // Calculate summary data
+  const totalCustomers = customers.length;
+  const activeCustomers = customers.filter(c => c.status === 'active').length;
+  const flaggedCustomers = customers.filter(c => c.status === 'flagged').length;
+  const totalRevenue = customers.reduce((sum, customer) => sum + customer.totalSpent, 0);
+
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <h2 className="text-2xl font-bold">Customer Management</h2>
-        <div className="relative w-64">
+        <div className="relative w-full md:w-64">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search customers..."
@@ -108,92 +148,121 @@ export function CustomerManagement() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{customers.length}</div>
+            <div className="text-2xl font-bold">{totalCustomers}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Active This Month</CardTitle>
+            <CardTitle className="text-sm font-medium">Active Customers</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">42</div>
+            <div className="text-2xl font-bold">{activeCustomers}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">New Signups (This Week)</CardTitle>
+            <CardTitle className="text-sm font-medium">Flagged Customers</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">8</div>
+            <div className="text-2xl font-bold">{flaggedCustomers}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">₹{totalRevenue.toLocaleString('en-IN')}</div>
           </CardContent>
         </Card>
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
-        <Table>
-          <TableCaption>List of all registered customers</TableCaption>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Customer Name</TableHead>
-              <TableHead>Contact</TableHead>
-              <TableHead>Total Rides</TableHead>
-              <TableHead>Total Spent</TableHead>
-              <TableHead>Rating</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Last Ride</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredCustomers.map((customer) => (
-              <TableRow key={customer.id}>
-                <TableCell className="font-medium">{customer.name}</TableCell>
-                <TableCell>
-                  <div className="flex flex-col text-sm">
-                    <span className="flex items-center gap-1">
-                      <Phone className="h-3 w-3" /> {customer.phone}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Mail className="h-3 w-3" /> {customer.email}
-                    </span>
-                  </div>
-                </TableCell>
-                <TableCell>{customer.totalRides}</TableCell>
-                <TableCell>₹{customer.totalSpent.toLocaleString('en-IN')}</TableCell>
-                <TableCell>
-                  <div className="flex items-center">
-                    <span className="font-bold mr-1">{customer.rating}</span>
-                    <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                  </div>
-                </TableCell>
-                <TableCell>{getStatusBadge(customer.status)}</TableCell>
-                <TableCell>{new Date(customer.lastRide).toLocaleDateString()}</TableCell>
-                <TableCell>
-                  <div className="flex space-x-2">
-                    <Button variant="outline" size="sm">
-                      <Eye className="h-3 w-3 mr-1" /> View
-                    </Button>
-                    {customer.status === 'flagged' ? (
-                      <Button variant="outline" size="sm" className="text-red-600">
-                        <Ban className="h-3 w-3 mr-1" /> Block
-                      </Button>
-                    ) : (
-                      <Button variant="outline" size="sm">
-                        <AlertTriangle className="h-3 w-3 mr-1" /> Flag
-                      </Button>
-                    )}
-                  </div>
-                </TableCell>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableCaption>List of all registered customers</TableCaption>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Customer Name</TableHead>
+                <TableHead>Contact</TableHead>
+                <TableHead>Total Rides</TableHead>
+                <TableHead>Total Spent</TableHead>
+                <TableHead>Rating</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Last Ride</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {filteredCustomers.map((customer) => (
+                <TableRow key={customer.id}>
+                  <TableCell className="font-medium">{customer.name}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-col text-sm">
+                      <span className="flex items-center gap-1">
+                        <Phone className="h-3 w-3" /> {customer.phone}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Mail className="h-3 w-3" /> {customer.email}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell>{customer.totalRides}</TableCell>
+                  <TableCell>₹{customer.totalSpent.toLocaleString('en-IN')}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center">
+                      <span className="font-bold mr-1">{customer.rating}</span>
+                      <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                    </div>
+                  </TableCell>
+                  <TableCell>{getStatusBadge(customer.status)}</TableCell>
+                  <TableCell>{new Date(customer.lastRide).toLocaleDateString()}</TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                        <DropdownMenuItem>
+                          <Eye className="h-3.5 w-3.5 mr-2" /> View Details
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => toggleCustomerFlag(customer.id)}>
+                          {customer.status === 'flagged' ? (
+                            <>
+                              <ShieldCheck className="h-3.5 w-3.5 mr-2" /> Remove Flag
+                            </>
+                          ) : (
+                            <>
+                              <AlertTriangle className="h-3.5 w-3.5 mr-2" /> Flag Customer
+                            </>
+                          )}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => issueRefund(customer.id)}>
+                          <ArrowRightLeft className="h-3.5 w-3.5 mr-2" /> Issue Refund
+                        </DropdownMenuItem>
+                        {customer.status !== 'blocked' && (
+                          <DropdownMenuItem className="text-red-600">
+                            <Ban className="h-3.5 w-3.5 mr-2" /> Block Customer
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       </div>
     </div>
   );

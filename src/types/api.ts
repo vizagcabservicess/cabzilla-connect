@@ -1,4 +1,3 @@
-
 // User related types
 export interface User {
   id: number;
@@ -47,6 +46,8 @@ export interface Booking {
   passengerName: string;
   passengerPhone: string;
   passengerEmail: string;
+  driverName?: string;
+  driverPhone?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -66,6 +67,8 @@ export interface BookingRequest {
   passengerEmail: string;
   hourlyPackage?: string;
   tourId?: string;
+  driverName?: string;
+  driverPhone?: string;
 }
 
 // Fare management types

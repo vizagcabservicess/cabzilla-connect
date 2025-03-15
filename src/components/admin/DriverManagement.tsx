@@ -6,12 +6,25 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/components/ui/use-toast";
 import { 
   MapPin, Phone, Mail, CheckCircle, XCircle, 
-  Plus, Edit, AlertTriangle 
+  Plus, Edit, AlertTriangle, Search, Star, 
+  MoreHorizontal, ToggleLeft, Car, Settings
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export function DriverManagement() {
+  const { toast } = useToast();
   // Sample driver data - in production, this would come from an API
   const [drivers, setDrivers] = useState([
     { 
@@ -24,7 +37,8 @@ export function DriverManagement() {
       totalRides: 352, 
       earnings: 120000, 
       rating: 4.8,
-      location: 'Hyderabad Central'
+      location: 'Hyderabad Central',
+      vehicle: 'Sedan - AP 31 XX 1234'
     },
     { 
       id: 2, 
@@ -36,7 +50,8 @@ export function DriverManagement() {
       totalRides: 215, 
       earnings: 85500, 
       rating: 4.6,
-      location: 'Gachibowli'
+      location: 'Gachibowli',
+      vehicle: 'SUV - AP 32 XX 5678'
     },
     { 
       id: 3, 
@@ -48,7 +63,8 @@ export function DriverManagement() {
       totalRides: 180, 
       earnings: 72000, 
       rating: 4.5,
-      location: 'Offline'
+      location: 'Offline',
+      vehicle: 'Sedan - AP 33 XX 9012'
     },
     { 
       id: 4, 
@@ -60,7 +76,8 @@ export function DriverManagement() {
       totalRides: 298, 
       earnings: 110000, 
       rating: 4.7,
-      location: 'Kukatpally'
+      location: 'Kukatpally',
+      vehicle: 'Hatchback - AP 34 XX 3456'
     },
     { 
       id: 5, 
@@ -72,9 +89,20 @@ export function DriverManagement() {
       totalRides: 175, 
       earnings: 65000, 
       rating: 4.4,
-      location: 'Ameerpet'
+      location: 'Ameerpet',
+      vehicle: 'Tempo - AP 35 XX 7890'
     }
   ]);
+
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Function to filter drivers based on search term
+  const filteredDrivers = drivers.filter(driver => 
+    driver.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    driver.phone.includes(searchTerm) ||
+    driver.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    driver.location.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   // Function to get status badge color
   const getStatusBadge = (status: string) => {
@@ -90,93 +118,156 @@ export function DriverManagement() {
     }
   };
 
+  // Handler for toggling driver status (would connect to an API in production)
+  const toggleDriverStatus = (driverId: number) => {
+    toast({
+      title: "Status Updated",
+      description: "Driver status has been updated successfully",
+    });
+    
+    setDrivers(drivers.map(driver => {
+      if (driver.id === driverId) {
+        const newStatus = driver.status === 'available' ? 'offline' : 'available';
+        return { ...driver, status: newStatus };
+      }
+      return driver;
+    }));
+  };
+
+  // Total driver statistics
+  const totalDrivers = drivers.length;
+  const availableDrivers = drivers.filter(d => d.status === 'available').length;
+  const busyDrivers = drivers.filter(d => d.status === 'busy').length;
+
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <h2 className="text-2xl font-bold">Driver Management</h2>
-        <Button className="flex items-center gap-2">
-          <Plus className="h-4 w-4" /> Add New Driver
-        </Button>
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          <div className="relative flex-grow md:w-64">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search drivers..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-8"
+            />
+          </div>
+          <Button className="flex items-center gap-2">
+            <Plus className="h-4 w-4" /> Add Driver
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Total Drivers</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalDrivers}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Available Drivers</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{availableDrivers}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Busy Drivers</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{busyDrivers}</div>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
-        <Table>
-          <TableCaption>List of all registered drivers</TableCaption>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Driver Name</TableHead>
-              <TableHead>Contact</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Total Rides</TableHead>
-              <TableHead>Earnings</TableHead>
-              <TableHead>Rating</TableHead>
-              <TableHead>Location</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {drivers.map((driver) => (
-              <TableRow key={driver.id}>
-                <TableCell className="font-medium">{driver.name}</TableCell>
-                <TableCell>
-                  <div className="flex flex-col text-sm">
-                    <span className="flex items-center gap-1">
-                      <Phone className="h-3 w-3" /> {driver.phone}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Mail className="h-3 w-3" /> {driver.email}
-                    </span>
-                  </div>
-                </TableCell>
-                <TableCell>{getStatusBadge(driver.status)}</TableCell>
-                <TableCell>{driver.totalRides}</TableCell>
-                <TableCell>₹{driver.earnings.toLocaleString('en-IN')}</TableCell>
-                <TableCell>
-                  <div className="flex items-center">
-                    <span className="font-bold mr-1">{driver.rating}</span>
-                    <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-1">
-                    <MapPin className="h-3 w-3" /> {driver.location}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex space-x-2">
-                    <Button variant="outline" size="sm">
-                      <Edit className="h-3 w-3 mr-1" /> Edit
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      <MapPin className="h-3 w-3 mr-1" /> Track
-                    </Button>
-                  </div>
-                </TableCell>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableCaption>List of all registered drivers</TableCaption>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Driver</TableHead>
+                <TableHead>Contact</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Rides</TableHead>
+                <TableHead>Earnings</TableHead>
+                <TableHead>Rating</TableHead>
+                <TableHead>Vehicle</TableHead>
+                <TableHead>Location</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {filteredDrivers.map((driver) => (
+                <TableRow key={driver.id}>
+                  <TableCell className="font-medium">{driver.name}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-col text-sm">
+                      <span className="flex items-center gap-1">
+                        <Phone className="h-3 w-3" /> {driver.phone}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Mail className="h-3 w-3" /> {driver.email}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell>{getStatusBadge(driver.status)}</TableCell>
+                  <TableCell>{driver.totalRides}</TableCell>
+                  <TableCell>₹{driver.earnings.toLocaleString('en-IN')}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center">
+                      <span className="font-bold mr-1">{driver.rating}</span>
+                      <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Car className="h-3 w-3" /> {driver.vehicle}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <MapPin className="h-3 w-3" /> {driver.location}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                        <DropdownMenuItem>
+                          <Edit className="h-3.5 w-3.5 mr-2" /> Edit Details
+                        </DropdownMenuItem>
+                        <DropdownMenuItem>
+                          <MapPin className="h-3.5 w-3.5 mr-2" /> Track Location
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => toggleDriverStatus(driver.id)}>
+                          <ToggleLeft className="h-3.5 w-3.5 mr-2" /> 
+                          {driver.status === 'available' ? 'Set as Offline' : 'Set as Available'}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem>
+                          <Settings className="h-3.5 w-3.5 mr-2" /> Manage Vehicle
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       </div>
     </div>
-  );
-}
-
-// Star icon component for ratings
-function Star(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-    </svg>
   );
 }

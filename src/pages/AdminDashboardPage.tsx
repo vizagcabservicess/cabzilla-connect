@@ -11,7 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
 import { 
   Car, Users, DollarSign, Star, Clock, AlertTriangle, Bell, MapPin, 
-  BarChart2, PieChart as PieChartIcon, Calendar, RefreshCcw
+  BarChart2, PieChart as PieChartIcon, Calendar, RefreshCcw, Settings,
+  CalendarClock, CircleDollarSign, TrendingUp, BadgeCheck
 } from "lucide-react";
 import { authAPI, bookingAPI, fareAPI } from '@/services/api';
 import { AdminBookingsList } from '@/components/admin/AdminBookingsList';
@@ -22,12 +23,14 @@ import { CustomerManagement } from '@/components/admin/CustomerManagement';
 import { DashboardMetrics } from '@/components/admin/DashboardMetrics';
 import { ReportingAnalytics } from '@/components/admin/ReportingAnalytics';
 import { AdminNotifications } from '@/components/admin/AdminNotifications';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function AdminDashboardPage() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month'>('week');
   const [metrics, setMetrics] = useState({
     totalBookings: 0,
     activeRides: 0,
@@ -73,7 +76,7 @@ export default function AdminDashboardPage() {
     
     try {
       setIsLoading(true);
-      const metricsData = await bookingAPI.getAdminDashboardMetrics();
+      const metricsData = await bookingAPI.getAdminDashboardMetrics(selectedPeriod);
       setMetrics(metricsData);
       
       // Simulate revenue data updates (in a real app, this would be fetched from the API)
@@ -98,7 +101,7 @@ export default function AdminDashboardPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [navigate, toast, revenueData, vehicleDistribution]);
+  }, [navigate, toast, revenueData, vehicleDistribution, selectedPeriod]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -126,12 +129,23 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="container mx-auto py-10 px-4">
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-bold">Admin Dashboard</h1>
           <p className="text-gray-500">Manage all aspects of your taxi service</p>
         </div>
-        <div className="space-x-2 flex items-center">
+        <div className="flex flex-col md:flex-row gap-2">
+          <Select value={selectedPeriod} onValueChange={(value: 'today' | 'week' | 'month') => setSelectedPeriod(value)}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Select period" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="today">Today</SelectItem>
+              <SelectItem value="week">This Week</SelectItem>
+              <SelectItem value="month">This Month</SelectItem>
+            </SelectContent>
+          </Select>
+          
           <Button 
             variant="outline" 
             size="sm" 
@@ -147,14 +161,14 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Dashboard Metrics */}
-      <DashboardMetrics initialMetrics={metrics} />
+      <DashboardMetrics initialMetrics={metrics} period={selectedPeriod} onRefresh={fetchDashboardData} />
 
       {/* Charts */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <Card>
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
-              <BarChart2 className="h-5 w-5" /> Revenue Trend (Last 6 Months)
+              <TrendingUp className="h-5 w-5" /> Revenue Trend (Last 6 Months)
             </CardTitle>
           </CardHeader>
           <CardContent className="h-80">
@@ -211,8 +225,10 @@ export default function AdminDashboardPage() {
           <TabsTrigger value="drivers" className="flex items-center gap-1"><Users className="h-4 w-4" /> Drivers</TabsTrigger>
           <TabsTrigger value="customers" className="flex items-center gap-1"><Users className="h-4 w-4" /> Customers</TabsTrigger>
           <TabsTrigger value="reports" className="flex items-center gap-1"><BarChart2 className="h-4 w-4" /> Reports</TabsTrigger>
-          <TabsTrigger value="pricing" className="flex items-center gap-1"><DollarSign className="h-4 w-4" /> Pricing</TabsTrigger>
+          <TabsTrigger value="financials" className="flex items-center gap-1"><CircleDollarSign className="h-4 w-4" /> Financials</TabsTrigger>
+          <TabsTrigger value="vehicles" className="flex items-center gap-1"><Car className="h-4 w-4" /> Vehicles</TabsTrigger>
           <TabsTrigger value="notifications" className="flex items-center gap-1"><Bell className="h-4 w-4" /> Notifications</TabsTrigger>
+          <TabsTrigger value="settings" className="flex items-center gap-1"><Settings className="h-4 w-4" /> Settings</TabsTrigger>
         </TabsList>
         
         <TabsContent value="bookings">
@@ -231,25 +247,79 @@ export default function AdminDashboardPage() {
           <ReportingAnalytics />
         </TabsContent>
         
-        <TabsContent value="pricing">
-          <Tabs defaultValue="tour-fares">
+        <TabsContent value="financials">
+          <Tabs defaultValue="revenue">
             <TabsList className="mb-4">
-              <TabsTrigger value="tour-fares">Tour Fares</TabsTrigger>
-              <TabsTrigger value="vehicle-pricing">Vehicle Pricing</TabsTrigger>
+              <TabsTrigger value="revenue">Revenue</TabsTrigger>
+              <TabsTrigger value="payouts">Driver Payouts</TabsTrigger>
+              <TabsTrigger value="pricing">Pricing Management</TabsTrigger>
             </TabsList>
             
-            <TabsContent value="tour-fares">
-              <FareManagement />
+            <TabsContent value="revenue">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Revenue Management</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground">This feature is under development</p>
+                </CardContent>
+              </Card>
             </TabsContent>
             
-            <TabsContent value="vehicle-pricing">
-              <VehiclePricingManagement />
+            <TabsContent value="payouts">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Driver Payouts</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground">This feature is under development</p>
+                </CardContent>
+              </Card>
+            </TabsContent>
+            
+            <TabsContent value="pricing">
+              <Tabs defaultValue="tour-fares">
+                <TabsList className="mb-4">
+                  <TabsTrigger value="tour-fares">Tour Fares</TabsTrigger>
+                  <TabsTrigger value="vehicle-pricing">Vehicle Pricing</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="tour-fares">
+                  <FareManagement />
+                </TabsContent>
+                
+                <TabsContent value="vehicle-pricing">
+                  <VehiclePricingManagement />
+                </TabsContent>
+              </Tabs>
             </TabsContent>
           </Tabs>
         </TabsContent>
         
+        <TabsContent value="vehicles">
+          <Card>
+            <CardHeader>
+              <CardTitle>Vehicle Management</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">This feature is under development</p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
         <TabsContent value="notifications">
           <AdminNotifications />
+        </TabsContent>
+        
+        <TabsContent value="settings">
+          <Card>
+            <CardHeader>
+              <CardTitle>System Settings</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">This feature is under development</p>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

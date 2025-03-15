@@ -36,10 +36,17 @@ header('Content-Type: application/json');
 // Log start of request processing
 logError("Dashboard.php request initiated", [
     'method' => $_SERVER['REQUEST_METHOD'],
-    'headers' => getallheaders()
+    'headers' => getallheaders(),
+    'query' => $_GET
 ]);
 
 try {
+    // Check if this is an admin metrics request
+    $isAdminMetricsRequest = isset($_GET['admin']) && $_GET['admin'] === 'true';
+    
+    // Get period filter if provided (today, week, month)
+    $period = isset($_GET['period']) ? $_GET['period'] : 'week';
+    
     // Authenticate user with improved logging
     $headers = getallheaders();
     logError("Request headers", ['headers' => $headers]);
@@ -61,13 +68,85 @@ try {
     }
     
     $userId = $userData['user_id'];
-    logError("User authenticated successfully", ['user_id' => $userId, 'token' => substr($token, 0, 20) . '...']);
+    $isAdmin = isset($userData['is_admin']) && $userData['is_admin'] === true;
+    
+    logError("User authenticated successfully", [
+        'user_id' => $userId, 
+        'is_admin' => $isAdmin ? 'true' : 'false',
+        'token' => substr($token, 0, 20) . '...'
+    ]);
 
     // Connect to database
     $conn = getDbConnection();
     if (!$conn) {
         logError("Database connection failed in dashboard.php");
         throw new Exception('Database connection failed');
+    }
+
+    // If this is an admin metrics request and the user is an admin
+    if ($isAdminMetricsRequest && $isAdmin) {
+        logError("Processing admin metrics request", ['period' => $period]);
+        
+        // Get date range based on period
+        $dateCondition = "";
+        switch ($period) {
+            case 'today':
+                $dateCondition = "WHERE DATE(created_at) = CURDATE()";
+                break;
+            case 'week':
+                $dateCondition = "WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)";
+                break;
+            case 'month':
+            default:
+                $dateCondition = "WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
+                break;
+        }
+        
+        // Get total bookings for the period
+        $totalBookingsQuery = "SELECT COUNT(*) as total FROM bookings $dateCondition";
+        $totalBookingsResult = $conn->query($totalBookingsQuery);
+        $totalBookings = $totalBookingsResult->fetch_assoc()['total'] ?? 0;
+        
+        // Get active rides (confirmed status with today's date)
+        $activeRidesQuery = "SELECT COUNT(*) as total FROM bookings 
+                             WHERE status = 'confirmed' 
+                             AND DATE(pickup_date) = CURDATE()";
+        $activeRidesResult = $conn->query($activeRidesQuery);
+        $activeRides = $activeRidesResult->fetch_assoc()['total'] ?? 0;
+        
+        // Get total revenue for the period
+        $totalRevenueQuery = "SELECT SUM(total_amount) as total FROM bookings $dateCondition";
+        $totalRevenueResult = $conn->query($totalRevenueQuery);
+        $totalRevenue = $totalRevenueResult->fetch_assoc()['total'] ?? 0;
+        
+        // Simulate driver metrics (in a real app, this would come from a drivers table)
+        $availableDrivers = 12;
+        $busyDrivers = 8;
+        
+        // Get average rating (simulated - would come from a ratings table)
+        $avgRating = 4.7;
+        
+        // Get upcoming rides (pending/confirmed with future date)
+        $upcomingRidesQuery = "SELECT COUNT(*) as total FROM bookings 
+                               WHERE (status = 'pending' OR status = 'confirmed')
+                               AND DATE(pickup_date) > CURDATE()";
+        $upcomingRidesResult = $conn->query($upcomingRidesQuery);
+        $upcomingRides = $upcomingRidesResult->fetch_assoc()['total'] ?? 0;
+        
+        // Prepare the metrics response
+        $metrics = [
+            'totalBookings' => (int)$totalBookings,
+            'activeRides' => (int)$activeRides,
+            'totalRevenue' => (float)$totalRevenue,
+            'availableDrivers' => (int)$availableDrivers,
+            'busyDrivers' => (int)$busyDrivers,
+            'avgRating' => (float)$avgRating,
+            'upcomingRides' => (int)$upcomingRides
+        ];
+        
+        logError("Sending admin metrics response", ['metrics' => $metrics]);
+        sendJsonResponse(['status' => 'success', 'data' => $metrics]);
+        exit;
     }
 
     // Get user's bookings - adding more logging for debugging
@@ -119,6 +198,8 @@ try {
             'passengerName' => $row['passenger_name'] ?? $userData['name'],
             'passengerPhone' => $row['passenger_phone'] ?? '',
             'passengerEmail' => $row['passenger_email'] ?? $userData['email'],
+            'driverName' => $row['driver_name'] ?? null,
+            'driverPhone' => $row['driver_phone'] ?? null,
             'createdAt' => $row['created_at'],
             'updatedAt' => $row['updated_at'] ?? $row['created_at']
         ];

@@ -3,14 +3,16 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DashboardMetrics as DashboardMetricsType } from '@/types/api';
 import { bookingAPI } from '@/services/api';
-import { Car, Users, DollarSign, Star, Clock, AlertTriangle } from "lucide-react";
+import { Car, Users, DollarSign, Star, Clock, AlertTriangle, Calendar } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
 interface DashboardMetricsProps {
   initialMetrics?: DashboardMetricsType;
+  period?: 'today' | 'week' | 'month';
+  onRefresh?: () => void;
 }
 
-export function DashboardMetrics({ initialMetrics }: DashboardMetricsProps) {
+export function DashboardMetrics({ initialMetrics, period = 'week', onRefresh }: DashboardMetricsProps) {
   const { toast } = useToast();
   const [metrics, setMetrics] = useState<DashboardMetricsType>(initialMetrics || {
     totalBookings: 0,
@@ -30,9 +32,10 @@ export function DashboardMetrics({ initialMetrics }: DashboardMetricsProps) {
         setIsLoading(true);
         setError(null);
         console.log('Fetching dashboard metrics...');
-        const data = await bookingAPI.getAdminDashboardMetrics();
+        const data = await bookingAPI.getAdminDashboardMetrics(period);
         console.log('Dashboard metrics received:', data);
         setMetrics(data);
+        if (onRefresh) onRefresh();
       } catch (error) {
         console.error('Error fetching dashboard metrics:', error);
         setError('Failed to load dashboard metrics');
@@ -49,11 +52,11 @@ export function DashboardMetrics({ initialMetrics }: DashboardMetricsProps) {
     if (!initialMetrics) {
       fetchMetrics();
     }
-  }, [initialMetrics, toast]);
+  }, [initialMetrics, toast, period, onRefresh]);
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-8">
         {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
           <Card key={i} className="animate-pulse">
             <CardHeader className="pb-2">
@@ -80,17 +83,23 @@ export function DashboardMetrics({ initialMetrics }: DashboardMetricsProps) {
     );
   }
 
+  const periodText = {
+    today: 'Today',
+    week: 'This Week',
+    month: 'This Month'
+  }[period];
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-8">
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Car className="h-4 w-4" /> Total Bookings
+            <Car className="h-4 w-4" /> Total Bookings ({periodText})
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">{metrics.totalBookings}</div>
-          <p className="text-xs text-gray-500">+12% from last month</p>
+          <p className="text-xs text-gray-500">+12% from last {period}</p>
         </CardContent>
       </Card>
       <Card>
@@ -101,7 +110,7 @@ export function DashboardMetrics({ initialMetrics }: DashboardMetricsProps) {
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">₹{metrics.totalRevenue.toLocaleString('en-IN')}</div>
-          <p className="text-xs text-gray-500">+8% from last month</p>
+          <p className="text-xs text-gray-500">+8% from last {period}</p>
         </CardContent>
       </Card>
       <Card>
@@ -122,8 +131,8 @@ export function DashboardMetrics({ initialMetrics }: DashboardMetricsProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{metrics.avgRating} / 5</div>
-          <p className="text-xs text-gray-500">Based on 230 reviews</p>
+          <div className="text-2xl font-bold">{metrics.avgRating.toFixed(1)} / 5</div>
+          <p className="text-xs text-gray-500">Based on customer reviews</p>
         </CardContent>
       </Card>
       
@@ -152,7 +161,7 @@ export function DashboardMetrics({ initialMetrics }: DashboardMetricsProps) {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Clock className="h-4 w-4" /> Upcoming Rides
+            <Calendar className="h-4 w-4" /> Upcoming Rides
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -163,7 +172,7 @@ export function DashboardMetrics({ initialMetrics }: DashboardMetricsProps) {
       <Card className="bg-green-50">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium text-green-800 flex items-center gap-2">
-            <Star className="h-4 w-4" /> Real-time Data
+            <Clock className="h-4 w-4" /> Real-time Data
           </CardTitle>
         </CardHeader>
         <CardContent>
