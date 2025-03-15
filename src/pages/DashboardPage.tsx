@@ -7,12 +7,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/use-toast";
-import { Book } from "lucide-react";
+import { Book, CircleOff, RefreshCw, Calendar, MapPin, Car } from "lucide-react";
 import { bookingAPI, authAPI } from '@/services/api';
 import { Booking } from '@/types/api';
 import { formatDate } from '@/lib/utils';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { CircleOff, RefreshCw } from "lucide-react";
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 2000; // 2 seconds
@@ -70,7 +69,7 @@ export default function DashboardPage() {
   };
 
   const getStatusColor = (status: string) => {
-    switch (status) {
+    switch (status.toLowerCase()) {
       case 'confirmed': return 'bg-green-100 text-green-800';
       case 'pending': return 'bg-yellow-100 text-yellow-800';
       case 'completed': return 'bg-blue-100 text-blue-800';
@@ -87,22 +86,6 @@ export default function DashboardPage() {
     ['completed', 'cancelled'].includes(booking.status.toLowerCase())
   );
 
-  if (isLoading) {
-    return (
-      <div className="container mx-auto py-10 px-4">
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold">Dashboard</h1>
-            <p className="text-gray-500">Welcome back, {user?.name || 'User'}</p>
-          </div>
-        </div>
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="container mx-auto py-10 px-4">
       <div className="flex justify-between items-center mb-8">
@@ -110,7 +93,9 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-bold">Dashboard</h1>
           <p className="text-gray-500">Welcome back, {user?.name || 'User'}</p>
         </div>
-        <Button onClick={() => navigate('/')}>Book New Cab</Button>
+        <Button onClick={() => navigate('/')} className="bg-blue-600 hover:bg-blue-700">
+          Book New Cab
+        </Button>
       </div>
 
       {error && (
@@ -118,7 +103,7 @@ export default function DashboardPage() {
           <CircleOff className="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
           <AlertDescription className="flex items-center justify-between">
-            <span>{error}</span>
+            <span>Failed to load your bookings. Please try again later.</span>
             <Button 
               variant="outline" 
               size="sm" 
@@ -170,26 +155,38 @@ export default function DashboardPage() {
                   <CardContent>
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <p className="text-sm text-gray-500">Pickup</p>
-                          <p className="font-medium">{booking.pickupLocation}</p>
+                        <div className="flex items-start">
+                          <MapPin className="h-4 w-4 mr-1 mt-1 text-gray-500" />
+                          <div>
+                            <p className="text-sm text-gray-500">Pickup</p>
+                            <p className="font-medium">{booking.pickupLocation}</p>
+                          </div>
                         </div>
                         {booking.dropLocation && (
-                          <div>
-                            <p className="text-sm text-gray-500">Drop</p>
-                            <p className="font-medium">{booking.dropLocation}</p>
+                          <div className="flex items-start">
+                            <MapPin className="h-4 w-4 mr-1 mt-1 text-gray-500" />
+                            <div>
+                              <p className="text-sm text-gray-500">Drop</p>
+                              <p className="font-medium">{booking.dropLocation}</p>
+                            </div>
                           </div>
                         )}
                       </div>
                       <Separator />
                       <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <p className="text-sm text-gray-500">Date & Time</p>
-                          <p className="font-medium">{new Date(booking.pickupDate).toLocaleString()}</p>
+                        <div className="flex items-start">
+                          <Calendar className="h-4 w-4 mr-1 mt-1 text-gray-500" />
+                          <div>
+                            <p className="text-sm text-gray-500">Date & Time</p>
+                            <p className="font-medium">{new Date(booking.pickupDate).toLocaleString()}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm text-gray-500">Vehicle</p>
-                          <p className="font-medium">{booking.cabType}</p>
+                        <div className="flex items-start">
+                          <Car className="h-4 w-4 mr-1 mt-1 text-gray-500" />
+                          <div>
+                            <p className="text-sm text-gray-500">Vehicle</p>
+                            <p className="font-medium">{booking.cabType}</p>
+                          </div>
                         </div>
                       </div>
                       <Separator />
@@ -213,8 +210,9 @@ export default function DashboardPage() {
           ) : (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-10">
+                <Book className="h-16 w-16 text-gray-300 mb-4" />
                 <p className="text-gray-500 mb-4">You don't have any upcoming bookings.</p>
-                <Button onClick={() => navigate('/')}>Book a Cab Now</Button>
+                <Button onClick={() => navigate('/')} className="bg-blue-600 hover:bg-blue-700">Book a Cab Now</Button>
               </CardContent>
             </Card>
           )}
@@ -241,26 +239,38 @@ export default function DashboardPage() {
                   <CardContent>
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <p className="text-sm text-gray-500">Pickup</p>
-                          <p className="font-medium">{booking.pickupLocation}</p>
+                        <div className="flex items-start">
+                          <MapPin className="h-4 w-4 mr-1 mt-1 text-gray-500" />
+                          <div>
+                            <p className="text-sm text-gray-500">Pickup</p>
+                            <p className="font-medium">{booking.pickupLocation}</p>
+                          </div>
                         </div>
                         {booking.dropLocation && (
-                          <div>
-                            <p className="text-sm text-gray-500">Drop</p>
-                            <p className="font-medium">{booking.dropLocation}</p>
+                          <div className="flex items-start">
+                            <MapPin className="h-4 w-4 mr-1 mt-1 text-gray-500" />
+                            <div>
+                              <p className="text-sm text-gray-500">Drop</p>
+                              <p className="font-medium">{booking.dropLocation}</p>
+                            </div>
                           </div>
                         )}
                       </div>
                       <Separator />
                       <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <p className="text-sm text-gray-500">Date & Time</p>
-                          <p className="font-medium">{new Date(booking.pickupDate).toLocaleString()}</p>
+                        <div className="flex items-start">
+                          <Calendar className="h-4 w-4 mr-1 mt-1 text-gray-500" />
+                          <div>
+                            <p className="text-sm text-gray-500">Date & Time</p>
+                            <p className="font-medium">{new Date(booking.pickupDate).toLocaleString()}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm text-gray-500">Vehicle</p>
-                          <p className="font-medium">{booking.cabType}</p>
+                        <div className="flex items-start">
+                          <Car className="h-4 w-4 mr-1 mt-1 text-gray-500" />
+                          <div>
+                            <p className="text-sm text-gray-500">Vehicle</p>
+                            <p className="font-medium">{booking.cabType}</p>
+                          </div>
                         </div>
                       </div>
                       <Separator />
@@ -282,8 +292,9 @@ export default function DashboardPage() {
           ) : (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-10">
+                <Book className="h-16 w-16 text-gray-300 mb-4" />
                 <p className="text-gray-500 mb-4">You don't have any past bookings.</p>
-                <Button onClick={() => navigate('/')}>Book a Cab Now</Button>
+                <Button onClick={() => navigate('/')} className="bg-blue-600 hover:bg-blue-700">Book a Cab Now</Button>
               </CardContent>
             </Card>
           )}

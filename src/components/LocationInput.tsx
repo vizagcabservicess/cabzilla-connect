@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Autocomplete } from "@react-google-maps/api";
 import { Search, X, MapPin } from "lucide-react";
-import { Location, vizagLocations, isVizagLocation } from "@/lib/locationData";
+import { Location, vizagLocations, apDestinations, isVizagLocation } from "@/lib/locationData";
 import { cn } from "@/lib/utils";
 import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
 import { useToast } from "@/components/ui/use-toast";
@@ -40,21 +40,10 @@ export function LocationInput({
   useEffect(() => {
     if (value) {
       setSearchQuery(value.name);
+    } else {
+      setSearchQuery("");
     }
   }, [value]);
-
-  // Auto-fill airport for airport trips
-  useEffect(() => {
-    if (isAirportTransfer) {
-      const airport = vizagLocations.find(loc => loc.type === 'airport');
-      
-      if (airport && ((isPickupLocation && label.toLowerCase().includes("pickup")) || 
-                     (!isPickupLocation && label.toLowerCase().includes("drop")))) {
-        onChange(airport);
-        setSearchQuery(airport.name);
-      }
-    }
-  }, [isAirportTransfer, isPickupLocation, label, onChange]);
 
   // Filter location suggestions based on search query
   useEffect(() => {
@@ -64,19 +53,34 @@ export function LocationInput({
     }
 
     const query = searchQuery.toLowerCase();
-    const filteredLocations = vizagLocations.filter(
+    let locationSource = isPickupLocation ? vizagLocations : apDestinations;
+    
+    // Filter the appropriate source based on isPickupLocation
+    const filteredLocations = locationSource.filter(
       location => 
         location.name.toLowerCase().includes(query) || 
         location.city.toLowerCase().includes(query)
     );
 
-    // For pickup locations, filter to only show Vizag locations
-    const locations = isPickupLocation 
-      ? filteredLocations.filter(loc => isVizagLocation(loc))
-      : filteredLocations;
-
-    setSuggestedLocations(locations.slice(0, 5));
+    setSuggestedLocations(filteredLocations.slice(0, 5));
   }, [searchQuery, isPickupLocation, isLoaded, readOnly]);
+
+  // Auto-fill airport only for airport trips
+  useEffect(() => {
+    if (isAirportTransfer) {
+      // Only for airport transfers
+      const airport = vizagLocations.find(loc => loc.type === 'airport');
+      
+      if (airport) {
+        // For pickup with airport label OR drop with destination label
+        if ((isPickupLocation && label.toLowerCase().includes("airport")) || 
+            (!isPickupLocation && label.toLowerCase().includes("destination"))) {
+          onChange(airport);
+          setSearchQuery(airport.name);
+        }
+      }
+    }
+  }, [isAirportTransfer, isPickupLocation, label, onChange]);
 
   // Handle Google Places selection
   const onPlaceChanged = () => {
@@ -183,6 +187,11 @@ export function LocationInput({
     );
   }
 
+  // Determine if this input should be read-only based on airport transfers
+  const isReadOnly = readOnly || (isAirportTransfer && 
+    ((isPickupLocation && label.toLowerCase().includes("airport")) || 
+    (!isPickupLocation && label.toLowerCase().includes("destination"))));
+
   return (
     <div className={cn("relative w-full", className)}>
       <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
@@ -192,9 +201,8 @@ export function LocationInput({
           <Search size={18} />
         </div>
 
-        {isAirportTransfer && ((isPickupLocation && label.toLowerCase().includes("airport")) || 
-                             (!isPickupLocation && label.toLowerCase().includes("destination"))) ? (
-          // Fixed airport input for airport transfers
+        {isReadOnly ? (
+          // Fixed readonly input
           <input
             type="text"
             className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-md bg-gray-100"
@@ -224,8 +232,7 @@ export function LocationInput({
               ref={inputRef}
               type="text"
               className={cn(
-                "w-full pl-10 pr-10 py-3 border border-gray-300 rounded-md", 
-                readOnly ? "bg-gray-100 cursor-not-allowed" : ""
+                "w-full pl-10 pr-10 py-3 border border-gray-300 rounded-md"
               )}
               placeholder={placeholder}
               value={searchQuery}
@@ -238,12 +245,11 @@ export function LocationInput({
                 // Delay hiding suggestions to allow clicking on them
                 setTimeout(() => setShowSuggestions(false), 200);
               }}
-              readOnly={readOnly}
             />
           </Autocomplete>
         )}
 
-        {searchQuery && !readOnly && (
+        {searchQuery && !isReadOnly && (
           <button
             type="button"
             onClick={handleClear}
