@@ -23,6 +23,8 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { bookingAPI } from '@/services/api';
 import { Booking } from '@/types/api';
+import { AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export function AdminBookingsList() {
   const { toast } = useToast();
@@ -30,19 +32,34 @@ export function AdminBookingsList() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [filteredBookings, setFilteredBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
   useEffect(() => {
     const fetchBookings = async () => {
       try {
+        setIsLoading(true);
+        setError(null);
+        console.log('Admin: Fetching all bookings...');
+        
         const data = await bookingAPI.getAllBookings();
-        setBookings(data);
-        setFilteredBookings(data);
+        console.log('Admin: Bookings received:', data);
+        
+        if (Array.isArray(data)) {
+          setBookings(data);
+          setFilteredBookings(data);
+        } else {
+          console.error('Admin: Invalid data format received:', data);
+          throw new Error('Invalid data format received from server');
+        }
       } catch (error) {
+        console.error('Admin: Error fetching bookings:', error);
+        setError(error instanceof Error ? error.message : 'Failed to load bookings');
+        
         toast({
           title: "Error",
-          description: "Failed to load bookings",
+          description: "Failed to load bookings. Please try again.",
           variant: "destructive",
         });
       } finally {
@@ -90,6 +107,25 @@ export function AdminBookingsList() {
       <div className="flex justify-center p-10">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-900"></div>
       </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Alert variant="destructive" className="mb-6">
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription className="flex items-center justify-between">
+          <span>{error}</span>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => window.location.reload()}
+            className="ml-4"
+          >
+            Retry
+          </Button>
+        </AlertDescription>
+      </Alert>
     );
   }
 

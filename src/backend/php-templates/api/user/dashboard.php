@@ -34,13 +34,13 @@ header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Content-Type: application/json');
 
 // Log start of request processing
-logError("Dashboard.php request initiated", ['method' => $_SERVER['REQUEST_METHOD'], 'headers' => getallheaders()]);
+logError("Dashboard.php request initiated", ['method' => $_SERVER['REQUEST_METHOD']]);
 
 try {
     // Authenticate user
     $userData = authenticate();
     if (!$userData || !isset($userData['user_id'])) {
-        logError("Authentication failed in dashboard.php", ['headers' => getallheaders()]);
+        logError("Authentication failed in dashboard.php");
         http_response_code(401);
         echo json_encode(['status' => 'error', 'message' => 'Authentication failed']);
         exit;
@@ -55,9 +55,6 @@ try {
         logError("Database connection failed in dashboard.php");
         throw new Exception('Database connection failed');
     }
-
-    // Log for debugging
-    logError("Fetching bookings for user", ['user_id' => $userId]);
 
     // Get user's bookings
     $stmt = $conn->prepare("SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC");
@@ -179,7 +176,7 @@ try {
         logError("No bookings found, providing sample data", ['count' => count($bookings)]);
     }
 
-    // ALWAYS use consistent response format with 'status' and 'data' keys
+    // ALWAYS send response in standard format
     echo json_encode(['status' => 'success', 'data' => $bookings]);
     exit;
     
@@ -187,11 +184,9 @@ try {
     logError("Exception in dashboard.php", [
         'message' => $e->getMessage(),
         'file' => $e->getFile(),
-        'line' => $e->getLine(),
-        'trace' => $e->getTraceAsString()
+        'line' => $e->getLine()
     ]);
     
-    // Send error response with proper JSON content type
     http_response_code(500);
     echo json_encode(['status' => 'error', 'message' => 'Server error: ' . $e->getMessage()]);
     exit;

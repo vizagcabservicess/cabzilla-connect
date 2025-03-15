@@ -66,14 +66,6 @@ const handleResponse = async (response: Response) => {
 // Helper to get auth token from localStorage
 const getAuthToken = () => localStorage.getItem('auth_token');
 
-// Helper to add an artificial delay for demo purposes
-const addDemoDelay = async () => {
-  // Add a small delay to simulate API call in development
-  if (process.env.NODE_ENV === 'development') {
-    await new Promise(resolve => setTimeout(resolve, 800));
-  }
-};
-
 // Auth API calls
 export const authAPI = {
   login: async (credentials: LoginRequest): Promise<AuthResponse> => {
@@ -185,9 +177,6 @@ export const bookingAPI = {
       } else if (responseData && Array.isArray(responseData)) {
         console.warn('API returned array directly instead of {status, data} object');
         return responseData;
-      } else if (responseData && typeof responseData === 'object') {
-        console.error('Response is an object but not in expected format:', responseData);
-        throw new Error('Invalid data format received from server. Expected {status: "success", data: [...]}');
       } else {
         console.error('Invalid data format received:', typeof responseData, responseData);
         throw new Error('Invalid data format received from server');

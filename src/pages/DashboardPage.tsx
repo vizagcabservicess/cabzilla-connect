@@ -30,40 +30,21 @@ export default function DashboardPage() {
       setError(null);
       console.log('Fetching user bookings...', { retry });
       
-      if (retry === 0) {
-        try {
-          const data = await bookingAPI.getUserBookings();
-          console.log('Bookings received:', data);
-          
-          if (Array.isArray(data)) {
-            setBookings(data);
-            setRetryCount(0); // Reset retry count on success
-            toast.success(`Found ${data.length} booking(s)`);
-          } else {
-            console.error('Invalid data format received:', data);
-            throw new Error('Invalid data format received from server');
-          }
-        } catch (error) {
-          console.error('Error in initial fetch:', error);
-          throw error; // Re-throw to be caught by outer catch
+      try {
+        const data = await bookingAPI.getUserBookings();
+        console.log('Bookings received:', data);
+        
+        if (Array.isArray(data)) {
+          setBookings(data);
+          setRetryCount(0); // Reset retry count on success
+          toast.success(`Found ${data.length} booking(s)`);
+        } else {
+          console.error('Invalid data format received:', data);
+          throw new Error('Invalid data format received from server');
         }
-      } else {
-        try {
-          const data = await bookingAPI.getUserBookings();
-          console.log('Bookings received on retry:', data);
-          
-          if (Array.isArray(data)) {
-            setBookings(data);
-            setRetryCount(0);
-            toast.success(`Successfully loaded ${data.length} booking(s)`);
-          } else {
-            console.error('Invalid data format received on retry:', data);
-            throw new Error('Invalid data format received from server');
-          }
-        } catch (error) {
-          console.error('Error in retry fetch:', error);
-          throw error; // Re-throw to be caught by outer catch
-        }
+      } catch (error) {
+        console.error('Error in fetch:', error);
+        throw error; // Re-throw to be caught by outer catch
       }
     } catch (error) {
       console.error('Error fetching bookings:', error);
