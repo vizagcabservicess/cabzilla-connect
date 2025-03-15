@@ -10,6 +10,17 @@ function App() {
   useEffect(() => {
     // Set page title
     document.title = 'Vizag Cabs - Book Cabs in Visakhapatnam';
+    
+    // Log navigation for debugging routes
+    const handleRouteChange = () => {
+      console.log('Route changed to:', window.location.pathname);
+    };
+    
+    window.addEventListener('popstate', handleRouteChange);
+    
+    return () => {
+      window.removeEventListener('popstate', handleRouteChange);
+    };
   }, []);
 
   return (
