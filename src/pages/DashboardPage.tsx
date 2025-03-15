@@ -16,6 +16,7 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const user = authAPI.getCurrentUser();
 
   useEffect(() => {
@@ -26,12 +27,18 @@ export default function DashboardPage() {
 
     const fetchBookings = async () => {
       try {
+        setIsLoading(true);
+        setError(null);
+        console.log('Fetching user bookings...');
         const data = await bookingAPI.getUserBookings();
+        console.log('Bookings received:', data);
         setBookings(data);
       } catch (error) {
+        console.error('Error fetching bookings:', error);
+        setError('Failed to load your bookings. Please try again later.');
         toast({
           title: "Error",
-          description: "Failed to load your bookings",
+          description: error instanceof Error ? error.message : 'Failed to load your bookings',
           variant: "destructive",
         });
       } finally {
@@ -69,6 +76,14 @@ export default function DashboardPage() {
         </div>
         <Button onClick={() => navigate('/')}>Book New Cab</Button>
       </div>
+
+      {error && (
+        <Card className="mb-6 border-red-200 bg-red-50">
+          <CardContent className="pt-6">
+            <p className="text-red-800">{error}</p>
+          </CardContent>
+        </Card>
+      )}
 
       <Tabs defaultValue="upcoming" className="w-full">
         <TabsList className="mb-6">

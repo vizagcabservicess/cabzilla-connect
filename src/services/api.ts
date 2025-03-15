@@ -1,4 +1,3 @@
-
 import { 
   AuthResponse, 
   LoginRequest, 
@@ -131,13 +130,30 @@ export const bookingAPI = {
     const token = getAuthToken();
     if (!token) throw new Error('Not authenticated');
     
-    const response = await fetch(`${API_URL}/user/dashboard`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-    });
+    console.log('Fetching user bookings...');
     
-    return handleResponse(response);
+    try {
+      const response = await fetch(`${API_URL}/user/dashboard`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        },
+      });
+      
+      const data = await handleResponse(response);
+      console.log('User bookings response:', data);
+      
+      // Ensure the response is an array
+      if (!Array.isArray(data)) {
+        console.error('Expected array but got:', data);
+        return [];
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error fetching user bookings:', error);
+      throw error;
+    }
   },
   
   createBooking: async (bookingData: BookingRequest): Promise<Booking> => {
