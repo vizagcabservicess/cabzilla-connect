@@ -1,3 +1,4 @@
+
 import { 
   AuthResponse, 
   LoginRequest, 
@@ -10,19 +11,18 @@ import {
   VehiclePricingUpdateRequest
 } from '@/types/api';
 
-// Base API URL - update to your actual deployed domain
-const API_URL = process.env.NODE_ENV === 'production' 
-  ? window.location.origin + '/api' // This will use the current domain + /api
-  : 'http://localhost:8000/api';
+// Base API URL - use current domain
+const API_URL = `${window.location.origin}/api`;
 
 // Helper for handling API responses
 const handleResponse = async (response: Response) => {
   // Check if response is HTML instead of JSON (common error with PHP)
   const contentType = response.headers.get('content-type');
-  if (contentType && contentType.indexOf('text/html') !== -1) {
+  if (contentType && contentType.indexOf('application/json') === -1) {
     const text = await response.text();
-    console.error('Received HTML instead of JSON:', text);
-    throw new Error('Server returned HTML instead of JSON. Check server configuration.');
+    console.error('Received non-JSON response:', text);
+    console.error('Content-Type received:', contentType);
+    throw new Error('Server returned invalid response format. Check server configuration.');
   }
   
   try {
@@ -35,7 +35,10 @@ const handleResponse = async (response: Response) => {
     return data;
   } catch (error) {
     console.error('API Response Error:', error);
-    throw new Error('Failed to parse response from server');
+    if (error instanceof SyntaxError) {
+      throw new Error('Failed to parse JSON response from server. Check API response format.');
+    }
+    throw error;
   }
 };
 
