@@ -3,6 +3,17 @@
 // Adjust the path to config.php correctly
 require_once __DIR__ . '/../../config.php';
 
+// For CORS preflight request
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    // Send CORS headers
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Methods: GET, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization');
+    header('Content-Type: application/json');
+    http_response_code(200);
+    exit;
+}
+
 // Allow only GET requests
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     // Add CORS headers
@@ -16,15 +27,6 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     exit;
 }
 
-// Handle preflight OPTIONS request
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    // Add CORS headers
-    header('Access-Control-Allow-Origin: *');
-    header('Access-Control-Allow-Methods: GET, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization');
-    exit;
-}
-
 // Add CORS headers for all responses
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
@@ -32,28 +34,51 @@ header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Content-Type: application/json');
 
 // Log start of request processing
-logError("Dashboard.php request initiated", ['method' => $_SERVER['REQUEST_METHOD']]);
+logError("Dashboard.php request initiated", ['method' => $_SERVER['REQUEST_METHOD'], 'headers' => getallheaders()]);
 
 try {
     // Authenticate user
     $userData = authenticate();
+    if (!$userData || !isset($userData['user_id'])) {
+        logError("Authentication failed in dashboard.php", ['headers' => getallheaders()]);
+        http_response_code(401);
+        echo json_encode(['error' => 'Authentication failed']);
+        exit;
+    }
+    
     $userId = $userData['user_id'];
+    logError("User authenticated successfully", ['user_id' => $userId]);
 
     // Connect to database
     $conn = getDbConnection();
+    if (!$conn) {
+        logError("Database connection failed in dashboard.php");
+        throw new Exception('Database connection failed');
+    }
 
     // Log for debugging
     logError("Fetching bookings for user", ['user_id' => $userId]);
 
     // Get user's bookings
     $stmt = $conn->prepare("SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC");
+    if (!$stmt) {
+        logError("Prepare statement failed", ['error' => $conn->error]);
+        throw new Exception('Database prepare error: ' . $conn->error);
+    }
+    
     $stmt->bind_param("i", $userId);
-    $stmt->execute();
+    $executed = $stmt->execute();
+    
+    if (!$executed) {
+        logError("Execute statement failed", ['error' => $stmt->error]);
+        throw new Exception('Database execute error: ' . $stmt->error);
+    }
+    
     $result = $stmt->get_result();
-
+    
     if (!$result) {
-        logError("Database error in dashboard.php", ['error' => $conn->error]);
-        throw new Exception('Database error: ' . $conn->error);
+        logError("Get result failed", ['error' => $stmt->error]);
+        throw new Exception('Database result error: ' . $stmt->error);
     }
 
     $bookings = [];
@@ -85,7 +110,7 @@ try {
     // Log count of real bookings found
     logError("Real bookings found", ['count' => count($bookings)]);
 
-    // If no bookings found, provide sample data for demo purposes
+    // Always provide sample data for demo purposes
     if (empty($bookings)) {
         // Create sample booking data with current user ID
         $bookings = [
@@ -128,6 +153,26 @@ try {
                 'passengerEmail' => $userData['email'],
                 'createdAt' => date('Y-m-d H:i:s', strtotime('-2 days')),
                 'updatedAt' => date('Y-m-d H:i:s')
+            ],
+            [
+                'id' => 3,
+                'userId' => $userId,
+                'bookingNumber' => 'BK' . rand(10000, 99999),
+                'pickupLocation' => 'Araku Valley',
+                'dropLocation' => 'Visakhapatnam',
+                'pickupDate' => date('Y-m-d H:i:s', strtotime('-3 days')),
+                'returnDate' => null,
+                'cabType' => 'Innova',
+                'distance' => 115,
+                'tripType' => 'outstation',
+                'tripMode' => 'one-way',
+                'totalAmount' => 3200,
+                'status' => 'completed',
+                'passengerName' => $userData['name'],
+                'passengerPhone' => '9550099336',
+                'passengerEmail' => $userData['email'],
+                'createdAt' => date('Y-m-d H:i:s', strtotime('-5 days')),
+                'updatedAt' => date('Y-m-d H:i:s', strtotime('-3 days'))
             ]
         ];
         
@@ -135,14 +180,15 @@ try {
     }
 
     // Send response with proper JSON content type
-    echo json_encode($bookings);
+    echo json_encode(['status' => 'success', 'data' => $bookings]);
     exit;
     
 } catch (Exception $e) {
     logError("Exception in dashboard.php", [
         'message' => $e->getMessage(),
         'file' => $e->getFile(),
-        'line' => $e->getLine()
+        'line' => $e->getLine(),
+        'trace' => $e->getTraceAsString()
     ]);
     
     // Send error response with proper JSON content type

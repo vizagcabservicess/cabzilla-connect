@@ -14,7 +14,7 @@ import { formatDate } from '@/lib/utils';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
 const MAX_RETRIES = 3;
-const RETRY_DELAY = 2000; // 2 seconds
+const RETRY_DELAY = 1500; // 1.5 seconds
 
 export default function DashboardPage() {
   const { toast } = useToast();
@@ -29,15 +29,28 @@ export default function DashboardPage() {
     try {
       setIsLoading(true);
       setError(null);
-      console.log('Fetching user bookings...');
+      console.log('Fetching user bookings...', { retry });
       const data = await bookingAPI.getUserBookings();
       console.log('Bookings received:', data);
       setBookings(data);
       setRetryCount(0); // Reset retry count on success
+      
+      // Show success toast
+      toast({
+        title: "Success",
+        description: `Found ${data.length} booking(s)`,
+        duration: 3000,
+      });
     } catch (error) {
       console.error('Error fetching bookings:', error);
       if (retry < MAX_RETRIES) {
         // Wait before retrying
+        toast({
+          title: "Retrying...",
+          description: `Attempt ${retry + 1} of ${MAX_RETRIES}`,
+          duration: RETRY_DELAY,
+        });
+        
         setTimeout(() => {
           setRetryCount(retry + 1);
           fetchBookings(retry + 1);

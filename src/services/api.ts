@@ -166,13 +166,15 @@ export const bookingAPI = {
       const data = await response.json();
       console.log('User bookings response:', data);
       
-      // Ensure the response is an array
-      if (!Array.isArray(data)) {
+      // Check if the response has the expected structure
+      if (data.status === 'success' && Array.isArray(data.data)) {
+        return data.data;
+      } else if (Array.isArray(data)) {
+        return data;
+      } else {
         console.error('Expected array but got:', data);
         throw new Error('Invalid data format received from server');
       }
-      
-      return data;
     } catch (error) {
       console.error('Error fetching user bookings:', error);
       throw error;
