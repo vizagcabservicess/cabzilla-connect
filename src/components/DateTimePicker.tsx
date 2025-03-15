@@ -1,16 +1,16 @@
+
 import { useState } from "react";
 import { Calendar } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon } from "@/components/ui/calendar";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { format } from "date-fns";
-import { DayPicker } from "react-day-picker";
 import { Input } from "@/components/ui/input";
 
 interface DateTimePickerProps {
@@ -73,12 +73,13 @@ export function DateTimePicker({
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="center" side="bottom">
-          <DayPicker
+          <CalendarComponent
             mode="single"
             selected={date}
             onSelect={onDateChange}
             disabled={minDate ? { before: minDate } : undefined}
             initialFocus
+            className={cn("p-3 pointer-events-auto")}
           />
           <div className="p-4 flex items-center space-x-2">
             <Input
