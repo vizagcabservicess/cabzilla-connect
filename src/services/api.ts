@@ -18,25 +18,44 @@ const API_URL = `${window.location.origin}/api`;
 
 // Helper for handling API responses
 const handleResponse = async (response: Response) => {
-  // Check if response is HTML instead of JSON (common error with PHP)
-  const contentType = response.headers.get('content-type');
-  if (contentType && !contentType.includes('application/json')) {
-    const text = await response.text();
-    console.error('Received non-JSON response:', text);
-    console.error('Content-Type received:', contentType);
-    throw new Error('Server returned invalid response format. Check server configuration.');
+  if (!response.ok) {
+    // Get error details from response
+    const contentType = response.headers.get('content-type');
+    
+    if (contentType && contentType.includes('application/json')) {
+      try {
+        const errorData = await response.json();
+        throw new Error(errorData.message || errorData.error || `Server error: ${response.status}`);
+      } catch (e) {
+        if (e instanceof SyntaxError) {
+          // JSON parse error
+          throw new Error(`Server error: ${response.status}`);
+        }
+        throw e; // Re-throw the error from errorData
+      }
+    } else {
+      // Non-JSON error response
+      const text = await response.text();
+      console.error('Received non-JSON response:', text);
+      console.error('Content-Type received:', contentType);
+      throw new Error(`Server returned invalid response format (${response.status}). Check server logs.`);
+    }
   }
   
+  // Handle JSON parsing for successful responses
   try {
-    const data = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(data.message || data.error || 'Something went wrong');
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      const text = await response.text();
+      console.error('Received non-JSON success response:', text);
+      console.error('Content-Type received:', contentType);
+      throw new Error('Server returned invalid response format. Expected JSON.');
     }
     
+    const data = await response.json();
     return data;
   } catch (error) {
-    console.error('API Response Error:', error);
+    console.error('API Response Parsing Error:', error);
     if (error instanceof SyntaxError) {
       throw new Error('Failed to parse JSON response from server. Check API response format.');
     }
@@ -151,29 +170,19 @@ export const bookingAPI = {
         },
       });
       
-      // Check if response is HTML instead of JSON
-      const contentType = response.headers.get('content-type');
-      if (contentType && !contentType.includes('application/json')) {
-        console.error('Received non-JSON response:', await response.text());
-        throw new Error('Invalid response format from server');
-      }
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch bookings');
-      }
-      
-      const data = await response.json();
+      // Use the improved handleResponse function
+      const data = await handleResponse(response);
       console.log('User bookings response:', data);
       
-      // Check if the response has the expected structure
+      // Properly handle the response structure
       if (data.status === 'success' && Array.isArray(data.data)) {
         return data.data;
       } else if (Array.isArray(data)) {
+        console.warn('API returned array directly instead of {status, data} object');
         return data;
       } else {
-        console.error('Expected array but got:', data);
-        throw new Error('Invalid data format received from server');
+        console.error('Invalid data format received:', data);
+        throw new Error('Invalid data format received from server. Expected {status: "success", data: [...]');
       }
     } catch (error) {
       console.error('Error fetching user bookings:', error);

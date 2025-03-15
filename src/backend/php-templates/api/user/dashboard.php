@@ -42,7 +42,7 @@ try {
     if (!$userData || !isset($userData['user_id'])) {
         logError("Authentication failed in dashboard.php", ['headers' => getallheaders()]);
         http_response_code(401);
-        echo json_encode(['error' => 'Authentication failed']);
+        echo json_encode(['status' => 'error', 'message' => 'Authentication failed']);
         exit;
     }
     
@@ -179,7 +179,7 @@ try {
         logError("No bookings found, providing sample data", ['count' => count($bookings)]);
     }
 
-    // Send response with proper JSON content type
+    // Important: Always use 'status' and 'data' keys consistently in the response
     echo json_encode(['status' => 'success', 'data' => $bookings]);
     exit;
     
@@ -193,6 +193,6 @@ try {
     
     // Send error response with proper JSON content type
     http_response_code(500);
-    echo json_encode(['error' => 'Server error: ' . $e->getMessage()]);
+    echo json_encode(['status' => 'error', 'message' => 'Server error: ' . $e->getMessage()]);
     exit;
 }

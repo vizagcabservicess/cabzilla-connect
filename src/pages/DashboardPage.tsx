@@ -7,7 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/use-toast";
-import { Book, CircleOff, RefreshCw, Calendar, MapPin, Car } from "lucide-react";
+import { toast } from "sonner";
+import { Book, CircleOff, RefreshCw, Calendar, MapPin, Car, ShieldAlert } from "lucide-react";
 import { bookingAPI, authAPI } from '@/services/api';
 import { Booking } from '@/types/api';
 import { formatDate } from '@/lib/utils';
@@ -17,7 +18,7 @@ const MAX_RETRIES = 3;
 const RETRY_DELAY = 1500; // 1.5 seconds
 
 export default function DashboardPage() {
-  const { toast } = useToast();
+  const { toast: uiToast } = useToast();
   const navigate = useNavigate();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -30,24 +31,36 @@ export default function DashboardPage() {
       setIsLoading(true);
       setError(null);
       console.log('Fetching user bookings...', { retry });
-      const data = await bookingAPI.getUserBookings();
-      console.log('Bookings received:', data);
-      setBookings(data);
-      setRetryCount(0); // Reset retry count on success
       
-      // Show success toast
-      toast({
-        title: "Success",
-        description: `Found ${data.length} booking(s)`,
-        duration: 3000,
-      });
+      // Use toast.promise for better UX
+      if (retry === 0) {
+        const data = await toast.promise(
+          bookingAPI.getUserBookings(),
+          {
+            loading: 'Loading your bookings...',
+            success: (data) => `Found ${data.length} booking(s)`,
+            error: 'Could not load your bookings'
+          }
+        );
+        console.log('Bookings received:', data);
+        setBookings(data);
+        setRetryCount(0); // Reset retry count on success
+      } else {
+        // For retries, don't show the toast.promise
+        const data = await bookingAPI.getUserBookings();
+        console.log('Bookings received on retry:', data);
+        setBookings(data);
+        setRetryCount(0);
+        
+        // Show success toast for retries
+        toast.success(`Successfully loaded ${data.length} booking(s)`);
+      }
     } catch (error) {
       console.error('Error fetching bookings:', error);
+      
       if (retry < MAX_RETRIES) {
         // Wait before retrying
-        toast({
-          title: "Retrying...",
-          description: `Attempt ${retry + 1} of ${MAX_RETRIES}`,
+        toast.info(`Retrying... (${retry + 1}/${MAX_RETRIES})`, {
           duration: RETRY_DELAY,
         });
         
@@ -56,17 +69,25 @@ export default function DashboardPage() {
           fetchBookings(retry + 1);
         }, RETRY_DELAY);
       } else {
-        setError('Failed to load your bookings. Please try again later.');
-        toast({
-          title: "Error",
-          description: "Could not load bookings. Please refresh the page.",
+        const errorMessage = error instanceof Error ? error.message : 'Failed to load your bookings. Please try again later.';
+        setError(errorMessage);
+        
+        // Show error in both toast systems for maximum visibility
+        uiToast({
+          title: "Error Loading Bookings",
+          description: errorMessage,
           variant: "destructive",
+        });
+        
+        toast.error('Could not load your bookings after multiple attempts', {
+          description: "Please refresh the page or try again later",
+          duration: 5000,
         });
       }
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [uiToast]);
 
   useEffect(() => {
     if (!authAPI.isAuthenticated()) {
@@ -113,10 +134,10 @@ export default function DashboardPage() {
 
       {error && (
         <Alert variant="destructive" className="mb-6">
-          <CircleOff className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
+          <ShieldAlert className="h-4 w-4" />
+          <AlertTitle>Error Loading Bookings</AlertTitle>
           <AlertDescription className="flex items-center justify-between">
-            <span>Failed to load your bookings. Please try again later.</span>
+            <span>{error}</span>
             <Button 
               variant="outline" 
               size="sm" 
