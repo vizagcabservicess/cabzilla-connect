@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { CabType, formatPrice, TripType, TripMode, extraCharges, oneWayRates } from '@/lib/cabData';
 import { Location, isVizagLocation } from '@/lib/locationData';
@@ -104,8 +105,9 @@ export function BookingSummary({
     
     if (tripType === 'outstation') {
       const allocatedKm = 300;
-      const effectiveDistance = distance;
-      const extraKm = Math.max(effectiveDistance - allocatedKm, 0);
+      const effectiveDistance = tripMode === "one-way" ? distance : distance * 2;
+      const totalDistance = tripMode === "one-way" ? distance : distance * 2;
+      const extraKm = Math.max(effectiveDistance - (allocatedKm * (tripMode === "one-way" ? 1 : days)), 0);
 
       let baseRate = 0, perKmRate = 0, driverAllowance = 250, nightHaltCharge = 0;
 
@@ -135,9 +137,9 @@ export function BookingSummary({
         oneWayRates[selectedCab.id as keyof typeof oneWayRates] || 13 : 13;
 
       const totalBaseFare = tripMode === "one-way" ? baseRate : days * baseRate;
-      const totalDistanceFare = tripMode === "one-way" 
-        ? 0
-        : extraKm * perKmRate;
+      const totalDistanceFare = extraKm > 0 
+        ? extraKm * (tripMode === "one-way" ? oneWayRate : perKmRate)
+        : 0;
       const totalNightHalt = tripMode === "round-trip" ? (days - 1) * nightHaltCharge : 0;
       
       return (
@@ -151,15 +153,15 @@ export function BookingSummary({
           <div className="flex justify-between text-sm mt-1">
             <span className="text-gray-600">
               {tripMode === "one-way" 
-                ? `Distance: ${distance} km`
-                : `Distance: ${distance} km`}
+                ? `Total distance: ${distance} km`
+                : `Total distance: ${totalDistance} km (${distance} km each way)`}
             </span>
             <span className="text-gray-600"></span>
           </div>
-          {tripMode === "round-trip" && extraKm > 0 && (
+          {extraKm > 0 && (
             <div className="flex justify-between text-sm mt-1">
               <span className="text-gray-600">
-                Extra distance fare ({extraKm} km × ₹{perKmRate})
+                Extra distance fare ({extraKm} km × ₹{tripMode === "one-way" ? oneWayRate : perKmRate})
               </span>
               <span className="text-gray-800">₹{totalDistanceFare.toLocaleString('en-IN')}</span>
             </div>

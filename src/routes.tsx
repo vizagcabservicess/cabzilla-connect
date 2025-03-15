@@ -4,6 +4,7 @@ import Index from './pages/Index';
 import CabsPage from './pages/CabsPage';
 import BookingConfirmationPage from './pages/BookingConfirmationPage';
 import NotFound from './pages/NotFound';
+import ToursPage from './pages/ToursPage';
 
 export const router = createBrowserRouter([
   {
@@ -20,7 +21,7 @@ export const router = createBrowserRouter([
   },
   {
     path: '/tours',
-    element: <CabsPage />,
+    element: <ToursPage />,
   },
   {
     path: '*',

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { CabType, formatPrice, TripType, TripMode, getLocalPackagePrice, oneWayRates } from '@/lib/cabData';
 import { Users, Briefcase, Tag, Info, Check } from 'lucide-react';
@@ -96,28 +97,37 @@ export function CabOptions({
       }
       
       if (tripMode === "one-way") {
-        const minimumDistance = Math.max(distance, 250);
-        const effectiveDistance = minimumDistance * 2;
-        const minKm = 300 * 2;
-        
-        const oneWayRate = oneWayRates[cab.id as keyof typeof oneWayRates] || 13;
-        
-        let totalBaseFare = baseRate;
+        // Base fare for one-way always includes 300km
+        const allocatedKm = 300;
+        const totalBaseFare = baseRate;
         let totalDistanceFare = 0;
         
-        if (effectiveDistance > minKm) {
-          totalDistanceFare = (effectiveDistance - minKm) * oneWayRate;
+        // Calculate extra kilometers beyond the base 300km
+        if (distance > allocatedKm) {
+          const extraKm = distance - allocatedKm;
+          const oneWayRate = oneWayRates[cab.id as keyof typeof oneWayRates] || 13;
+          totalDistanceFare = extraKm * oneWayRate;
         }
         
+        // Add driver allowance
         totalFare = totalBaseFare + totalDistanceFare + 250;
       } else {
+        // Round trip calculation
         let days = returnDate ? Math.max(1, differenceInDays(returnDate, pickupDate || new Date()) + 1) : 1;
-        let minKm = days * 300;
+        const allocatedKm = 300; // per day
+        const totalAllocatedKm = days * allocatedKm;
         
         let effectiveDistance = distance * 2;
         
         let totalBaseFare = days * baseRate;
-        let totalDistanceFare = Math.max(effectiveDistance - minKm, 0) * perKmRate;
+        let totalDistanceFare = 0;
+        
+        // Calculate extra kilometers beyond the allocated km for all days
+        if (effectiveDistance > totalAllocatedKm) {
+          const extraKm = effectiveDistance - totalAllocatedKm;
+          totalDistanceFare = extraKm * perKmRate;
+        }
+        
         let totalNightHalt = (days - 1) * nightHaltCharge;
         
         totalFare = totalBaseFare + totalDistanceFare + totalNightHalt + (days * 250);
@@ -146,9 +156,15 @@ export function CabOptions({
             const packageInfo = hourlyPackage === '8hrs-80km' ? '8 hrs / 80 km' : '10 hrs / 100 km';
             fareDetails = packageInfo;
           } else if (tripType === 'outstation') {
+            const totalDistance = tripMode === 'one-way' ? distance : distance * 2;
+            const allocatedKm = 300;
+            const extraKm = tripMode === 'one-way' 
+              ? Math.max(0, distance - allocatedKm)
+              : Math.max(0, totalDistance - (allocatedKm * (returnDate ? Math.max(1, differenceInDays(returnDate, pickupDate || new Date()) + 1) : 1)));
+              
             fareDetails = tripMode === 'one-way' 
-              ? `One way - ${distance*2}km calculated for fare` 
-              : `Round trip - ${distance * 2}km total`;
+              ? `One way - ${distance}km (${extraKm > 0 ? extraKm + 'km extra' : 'within base km'})` 
+              : `Round trip - ${totalDistance}km total`;
           }
 
           return (
