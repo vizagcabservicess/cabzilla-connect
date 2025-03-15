@@ -1,6 +1,7 @@
 
 <?php
-require_once '../config.php';
+// Adjust the path to config.php correctly
+require_once __DIR__ . '/../config.php';
 
 // Allow only POST requests
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
