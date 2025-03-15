@@ -1,4 +1,5 @@
 
+import { useEffect } from "react";
 import { TripMode, TripType } from "@/lib/cabData";
 import { cn } from "@/lib/utils";
 import { CarTaxiFront, Clock, Plane, RotateCw } from "lucide-react";
@@ -16,14 +17,42 @@ export function TabTripSelector({
   onTabChange,
   onTripModeChange,
 }: TabTripSelectorProps) {
+  // Load previously selected tab and trip mode from session storage on component mount
+  useEffect(() => {
+    const savedTab = sessionStorage.getItem('selectedTab') as TripType;
+    const savedTripMode = sessionStorage.getItem('tripMode') as TripMode;
+    
+    if (savedTab && savedTab !== selectedTab) {
+      onTabChange(savedTab);
+    }
+    
+    if (savedTripMode && onTripModeChange && savedTripMode !== tripMode) {
+      onTripModeChange(savedTripMode);
+    }
+  }, []);
+
+  const handleTabChange = (tab: TripType) => {
+    onTabChange(tab);
+    // Save selected tab in session storage
+    sessionStorage.setItem('selectedTab', tab);
+  };
+
+  const handleTripModeChange = (mode: TripMode) => {
+    if (onTripModeChange) {
+      onTripModeChange(mode);
+      // Save trip mode in session storage
+      sessionStorage.setItem('tripMode', mode);
+    }
+  };
+
   return (
     <div className="w-full mb-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-1 bg-gray-100 p-1 rounded-lg">
         {/* Outstation One-Way Tab */}
         <button
           onClick={() => {
-            onTabChange("outstation");
-            if (onTripModeChange) onTripModeChange("one-way");
+            handleTabChange("outstation");
+            handleTripModeChange("one-way");
           }}
           className={cn(
             "flex items-center justify-center py-3 px-4 rounded-md transition-all text-sm font-medium",
@@ -39,8 +68,8 @@ export function TabTripSelector({
         {/* Outstation Round-Trip Tab */}
         <button
           onClick={() => {
-            onTabChange("outstation");
-            if (onTripModeChange) onTripModeChange("round-trip");
+            handleTabChange("outstation");
+            handleTripModeChange("round-trip");
           }}
           className={cn(
             "flex items-center justify-center py-3 px-4 rounded-md transition-all text-sm font-medium",
@@ -55,7 +84,7 @@ export function TabTripSelector({
 
         {/* Airport Transfers Tab */}
         <button
-          onClick={() => onTabChange("airport")}
+          onClick={() => handleTabChange("airport")}
           className={cn(
             "flex items-center justify-center py-3 px-4 rounded-md transition-all text-sm font-medium",
             selectedTab === "airport"
@@ -69,7 +98,7 @@ export function TabTripSelector({
 
         {/* Hourly Rentals Tab */}
         <button
-          onClick={() => onTabChange("local")}
+          onClick={() => handleTabChange("local")}
           className={cn(
             "flex items-center justify-center py-3 px-4 rounded-md transition-all text-sm font-medium",
             selectedTab === "local"

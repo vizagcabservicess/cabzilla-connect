@@ -77,7 +77,10 @@ export function CabOptions({
       
       let days = returnDate ? Math.max(1, differenceInDays(returnDate, pickupDate || new Date()) + 1) : 1;
       let minKm = days * 300;
-      let effectiveDistance = tripMode === "one-way" ? distance : distance;
+      
+      // For round trips, double the distance for fare calculation
+      let effectiveDistance = tripMode === "round-trip" ? distance * 2 : distance;
+      
       let totalBaseFare = days * baseRate;
       let totalDistanceFare = Math.max(effectiveDistance - minKm, 0) * perKmRate;
       let totalNightHalt = tripMode === "round-trip" ? (days - 1) * nightHaltCharge : 0;
@@ -123,7 +126,17 @@ export function CabOptions({
             >
               <div 
                 className="p-4 cursor-pointer"
-                onClick={() => onSelectCab(cab)}
+                onClick={() => {
+                  onSelectCab(cab);
+                  // Store selected cab in session storage
+                  sessionStorage.setItem('selectedCab', JSON.stringify(cab));
+                  
+                  // Auto-scroll to booking summary
+                  const bookingSummary = document.getElementById('booking-summary');
+                  if (bookingSummary) {
+                    bookingSummary.scrollIntoView({ behavior: 'smooth' });
+                  }
+                }}
               >
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center space-x-3">

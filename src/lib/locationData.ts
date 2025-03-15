@@ -222,9 +222,19 @@ export const popularLocations: Location[] = [
 
 // Helper function to check if a location is within Visakhapatnam
 export const isVizagLocation = (location: Location): boolean => {
+  if (!location) return false;
+  
   return location.city.toLowerCase() === 'visakhapatnam' || 
          location.name.toLowerCase().includes('visakhapatnam') ||
-         location.name.toLowerCase().includes('vizag');
+         location.name.toLowerCase().includes('vizag') ||
+         // Check against known Vizag area IDs
+         vizagLocations.some(vizagLoc => vizagLoc.id === location.id);
+};
+
+// Check if both pickup and drop locations are within Visakhapatnam
+export const areBothLocationsInVizag = (pickup: Location | null, drop: Location | null): boolean => {
+  if (!pickup || !drop) return false;
+  return isVizagLocation(pickup) && isVizagLocation(drop);
 };
 
 export const searchLocations = (query: string, isPickup: boolean = false): Location[] => {

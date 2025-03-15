@@ -1,7 +1,7 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { CabType, PromoCode, formatPrice, TripType, TripMode, extraCharges } from '@/lib/cabData';
-import { Location } from '@/lib/locationData';
+import { Location, isVizagLocation } from '@/lib/locationData';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tag, X, CheckCircle, Calendar, MapPin, Users, ArrowRight, ArrowLeftRight } from 'lucide-react';
@@ -34,6 +34,21 @@ export function BookingSummary({
   const [promoCode, setPromoCode] = useState('');
   const [appliedPromo, setAppliedPromo] = useState<PromoCode | null>(null);
   const navigate = useNavigate();
+  const [bookingId, setBookingId] = useState<string>('');
+
+  useEffect(() => {
+    // Generate a random booking ID for reference
+    const generateBookingId = () => {
+      const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let result = 'BK';
+      for (let i = 0; i < 8; i++) {
+        result += characters.charAt(Math.floor(Math.random() * characters.length));
+      }
+      return result;
+    };
+    
+    setBookingId(generateBookingId());
+  }, []);
 
   if (!pickupLocation || !pickupDate || !selectedCab) {
     return null;
@@ -92,8 +107,8 @@ export function BookingSummary({
       // Base km allocation (One-Way: 300km, Round-Trip: 300km per day)
       const allocatedKm = tripMode === "one-way" ? 300 : days * 300;
 
-      // Chargeable distance (One-Way uses round-trip distance for calculation)
-      const totalDistance = tripMode === "one-way" ? distance * 2 : distance;
+      // Chargeable distance (For round-trip, double the one-way distance)
+      const totalDistance = tripMode === "round-trip" ? distance * 2 : distance;
       const extraKm = Math.max(totalDistance - allocatedKm, 0);
 
       // Vehicle Pricing Data
@@ -131,7 +146,11 @@ export function BookingSummary({
             <span className="text-gray-800">₹{totalBaseFare.toLocaleString('en-IN')}</span>
           </div>
           <div className="flex justify-between text-sm mt-1">
-            <span className="text-gray-600">Distance fare ({extraKm} km)</span>
+            <span className="text-gray-600">Distance: {totalDistance} km</span>
+            <span className="text-gray-600"></span>
+          </div>
+          <div className="flex justify-between text-sm mt-1">
+            <span className="text-gray-600">Extra distance fare ({extraKm} km)</span>
             <span className="text-gray-800">₹{totalDistanceFare.toLocaleString('en-IN')}</span>
           </div>
           <div className="flex justify-between text-sm mt-1">
@@ -152,28 +171,27 @@ export function BookingSummary({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-card border border-gray-200 overflow-hidden">
+    <div id="booking-summary" className="bg-white rounded-lg shadow-card border border-gray-200 overflow-hidden">
       <div className="p-5 border-b border-gray-200">
         <h3 className="text-xl font-semibold text-gray-800">Booking Summary</h3>
-        {tripType === 'outstation' && (
-          <div className="mt-1 text-sm text-blue-600 font-medium flex items-center">
-            {tripMode === 'one-way' ? (
+        <div className="mt-1 text-sm text-blue-600 font-medium flex items-center">
+          <div className="flex items-center mr-2">
+            {bookingId && <span className="text-xs bg-blue-50 px-2 py-1 rounded-md">#{bookingId}</span>}
+          </div>
+          {tripType === 'outstation' && (
+            tripMode === 'one-way' ? (
               <><ArrowRight size={14} className="mr-1" /> One Way Trip</>
             ) : (
               <><ArrowLeftRight size={14} className="mr-1" /> Round Trip</>
-            )}
-          </div>
-        )}
-        {tripType === 'airport' && (
-          <div className="mt-1 text-sm text-blue-600 font-medium flex items-center">
-            <ArrowRight size={14} className="mr-1" /> Airport Transfer
-          </div>
-        )}
-        {tripType === 'local' && (
-          <div className="mt-1 text-sm text-blue-600 font-medium flex items-center">
-            <ArrowRight size={14} className="mr-1" /> Local Hourly Rental
-          </div>
-        )}
+            )
+          )}
+          {tripType === 'airport' && (
+            <><ArrowRight size={14} className="mr-1" /> Airport Transfer</>
+          )}
+          {tripType === 'local' && (
+            <><ArrowRight size={14} className="mr-1" /> Local Hourly Rental</>
+          )}
+        </div>
       </div>
 
       <div className="p-5 space-y-4">
