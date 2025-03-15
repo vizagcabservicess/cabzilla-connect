@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -6,12 +5,11 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { toast } from "sonner";
 import { Book, CircleOff, RefreshCw, Calendar, MapPin, Car, ShieldAlert } from "lucide-react";
 import { bookingAPI, authAPI } from '@/services/api';
 import { Booking } from '@/types/api';
-import { formatDate } from '@/lib/utils';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
 const MAX_RETRIES = 3;
@@ -32,52 +30,45 @@ export default function DashboardPage() {
       setError(null);
       console.log('Fetching user bookings...', { retry });
       
-      // Use toast.promise for better UX
       if (retry === 0) {
-        const data = await toast.promise(
-          bookingAPI.getUserBookings(),
-          {
-            loading: 'Loading your bookings...',
-            success: (data) => {
-              // Fixed: Properly check data is an array before setting it
-              if (Array.isArray(data)) {
-                return `Found ${data.length} booking(s)`;
-              }
-              throw new Error('Invalid data format received');
-            },
-            error: 'Could not load your bookings'
+        try {
+          const data = await bookingAPI.getUserBookings();
+          console.log('Bookings received:', data);
+          
+          if (Array.isArray(data)) {
+            setBookings(data);
+            setRetryCount(0); // Reset retry count on success
+            toast.success(`Found ${data.length} booking(s)`);
+          } else {
+            console.error('Invalid data format received:', data);
+            throw new Error('Invalid data format received from server');
           }
-        );
-        console.log('Bookings received:', data);
-        
-        // Fixed: Make sure data is an array before setting state
-        if (Array.isArray(data)) {
-          setBookings(data);
-          setRetryCount(0); // Reset retry count on success
-        } else {
-          throw new Error('Invalid data format received');
+        } catch (error) {
+          console.error('Error in initial fetch:', error);
+          throw error; // Re-throw to be caught by outer catch
         }
       } else {
-        // For retries, don't show the toast.promise
-        const data = await bookingAPI.getUserBookings();
-        console.log('Bookings received on retry:', data);
-        
-        // Fixed: Make sure data is an array before setting state
-        if (Array.isArray(data)) {
-          setBookings(data);
-          setRetryCount(0);
+        try {
+          const data = await bookingAPI.getUserBookings();
+          console.log('Bookings received on retry:', data);
           
-          // Show success toast for retries
-          toast.success(`Successfully loaded ${data.length} booking(s)`);
-        } else {
-          throw new Error('Invalid data format received');
+          if (Array.isArray(data)) {
+            setBookings(data);
+            setRetryCount(0);
+            toast.success(`Successfully loaded ${data.length} booking(s)`);
+          } else {
+            console.error('Invalid data format received on retry:', data);
+            throw new Error('Invalid data format received from server');
+          }
+        } catch (error) {
+          console.error('Error in retry fetch:', error);
+          throw error; // Re-throw to be caught by outer catch
         }
       }
     } catch (error) {
       console.error('Error fetching bookings:', error);
       
       if (retry < MAX_RETRIES) {
-        // Wait before retrying
         toast.info(`Retrying... (${retry + 1}/${MAX_RETRIES})`, {
           duration: RETRY_DELAY,
         });
@@ -90,7 +81,6 @@ export default function DashboardPage() {
         const errorMessage = error instanceof Error ? error.message : 'Failed to load your bookings. Please try again later.';
         setError(errorMessage);
         
-        // Show error in both toast systems for maximum visibility
         uiToast({
           title: "Error Loading Bookings",
           description: errorMessage,

@@ -110,7 +110,7 @@ try {
     // Log count of real bookings found
     logError("Real bookings found", ['count' => count($bookings)]);
 
-    // Always provide sample data for demo purposes
+    // Always provide sample data for demo purposes if no real bookings exist
     if (empty($bookings)) {
         // Create sample booking data with current user ID
         $bookings = [
@@ -179,7 +179,7 @@ try {
         logError("No bookings found, providing sample data", ['count' => count($bookings)]);
     }
 
-    // Important: Always use 'status' and 'data' keys consistently in the response
+    // ALWAYS use consistent response format with 'status' and 'data' keys
     echo json_encode(['status' => 'success', 'data' => $bookings]);
     exit;
     

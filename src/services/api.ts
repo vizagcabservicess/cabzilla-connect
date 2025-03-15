@@ -170,19 +170,27 @@ export const bookingAPI = {
         },
       });
       
+      // Log the raw response for debugging
+      console.log('Response status:', response.status);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+      
       // Use the improved handleResponse function
       const responseData = await handleResponse(response);
       console.log('User bookings response:', responseData);
       
-      // Properly handle the response structure
-      if (responseData.status === 'success' && Array.isArray(responseData.data)) {
+      // Handle the response structure consistently
+      if (responseData && responseData.status === 'success' && Array.isArray(responseData.data)) {
+        console.log('Success: Got bookings array from data property', responseData.data.length);
         return responseData.data;
-      } else if (Array.isArray(responseData)) {
+      } else if (responseData && Array.isArray(responseData)) {
         console.warn('API returned array directly instead of {status, data} object');
         return responseData;
+      } else if (responseData && typeof responseData === 'object') {
+        console.error('Response is an object but not in expected format:', responseData);
+        throw new Error('Invalid data format received from server. Expected {status: "success", data: [...]}');
       } else {
-        console.error('Invalid data format received:', responseData);
-        throw new Error('Invalid data format received from server. Expected {status: "success", data: [...]');
+        console.error('Invalid data format received:', typeof responseData, responseData);
+        throw new Error('Invalid data format received from server');
       }
     } catch (error) {
       console.error('Error fetching user bookings:', error);
