@@ -32,7 +32,7 @@ const GoogleMapComponent = ({
   const directionsCallback = useCallback((result: google.maps.DirectionsResult | null, status: google.maps.DirectionsStatus) => {
     console.log("Directions status:", status);
     
-    if (status === 'OK' && result) {
+    if (status === google.maps.DirectionsStatus.OK && result) {
       setDirections(result);
       
       // Extract and log the actual distance from the directions result
@@ -57,8 +57,24 @@ const GoogleMapComponent = ({
       }
     } else {
       console.error("Directions request failed with status:", status);
+      // Fallback to default distance calculation if Google Maps fails
+      if (onDistanceCalculated && pickupLocation && dropLocation) {
+        // Calculate approximate distance using the Haversine formula
+        const R = 6371; // Radius of the earth in km
+        const dLat = (dropLocation.lat - pickupLocation.lat) * Math.PI / 180;
+        const dLon = (dropLocation.lng - pickupLocation.lng) * Math.PI / 180;
+        const a = 
+          Math.sin(dLat/2) * Math.sin(dLat/2) +
+          Math.cos(pickupLocation.lat * Math.PI / 180) * Math.cos(dropLocation.lat * Math.PI / 180) * 
+          Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const distance = Math.round(R * c); // Distance in km
+        const duration = Math.round(distance * 2); // Approximate duration in minutes
+        
+        onDistanceCalculated(distance, duration);
+      }
     }
-  }, [onDistanceCalculated]);
+  }, [onDistanceCalculated, pickupLocation, dropLocation]);
 
   useEffect(() => {
     // Reset directions when locations change
