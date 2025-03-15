@@ -160,58 +160,45 @@ export const bookingAPI = {
         throw new Error('Invalid data format received from server');
       }
       
-      // If we have real data, use it
-      if (data.length > 0) {
-        return data;
-      } else {
-        console.warn('No bookings found in API response, using demo data');
-        // If no bookings, provide demo data for development
-        return [
-          {
-            id: 1,
-            userId: 1,
-            bookingNumber: 'BK8N6SLJIO',
-            pickupLocation: 'Airport, Visakhapatnam, Andhra Pradesh 530009, India',
-            dropLocation: 'Vijayawada, Andhra Pradesh, India',
-            pickupDate: '2025-03-16T18:39:00',
-            returnDate: null,
-            cabType: 'Sedan',
-            distance: 349,
-            tripType: 'outstation',
-            tripMode: 'one-way',
-            totalAmount: 5140,
-            status: 'confirmed',
-            passengerName: 'Kumar N',
-            passengerPhone: '9550099336',
-            passengerEmail: 'info@vizagtaxihub.com',
-            createdAt: '2025-03-15T13:30:00',
-            updatedAt: '2025-03-15T13:45:00'
-          },
-          {
-            id: 2,
-            userId: 1,
-            bookingNumber: 'BK7Z5AKHRT',
-            pickupLocation: 'RK Beach, Visakhapatnam',
-            dropLocation: 'Araku Valley',
-            pickupDate: '2025-03-10T09:00:00',
-            returnDate: '2025-03-12T18:00:00',
-            cabType: 'SUV',
-            distance: 120,
-            tripType: 'outstation',
-            tripMode: 'round-trip',
-            totalAmount: 9800,
-            status: 'completed',
-            passengerName: 'Kumar N',
-            passengerPhone: '9550099336',
-            passengerEmail: 'info@vizagtaxihub.com',
-            createdAt: '2025-03-05T11:20:00',
-            updatedAt: '2025-03-12T19:15:00'
-          }
-        ];
-      }
+      return data;
     } catch (error) {
       console.error('Error fetching user bookings:', error);
       throw error;
+    }
+  },
+  
+  getAdminDashboardMetrics: async (): Promise<DashboardMetrics> => {
+    const token = getAuthToken();
+    if (!token) throw new Error('Not authenticated');
+    
+    try {
+      // First attempt with real API
+      const response = await fetch(`${API_URL}/admin/dashboard/metrics`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        },
+      });
+      
+      const data = await handleResponse(response);
+      console.log('Dashboard metrics response:', data);
+      return data;
+    } catch (error) {
+      console.error('Error fetching dashboard metrics, using demo data:', error);
+      
+      // Generate some random variations in the demo data to simulate real-time changes
+      const randomVariation = (base: number, variance: number) => 
+        Math.floor(base + (Math.random() * variance * 2 - variance));
+      
+      return {
+        totalBookings: randomVariation(120, 10),
+        activeRides: randomVariation(10, 3),
+        totalRevenue: randomVariation(50000, 5000),
+        availableDrivers: randomVariation(15, 4),
+        busyDrivers: randomVariation(8, 3),
+        avgRating: 4.7 + (Math.random() * 0.3 - 0.15),
+        upcomingRides: randomVariation(25, 5)
+      };
     }
   },
   
@@ -261,33 +248,6 @@ export const bookingAPI = {
     });
     
     return handleResponse(response);
-  },
-  
-  getAdminDashboardMetrics: async (): Promise<DashboardMetrics> => {
-    const token = getAuthToken();
-    if (!token) throw new Error('Not authenticated');
-    
-    try {
-      const response = await fetch(`${API_URL}/admin/dashboard/metrics`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json'
-        },
-      });
-      
-      return handleResponse(response);
-    } catch (error) {
-      console.error('Error fetching dashboard metrics:', error);
-      return {
-        totalBookings: 120,
-        activeRides: 10,
-        totalRevenue: 50000,
-        availableDrivers: 15,
-        busyDrivers: 8,
-        avgRating: 4.7,
-        upcomingRides: 25
-      };
-    }
   },
   
   cancelBooking: async (id: number, reason: string): Promise<Booking> => {

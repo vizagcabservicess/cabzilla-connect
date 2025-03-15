@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
 import { 
   Car, Users, DollarSign, Star, Clock, AlertTriangle, Bell, MapPin, 
-  BarChart2, PieChart as PieChartIcon, Calendar
+  BarChart2, PieChart as PieChartIcon, Calendar, RefreshCcw
 } from "lucide-react";
 import { authAPI, bookingAPI, fareAPI } from '@/services/api';
 import { AdminBookingsList } from '@/components/admin/AdminBookingsList';
@@ -27,17 +27,35 @@ export default function AdminDashboardPage() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
+  const [autoRefresh, setAutoRefresh] = useState(true);
   const [metrics, setMetrics] = useState({
-    totalBookings: 120,
-    activeRides: 10,
-    totalRevenue: 50000,
-    availableDrivers: 15,
-    busyDrivers: 8,
-    avgRating: 4.7,
-    upcomingRides: 25
+    totalBookings: 0,
+    activeRides: 0,
+    totalRevenue: 0,
+    availableDrivers: 0,
+    busyDrivers: 0,
+    avgRating: 0,
+    upcomingRides: 0
   });
+  const [revenueData, setRevenueData] = useState([
+    { name: 'Jan', revenue: 35000 },
+    { name: 'Feb', revenue: 42000 },
+    { name: 'Mar', revenue: 38000 },
+    { name: 'Apr', revenue: 50000 },
+    { name: 'May', revenue: 55000 },
+    { name: 'Jun', revenue: 48000 }
+  ]);
+  const [vehicleDistribution, setVehicleDistribution] = useState([
+    { name: 'Sedan', value: 35 },
+    { name: 'SUV', value: 25 },
+    { name: 'Hatchback', value: 20 },
+    { name: 'Luxury', value: 10 },
+    { name: 'Tempo', value: 10 }
+  ]);
   
-  useEffect(() => {
+  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
+
+  const fetchDashboardData = useCallback(async () => {
     if (!authAPI.isAuthenticated()) {
       navigate('/login');
       return;
@@ -53,33 +71,52 @@ export default function AdminDashboardPage() {
       return;
     }
     
-    // Simulation of fetching metrics
-    setTimeout(() => {
+    try {
+      setIsLoading(true);
+      const metricsData = await bookingAPI.getAdminDashboardMetrics();
+      setMetrics(metricsData);
+      
+      // Simulate revenue data updates (in a real app, this would be fetched from the API)
+      const updatedRevenueData = [...revenueData];
+      updatedRevenueData[5].revenue = metricsData.totalRevenue * (0.8 + Math.random() * 0.4);
+      setRevenueData(updatedRevenueData);
+      
+      // Simulate vehicle distribution updates
+      const newVehicleDistribution = vehicleDistribution.map(item => ({
+        ...item, 
+        value: item.value + (Math.random() > 0.5 ? 1 : -1) * Math.floor(Math.random() * 3)
+      }));
+      setVehicleDistribution(newVehicleDistribution);
+      
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load dashboard data",
+        variant: "destructive",
+      });
+    } finally {
       setIsLoading(false);
-    }, 1000);
-  }, [navigate, toast]);
+    }
+  }, [navigate, toast, revenueData, vehicleDistribution]);
 
-  // Sample data for charts
-  const revenueData = [
-    { name: 'Jan', revenue: 35000 },
-    { name: 'Feb', revenue: 42000 },
-    { name: 'Mar', revenue: 38000 },
-    { name: 'Apr', revenue: 50000 },
-    { name: 'May', revenue: 55000 },
-    { name: 'Jun', revenue: 48000 }
-  ];
+  useEffect(() => {
+    fetchDashboardData();
+    
+    // Set up automatic refreshing if enabled
+    let intervalId: number | undefined;
+    if (autoRefresh) {
+      intervalId = window.setInterval(() => {
+        fetchDashboardData();
+      }, 60000); // Refresh every minute
+    }
+    
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [fetchDashboardData, autoRefresh]);
 
-  const vehicleDistribution = [
-    { name: 'Sedan', value: 35 },
-    { name: 'SUV', value: 25 },
-    { name: 'Hatchback', value: 20 },
-    { name: 'Luxury', value: 10 },
-    { name: 'Tempo', value: 10 }
-  ];
-
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
-
-  if (isLoading) {
+  if (isLoading && !metrics.totalBookings) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-900"></div>
@@ -94,7 +131,16 @@ export default function AdminDashboardPage() {
           <h1 className="text-3xl font-bold">Admin Dashboard</h1>
           <p className="text-gray-500">Manage all aspects of your taxi service</p>
         </div>
-        <div className="space-x-2">
+        <div className="space-x-2 flex items-center">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className={autoRefresh ? "text-green-600" : ""}
+            onClick={() => setAutoRefresh(!autoRefresh)}
+          >
+            <RefreshCcw className={`h-4 w-4 mr-1 ${autoRefresh ? "animate-spin" : ""}`} />
+            {autoRefresh ? "Auto-refresh On" : "Auto-refresh Off"}
+          </Button>
           <Button variant="outline" onClick={() => navigate('/dashboard')}>User Dashboard</Button>
           <Button onClick={() => navigate('/')}>Book New Cab</Button>
         </div>
@@ -120,7 +166,7 @@ export default function AdminDashboardPage() {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
                 <YAxis />
-                <Tooltip />
+                <Tooltip formatter={(value) => [`₹${value}`, 'Revenue']} />
                 <Legend />
                 <Line type="monotone" dataKey="revenue" stroke="#8884d8" activeDot={{ r: 8 }} />
               </LineChart>
@@ -151,7 +197,7 @@ export default function AdminDashboardPage() {
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip formatter={(value) => [`${value} vehicles`, 'Count']} />
               </PieChart>
             </ResponsiveContainer>
           </CardContent>

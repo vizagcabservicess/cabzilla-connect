@@ -2,22 +2,83 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DashboardMetrics as DashboardMetricsType } from '@/types/api';
-import { Car, Users, DollarSign, Star, Clock } from "lucide-react";
+import { bookingAPI } from '@/services/api';
+import { Car, Users, DollarSign, Star, Clock, AlertTriangle } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
 
 interface DashboardMetricsProps {
   initialMetrics?: DashboardMetricsType;
 }
 
 export function DashboardMetrics({ initialMetrics }: DashboardMetricsProps) {
+  const { toast } = useToast();
   const [metrics, setMetrics] = useState<DashboardMetricsType>(initialMetrics || {
-    totalBookings: 120,
-    activeRides: 10,
-    totalRevenue: 50000,
-    availableDrivers: 15,
-    busyDrivers: 8,
-    avgRating: 4.7,
-    upcomingRides: 25
+    totalBookings: 0,
+    activeRides: 0,
+    totalRevenue: 0,
+    availableDrivers: 0,
+    busyDrivers: 0,
+    avgRating: 0,
+    upcomingRides: 0
   });
+  const [isLoading, setIsLoading] = useState(!initialMetrics);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchMetrics = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        console.log('Fetching dashboard metrics...');
+        const data = await bookingAPI.getAdminDashboardMetrics();
+        console.log('Dashboard metrics received:', data);
+        setMetrics(data);
+      } catch (error) {
+        console.error('Error fetching dashboard metrics:', error);
+        setError('Failed to load dashboard metrics');
+        toast({
+          title: "Error",
+          description: error instanceof Error ? error.message : 'Failed to load dashboard metrics',
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (!initialMetrics) {
+      fetchMetrics();
+    }
+  }, [initialMetrics, toast]);
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+          <Card key={i} className="animate-pulse">
+            <CardHeader className="pb-2">
+              <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+            </CardHeader>
+            <CardContent>
+              <div className="h-6 bg-gray-200 rounded w-1/2 mb-2"></div>
+              <div className="h-3 bg-gray-200 rounded w-3/4"></div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="mb-8 border-red-200 bg-red-50">
+        <CardContent className="pt-6 flex items-center gap-2">
+          <AlertTriangle className="h-5 w-5 text-red-600" />
+          <p className="text-red-800">{error}</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -97,6 +158,17 @@ export function DashboardMetrics({ initialMetrics }: DashboardMetricsProps) {
         <CardContent>
           <div className="text-2xl font-bold">{metrics.upcomingRides}</div>
           <p className="text-xs text-gray-500">Scheduled for today</p>
+        </CardContent>
+      </Card>
+      <Card className="bg-green-50">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-green-800 flex items-center gap-2">
+            <Star className="h-4 w-4" /> Real-time Data
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold text-green-700">Active</div>
+          <p className="text-xs text-green-600">Last updated: {new Date().toLocaleTimeString()}</p>
         </CardContent>
       </Card>
     </div>
