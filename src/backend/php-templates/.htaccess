@@ -5,13 +5,13 @@ RewriteEngine On
 # Ensure API requests go directly to PHP files, not React frontend
 RewriteRule ^api/ - [L]
 
-# API routing rules
+# API routing rules - Fixed endpoint formats
 RewriteRule ^api/signup$ api/signup.php [L]
 RewriteRule ^api/login$ api/login.php [L]
 RewriteRule ^api/user/dashboard$ api/user/dashboard.php [QSA,L]
 RewriteRule ^api/user/dashboard/$ api/user/dashboard.php [QSA,L]
-RewriteRule ^api/booking/create$ api/book.php [L]
 RewriteRule ^api/book$ api/book.php [L]
+RewriteRule ^api/booking/create$ api/book.php [L]
 RewriteRule ^api/booking/([0-9]+)/edit$ api/booking/edit.php?id=$1 [QSA,L]
 RewriteRule ^api/book/edit/([0-9]+)$ api/booking/edit.php?id=$1 [QSA,L]
 RewriteRule ^api/booking/edit/([0-9]+)$ api/booking/edit.php?id=$1 [QSA,L]
@@ -23,6 +23,13 @@ RewriteRule ^api/fares/tours$ api/fares/tours.php [L]
 RewriteRule ^api/fares/vehicles$ api/fares/vehicles.php [L]
 RewriteRule ^api/admin/fares/update$ api/admin/fares-update.php [L]
 RewriteRule ^api/admin/km-price/update$ api/admin/km-price-update.php [L]
+
+# Critical fix for booking CRUD operations
+RewriteRule ^api/book/$ api/book.php [L]
+RewriteRule ^api/booking$ api/book.php [L]
+RewriteRule ^api/booking/$ api/book.php [L]
+RewriteRule ^api/book/cancel/([0-9]+)$ api/booking/cancel.php?id=$1 [QSA,L]
+RewriteRule ^api/booking/([0-9]+)/cancel$ api/booking/cancel.php?id=$1 [QSA,L]
 
 # Set the default character set
 AddDefaultCharset UTF-8

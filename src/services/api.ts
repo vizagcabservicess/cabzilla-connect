@@ -3,7 +3,7 @@ import axios, { AxiosInstance, AxiosError, AxiosRequestConfig } from 'axios';
 import { jwtDecode } from 'jwt-decode';
 import { Booking, BookingRequest, DashboardMetrics, VehiclePricingUpdateRequest } from '@/types/api';
 
-// Define API base URL from environment variables
+// Define API base URL from environment variables with fallback to hostinger site
 const apiBaseURL = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com/api';
 console.log('API Base URL:', apiBaseURL);
 
@@ -271,24 +271,30 @@ export const bookingAPI = {
     return makeApiRequest(async () => {
       console.log('Creating booking with data:', bookingData);
       
-      // For local bookings, ensure distance is set based on package
-      if (bookingData.tripType === 'local' && (!bookingData.distance || bookingData.distance === 0)) {
-        if (bookingData.hourlyPackage === '8hrs-80km') {
-          bookingData.distance = 80;
-        } else if (bookingData.hourlyPackage === '10hrs-100km') {
-          bookingData.distance = 100;
-        } else {
-          bookingData.distance = 80; // Default fallback
+      // Try multiple endpoints for booking creation
+      const endpoints = ['/book', '/api/book', '/booking', '/api/booking'];
+      let lastError: any = null;
+
+      for (const endpoint of endpoints) {
+        try {
+          console.log(`Trying booking endpoint: ${endpoint}`);
+          const response = await apiClient.post(endpoint, bookingData);
+          
+          if (response.data.status === 'success') {
+            console.log(`Booking successfully created using endpoint: ${endpoint}`);
+            return response.data;
+          } else {
+            lastError = new Error(response.data.message || `Failed to create booking at ${endpoint}`);
+          }
+        } catch (error) {
+          console.error(`Booking endpoint ${endpoint} failed:`, error);
+          lastError = error;
+          // Continue trying next endpoint
         }
-        console.log('Set default distance for local booking:', bookingData.distance);
       }
       
-      const response = await apiClient.post('/book', bookingData);
-      if (response.data.status === 'success') {
-        return response.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to create booking');
-      }
+      // If we get here, all endpoints failed
+      throw lastError || new Error('Failed to create booking after trying all endpoints');
     });
   },
 
@@ -344,45 +350,35 @@ export const bookingAPI = {
       console.log(`Updating booking ID: ${id} with data:`, bookingData);
       
       // Try multiple endpoint formats with proper error handling
-      try {
-        console.log(`Trying first endpoint format for update: /booking/${id}/edit`);
-        const response = await apiClient.post(`/booking/${id}/edit`, bookingData);
-        if (response.data.status === 'success') {
-          return response.data;
-        } else {
-          throw new Error(response.data.message || 'Failed to update booking');
-        }
-      } catch (firstError) {
-        console.log('First endpoint format failed for update, error:', firstError);
-        
+      const endpoints = [
+        `/booking/${id}/edit`,
+        `/book/edit/${id}`,
+        `/api/booking/edit/${id}`,
+        `/api/book/edit/${id}`
+      ];
+      
+      let lastError: any = null;
+      
+      for (const endpoint of endpoints) {
         try {
-          console.log(`Trying second endpoint format for update: /book/edit/${id}`);
-          const response = await apiClient.post(`/book/edit/${id}`, bookingData);
+          console.log(`Trying endpoint for update: ${endpoint}`);
+          const response = await apiClient.post(endpoint, bookingData);
+          
           if (response.data.status === 'success') {
+            console.log(`Booking successfully updated using endpoint: ${endpoint}`);
             return response.data;
           } else {
-            throw new Error(response.data.message || 'Failed to update booking');
+            lastError = new Error(response.data.message || `Failed to update booking at ${endpoint}`);
           }
-        } catch (secondError) {
-          console.log('Second endpoint format failed for update, error:', secondError);
-          
-          // Try a third format as a last resort
-          try {
-            console.log(`Trying third endpoint format for update: /api/booking/edit/${id}`);
-            const response = await apiClient.post(`/api/booking/edit/${id}`, bookingData);
-            if (response.data.status === 'success') {
-              return response.data;
-            }
-          } catch (thirdError) {
-            console.log('All endpoint formats failed for update');
-            // Re-throw the first error for consistent error reporting
-            throw firstError;
-          }
+        } catch (error) {
+          console.error(`Update endpoint ${endpoint} failed:`, error);
+          lastError = error;
+          // Continue trying next endpoint
         }
-        
-        // If we somehow get here without returning or throwing, throw the first error
-        throw firstError;
       }
+      
+      // If we get here, all endpoints failed
+      throw lastError || new Error('Failed to update booking after trying all endpoints');
     });
   },
   
@@ -390,48 +386,37 @@ export const bookingAPI = {
     return makeApiRequest(async () => {
       console.log(`Cancelling booking ID: ${id} with reason: ${reason}`);
       
-      // Try multiple endpoint formats with proper error handling
-      try {
-        console.log(`Trying standard cancellation endpoint: /booking/cancel`);
-        const response = await apiClient.post('/booking/cancel', { 
-          bookingId: id,
-          reason: reason 
-        });
-        if (response.data.status === 'success') {
-          return response.data;
-        } else {
-          throw new Error(response.data.message || 'Failed to cancel booking');
-        }
-      } catch (error) {
-        console.log('Standard cancellation endpoint failed, trying alternative format:', error);
-        
+      // Try multiple endpoint formats for cancellation
+      const endpoints = [
+        { url: '/booking/cancel', data: { bookingId: id, reason } },
+        { url: `/booking/${id}/cancel`, data: { reason } },
+        { url: `/book/cancel/${id}`, data: { reason } },
+        { url: `/api/booking/cancel`, data: { bookingId: id, reason } },
+        { url: `/api/book/cancel/${id}`, data: { reason } }
+      ];
+      
+      let lastError: any = null;
+      
+      for (const endpoint of endpoints) {
         try {
-          // Try alternative endpoint as a fallback
-          const response = await apiClient.post(`/booking/${id}/cancel`, { 
-            reason: reason 
-          });
-          if (response.data.status === 'success') {
-            return response.data;
-          }
-        } catch (secondError) {
-          console.log('Second cancellation endpoint failed, trying third format:', secondError);
+          console.log(`Trying cancellation endpoint: ${endpoint.url}`);
+          const response = await apiClient.post(endpoint.url, endpoint.data);
           
-          // Try a third format with the book prefix
-          try {
-            const response = await apiClient.post(`/book/cancel/${id}`, { 
-              reason: reason 
-            });
-            if (response.data.status === 'success') {
-              return response.data;
-            }
-          } catch (thirdError) {
-            console.log('All cancellation endpoints failed');
-            throw error; // Throw the original error
+          if (response.data.status === 'success') {
+            console.log(`Booking successfully cancelled using endpoint: ${endpoint.url}`);
+            return response.data;
+          } else {
+            lastError = new Error(response.data.message || `Failed to cancel booking at ${endpoint.url}`);
           }
+        } catch (error) {
+          console.error(`Cancellation endpoint ${endpoint.url} failed:`, error);
+          lastError = error;
+          // Continue trying next endpoint
         }
-        
-        throw error; // If execution reaches here, throw the original error
       }
+      
+      // If we get here, all endpoints failed
+      throw lastError || new Error('Failed to cancel booking after trying all endpoints');
     });
   },
   
@@ -439,41 +424,37 @@ export const bookingAPI = {
     return makeApiRequest(async () => {
       console.log(`Fetching receipt for booking ID: ${id}`);
       
-      // Try multiple endpoint formats with proper error handling
-      try {
-        console.log(`Trying standard receipt endpoint: /receipt/${id}`);
-        const response = await apiClient.get(`/receipt/${id}`);
-        if (response.data.status === 'success') {
-          return response.data.data;
-        } else {
-          throw new Error(response.data.message || 'Failed to fetch receipt');
-        }
-      } catch (error) {
-        console.log('Standard receipt endpoint failed, trying alternative format:', error);
-        
+      // Try multiple endpoint formats for receipt retrieval
+      const endpoints = [
+        `/receipt/${id}`,
+        `/booking/${id}/receipt`,
+        `/book/${id}/receipt`,
+        `/api/receipt/${id}`,
+        `/api/booking/${id}`
+      ];
+      
+      let lastError: any = null;
+      
+      for (const endpoint of endpoints) {
         try {
-          // Try alternative endpoint as a fallback
-          const response = await apiClient.get(`/booking/${id}/receipt`);
-          if (response.data.status === 'success') {
-            return response.data.data;
-          }
-        } catch (secondError) {
-          console.log('Second receipt endpoint failed, trying third format:', secondError);
+          console.log(`Trying receipt endpoint: ${endpoint}`);
+          const response = await apiClient.get(endpoint);
           
-          try {
-            // Try a third format with the book prefix
-            const response = await apiClient.get(`/book/${id}/receipt`);
-            if (response.data.status === 'success') {
-              return response.data.data;
-            }
-          } catch (thirdError) {
-            console.log('All receipt endpoints failed');
-            throw error; // Throw the original error
+          if (response.data.status === 'success') {
+            console.log(`Receipt successfully retrieved using endpoint: ${endpoint}`);
+            return response.data.data;
+          } else {
+            lastError = new Error(response.data.message || `Failed to fetch receipt at ${endpoint}`);
           }
+        } catch (error) {
+          console.error(`Receipt endpoint ${endpoint} failed:`, error);
+          lastError = error;
+          // Continue trying next endpoint
         }
-        
-        throw error; // If execution reaches here, throw the original error
       }
+      
+      // If we get here, all endpoints failed
+      throw lastError || new Error('Failed to fetch receipt after trying all endpoints');
     });
   },
   
@@ -482,56 +463,36 @@ export const bookingAPI = {
       console.log('Fetching user bookings...');
       
       // Try with various endpoint formats for dashboard data
-      try {
-        // First attempt with proper path
-        console.log('Trying primary dashboard endpoint');
-        const timestamp = new Date().getTime();
-        const response = await apiClient.get(`/user/dashboard?_t=${timestamp}`);
-        
-        if (response.data.status === 'success') {
-          console.log('Primary dashboard endpoint succeeded');
-          return response.data.data;
-        } else {
-          throw new Error(response.data.message || 'Failed to fetch bookings');
-        }
-      } catch (firstError) {
-        console.log('Primary dashboard endpoint failed:', firstError);
-        
+      const endpoints = [
+        '/user/dashboard',
+        '/user/dashboard/',
+        '/api/user/dashboard.php'
+      ];
+      
+      let lastError: any = null;
+      const timestamp = new Date().getTime();
+      
+      for (const endpoint of endpoints) {
         try {
-          // Second attempt with trailing slash
-          console.log('Trying dashboard endpoint with trailing slash');
-          const timestamp = new Date().getTime();
-          const response = await apiClient.get(`/user/dashboard/?_t=${timestamp}`);
+          console.log(`Trying dashboard endpoint: ${endpoint}`);
+          const response = await apiClient.get(`${endpoint}?_t=${timestamp}`);
           
           if (response.data.status === 'success') {
-            console.log('Dashboard endpoint with trailing slash succeeded');
+            console.log(`User bookings successfully retrieved using endpoint: ${endpoint}`);
             return response.data.data;
           } else {
-            throw new Error(response.data.message || 'Failed to fetch bookings');
+            lastError = new Error(response.data.message || `Failed to fetch bookings at ${endpoint}`);
           }
-        } catch (secondError) {
-          console.log('Second dashboard endpoint failed, trying direct PHP approach');
-          
-          try {
-            // Third attempt directly to PHP file
-            const timestamp = new Date().getTime();
-            const response = await apiClient.get(`/api/user/dashboard.php?_t=${timestamp}`);
-            
-            if (response.data.status === 'success') {
-              console.log('Direct PHP dashboard endpoint succeeded');
-              return response.data.data;
-            } else {
-              throw new Error(response.data.message || 'Failed to fetch bookings');
-            }
-          } catch (thirdError) {
-            console.log('All dashboard endpoints failed');
-            
-            // Emergency fallback: return empty array to prevent UI breaks
-            console.log('Using emergency fallback: empty bookings array');
-            return [];
-          }
+        } catch (error) {
+          console.error(`Dashboard endpoint ${endpoint} failed:`, error);
+          lastError = error;
+          // Continue trying next endpoint
         }
       }
+      
+      // Emergency fallback: return empty array to prevent UI breaks
+      console.log('All dashboard endpoints failed, using emergency fallback');
+      return [];
     });
   },
 

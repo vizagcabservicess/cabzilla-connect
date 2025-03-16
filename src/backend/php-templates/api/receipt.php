@@ -28,7 +28,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 logError("Receipt request received", [
     'method' => $_SERVER['REQUEST_METHOD'],
     'request_uri' => $_SERVER['REQUEST_URI'],
-    'query_string' => $_SERVER['QUERY_STRING'] ?? 'none'
+    'query_string' => $_SERVER['QUERY_STRING'] ?? 'none',
+    'path_info' => $_SERVER['PATH_INFO'] ?? 'none'
 ]);
 
 // Get booking ID from URL
@@ -38,6 +39,15 @@ $bookingId = isset($_GET['id']) ? intval($_GET['id']) : 0;
 if (!$bookingId && isset($_SERVER['PATH_INFO'])) {
     $pathParts = explode('/', trim($_SERVER['PATH_INFO'], '/'));
     $bookingId = intval(end($pathParts));
+}
+
+// Try to get id from the last part of the URL if still no ID
+if (!$bookingId) {
+    $uriParts = explode('/', trim($_SERVER['REQUEST_URI'], '/'));
+    $lastPart = end($uriParts);
+    if (is_numeric($lastPart)) {
+        $bookingId = intval($lastPart);
+    }
 }
 
 if (!$bookingId) {
@@ -52,7 +62,7 @@ if (!$bookingId) {
 
 // Authenticate user
 $userData = authenticate();
-$userId = $userData['user_id'];
+$userId = $userData['user_id'] ?? null;
 $isAdmin = isset($userData['role']) && $userData['role'] === 'admin';
 
 // Connect to database
@@ -67,10 +77,16 @@ if ($isAdmin) {
     $sql = "SELECT * FROM bookings WHERE id = ?";
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("i", $bookingId);
-} else {
+} else if ($userId) {
     $sql = "SELECT * FROM bookings WHERE id = ? AND user_id = ?";
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("ii", $bookingId, $userId);
+} else {
+    // For non-logged in users, just check if booking exists
+    // This allows customers without accounts to view their receipts using the URL
+    $sql = "SELECT * FROM bookings WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $bookingId);
 }
 
 if (!$stmt->execute()) {

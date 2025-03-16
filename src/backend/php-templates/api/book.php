@@ -22,17 +22,30 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Access-Control-Allow-Headers: Content-Type, Authorization');
     
     sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
+    exit;
 }
 
 // Log request data for debugging
 logError("Book.php request initiated", [
     'method' => $_SERVER['REQUEST_METHOD'],
-    'headers' => getallheaders()
+    'headers' => getallheaders(),
+    'request_uri' => $_SERVER['REQUEST_URI']
 ]);
 
 // Get the request body
-$data = json_decode(file_get_contents('php://input'), true);
-logError("Booking request data", ['data' => $data]);
+$rawInput = file_get_contents('php://input');
+logError("Raw input received", ['raw' => $rawInput]);
+
+$data = json_decode($rawInput, true);
+
+// Check if JSON decoding failed
+if ($data === null && json_last_error() !== JSON_ERROR_NONE) {
+    logError("JSON decode error", ['error' => json_last_error_msg()]);
+    sendJsonResponse(['status' => 'error', 'message' => 'Invalid JSON data: ' . json_last_error_msg()], 400);
+    exit;
+}
+
+logError("Booking request data after JSON decode", ['data' => $data]);
 
 // Different validation rules based on trip type
 $requiredFields = [
@@ -68,26 +81,46 @@ if (isset($data['tripType']) && $data['tripType'] === 'local') {
 }
 
 // Validate required fields
+$missingFields = [];
 foreach ($requiredFields as $field) {
     if (!isset($data[$field]) || (is_string($data[$field]) && trim($data[$field]) === '')) {
-        sendJsonResponse(['status' => 'error', 'message' => "Field $field is required"], 400);
-        exit;
+        $missingFields[] = $field;
     }
+}
+
+if (!empty($missingFields)) {
+    logError("Missing required fields", ['missing' => $missingFields, 'data' => $data]);
+    sendJsonResponse([
+        'status' => 'error', 
+        'message' => "Required fields missing: " . implode(", ", $missingFields)
+    ], 400);
+    exit;
 }
 
 // Get user ID if authenticated
 $userId = null;
 $headers = getallheaders();
-if (isset($headers['Authorization']) || isset($headers['authorization'])) {
-    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
+$authHeader = null;
+
+if (isset($headers['Authorization'])) {
+    $authHeader = $headers['Authorization'];
+} elseif (isset($headers['authorization'])) {
+    $authHeader = $headers['authorization'];
+}
+
+if ($authHeader) {
     $token = str_replace('Bearer ', '', $authHeader);
     
-    $payload = verifyJwtToken($token);
-    if ($payload && isset($payload['user_id'])) {
-        $userId = $payload['user_id'];
-        logError("Authenticated booking", ['user_id' => $userId]);
-    } else {
-        logError("Invalid token for booking", ['token' => substr($token, 0, 20) . '...']);
+    try {
+        $payload = verifyJwtToken($token);
+        if ($payload && isset($payload['user_id'])) {
+            $userId = $payload['user_id'];
+            logError("Authenticated booking", ['user_id' => $userId]);
+        } else {
+            logError("Invalid token payload for booking", ['token' => substr($token, 0, 20) . '...']);
+        }
+    } catch (Exception $e) {
+        logError("Token verification error", ['error' => $e->getMessage()]);
     }
 } else {
     // For debugging - log the headers we received
@@ -150,6 +183,23 @@ try {
         $hourlyPackage, $tourId, $status
     );
 
+    logError("About to execute SQL", [
+        'query' => $sql,
+        'data' => [
+            'userId' => $userId,
+            'bookingNumber' => $bookingNumber,
+            'pickupLocation' => $pickupLocation,
+            'dropLocation' => $dropLocation,
+            'pickupDate' => $pickupDate,
+            'returnDate' => $returnDate,
+            'cabType' => $cabType,
+            'distance' => $distance,
+            'tripType' => $tripType,
+            'tripMode' => $tripMode,
+            'totalAmount' => $totalAmount
+        ]
+    ]);
+
     if (!$stmt->execute()) {
         throw new Exception("Execute statement failed: " . $stmt->error);
     }
@@ -199,6 +249,29 @@ try {
         'createdAt' => $booking['created_at'],
         'updatedAt' => $booking['updated_at']
     ];
+
+    // Send email notification about new booking
+    $emailSubject = "New Cab Booking Confirmation - #{$booking['booking_number']}";
+    $emailBody = "Dear {$booking['passenger_name']},\n\n" .
+                "Thank you for booking with us! Your booking has been received and is being processed.\n\n" .
+                "Booking details:\n" .
+                "Booking #: {$booking['booking_number']}\n" .
+                "Pickup: {$booking['pickup_location']}\n" .
+                "Drop: {$booking['drop_location']}\n" .
+                "Date: {$booking['pickup_date']}\n" .
+                "Vehicle: {$booking['cab_type']}\n" .
+                "Amount: ₹{$booking['total_amount']}\n\n" .
+                "We will contact you shortly with driver details.\n\n" .
+                "Thank you for choosing our service!";
+    
+    // Try to send notification email
+    try {
+        sendEmailNotification($booking['passenger_email'], $emailSubject, $emailBody);
+        logError("Booking confirmation email sent", ['email' => $booking['passenger_email']]);
+    } catch (Exception $e) {
+        // Log the error but don't fail the booking
+        logError("Failed to send booking confirmation email", ['error' => $e->getMessage()]);
+    }
 
     // Send response
     sendJsonResponse([
