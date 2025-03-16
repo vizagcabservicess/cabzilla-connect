@@ -23,7 +23,7 @@ AddHandler application/x-httpd-php .php
     Header set Expires "0"
 </IfModule>
 
-# Handle OPTIONS requests for CORS preflight
+# Handle OPTIONS requests for CORS preflight - CRITICAL FIX
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule ^(.*)$ $1 [R=200,L]
 
@@ -45,6 +45,13 @@ RewriteRule ^api/booking$ api/book.php [QSA,L]
 RewriteRule ^api/booking/$ api/book.php [QSA,L]
 RewriteRule ^api/booking/create$ api/book.php [QSA,L]
 
+# CRITICAL FIX FOR CANCELLATION - Add explicit rules with highest priority
+RewriteRule ^api/booking/cancel$ api/booking/cancel.php [QSA,L]
+RewriteRule ^api/booking/([0-9]+)/cancel/?$ api/booking/cancel.php?id=$1 [QSA,L]
+RewriteRule ^api/booking/cancel/([0-9]+)/?$ api/booking/cancel.php?id=$1 [QSA,L]
+RewriteRule ^api/book/cancel/([0-9]+)/?$ api/booking/cancel.php?id=$1 [QSA,L]
+RewriteRule ^api/cancel/booking/([0-9]+)/?$ api/booking/cancel.php?id=$1 [QSA,L]
+
 # CRITICAL FIX: Booking edit endpoints - multiple formats
 RewriteRule ^api/booking/([0-9]+)/edit/?$ api/booking/edit.php?id=$1 [QSA,L]
 RewriteRule ^api/booking/edit/([0-9]+)/?$ api/booking/edit.php?id=$1 [QSA,L]
@@ -57,12 +64,6 @@ RewriteRule ^api/booking/([0-9]+)/receipt/?$ api/receipt.php?id=$1 [QSA,L]
 RewriteRule ^api/booking/receipt/([0-9]+)/?$ api/receipt.php?id=$1 [QSA,L]
 RewriteRule ^api/booking/([0-9]+)/?$ api/receipt.php?id=$1 [QSA,L]
 
-# CRITICAL FIX: Cancel endpoints - multiple formats
-RewriteRule ^api/booking/cancel$ api/booking/cancel.php [QSA,L]
-RewriteRule ^api/booking/([0-9]+)/cancel/?$ api/booking/cancel.php?id=$1 [QSA,L]
-RewriteRule ^api/booking/cancel/([0-9]+)/?$ api/booking/cancel.php?id=$1 [QSA,L]
-RewriteRule ^api/book/cancel/([0-9]+)/?$ api/booking/cancel.php?id=$1 [QSA,L]
-
 # Admin endpoints
 RewriteRule ^api/admin/bookings$ api/admin/bookings.php [QSA,L]
 RewriteRule ^api/fares/tours$ api/fares/tours.php [QSA,L]
@@ -73,6 +74,10 @@ RewriteRule ^api/admin/km-price/update$ api/admin/km-price-update.php [QSA,L]
 # Direct access to PHP files - highest priority
 RewriteCond %{REQUEST_URI} \.php$
 RewriteRule ^(.*)$ $1 [L]
+
+# CRITICAL FIX: More specific fallback for booking cancellation
+RewriteCond %{REQUEST_URI} ^/api/booking/cancel
+RewriteRule ^api/booking/cancel(.*)$ api/booking/cancel.php [QSA,L]
 
 # Fallback for all other API paths to maintain compatibility
 RewriteCond %{REQUEST_URI} ^/api/

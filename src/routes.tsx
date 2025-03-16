@@ -71,6 +71,15 @@ export const router = createBrowserRouter([
     path: '/booking/:id',
     element: <ReceiptPage />,
   },
+  // CRITICAL FIX: Add explicit cancel routes
+  {
+    path: '/booking/:id/cancel',
+    element: <DashboardPage />,
+  },
+  {
+    path: '/booking/cancel/:id',
+    element: <DashboardPage />,
+  },
   {
     path: '/admin',
     element: <AdminDashboardPage />,

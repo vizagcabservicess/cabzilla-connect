@@ -13,7 +13,8 @@ RewriteRule ^edit/([0-9]+)/?$ edit.php?id=$1 [QSA,L]
 RewriteRule ^([0-9]+)/receipt/?$ ../receipt.php?id=$1 [QSA,L]
 RewriteRule ^receipt/([0-9]+)/?$ ../receipt.php?id=$1 [QSA,L]
 
-# CRITICAL FIX: Fix for booking cancel endpoints - multiple formats
+# CRITICAL FIX: Fix for booking cancel endpoints - multiple formats with highest priority
+RewriteRule ^cancel$ cancel.php [QSA,L]
 RewriteRule ^([0-9]+)/cancel/?$ cancel.php?id=$1 [QSA,L]
 RewriteRule ^cancel/([0-9]+)/?$ cancel.php?id=$1 [QSA,L]
 
@@ -35,7 +36,7 @@ RewriteRule ^cancel/([0-9]+)/?$ cancel.php?id=$1 [QSA,L]
     Header always set Expires "0"
 </IfModule>
 
-# Handle OPTIONS requests for CORS
+# Handle OPTIONS requests for CORS - CRITICAL FIX
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
 
