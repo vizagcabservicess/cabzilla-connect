@@ -150,16 +150,12 @@ const handleApiError = (error: any) => {
 };
 
 // Helper function to make API requests with retry logic
-const makeApiRequest = async <T>(
-  requestFn: () => Promise<T>,
-  maxRetries = 3,
-  retryDelay = 1000
-): Promise<T> => {
+const makeApiRequest = async <T>(apiCall: () => Promise<T>): Promise<T> => {
   let retries = 0;
   
   while (true) {
     try {
-      return await requestFn();
+      return await apiCall();
     } catch (error) {
       retries++;
       console.log(`API request failed (attempt ${retries}/${maxRetries})`, error);
@@ -285,11 +281,23 @@ export const bookingAPI = {
   async getBooking(id: string): Promise<Booking> {
     return makeApiRequest(async () => {
       console.log(`Fetching booking details for ID: ${id}`);
-      const response = await apiClient.get(`/booking/${id}/edit`);
-      if (response.data.status === 'success') {
-        return response.data.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to fetch booking details');
+      // Try all possible endpoint formats
+      try {
+        const response = await apiClient.get(`/booking/${id}/edit`);
+        if (response.data.status === 'success') {
+          return response.data.data;
+        } else {
+          throw new Error(response.data.message || 'Failed to fetch booking');
+        }
+      } catch (error) {
+        // If first endpoint fails, try alternative endpoint
+        console.log('First endpoint failed, trying alternative format');
+        const response = await apiClient.get(`/book/edit/${id}`);
+        if (response.data.status === 'success') {
+          return response.data.data;
+        } else {
+          throw new Error(response.data.message || 'Failed to fetch booking');
+        }
       }
     });
   },
@@ -297,11 +305,22 @@ export const bookingAPI = {
   async updateBooking(id: string, bookingData: any): Promise<any> {
     return makeApiRequest(async () => {
       console.log(`Updating booking ID: ${id} with data:`, bookingData);
-      const response = await apiClient.post(`/booking/${id}/edit`, bookingData);
-      if (response.data.status === 'success') {
-        return response.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to update booking');
+      try {
+        const response = await apiClient.post(`/booking/${id}/edit`, bookingData);
+        if (response.data.status === 'success') {
+          return response.data;
+        } else {
+          throw new Error(response.data.message || 'Failed to update booking');
+        }
+      } catch (error) {
+        // If first endpoint fails, try alternative endpoint
+        console.log('First endpoint failed, trying alternative format');
+        const response = await apiClient.post(`/book/edit/${id}`, bookingData);
+        if (response.data.status === 'success') {
+          return response.data;
+        } else {
+          throw new Error(response.data.message || 'Failed to update booking');
+        }
       }
     });
   },

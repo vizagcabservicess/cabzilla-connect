@@ -2,7 +2,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, RefreshCw, WifiOff, Server, FileQuestion } from "lucide-react";
+import { AlertTriangle, RefreshCw, WifiOff, Server, FileQuestion, Mail } from "lucide-react";
 
 interface ApiErrorFallbackProps {
   error: Error | string;
@@ -21,12 +21,14 @@ export function ApiErrorFallback({
   
   // Better error classification
   const isNetworkError = 
-    /network|connection|failed|ERR_NETWORK|ECONNABORTED|404|400|500|503|timeout/i.test(errorMessage);
+    /network|connection|failed|ERR_NETWORK|ECONNABORTED|404|400|timeout/i.test(errorMessage);
   
   const isServerError = 
     /server|500|503|unavailable|internal server error/i.test(errorMessage);
   
   const is404Error = /404|not found/i.test(errorMessage);
+  
+  const isEmailError = /email|mail|notification|smtp/i.test(errorMessage);
 
   const handleRetry = () => {
     console.log("Retrying after error...");
@@ -50,36 +52,54 @@ export function ApiErrorFallback({
   };
 
   // Pick the most appropriate icon
-  const ErrorIcon = isNetworkError 
-    ? WifiOff 
-    : (isServerError ? Server : (is404Error ? FileQuestion : AlertTriangle));
+  const ErrorIcon = isEmailError 
+    ? Mail 
+    : (isNetworkError 
+      ? WifiOff 
+      : (isServerError ? Server : (is404Error ? FileQuestion : AlertTriangle)));
 
   return (
     <Card className="w-full border-red-200 bg-red-50">
       <CardHeader>
         <CardTitle className="flex items-center text-red-700">
           <ErrorIcon className="h-5 w-5 mr-2" />
-          {title}
+          {isEmailError ? "Email Notification Error" : title}
         </CardTitle>
       </CardHeader>
       <CardContent>
         <Alert variant="destructive" className="mb-4">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>
-            {isNetworkError 
-              ? "Server Connection Failed" 
-              : (isServerError 
-                ? "Server Error" 
-                : (is404Error 
-                  ? "Resource Not Found" 
-                  : "Error"))}
+            {isEmailError 
+              ? "Email Notification Failed" 
+              : (isNetworkError 
+                ? "Server Connection Failed" 
+                : (isServerError 
+                  ? "Server Error" 
+                  : (is404Error 
+                    ? "Resource Not Found" 
+                    : "Error")))}
           </AlertTitle>
           <AlertDescription>
-            {isNetworkError 
-              ? "Unable to connect to the server. Please check your internet connection or try again later."
-              : errorMessage}
+            {isEmailError 
+              ? "The system failed to send email notifications. Your booking was processed, but confirmation emails could not be sent."
+              : (isNetworkError 
+                ? "Unable to connect to the server. Please check your internet connection or try again later."
+                : errorMessage)}
           </AlertDescription>
         </Alert>
+        
+        {isEmailError && (
+          <div className="text-sm text-gray-700 mt-4">
+            <p className="font-medium">What you can try:</p>
+            <ul className="list-disc pl-5 mt-2 space-y-1">
+              <li>Check your email address is correct in your profile</li>
+              <li>Contact support to verify your booking details</li>
+              <li>Try the operation again later</li>
+            </ul>
+            <p className="mt-3 text-xs text-gray-500">Error details: {errorMessage}</p>
+          </div>
+        )}
         
         {isNetworkError && (
           <div className="text-sm text-gray-700 mt-4">

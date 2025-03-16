@@ -1,4 +1,3 @@
-
 <?php
 // Turn on error reporting for debugging - remove in production
 ini_set('display_errors', 0);
@@ -15,6 +14,11 @@ define('DB_DATABASE', 'u644605165_db_booking');
 
 // JWT Secret Key for authentication - should be a strong secure key
 define('JWT_SECRET', 'hJ8iP2qR5sT7vZ9xB4nM6cF3jL1oA0eD');  // Secure JWT secret
+
+// Email configuration
+define('ADMIN_EMAIL', 'admin@example.com');  // Update with actual admin email
+define('SUPPORT_EMAIL', 'support@example.com');  // Update with actual support email
+define('EMAIL_SUBJECT_PREFIX', '[VizagCabs] ');  // Update with your brand name
 
 // Connect to database with improved error reporting
 function getDbConnection() {
@@ -227,6 +231,40 @@ function generateBookingNumber() {
     $timestamp = time();
     $random = rand(1000, 9999);
     return $prefix . $timestamp . $random;
+}
+
+// New function to send email notifications
+function sendEmailNotification($to, $subject, $message, $headers = '') {
+    // Log email attempt
+    logError("Sending email notification", [
+        'to' => $to,
+        'subject' => $subject,
+        'message_length' => strlen($message)
+    ]);
+    
+    // Set default headers if not provided
+    if (empty($headers)) {
+        $headers = "From: " . SUPPORT_EMAIL . "\r\n";
+        $headers .= "Reply-To: " . SUPPORT_EMAIL . "\r\n";
+        $headers .= "X-Mailer: PHP/" . phpversion() . "\r\n";
+        $headers .= "MIME-Version: 1.0\r\n";
+        $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
+    }
+    
+    // Prepend subject prefix
+    $subject = EMAIL_SUBJECT_PREFIX . $subject;
+    
+    // Attempt to send email
+    $result = mail($to, $subject, $message, $headers);
+    
+    // Log result
+    logError("Email send result", [
+        'success' => $result ? 'yes' : 'no',
+        'to' => $to,
+        'subject' => $subject
+    ]);
+    
+    return $result;
 }
 
 // Log errors to file for debugging
