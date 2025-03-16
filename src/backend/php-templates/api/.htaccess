@@ -29,23 +29,23 @@ DirectoryIndex index.php
 RewriteRule ^user/dashboard$ user/dashboard.php [QSA,L]
 RewriteRule ^user/dashboard/$ user/dashboard.php [QSA,L]
 
-# Critical fix for PHP files - allow direct access
+# Critical fix - directly route all raw PHP requests to actual PHP files
 <FilesMatch "\.php$">
     RewriteEngine Off
 </FilesMatch>
 
-# FIXED: Process booking modification URLs - multiple formats for compatibility
+# CRITICAL FIX: Process booking modification URLs - MULTIPLE formats for compatibility
 RewriteRule ^booking/([0-9]+)/edit/?$ booking/edit.php?id=$1 [QSA,L]
 RewriteRule ^booking/edit/([0-9]+)/?$ booking/edit.php?id=$1 [QSA,L]
 RewriteRule ^book/edit/([0-9]+)/?$ booking/edit.php?id=$1 [QSA,L]
 
-# FIXED: Process booking receipt URLs - multiple formats for compatibility  
+# CRITICAL FIX: Process booking receipt URLs - MULTIPLE formats
 RewriteRule ^receipt/([0-9]+)/?$ receipt.php?id=$1 [QSA,L]
 RewriteRule ^booking/([0-9]+)/?$ receipt.php?id=$1 [QSA,L]
 RewriteRule ^booking/receipt/([0-9]+)/?$ receipt.php?id=$1 [QSA,L]
 RewriteRule ^booking/([0-9]+)/receipt/?$ receipt.php?id=$1 [QSA,L]
 
-# FIXED: Process booking cancellation URLs - multiple formats for compatibility
+# CRITICAL FIX: Process booking cancellation URLs - MULTIPLE formats
 RewriteRule ^booking/cancel$ booking/cancel.php [QSA,L]
 RewriteRule ^booking/([0-9]+)/cancel/?$ booking/cancel.php?id=$1 [QSA,L]
 RewriteRule ^booking/cancel/([0-9]+)/?$ booking/cancel.php?id=$1 [QSA,L]

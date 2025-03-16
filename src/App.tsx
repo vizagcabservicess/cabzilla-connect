@@ -52,8 +52,15 @@ function App() {
     const clearCachedData = () => {
       try {
         console.info('Clearing all cached data');
-        ['authToken', 'userId', 'userProfile', 'bookingDetails'].forEach(key => {
+        const storageKeys = [
+          'authToken', 'userId', 'userProfile', 'bookingDetails', 
+          'selectedCab', 'pickupLocation', 'dropLocation', 
+          'pickupDate', 'returnDate', 'auth_token'
+        ];
+        
+        storageKeys.forEach(key => {
           sessionStorage.removeItem(key);
+          localStorage.removeItem(key);
         });
       } catch (e) {
         console.error('Failed to clear cached data:', e);

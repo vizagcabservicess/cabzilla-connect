@@ -4,15 +4,15 @@ RewriteEngine On
 # Set default PHP handler - critical for proper execution
 AddHandler application/x-httpd-php .php
 
-# FIXED: Handle booking edit endpoints - multiple formats for compatibility
+# Fix for booking edit endpoints - multiple formats
 RewriteRule ^([0-9]+)/edit/?$ edit.php?id=$1 [QSA,L]
 RewriteRule ^edit/([0-9]+)/?$ edit.php?id=$1 [QSA,L]
 
-# FIXED: Handle booking receipt endpoints - multiple formats for compatibility
+# Fix for booking receipt endpoints - multiple formats
 RewriteRule ^([0-9]+)/receipt/?$ ../receipt.php?id=$1 [QSA,L]
 RewriteRule ^receipt/([0-9]+)/?$ ../receipt.php?id=$1 [QSA,L]
 
-# FIXED: Handle booking cancel endpoints - multiple formats for compatibility
+# Fix for booking cancel endpoints - multiple formats
 RewriteRule ^([0-9]+)/cancel/?$ cancel.php?id=$1 [QSA,L]
 RewriteRule ^cancel/([0-9]+)/?$ cancel.php?id=$1 [QSA,L]
 
@@ -24,6 +24,10 @@ RewriteRule ^cancel/([0-9]+)/?$ cancel.php?id=$1 [QSA,L]
 # Set CORS headers
 <IfModule mod_headers.c>
     Header set Access-Control-Allow-Origin "*"
-    Header set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+    Header set Access-Control-Allow-Methods "GET, POST, OPTIONS, PUT, DELETE"
     Header set Access-Control-Allow-Headers "Content-Type, Authorization"
 </IfModule>
+
+# Handle OPTIONS requests for CORS
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule .* - [R=200,L]
