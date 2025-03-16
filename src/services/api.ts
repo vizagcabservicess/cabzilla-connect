@@ -375,8 +375,10 @@ export const bookingAPI = {
         requestData.returnDate = null;
       }
       
-      // Add sendEmailNotification for better visibility
-      requestData.sendEmailNotification = true;
+      // Add sendEmailNotification explicitly for better visibility
+      if (requestData.sendEmailNotification === undefined) {
+        requestData.sendEmailNotification = true;
+      }
       
       console.log('Creating booking with data:', requestData);
       
@@ -572,7 +574,7 @@ export const fareAPI = {
 
 // Fix for BookingRequest to include sendEmailNotification
 export const bookingRequestHelper = {
-  addEmailNotification(bookingData: BookingRequest): any {
+  addEmailNotification(bookingData: BookingRequest): BookingRequest {
     return {
       ...bookingData,
       sendEmailNotification: true

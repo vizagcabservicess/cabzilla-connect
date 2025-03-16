@@ -69,6 +69,7 @@ export interface BookingRequest {
   tourId?: string;
   driverName?: string;
   driverPhone?: string;
+  sendEmailNotification?: boolean;
 }
 
 // Fare management types

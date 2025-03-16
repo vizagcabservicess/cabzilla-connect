@@ -55,9 +55,7 @@ const CabsPage = () => {
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState<boolean>(false);
   const [bookingComplete, setBookingComplete] = useState<boolean>(false);
 
-  // Clear price and selected cab when trip type or mode changes
   useEffect(() => {
-    // Clear all cached data to prevent stale data issues
     sessionStorage.removeItem('selectedCab');
     sessionStorage.removeItem('bookingDetails');
     
@@ -65,7 +63,6 @@ const CabsPage = () => {
     setTotalPrice(0);
   }, [tripType, tripMode]);
 
-  // Set airport as pickup for airport trips
   useEffect(() => {
     if (tripType === "airport") {
       const airport = vizagLocations.find(loc => loc.type === 'airport');
@@ -77,7 +74,6 @@ const CabsPage = () => {
     }
   }, [tripType, pickup, dropoff]);
 
-  // FIX: Remove the auto-switching to airport, only check for Vizag locations
   useEffect(() => {
     if (tripType === "airport" && pickup && dropoff) {
       const isPickupInVizag = isVizagLocation(pickup);
@@ -95,19 +91,15 @@ const CabsPage = () => {
         navigate("/cabs/outstation");
       }
     }
-    // We DON'T switch to airport mode for locations outside AP
   }, [pickup, dropoff, tripType, toast, navigate]);
 
-  // Clear selected cab when locations change
   useEffect(() => {
     setSelectedCab(null);
     setTotalPrice(0);
-    // Also clear session storage to prevent cached data
     sessionStorage.removeItem('selectedCab');
   }, [pickup, dropoff]);
 
   const handleTripTypeChange = (type: TripType) => {
-    // Clear all cached data when changing trip type
     sessionStorage.removeItem('selectedCab');
     sessionStorage.removeItem('bookingDetails');
     
@@ -150,7 +142,6 @@ const CabsPage = () => {
     }
   };
 
-  // Calculate distance based on locations or package selection - updated to avoid caching issues
   useEffect(() => {
     const fetchDistance = async () => {
       if (tripType === "local") {
@@ -159,8 +150,8 @@ const CabsPage = () => {
           setDistance(selectedPackage.kilometers);
           const estimatedTime = selectedPackage.hours * 60;
           setTravelTime(estimatedTime);
-          setSelectedCab(null); // Reset selected cab when package changes
-          sessionStorage.removeItem('selectedCab'); // Clear cached cab
+          setSelectedCab(null);
+          sessionStorage.removeItem('selectedCab');
         }
         return;
       }
@@ -168,8 +159,8 @@ const CabsPage = () => {
       if (pickup && dropoff) {
         setIsCalculatingDistance(true);
         setShowMap(false);
-        setSelectedCab(null); // Reset selected cab when locations change
-        sessionStorage.removeItem('selectedCab'); // Clear cached cab
+        setSelectedCab(null);
+        sessionStorage.removeItem('selectedCab');
   
         try {
           const result = await calculateDistanceMatrix(pickup, dropoff);
@@ -207,7 +198,6 @@ const CabsPage = () => {
     fetchDistance();
   }, [pickup, dropoff, tripType, hourlyPackage, toast]);
 
-  // Calculate total price when needed inputs change
   useEffect(() => {
     if (selectedCab && distance > 0) {
       const fare = calculateFare(
@@ -227,7 +217,7 @@ const CabsPage = () => {
 
   const handleHourlyPackageChange = (packageId: string) => {
     setHourlyPackage(packageId);
-    setSelectedCab(null); // Reset selected cab when package changes
+    setSelectedCab(null);
     
     const selectedPackage = hourlyPackages.find((pkg) => pkg.id === packageId);
     if (selectedPackage) {
@@ -302,7 +292,8 @@ const CabsPage = () => {
         passengerName: guestDetails.name,
         passengerPhone: guestDetails.phone,
         passengerEmail: guestDetails.email,
-        hourlyPackage: tripType === 'local' ? hourlyPackage : null
+        hourlyPackage: tripType === 'local' ? hourlyPackage : undefined,
+        sendEmailNotification: true
       };
       
       const response = await bookingAPI.createBooking(bookingData);
