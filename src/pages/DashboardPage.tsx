@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -16,6 +15,7 @@ import { DashboardMetrics } from '@/components/admin/DashboardMetrics';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1500; // 1.5 seconds
+const AUTH_CHECK_INTERVAL = 60000; // Check token validity every minute
 
 export default function DashboardPage() {
   const { toast: uiToast } = useToast();
@@ -25,47 +25,67 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [isAuthChecked, setIsAuthChecked] = useState(false);
+  
   const user = authAPI.getCurrentUser();
   const isAdmin = user?.role === 'admin';
   
-  // Check if coming from booking confirmation
   const comingFromBooking = location.state?.fromBooking;
 
-  // Check auth on page load
   useEffect(() => {
+    console.log('Performing initial auth check on DashboardPage mount');
+    
+    const checkAuth = () => {
+      if (!authAPI.isAuthenticated()) {
+        console.log('User not authenticated, redirecting to login');
+        toast.error('Please login to access your dashboard');
+        navigate('/login');
+        return false;
+      }
+      return true;
+    };
+    
+    const isAuthenticated = checkAuth();
+    setIsAuthChecked(true);
+    
+    if (isAuthenticated) {
+      console.log('User authenticated, proceeding with dashboard');
+      
+      if (comingFromBooking) {
+        toast.success('Booking successful! Your dashboard has been updated.');
+      }
+    }
+    
+    const authCheckInterval = setInterval(() => {
+      console.log('Performing periodic auth check');
+      checkAuth();
+    }, AUTH_CHECK_INTERVAL);
+    
+    return () => {
+      clearInterval(authCheckInterval);
+    };
+  }, [navigate, comingFromBooking]);
+
+  const fetchBookings = useCallback(async (retry = 0) => {
+    if (!isAuthChecked) {
+      console.log('Auth check not completed yet, delaying fetch');
+      return;
+    }
+    
     if (!authAPI.isAuthenticated()) {
-      console.log('User not authenticated, redirecting to login');
-      toast.error('Please login to access your dashboard');
+      console.error('Auth token missing or invalid, redirecting to login');
+      toast.error('Your session has expired. Please login again.');
       navigate('/login');
       return;
     }
     
-    console.log('User authenticated, proceeding with dashboard');
-    
-    // Show notification if coming from booking
-    if (comingFromBooking) {
-      toast.success('Booking successful! Your dashboard has been updated.');
-    }
-  }, [navigate, comingFromBooking]);
-
-  const fetchBookings = useCallback(async (retry = 0) => {
     try {
       setIsLoading(true);
       setError(null);
       console.log('Fetching user bookings...', { retry });
       
-      // Double-check authentication
-      if (!authAPI.isAuthenticated()) {
-        console.error('Auth token missing, redirecting to login');
-        toast.error('Your session has expired. Please login again.');
-        navigate('/login');
-        return;
-      }
-      
       try {
-        // Add cache busting without passing parameter to API function
         console.log('Fetching bookings with cache busting...');
-        // We'll use a custom timestamp as a signal here, but we won't pass it to the function
         const cacheBust = new Date().getTime();
         console.log(`Cache busting with timestamp: ${cacheBust}`);
         
@@ -74,7 +94,7 @@ export default function DashboardPage() {
         
         if (Array.isArray(data)) {
           setBookings(data);
-          setRetryCount(0); // Reset retry count on success
+          setRetryCount(0);
           if (data.length === 0) {
             toast.info('No bookings found. Book your first cab ride now!');
           } else {
@@ -87,20 +107,18 @@ export default function DashboardPage() {
       } catch (error) {
         console.error('Error in fetch:', error);
         
-        // Handle authentication errors
         if (error instanceof Error && 
             (error.message.includes('Invalid or expired token') || 
              error.message.includes('Authentication failed') ||
              error.message.includes('Not authenticated') ||
              error.message.includes('401'))) {
           console.log('Authentication error detected, clearing local storage');
-          localStorage.removeItem('auth_token');
-          toast.error('Your session has expired. Please login again.');
+          authAPI.logout();
           navigate('/login');
           return;
         }
         
-        throw error; // Re-throw to be caught by outer catch
+        throw error;
       }
     } catch (error) {
       console.error('Error fetching bookings:', error);
@@ -132,11 +150,13 @@ export default function DashboardPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [navigate, uiToast]);
+  }, [navigate, uiToast, isAuthChecked]);
 
   useEffect(() => {
-    fetchBookings();
-  }, [fetchBookings]);
+    if (isAuthChecked) {
+      fetchBookings();
+    }
+  }, [fetchBookings, isAuthChecked]);
 
   const handleRetry = () => {
     setRetryCount(0);
@@ -169,7 +189,6 @@ export default function DashboardPage() {
     ['completed', 'cancelled'].includes(booking.status.toLowerCase())
   );
 
-  // Empty state component for no bookings
   const NoBookingsCard = () => (
     <Card>
       <CardContent className="flex flex-col items-center justify-center py-10">

@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import {
   Form,
   FormControl,
@@ -25,7 +26,7 @@ const loginSchema = z.object({
 });
 
 export function LoginForm() {
-  const { toast } = useToast();
+  const { toast: uiToast } = useToast();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -43,21 +44,48 @@ export function LoginForm() {
     setError(null);
     
     try {
+      // Clear any existing tokens first
+      authAPI.logout();
+      
+      // Attempt login
       const response = await authAPI.login(values);
-      toast({
+      
+      // Add additional success messages and notifications
+      toast.success("Login Successful", {
+        description: "Welcome back!",
+        duration: 3000,
+      });
+      
+      uiToast({
         title: "Login Successful",
         description: "Welcome back!",
         duration: 3000,
       });
-      navigate('/dashboard');
+      
+      console.log("Login successful, navigating to dashboard");
+      
+      // Use a slight delay to ensure token is properly set
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 100);
+      
     } catch (error) {
       setError(error as Error);
-      toast({
+      
+      // Show error in both toast systems for reliability
+      toast.error("Login Failed", {
+        description: error instanceof Error ? error.message : "Something went wrong",
+        duration: 5000,
+      });
+      
+      uiToast({
         title: "Login Failed",
         description: error instanceof Error ? error.message : "Something went wrong",
         variant: "destructive",
         duration: 5000,
       });
+      
+      console.error("Login failed:", error);
     } finally {
       setIsLoading(false);
     }
