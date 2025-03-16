@@ -43,6 +43,7 @@ export function DashboardMetrics({ initialMetrics, period = 'week', onRefresh }:
       setIsLoading(true);
       setError(null);
       console.log(`Fetching dashboard metrics for period: ${period}...`);
+      // Call the API without any arguments (period will be handled by the backend)
       const data = await bookingAPI.getAdminDashboardMetrics();
       console.log('Dashboard metrics received:', data);
       setMetrics(data);

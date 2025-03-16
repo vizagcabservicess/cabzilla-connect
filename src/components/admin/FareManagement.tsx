@@ -8,7 +8,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -64,7 +63,10 @@ export function FareManagement() {
   useEffect(() => {
     const fetchTourFares = async () => {
       try {
-        const data = await fareAPI.getTourFares();
+        // Add timestamp to force cache refresh
+        const timestamp = new Date().getTime();
+        const data = await fareAPI.getTourFares(`?_t=${timestamp}`);
+        console.log("Fetched tour fares:", data);
         setTourFares(data);
         if (data.length > 0) {
           form.reset({
@@ -78,6 +80,7 @@ export function FareManagement() {
           setSelectedTour(data[0]);
         }
       } catch (error) {
+        console.error("Error fetching tour fares:", error);
         toast({
           title: "Error",
           description: "Failed to load tour fares",
@@ -94,6 +97,7 @@ export function FareManagement() {
   const onSubmit = async (values: FareUpdateRequest) => {
     setIsSubmitting(true);
     try {
+      console.log("Updating tour fares:", values);
       await fareAPI.updateTourFares(values);
       
       // Update local state
@@ -106,6 +110,7 @@ export function FareManagement() {
         description: "Tour fares updated successfully",
       });
     } catch (error) {
+      console.error("Error updating tour fares:", error);
       toast({
         title: "Error",
         description: "Failed to update tour fares",

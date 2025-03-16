@@ -60,7 +60,10 @@ export function VehiclePricingManagement() {
   useEffect(() => {
     const fetchVehiclePricing = async () => {
       try {
-        const data = await fareAPI.getVehiclePricing();
+        // Add timestamp to force cache refresh
+        const timestamp = new Date().getTime();
+        const data = await fareAPI.getVehiclePricing(`?_t=${timestamp}`);
+        console.log("Fetched vehicle pricing:", data);
         setVehiclePricing(data);
         if (data.length > 0) {
           form.reset({
@@ -73,6 +76,7 @@ export function VehiclePricingManagement() {
           setSelectedVehicle(data[0]);
         }
       } catch (error) {
+        console.error("Error fetching vehicle pricing:", error);
         toast({
           title: "Error",
           description: "Failed to load vehicle pricing",
@@ -89,6 +93,7 @@ export function VehiclePricingManagement() {
   const onSubmit = async (values: VehiclePricingUpdateRequest) => {
     setIsSubmitting(true);
     try {
+      console.log("Updating vehicle pricing:", values);
       await fareAPI.updateVehiclePricing(values);
       
       // Update local state
@@ -101,6 +106,7 @@ export function VehiclePricingManagement() {
         description: "Vehicle pricing updated successfully",
       });
     } catch (error) {
+      console.error("Error updating vehicle pricing:", error);
       toast({
         title: "Error",
         description: "Failed to update vehicle pricing",

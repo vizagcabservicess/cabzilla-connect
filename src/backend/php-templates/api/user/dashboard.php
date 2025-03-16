@@ -1,4 +1,3 @@
-
 <?php
 // Adjust the path to config.php correctly
 require_once __DIR__ . '/../../config.php';
@@ -46,6 +45,9 @@ try {
     
     // Get period filter if provided (today, week, month)
     $period = isset($_GET['period']) ? $_GET['period'] : 'week';
+    
+    // Log the period parameter
+    logError("Period parameter", ['period' => $period]);
     
     // Authenticate user with improved logging
     $headers = getallheaders();
@@ -102,6 +104,9 @@ try {
                 break;
         }
         
+        // Log the SQL condition being used
+        logError("Date condition for metrics", ['sql_condition' => $dateCondition]);
+        
         // Get total bookings for the period
         $totalBookingsQuery = "SELECT COUNT(*) as total FROM bookings $dateCondition";
         $totalBookingsResult = $conn->query($totalBookingsQuery);
@@ -144,7 +149,7 @@ try {
             'upcomingRides' => (int)$upcomingRides
         ];
         
-        logError("Sending admin metrics response", ['metrics' => $metrics]);
+        logError("Sending admin metrics response", ['metrics' => $metrics, 'period' => $period]);
         sendJsonResponse(['status' => 'success', 'data' => $metrics]);
         exit;
     }
