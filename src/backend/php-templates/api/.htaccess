@@ -4,18 +4,19 @@ RewriteEngine On
 
 # Set default PHP handler - critical for proper execution
 AddHandler application/x-httpd-php .php
+SetHandler application/x-httpd-php
 
 # Allow CORS (Cross-Origin Resource Sharing)
 <IfModule mod_headers.c>
-    Header set Access-Control-Allow-Origin "*"
-    Header set Access-Control-Allow-Methods "GET, POST, OPTIONS"
-    Header set Access-Control-Allow-Headers "Content-Type, Authorization"
-    Header set Access-Control-Max-Age "1728000"
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+    Header always set Access-Control-Max-Age "3600"
     
-    # Add cache prevention headers
-    Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
-    Header set Pragma "no-cache"
-    Header set Expires "0"
+    # Aggressive cache prevention headers
+    Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    Header always set Pragma "no-cache"
+    Header always set Expires "0"
 </IfModule>
 
 # Handle OPTIONS method for CORS preflight requests
@@ -29,9 +30,10 @@ DirectoryIndex index.php
 RewriteRule ^user/dashboard$ user/dashboard.php [QSA,L]
 RewriteRule ^user/dashboard/$ user/dashboard.php [QSA,L]
 
-# Critical fix - directly route all raw PHP requests to actual PHP files
+# CRITICAL FIX: Direct handler for all PHP files
 <FilesMatch "\.php$">
     RewriteEngine Off
+    SetHandler application/x-httpd-php
 </FilesMatch>
 
 # CRITICAL FIX: Process booking modification URLs - MULTIPLE formats for compatibility
@@ -60,6 +62,6 @@ RewriteRule ^book/cancel/([0-9]+)/?$ booking/cancel.php?id=$1 [QSA,L]
 # Disable directory listing
 Options -Indexes
 
-# Set PHP error reporting (for debugging)
-php_flag display_errors On
-php_value error_reporting E_ALL
+# Direct access fallback for PHP files that don't match other rules
+RewriteCond %{REQUEST_URI} \.php$
+RewriteRule ^(.*)$ $1 [L]

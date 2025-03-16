@@ -4,16 +4,24 @@ import { useEffect, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertTriangle, Home, ArrowLeft, RefreshCw, FileSearch, ExternalLink } from "lucide-react";
+import { AlertTriangle, Home, ArrowLeft, RefreshCw, FileSearch, ExternalLink, WifiOff } from "lucide-react";
 import { ApiErrorFallback } from "@/components/ApiErrorFallback";
+import { toast } from "sonner";
 
 const NotFound = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [isApiPath, setIsApiPath] = useState(false);
   const [isBookingPath, setIsBookingPath] = useState(false);
+  const [testedEndpoints, setTestedEndpoints] = useState<{[key: string]: boolean}>({});
   
   useEffect(() => {
+    // Show a toast notification for 404 error
+    toast.error("Page Not Found", {
+      description: `The requested path ${location.pathname} does not exist`,
+      duration: 5000,
+    });
+    
     // Log detailed error information for debugging
     console.error(
       "404 Error: User attempted to access non-existent route:",
@@ -35,7 +43,51 @@ const NotFound = () => {
     setIsApiPath(apiPathRegex.test(location.pathname));
     setIsBookingPath(bookingPathRegex.test(location.pathname));
     
+    // Automatically test API endpoints if this is an API path
+    if (apiPathRegex.test(location.pathname) || bookingPathRegex.test(location.pathname)) {
+      testApiEndpoints();
+    }
   }, [location]);
+
+  const testApiEndpoints = async () => {
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com/api';
+    const results: {[key: string]: boolean} = {};
+    
+    // Test essential API endpoints
+    const endpoints = [
+      '/login',
+      '/signup',
+      '/user/dashboard',
+      '/booking/123/edit',
+      '/receipt/123',
+      '/booking/cancel/123'
+    ];
+    
+    for (const endpoint of endpoints) {
+      try {
+        const response = await fetch(`${apiBaseUrl}${endpoint}`, {
+          method: 'OPTIONS',
+          headers: {
+            'Accept': 'application/json',
+          }
+        });
+        results[endpoint] = response.ok;
+      } catch (error) {
+        results[endpoint] = false;
+      }
+    }
+    
+    setTestedEndpoints(results);
+    
+    // Count failures
+    const failCount = Object.values(results).filter(result => !result).length;
+    if (failCount > 3) {
+      toast.error("API Connection Issues", {
+        description: `${failCount} of ${endpoints.length} API endpoints are inaccessible`,
+        duration: 7000,
+      });
+    }
+  };
 
   const extractBookingId = () => {
     // Try to extract a booking ID from the URL if it contains one
@@ -44,6 +96,20 @@ const NotFound = () => {
   };
 
   const bookingId = extractBookingId();
+
+  const clearBrowserCache = () => {
+    // Clear local storage
+    localStorage.clear();
+    sessionStorage.clear();
+    
+    // Clear cookies
+    document.cookie.split(";").forEach(function(c) {
+      document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+    });
+    
+    // Reload page
+    window.location.reload();
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
@@ -84,6 +150,25 @@ const NotFound = () => {
               </div>
             </>
           )}
+          
+          {Object.keys(testedEndpoints).length > 0 && (
+            <div className="mt-6 p-3 bg-gray-50 rounded-md border border-gray-200">
+              <h4 className="text-sm font-medium mb-2 flex items-center">
+                <WifiOff className="h-3.5 w-3.5 mr-1.5" />
+                API Connectivity Test Results
+              </h4>
+              <ul className="text-xs space-y-1">
+                {Object.entries(testedEndpoints).map(([endpoint, success]) => (
+                  <li key={endpoint} className="flex justify-between">
+                    <span>{endpoint}</span>
+                    <span className={success ? "text-green-600" : "text-red-600"}>
+                      {success ? "✓ OK" : "✗ Failed"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </CardContent>
         
         <CardFooter className="flex flex-wrap gap-3 border-t border-gray-100 pt-4">
@@ -117,12 +202,12 @@ const NotFound = () => {
           </Button>
           
           <Button 
-            onClick={() => window.location.reload()} 
-            variant="ghost"
+            onClick={clearBrowserCache} 
+            variant="secondary"
             className="gap-2"
           >
             <RefreshCw className="h-4 w-4" />
-            Refresh Page
+            Clear Cache & Reload
           </Button>
         </CardFooter>
       </Card>

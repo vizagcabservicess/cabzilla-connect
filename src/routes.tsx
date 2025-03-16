@@ -41,12 +41,34 @@ export const router = createBrowserRouter([
     path: '/dashboard',
     element: <DashboardPage />,
   },
+  // IMPORTANT: Multiple route patterns for booking edit for better compatibility
   {
     path: '/booking/:id/edit',
     element: <BookingEditPage />,
   },
   {
+    path: '/booking/edit/:id',
+    element: <BookingEditPage />,
+  },
+  {
+    path: '/book/edit/:id',
+    element: <BookingEditPage />,
+  },
+  // Multiple route patterns for receipts
+  {
     path: '/receipt/:id',
+    element: <ReceiptPage />,
+  },
+  {
+    path: '/booking/:id/receipt',
+    element: <ReceiptPage />,
+  },
+  {
+    path: '/booking/receipt/:id',
+    element: <ReceiptPage />,
+  },
+  {
+    path: '/booking/:id',
     element: <ReceiptPage />,
   },
   {

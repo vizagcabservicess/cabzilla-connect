@@ -55,7 +55,9 @@ function App() {
         const storageKeys = [
           'authToken', 'userId', 'userProfile', 'bookingDetails', 
           'selectedCab', 'pickupLocation', 'dropLocation', 
-          'pickupDate', 'returnDate', 'auth_token'
+          'pickupDate', 'returnDate', 'auth_token',
+          'cabFares', 'hourlyPackage', 'tourPackage',
+          'bookingData', 'passengerDetails', 'tripDetails'
         ];
         
         storageKeys.forEach(key => {
@@ -67,6 +69,26 @@ function App() {
       }
     };
     clearCachedData();
+    
+    // Verify API connectivity at startup
+    const checkApiConnectivity = async () => {
+      try {
+        const apiUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com/api';
+        console.info('Checking API connectivity to:', apiUrl);
+        
+        const response = await fetch(`${apiUrl}/login`, { 
+          method: 'OPTIONS',
+          headers: { 'Accept': 'application/json' },
+          // Prevent caching with a random number
+          cache: 'no-cache'
+        });
+        
+        console.info(`API connectivity check: ${response.status} ${response.ok ? 'OK' : 'Failed'}`);
+      } catch (error) {
+        console.error('API connectivity check failed:', error);
+      }
+    };
+    checkApiConnectivity();
     
     return () => {
       // Cleanup
