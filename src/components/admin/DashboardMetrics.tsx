@@ -3,13 +3,15 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DashboardMetrics as DashboardMetricsType } from '@/types/api';
 import { bookingAPI } from '@/services/api';
-import { Car, Users, DollarSign, Star, Clock, AlertTriangle, Calendar } from "lucide-react";
+import { Car, Users, DollarSign, Star, Clock, AlertTriangle, Calendar, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
+import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 
 interface DashboardMetricsProps {
   initialMetrics?: DashboardMetricsType;
-  period?: 'today' | 'week' | 'month'; // Added period parameter
+  period?: 'today' | 'week' | 'month';
   onRefresh?: () => void;
 }
 
@@ -27,6 +29,7 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
   const [isLoading, setIsLoading] = useState(!initialMetrics);
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>(initialPeriod);
+  const [retryCount, setRetryCount] = useState(0);
 
   // Initial data fetch when component mounts or period changes
   useEffect(() => {
@@ -55,7 +58,8 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
       }
     } catch (error) {
       console.error('Error fetching dashboard metrics:', error);
-      setError('Failed to load dashboard metrics');
+      setError(error instanceof Error ? error.message : 'Failed to load dashboard metrics');
+      
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : 'Failed to load dashboard metrics',
@@ -69,6 +73,31 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
   const handlePeriodChange = (newPeriod: 'today' | 'week' | 'month') => {
     setPeriod(newPeriod);
   };
+
+  const handleRetry = () => {
+    setRetryCount(prev => prev + 1);
+    fetchMetrics();
+  };
+
+  if (error) {
+    return (
+      <div>
+        <Tabs value={period} className="w-full mb-4">
+          <TabsList>
+            <TabsTrigger value="today" onClick={() => handlePeriodChange('today')}>Today</TabsTrigger>
+            <TabsTrigger value="week" onClick={() => handlePeriodChange('week')}>This Week</TabsTrigger>
+            <TabsTrigger value="month" onClick={() => handlePeriodChange('month')}>This Month</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        
+        <ApiErrorFallback 
+          error={error} 
+          onRetry={handleRetry} 
+          title="Dashboard Metrics Error" 
+        />
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -98,27 +127,6 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
     );
   }
 
-  if (error) {
-    return (
-      <div>
-        <Tabs value={period} className="w-full mb-4">
-          <TabsList>
-            <TabsTrigger value="today" onClick={() => handlePeriodChange('today')}>Today</TabsTrigger>
-            <TabsTrigger value="week" onClick={() => handlePeriodChange('week')}>This Week</TabsTrigger>
-            <TabsTrigger value="month" onClick={() => handlePeriodChange('month')}>This Month</TabsTrigger>
-          </TabsList>
-        </Tabs>
-        
-        <Card className="mb-8 border-red-200 bg-red-50">
-          <CardContent className="pt-6 flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-red-600" />
-            <p className="text-red-800">{error}</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   const periodText = {
     today: 'Today',
     week: 'This Week',
@@ -127,13 +135,20 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
 
   return (
     <div>
-      <Tabs value={period} className="w-full mb-4">
-        <TabsList>
-          <TabsTrigger value="today" onClick={() => handlePeriodChange('today')}>Today</TabsTrigger>
-          <TabsTrigger value="week" onClick={() => handlePeriodChange('week')}>This Week</TabsTrigger>
-          <TabsTrigger value="month" onClick={() => handlePeriodChange('month')}>This Month</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <div className="flex justify-between items-center mb-4">
+        <Tabs value={period} className="w-full">
+          <TabsList>
+            <TabsTrigger value="today" onClick={() => handlePeriodChange('today')}>Today</TabsTrigger>
+            <TabsTrigger value="week" onClick={() => handlePeriodChange('week')}>This Week</TabsTrigger>
+            <TabsTrigger value="month" onClick={() => handlePeriodChange('month')}>This Month</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        
+        <Button variant="outline" size="sm" onClick={handleRetry} className="ml-2">
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Refresh
+        </Button>
+      </div>
       
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-8">
         <Card>

@@ -3,8 +3,8 @@ import axios, { AxiosInstance, AxiosError } from 'axios';
 import { jwtDecode } from 'jwt-decode';
 import { Booking, BookingRequest, DashboardMetrics, TourFare, VehiclePricingUpdateRequest, VehiclePricing } from '@/types/api';
 
-// Define API base URL
-const baseURL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api';
+// Define API base URL - modify to use import.meta.env for Vite instead of process.env
+const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
 
 // Create Axios instance
 const apiClient: AxiosInstance = axios.create({
@@ -14,6 +14,7 @@ const apiClient: AxiosInstance = axios.create({
     'Accept': 'application/json',
   },
   withCredentials: false,
+  timeout: 15000, // Add a timeout to prevent long-hanging requests
 });
 
 // Function to set the auth token in the headers
@@ -42,9 +43,17 @@ const handleApiError = (error: any) => {
       console.error('Status Code:', axiosError.response.status);
       console.error('Response Data:', axiosError.response.data);
     }
+    
+    // Add special handling for network errors
+    if (axiosError.code === 'ERR_NETWORK' || axiosError.code === 'ECONNABORTED') {
+      console.error('Network error - server may be down or unreachable');
+      return new Error('Network error: Server is unreachable. Please check your connection and try again.');
+    }
   } else {
     console.error('Non-Axios Error:', error);
   }
+  
+  return error instanceof Error ? error : new Error('An unknown error occurred');
 };
 
 // API service for authentication
@@ -60,8 +69,7 @@ export const authAPI = {
         throw new Error(response.data.message || 'Login failed');
       }
     } catch (error) {
-      handleApiError(error);
-      throw error;
+      throw handleApiError(error);
     }
   },
 
@@ -74,8 +82,7 @@ export const authAPI = {
         throw new Error(response.data.message || 'Registration failed');
       }
     } catch (error) {
-      handleApiError(error);
-      throw error;
+      throw handleApiError(error);
     }
   },
 
@@ -135,8 +142,7 @@ export const bookingAPI = {
         throw new Error(response.data.message || 'Failed to create booking');
       }
     } catch (error) {
-      handleApiError(error);
-      throw error;
+      throw handleApiError(error);
     }
   },
 
@@ -149,8 +155,7 @@ export const bookingAPI = {
         throw new Error(response.data.message || 'Failed to fetch booking details');
       }
     } catch (error) {
-      handleApiError(error);
-      throw error;
+      throw handleApiError(error);
     }
   },
 
@@ -163,8 +168,7 @@ export const bookingAPI = {
         throw new Error(response.data.message || 'Failed to update booking');
       }
     } catch (error) {
-      handleApiError(error);
-      throw error;
+      throw handleApiError(error);
     }
   },
   
@@ -182,8 +186,7 @@ export const bookingAPI = {
       }
     } catch (error) {
       console.error('Error in getUserBookings:', error);
-      handleApiError(error);
-      throw error;
+      throw handleApiError(error);
     }
   },
 
@@ -201,8 +204,7 @@ export const bookingAPI = {
       }
     } catch (error) {
       console.error('Error in getAllBookings:', error);
-      handleApiError(error);
-      throw error;
+      throw handleApiError(error);
     }
   },
 
@@ -220,8 +222,7 @@ export const bookingAPI = {
       }
     } catch (error) {
       console.error('Error in getAdminDashboardMetrics:', error);
-      handleApiError(error);
-      throw error;
+      throw handleApiError(error);
     }
   },
 };
@@ -241,8 +242,7 @@ export const fareAPI = {
       }
     } catch (error) {
       console.error('Error in getTourFares:', error);
-      handleApiError(error);
-      throw error;
+      throw handleApiError(error);
     }
   },
   
@@ -255,8 +255,7 @@ export const fareAPI = {
         throw new Error(response.data.message || 'Failed to update tour fares');
       }
     } catch (error) {
-      handleApiError(error);
-      throw error;
+      throw handleApiError(error);
     }
   },
   
@@ -273,8 +272,7 @@ export const fareAPI = {
       }
     } catch (error) {
       console.error('Error in getVehiclePricing:', error);
-      handleApiError(error);
-      throw error;
+      throw handleApiError(error);
     }
   },
   
@@ -287,8 +285,7 @@ export const fareAPI = {
         throw new Error(response.data.message || 'Failed to update vehicle pricing');
       }
     } catch (error) {
-      handleApiError(error);
-      throw error;
+      throw handleApiError(error);
     }
   }
 };

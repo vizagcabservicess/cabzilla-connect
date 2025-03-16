@@ -12,7 +12,7 @@ interface GuestDetailsFormProps {
   totalPrice: number;
   onBack?: () => void;
   initialData?: any;
-  bookingId?: string; // Changed from number to string
+  bookingId?: string;
   isEditing?: boolean;
   isSubmitting?: boolean;
 }
@@ -46,7 +46,7 @@ export function GuestDetailsForm({
           ...initialData
         };
         
-        await bookingAPI.updateBooking(bookingId, updatedData);
+        await bookingAPI.updateBooking(bookingId.toString(), updatedData);
         
         toast({
           title: "Booking Updated",
