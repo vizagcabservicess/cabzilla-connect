@@ -1,4 +1,3 @@
-
 import axios, { AxiosInstance, AxiosError, AxiosRequestConfig } from 'axios';
 import { jwtDecode } from 'jwt-decode';
 import { Booking, BookingRequest, DashboardMetrics, VehiclePricingUpdateRequest } from '@/types/api';
@@ -336,6 +335,17 @@ export const authAPI = {
       console.error('Error decoding token:', e);
       return null;
     }
+  },
+
+  // Add getCurrentUser method for DashboardPage
+  getCurrentUser(): any {
+    return this.getUser();
+  },
+  
+  // Add isAdmin method for AdminDashboardPage
+  isAdmin(): boolean {
+    const user = this.getUser();
+    return user && user.role === 'admin';
   }
 };
 
@@ -380,6 +390,7 @@ export const bookingAPI = {
     }, 2, 2000); // 2 retries with 2 second delay
   },
 
+  // Update this method to match both getUserBookings and getBookings usages
   async getBookings(): Promise<Booking[]> {
     return makeApiRequest(async () => {
       // Add cache busting
@@ -393,6 +404,15 @@ export const bookingAPI = {
         throw new Error(response.data?.message || 'Failed to fetch bookings');
       }
     });
+  },
+
+  // Add alias methods for backward compatibility
+  async getUserBookings(): Promise<Booking[]> {
+    return this.getBookings();
+  },
+
+  async getAllBookings(): Promise<Booking[]> {
+    return this.getBookings();
   },
 
   async getDashboardMetrics(period: string = 'week', isAdmin: boolean = false): Promise<DashboardMetrics> {
@@ -411,6 +431,152 @@ export const bookingAPI = {
         throw new Error(response.data?.message || 'Failed to fetch metrics');
       }
     });
+  },
+
+  // Add getAdminDashboardMetrics alias for backward compatibility
+  async getAdminDashboardMetrics(period: string = 'week'): Promise<DashboardMetrics> {
+    return this.getDashboardMetrics(period, true);
+  },
+
+  // Add updateBooking for GuestDetailsForm
+  async updateBooking(bookingId: string, bookingData: Partial<BookingRequest>): Promise<any> {
+    return makeApiRequest(async () => {
+      const response = await apiClient.put(`/bookings/${bookingId}`, bookingData);
+      
+      if (response.data && response.data.status === 'success') {
+        return response.data.data;
+      } else {
+        throw new Error(response.data?.message || 'Failed to update booking');
+      }
+    });
+  },
+
+  // Add updateBookingStatus for AdminBookingsList
+  async updateBookingStatus(bookingId: string, status: string, notes: string = ''): Promise<any> {
+    return makeApiRequest(async () => {
+      const response = await apiClient.put(`/bookings/${bookingId}/status`, { status, notes });
+      
+      if (response.data && response.data.status === 'success') {
+        return response.data.data;
+      } else {
+        throw new Error(response.data?.message || 'Failed to update booking status');
+      }
+    });
+  },
+
+  // Add assignDriver for AdminBookingsList
+  async assignDriver(bookingId: string, driverId: string, driverName: string, driverPhone: string): Promise<any> {
+    return makeApiRequest(async () => {
+      const response = await apiClient.put(`/bookings/${bookingId}/driver`, { 
+        driverId, driverName, driverPhone 
+      });
+      
+      if (response.data && response.data.status === 'success') {
+        return response.data.data;
+      } else {
+        throw new Error(response.data?.message || 'Failed to assign driver');
+      }
+    });
+  },
+
+  // Add getBookingReceipt for AdminBookingsList
+  async getBookingReceipt(bookingId: string): Promise<any> {
+    return makeApiRequest(async () => {
+      const response = await apiClient.get(`/bookings/${bookingId}/receipt`);
+      
+      if (response.data && response.data.status === 'success') {
+        return response.data.data;
+      } else {
+        throw new Error(response.data?.message || 'Failed to get booking receipt');
+      }
+    });
+  }
+};
+
+// Add Fare API service
+export const fareAPI = {
+  // Vehicle pricing methods
+  async getVehiclePricing(): Promise<any> {
+    return makeApiRequest(async () => {
+      const response = await apiClient.get('/vehicle-pricing');
+      
+      if (response.data && response.data.status === 'success') {
+        return response.data.data;
+      } else {
+        throw new Error(response.data?.message || 'Failed to fetch vehicle pricing');
+      }
+    });
+  },
+
+  async updateVehiclePricing(pricingData: VehiclePricingUpdateRequest): Promise<any> {
+    return makeApiRequest(async () => {
+      const response = await apiClient.put('/vehicle-pricing', pricingData);
+      
+      if (response.data && response.data.status === 'success') {
+        return response.data.data;
+      } else {
+        throw new Error(response.data?.message || 'Failed to update vehicle pricing');
+      }
+    });
+  },
+
+  // Tour fare methods
+  async getTourFares(): Promise<any> {
+    return makeApiRequest(async () => {
+      const response = await apiClient.get('/tour-fares');
+      
+      if (response.data && response.data.status === 'success') {
+        return response.data.data;
+      } else {
+        throw new Error(response.data?.message || 'Failed to fetch tour fares');
+      }
+    });
+  },
+
+  async updateTourFares(fareData: any): Promise<any> {
+    return makeApiRequest(async () => {
+      const response = await apiClient.put('/tour-fares', fareData);
+      
+      if (response.data && response.data.status === 'success') {
+        return response.data.data;
+      } else {
+        throw new Error(response.data?.message || 'Failed to update tour fares');
+      }
+    });
+  },
+
+  async addTourFare(tourData: any): Promise<any> {
+    return makeApiRequest(async () => {
+      const response = await apiClient.post('/tour-fares', tourData);
+      
+      if (response.data && response.data.status === 'success') {
+        return response.data.data;
+      } else {
+        throw new Error(response.data?.message || 'Failed to add tour fare');
+      }
+    });
+  },
+
+  async deleteTourFare(tourId: string): Promise<any> {
+    return makeApiRequest(async () => {
+      const response = await apiClient.delete(`/tour-fares/${tourId}`);
+      
+      if (response.data && response.data.status === 'success') {
+        return response.data.data;
+      } else {
+        throw new Error(response.data?.message || 'Failed to delete tour fare');
+      }
+    });
+  }
+};
+
+// Fix for BookingRequest to include sendEmailNotification
+export const bookingRequestHelper = {
+  addEmailNotification(bookingData: BookingRequest): any {
+    return {
+      ...bookingData,
+      sendEmailNotification: true
+    };
   }
 };
 

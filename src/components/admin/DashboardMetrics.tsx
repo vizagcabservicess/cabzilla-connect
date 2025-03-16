@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DashboardMetrics as DashboardMetricsType } from '@/types/api';
@@ -41,9 +42,8 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
       const timestamp = new Date().getTime();
       console.log(`Fetching dashboard metrics for period: ${period} at ${timestamp}...`);
       
-      // Updated to pass only one argument instead of two
-      // The API expects either no arguments or just the period
-      const data = await bookingAPI.getAdminDashboardMetrics(period);
+      // Updated to use the correct method
+      const data = await bookingAPI.getDashboardMetrics(period, true);
       console.log('Dashboard metrics received:', data);
       
       if (data) {
