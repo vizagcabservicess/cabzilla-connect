@@ -218,7 +218,8 @@ try {
     // Get user's bookings - adding more logging for debugging
     logError("Preparing to fetch bookings for user", ['user_id' => $userId]);
 
-    $stmt = $conn->prepare("SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC");
+    // FIX: Modified SQL query to use more explicit ORDER BY and include LIMIT clause
+    $stmt = $conn->prepare("SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC LIMIT 100");
     if (!$stmt) {
         logError("Prepare statement failed", ['error' => $conn->error]);
         throw new Exception('Database prepare error: ' . $conn->error);
@@ -241,12 +242,20 @@ try {
 
     // Debug: Log the SQL query for debugging
     logError("SQL Query executed", [
-        'query' => "SELECT * FROM bookings WHERE user_id = {$userId} ORDER BY created_at DESC",
+        'query' => "SELECT * FROM bookings WHERE user_id = {$userId} ORDER BY created_at DESC LIMIT 100",
         'timestamp' => time() // Add timestamp for cache tracking
     ]);
 
     $bookings = [];
     while ($row = $result->fetch_assoc()) {
+        // Log each row for debugging
+        logError("Booking record found", [
+            'id' => $row['id'],
+            'booking_number' => $row['booking_number'],
+            'pickup_date' => $row['pickup_date'],
+            'created_at' => $row['created_at']
+        ]);
+
         // Ensure all required fields are present
         $booking = [
             'id' => $row['id'],

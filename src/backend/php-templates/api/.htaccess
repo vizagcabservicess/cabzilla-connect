@@ -6,6 +6,12 @@ RewriteEngine On
 php_flag display_errors on
 php_value error_reporting E_ALL
 
+# Set higher memory limit and execution time
+php_value memory_limit 256M
+php_value max_execution_time 300
+php_value post_max_size 64M
+php_value upload_max_filesize 32M
+
 # Parse API routes to PHP files
 RewriteRule ^signup$ signup.php [L]
 RewriteRule ^login$ login.php [L]
@@ -30,6 +36,11 @@ RewriteRule ^admin/km-price/update$ admin/km-price-update.php [L]
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
     Header always set Access-Control-Allow-Headers "Content-Type, Authorization"
     Header always set Access-Control-Max-Age "3600"
+    
+    # Prevent caching of API responses
+    Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
 </IfModule>
 
 # Handle OPTIONS method for CORS preflight
@@ -38,3 +49,8 @@ RewriteRule .* - [R=200,L]
 
 # Prevent direct access to .php files
 Options -Indexes
+
+# Set higher timeouts
+<IfModule mod_reqtimeout.c>
+    RequestReadTimeout header=90 body=300
+</IfModule>

@@ -177,9 +177,9 @@ try {
         'updatedAt' => $booking['updated_at']
     ];
 
-    // Send email notification
+    // FIX: Improved email notification function
     $emailSent = sendBookingEmailNotification($formattedBooking);
-    logError("Email notification status", ['sent' => $emailSent ? 'yes' : 'no']);
+    logError("Email notification status", ['sent' => $emailSent ? 'yes' : 'no', 'recipient' => $passengerEmail]);
 
     // Send response
     sendJsonResponse([
@@ -191,4 +191,125 @@ try {
 } catch (Exception $e) {
     logError("Exception occurred during booking", ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
     sendJsonResponse(['status' => 'error', 'message' => 'Server error: ' . $e->getMessage()], 500);
+}
+
+// Enhanced email notification function
+function sendBookingEmailNotification($booking) {
+    try {
+        // Log the attempt
+        logError("Attempting to send booking confirmation email", [
+            'booking_id' => $booking['id'], 
+            'booking_number' => $booking['bookingNumber'],
+            'email' => $booking['passengerEmail']
+        ]);
+        
+        // Check if mail function exists
+        if (!function_exists('mail')) {
+            logError("PHP mail function not available");
+            return false;
+        }
+        
+        $to = $booking['passengerEmail'];
+        $subject = "Booking Confirmation - #" . $booking['bookingNumber'];
+        
+        // Create a nice HTML email
+        $message = "
+        <html>
+        <head>
+            <title>Booking Confirmation</title>
+            <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                .header { background: #4a90e2; color: white; padding: 10px 20px; }
+                .content { padding: 20px; border: 1px solid #ddd; }
+                .footer { font-size: 12px; color: #777; margin-top: 20px; }
+                table { border-collapse: collapse; width: 100%; }
+                th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
+                th { background-color: #f2f2f2; }
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <h2>Booking Confirmation</h2>
+                </div>
+                <div class='content'>
+                    <p>Dear {$booking['passengerName']},</p>
+                    <p>Thank you for booking with us. Your booking has been confirmed with the following details:</p>
+                    
+                    <table>
+                        <tr>
+                            <th>Booking Number</th>
+                            <td>#{$booking['bookingNumber']}</td>
+                        </tr>
+                        <tr>
+                            <th>Pickup Location</th>
+                            <td>{$booking['pickupLocation']}</td>
+                        </tr>";
+        
+        if (!empty($booking['dropLocation'])) {
+            $message .= "
+                        <tr>
+                            <th>Drop Location</th>
+                            <td>{$booking['dropLocation']}</td>
+                        </tr>";
+        }
+        
+        $message .= "
+                        <tr>
+                            <th>Pickup Date/Time</th>
+                            <td>" . date('Y-m-d h:i A', strtotime($booking['pickupDate'])) . "</td>
+                        </tr>
+                        <tr>
+                            <th>Vehicle Type</th>
+                            <td>{$booking['cabType']}</td>
+                        </tr>
+                        <tr>
+                            <th>Trip Type</th>
+                            <td>" . ucfirst($booking['tripType']) . " - " . ucfirst($booking['tripMode']) . "</td>
+                        </tr>
+                        <tr>
+                            <th>Amount</th>
+                            <td>₹" . number_format($booking['totalAmount'], 2) . "</td>
+                        </tr>
+                        <tr>
+                            <th>Status</th>
+                            <td>" . ucfirst($booking['status']) . "</td>
+                        </tr>
+                    </table>
+                    
+                    <p>We will assign a driver shortly and update you with their details before pickup time.</p>
+                    <p>For any changes or inquiries, please contact our customer support.</p>
+                    
+                    <p>Thank you for choosing our service!</p>
+                </div>
+                <div class='footer'>
+                    <p>This is an automated email. Please do not reply to this message.</p>
+                </div>
+            </div>
+        </body>
+        </html>";
+        
+        // To send HTML mail, the Content-type header must be set
+        $headers = "MIME-Version: 1.0" . "\r\n";
+        $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+        $headers .= 'From: CabBooking <noreply@cabbooking.com>' . "\r\n";
+        
+        // Attempt to send the email and log the result
+        $mailSent = @mail($to, $subject, $message, $headers);
+        
+        logError("Email sending result", [
+            'sent' => $mailSent ? 'success' : 'failed',
+            'to' => $to,
+            'subject' => $subject
+        ]);
+        
+        return $mailSent;
+    } catch (Exception $e) {
+        logError("Exception in sendBookingEmailNotification", [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        return false;
+    }
 }

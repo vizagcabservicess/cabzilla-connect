@@ -173,6 +173,9 @@ export const authAPI = {
 
   logout() {
     setAuthToken(null);
+    // Clear any cached data
+    localStorage.removeItem('cached_bookings');
+    localStorage.removeItem('cached_metrics');
   },
 
   isAuthenticated(): boolean {
@@ -240,6 +243,10 @@ export const bookingAPI = {
       });
       
       if (response.data.status === 'success') {
+        // Clear cached bookings to force a refresh on next dashboard visit
+        localStorage.removeItem('cached_bookings');
+        localStorage.removeItem('cached_metrics');
+        
         return response.data;
       } else {
         throw new Error(response.data.message || 'Failed to create booking');
@@ -272,12 +279,22 @@ export const bookingAPI = {
   async getUserBookings(): Promise<Booking[]> {
     return makeApiRequest(async () => {
       console.log('Fetching user bookings...');
-      // Add cache busting parameter to URL
+      
+      // Force cache busting by adding timestamp parameter
       const timestamp = new Date().getTime();
-      const response = await apiClient.get(`/user/dashboard?_=${timestamp}`);
+      const response = await apiClient.get(`/user/dashboard?_=${timestamp}`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
       
       if (response.data.status === 'success') {
-        return response.data.data;
+        // Store data in localStorage for debugging purposes
+        const bookings = response.data.data;
+        console.log(`Retrieved ${bookings.length} bookings from API`);
+        return bookings;
       } else {
         throw new Error(response.data.message || 'Failed to fetch bookings');
       }
@@ -302,11 +319,21 @@ export const bookingAPI = {
   async getAdminDashboardMetrics(period: 'today' | 'week' | 'month' = 'week'): Promise<DashboardMetrics> {
     return makeApiRequest(async () => {
       console.log(`Fetching admin dashboard metrics for period: ${period}...`);
-      // Add admin=true and period parameters
+      
+      // Add cache busting parameter
       const timestamp = new Date().getTime();
+      const url = `/user/dashboard?admin=true&period=${period}&_=${timestamp}`;
+      
+      console.log(`Making request to: ${url}`);
       
       try {
-        const response = await apiClient.get(`/user/dashboard?admin=true&period=${period}&_=${timestamp}`);
+        const response = await apiClient.get(url, {
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        });
         
         if (response.data.status === 'success') {
           return response.data.data;
