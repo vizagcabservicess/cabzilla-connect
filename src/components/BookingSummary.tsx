@@ -55,7 +55,8 @@ export function BookingSummary({
     setBookingId(generateBookingId());
   }, []);
 
-  if (!pickupLocation || !pickupDate || !selectedCab) {
+  // Return early only if we don't have the absolute minimum required information
+  if (!pickupLocation || !pickupDate) {
     return null;
   }
 
@@ -64,6 +65,15 @@ export function BookingSummary({
     : 1;
 
   const renderFareBreakdown = () => {
+    // Show a placeholder message if cab isn't selected yet
+    if (!selectedCab) {
+      return (
+        <div className="text-center py-3 text-gray-500">
+          <p>Select a cab to view fare details</p>
+        </div>
+      );
+    }
+    
     if (tripType === 'airport') {
       return (
         <>
@@ -268,14 +278,21 @@ export function BookingSummary({
             </div>
           </div>
         )}
-         <div className="flex items-start space-x-3">
-          <Users className="text-blue-500 mt-1 flex-shrink-0" size={18} />
-          <div>
-            <p className="text-xs text-gray-500">CAB TYPE</p>
-            <p className="font-medium text-gray-800">{selectedCab.name}</p>
-            <p className="text-xs text-gray-600">{selectedCab.capacity} persons • {selectedCab.luggage} bags</p>
+         
+        {selectedCab ? (
+          <div className="flex items-start space-x-3">
+            <Users className="text-blue-500 mt-1 flex-shrink-0" size={18} />
+            <div>
+              <p className="text-xs text-gray-500">CAB TYPE</p>
+              <p className="font-medium text-gray-800">{selectedCab.name}</p>
+              <p className="text-xs text-gray-600">{selectedCab.capacity} persons • {selectedCab.luggage} bags</p>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="border-t border-gray-100 pt-3 mt-2">
+            <p className="text-sm text-center text-gray-500">Please select a cab to proceed</p>
+          </div>
+        )}
 
         <div className="border-t border-gray-200 pt-4 mt-4">
           {renderFareBreakdown()}
@@ -283,7 +300,9 @@ export function BookingSummary({
 
         <div className="border-t border-gray-200 pt-4 flex justify-between items-center">
           <span className="font-semibold text-gray-800">Total Amount</span>
-          <span className="font-semibold text-xl text-gray-800">{formatPrice(totalPrice)}</span>
+          <span className="font-semibold text-xl text-gray-800">
+            {selectedCab ? formatPrice(totalPrice) : "—"}
+          </span>
         </div>
       </div>
     </div>

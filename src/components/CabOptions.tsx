@@ -33,7 +33,7 @@ export function CabOptions({
   const [selectedCabId, setSelectedCabId] = useState<string | null>(selectedCab?.id || null);
   const [cabFares, setCabFares] = useState<Record<string, number>>({});
 
-  // Reset cab selection and fares when key parameters change
+  // Reset cab selection when key parameters change
   useEffect(() => {
     setSelectedCabId(null);
     setCabFares({});
@@ -41,7 +41,7 @@ export function CabOptions({
     if (selectedCab) {
       onSelectCab(null as any); // Reset the selected cab
     }
-  }, [tripType, tripMode, hourlyPackage, distance, onSelectCab]);
+  }, [tripType, tripMode, hourlyPackage, onSelectCab]);
 
   // Calculate fares for all cab types whenever relevant parameters change
   useEffect(() => {
@@ -88,8 +88,10 @@ export function CabOptions({
       totalFare = calculateAirportFare(cab.name, distance);
     }
     else if (tripType === 'local' && hourlyPackage) {
+      // Get base package price for local rental
       totalFare = getLocalPackagePrice(hourlyPackage, cab.name);
       
+      // Calculate extra km charges if any
       const packageKm = hourlyPackage === '8hrs-80km' ? 80 : 100;
       if (distance > packageKm) {
         const extraKm = distance - packageKm;

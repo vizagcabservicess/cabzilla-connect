@@ -35,9 +35,7 @@ export function DashboardMetrics({ initialMetrics, period = 'week', onRefresh }:
 
   // Fetch metrics data when period changes
   useEffect(() => {
-    if (!initialMetrics || period) {
-      fetchMetrics();
-    }
+    fetchMetrics();
   }, [period]);
 
   const fetchMetrics = async () => {
