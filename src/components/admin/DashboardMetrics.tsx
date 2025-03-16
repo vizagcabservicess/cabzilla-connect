@@ -35,7 +35,7 @@ export function DashboardMetrics({ initialMetrics, period = 'week', onRefresh }:
 
   // Fetch metrics data when period changes
   useEffect(() => {
-    if (!initialMetrics) {
+    if (!initialMetrics || period) {
       fetchMetrics();
     }
   }, [period]);
@@ -45,7 +45,7 @@ export function DashboardMetrics({ initialMetrics, period = 'week', onRefresh }:
       setIsLoading(true);
       setError(null);
       console.log(`Fetching dashboard metrics for period: ${period}...`);
-      const data = await bookingAPI.getAdminDashboardMetrics(period);
+      const data = await bookingAPI.getAdminDashboardMetrics();
       console.log('Dashboard metrics received:', data);
       setMetrics(data);
       if (onRefresh) onRefresh();
