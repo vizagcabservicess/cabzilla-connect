@@ -285,7 +285,7 @@ export const bookingAPI = {
   async getBooking(id: string): Promise<Booking> {
     return makeApiRequest(async () => {
       console.log(`Fetching booking details for ID: ${id}`);
-      const response = await apiClient.get(`/book/edit/${id}`);
+      const response = await apiClient.get(`/booking/${id}/edit`);
       if (response.data.status === 'success') {
         return response.data.data;
       } else {
@@ -297,7 +297,7 @@ export const bookingAPI = {
   async updateBooking(id: string, bookingData: any): Promise<any> {
     return makeApiRequest(async () => {
       console.log(`Updating booking ID: ${id} with data:`, bookingData);
-      const response = await apiClient.post(`/book/edit/${id}`, bookingData);
+      const response = await apiClient.post(`/booking/${id}/edit`, bookingData);
       if (response.data.status === 'success') {
         return response.data;
       } else {

@@ -14,13 +14,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+// Enable error reporting for debugging
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
+
 // Get booking ID from URL
 $bookingId = isset($_GET['id']) ? intval($_GET['id']) : 0;
 
 if (!$bookingId) {
+    logError("Missing booking ID in request", ['GET' => $_GET, 'URL' => $_SERVER['REQUEST_URI']]);
     sendJsonResponse(['status' => 'error', 'message' => 'Invalid booking ID'], 400);
     exit;
 }
+
+// Log request details for debugging
+logError("Booking edit request", [
+    'method' => $_SERVER['REQUEST_METHOD'],
+    'booking_id' => $bookingId,
+    'request_uri' => $_SERVER['REQUEST_URI'],
+    'query_string' => $_SERVER['QUERY_STRING']
+]);
 
 // Check if this is a GET or POST request
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
@@ -333,9 +346,6 @@ function sendBookingUpdateNotification($booking) {
         'user_email' => $booking['passengerEmail'],
         'admin_email' => $adminEmail
     ]);
-    
-    // In a production environment, this would use PHP's mail() function
-    // For this implementation, we'll use PHP's mail() function directly
     
     // Prepare the email subject and message for user
     $userSubject = "Your booking #{$booking['bookingNumber']} has been updated";
