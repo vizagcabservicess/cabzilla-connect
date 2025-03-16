@@ -21,7 +21,7 @@ RewriteRule ^api/admin/km-price/update$ api/admin/km-price-update.php [L]
 # Set the default character set
 AddDefaultCharset UTF-8
 
-# Enable CORS
+# Enable CORS - Explicitly allow any origin
 <IfModule mod_headers.c>
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"

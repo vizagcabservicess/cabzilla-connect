@@ -25,7 +25,7 @@ RewriteRule ^admin/km-price/update$ admin/km-price-update.php [L]
     Header always set Expires "0"
 </FilesMatch>
 
-# Enable CORS
+# Enable CORS - Explicitly allow any origin
 <IfModule mod_headers.c>
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"

@@ -10,6 +10,16 @@ logError("Login endpoint called", [
     'raw_input' => file_get_contents('php://input')
 ]);
 
+// Allow CORS for OPTIONS requests (preflight)
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Methods: POST, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization');
+    header('Access-Control-Max-Age: 86400'); // 24 hours cache for preflight
+    http_response_code(200);
+    exit;
+}
+
 // Allow only POST requests
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
@@ -19,11 +29,12 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
+header('Access-Control-Allow-Origin: *');
 
 try {
     // Get the request body
     $input = file_get_contents('php://input');
-    logError("Login request received", ['input' => $input]);
+    logError("Login request received", ['raw_input' => $input]);
     
     $data = json_decode($input, true);
     
@@ -42,6 +53,11 @@ try {
     
     // Check if user exists
     $stmt = $conn->prepare("SELECT id, name, email, phone, password, role FROM users WHERE email = ?");
+    if (!$stmt) {
+        logError("Database prepare failed", ['error' => $conn->error]);
+        sendJsonResponse(['status' => 'error', 'message' => 'Database error: ' . $conn->error], 500);
+    }
+    
     $stmt->bind_param("s", $email);
     $result = $stmt->execute();
     

@@ -30,6 +30,7 @@ export function LoginForm() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   // Clear any existing tokens when the login form is mounted
   useEffect(() => {
@@ -65,6 +66,32 @@ export function LoginForm() {
         _timestamp: timestamp
       };
       
+      // Make direct fetch call to debug API connection
+      const apiUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com/api';
+      console.log('Using API URL:', `${apiUrl}/login`);
+      
+      // Try a direct fetch first to diagnose any issues
+      try {
+        const directResponse = await fetch(`${apiUrl}/login`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Cache-Control': 'no-cache, no-store'
+          },
+          body: JSON.stringify(requestWithTimestamp)
+        });
+        
+        console.log('Direct fetch response status:', directResponse.status);
+        if (!directResponse.ok) {
+          const errorText = await directResponse.text();
+          console.log('Error response from direct fetch:', errorText);
+        }
+      } catch (fetchError) {
+        console.error('Direct fetch failed:', fetchError);
+      }
+      
+      // Proceed with the original login flow
       const response = await authAPI.login(requestWithTimestamp);
       
       if (!response || !response.token) {
@@ -108,7 +135,7 @@ export function LoginForm() {
         errorMessage = 'Invalid email or password. Please try again.';
       } else if (errorMessage.includes('500')) {
         errorMessage = 'Server error. Please try again later.';
-      } else if (errorMessage.includes('network')) {
+      } else if (errorMessage.includes('network') || errorMessage.includes('failed')) {
         errorMessage = 'Network error. Please check your connection and try again.';
       }
       
@@ -130,6 +157,9 @@ export function LoginForm() {
 
   const handleRetry = () => {
     setError(null);
+    setRetryCount(prevCount => prevCount + 1);
+    // Try to clear any browser cache issues
+    window.location.reload();
   };
 
   if (error) {
@@ -171,6 +201,9 @@ export function LoginForm() {
             </FormItem>
           )}
         />
+        <div className="text-xs text-gray-500 mb-2">
+          API URL: {import.meta.env.VITE_API_BASE_URL || 'Using default URL'}
+        </div>
         <Button type="submit" className="w-full" disabled={isLoading}>
           {isLoading ? "Logging in..." : "Login"}
         </Button>
