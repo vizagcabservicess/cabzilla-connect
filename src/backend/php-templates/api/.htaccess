@@ -12,9 +12,10 @@ php_value max_execution_time 300
 php_value post_max_size 64M
 php_value upload_max_filesize 32M
 
-# Enable PHP mail functionality
+# Enable PHP mail functionality with proper configuration
 php_value sendmail_path "/usr/sbin/sendmail -t -i"
 php_flag mail.add_x_header On
+php_value mail.force_extra_parameters "-f noreply@yourdomain.com"
 
 # Parse API routes to PHP files
 RewriteRule ^signup$ signup.php [L]
@@ -56,5 +57,8 @@ Options -Indexes
 
 # Set higher timeouts for long operations
 <IfModule mod_reqtimeout.c>
-    RequestReadTimeout header=90 body=300
+    RequestReadTimeout header=90 body=600
 </IfModule>
+
+# Configure additional timeouts
+TimeOut 600

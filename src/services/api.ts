@@ -59,6 +59,16 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => {
     console.log(`API Response: ${response.status} ${response.config.url}`, response.data);
+    
+    // Special handling for book.php responses
+    if (response.config.url?.includes('/book')) {
+      // Check if the response data indicates an error despite 200 status
+      if (response.data.status === 'error') {
+        console.error('Booking error from server:', response.data.message);
+        return Promise.reject(new Error(response.data.message || 'Unknown booking error'));
+      }
+    }
+    
     return response;
   },
   (error) => {
@@ -87,7 +97,7 @@ const handleApiError = (error: any) => {
       console.error('Status Code:', axiosError.response.status);
       console.error('Response Data:', axiosError.response.data);
       
-      // Return error with response data if available - FIX: Handle different response data types properly
+      // Return error with response data if available
       return new Error(
         `Error ${axiosError.response.status}: ${
           typeof axiosError.response.data === 'object' && axiosError.response.data !== null
@@ -220,7 +230,7 @@ export const bookingAPI = {
     return makeApiRequest(async () => {
       console.log('Creating booking with data:', bookingData);
       
-      // Add better validation
+      // Validate critical fields
       if (!bookingData.pickupLocation) {
         throw new Error('Pickup location is required');
       }
@@ -229,29 +239,47 @@ export const bookingAPI = {
         throw new Error('Pickup date is required');
       }
       
-      // Format numeric values properly
+      if (!bookingData.passengerName || !bookingData.passengerEmail || !bookingData.passengerPhone) {
+        throw new Error('Passenger details are required');
+      }
+      
+      // Format numeric values properly and ensure required fields
       const formattedData = {
         ...bookingData,
+        pickupLocation: bookingData.pickupLocation.trim(),
+        dropLocation: bookingData.dropLocation ? bookingData.dropLocation.trim() : '',
         distance: bookingData.distance || 0,
         totalAmount: bookingData.totalAmount || 0,
         sendEmailNotification: true // Enable email notifications
       };
       
-      // Use longer timeout for booking creation
+      console.log('Submitting formatted booking data:', formattedData);
+      
+      // Use longer timeout for booking creation and clear response cache
       const response = await apiClient.post('/book', formattedData, {
-        timeout: 60000 // 60 seconds timeout for booking creation
+        timeout: 120000, // 120 seconds timeout for booking creation
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
       });
+      
+      // Check if response indicates error despite 200 status code
+      if (response.data.status === 'error') {
+        throw new Error(response.data.message || 'Failed to create booking');
+      }
       
       if (response.data.status === 'success') {
         // Clear cached bookings to force a refresh on next dashboard visit
         localStorage.removeItem('cached_bookings');
         localStorage.removeItem('cached_metrics');
         
-        return response.data;
+        return response.data.data || response.data;
       } else {
-        throw new Error(response.data.message || 'Failed to create booking');
+        throw new Error(response.data.message || 'Failed to create booking: Unknown error');
       }
-    }, 4, 3000); // More retries with longer delay for booking creation
+    }, 4, 5000); // More retries with longer delay for booking creation
   },
 
   async getBooking(id: string): Promise<Booking> {

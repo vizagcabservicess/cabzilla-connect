@@ -31,6 +31,7 @@ export function GuestDetailsForm({
   const [isEditMode, setIsEditMode] = useState(isEditing);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [attemptCount, setAttemptCount] = useState(0);
 
   const handleSubmit = async (details: any) => {
     if (isSubmitting || isSaving) return; // Prevent double submission
@@ -39,6 +40,9 @@ export function GuestDetailsForm({
     setErrorMessage(null);
     
     try {
+      // Increment attempt counter for debugging
+      setAttemptCount(prev => prev + 1);
+      
       if (bookingId && isEditMode) {
         // If editing an existing booking
         const updatedData = {
@@ -58,13 +62,15 @@ export function GuestDetailsForm({
         
         setIsEditMode(false);
       } else {
-        // For new bookings
+        // For new bookings - attempt direct submission to API
+        console.log(`Submitting booking (attempt ${attemptCount + 1})`, details);
         onSubmit(details);
       }
     } catch (error) {
       console.error("Booking error:", error);
       setErrorMessage(error instanceof Error ? error.message : "Something went wrong with your booking. Please try again.");
       
+      // Show detailed error in toast for better visibility
       toast({
         title: "Booking Failed",
         description: error instanceof Error ? error.message : "Something went wrong with your booking",

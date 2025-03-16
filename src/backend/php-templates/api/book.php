@@ -36,7 +36,7 @@ logError("Booking request data", ['data' => $data]);
 
 // Validate required fields
 $requiredFields = [
-    'pickupLocation', 'pickupDate', 'cabType', 
+    'pickupLocation', 'cabType', 
     'tripType', 'tripMode', 'totalAmount', 
     'passengerName', 'passengerPhone', 'passengerEmail'
 ];
@@ -206,7 +206,7 @@ try {
     sendJsonResponse(['status' => 'error', 'message' => 'Server error: ' . $e->getMessage()], 500);
 }
 
-// Enhanced email notification function with improved error handling
+// Enhanced email notification function with improved error handling and direct mail configuration
 function sendBookingEmailNotification($booking) {
     try {
         // Log the attempt
@@ -306,7 +306,8 @@ function sendBookingEmailNotification($booking) {
         // To send HTML mail, the Content-type header must be set
         $headers = "MIME-Version: 1.0" . "\r\n";
         $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-        $headers .= 'From: CabBooking <noreply@cabbooking.com>' . "\r\n";
+        $headers .= 'From: CabBooking <noreply@' . $_SERVER['HTTP_HOST'] . '>' . "\r\n";
+        $headers .= 'Reply-To: noreply@' . $_SERVER['HTTP_HOST'] . "\r\n";
         
         // Add detailed logging before sending
         logError("Email content ready to send", [
@@ -316,14 +317,30 @@ function sendBookingEmailNotification($booking) {
             'message_length' => strlen($message)
         ]);
         
-        // Attempt to send the email and log the result
+        // Attempt to send the email with better error capture
         $mailSent = @mail($to, $subject, $message, $headers);
+        $mailError = error_get_last();
         
-        logError("Email sending result", [
+        // If mail fails, try using a different From header
+        if (!$mailSent) {
+            logError("First mail attempt failed, trying with different headers", [
+                'error' => $mailError
+            ]);
+            
+            // Try with a simpler header
+            $altHeaders = "MIME-Version: 1.0" . "\r\n";
+            $altHeaders .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+            $altHeaders .= 'From: booking@example.com' . "\r\n";
+            
+            $mailSent = @mail($to, $subject, $message, $altHeaders);
+            $mailError = error_get_last();
+        }
+        
+        logError("Email sending final result", [
             'sent' => $mailSent ? 'success' : 'failed',
             'to' => $to,
             'subject' => $subject,
-            'php_error' => error_get_last()
+            'php_error' => $mailError
         ]);
         
         return $mailSent;
