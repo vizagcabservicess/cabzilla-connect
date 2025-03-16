@@ -115,7 +115,7 @@ try {
             'date_condition' => $dateCondition
         ]);
         
-        // Get total bookings for the period
+        // Get total bookings for the period - FIXED: Include all bookings regardless of user_id
         $totalBookingsQuery = "SELECT COUNT(*) as total FROM bookings $dateCondition";
         $totalBookingsResult = $conn->query($totalBookingsQuery);
         $totalBookings = $totalBookingsResult->fetch_assoc()['total'] ?? 0;
@@ -215,17 +215,20 @@ try {
         exit;
     }
 
-    // Get user's bookings - adding more logging for debugging
-    logError("Preparing to fetch bookings for user", ['user_id' => $userId]);
+    // FIXED: Get user's bookings - CRITICAL FIX: We need to show both bookings with matching user_id and
+    // bookings with matching passenger email for non-logged-in bookings
+    logError("Preparing to fetch bookings for user", ['user_id' => $userId, 'email' => $userData['email']]);
 
-    // FIX: Modified SQL query to use more explicit ORDER BY and include LIMIT clause
-    $stmt = $conn->prepare("SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC LIMIT 100");
+    // FIXED: SQL query now includes both user_id AND email matches for the user
+    $query = "SELECT * FROM bookings WHERE (user_id = ? OR passenger_email = ?) ORDER BY created_at DESC LIMIT 100";
+    $stmt = $conn->prepare($query);
     if (!$stmt) {
-        logError("Prepare statement failed", ['error' => $conn->error]);
+        logError("Prepare statement failed", ['error' => $conn->error, 'query' => $query]);
         throw new Exception('Database prepare error: ' . $conn->error);
     }
     
-    $stmt->bind_param("i", $userId);
+    $userEmail = $userData['email'] ?? '';
+    $stmt->bind_param("is", $userId, $userEmail);
     $executed = $stmt->execute();
     
     if (!$executed) {
@@ -242,8 +245,9 @@ try {
 
     // Debug: Log the SQL query for debugging
     logError("SQL Query executed", [
-        'query' => "SELECT * FROM bookings WHERE user_id = {$userId} ORDER BY created_at DESC LIMIT 100",
-        'timestamp' => time() // Add timestamp for cache tracking
+        'query' => "SELECT * FROM bookings WHERE (user_id = {$userId} OR passenger_email = '{$userEmail}') ORDER BY created_at DESC LIMIT 100",
+        'timestamp' => time(), // Add timestamp for cache tracking
+        'result_size' => $result->num_rows
     ]);
 
     $bookings = [];
@@ -283,7 +287,7 @@ try {
     }
 
     // Log count of real bookings found
-    logError("Real bookings found", ['count' => count($bookings), 'user_id' => $userId]);
+    logError("Real bookings found", ['count' => count($bookings), 'user_id' => $userId, 'email' => $userEmail]);
 
     // Return empty array if no bookings found instead of providing demo data
     if (empty($bookings)) {

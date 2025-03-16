@@ -2,7 +2,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, RefreshCw, WifiOff, Server, FileQuestion, Mail, ArrowRightCircle } from "lucide-react";
+import { AlertTriangle, RefreshCw, WifiOff, Server, FileQuestion, Mail, ArrowRightCircle, ShieldAlert } from "lucide-react";
 
 interface ApiErrorFallbackProps {
   error: Error | string;
@@ -30,6 +30,9 @@ export function ApiErrorFallback({
   
   const isEmailError = 
     /email|mail|notification|failed to send/i.test(errorMessage);
+    
+  const isDatabaseError = 
+    /database|db|query|sql|constraint|foreign key|insert|update|delete/i.test(errorMessage);
 
   const handleRetry = () => {
     console.log("Retrying after error...");
@@ -66,7 +69,11 @@ export function ApiErrorFallback({
         ? Server 
         : (is404Error 
             ? FileQuestion 
-            : (isEmailError ? Mail : AlertTriangle)));
+            : (isEmailError 
+                ? Mail 
+                : (isDatabaseError 
+                    ? ShieldAlert
+                    : AlertTriangle))));
 
   return (
     <Card className="w-full border-red-200 bg-red-50">
@@ -88,12 +95,16 @@ export function ApiErrorFallback({
                   ? "Resource Not Found" 
                   : (isEmailError
                     ? "Email Notification Issue"
-                    : "Error")))}
+                    : (isDatabaseError
+                      ? "Database Error"
+                      : "Error"))))}
           </AlertTitle>
           <AlertDescription>
-            {isNetworkError 
-              ? "Unable to connect to the server. Please check your internet connection or try again later."
-              : errorMessage}
+            {isDatabaseError 
+              ? "There was an issue with our database. Your booking information may not have been saved properly."
+              : isNetworkError 
+                ? "Unable to connect to the server. Please check your internet connection or try again later."
+                : errorMessage}
           </AlertDescription>
         </Alert>
         
@@ -141,6 +152,19 @@ export function ApiErrorFallback({
               <li>The booking was created but email notification failed</li>
               <li>Your booking is still valid and can be viewed in your dashboard</li>
               <li>The server's email configuration may need adjustment</li>
+            </ul>
+            <p className="mt-3 text-xs text-gray-500">Error details: {errorMessage}</p>
+          </div>
+        )}
+        
+        {isDatabaseError && (
+          <div className="text-sm text-gray-700 mt-4">
+            <p className="font-medium">Database issues:</p>
+            <ul className="list-disc pl-5 mt-2 space-y-1">
+              <li>There may be an issue with our database connection</li>
+              <li>Your booking information might not have been saved correctly</li>
+              <li>This is usually a temporary issue that our team is already working on</li>
+              <li>Please try again in a few minutes or contact customer support</li>
             </ul>
             <p className="mt-3 text-xs text-gray-500">Error details: {errorMessage}</p>
           </div>

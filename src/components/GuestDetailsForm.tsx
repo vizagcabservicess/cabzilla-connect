@@ -1,4 +1,3 @@
-
 import { useRef, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
@@ -35,12 +34,16 @@ export function GuestDetailsForm({
   const [attemptCount, setAttemptCount] = useState(0);
   const [bookingSuccess, setBookingSuccess] = useState(false);
   const [processingState, setProcessingState] = useState<'idle' | 'submitting' | 'processing' | 'success' | 'error'>('idle');
+  const [showErrorDetails, setShowErrorDetails] = useState(false);
+  const [errorDetails, setErrorDetails] = useState<string | null>(null);
 
   const handleSubmit = async (details: any) => {
     if (isSubmitting || isSaving) return; // Prevent double submission
     
     setIsSaving(true);
     setErrorMessage(null);
+    setErrorDetails(null);
+    setShowErrorDetails(false);
     setProcessingState('submitting');
     
     try {
@@ -89,12 +92,29 @@ export function GuestDetailsForm({
     } catch (error) {
       console.error("Booking error:", error);
       setProcessingState('error');
-      setErrorMessage(error instanceof Error ? error.message : "Something went wrong with your booking. Please try again.");
+      
+      let errorMsg = "Something went wrong with your booking. Please try again.";
+      let detailedError = null;
+      
+      if (error instanceof Error) {
+        errorMsg = error.message;
+        detailedError = JSON.stringify(error, Object.getOwnPropertyNames(error), 2);
+      } else if (typeof error === 'object' && error !== null) {
+        try {
+          errorMsg = error.toString();
+          detailedError = JSON.stringify(error, null, 2);
+        } catch (e) {
+          // Keep default error message
+        }
+      }
+      
+      setErrorMessage(errorMsg);
+      setErrorDetails(detailedError);
       
       // Show detailed error in toast for better visibility
       toast({
         title: "Booking Failed",
-        description: error instanceof Error ? error.message : "Something went wrong with your booking",
+        description: errorMsg,
         variant: "destructive",
         duration: 5000,
       });
@@ -102,6 +122,56 @@ export function GuestDetailsForm({
       setIsSaving(false);
     }
   };
+
+  const toggleErrorDetails = () => {
+    setShowErrorDetails(prev => !prev);
+  };
+
+  // If we encounter a server error, offer an alternative
+  if (errorMessage && errorMessage.includes('500') && attemptCount > 2) {
+    return (
+      <div className="p-4 bg-white rounded-lg shadow">
+        <ApiErrorFallback 
+          error={errorMessage}
+          onRetry={() => {
+            setErrorMessage(null);
+            setProcessingState('idle');
+            setAttemptCount(0);
+          }}
+          title="Booking Error"
+        />
+        
+        <div className="mt-4 text-sm text-gray-600">
+          <p>If you continue to experience problems, please try:</p>
+          <ul className="list-disc ml-5 mt-2">
+            <li>Refreshing the page and trying again</li>
+            <li>Using a different browser</li>
+            <li>Contacting customer support</li>
+            <li>Try our WhatsApp booking option</li>
+          </ul>
+        </div>
+        
+        {errorDetails && (
+          <div className="mt-4">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={toggleErrorDetails}
+              className="text-xs"
+            >
+              {showErrorDetails ? "Hide Error Details" : "Show Error Details"}
+            </Button>
+            
+            {showErrorDetails && (
+              <pre className="mt-2 p-3 bg-gray-100 rounded text-xs overflow-x-auto">
+                {errorDetails}
+              </pre>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div ref={formRef} className="transition-all duration-300 rounded-lg">
@@ -148,6 +218,21 @@ export function GuestDetailsForm({
             <p className="font-medium">Booking Error</p>
             <p className="text-sm">{errorMessage}</p>
             <p className="text-sm mt-1">Please check your details and try again, or contact support if the problem persists.</p>
+            
+            {attemptCount > 1 && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="mt-1 h-7 text-xs"
+                onClick={() => {
+                  setErrorMessage(null);
+                  setProcessingState('idle');
+                  setAttemptCount(0);
+                }}
+              >
+                Try again
+              </Button>
+            )}
           </div>
         </div>
       )}

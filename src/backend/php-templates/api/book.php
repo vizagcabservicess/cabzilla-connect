@@ -96,13 +96,38 @@ try {
         exit;
     }
 
+    // FIXED: Check if user exists before inserting booking (to avoid foreign key constraint errors)
+    if ($userId !== null) {
+        $userCheckStmt = $conn->prepare("SELECT id FROM users WHERE id = ?");
+        if (!$userCheckStmt) {
+            logError("User check prepare statement failed", ['error' => $conn->error]);
+            // Continue with null user_id if user check fails
+            $userId = null;
+        } else {
+            $userCheckStmt->bind_param("i", $userId);
+            if (!$userCheckStmt->execute()) {
+                logError("User check execute failed", ['error' => $userCheckStmt->error]);
+                // Continue with null user_id if user check fails
+                $userId = null;
+            } else {
+                $userResult = $userCheckStmt->get_result();
+                if ($userResult->num_rows === 0) {
+                    logError("User ID not found in database", ['user_id' => $userId]);
+                    // User doesn't exist, set to NULL to avoid foreign key issues
+                    $userId = null;
+                }
+                $userCheckStmt->close();
+            }
+        }
+    }
+
     // Generate a unique booking number
     $bookingNumber = generateBookingNumber();
 
     // Debug log the user ID
     logError("User ID for booking", ['user_id' => $userId]);
 
-    // Prepare the SQL query - make distance nullable
+    // FIXED: Prepare SQL query with proper NULL handling
     $sql = "INSERT INTO bookings 
             (user_id, booking_number, pickup_location, drop_location, pickup_date, 
             return_date, cab_type, distance, trip_type, trip_mode, 
@@ -142,6 +167,7 @@ try {
         'total' => $totalAmount
     ]);
 
+    // FIXED: Better bind_param with NULL handling
     $stmt->bind_param(
         "issssssdssdsssiss",
         $userId, $bookingNumber, $pickupLocation, $dropLocation, $pickupDate,
@@ -152,11 +178,50 @@ try {
 
     if (!$stmt->execute()) {
         logError("Execute statement failed", ['error' => $stmt->error]);
-        sendJsonResponse(['status' => 'error', 'message' => 'Failed to create booking: ' . $stmt->error], 500);
-        exit;
+        // FIXED: Better error handling with specific foreign key constraint error
+        if (strpos($stmt->error, 'foreign key constraint') !== false) {
+            sendJsonResponse([
+                'status' => 'error', 
+                'message' => 'Database constraint error. Creating booking without user association.',
+                'detail' => $stmt->error
+            ], 500);
+            // Try again with NULL user_id
+            $userId = null;
+            $stmt->close();
+            
+            // Retry with null user_id
+            $retryStmt = $conn->prepare($sql);
+            if (!$retryStmt) {
+                logError("Retry prepare statement failed", ['error' => $conn->error]);
+                sendJsonResponse(['status' => 'error', 'message' => 'Database retry error: ' . $conn->error], 500);
+                exit;
+            }
+            
+            $retryStmt->bind_param(
+                "issssssdssdsssiss",
+                $userId, $bookingNumber, $pickupLocation, $dropLocation, $pickupDate,
+                $returnDate, $cabType, $distance, $tripType, $tripMode,
+                $totalAmount, $passengerName, $passengerPhone, $passengerEmail,
+                $hourlyPackage, $tourId, $status
+            );
+            
+            if (!$retryStmt->execute()) {
+                logError("Retry execute failed", ['error' => $retryStmt->error]);
+                sendJsonResponse(['status' => 'error', 'message' => 'Database retry failed: ' . $retryStmt->error], 500);
+                exit;
+            }
+            
+            $bookingId = $conn->insert_id;
+            $retryStmt->close();
+        } else {
+            sendJsonResponse(['status' => 'error', 'message' => 'Failed to create booking: ' . $stmt->error], 500);
+            exit;
+        }
+    } else {
+        $bookingId = $conn->insert_id;
+        $stmt->close();
     }
 
-    $bookingId = $conn->insert_id;
     logError("Booking created", ['booking_id' => $bookingId, 'booking_number' => $bookingNumber, 'user_id' => $userId]);
 
     // Get the created booking
@@ -206,7 +271,7 @@ try {
     ];
 
     // Send email notification
-    $emailSent = sendBookingEmailNotification($formattedBooking);
+    $emailSent = sendBookingEmailNotification($formattedBooking, 'narendrakumarupwork@gmail.com');
     logError("Email notification status", [
         'sent' => $emailSent ? 'yes' : 'no', 
         'recipient' => $passengerEmail,
@@ -255,4 +320,136 @@ function getRequestHeaders() {
     }
     
     return $headers;
+}
+
+/**
+ * Send email notification for booking
+ * 
+ * @param array $booking
+ * @param string $fromEmail
+ * @return bool
+ */
+function sendBookingEmailNotification($booking, $fromEmail = 'narendrakumarupwork@gmail.com') {
+    try {
+        logError("Preparing email notification", [
+            'booking_id' => $booking['id'],
+            'to' => $booking['passengerEmail']
+        ]);
+        
+        $to = $booking['passengerEmail'];
+        $subject = "Your Cab Booking Confirmation - Booking #{$booking['bookingNumber']}";
+        
+        // Set important email headers for better deliverability
+        $headers = [
+            'From' => "Cab Booking <{$fromEmail}>",
+            'Reply-To' => $fromEmail,
+            'X-Mailer' => 'PHP/' . phpversion(),
+            'MIME-Version' => '1.0',
+            'Content-Type' => 'text/html; charset=UTF-8'
+        ];
+        
+        // Build email headers string
+        $headerString = '';
+        foreach ($headers as $name => $value) {
+            $headerString .= $name . ': ' . $value . "\r\n";
+        }
+        
+        // Format date
+        $formattedPickupDate = date('d M Y, h:i A', strtotime($booking['pickupDate']));
+        
+        // Create HTML email body
+        $message = "
+        <html>
+        <head>
+            <title>Booking Confirmation</title>
+            <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                .header { background-color: #3b82f6; color: white; padding: 15px; text-align: center; }
+                .content { padding: 20px; border: 1px solid #ddd; }
+                .booking-details { margin: 20px 0; }
+                .detail-row { display: flex; margin-bottom: 10px; }
+                .detail-label { font-weight: bold; width: 150px; }
+                .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #777; }
+                .amount { font-size: 18px; font-weight: bold; color: #3b82f6; }
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <h2>Booking Confirmation</h2>
+                </div>
+                <div class='content'>
+                    <p>Dear {$booking['passengerName']},</p>
+                    <p>Thank you for booking with us. Your booking has been confirmed.</p>
+                    
+                    <div class='booking-details'>
+                        <div class='detail-row'>
+                            <div class='detail-label'>Booking Number:</div>
+                            <div>{$booking['bookingNumber']}</div>
+                        </div>
+                        <div class='detail-row'>
+                            <div class='detail-label'>Pickup Location:</div>
+                            <div>{$booking['pickupLocation']}</div>
+                        </div>";
+        
+        if (!empty($booking['dropLocation'])) {
+            $message .= "
+                        <div class='detail-row'>
+                            <div class='detail-label'>Drop Location:</div>
+                            <div>{$booking['dropLocation']}</div>
+                        </div>";
+        }
+        
+        $message .= "
+                        <div class='detail-row'>
+                            <div class='detail-label'>Pickup Date:</div>
+                            <div>{$formattedPickupDate}</div>
+                        </div>
+                        <div class='detail-row'>
+                            <div class='detail-label'>Cab Type:</div>
+                            <div>{$booking['cabType']}</div>
+                        </div>
+                        <div class='detail-row'>
+                            <div class='detail-label'>Trip Type:</div>
+                            <div>{$booking['tripType']} ({$booking['tripMode']})</div>
+                        </div>
+                        <div class='detail-row'>
+                            <div class='detail-label'>Amount:</div>
+                            <div class='amount'>₹{$booking['totalAmount']}</div>
+                        </div>
+                    </div>
+                    
+                    <p>Our driver will contact you before the pickup time. For any queries, please contact our customer support.</p>
+                    <p>We wish you a comfortable journey!</p>
+                </div>
+                <div class='footer'>
+                    <p>This is an automated email, please do not reply to this message.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        ";
+        
+        // Set additional parameters for the mail function
+        $additionalParams = "-f " . $fromEmail;
+        
+        // Attempt to send email
+        logError("Sending email", [
+            'to' => $to,
+            'subject' => $subject,
+            'header_length' => strlen($headerString),
+            'message_length' => strlen($message)
+        ]);
+        
+        // Add error suppression operator to prevent mail() warnings from breaking JSON response
+        $result = @mail($to, $subject, $message, $headerString, $additionalParams);
+        
+        logError("Email sending result", ['success' => $result ? 'yes' : 'no']);
+        
+        return $result;
+    } catch (Exception $e) {
+        logError("Email sending exception", ['error' => $e->getMessage()]);
+        return false;
+    }
 }

@@ -1,3 +1,4 @@
+
 export interface CabType {
   id: string;
   name: string;
@@ -106,15 +107,20 @@ export const hourlyPackages: HourlyPackage[] = [
   }
 ];
 
+// FIXED: Extra charges per cab type with consistent pricing
 export const extraCharges = {
   sedan: { perHour: 300, perKm: 14 },
+  suv: { perHour: 350, perKm: 18 },
   ertiga: { perHour: 350, perKm: 18 },
-  innova: { perHour: 400, perKm: 20 }
+  innova: { perHour: 400, perKm: 20 },
+  tempo: { perHour: 500, perKm: 22 },
+  luxury: { perHour: 600, perKm: 25 }
 };
 
 export const oneWayRates = {
   sedan: 13,
   ertiga: 16,
+  suv: 16,
   innova: 18,
   tempo: 22,
   luxury: 25
@@ -176,31 +182,60 @@ export const tourFares = {
   }
 };
 
+// FIXED: Improved local package pricing with caching support
+const localPackagePrices = {
+  '8hrs-80km': {
+    sedan: 2400,
+    suv: 3000,
+    ertiga: 3000,
+    innova: 3500,
+    tempo: 5000,
+    luxury: 6000
+  },
+  '10hrs-100km': {
+    sedan: 3000,
+    suv: 3500,
+    ertiga: 3500,
+    innova: 4000,
+    tempo: 6000,
+    luxury: 7000
+  }
+};
+
+// FIXED: Cache for package prices to improve performance
+const packagePriceCache = new Map();
+
 export const getLocalPackagePrice = (packageId: string, cabType: string): number => {
+  const cacheKey = `${packageId}_${cabType.toLowerCase()}`;
+  
+  // Check if we have a cached price
+  if (packagePriceCache.has(cacheKey)) {
+    return packagePriceCache.get(cacheKey);
+  }
+  
   const pkg = hourlyPackages.find(p => p.id === packageId);
   if (!pkg) return 0;
   
   const cabLower = cabType.toLowerCase();
+  let price = 0;
   
-  if (packageId === '8hrs-80km') {
-    if (cabLower === 'sedan') return 2400;
-    if (cabLower === 'ertiga') return 3000;
-    if (cabLower === 'innova') return 3500;
-    if (cabLower === 'innova crysta') return 3500;
+  // First check if we have a direct price in our price matrix
+  if (packageId in localPackagePrices && cabLower in localPackagePrices[packageId as keyof typeof localPackagePrices]) {
+    price = localPackagePrices[packageId as keyof typeof localPackagePrices][cabLower as keyof typeof localPackagePrices[keyof typeof localPackagePrices]];
   } 
-  else if (packageId === '10hrs-100km') {
-    if (cabLower === 'sedan') return 3000;
-    if (cabLower === 'ertiga') return 3500;
-    if (cabLower === 'innova') return 4000;
-    if (cabLower === 'innova crysta') return 4000;
+  // Fallback to standard calculation
+  else {
+    if (cabLower === 'sedan') price = 2400;
+    else if (cabLower === 'ertiga' || cabLower === 'suv') price = 3000;
+    else if (cabLower === 'innova' || cabLower === 'innova crysta') price = 3500;
+    else if (cabLower.includes('tempo')) price = 5000;
+    else price = pkg.basePrice; // Fallback to package base price
   }
   
-  if (cabLower === 'sedan') return 2400;
-  if (cabLower === 'ertiga') return 3000;
-  if (cabLower === 'innova' || cabLower === 'innova crysta') return 3500;
-  if (cabLower.includes('tempo')) return 5000;
+  // Cache the result
+  packagePriceCache.set(cacheKey, price);
   
-  return pkg.basePrice; // Fallback to package base price
+  return price;
 };
 
 export function calculateFare(
@@ -227,8 +262,8 @@ export function calculateFare(
     return baseFare;
   }
   else if (tripType === 'local' && hourlyPackageId) {
-    // For local packages, get the specific package price based on cab type
-    const basePackagePrice = getLocalPackagePrice(hourlyPackageId, cabType.name);
+    // FIXED: For local packages, get the specific package price based on cab type
+    const basePackagePrice = getLocalPackagePrice(hourlyPackageId, cabType.id);
     totalFare = basePackagePrice;
     
     console.log(`Local package base price for ${cabType.name}: ${basePackagePrice}`);
@@ -237,16 +272,19 @@ export function calculateFare(
     
     if (selectedPackage && distance > selectedPackage.kilometers) {
       const extraKm = distance - selectedPackage.kilometers;
+      
+      // FIXED: Get correct extra charge rates for the cab type
+      let extraChargeRate = cabType.pricePerKm; // Default fallback
+      
+      // Get the extra charge rate for this cab type
       const extraChargeRates = extraCharges[cabType.id as keyof typeof extraCharges];
       if (extraChargeRates) {
-        const extraCost = extraKm * extraChargeRates.perKm;
-        console.log(`Extra ${extraKm}km at rate ${extraChargeRates.perKm}: ${extraCost}`);
-        totalFare += extraCost;
-      } else {
-        const extraCost = extraKm * cabType.pricePerKm;
-        console.log(`Extra ${extraKm}km at default rate ${cabType.pricePerKm}: ${extraCost}`);
-        totalFare += extraCost;
+        extraChargeRate = extraChargeRates.perKm;
       }
+      
+      const extraCost = extraKm * extraChargeRate;
+      console.log(`Extra ${extraKm}km at rate ${extraChargeRate}: ${extraCost}`);
+      totalFare += extraCost;
     }
     
     console.log(`Final local package fare: ${totalFare}`);
@@ -262,26 +300,40 @@ export function calculateFare(
     // Get pricing factors based on cab type
     let basePrice = 0, perKmRate = 0, driverAllowance = 250, nightHaltCharge = 0;
     
-    switch (cabType.name.toLowerCase()) {
-      case "sedan":
-        basePrice = 4200;
-        perKmRate = 14;
-        nightHaltCharge = 700;
-        break;
-      case "ertiga":
-        basePrice = 5400;
-        perKmRate = 18;
-        nightHaltCharge = 1000;
-        break;
-      case "innova crysta":
-        basePrice = 6000;
-        perKmRate = 20;
-        nightHaltCharge = 1000;
-        break;
-      default:
-        basePrice = cabType.price;
-        perKmRate = cabType.pricePerKm;
-        nightHaltCharge = 700;
+    // FIXED: More consistent cab type handling with fallback
+    const cabId = cabType.id.toLowerCase();
+    const cabName = cabType.name.toLowerCase();
+    
+    if (cabId === 'sedan') {
+      basePrice = 4200;
+      perKmRate = 14;
+      nightHaltCharge = 700;
+    } 
+    else if (cabId === 'suv' || cabId === 'ertiga' || cabName.includes('ertiga')) {
+      basePrice = 5400;
+      perKmRate = 18;
+      nightHaltCharge = 1000;
+    } 
+    else if (cabId === 'innova' || cabName.includes('innova')) {
+      basePrice = 6000;
+      perKmRate = 20;
+      nightHaltCharge = 1000;
+    } 
+    else if (cabId === 'tempo' || cabName.includes('tempo')) {
+      basePrice = 9000;
+      perKmRate = 22;
+      nightHaltCharge = 1200;
+    } 
+    else if (cabId === 'luxury') {
+      basePrice = 10500;
+      perKmRate = 25;
+      nightHaltCharge = 1500;
+    } 
+    else {
+      // Default fallback
+      basePrice = cabType.price;
+      perKmRate = cabType.pricePerKm;
+      nightHaltCharge = 700;
     }
     
     if (tripMode === 'one-way') {
@@ -350,4 +402,10 @@ export function calculateFare(
 
 export function formatPrice(price: number): string {
   return `₹${price.toLocaleString('en-IN')}`;
+}
+
+// FIXED: Add a cache clearing function to reset caches
+export function clearFareCaches() {
+  packagePriceCache.clear();
+  console.log("Fare caches cleared");
 }
