@@ -43,7 +43,7 @@ export function SignupForm() {
   const onSubmit = async (values: SignupRequest) => {
     setIsLoading(true);
     try {
-      const response = await authAPI.signup(values);
+      const response = await authAPI.register(values);
       toast({
         title: "Account Created",
         description: "Your account has been created successfully!",

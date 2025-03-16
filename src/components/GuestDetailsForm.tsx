@@ -12,7 +12,7 @@ interface GuestDetailsFormProps {
   totalPrice: number;
   onBack?: () => void;
   initialData?: any;
-  bookingId?: number;
+  bookingId?: string; // Changed from number to string
   isEditing?: boolean;
   isSubmitting?: boolean;
 }

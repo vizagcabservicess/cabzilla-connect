@@ -51,7 +51,15 @@ export function AdminBookingsList() {
         setError(null);
         console.log('Admin: Fetching all bookings...');
         
-        const data = await bookingAPI.getAllBookings();
+        // Temporary fallback to getUserBookings if getAllBookings fails
+        let data;
+        try {
+          data = await bookingAPI.getAllBookings();
+        } catch (error) {
+          console.warn('getAllBookings failed, falling back to getUserBookings');
+          data = await bookingAPI.getUserBookings();
+        }
+        
         console.log('Admin: Bookings received:', data);
         
         if (Array.isArray(data)) {

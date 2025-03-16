@@ -75,7 +75,7 @@ export default function AdminDashboardPage() {
     
     try {
       setIsLoading(true);
-      const metricsData = await bookingAPI.getAdminDashboardMetrics();
+      const metricsData = await bookingAPI.getAdminDashboardMetrics(selectedPeriod);
       setMetrics(metricsData);
       
       // Simulate revenue data updates (in a real app, this would be fetched from the API)
@@ -100,7 +100,7 @@ export default function AdminDashboardPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [navigate, toast, revenueData, vehicleDistribution]);
+  }, [navigate, toast, revenueData, vehicleDistribution, selectedPeriod]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -159,8 +159,12 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* Dashboard Metrics */}
-      <DashboardMetrics initialMetrics={metrics} period={selectedPeriod} onRefresh={fetchDashboardData} />
+      {/* Dashboard Metrics with period parameter */}
+      <DashboardMetrics 
+        initialMetrics={metrics} 
+        period={selectedPeriod} 
+        onRefresh={fetchDashboardData} 
+      />
 
       {/* Charts */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">

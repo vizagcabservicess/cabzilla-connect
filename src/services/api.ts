@@ -1,6 +1,7 @@
+
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { jwtDecode } from 'jwt-decode';
-import { Booking, BookingRequest, DashboardMetrics } from '@/types/api';
+import { Booking, BookingRequest, DashboardMetrics, TourFare, VehiclePricingUpdateRequest, VehiclePricing } from '@/types/api';
 
 // Define API base URL
 const baseURL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api';
@@ -78,6 +79,11 @@ export const authAPI = {
     }
   },
 
+  // Alias for register to match usage in SignupForm
+  async signup(userData: any): Promise<any> {
+    return this.register(userData);
+  },
+
   logout() {
     setAuthToken(null);
   },
@@ -88,6 +94,18 @@ export const authAPI = {
     try {
       const decodedToken: { exp: number } = jwtDecode(token);
       return decodedToken.exp * 1000 > Date.now();
+    } catch (error) {
+      console.error('Error decoding token:', error);
+      return false;
+    }
+  },
+
+  isAdmin(): boolean {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return false;
+    try {
+      const decodedToken: { role?: string } = jwtDecode(token);
+      return decodedToken.role === 'admin';
     } catch (error) {
       console.error('Error decoding token:', error);
       return false;
@@ -169,6 +187,25 @@ export const bookingAPI = {
     }
   },
 
+  // Add method to get all bookings for admin
+  async getAllBookings(): Promise<Booking[]> {
+    try {
+      console.log('Admin: Fetching all bookings...');
+      const timestamp = new Date().getTime();
+      const response = await apiClient.get(`/admin/bookings.php?_=${timestamp}`);
+      
+      if (response.data.status === 'success') {
+        return response.data.data;
+      } else {
+        throw new Error(response.data.message || 'Failed to fetch all bookings');
+      }
+    } catch (error) {
+      console.error('Error in getAllBookings:', error);
+      handleApiError(error);
+      throw error;
+    }
+  },
+
   async getAdminDashboardMetrics(period: 'today' | 'week' | 'month' = 'week'): Promise<DashboardMetrics> {
     try {
       console.log(`Fetching admin dashboard metrics for period: ${period}...`);
@@ -189,12 +226,43 @@ export const bookingAPI = {
   },
 };
 
-// API service for vehicle pricing
-export const vehiclePricingAPI = {
+// API service for fare management
+export const fareAPI = {
+  async getTourFares(): Promise<TourFare[]> {
+    try {
+      console.log('Fetching tour fares...');
+      const timestamp = new Date().getTime();
+      const response = await apiClient.get(`/fares/tours.php?_=${timestamp}`);
+      
+      if (response.data.status === 'success') {
+        return response.data.data;
+      } else {
+        throw new Error(response.data.message || 'Failed to fetch tour fares');
+      }
+    } catch (error) {
+      console.error('Error in getTourFares:', error);
+      handleApiError(error);
+      throw error;
+    }
+  },
+  
+  async updateTourFares(fareData: any): Promise<any> {
+    try {
+      const response = await apiClient.post('/fares/update-tour.php', fareData);
+      if (response.data.status === 'success') {
+        return response.data;
+      } else {
+        throw new Error(response.data.message || 'Failed to update tour fares');
+      }
+    } catch (error) {
+      handleApiError(error);
+      throw error;
+    }
+  },
+  
   async getVehiclePricing(): Promise<VehiclePricing[]> {
     try {
       console.log('Fetching vehicle pricing data...');
-      // Add cache busting parameter to URL
       const timestamp = new Date().getTime();
       const response = await apiClient.get(`/fares/vehicles.php?_=${timestamp}`);
       
@@ -209,26 +277,32 @@ export const vehiclePricingAPI = {
       throw error;
     }
   },
-};
-
-// API service for tour fares
-export const tourFaresAPI = {
-  async getTourFares(): Promise<TourFare[]> {
+  
+  async updateVehiclePricing(pricingData: VehiclePricingUpdateRequest): Promise<any> {
     try {
-      console.log('Fetching tour fares...');
-      // Add cache busting parameter to URL
-      const timestamp = new Date().getTime();
-      const response = await apiClient.get(`/fares/tours.php?_=${timestamp}`);
-      
+      const response = await apiClient.post('/fares/update-vehicle.php', pricingData);
       if (response.data.status === 'success') {
-        return response.data.data;
+        return response.data;
       } else {
-        throw new Error(response.data.message || 'Failed to fetch tour fares');
+        throw new Error(response.data.message || 'Failed to update vehicle pricing');
       }
     } catch (error) {
-      console.error('Error in getTourFares:', error);
       handleApiError(error);
       throw error;
     }
+  }
+};
+
+// API service for vehicle pricing (aliased under fareAPI now)
+export const vehiclePricingAPI = {
+  async getVehiclePricing(): Promise<VehiclePricing[]> {
+    return fareAPI.getVehiclePricing();
+  },
+};
+
+// API service for tour fares (aliased under fareAPI now)
+export const tourFaresAPI = {
+  async getTourFares(): Promise<TourFare[]> {
+    return fareAPI.getTourFares();
   },
 };

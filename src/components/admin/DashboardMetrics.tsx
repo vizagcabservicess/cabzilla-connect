@@ -9,10 +9,11 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface DashboardMetricsProps {
   initialMetrics?: DashboardMetricsType;
+  period?: 'today' | 'week' | 'month'; // Added period parameter
   onRefresh?: () => void;
 }
 
-export function DashboardMetrics({ initialMetrics, onRefresh }: DashboardMetricsProps) {
+export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week', onRefresh }: DashboardMetricsProps) {
   const { toast } = useToast();
   const [metrics, setMetrics] = useState<DashboardMetricsType>(initialMetrics || {
     totalBookings: 0,
@@ -25,9 +26,9 @@ export function DashboardMetrics({ initialMetrics, onRefresh }: DashboardMetrics
   });
   const [isLoading, setIsLoading] = useState(!initialMetrics);
   const [error, setError] = useState<string | null>(null);
-  const [period, setPeriod] = useState<'today' | 'week' | 'month'>('week');
+  const [period, setPeriod] = useState<'today' | 'week' | 'month'>(initialPeriod);
 
-  // Initial data fetch when component mounts
+  // Initial data fetch when component mounts or period changes
   useEffect(() => {
     fetchMetrics();
   }, [period]);
