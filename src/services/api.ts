@@ -1,4 +1,3 @@
-
 import axios, { AxiosInstance, AxiosError, AxiosRequestConfig } from 'axios';
 import { jwtDecode } from 'jwt-decode';
 import { Booking, BookingRequest, DashboardMetrics, VehiclePricingUpdateRequest } from '@/types/api';
@@ -13,6 +12,9 @@ const apiClient: AxiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0'
   },
   withCredentials: false,
   timeout: 30000, // Increased timeout for slower connections
@@ -23,22 +25,57 @@ const setAuthToken = (token: string | null) => {
   if (token) {
     apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     localStorage.setItem('auth_token', token);
+    sessionStorage.setItem('auth_token', token);
+    console.log(`Auth token set (${token.length} chars)`);
   } else {
     delete apiClient.defaults.headers.common['Authorization'];
     localStorage.removeItem('auth_token');
+    sessionStorage.removeItem('auth_token');
+    console.log('Auth token removed');
   }
 };
 
-// Load token from localStorage on app initialization
-const storedToken = localStorage.getItem('auth_token');
-if (storedToken) {
-  setAuthToken(storedToken);
-}
+// Load token from localStorage on app initialization with fallback to sessionStorage
+const loadAuthToken = () => {
+  const storedToken = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
+  if (storedToken) {
+    console.log(`Found stored auth token (${storedToken.length} chars)`);
+    setAuthToken(storedToken);
+    return true;
+  }
+  return false;
+};
 
-// Add request interceptor for debugging
+// Initial token load
+loadAuthToken();
+
+// Add request interceptor for debugging and token refresh
 apiClient.interceptors.request.use(
   (config) => {
-    console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`, config.data);
+    // Check for token in localStorage on each request as a fallback
+    if (!config.headers.Authorization) {
+      const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+        console.log('Added token from storage to request headers');
+      }
+    }
+    
+    // Add cache prevention headers
+    config.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+    config.headers['Pragma'] = 'no-cache';
+    config.headers['Expires'] = '0';
+    
+    // Add timestamp to GET requests to prevent caching
+    if (config.method?.toLowerCase() === 'get') {
+      config.params = {
+        ...config.params,
+        _t: new Date().getTime()
+      };
+    }
+    
+    console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`, 
+      config.method?.toLowerCase() === 'post' ? config.data : '');
     return config;
   },
   (error) => {
@@ -55,6 +92,21 @@ apiClient.interceptors.response.use(
   },
   (error) => {
     console.error('Response error:', error);
+    
+    // Check if error is due to token expiration
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
+      console.log('Authentication error detected, clearing local storage');
+      // Clear token on auth errors
+      localStorage.removeItem('auth_token');
+      sessionStorage.removeItem('auth_token');
+      
+      // Redirect to login if not already there
+      if (!window.location.pathname.includes('/login')) {
+        console.log('Redirecting to login page due to authentication error');
+        window.location.href = '/login';
+      }
+    }
+    
     return Promise.reject(error);
   }
 );
@@ -126,15 +178,25 @@ const makeApiRequest = async <T>(
 export const authAPI = {
   async login(credentials: any): Promise<any> {
     return makeApiRequest(async () => {
+      console.log('Attempting login with credentials:', { email: credentials.email, passwordLength: credentials.password?.length });
+      
+      // Clear any existing tokens before login
+      localStorage.removeItem('auth_token');
+      sessionStorage.removeItem('auth_token');
+      
       const response = await apiClient.post('/login', credentials);
-      if (response.data.status === 'success') {
-        const token = response.data.token;
-        setAuthToken(token);
+      
+      if (response.data.token) {
+        console.log(`Login successful, received token (${response.data.token.length} chars)`);
+        setAuthToken(response.data.token);
+        return response.data;
+      } else if (response.data.status === 'success') {
+        console.warn('Login returned success but no token was found in the response');
         return response.data;
       } else {
-        throw new Error(response.data.message || 'Login failed');
+        throw new Error(response.data.message || 'Login failed - no token received');
       }
-    });
+    }, 3, 1500); // 3 retries with 1.5s initial delay
   },
 
   async register(userData: any): Promise<any> {
@@ -198,6 +260,19 @@ export const bookingAPI = {
   async createBooking(bookingData: BookingRequest): Promise<any> {
     return makeApiRequest(async () => {
       console.log('Creating booking with data:', bookingData);
+      
+      // For local bookings, ensure distance is set based on package
+      if (bookingData.tripType === 'local' && (!bookingData.distance || bookingData.distance === 0)) {
+        if (bookingData.hourlyPackage === '8hrs-80km') {
+          bookingData.distance = 80;
+        } else if (bookingData.hourlyPackage === '10hrs-100km') {
+          bookingData.distance = 100;
+        } else {
+          bookingData.distance = 80; // Default fallback
+        }
+        console.log('Set default distance for local booking:', bookingData.distance);
+      }
+      
       const response = await apiClient.post('/book', bookingData);
       if (response.data.status === 'success') {
         return response.data;

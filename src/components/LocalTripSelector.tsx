@@ -31,7 +31,7 @@ export function LocalTripSelector({
       console.log("Setting default hourly package");
       onHourlyPackageChange(hourlyPackages[0].id);
     }
-  }, []);
+  }, [hourlyPackage, onHourlyPackageChange]);
 
   return (
     <div className="space-y-4">

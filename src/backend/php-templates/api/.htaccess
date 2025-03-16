@@ -15,6 +15,13 @@ RewriteRule ^fares/vehicles$ fares/vehicles.php [L]
 RewriteRule ^admin/fares/update$ admin/fares-update.php [L]
 RewriteRule ^admin/km-price/update$ admin/km-price-update.php [L]
 
+# Disable caching for API endpoints
+<IfModule mod_headers.c>
+    Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    Header always set Pragma "no-cache"
+    Header always set Expires "0"
+</IfModule>
+
 # Set content type
 <FilesMatch "\.(php)$">
     Header set Content-Type "application/json"

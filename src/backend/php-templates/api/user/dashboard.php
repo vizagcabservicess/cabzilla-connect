@@ -27,6 +27,11 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     exit;
 }
 
+// Add cache prevention headers
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Pragma: no-cache");
+header("Expires: 0");
+
 // Add CORS headers for all responses
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
@@ -47,12 +52,19 @@ try {
     // Get period filter if provided (today, week, month)
     $period = isset($_GET['period']) ? $_GET['period'] : 'week';
     
+    // Get the timestamp to help prevent caching
+    $timestamp = isset($_GET['_t']) ? $_GET['_t'] : time();
+    
     // Log the period parameter
-    logError("Period parameter", ['period' => $period]);
+    logError("Request parameters", [
+        'period' => $period,
+        'timestamp' => $timestamp,
+        'admin' => $isAdminMetricsRequest ? 'true' : 'false'
+    ]);
     
     // Authenticate user with improved logging
     $headers = getallheaders();
-    logError("Request headers", ['headers' => $headers]);
+    logError("Request headers", ['headers' => array_keys($headers)]);
     
     if (!isset($headers['Authorization']) && !isset($headers['authorization'])) {
         logError("Missing authorization header");
@@ -63,10 +75,15 @@ try {
     $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
     $token = str_replace('Bearer ', '', $authHeader);
     
-    $userData = authenticate();
+    logError("Token received", ['token_length' => strlen($token)]);
+    
+    $userData = verifyJwtToken($token);
     if (!$userData || !isset($userData['user_id'])) {
-        logError("Authentication failed in dashboard.php", ['token' => substr($token, 0, 20) . '...']);
-        sendJsonResponse(['status' => 'error', 'message' => 'Authentication failed'], 401);
+        logError("Authentication failed in dashboard.php", [
+            'token_length' => strlen($token),
+            'token_parts' => count(explode('.', $token))
+        ]);
+        sendJsonResponse(['status' => 'error', 'message' => 'Invalid or expired token'], 401);
         exit;
     }
     
@@ -76,7 +93,7 @@ try {
     logError("User authenticated successfully", [
         'user_id' => $userId, 
         'is_admin' => $isAdmin ? 'true' : 'false',
-        'token' => substr($token, 0, 20) . '...'
+        'token_parts' => count(explode('.', $token))
     ]);
 
     // Connect to database
@@ -214,11 +231,6 @@ try {
 
     // Log count of real bookings found
     logError("Real bookings found", ['count' => count($bookings), 'user_id' => $userId]);
-
-    // Return empty array if no bookings found instead of providing demo data
-    if (empty($bookings)) {
-        logError("No bookings found, returning empty array");
-    }
 
     // Ensure the response format is consistent
     $response = [

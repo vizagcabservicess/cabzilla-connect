@@ -1,3 +1,4 @@
+
 <?php
 // Turn on error reporting for debugging - remove in production
 ini_set('display_errors', 0);
@@ -42,6 +43,11 @@ function getDbConnection() {
 
 // Helper function to send JSON response
 function sendJsonResponse($data, $statusCode = 200) {
+    // Add no-cache headers to all responses
+    header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+    header("Pragma: no-cache");
+    header("Expires: 0");
+    
     // Make sure we're sending JSON
     if (!headers_sent()) {
         header('Content-Type: application/json');
@@ -63,7 +69,7 @@ function sendJsonResponse($data, $statusCode = 200) {
 // Helper function to generate JWT token
 function generateJwtToken($userId, $email, $role) {
     $issuedAt = time();
-    $expirationTime = $issuedAt + 60 * 60 * 24 * 7; // 7 days - increased from 24 hours
+    $expirationTime = $issuedAt + 60 * 60 * 24 * 14; // 14 days - increased from 7 days
     
     $payload = [
         'iat' => $issuedAt,
@@ -84,10 +90,15 @@ function generateJwtToken($userId, $email, $role) {
     $signature = hash_hmac('sha256', "$base64UrlHeader.$base64UrlPayload", JWT_SECRET, true);
     $base64UrlSignature = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($signature));
     
-    return "$base64UrlHeader.$base64UrlPayload.$base64UrlSignature";
+    $token = "$base64UrlHeader.$base64UrlPayload.$base64UrlSignature";
+    
+    // Log token length to help debug truncation issues
+    logError("Generated token", ['length' => strlen($token), 'user_id' => $userId]);
+    
+    return $token;
 }
 
-// Helper function to verify JWT token - improved for better base64 handling
+// Helper function to verify JWT token with improved debugging
 function verifyJwtToken($token) {
     try {
         // Log token verification attempt for debugging
@@ -101,28 +112,37 @@ function verifyJwtToken($token) {
         
         list($base64UrlHeader, $base64UrlPayload, $base64UrlSignature) = $parts;
         
-        // Add padding to base64 strings if needed
-        $base64UrlHeader = addBase64Padding($base64UrlHeader);
-        $base64UrlPayload = addBase64Padding($base64UrlPayload);
-        $base64UrlSignature = addBase64Padding($base64UrlSignature);
+        // Base64 URL decode the header and payload
+        $headerJson = base64_decode(strtr($base64UrlHeader, '-_', '+/'));
+        $payloadJson = base64_decode(strtr($base64UrlPayload, '-_', '+/'));
         
-        // Decode header and payload
-        $header = json_decode(base64_decode(strtr($base64UrlHeader, '-_', '+/')), true);
-        $payload = json_decode(base64_decode(strtr($base64UrlPayload, '-_', '+/')), true);
+        if (!$headerJson || !$payloadJson) {
+            logError("Failed to decode header or payload", [
+                'header_length' => strlen($headerJson), 
+                'payload_length' => strlen($payloadJson)
+            ]);
+            return false;
+        }
+        
+        $header = json_decode($headerJson, true);
+        $payload = json_decode($payloadJson, true);
         
         if (!$header || !$payload) {
-            logError("Failed to decode header or payload", [
+            logError("Failed to parse header or payload JSON", [
                 'header_decoded' => $header !== null,
-                'payload_decoded' => $payload !== null
+                'payload_decoded' => $payload !== null,
+                'header_json' => substr($headerJson, 0, 30),
+                'payload_json' => substr($payloadJson, 0, 30)
             ]);
             return false;
         }
         
         // Verify signature
-        $signature = base64_decode(strtr($base64UrlSignature, '-_', '+/'));
         $expectedSignature = hash_hmac('sha256', "$base64UrlHeader.$base64UrlPayload", JWT_SECRET, true);
+        $actualSignature = base64_decode(strtr($base64UrlSignature, '-_', '+/'));
         
-        if (!hash_equals($signature, $expectedSignature)) {
+        // Use hash_equals for timing attack protection
+        if (!hash_equals($expectedSignature, $actualSignature)) {
             logError("Signature verification failed");
             return false;
         }
@@ -132,27 +152,25 @@ function verifyJwtToken($token) {
             logError("Token expired or missing expiration", [
                 'has_exp' => isset($payload['exp']),
                 'current_time' => time(),
-                'exp_time' => $payload['exp'] ?? 'missing'
+                'exp_time' => $payload['exp'] ?? 'missing',
+                'diff' => isset($payload['exp']) ? ($payload['exp'] - time()) : 'N/A'
             ]);
             return false;
         }
         
-        logError("Token verified successfully", ['user_id' => $payload['user_id']]);
+        logError("Token verified successfully", [
+            'user_id' => $payload['user_id'],
+            'exp' => date('Y-m-d H:i:s', $payload['exp'])
+        ]);
+        
         return $payload;
         
     } catch (Exception $e) {
-        logError("Exception in token verification: " . $e->getMessage());
+        logError("Exception in token verification: " . $e->getMessage(), [
+            'trace' => $e->getTraceAsString()
+        ]);
         return false;
     }
-}
-
-// Helper function to add padding to base64 strings
-function addBase64Padding($input) {
-    $padLength = 4 - (strlen($input) % 4);
-    if ($padLength < 4) {
-        $input .= str_repeat('=', $padLength);
-    }
-    return $input;
 }
 
 // Check if user is authenticated
@@ -165,7 +183,7 @@ function authenticate() {
     }
     
     $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
-    logError("Auth header", ['header' => $authHeader]);
+    logError("Auth header", ['header' => substr($authHeader, 0, 30) . '...']);
     
     // Extract token from "Bearer <token>"
     if (strpos($authHeader, 'Bearer ') === 0) {
@@ -174,8 +192,8 @@ function authenticate() {
         $token = $authHeader; // Try using the header value directly if "Bearer " prefix is missing
     }
     
-    // Additional logging for token verification
-    logError("Token before verification", [
+    // Log token length for debugging truncation issues
+    logError("Token for authentication", [
         'token_length' => strlen($token),
         'token_parts' => count(explode('.', $token))
     ]);

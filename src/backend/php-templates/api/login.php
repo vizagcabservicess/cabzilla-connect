@@ -3,10 +3,31 @@
 // Adjust the path to config.php correctly
 require_once __DIR__ . '/../config.php';
 
+// For CORS preflight request
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    // Send CORS headers
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Methods: POST, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization');
+    header('Content-Type: application/json');
+    http_response_code(200);
+    exit;
+}
+
 // Allow only POST requests
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    sendJsonResponse(['error' => 'Method not allowed'], 405);
+    // Add CORS headers
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Methods: POST, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization');
+    
+    sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
 }
+
+// Disable caching for authentication endpoints
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Pragma: no-cache");
+header("Expires: 0");
 
 try {
     // Get the request body
@@ -17,7 +38,7 @@ try {
     
     // Validate input
     if (!isset($data['email']) || !isset($data['password'])) {
-        sendJsonResponse(['error' => 'Email and password are required'], 400);
+        sendJsonResponse(['status' => 'error', 'message' => 'Email and password are required'], 400);
     }
     
     $email = $data['email'];
@@ -33,30 +54,33 @@ try {
     $result = $stmt->get_result();
     
     if ($result->num_rows === 0) {
-        sendJsonResponse(['error' => 'Invalid email or password'], 401);
+        logError("Login failed - user not found", ['email' => $email]);
+        sendJsonResponse(['status' => 'error', 'message' => 'Invalid email or password'], 401);
     }
     
     $user = $result->fetch_assoc();
     
     // Verify password
     if (!password_verify($password, $user['password'])) {
-        sendJsonResponse(['error' => 'Invalid email or password'], 401);
+        logError("Login failed - password mismatch", ['email' => $email]);
+        sendJsonResponse(['status' => 'error', 'message' => 'Invalid email or password'], 401);
     }
     
     // Remove password from user data
     unset($user['password']);
     
-    // Generate JWT token
+    // Generate JWT token with longer expiration (14 days)
     $token = generateJwtToken($user['id'], $user['email'], $user['role']);
+    logError("Login successful - token generated", ['user_id' => $user['id'], 'token_length' => strlen($token)]);
     
     // Send response
     sendJsonResponse([
-        'success' => true,
+        'status' => 'success',
         'message' => 'Login successful',
         'token' => $token,
         'user' => $user
     ]);
 } catch (Exception $e) {
     logError('Login exception: ' . $e->getMessage());
-    sendJsonResponse(['error' => 'An unexpected error occurred: ' . $e->getMessage()], 500);
+    sendJsonResponse(['status' => 'error', 'message' => 'An unexpected error occurred: ' . $e->getMessage()], 500);
 }
