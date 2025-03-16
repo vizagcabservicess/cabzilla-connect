@@ -14,7 +14,7 @@ const apiClient: AxiosInstance = axios.create({
     'Accept': 'application/json',
   },
   withCredentials: false,
-  timeout: 30000, // Increased timeout for slower connections
+  timeout: 45000, // Increased timeout for slower connections
 });
 
 // Function to set the auth token in the headers
@@ -38,6 +38,15 @@ if (storedToken) {
 apiClient.interceptors.request.use(
   (config) => {
     console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`, config.data);
+    
+    // Add timestamp to URLs to prevent caching issues
+    if (config.method?.toLowerCase() === 'get') {
+      config.params = {
+        ...config.params,
+        _t: new Date().getTime()
+      };
+    }
+    
     return config;
   },
   (error) => {
@@ -53,7 +62,17 @@ apiClient.interceptors.response.use(
     return response;
   },
   (error) => {
-    console.error('Response error:', error);
+    console.error('Response error:', error.response?.status, error.message);
+    console.error('Response data:', error.response?.data);
+    
+    // Check for specific booking error
+    if (error.response?.status === 500 && 
+        error.config?.url?.includes('/book') && 
+        (error.response?.data?.message?.includes('Server error') || 
+         error.response?.data?.message?.includes('Failed to create booking'))) {
+      console.error('Booking creation error. Additional logging:', error);
+    }
+    
     return Promise.reject(error);
   }
 );
@@ -197,18 +216,35 @@ export const bookingAPI = {
   async createBooking(bookingData: BookingRequest): Promise<any> {
     return makeApiRequest(async () => {
       console.log('Creating booking with data:', bookingData);
-      // Add flag to request email notifications
-      const requestWithNotification = {
+      
+      // Add better validation
+      if (!bookingData.pickupLocation) {
+        throw new Error('Pickup location is required');
+      }
+      
+      if (!bookingData.pickupDate) {
+        throw new Error('Pickup date is required');
+      }
+      
+      // Format numeric values properly
+      const formattedData = {
         ...bookingData,
+        distance: bookingData.distance || 0,
+        totalAmount: bookingData.totalAmount || 0,
         sendEmailNotification: true // Enable email notifications
       };
-      const response = await apiClient.post('/book', requestWithNotification);
+      
+      // Use longer timeout for booking creation
+      const response = await apiClient.post('/book', formattedData, {
+        timeout: 60000 // 60 seconds timeout for booking creation
+      });
+      
       if (response.data.status === 'success') {
         return response.data;
       } else {
         throw new Error(response.data.message || 'Failed to create booking');
       }
-    }, 3, 2000); // More retries with longer delay for booking creation
+    }, 4, 3000); // More retries with longer delay for booking creation
   },
 
   async getBooking(id: string): Promise<Booking> {

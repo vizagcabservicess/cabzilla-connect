@@ -2,6 +2,10 @@
 # Enable rewrite engine
 RewriteEngine On
 
+# Set PHP error reporting for debugging
+php_flag display_errors on
+php_value error_reporting E_ALL
+
 # Parse API routes to PHP files
 RewriteRule ^signup$ signup.php [L]
 RewriteRule ^login$ login.php [L]
@@ -31,3 +35,6 @@ RewriteRule ^admin/km-price/update$ admin/km-price-update.php [L]
 # Handle OPTIONS method for CORS preflight
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
+
+# Prevent direct access to .php files
+Options -Indexes

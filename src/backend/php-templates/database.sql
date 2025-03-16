@@ -24,7 +24,7 @@ CREATE TABLE `bookings` (
   `pickup_date` datetime NOT NULL,
   `return_date` datetime NULL,
   `cab_type` varchar(50) NOT NULL,
-  `distance` float NOT NULL,
+  `distance` float NULL DEFAULT 0,
   `trip_type` enum('outstation','local','airport','tour') NOT NULL,
   `trip_mode` enum('one-way','round-trip') NOT NULL,
   `total_amount` decimal(10,2) NOT NULL,
