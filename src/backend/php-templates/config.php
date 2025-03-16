@@ -1,16 +1,22 @@
 
 <?php
 // Turn on error reporting for debugging - remove in production
-ini_set('display_errors', 0);
+ini_set('display_errors', 1);
 error_reporting(E_ALL);
+
+// Create a log directory if it doesn't exist
+$logDir = __DIR__ . '/logs';
+if (!file_exists($logDir)) {
+    mkdir($logDir, 0755, true);
+}
 
 // Ensure all responses are JSON
 header('Content-Type: application/json');
 
 // Database configuration - use correct database credentials from the hosting account
 define('DB_HOST', 'localhost');
-define('DB_USERNAME', 'u644605165_bookinguser');  // Updated database username
-define('DB_PASSWORD', 'BookingPass123#');         // Updated database password
+define('DB_USERNAME', 'u644605165_bookinguser');  // Database username
+define('DB_PASSWORD', 'BookingPass123#');         // Database password
 define('DB_DATABASE', 'u644605165_db_booking');
 
 // JWT Secret Key for authentication - should be a strong secure key
@@ -43,6 +49,9 @@ function getDbConnection() {
 
 // Helper function to send JSON response
 function sendJsonResponse($data, $statusCode = 200) {
+    // Set HTTP response code
+    http_response_code($statusCode);
+    
     // Set cache control headers to prevent caching
     header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
     header('Pragma: no-cache');
@@ -51,7 +60,6 @@ function sendJsonResponse($data, $statusCode = 200) {
     // Make sure we're sending JSON
     if (!headers_sent()) {
         header('Content-Type: application/json');
-        http_response_code($statusCode);
     }
     
     // Ensure consistent response format
@@ -99,7 +107,7 @@ function generateJwtToken($userId, $email, $role) {
     return "$base64UrlHeader.$base64UrlPayload.$base64UrlSignature";
 }
 
-// Helper function to verify JWT token - simplified and fixed
+// Helper function to verify JWT token - improved version
 function verifyJwtToken($token) {
     try {
         // Log token verification attempt for debugging
@@ -215,7 +223,7 @@ function generateBookingNumber() {
 
 // Log errors to file for debugging
 function logError($message, $data = []) {
-    $logFile = __DIR__ . '/error.log';
+    $logFile = __DIR__ . '/logs/error_' . date('Y-m-d') . '.log';
     $timestamp = date('Y-m-d H:i:s');
     $logMessage = "[$timestamp] $message " . json_encode($data) . PHP_EOL;
     error_log($logMessage, 3, $logFile);
@@ -252,14 +260,31 @@ function getAllHeaders() {
 // Set error handler to catch PHP errors
 set_error_handler(function($errno, $errstr, $errfile, $errline) {
     logError("PHP Error [$errno]: $errstr in $errfile on line $errline");
-    sendJsonResponse(['status' => 'error', 'message' => 'Server error occurred'], 500);
-});
+    if (error_reporting() & $errno) {
+        throw new ErrorException($errstr, 0, $errno, $errfile, $errline);
+    }
+}, E_ALL);
 
 // Set exception handler
 set_exception_handler(function($exception) {
     logError("Uncaught Exception: " . $exception->getMessage(), [
         'file' => $exception->getFile(),
-        'line' => $exception->getLine()
+        'line' => $exception->getLine(),
+        'trace' => $exception->getTraceAsString()
     ]);
-    sendJsonResponse(['status' => 'error', 'message' => 'Server error occurred'], 500);
+    sendJsonResponse(['status' => 'error', 'message' => 'Server error occurred: ' . $exception->getMessage()], 500);
+});
+
+// Make sure we're handling fatal errors too
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error !== null && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        logError("Fatal Error: " . $error['message'], [
+            'file' => $error['file'],
+            'line' => $error['line']
+        ]);
+        if (!headers_sent()) {
+            sendJsonResponse(['status' => 'error', 'message' => 'A fatal error occurred on the server'], 500);
+        }
+    }
 });

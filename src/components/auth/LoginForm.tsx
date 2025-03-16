@@ -57,13 +57,21 @@ export function LoginForm() {
     
     try {
       console.log('Attempting login with:', values.email);
-      const response = await authAPI.login(values);
       
-      if (!response.token) {
+      // Add timestamp to prevent cached responses
+      const timestamp = new Date().getTime();
+      const requestWithTimestamp = {
+        ...values,
+        _timestamp: timestamp
+      };
+      
+      const response = await authAPI.login(requestWithTimestamp);
+      
+      if (!response || !response.token) {
         throw new Error('No token received from server');
       }
       
-      console.log('Login successful, token received');
+      console.log('Login successful, token received of length:', response.token.length);
       
       // Store token in multiple places for redundancy
       localStorage.setItem('auth_token', response.token);
@@ -98,6 +106,10 @@ export function LoginForm() {
       // Special handling for common auth errors
       if (errorMessage.includes('401') || errorMessage.includes('Invalid email or password')) {
         errorMessage = 'Invalid email or password. Please try again.';
+      } else if (errorMessage.includes('500')) {
+        errorMessage = 'Server error. Please try again later.';
+      } else if (errorMessage.includes('network')) {
+        errorMessage = 'Network error. Please check your connection and try again.';
       }
       
       toast.error("Login Failed", {
