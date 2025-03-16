@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DashboardMetrics as DashboardMetricsType } from '@/types/api';
 import { bookingAPI } from '@/services/api';
@@ -30,73 +30,45 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>(initialPeriod);
   const [retryCount, setRetryCount] = useState(0);
-  const [lastRefreshTime, setLastRefreshTime] = useState<Date>(new Date());
 
-  // Function to fetch metrics with cache busting
-  const fetchMetrics = useCallback(async (forceRefresh = false) => {
+  // Initial data fetch when component mounts or period changes
+  useEffect(() => {
+    fetchMetrics();
+  }, [period]);
+
+  const fetchMetrics = async () => {
     try {
       setIsLoading(true);
       setError(null);
+      console.log(`Fetching dashboard metrics for period: ${period}...`);
       
-      // Log with timestamp for debugging
+      // Add a timestamp for cache busting - not passed to API but just logged
       const timestamp = new Date().getTime();
-      console.log(`Fetching dashboard metrics for period: ${period} at ${timestamp}...`);
+      console.log(`Cache busting with timestamp: ${timestamp}`);
       
-      // Updated to use the correct method
-      const data = await bookingAPI.getDashboardMetrics(period, true);
+      // Call the API with the period
+      const data = await bookingAPI.getAdminDashboardMetrics(period);
       console.log('Dashboard metrics received:', data);
       
       if (data) {
         setMetrics(data);
-        setLastRefreshTime(new Date());
         if (onRefresh) onRefresh();
       } else {
         throw new Error('No data received from metrics API');
       }
     } catch (error) {
       console.error('Error fetching dashboard metrics:', error);
+      setError(error instanceof Error ? error.message : 'Failed to load dashboard metrics');
       
-      // Check for specific error about drivers table
-      const errorMessage = error instanceof Error ? error.message : 'Failed to load dashboard metrics';
-      const isDriversTableError = errorMessage.includes("drivers") && errorMessage.includes("doesn't exist");
-      
-      if (isDriversTableError) {
-        setError("The drivers table hasn't been created in the database yet. This is expected in development. The metrics will use sample data instead.");
-        
-        // Set fallback metrics data
-        setMetrics({
-          totalBookings: Math.floor(Math.random() * 50) + 20,
-          activeRides: Math.floor(Math.random() * 15) + 5,
-          totalRevenue: Math.floor(Math.random() * 50000) + 25000,
-          availableDrivers: Math.floor(Math.random() * 15) + 10,
-          busyDrivers: Math.floor(Math.random() * 10) + 5,
-          avgRating: 4.7,
-          upcomingRides: Math.floor(Math.random() * 20) + 10
-        });
-        
-        toast({
-          title: "Development Mode",
-          description: "Using sample metrics data since the drivers table isn't set up yet.",
-          variant: "default",
-        });
-      } else {
-        setError(errorMessage);
-        
-        toast({
-          title: "Error",
-          description: errorMessage,
-          variant: "destructive",
-        });
-      }
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : 'Failed to load dashboard metrics',
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
-  }, [period, onRefresh, toast]);
-
-  // Initial data fetch when component mounts or period changes
-  useEffect(() => {
-    fetchMetrics(true); // Force refresh on period change
-  }, [period]);
+  };
 
   const handlePeriodChange = (newPeriod: 'today' | 'week' | 'month') => {
     setPeriod(newPeriod);
@@ -104,15 +76,7 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
 
   const handleRetry = () => {
     setRetryCount(prev => prev + 1);
-    fetchMetrics(true); // Force refresh on retry
-  };
-
-  const handleRefresh = () => {
-    fetchMetrics(true); // Force refresh on manual refresh
-    toast({
-      title: "Refreshing Data",
-      description: "Dashboard metrics are being updated..."
-    });
+    fetchMetrics();
   };
 
   if (error) {
@@ -131,66 +95,6 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
           onRetry={handleRetry} 
           title="Dashboard Metrics Error" 
         />
-        
-        {/* Display metrics anyway if we have fallback data */}
-        {metrics.totalBookings > 0 && (
-          <div className="mt-6">
-            <div className="text-amber-600 font-medium mb-4 p-2 bg-amber-50 border border-amber-200 rounded-md">
-              <AlertTriangle className="h-4 w-4 inline mr-1" />
-              Showing estimated metrics based on available data. Some values may not be accurate.
-            </div>
-            
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-8">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2">
-                    <Car className="h-4 w-4" /> Total Bookings (Est.)
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{metrics.totalBookings}</div>
-                  <p className="text-xs text-gray-500">Estimated value</p>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2">
-                    <DollarSign className="h-4 w-4" /> Total Revenue (Est.)
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">₹{metrics.totalRevenue.toLocaleString('en-IN')}</div>
-                  <p className="text-xs text-gray-500">Estimated value</p>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2">
-                    <Car className="h-4 w-4" /> Active Rides (Est.)
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{metrics.activeRides}</div>
-                  <p className="text-xs text-gray-500">Estimated value</p>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2">
-                    <Star className="h-4 w-4" /> Average Rating
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{metrics.avgRating.toFixed(1)} / 5</div>
-                  <p className="text-xs text-gray-500">Based on customer reviews</p>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        )}
       </div>
     );
   }
@@ -240,7 +144,7 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
           </TabsList>
         </Tabs>
         
-        <Button variant="outline" size="sm" onClick={handleRefresh} className="ml-2">
+        <Button variant="outline" size="sm" onClick={handleRetry} className="ml-2">
           <RefreshCw className="h-4 w-4 mr-2" />
           Refresh
         </Button>
@@ -322,7 +226,7 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{metrics.upcomingRides}</div>
-            <p className="text-xs text-gray-500">Scheduled for future dates</p>
+            <p className="text-xs text-gray-500">Scheduled for today</p>
           </CardContent>
         </Card>
         <Card className="bg-green-50">
@@ -333,7 +237,7 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-700">Active</div>
-            <p className="text-xs text-green-600">Last updated: {lastRefreshTime.toLocaleTimeString()}</p>
+            <p className="text-xs text-green-600">Last updated: {new Date().toLocaleTimeString()}</p>
           </CardContent>
         </Card>
       </div>

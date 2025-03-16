@@ -2,32 +2,10 @@
 # Enable rewrite engine
 RewriteEngine On
 
-# Set PHP error reporting for debugging
-php_flag display_errors on
-php_value error_reporting E_ALL
-
-# Set higher memory limit and execution time
-php_value memory_limit 512M
-php_value max_execution_time 600
-php_value post_max_size 128M
-php_value upload_max_filesize 64M
-
-# Enable PHP mail functionality with proper configuration
-php_value sendmail_path "/usr/sbin/sendmail -t -i"
-php_flag mail.add_x_header On
-php_value mail.force_extra_parameters "-f narendrakumarupwork@gmail.com"
-
-# Default mail settings
-php_value SMTP localhost
-php_value smtp_port 25
-php_value SMTP_SERVER localhost
-php_flag mail.log On
-php_value mail.log "/tmp/mail.log"
-
 # Parse API routes to PHP files
 RewriteRule ^signup$ signup.php [L]
 RewriteRule ^login$ login.php [L]
-RewriteRule ^user/dashboard$ user/dashboard.php [L,QSA]
+RewriteRule ^user/dashboard$ user/dashboard.php [L]
 RewriteRule ^booking/create$ book.php [L]
 RewriteRule ^book$ book.php [L]
 RewriteRule ^book/edit/([0-9]+)$ book-edit.php?id=$1 [L]
@@ -36,10 +14,6 @@ RewriteRule ^fares/tours$ fares/tours.php [L]
 RewriteRule ^fares/vehicles$ fares/vehicles.php [L]
 RewriteRule ^admin/fares/update$ admin/fares-update.php [L]
 RewriteRule ^admin/km-price/update$ admin/km-price-update.php [L]
-
-# Added missing routes
-RewriteRule ^booking/([0-9]+)$ booking.php?id=$1 [L,QSA]
-RewriteRule ^bookings$ bookings.php [L,QSA]
 
 # Set content type
 <FilesMatch "\.(php)$">
@@ -52,58 +26,8 @@ RewriteRule ^bookings$ bookings.php [L,QSA]
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
     Header always set Access-Control-Allow-Headers "Content-Type, Authorization"
     Header always set Access-Control-Max-Age "3600"
-    
-    # Prevent caching of API responses for fares and pricing
-    Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
-    Header set Pragma "no-cache"
-    Header set Expires "0"
 </IfModule>
 
 # Handle OPTIONS method for CORS preflight
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
-
-# Prevent direct access to .php files
-Options -Indexes
-
-# Set higher timeouts for long operations
-<IfModule mod_reqtimeout.c>
-    RequestReadTimeout header=180 body=1200
-</IfModule>
-
-# Configure additional timeouts
-TimeOut 1200
-
-# DirectoryIndex
-DirectoryIndex index.php
-
-# Error handling
-ErrorDocument 500 '{"status":"error","message":"Internal Server Error"}'
-ErrorDocument 404 '{"status":"error","message":"Not Found"}'
-
-# Enable gzip compression for JSON responses
-<IfModule mod_deflate.c>
-    AddOutputFilterByType DEFLATE application/json
-</IfModule>
-
-# Disable mod_security for book.php (if available)
-<IfModule mod_security.c>
-    <LocationMatch "^/api/book">
-        SecRuleEngine Off
-    </LocationMatch>
-</IfModule>
-
-# Increase POST max size specifically for booking
-<Location "/api/book">
-    php_value post_max_size 256M
-    php_value upload_max_filesize 128M
-    php_value max_execution_time 300
-    php_value max_input_time 300
-</Location>
-
-# Disable caching for API endpoints
-<LocationMatch "^/api/">
-    Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
-    Header set Pragma "no-cache"
-    Header set Expires "0"
-</LocationMatch>

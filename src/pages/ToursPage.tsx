@@ -11,10 +11,10 @@ import { useToast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
 import { Location, vizagLocations } from "@/lib/locationData";
 import { CabType, cabTypes, availableTours, tourFares } from "@/lib/cabData";
-import { MapPin, Calendar, Check, AlertTriangle } from 'lucide-react';
+import { MapPin, Calendar, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { bookingAPI } from '@/services/api';
-import { BookingRequest } from '@/types/api';
+import { bookingAPI } from "@/services/api";
+import { BookingRequest } from "@/types/api";
 
 const ToursPage = () => {
   const navigate = useNavigate();
@@ -26,7 +26,6 @@ const ToursPage = () => {
   const [selectedCab, setSelectedCab] = useState<CabType | null>(null);
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [bookingError, setBookingError] = useState<string | null>(null);
   
   const getTourFare = (tourId: string, cabId: string): number => {
     if (!tourId || !cabId) return 0;
@@ -81,13 +80,11 @@ const ToursPage = () => {
     }
     
     setShowGuestDetailsForm(true);
-    setBookingError(null);
   };
   
   const handleGuestDetailsSubmit = async (guestDetails: any) => {
     try {
       setIsSubmitting(true);
-      setBookingError(null);
       
       const selectedTourDetails = availableTours.find(tour => tour.id === selectedTour);
       
@@ -124,10 +121,6 @@ const ToursPage = () => {
       const response = await bookingAPI.createBooking(bookingData);
       console.log('Tour booking created:', response);
       
-      if (!response || !response.id) {
-        throw new Error("Booking response is missing required data");
-      }
-      
       const bookingDataForStorage = {
         tourId: selectedTour,
         tourName: selectedTourDetails.name,
@@ -154,16 +147,9 @@ const ToursPage = () => {
       navigate("/booking-confirmation", { state: { newBooking: true } });
     } catch (error) {
       console.error('Error creating tour booking:', error);
-      
-      const errorMessage = error instanceof Error 
-        ? error.message 
-        : "Failed to create booking. Please try again.";
-      
-      setBookingError(errorMessage);
-      
       toast({
         title: "Booking Failed",
-        description: errorMessage,
+        description: error instanceof Error ? error.message : "Failed to create booking. Please try again.",
         variant: "destructive",
         duration: 5000,
       });
@@ -268,21 +254,10 @@ const ToursPage = () => {
           ) : (
             <div className="grid md:grid-cols-2 gap-6">
               <div>
-                {bookingError && (
-                  <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-md flex items-start">
-                    <AlertTriangle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-medium">Booking Error</p>
-                      <p className="text-sm">{bookingError}</p>
-                    </div>
-                  </div>
-                )}
-                
                 <GuestDetailsForm
                   onSubmit={handleGuestDetailsSubmit}
                   totalPrice={selectedTour && selectedCab ? 
                     getTourFare(selectedTour, selectedCab.id) : 0}
-                  onBack={() => setShowGuestDetailsForm(false)}
                   isSubmitting={isSubmitting}
                 />
               </div>

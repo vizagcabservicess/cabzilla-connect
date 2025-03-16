@@ -13,7 +13,6 @@ import { bookingAPI, authAPI } from '@/services/api';
 import { Booking } from '@/types/api';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { DashboardMetrics } from '@/components/admin/DashboardMetrics';
-import { clearFareCaches } from '@/lib/cabData';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1500; // 1.5 seconds
@@ -26,63 +25,30 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
-  const [user, setUser] = useState(authAPI.getCurrentUser());
-  const [isAuthenticated, setIsAuthenticated] = useState(authAPI.isAuthenticated());
+  const user = authAPI.getCurrentUser();
   const isAdmin = user?.role === 'admin';
   
   // Check if coming from booking confirmation
   const comingFromBooking = location.state?.fromBooking;
 
-  // Clear all fare caches on component mount
+  // Check auth on page load
   useEffect(() => {
-    clearFareCaches();
-  }, []);
-
-  // Verify authentication on mount and refresh if needed
-  useEffect(() => {
-    const checkAuth = () => {
-      const isAuth = authAPI.isAuthenticated();
-      const currentUser = authAPI.getCurrentUser();
-      
-      setIsAuthenticated(isAuth);
-      setUser(currentUser);
-      
-      if (!isAuth) {
-        console.log('User not authenticated, redirecting to login');
-        toast.error('Please login to access your dashboard');
-        navigate('/login', { replace: true });
-        return false;
-      }
-      
-      console.log('User authenticated:', currentUser);
-      return true;
-    };
-    
-    // Initial check
-    const authOk = checkAuth();
-    
-    // Set up periodic check every 30 seconds
-    const authCheckInterval = setInterval(() => {
-      checkAuth();
-    }, 30000);
-    
-    // Show notification if coming from booking
-    if (authOk && comingFromBooking) {
-      toast.success('Booking successful! Your dashboard has been updated.');
-    }
-    
-    return () => {
-      clearInterval(authCheckInterval);
-    };
-  }, [navigate, comingFromBooking]);
-
-  const fetchBookings = useCallback(async (retry = 0) => {
-    // Don't attempt to fetch if not authenticated
     if (!authAPI.isAuthenticated()) {
-      console.log('Not authenticated, skipping booking fetch');
+      console.log('User not authenticated, redirecting to login');
+      toast.error('Please login to access your dashboard');
+      navigate('/login');
       return;
     }
     
+    console.log('User authenticated, proceeding with dashboard');
+    
+    // Show notification if coming from booking
+    if (comingFromBooking) {
+      toast.success('Booking successful! Your dashboard has been updated.');
+    }
+  }, [navigate, comingFromBooking]);
+
+  const fetchBookings = useCallback(async (retry = 0) => {
     try {
       setIsLoading(true);
       setError(null);
@@ -92,7 +58,7 @@ export default function DashboardPage() {
       if (!authAPI.isAuthenticated()) {
         console.error('Auth token missing, redirecting to login');
         toast.error('Your session has expired. Please login again.');
-        navigate('/login', { replace: true });
+        navigate('/login');
         return;
       }
       
@@ -128,9 +94,9 @@ export default function DashboardPage() {
              error.message.includes('Not authenticated') ||
              error.message.includes('401'))) {
           console.log('Authentication error detected, clearing local storage');
-          authAPI.logout(); // This also clears the token
+          localStorage.removeItem('auth_token');
           toast.error('Your session has expired. Please login again.');
-          navigate('/login', { replace: true });
+          navigate('/login');
           return;
         }
         
@@ -169,11 +135,8 @@ export default function DashboardPage() {
   }, [navigate, uiToast]);
 
   useEffect(() => {
-    // Only fetch bookings if authenticated
-    if (isAuthenticated) {
-      fetchBookings();
-    }
-  }, [fetchBookings, isAuthenticated]);
+    fetchBookings();
+  }, [fetchBookings]);
 
   const handleRetry = () => {
     setRetryCount(0);
@@ -182,7 +145,6 @@ export default function DashboardPage() {
   
   const handleLogout = () => {
     authAPI.logout();
-    navigate('/login', { replace: true });
   };
 
   const handleViewReceipt = (bookingId: number | string) => {
@@ -198,16 +160,6 @@ export default function DashboardPage() {
       default: return 'bg-gray-100 text-gray-800';
     }
   };
-
-  // If not authenticated, show a loading state - redirection will happen in useEffect
-  if (!isAuthenticated) {
-    return (
-      <div className="container mx-auto py-20 text-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-900 mx-auto"></div>
-        <p className="mt-4">Checking authentication status...</p>
-      </div>
-    );
-  }
 
   const upcomingBookings = bookings.filter(booking => 
     ['pending', 'confirmed'].includes(booking.status.toLowerCase())

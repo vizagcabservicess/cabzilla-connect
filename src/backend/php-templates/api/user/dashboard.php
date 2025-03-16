@@ -47,11 +47,8 @@ try {
     // Get period filter if provided (today, week, month)
     $period = isset($_GET['period']) ? $_GET['period'] : 'week';
     
-    // Force cache refresh if requested
-    $forceRefresh = isset($_GET['refresh']) && $_GET['refresh'] === 'true';
-    
     // Log the period parameter
-    logError("Period parameter", ['period' => $period, 'force_refresh' => $forceRefresh ? 'true' : 'false']);
+    logError("Period parameter", ['period' => $period]);
     
     // Authenticate user with improved logging
     $headers = getallheaders();
@@ -91,7 +88,7 @@ try {
 
     // If this is an admin metrics request and the user is an admin
     if ($isAdminMetricsRequest && $isAdmin) {
-        logError("Processing admin metrics request", ['period' => $period, 'force_refresh' => $forceRefresh]);
+        logError("Processing admin metrics request", ['period' => $period]);
         
         // Get date range based on period
         $dateCondition = "";
@@ -108,14 +105,10 @@ try {
                 break;
         }
         
-        // Add cache busting timestamp to the log
-        logError("Admin metrics with cache busting", [
-            'timestamp' => time(),
-            'period' => $period,
-            'date_condition' => $dateCondition
-        ]);
+        // Log the SQL condition being used
+        logError("Date condition for metrics", ['sql_condition' => $dateCondition]);
         
-        // Get total bookings for the period - FIXED: Include all bookings regardless of user_id
+        // Get total bookings for the period
         $totalBookingsQuery = "SELECT COUNT(*) as total FROM bookings $dateCondition";
         $totalBookingsResult = $conn->query($totalBookingsQuery);
         $totalBookings = $totalBookingsResult->fetch_assoc()['total'] ?? 0;
@@ -132,64 +125,12 @@ try {
         $totalRevenueResult = $conn->query($totalRevenueQuery);
         $totalRevenue = $totalRevenueResult->fetch_assoc()['total'] ?? 0;
         
-        // FIXED: Check if drivers table exists before querying it
-        $driversTableExists = false;
-        $checkTableQuery = "SHOW TABLES LIKE 'drivers'";
-        $checkTableResult = $conn->query($checkTableQuery);
-        if ($checkTableResult && $checkTableResult->num_rows > 0) {
-            $driversTableExists = true;
-        }
+        // Simulate driver metrics (in a real app, this would come from a drivers table)
+        $availableDrivers = 12;
+        $busyDrivers = 8;
         
-        // Either query the drivers table if it exists or use fallback data
-        $availableDrivers = 0;
-        $busyDrivers = 0;
-        
-        if ($driversTableExists) {
-            // Get driver counts from the drivers table
-            $driverCountQuery = "SELECT 
-                               COUNT(*) as total_drivers,
-                               SUM(CASE WHEN status = 'available' THEN 1 ELSE 0 END) as available_drivers,
-                               SUM(CASE WHEN status = 'busy' THEN 1 ELSE 0 END) as busy_drivers
-                             FROM drivers";
-            
-            $driverCountResult = $conn->query($driverCountQuery);
-            
-            if ($driverCountResult && $driverCountResult->num_rows > 0) {
-                $driverData = $driverCountResult->fetch_assoc();
-                $availableDrivers = (int)$driverData['available_drivers'];
-                $busyDrivers = (int)$driverData['busy_drivers'];
-            }
-        } else {
-            // If drivers table doesn't exist, generate fallback data based on bookings
-            logError("Drivers table doesn't exist, using fallback data");
-            
-            // Use active rides + random value for busy drivers
-            $busyDrivers = $activeRides + rand(3, 8);
-            
-            // Generate a reasonable number of available drivers
-            $availableDrivers = $busyDrivers + rand(5, 15);
-        }
-        
-        // Check if ratings table exists
-        $ratingsTableExists = false;
-        $checkRatingsTableQuery = "SHOW TABLES LIKE 'ratings'";
-        $checkRatingsResult = $conn->query($checkRatingsTableQuery);
-        if ($checkRatingsResult && $checkRatingsResult->num_rows > 0) {
-            $ratingsTableExists = true;
-        }
-        
-        // Get average rating - fallback to 4.7 if no ratings table
+        // Get average rating (simulated - would come from a ratings table)
         $avgRating = 4.7;
-        if ($ratingsTableExists) {
-            $avgRatingQuery = "SELECT AVG(rating) as avg_rating FROM ratings";
-            $avgRatingResult = $conn->query($avgRatingQuery);
-            
-            if ($avgRatingResult && $avgRatingResult->num_rows > 0) {
-                $avgRating = (float)$avgRatingResult->fetch_assoc()['avg_rating'];
-                // If no ratings yet, default to 4.7
-                $avgRating = $avgRating ?: 4.7;
-            }
-        }
         
         // Get upcoming rides (pending/confirmed with future date)
         $upcomingRidesQuery = "SELECT COUNT(*) as total FROM bookings 
@@ -206,8 +147,7 @@ try {
             'availableDrivers' => (int)$availableDrivers,
             'busyDrivers' => (int)$busyDrivers,
             'avgRating' => (float)$avgRating,
-            'upcomingRides' => (int)$upcomingRides,
-            'timestamp' => time() // Add timestamp for cache tracking
+            'upcomingRides' => (int)$upcomingRides
         ];
         
         logError("Sending admin metrics response", ['metrics' => $metrics, 'period' => $period]);
@@ -215,20 +155,16 @@ try {
         exit;
     }
 
-    // FIXED: Get user's bookings - CRITICAL FIX: We need to show both bookings with matching user_id and
-    // bookings with matching passenger email for non-logged-in bookings
-    logError("Preparing to fetch bookings for user", ['user_id' => $userId, 'email' => $userData['email']]);
+    // Get user's bookings - adding more logging for debugging
+    logError("Preparing to fetch bookings for user", ['user_id' => $userId]);
 
-    // FIXED: SQL query now includes both user_id AND email matches for the user
-    $query = "SELECT * FROM bookings WHERE (user_id = ? OR passenger_email = ?) ORDER BY created_at DESC LIMIT 100";
-    $stmt = $conn->prepare($query);
+    $stmt = $conn->prepare("SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC");
     if (!$stmt) {
-        logError("Prepare statement failed", ['error' => $conn->error, 'query' => $query]);
+        logError("Prepare statement failed", ['error' => $conn->error]);
         throw new Exception('Database prepare error: ' . $conn->error);
     }
     
-    $userEmail = $userData['email'] ?? '';
-    $stmt->bind_param("is", $userId, $userEmail);
+    $stmt->bind_param("i", $userId);
     $executed = $stmt->execute();
     
     if (!$executed) {
@@ -245,21 +181,11 @@ try {
 
     // Debug: Log the SQL query for debugging
     logError("SQL Query executed", [
-        'query' => "SELECT * FROM bookings WHERE (user_id = {$userId} OR passenger_email = '{$userEmail}') ORDER BY created_at DESC LIMIT 100",
-        'timestamp' => time(), // Add timestamp for cache tracking
-        'result_size' => $result->num_rows
+        'query' => "SELECT * FROM bookings WHERE user_id = {$userId} ORDER BY created_at DESC"
     ]);
 
     $bookings = [];
     while ($row = $result->fetch_assoc()) {
-        // Log each row for debugging
-        logError("Booking record found", [
-            'id' => $row['id'],
-            'booking_number' => $row['booking_number'],
-            'pickup_date' => $row['pickup_date'],
-            'created_at' => $row['created_at']
-        ]);
-
         // Ensure all required fields are present
         $booking = [
             'id' => $row['id'],
@@ -287,7 +213,7 @@ try {
     }
 
     // Log count of real bookings found
-    logError("Real bookings found", ['count' => count($bookings), 'user_id' => $userId, 'email' => $userEmail]);
+    logError("Real bookings found", ['count' => count($bookings), 'user_id' => $userId]);
 
     // Return empty array if no bookings found instead of providing demo data
     if (empty($bookings)) {
@@ -297,8 +223,7 @@ try {
     // Ensure the response format is consistent
     $response = [
         'status' => 'success',
-        'data' => $bookings,
-        'timestamp' => time() // Add timestamp for client-side cache tracking
+        'data' => $bookings
     ];
     
     logError("Sending response", ['response_size' => strlen(json_encode($response))]);

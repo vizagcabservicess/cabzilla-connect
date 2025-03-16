@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { CabType, formatPrice, TripType, TripMode, clearFareCaches } from '@/lib/cabData';
+import { CabType, formatPrice, TripType, TripMode, getLocalPackagePrice, oneWayRates } from '@/lib/cabData';
 import { Users, Briefcase, Tag, Info, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { differenceInDays } from 'date-fns';
@@ -33,22 +33,13 @@ export function CabOptions({
   const [selectedCabId, setSelectedCabId] = useState<string | null>(selectedCab?.id || null);
   const [cabFares, setCabFares] = useState<Record<string, number>>({});
 
-  // Clear fare caches when component mounts to ensure fresh calculations
-  useEffect(() => {
-    console.log("CabOptions: Component mounted, clearing fare caches");
-    clearFareCaches();
-  }, []);
-
   // Force recalculation of fares when any parameter changes
   useEffect(() => {
-    console.log("CabOptions: Parameters changed, resetting selections and clearing caches");
     setSelectedCabId(null);
     setCabFares({});
-    clearFareCaches();
     
     // Clear any previously selected cab from sessionStorage to prevent caching issues
     sessionStorage.removeItem('selectedCab');
-    localStorage.removeItem('selectedCab');
     
     if (selectedCab) {
       onSelectCab(null as any); // Reset the selected cab
@@ -58,7 +49,6 @@ export function CabOptions({
   // Calculate fares for all cab types whenever relevant parameters change
   useEffect(() => {
     if (distance > 0) {
-      console.log("CabOptions: Calculating new fares for all cab types");
       const newFares: Record<string, number> = {};
       cabTypes.forEach(cab => {
         newFares[cab.id] = calculateCabFare(cab);
@@ -81,32 +71,11 @@ export function CabOptions({
   };
 
   const handleSelectCab = (cab: CabType) => {
-    console.log(`CabOptions: Selected cab ${cab.id}`);
     setSelectedCabId(cab.id);
-    
-    // Refresh fare calculation when selecting
-    const fare = calculateCabFare(cab);
-    console.log(`CabOptions: Calculated fare for ${cab.id}: ${fare}`);
-    
-    // Update the fare in state
-    setCabFares(prev => ({
-      ...prev,
-      [cab.id]: fare
-    }));
-    
-    // Create a deep copy of the cab with calculated fare to pass to parent
-    const selectedCabWithFare = {
-      ...cab,
-      calculatedFare: fare
-    };
-    
-    // Store in sessionStorage for immediate use but avoid localStorage (which would persist too long)
-    sessionStorage.setItem('selectedCab', JSON.stringify(selectedCabWithFare));
-    
-    // Notify parent component
     onSelectCab(cab);
     
-    // Scroll to booking summary if it exists
+    sessionStorage.setItem('selectedCab', JSON.stringify(cab));
+    
     const bookingSummary = document.getElementById('booking-summary');
     if (bookingSummary) {
       setTimeout(() => {
@@ -115,141 +84,47 @@ export function CabOptions({
     }
   };
 
-  // Dynamic calculation function for cab fares that doesn't use caching
   const calculateCabFare = (cab: CabType): number => {
-    console.log(`CabOptions: Calculating fare for ${cab.name}, trip type: ${tripType}, package: ${hourlyPackage}`);
     let totalFare = 0;
     
-    // Calculate airport fares (fixed rates based on locations)
     if (tripType === 'airport') {
       totalFare = calculateAirportFare(cab.name, distance);
-      console.log(`CabOptions: Airport fare for ${cab.name}: ${totalFare}`);
     }
-    // Calculate local package fares (hourly rentals)
     else if (tripType === 'local' && hourlyPackage) {
-      // Calculate base package price based on cab type
-      if (hourlyPackage === '8hrs-80km') {
-        // 8 hours / 80 km package rates
-        switch (cab.id) {
-          case 'sedan':
-            totalFare = 5160;
-            break;
-          case 'ertiga':
-          case 'suv':
-            totalFare = 6550;
-            break;
-          case 'innova':
-            totalFare = 7440;
-            break;
-          case 'tempo':
-            totalFare = 11500;
-            break;
-          case 'luxury':
-            totalFare = 14000;
-            break;
-          default:
-            totalFare = 5000;
-        }
-      } else if (hourlyPackage === '10hrs-100km') {
-        // 10 hours / 100 km package rates
-        switch (cab.id) {
-          case 'sedan':
-            totalFare = 5800;
-            break;
-          case 'ertiga':
-          case 'suv':
-            totalFare = 7200;
-            break;
-          case 'innova':
-            totalFare = 8500;
-            break;
-          case 'tempo':
-            totalFare = 13000;
-            break;
-          case 'luxury':
-            totalFare = 15500;
-            break;
-          default:
-            totalFare = 6000;
-        }
-      }
-      
-      console.log(`CabOptions: Local base fare for ${cab.name}, package ${hourlyPackage}: ${totalFare}`);
+      // Get base package price for local rental
+      totalFare = getLocalPackagePrice(hourlyPackage, cab.name);
       
       // Calculate extra km charges if any
       const packageKm = hourlyPackage === '8hrs-80km' ? 80 : 100;
       if (distance > packageKm) {
         const extraKm = distance - packageKm;
-        let extraChargeRate = 0;
-        
-        // Per km extra charges based on cab type
-        switch (cab.id) {
-          case 'sedan':
-            extraChargeRate = 14;
-            break;
-          case 'ertiga':
-          case 'suv':
-            extraChargeRate = 18;
-            break;
-          case 'innova':
-            extraChargeRate = 20;
-            break;
-          case 'tempo':
-            extraChargeRate = 22;
-            break;
-          case 'luxury':
-            extraChargeRate = 25;
-            break;
-          default:
-            extraChargeRate = cab.pricePerKm;
-        }
-        
-        const extraFare = extraKm * extraChargeRate;
-        console.log(`CabOptions: Extra km charge: ${extraKm}km x ${extraChargeRate} = ${extraFare}`);
-        totalFare += extraFare;
+        totalFare += extraKm * cab.pricePerKm;
       }
-      
-      console.log(`CabOptions: Final local fare for ${cab.name}: ${totalFare}`);
     }
-    // Calculate outstation fares (one-way and round-trip)
     else if (tripType === 'outstation') {
       let baseRate = 0, perKmRate = 0, nightHaltCharge = 0, driverAllowance = 250;
       
-      // Set rates based on cab type
-      switch (cab.id) {
+      switch (cab.name.toLowerCase()) {
         case "sedan":
           baseRate = 4200;
           perKmRate = 14;
           nightHaltCharge = 700;
           break;
         case "ertiga":
-        case "suv":
           baseRate = 5400;
           perKmRate = 18;
           nightHaltCharge = 1000;
           break;
-        case "innova":
+        case "innova crysta":
           baseRate = 6000;
           perKmRate = 20;
           nightHaltCharge = 1000;
-          break;
-        case "tempo":
-          baseRate = 9000;
-          perKmRate = 22;
-          nightHaltCharge = 1200;
-          break;
-        case "luxury":
-          baseRate = 10500;
-          perKmRate = 25;
-          nightHaltCharge = 1500;
           break;
         default:
           baseRate = cab.price;
           perKmRate = cab.pricePerKm;
           nightHaltCharge = 1000;
       }
-      
-      console.log(`CabOptions: Outstation rates for ${cab.name}: base=${baseRate}, perKm=${perKmRate}`);
       
       if (tripMode === "one-way") {
         // One-way calculation - double the distance to account for driver return
@@ -262,12 +137,10 @@ export function CabOptions({
         if (effectiveDistance > allocatedKm) {
           const extraKm = effectiveDistance - allocatedKm;
           totalDistanceFare = extraKm * perKmRate;
-          console.log(`CabOptions: Extra distance charge: ${extraKm}km x ${perKmRate} = ${totalDistanceFare}`);
         }
         
         // Add driver allowance
         totalFare = totalBaseFare + totalDistanceFare + driverAllowance;
-        console.log(`CabOptions: One-way fare for ${cab.name}: ${totalFare}`);
       } else {
         // Round trip calculation
         let days = returnDate ? Math.max(1, differenceInDays(returnDate, pickupDate || new Date()) + 1) : 1;
@@ -283,24 +156,15 @@ export function CabOptions({
         if (effectiveDistance > totalAllocatedKm) {
           const extraKm = effectiveDistance - totalAllocatedKm;
           totalDistanceFare = extraKm * perKmRate;
-          console.log(`CabOptions: Round-trip extra distance: ${extraKm}km x ${perKmRate} = ${totalDistanceFare}`);
         }
         
         let totalNightHalt = (days - 1) * nightHaltCharge;
         
         totalFare = totalBaseFare + totalDistanceFare + totalNightHalt + (days * driverAllowance);
-        console.log(`CabOptions: Round-trip fare for ${cab.name}: ${totalFare} (${days} days)`);
       }
     }
-    // Calculate tour fares (handled by the touring page directly)
-    else if (tripType === 'tour') {
-      // Tour fare calculation is handled in the Tours page
-      totalFare = cab.price;
-    }
     
-    const roundedFare = Math.ceil(totalFare / 10) * 10; // Round to nearest 10
-    console.log(`CabOptions: Final rounded fare for ${cab.name}: ${roundedFare}`);
-    return roundedFare;
+    return Math.ceil(totalFare / 10) * 10; // Round to nearest 10
   };
 
   return (

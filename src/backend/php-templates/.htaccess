@@ -1,46 +1,40 @@
 
-# Prevent caching for API endpoints
-<IfModule mod_headers.c>
-  <FilesMatch "\.(php)$">
-    Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
-    Header set Pragma "no-cache"
-    Header set Expires "Wed, 11 Jan 1984 05:00:00 GMT"
-  </FilesMatch>
-</IfModule>
+# Enable rewrite engine
+RewriteEngine On
+
+# Ensure API requests go directly to PHP files, not React frontend
+RewriteRule ^api/ - [L]
+
+# API routing rules
+RewriteRule ^api/signup$ api/signup.php [L]
+RewriteRule ^api/login$ api/login.php [L]
+RewriteRule ^api/user/dashboard$ api/user/dashboard.php [L]
+RewriteRule ^api/booking/create$ api/book.php [L]
+RewriteRule ^api/book$ api/book.php [L]
+RewriteRule ^api/book/edit/([0-9]+)$ api/book-edit.php?id=$1 [L]
+RewriteRule ^api/admin/bookings$ api/admin/bookings.php [L]
+RewriteRule ^api/fares/tours$ api/fares/tours.php [L]
+RewriteRule ^api/fares/vehicles$ api/fares/vehicles.php [L]
+RewriteRule ^api/admin/fares/update$ api/admin/fares-update.php [L]
+RewriteRule ^api/admin/km-price/update$ api/admin/km-price-update.php [L]
+
+# Set the default character set
+AddDefaultCharset UTF-8
 
 # Enable CORS
 <IfModule mod_headers.c>
-  Header set Access-Control-Allow-Origin "*"
-  Header set Access-Control-Allow-Methods "GET, POST, OPTIONS, PUT, DELETE"
-  Header set Access-Control-Allow-Headers "Content-Type, Authorization"
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization"
+    Header always set Access-Control-Max-Age "3600"
 </IfModule>
 
-# Handle Authorization header
-RewriteEngine On
-RewriteCond %{HTTP:Authorization} ^(.*)
-RewriteRule .* - [e=HTTP_AUTHORIZATION:%1]
+# Handle OPTIONS requests for CORS preflight
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule .* - [R=200,L]
 
-# Prevent caching for JSON responses
-<FilesMatch "\.json$">
-  <IfModule mod_headers.c>
-    Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
-    Header set Pragma "no-cache"
-    Header set Expires "Wed, 11 Jan 1984 05:00:00 GMT"
-  </IfModule>
-</FilesMatch>
-
-# Return 404 for any sensitive files
-<FilesMatch "(config\.php|\.env|\.*sql)$">
-  Order allow,deny
-  Deny from all
-</FilesMatch>
-
-# PHP settings for better security and performance
-<IfModule mod_php7.c>
-  php_flag display_errors Off
-  php_flag log_errors On
-  php_value max_execution_time 300
-  php_value memory_limit 256M
-  php_value post_max_size 50M
-  php_value upload_max_filesize 20M
-</IfModule>
+# Redirect all non-file/directory/API requests to index.html for React Router
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} !^/api
+RewriteRule ^ index.html [QSA,L]
