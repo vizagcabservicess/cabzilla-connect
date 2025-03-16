@@ -22,6 +22,10 @@ RewriteRule ^(.*)$ $1 [R=200,L]
 # Set default index for directories
 DirectoryIndex index.php
 
+# Process dashboard route
+RewriteRule ^user/dashboard$ user/dashboard.php [QSA,L]
+RewriteRule ^user/dashboard/$ user/dashboard.php [QSA,L]
+
 # Process booking URLs - multiple formats for compatibility
 RewriteRule ^booking/([0-9]+)/edit/?$ booking/edit.php?id=$1 [QSA,L]
 RewriteRule ^book/edit/([0-9]+)/?$ booking/edit.php?id=$1 [QSA,L]

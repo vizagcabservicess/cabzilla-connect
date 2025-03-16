@@ -42,7 +42,8 @@ header('Content-Type: application/json');
 logError("Dashboard.php request initiated", [
     'method' => $_SERVER['REQUEST_METHOD'],
     'headers' => getallheaders(),
-    'query' => $_GET
+    'query' => $_GET,
+    'request_uri' => $_SERVER['REQUEST_URI']
 ]);
 
 try {
@@ -231,6 +232,21 @@ try {
 
     // Log count of real bookings found
     logError("Real bookings found", ['count' => count($bookings), 'user_id' => $userId]);
+
+    // If no bookings found, check if the user has any bookings in the database
+    if (count($bookings) === 0) {
+        $checkQuery = "SELECT COUNT(*) as count FROM bookings WHERE user_id = ?";
+        $checkStmt = $conn->prepare($checkQuery);
+        $checkStmt->bind_param("i", $userId);
+        $checkStmt->execute();
+        $checkResult = $checkStmt->get_result();
+        $bookingCount = $checkResult->fetch_assoc()['count'] ?? 0;
+        
+        logError("Double-checking bookings for user", [
+            'user_id' => $userId,
+            'booking_count' => $bookingCount
+        ]);
+    }
 
     // Ensure the response format is consistent
     $response = [

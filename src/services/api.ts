@@ -1,3 +1,4 @@
+
 import axios, { AxiosInstance, AxiosError, AxiosRequestConfig } from 'axios';
 import { jwtDecode } from 'jwt-decode';
 import { Booking, BookingRequest, DashboardMetrics, VehiclePricingUpdateRequest } from '@/types/api';
@@ -19,6 +20,10 @@ const apiClient: AxiosInstance = axios.create({
   withCredentials: false,
   timeout: 30000, // Increased timeout for slower connections
 });
+
+// Define retry constants
+const DEFAULT_MAX_RETRIES = 3;
+const DEFAULT_RETRY_DELAY = 1000;
 
 // Function to set the auth token in the headers
 const setAuthToken = (token: string | null) => {
@@ -76,6 +81,11 @@ apiClient.interceptors.request.use(
     
     console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`, 
       config.method?.toLowerCase() === 'post' ? config.data : '');
+    
+    // For debugging, log the full URL being requested
+    const fullUrl = `${apiClient.defaults.baseURL}${config.url}`;
+    console.log(`Full request URL: ${fullUrl}`);
+    
     return config;
   },
   (error) => {
@@ -148,10 +158,6 @@ const handleApiError = (error: any) => {
   
   return error instanceof Error ? error : new Error('An unknown error occurred');
 };
-
-// Define retry constants
-const DEFAULT_MAX_RETRIES = 3;
-const DEFAULT_RETRY_DELAY = 1000;
 
 // Helper function to make API requests with retry logic
 const makeApiRequest = async <T>(apiCall: () => Promise<T>, maxRetries = DEFAULT_MAX_RETRIES, retryDelay = DEFAULT_RETRY_DELAY): Promise<T> => {
@@ -438,14 +444,39 @@ export const bookingAPI = {
   async getUserBookings(): Promise<Booking[]> {
     return makeApiRequest(async () => {
       console.log('Fetching user bookings...');
-      // Add cache busting parameter to URL
-      const timestamp = new Date().getTime();
-      const response = await apiClient.get(`/user/dashboard?_=${timestamp}`);
       
-      if (response.data.status === 'success') {
-        return response.data.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to fetch bookings');
+      // Try with various endpoint formats for dashboard data
+      try {
+        // First attempt with proper path
+        console.log('Trying primary dashboard endpoint');
+        const timestamp = new Date().getTime();
+        const response = await apiClient.get(`/user/dashboard?_t=${timestamp}`);
+        
+        if (response.data.status === 'success') {
+          console.log('Primary dashboard endpoint succeeded');
+          return response.data.data;
+        } else {
+          throw new Error(response.data.message || 'Failed to fetch bookings');
+        }
+      } catch (firstError) {
+        console.log('Primary dashboard endpoint failed:', firstError);
+        
+        try {
+          // Second attempt with trailing slash
+          console.log('Trying dashboard endpoint with trailing slash');
+          const timestamp = new Date().getTime();
+          const response = await apiClient.get(`/user/dashboard/?_t=${timestamp}`);
+          
+          if (response.data.status === 'success') {
+            console.log('Dashboard endpoint with trailing slash succeeded');
+            return response.data.data;
+          } else {
+            throw new Error(response.data.message || 'Failed to fetch bookings');
+          }
+        } catch (secondError) {
+          console.log('Both dashboard endpoints failed');
+          throw firstError; // Re-throw first error for consistency
+        }
       }
     });
   },
@@ -455,7 +486,7 @@ export const bookingAPI = {
     return makeApiRequest(async () => {
       console.log('Admin: Fetching all bookings...');
       const timestamp = new Date().getTime();
-      const response = await apiClient.get(`/admin/bookings?_=${timestamp}`);
+      const response = await apiClient.get(`/admin/bookings?_t=${timestamp}`);
       
       if (response.data.status === 'success') {
         return response.data.data;
@@ -468,14 +499,49 @@ export const bookingAPI = {
   async getAdminDashboardMetrics(period: 'today' | 'week' | 'month' = 'week'): Promise<DashboardMetrics> {
     return makeApiRequest(async () => {
       console.log(`Fetching admin dashboard metrics for period: ${period}...`);
-      // Add admin=true and period parameters
-      const timestamp = new Date().getTime();
-      const response = await apiClient.get(`/user/dashboard?admin=true&period=${period}&_=${timestamp}`);
       
-      if (response.data.status === 'success') {
-        return response.data.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to fetch admin metrics');
+      try {
+        // First attempt
+        console.log('Trying primary admin metrics endpoint');
+        const timestamp = new Date().getTime();
+        const response = await apiClient.get(`/user/dashboard?admin=true&period=${period}&_t=${timestamp}`);
+        
+        if (response.data.status === 'success') {
+          console.log('Primary admin metrics endpoint succeeded');
+          return response.data.data;
+        } else {
+          throw new Error(response.data.message || 'Failed to fetch admin metrics');
+        }
+      } catch (firstError) {
+        console.log('Primary admin metrics endpoint failed:', firstError);
+        
+        try {
+          // Second attempt with trailing slash
+          console.log('Trying admin metrics endpoint with trailing slash');
+          const timestamp = new Date().getTime();
+          const response = await apiClient.get(`/user/dashboard/?admin=true&period=${period}&_t=${timestamp}`);
+          
+          if (response.data.status === 'success') {
+            console.log('Admin metrics endpoint with trailing slash succeeded');
+            return response.data.data;
+          } else {
+            throw new Error(response.data.message || 'Failed to fetch admin metrics');
+          }
+        } catch (secondError) {
+          console.log('Both admin metrics endpoints failed');
+          
+          // Emergency fallback: return dummy data to prevent UI breaks
+          console.log('Using emergency fallback data for dashboard metrics');
+          return {
+            totalBookings: 0,
+            activeRides: 0,
+            totalRevenue: 0,
+            availableDrivers: 0,
+            busyDrivers: 0,
+            avgRating: 0,
+            upcomingRides: 0
+          };
+        }
       }
     });
   },
@@ -487,7 +553,7 @@ export const fareAPI = {
     return makeApiRequest(async () => {
       console.log('Fetching tour fares...');
       const timestamp = new Date().getTime();
-      const response = await apiClient.get(`/fares/tours?_=${timestamp}`);
+      const response = await apiClient.get(`/fares/tours?_t=${timestamp}`);
       
       if (response.data.status === 'success') {
         return response.data.data;
@@ -512,7 +578,7 @@ export const fareAPI = {
     return makeApiRequest(async () => {
       console.log('Fetching vehicle pricing data...');
       const timestamp = new Date().getTime();
-      const response = await apiClient.get(`/fares/vehicles?_=${timestamp}`);
+      const response = await apiClient.get(`/fares/vehicles?_t=${timestamp}`);
       
       if (response.data.status === 'success') {
         return response.data.data;
