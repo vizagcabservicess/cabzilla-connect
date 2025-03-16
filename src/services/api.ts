@@ -1,20 +1,21 @@
 
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import axios, { AxiosInstance, AxiosError, AxiosRequestConfig } from 'axios';
 import { jwtDecode } from 'jwt-decode';
 import { Booking, BookingRequest, DashboardMetrics, VehiclePricingUpdateRequest } from '@/types/api';
 
-// Define API base URL - use import.meta.env for Vite
-const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com/api';
+// Define API base URL from environment variables
+const apiBaseURL = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com/api';
+console.log('API Base URL:', apiBaseURL);
 
-// Create Axios instance
+// Create Axios instance with better configuration
 const apiClient: AxiosInstance = axios.create({
-  baseURL: baseURL,
+  baseURL: apiBaseURL,
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   },
   withCredentials: false,
-  timeout: 15000, // Add a timeout to prevent long-hanging requests
+  timeout: 30000, // Increased timeout for slower connections
 });
 
 // Function to set the auth token in the headers
@@ -34,20 +35,60 @@ if (storedToken) {
   setAuthToken(storedToken);
 }
 
-// Function to handle API errors
+// Add request interceptor for debugging
+apiClient.interceptors.request.use(
+  (config) => {
+    console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`, config.data);
+    return config;
+  },
+  (error) => {
+    console.error('Request error:', error);
+    return Promise.reject(error);
+  }
+);
+
+// Add response interceptor for debugging
+apiClient.interceptors.response.use(
+  (response) => {
+    console.log(`API Response: ${response.status} ${response.config.url}`, response.data);
+    return response;
+  },
+  (error) => {
+    console.error('Response error:', error);
+    return Promise.reject(error);
+  }
+);
+
+// Function to handle API errors with improved diagnostics
 const handleApiError = (error: any) => {
   if (axios.isAxiosError(error)) {
     const axiosError = error as AxiosError;
     console.error('API Error:', axiosError.message);
+    
     if (axiosError.response) {
       console.error('Status Code:', axiosError.response.status);
       console.error('Response Data:', axiosError.response.data);
+      
+      // Return error with response data if available
+      return new Error(
+        `Error ${axiosError.response.status}: ${
+          typeof axiosError.response.data === 'object' && axiosError.response.data !== null
+          ? axiosError.response.data.message || JSON.stringify(axiosError.response.data)
+          : axiosError.message
+        }`
+      );
     }
     
-    // Add special handling for network errors
+    // Special handling for network errors
     if (axiosError.code === 'ERR_NETWORK' || axiosError.code === 'ECONNABORTED') {
       console.error('Network error - server may be down or unreachable');
       return new Error('Network error: Server is unreachable. Please check your connection and try again.');
+    }
+
+    // Handle timeout errors
+    if (axiosError.code === 'ETIMEDOUT') {
+      console.error('Request timed out');
+      return new Error('Request timed out. Please try again later.');
     }
   } else {
     console.error('Non-Axios Error:', error);
@@ -56,11 +97,36 @@ const handleApiError = (error: any) => {
   return error instanceof Error ? error : new Error('An unknown error occurred');
 };
 
+// Helper function to make API requests with retry logic
+const makeApiRequest = async <T>(
+  requestFn: () => Promise<T>,
+  maxRetries = 3,
+  retryDelay = 1000
+): Promise<T> => {
+  let retries = 0;
+  
+  while (true) {
+    try {
+      return await requestFn();
+    } catch (error) {
+      retries++;
+      console.log(`API request failed (attempt ${retries}/${maxRetries})`, error);
+      
+      if (retries >= maxRetries) {
+        throw handleApiError(error);
+      }
+      
+      // Wait before retrying (with exponential backoff)
+      await new Promise(r => setTimeout(r, retryDelay * retries));
+    }
+  }
+};
+
 // API service for authentication
 export const authAPI = {
   async login(credentials: any): Promise<any> {
-    try {
-      const response = await apiClient.post('/auth/login.php', credentials);
+    return makeApiRequest(async () => {
+      const response = await apiClient.post('/login', credentials);
       if (response.data.status === 'success') {
         const token = response.data.token;
         setAuthToken(token);
@@ -68,22 +134,18 @@ export const authAPI = {
       } else {
         throw new Error(response.data.message || 'Login failed');
       }
-    } catch (error) {
-      throw handleApiError(error);
-    }
+    });
   },
 
   async register(userData: any): Promise<any> {
-    try {
-      const response = await apiClient.post('/auth/register.php', userData);
+    return makeApiRequest(async () => {
+      const response = await apiClient.post('/signup', userData);
       if (response.data.status === 'success') {
         return response.data;
       } else {
         throw new Error(response.data.message || 'Registration failed');
       }
-    } catch (error) {
-      throw handleApiError(error);
-    }
+    });
   },
 
   // Alias for register to match usage in SignupForm
@@ -134,173 +196,135 @@ export const authAPI = {
 // API service for booking related operations
 export const bookingAPI = {
   async createBooking(bookingData: BookingRequest): Promise<any> {
-    try {
-      // Add retry logic for better reliability
-      let retries = 0;
-      const maxRetries = 3;
-      
-      while (retries < maxRetries) {
-        try {
-          const response = await apiClient.post('/booking/create.php', bookingData);
-          if (response.data.status === 'success') {
-            return response.data;
-          } else {
-            throw new Error(response.data.message || 'Failed to create booking');
-          }
-        } catch (error) {
-          retries++;
-          if (retries >= maxRetries) throw error;
-          
-          // Wait before retrying (exponential backoff)
-          await new Promise(r => setTimeout(r, 1000 * retries));
-        }
+    return makeApiRequest(async () => {
+      console.log('Creating booking with data:', bookingData);
+      const response = await apiClient.post('/book', bookingData);
+      if (response.data.status === 'success') {
+        return response.data;
+      } else {
+        throw new Error(response.data.message || 'Failed to create booking');
       }
-    } catch (error) {
-      throw handleApiError(error);
-    }
+    }, 3, 2000); // More retries with longer delay for booking creation
   },
 
   async getBooking(id: string): Promise<Booking> {
-    try {
-      const response = await apiClient.get(`/booking/details.php?id=${id}`);
+    return makeApiRequest(async () => {
+      const response = await apiClient.get(`/book/edit/${id}`);
       if (response.data.status === 'success') {
         return response.data.data;
       } else {
         throw new Error(response.data.message || 'Failed to fetch booking details');
       }
-    } catch (error) {
-      throw handleApiError(error);
-    }
+    });
   },
 
   async updateBooking(id: string, bookingData: any): Promise<any> {
-    try {
-      const response = await apiClient.post(`/booking/update.php?id=${id}`, bookingData);
+    return makeApiRequest(async () => {
+      const response = await apiClient.post(`/book/edit/${id}`, bookingData);
       if (response.data.status === 'success') {
         return response.data;
       } else {
         throw new Error(response.data.message || 'Failed to update booking');
       }
-    } catch (error) {
-      throw handleApiError(error);
-    }
+    });
   },
   
   async getUserBookings(): Promise<Booking[]> {
-    try {
+    return makeApiRequest(async () => {
       console.log('Fetching user bookings...');
       // Add cache busting parameter to URL
       const timestamp = new Date().getTime();
-      const response = await apiClient.get(`/user/dashboard.php?_=${timestamp}`);
+      const response = await apiClient.get(`/user/dashboard?_=${timestamp}`);
       
       if (response.data.status === 'success') {
         return response.data.data;
       } else {
         throw new Error(response.data.message || 'Failed to fetch bookings');
       }
-    } catch (error) {
-      console.error('Error in getUserBookings:', error);
-      throw handleApiError(error);
-    }
+    });
   },
 
   // Add method to get all bookings for admin
   async getAllBookings(): Promise<Booking[]> {
-    try {
+    return makeApiRequest(async () => {
       console.log('Admin: Fetching all bookings...');
       const timestamp = new Date().getTime();
-      const response = await apiClient.get(`/admin/bookings.php?_=${timestamp}`);
+      const response = await apiClient.get(`/admin/bookings?_=${timestamp}`);
       
       if (response.data.status === 'success') {
         return response.data.data;
       } else {
         throw new Error(response.data.message || 'Failed to fetch all bookings');
       }
-    } catch (error) {
-      console.error('Error in getAllBookings:', error);
-      throw handleApiError(error);
-    }
+    });
   },
 
   async getAdminDashboardMetrics(period: 'today' | 'week' | 'month' = 'week'): Promise<DashboardMetrics> {
-    try {
+    return makeApiRequest(async () => {
       console.log(`Fetching admin dashboard metrics for period: ${period}...`);
       // Add admin=true and period parameters
       const timestamp = new Date().getTime();
-      const response = await apiClient.get(`/user/dashboard.php?admin=true&period=${period}&_=${timestamp}`);
+      const response = await apiClient.get(`/user/dashboard?admin=true&period=${period}&_=${timestamp}`);
       
       if (response.data.status === 'success') {
         return response.data.data;
       } else {
         throw new Error(response.data.message || 'Failed to fetch admin metrics');
       }
-    } catch (error) {
-      console.error('Error in getAdminDashboardMetrics:', error);
-      throw handleApiError(error);
-    }
+    });
   },
 };
 
 // API service for fare management
 export const fareAPI = {
   async getTourFares(): Promise<any[]> {
-    try {
+    return makeApiRequest(async () => {
       console.log('Fetching tour fares...');
       const timestamp = new Date().getTime();
-      const response = await apiClient.get(`/fares/tours.php?_=${timestamp}`);
+      const response = await apiClient.get(`/fares/tours?_=${timestamp}`);
       
       if (response.data.status === 'success') {
         return response.data.data;
       } else {
         throw new Error(response.data.message || 'Failed to fetch tour fares');
       }
-    } catch (error) {
-      console.error('Error in getTourFares:', error);
-      throw handleApiError(error);
-    }
+    });
   },
   
   async updateTourFares(fareData: any): Promise<any> {
-    try {
-      const response = await apiClient.post('/fares/update-tour.php', fareData);
+    return makeApiRequest(async () => {
+      const response = await apiClient.post('/fares/update-tour', fareData);
       if (response.data.status === 'success') {
         return response.data;
       } else {
         throw new Error(response.data.message || 'Failed to update tour fares');
       }
-    } catch (error) {
-      throw handleApiError(error);
-    }
+    });
   },
   
   async getVehiclePricing(): Promise<any[]> {
-    try {
+    return makeApiRequest(async () => {
       console.log('Fetching vehicle pricing data...');
       const timestamp = new Date().getTime();
-      const response = await apiClient.get(`/fares/vehicles.php?_=${timestamp}`);
+      const response = await apiClient.get(`/fares/vehicles?_=${timestamp}`);
       
       if (response.data.status === 'success') {
         return response.data.data;
       } else {
         throw new Error(response.data.message || 'Failed to fetch vehicle pricing data');
       }
-    } catch (error) {
-      console.error('Error in getVehiclePricing:', error);
-      throw handleApiError(error);
-    }
+    });
   },
   
   async updateVehiclePricing(pricingData: VehiclePricingUpdateRequest): Promise<any> {
-    try {
-      const response = await apiClient.post('/fares/update-vehicle.php', pricingData);
+    return makeApiRequest(async () => {
+      const response = await apiClient.post('/fares/update-vehicle', pricingData);
       if (response.data.status === 'success') {
         return response.data;
       } else {
         throw new Error(response.data.message || 'Failed to update vehicle pricing');
       }
-    } catch (error) {
-      throw handleApiError(error);
-    }
+    });
   }
 };
 

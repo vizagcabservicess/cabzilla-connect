@@ -16,14 +16,42 @@ export function TabTripSelector({
   onTabChange, 
   onTripModeChange 
 }: TabTripSelectorProps) {
-  // Clear any cached fare data when tab changes
-  useEffect(() => {
-    // Clear all session storage related to fares and booking details
+  // Function to thoroughly clear all cache data
+  const clearAllCacheData = () => {
+    console.log("Clearing all cached data");
+    
+    // Clear all booking and fare related data
     sessionStorage.removeItem('selectedCab');
     sessionStorage.removeItem('hourlyPackage');
     sessionStorage.removeItem('tourPackage');
     sessionStorage.removeItem('bookingDetails');
     sessionStorage.removeItem('cabFares');
+    sessionStorage.removeItem('dropLocation');
+    sessionStorage.removeItem('pickupLocation');
+    sessionStorage.removeItem('pickupDate');
+    sessionStorage.removeItem('returnDate');
+    
+    // Force clear local cache variables
+    const localKeys = ['fare-', 'discount-', 'cab-', 'location-', 'trip-'];
+    
+    // Loop through sessionStorage to find items with these keys
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i);
+      if (key) {
+        for (const prefix of localKeys) {
+          if (key.startsWith(prefix)) {
+            console.log(`Removing cached item: ${key}`);
+            sessionStorage.removeItem(key);
+            break;
+          }
+        }
+      }
+    }
+  };
+  
+  // Clear any cached fare data when tab changes
+  useEffect(() => {
+    clearAllCacheData();
     
     // Reset drop location when switching to local
     if (selectedTab === 'local') {
@@ -34,12 +62,7 @@ export function TabTripSelector({
   // Function to handle tab change with complete data reset
   const handleTabChange = (value: string) => {
     // Force clear all cached data
-    sessionStorage.removeItem('selectedCab');
-    sessionStorage.removeItem('hourlyPackage');
-    sessionStorage.removeItem('tourPackage');
-    sessionStorage.removeItem('bookingDetails');
-    sessionStorage.removeItem('cabFares');
-    sessionStorage.removeItem('dropLocation');
+    clearAllCacheData();
     
     // Then update the tab
     onTabChange(value as 'outstation' | 'local' | 'airport' | 'tour');

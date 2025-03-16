@@ -6,6 +6,7 @@ RewriteEngine On
 RewriteRule ^signup$ signup.php [L]
 RewriteRule ^login$ login.php [L]
 RewriteRule ^user/dashboard$ user/dashboard.php [L]
+RewriteRule ^booking/create$ book.php [L]
 RewriteRule ^book$ book.php [L]
 RewriteRule ^book/edit/([0-9]+)$ book-edit.php?id=$1 [L]
 RewriteRule ^admin/bookings$ admin/bookings.php [L]

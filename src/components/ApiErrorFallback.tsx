@@ -2,7 +2,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, RefreshCw } from "lucide-react";
+import { AlertTriangle, RefreshCw, WifiOff, Server, FileQuestion } from "lucide-react";
 
 interface ApiErrorFallbackProps {
   error: Error | string;
@@ -18,14 +18,28 @@ export function ApiErrorFallback({
   title = "Connection Error"
 }: ApiErrorFallbackProps) {
   const errorMessage = typeof error === "string" ? error : error.message;
-  const isNetworkError = errorMessage.includes("Network") || 
-                          errorMessage.includes("connection") ||
-                          errorMessage.includes("ERR_NETWORK") ||
-                          errorMessage.includes("ECONNABORTED") ||
-                          errorMessage.includes("404") || 
-                          errorMessage.includes("failed");
+  
+  // Better error classification
+  const isNetworkError = 
+    /network|connection|failed|ERR_NETWORK|ECONNABORTED|404|400|500|503|timeout/i.test(errorMessage);
+  
+  const isServerError = 
+    /server|500|503|unavailable|internal server error/i.test(errorMessage);
+  
+  const is404Error = /404|not found/i.test(errorMessage);
 
   const handleRetry = () => {
+    console.log("Retrying after error...");
+    
+    // Clear any cached data that might be causing issues
+    const cacheKeys = [
+      'selectedCab', 'hourlyPackage', 'tourPackage', 
+      'bookingDetails', 'cabFares', 'dropLocation',
+      'pickupLocation', 'pickupDate', 'returnDate'
+    ];
+    
+    cacheKeys.forEach(key => sessionStorage.removeItem(key));
+    
     if (onRetry) {
       onRetry();
     } else if (resetErrorBoundary) {
@@ -35,18 +49,31 @@ export function ApiErrorFallback({
     }
   };
 
+  // Pick the most appropriate icon
+  const ErrorIcon = isNetworkError 
+    ? WifiOff 
+    : (isServerError ? Server : (is404Error ? FileQuestion : AlertTriangle));
+
   return (
     <Card className="w-full border-red-200 bg-red-50">
       <CardHeader>
         <CardTitle className="flex items-center text-red-700">
-          <AlertTriangle className="h-5 w-5 mr-2" />
+          <ErrorIcon className="h-5 w-5 mr-2" />
           {title}
         </CardTitle>
       </CardHeader>
       <CardContent>
         <Alert variant="destructive" className="mb-4">
           <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>{isNetworkError ? "Server Connection Failed" : "Error"}</AlertTitle>
+          <AlertTitle>
+            {isNetworkError 
+              ? "Server Connection Failed" 
+              : (isServerError 
+                ? "Server Error" 
+                : (is404Error 
+                  ? "Resource Not Found" 
+                  : "Error"))}
+          </AlertTitle>
           <AlertDescription>
             {isNetworkError 
               ? "Unable to connect to the server. Please check your internet connection or try again later."
@@ -66,8 +93,20 @@ export function ApiErrorFallback({
             <p className="mt-3 text-xs text-gray-500">Error details: {errorMessage}</p>
           </div>
         )}
+        
+        {isServerError && (
+          <div className="text-sm text-gray-700 mt-4">
+            <p className="font-medium">What you can try:</p>
+            <ul className="list-disc pl-5 mt-2 space-y-1">
+              <li>Wait a few minutes and try again</li>
+              <li>Clear your browser cache and cookies</li>
+              <li>Contact support if the problem persists</li>
+            </ul>
+            <p className="mt-3 text-xs text-gray-500">Error details: {errorMessage}</p>
+          </div>
+        )}
       </CardContent>
-      <CardFooter>
+      <CardFooter className="flex flex-wrap gap-3">
         <Button 
           onClick={handleRetry} 
           variant="outline" 
@@ -75,6 +114,14 @@ export function ApiErrorFallback({
         >
           <RefreshCw className="h-4 w-4" />
           Retry Connection
+        </Button>
+        
+        <Button 
+          onClick={() => window.location.href = '/'} 
+          variant="ghost" 
+          className="gap-2"
+        >
+          Return to Home
         </Button>
       </CardFooter>
     </Card>
