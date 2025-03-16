@@ -69,11 +69,11 @@ const handleApiError = (error: any) => {
       console.error('Status Code:', axiosError.response.status);
       console.error('Response Data:', axiosError.response.data);
       
-      // Return error with response data if available
+      // Return error with response data if available - FIX: Handle different response data types properly
       return new Error(
         `Error ${axiosError.response.status}: ${
           typeof axiosError.response.data === 'object' && axiosError.response.data !== null
-          ? axiosError.response.data.message || JSON.stringify(axiosError.response.data)
+          ? (axiosError.response.data as any).message || JSON.stringify(axiosError.response.data)
           : axiosError.message
         }`
       );
