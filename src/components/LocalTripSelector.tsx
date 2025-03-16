@@ -1,5 +1,5 @@
 
-import { LocalTripPurpose, HourlyPackage, hourlyPackages, getLocalPackagePrice } from "@/lib/cabData";
+import { LocalTripPurpose, HourlyPackage, hourlyPackages, getLocalPackagePrice, clearFareCaches } from "@/lib/cabData";
 import { 
   Select,
   SelectContent,
@@ -24,14 +24,23 @@ export function LocalTripSelector({
   onHourlyPackageChange 
 }: LocalTripSelectorProps) {
   
-  // Reset package selection if needed to ensure proper pricing
+  // Clear fare caches on component mount to ensure fresh calculations
   useEffect(() => {
     console.log("LocalTripSelector mounted with package:", hourlyPackage);
+    clearFareCaches(); // Clear caches on component mount
+    
     if (!hourlyPackage) {
       console.log("Setting default hourly package");
       onHourlyPackageChange(hourlyPackages[0].id);
     }
   }, []);
+
+  // Clear caches when package changes to ensure fresh pricing
+  const handlePackageChange = (value: string) => {
+    console.log("Hourly package changed to:", value);
+    clearFareCaches(); // Clear caches when package changes
+    onHourlyPackageChange(value);
+  };
 
   return (
     <div className="space-y-4">
@@ -56,10 +65,7 @@ export function LocalTripSelector({
         <Label htmlFor="hourly-package" className="text-xs font-medium text-gray-700">HOURLY PACKAGE</Label>
         <Select 
           value={hourlyPackage} 
-          onValueChange={(value) => {
-            console.log("Hourly package changed to:", value);
-            onHourlyPackageChange(value);
-          }}
+          onValueChange={handlePackageChange}
         >
           <SelectTrigger id="hourly-package" className="w-full mt-1">
             <SelectValue placeholder="Select hourly package" />

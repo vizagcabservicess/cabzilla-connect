@@ -53,7 +53,7 @@ RewriteRule ^bookings$ bookings.php [L,QSA]
     Header always set Access-Control-Allow-Headers "Content-Type, Authorization"
     Header always set Access-Control-Max-Age "3600"
     
-    # Prevent caching of API responses
+    # Prevent caching of API responses for fares and pricing
     Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
     Header set Pragma "no-cache"
     Header set Expires "0"
@@ -81,6 +81,11 @@ DirectoryIndex index.php
 ErrorDocument 500 '{"status":"error","message":"Internal Server Error"}'
 ErrorDocument 404 '{"status":"error","message":"Not Found"}'
 
+# Enable gzip compression for JSON responses
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE application/json
+</IfModule>
+
 # Disable mod_security for book.php (if available)
 <IfModule mod_security.c>
     <LocationMatch "^/api/book">
@@ -95,3 +100,10 @@ ErrorDocument 404 '{"status":"error","message":"Not Found"}'
     php_value max_execution_time 300
     php_value max_input_time 300
 </Location>
+
+# Disable caching for API endpoints
+<LocationMatch "^/api/">
+    Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+</LocationMatch>
