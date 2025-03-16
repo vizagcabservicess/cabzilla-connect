@@ -31,7 +31,24 @@ export function TabTripSelector({
     }
   }, []);
 
+  const clearCachedFares = () => {
+    // Clear any cached fare data when changing tabs
+    localStorage.removeItem('cachedFares');
+    localStorage.removeItem('cachedVehiclePricing');
+    localStorage.removeItem('cachedTourFares');
+    
+    // Also remove from session storage if used there
+    sessionStorage.removeItem('cachedFares');
+    sessionStorage.removeItem('cachedVehiclePricing');
+    sessionStorage.removeItem('cachedTourFares');
+    
+    console.log('Cleared cached fare data');
+  };
+
   const handleTabChange = (tab: TripType) => {
+    // Clear cached fares before changing tab
+    clearCachedFares();
+    
     onTabChange(tab);
     // Save selected tab in session storage
     sessionStorage.setItem('selectedTab', tab);
@@ -39,6 +56,9 @@ export function TabTripSelector({
 
   const handleTripModeChange = (mode: TripMode) => {
     if (onTripModeChange) {
+      // Clear cached fares before changing trip mode
+      clearCachedFares();
+      
       onTripModeChange(mode);
       // Save trip mode in session storage
       sessionStorage.setItem('tripMode', mode);

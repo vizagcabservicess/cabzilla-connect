@@ -1,3 +1,4 @@
+
 <?php
 // Adjust the path to config.php correctly
 require_once __DIR__ . '/../../config.php';
@@ -70,7 +71,7 @@ try {
     }
     
     $userId = $userData['user_id'];
-    $isAdmin = isset($userData['is_admin']) && $userData['is_admin'] === true;
+    $isAdmin = isset($userData['role']) && $userData['role'] === 'admin';
     
     logError("User authenticated successfully", [
         'user_id' => $userId, 
