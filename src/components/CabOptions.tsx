@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { CabType, formatPrice, TripType, TripMode, getLocalPackagePrice, oneWayRates } from '@/lib/cabData';
+import { CabType, formatPrice, TripType, TripMode, getLocalPackagePrice, oneWayRates, clearFareCaches } from '@/lib/cabData';
 import { Users, Briefcase, Tag, Info, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { differenceInDays } from 'date-fns';
@@ -33,10 +33,16 @@ export function CabOptions({
   const [selectedCabId, setSelectedCabId] = useState<string | null>(selectedCab?.id || null);
   const [cabFares, setCabFares] = useState<Record<string, number>>({});
 
+  // Clear fare caches when component mounts to ensure fresh calculations
+  useEffect(() => {
+    clearFareCaches();
+  }, []);
+
   // Force recalculation of fares when any parameter changes
   useEffect(() => {
     setSelectedCabId(null);
     setCabFares({});
+    clearFareCaches();
     
     // Clear any previously selected cab from sessionStorage to prevent caching issues
     sessionStorage.removeItem('selectedCab');
@@ -91,8 +97,8 @@ export function CabOptions({
       totalFare = calculateAirportFare(cab.name, distance);
     }
     else if (tripType === 'local' && hourlyPackage) {
-      // Get base package price for local rental
-      totalFare = getLocalPackagePrice(hourlyPackage, cab.name);
+      // Get base package price for local rental using the improved function
+      totalFare = getLocalPackagePrice(hourlyPackage, cab.id);
       
       // Calculate extra km charges if any
       const packageKm = hourlyPackage === '8hrs-80km' ? 80 : 100;

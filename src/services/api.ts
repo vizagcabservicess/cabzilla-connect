@@ -1,4 +1,3 @@
-
 import axios, { AxiosInstance, AxiosError, AxiosRequestConfig } from 'axios';
 import { jwtDecode } from 'jwt-decode';
 import { Booking, BookingRequest, DashboardMetrics, VehiclePricingUpdateRequest } from '@/types/api';
@@ -15,7 +14,7 @@ const apiClient: AxiosInstance = axios.create({
     'Accept': 'application/json',
   },
   withCredentials: false,
-  timeout: 45000, // Increased timeout for slower connections
+  timeout: 90000, // Increased timeout for slower connections
 });
 
 // Function to set the auth token in the headers
@@ -61,13 +60,10 @@ apiClient.interceptors.response.use(
   (response) => {
     console.log(`API Response: ${response.status} ${response.config.url}`, response.data);
     
-    // Special handling for book.php responses
-    if (response.config.url?.includes('/book')) {
-      // Check if the response data indicates an error despite 200 status
-      if (response.data.status === 'error') {
-        console.error('Booking error from server:', response.data.message);
-        return Promise.reject(new Error(response.data.message || 'Unknown booking error'));
-      }
+    // Check if the response data indicates an error despite 200 status
+    if (response.data.status === 'error') {
+      console.error('Error from server despite 200 status:', response.data.message);
+      return Promise.reject(new Error(response.data.message || 'Unknown server error'));
     }
     
     return response;
@@ -76,10 +72,13 @@ apiClient.interceptors.response.use(
     console.error('Response error:', error.response?.status, error.message);
     console.error('Response data:', error.response?.data);
     
-    // Check for specific booking error
-    if (error.response?.status === 500 && 
-        error.config?.url?.includes('/book')) {
-      console.error('Booking creation error. Additional logging:', error);
+    // Enhanced error debugging
+    if (error.response?.status === 500 && error.config?.url?.includes('/book')) {
+      console.error('Booking creation error details:', {
+        requestData: error.config?.data,
+        responseData: error.response?.data,
+        headers: error.config?.headers
+      });
     }
     
     return Promise.reject(error);
@@ -98,6 +97,14 @@ const handleApiError = (error: any) => {
       
       // Return error with response data if available
       const responseData = axiosError.response.data as any;
+      if (typeof responseData === 'object' && responseData !== null && responseData.message) {
+        return new Error(responseData.message);
+      }
+      
+      if (typeof responseData === 'string' && responseData.includes('error')) {
+        return new Error(responseData);
+      }
+      
       return new Error(
         `Error ${axiosError.response.status}: ${
           typeof responseData === 'object' && responseData !== null
@@ -109,13 +116,11 @@ const handleApiError = (error: any) => {
     
     // Special handling for network errors
     if (axiosError.code === 'ERR_NETWORK' || axiosError.code === 'ECONNABORTED') {
-      console.error('Network error - server may be down or unreachable');
       return new Error('Network error: Server is unreachable. Please check your connection and try again.');
     }
 
     // Handle timeout errors
     if (axiosError.code === 'ETIMEDOUT') {
-      console.error('Request timed out');
       return new Error('Request timed out. Please try again later.');
     }
   } else {
@@ -268,6 +273,9 @@ export const bookingAPI = {
         dropLocation: bookingData.dropLocation ? bookingData.dropLocation.trim() : '',
         distance: bookingData.distance || 0,
         totalAmount: bookingData.totalAmount || 0,
+        tripType: bookingData.tripType || 'local',
+        tripMode: bookingData.tripMode || 'one-way',
+        cabType: bookingData.cabType || 'Sedan',
         sendEmailNotification: true // Enable email notifications
       };
       
@@ -283,7 +291,7 @@ export const bookingAPI = {
         }
       });
       
-      // Check if response indicates error despite 200 status code
+      // Check response manually for error indicators
       if (response.data.status === 'error') {
         throw new Error(response.data.message || 'Failed to create booking');
       }
@@ -293,7 +301,7 @@ export const bookingAPI = {
       } else {
         throw new Error(response.data.message || 'Failed to create booking: Unknown error');
       }
-    }, 5, 5000); // More retries with longer delay for booking creation
+    }, 5, 5000); // 5 retries with 5-second base delay for booking creation
   },
 
   async getBooking(id: string): Promise<Booking> {

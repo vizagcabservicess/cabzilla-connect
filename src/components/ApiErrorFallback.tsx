@@ -2,7 +2,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, RefreshCw, WifiOff, Server, FileQuestion, Mail, ArrowRightCircle, ShieldAlert } from "lucide-react";
+import { AlertTriangle, RefreshCw, WifiOff, Server, FileQuestion, Mail, ArrowRightCircle, ShieldAlert, Database } from "lucide-react";
 
 interface ApiErrorFallbackProps {
   error: Error | string;
@@ -33,6 +33,9 @@ export function ApiErrorFallback({
     
   const isDatabaseError = 
     /database|db|query|sql|constraint|foreign key|insert|update|delete/i.test(errorMessage);
+    
+  const isBookingError = 
+    /booking|failed to create booking|Unknown error/i.test(errorMessage);
 
   const handleRetry = () => {
     console.log("Retrying after error...");
@@ -71,8 +74,8 @@ export function ApiErrorFallback({
             ? FileQuestion 
             : (isEmailError 
                 ? Mail 
-                : (isDatabaseError 
-                    ? ShieldAlert
+                : (isDatabaseError || isBookingError
+                    ? Database
                     : AlertTriangle))));
 
   return (
@@ -80,7 +83,7 @@ export function ApiErrorFallback({
       <CardHeader>
         <CardTitle className="flex items-center text-red-700">
           <ErrorIcon className="h-5 w-5 mr-2" />
-          {title}
+          {isBookingError ? "Booking Error" : title}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -97,14 +100,18 @@ export function ApiErrorFallback({
                     ? "Email Notification Issue"
                     : (isDatabaseError
                       ? "Database Error"
-                      : "Error"))))}
+                      : (isBookingError
+                        ? "Booking Creation Error"
+                        : "Error")))))}
           </AlertTitle>
           <AlertDescription>
-            {isDatabaseError 
-              ? "There was an issue with our database. Your booking information may not have been saved properly."
-              : isNetworkError 
-                ? "Unable to connect to the server. Please check your internet connection or try again later."
-                : errorMessage}
+            {isBookingError
+              ? "We couldn't process your booking request. Please try again or contact customer support."
+              : (isDatabaseError 
+                ? "There was an issue with our database. Your booking information may not have been saved properly."
+                : isNetworkError 
+                  ? "Unable to connect to the server. Please check your internet connection or try again later."
+                  : errorMessage)}
           </AlertDescription>
         </Alert>
         
@@ -128,6 +135,19 @@ export function ApiErrorFallback({
               <li>Wait a few minutes and try again</li>
               <li>Clear your browser cache and cookies</li>
               <li>Contact support if the problem persists</li>
+            </ul>
+            <p className="mt-3 text-xs text-gray-500">Error details: {errorMessage}</p>
+          </div>
+        )}
+        
+        {isBookingError && (
+          <div className="text-sm text-gray-700 mt-4">
+            <p className="font-medium">What could be happening:</p>
+            <ul className="list-disc pl-5 mt-2 space-y-1">
+              <li>Your booking information might have some issue</li>
+              <li>The server might be experiencing high traffic</li>
+              <li>There might be a temporary database issue</li>
+              <li>Try again with different booking details</li>
             </ul>
             <p className="mt-3 text-xs text-gray-500">Error details: {errorMessage}</p>
           </div>

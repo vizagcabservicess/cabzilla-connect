@@ -96,18 +96,19 @@ try {
         exit;
     }
 
-    // FIXED: Check if user exists before inserting booking (to avoid foreign key constraint errors)
+    // CRITICAL FIX: Always use NULL for user_id if not authenticated 
+    // or if user cannot be verified to avoid foreign key constraint errors
     if ($userId !== null) {
         $userCheckStmt = $conn->prepare("SELECT id FROM users WHERE id = ?");
         if (!$userCheckStmt) {
             logError("User check prepare statement failed", ['error' => $conn->error]);
-            // Continue with null user_id if user check fails
+            // Force NULL user_id if user check fails
             $userId = null;
         } else {
             $userCheckStmt->bind_param("i", $userId);
             if (!$userCheckStmt->execute()) {
                 logError("User check execute failed", ['error' => $userCheckStmt->error]);
-                // Continue with null user_id if user check fails
+                // Force NULL user_id if user check fails
                 $userId = null;
             } else {
                 $userResult = $userCheckStmt->get_result();
@@ -125,9 +126,9 @@ try {
     $bookingNumber = generateBookingNumber();
 
     // Debug log the user ID
-    logError("User ID for booking", ['user_id' => $userId]);
+    logError("Final user ID for booking", ['user_id' => $userId === null ? 'NULL' : $userId]);
 
-    // FIXED: Prepare SQL query with proper NULL handling
+    // Prepare SQL query with proper NULL handling
     $sql = "INSERT INTO bookings 
             (user_id, booking_number, pickup_location, drop_location, pickup_date, 
             return_date, cab_type, distance, trip_type, trip_mode, 
@@ -164,32 +165,38 @@ try {
         'pickup' => $pickupLocation,
         'dropoff' => $dropLocation,
         'pickup_date' => $pickupDate,
-        'total' => $totalAmount
+        'total' => $totalAmount,
+        'user_id' => $userId
     ]);
 
-    // FIXED: Better bind_param with NULL handling
-    $stmt->bind_param(
-        "issssssdssdsssiss",
-        $userId, $bookingNumber, $pickupLocation, $dropLocation, $pickupDate,
-        $returnDate, $cabType, $distance, $tripType, $tripMode,
-        $totalAmount, $passengerName, $passengerPhone, $passengerEmail,
-        $hourlyPackage, $tourId, $status
-    );
+    // Better bind_param with NULL handling for user_id
+    if ($userId === null) {
+        $stmt->bind_param(
+            "ssssssdssdsssiss",
+            $nullValue, $bookingNumber, $pickupLocation, $dropLocation, $pickupDate,
+            $returnDate, $cabType, $distance, $tripType, $tripMode,
+            $totalAmount, $passengerName, $passengerPhone, $passengerEmail,
+            $hourlyPackage, $tourId, $status
+        );
+    } else {
+        $stmt->bind_param(
+            "issssssdssdsssiss",
+            $userId, $bookingNumber, $pickupLocation, $dropLocation, $pickupDate,
+            $returnDate, $cabType, $distance, $tripType, $tripMode,
+            $totalAmount, $passengerName, $passengerPhone, $passengerEmail,
+            $hourlyPackage, $tourId, $status
+        );
+    }
 
     if (!$stmt->execute()) {
         logError("Execute statement failed", ['error' => $stmt->error]);
-        // FIXED: Better error handling with specific foreign key constraint error
-        if (strpos($stmt->error, 'foreign key constraint') !== false) {
-            sendJsonResponse([
-                'status' => 'error', 
-                'message' => 'Database constraint error. Creating booking without user association.',
-                'detail' => $stmt->error
-            ], 500);
-            // Try again with NULL user_id
-            $userId = null;
+        
+        // Try again with NULL user_id if that wasn't already tried
+        if ($userId !== null && strpos($stmt->error, 'foreign key constraint') !== false) {
+            logError("Foreign key constraint error. Retrying with NULL user_id");
             $stmt->close();
             
-            // Retry with null user_id
+            // Retry with explicit NULL user_id
             $retryStmt = $conn->prepare($sql);
             if (!$retryStmt) {
                 logError("Retry prepare statement failed", ['error' => $conn->error]);
@@ -197,9 +204,10 @@ try {
                 exit;
             }
             
+            $nullUserId = null;
             $retryStmt->bind_param(
-                "issssssdssdsssiss",
-                $userId, $bookingNumber, $pickupLocation, $dropLocation, $pickupDate,
+                "ssssssdssdsssiss",
+                $nullUserId, $bookingNumber, $pickupLocation, $dropLocation, $pickupDate,
                 $returnDate, $cabType, $distance, $tripType, $tripMode,
                 $totalAmount, $passengerName, $passengerPhone, $passengerEmail,
                 $hourlyPackage, $tourId, $status

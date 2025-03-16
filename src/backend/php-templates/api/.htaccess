@@ -17,7 +17,7 @@ php_value sendmail_path "/usr/sbin/sendmail -t -i"
 php_flag mail.add_x_header On
 php_value mail.force_extra_parameters "-f narendrakumarupwork@gmail.com"
 
-# FIXED: Default mail settings
+# Default mail settings
 php_value SMTP localhost
 php_value smtp_port 25
 php_value SMTP_SERVER localhost
@@ -37,7 +37,7 @@ RewriteRule ^fares/vehicles$ fares/vehicles.php [L]
 RewriteRule ^admin/fares/update$ admin/fares-update.php [L]
 RewriteRule ^admin/km-price/update$ admin/km-price-update.php [L]
 
-# FIXED: Added missing routes
+# Added missing routes
 RewriteRule ^booking/([0-9]+)$ booking.php?id=$1 [L,QSA]
 RewriteRule ^bookings$ bookings.php [L,QSA]
 
@@ -74,9 +74,24 @@ Options -Indexes
 # Configure additional timeouts
 TimeOut 1200
 
-# FIXED: Add DirectoryIndex
+# DirectoryIndex
 DirectoryIndex index.php
 
-# FIXED: Error handling
+# Error handling
 ErrorDocument 500 '{"status":"error","message":"Internal Server Error"}'
 ErrorDocument 404 '{"status":"error","message":"Not Found"}'
+
+# Disable mod_security for book.php (if available)
+<IfModule mod_security.c>
+    <LocationMatch "^/api/book">
+        SecRuleEngine Off
+    </LocationMatch>
+</IfModule>
+
+# Increase POST max size specifically for booking
+<Location "/api/book">
+    php_value post_max_size 256M
+    php_value upload_max_filesize 128M
+    php_value max_execution_time 300
+    php_value max_input_time 300
+</Location>

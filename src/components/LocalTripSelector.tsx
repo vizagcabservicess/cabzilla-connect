@@ -1,5 +1,5 @@
 
-import { LocalTripPurpose, HourlyPackage, hourlyPackages } from "@/lib/cabData";
+import { LocalTripPurpose, HourlyPackage, hourlyPackages, getLocalPackagePrice } from "@/lib/cabData";
 import { 
   Select,
   SelectContent,
@@ -67,7 +67,7 @@ export function LocalTripSelector({
           <SelectContent>
             {hourlyPackages.map((pkg) => (
               <SelectItem key={pkg.id} value={pkg.id}>
-                {pkg.name} - ₹{Math.round(1400 * pkg.multiplier)}+
+                {pkg.name} - ₹{getLocalPackagePrice(pkg.id, 'sedan')}+
               </SelectItem>
             ))}
           </SelectContent>
