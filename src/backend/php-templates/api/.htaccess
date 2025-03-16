@@ -7,20 +7,20 @@ php_flag display_errors on
 php_value error_reporting E_ALL
 
 # Set higher memory limit and execution time
-php_value memory_limit 256M
-php_value max_execution_time 300
-php_value post_max_size 64M
-php_value upload_max_filesize 32M
+php_value memory_limit 512M
+php_value max_execution_time 600
+php_value post_max_size 128M
+php_value upload_max_filesize 64M
 
 # Enable PHP mail functionality with proper configuration
 php_value sendmail_path "/usr/sbin/sendmail -t -i"
 php_flag mail.add_x_header On
-php_value mail.force_extra_parameters "-f noreply@yourdomain.com"
+php_value mail.force_extra_parameters "-f narendrakumarupwork@gmail.com"
 
 # Parse API routes to PHP files
 RewriteRule ^signup$ signup.php [L]
 RewriteRule ^login$ login.php [L]
-RewriteRule ^user/dashboard$ user/dashboard.php [L]
+RewriteRule ^user/dashboard$ user/dashboard.php [L,QSA]
 RewriteRule ^booking/create$ book.php [L]
 RewriteRule ^book$ book.php [L]
 RewriteRule ^book/edit/([0-9]+)$ book-edit.php?id=$1 [L]
@@ -57,8 +57,8 @@ Options -Indexes
 
 # Set higher timeouts for long operations
 <IfModule mod_reqtimeout.c>
-    RequestReadTimeout header=90 body=600
+    RequestReadTimeout header=180 body=1200
 </IfModule>
 
 # Configure additional timeouts
-TimeOut 600
+TimeOut 1200

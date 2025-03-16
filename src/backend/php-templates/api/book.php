@@ -5,7 +5,6 @@ require_once __DIR__ . '/../config.php';
 
 // For CORS preflight request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    // Send CORS headers
     header('Access-Control-Allow-Origin: *');
     header('Access-Control-Allow-Methods: POST, OPTIONS');
     header('Access-Control-Allow-Headers: Content-Type, Authorization');
@@ -16,7 +15,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // Allow only POST requests
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    // Add CORS headers
     header('Access-Control-Allow-Origin: *');
     header('Access-Control-Allow-Methods: POST, OPTIONS');
     header('Access-Control-Allow-Headers: Content-Type, Authorization');
@@ -27,11 +25,24 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 // Log request data for debugging
 logError("Book.php request initiated", [
     'method' => $_SERVER['REQUEST_METHOD'],
-    'headers' => getallheaders()
+    'request_uri' => $_SERVER['REQUEST_URI'],
+    'headers' => getRequestHeaders()
 ]);
 
 // Get the request body
-$data = json_decode(file_get_contents('php://input'), true);
+$rawInput = file_get_contents('php://input');
+logError("Raw input received", ['length' => strlen($rawInput), 'sample' => substr($rawInput, 0, 100)]);
+
+// Decode JSON data
+$data = json_decode($rawInput, true);
+
+// Check if JSON is valid
+if (json_last_error() !== JSON_ERROR_NONE) {
+    logError("JSON decode error", ['error' => json_last_error_msg(), 'raw_data' => substr($rawInput, 0, 200)]);
+    sendJsonResponse(['status' => 'error', 'message' => 'Invalid JSON data: ' . json_last_error_msg()], 400);
+    exit;
+}
+
 logError("Booking request data", ['data' => $data]);
 
 // Validate required fields
@@ -41,16 +52,26 @@ $requiredFields = [
     'passengerName', 'passengerPhone', 'passengerEmail'
 ];
 
+$missingFields = [];
 foreach ($requiredFields as $field) {
-    if (!isset($data[$field]) || empty($data[$field])) {
-        sendJsonResponse(['status' => 'error', 'message' => "Field $field is required"], 400);
-        exit;
+    if (!isset($data[$field]) || (is_string($data[$field]) && trim($data[$field]) === '')) {
+        $missingFields[] = $field;
     }
+}
+
+if (!empty($missingFields)) {
+    logError("Missing required fields", ['missing' => $missingFields]);
+    sendJsonResponse([
+        'status' => 'error', 
+        'message' => 'Required fields missing: ' . implode(', ', $missingFields),
+        'fields' => $missingFields
+    ], 400);
+    exit;
 }
 
 // Get user ID if authenticated
 $userId = null;
-$headers = getallheaders();
+$headers = getRequestHeaders();
 if (isset($headers['Authorization']) || isset($headers['authorization'])) {
     $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
     $token = str_replace('Bearer ', '', $authHeader);
@@ -63,7 +84,6 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
         logError("Invalid token for booking", ['token' => substr($token, 0, 20) . '...']);
     }
 } else {
-    // For debugging - log the headers we received
     logError("No authorization header found", ['headers' => $headers]);
 }
 
@@ -92,7 +112,7 @@ try {
 
     $stmt = $conn->prepare($sql);
     if (!$stmt) {
-        logError("Prepare statement failed", ['error' => $conn->error]);
+        logError("Prepare statement failed", ['error' => $conn->error, 'sql' => $sql]);
         sendJsonResponse(['status' => 'error', 'message' => 'Database prepare error: ' . $conn->error], 500);
         exit;
     }
@@ -206,149 +226,33 @@ try {
     sendJsonResponse(['status' => 'error', 'message' => 'Server error: ' . $e->getMessage()], 500);
 }
 
-// Enhanced email notification function with improved error handling and direct mail configuration
-function sendBookingEmailNotification($booking) {
-    try {
-        // Log the attempt
-        logError("Attempting to send booking confirmation email", [
-            'booking_id' => $booking['id'], 
-            'booking_number' => $booking['bookingNumber'],
-            'email' => $booking['passengerEmail']
-        ]);
-        
-        // Check if mail function exists
-        if (!function_exists('mail')) {
-            logError("PHP mail function not available");
-            return false;
-        }
-        
-        $to = $booking['passengerEmail'];
-        $subject = "Booking Confirmation - #" . $booking['bookingNumber'];
-        
-        // Create a nice HTML email
-        $message = "
-        <html>
-        <head>
-            <title>Booking Confirmation</title>
-            <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                .header { background: #4a90e2; color: white; padding: 10px 20px; }
-                .content { padding: 20px; border: 1px solid #ddd; }
-                .footer { font-size: 12px; color: #777; margin-top: 20px; }
-                table { border-collapse: collapse; width: 100%; }
-                th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
-                th { background-color: #f2f2f2; }
-            </style>
-        </head>
-        <body>
-            <div class='container'>
-                <div class='header'>
-                    <h2>Booking Confirmation</h2>
-                </div>
-                <div class='content'>
-                    <p>Dear {$booking['passengerName']},</p>
-                    <p>Thank you for booking with us. Your booking has been confirmed with the following details:</p>
-                    
-                    <table>
-                        <tr>
-                            <th>Booking Number</th>
-                            <td>#{$booking['bookingNumber']}</td>
-                        </tr>
-                        <tr>
-                            <th>Pickup Location</th>
-                            <td>{$booking['pickupLocation']}</td>
-                        </tr>";
-        
-        if (!empty($booking['dropLocation'])) {
-            $message .= "
-                        <tr>
-                            <th>Drop Location</th>
-                            <td>{$booking['dropLocation']}</td>
-                        </tr>";
-        }
-        
-        $message .= "
-                        <tr>
-                            <th>Pickup Date/Time</th>
-                            <td>" . date('Y-m-d h:i A', strtotime($booking['pickupDate'])) . "</td>
-                        </tr>
-                        <tr>
-                            <th>Vehicle Type</th>
-                            <td>{$booking['cabType']}</td>
-                        </tr>
-                        <tr>
-                            <th>Trip Type</th>
-                            <td>" . ucfirst($booking['tripType']) . " - " . ucfirst($booking['tripMode']) . "</td>
-                        </tr>
-                        <tr>
-                            <th>Amount</th>
-                            <td>₹" . number_format($booking['totalAmount'], 2) . "</td>
-                        </tr>
-                        <tr>
-                            <th>Status</th>
-                            <td>" . ucfirst($booking['status']) . "</td>
-                        </tr>
-                    </table>
-                    
-                    <p>We will assign a driver shortly and update you with their details before pickup time.</p>
-                    <p>For any changes or inquiries, please contact our customer support.</p>
-                    
-                    <p>Thank you for choosing our service!</p>
-                </div>
-                <div class='footer'>
-                    <p>This is an automated email. Please do not reply to this message.</p>
-                </div>
-            </div>
-        </body>
-        </html>";
-        
-        // To send HTML mail, the Content-type header must be set
-        $headers = "MIME-Version: 1.0" . "\r\n";
-        $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-        $headers .= 'From: CabBooking <noreply@' . $_SERVER['HTTP_HOST'] . '>' . "\r\n";
-        $headers .= 'Reply-To: noreply@' . $_SERVER['HTTP_HOST'] . "\r\n";
-        
-        // Add detailed logging before sending
-        logError("Email content ready to send", [
-            'to' => $to,
-            'subject' => $subject,
-            'headers' => $headers,
-            'message_length' => strlen($message)
-        ]);
-        
-        // Attempt to send the email with better error capture
-        $mailSent = @mail($to, $subject, $message, $headers);
-        $mailError = error_get_last();
-        
-        // If mail fails, try using a different From header
-        if (!$mailSent) {
-            logError("First mail attempt failed, trying with different headers", [
-                'error' => $mailError
-            ]);
-            
-            // Try with a simpler header
-            $altHeaders = "MIME-Version: 1.0" . "\r\n";
-            $altHeaders .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-            $altHeaders .= 'From: booking@example.com' . "\r\n";
-            
-            $mailSent = @mail($to, $subject, $message, $altHeaders);
-            $mailError = error_get_last();
-        }
-        
-        logError("Email sending final result", [
-            'sent' => $mailSent ? 'success' : 'failed',
-            'to' => $to,
-            'subject' => $subject,
-            'php_error' => $mailError
-        ]);
-        
-        return $mailSent;
-    } catch (Exception $e) {
-        logError("Exception in sendBookingEmailNotification", [
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString()
-        ]);
-        return false;
+// Helper function to safely get request headers across different server configurations
+function getRequestHeaders() {
+    if (function_exists('getallheaders')) {
+        return getallheaders();
     }
+    
+    $headers = [];
+    foreach ($_SERVER as $name => $value) {
+        if (substr($name, 0, 5) == 'HTTP_') {
+            $name = str_replace(' ', '-', ucwords(strtolower(str_replace('_', ' ', substr($name, 5)))));
+            $headers[$name] = $value;
+        } else if ($name == 'CONTENT_TYPE') {
+            $headers['Content-Type'] = $value;
+        } else if ($name == 'CONTENT_LENGTH') {
+            $headers['Content-Length'] = $value;
+        } else if ($name == 'AUTHORIZATION') {
+            $headers['Authorization'] = $value;
+        }
+    }
+    
+    // Check for authorization in other locations
+    if (!isset($headers['Authorization']) && isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
+        $headers['Authorization'] = $_SERVER['REDIRECT_HTTP_AUTHORIZATION'];
+    } else if (!isset($headers['Authorization']) && isset($_SERVER['PHP_AUTH_USER'])) {
+        $basic_pass = isset($_SERVER['PHP_AUTH_PW']) ? $_SERVER['PHP_AUTH_PW'] : '';
+        $headers['Authorization'] = 'Basic ' . base64_encode($_SERVER['PHP_AUTH_USER'] . ':' . $basic_pass);
+    }
+    
+    return $headers;
 }

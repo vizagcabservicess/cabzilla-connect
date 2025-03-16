@@ -1,3 +1,4 @@
+
 import axios, { AxiosInstance, AxiosError, AxiosRequestConfig } from 'axios';
 import { jwtDecode } from 'jwt-decode';
 import { Booking, BookingRequest, DashboardMetrics, VehiclePricingUpdateRequest } from '@/types/api';
@@ -77,9 +78,7 @@ apiClient.interceptors.response.use(
     
     // Check for specific booking error
     if (error.response?.status === 500 && 
-        error.config?.url?.includes('/book') && 
-        (error.response?.data?.message?.includes('Server error') || 
-         error.response?.data?.message?.includes('Failed to create booking'))) {
+        error.config?.url?.includes('/book')) {
       console.error('Booking creation error. Additional logging:', error);
     }
     
@@ -98,10 +97,11 @@ const handleApiError = (error: any) => {
       console.error('Response Data:', axiosError.response.data);
       
       // Return error with response data if available
+      const responseData = axiosError.response.data as any;
       return new Error(
         `Error ${axiosError.response.status}: ${
-          typeof axiosError.response.data === 'object' && axiosError.response.data !== null
-          ? (axiosError.response.data as any).message || JSON.stringify(axiosError.response.data)
+          typeof responseData === 'object' && responseData !== null
+          ? (responseData.message || JSON.stringify(responseData))
           : axiosError.message
         }`
       );
@@ -150,6 +150,22 @@ const makeApiRequest = async <T>(
   }
 };
 
+// Helper function to clear all cached data
+const clearAllCachedData = () => {
+  console.log("Clearing all cached data");
+  localStorage.removeItem('cached_bookings');
+  localStorage.removeItem('cached_metrics');
+  sessionStorage.removeItem('selectedCab');
+  sessionStorage.removeItem('hourlyPackage');
+  sessionStorage.removeItem('tourPackage');
+  sessionStorage.removeItem('bookingDetails');
+  sessionStorage.removeItem('cabFares');
+  sessionStorage.removeItem('dropLocation');
+  sessionStorage.removeItem('pickupLocation');
+  sessionStorage.removeItem('pickupDate');
+  sessionStorage.removeItem('returnDate');
+};
+
 // API service for authentication
 export const authAPI = {
   async login(credentials: any): Promise<any> {
@@ -183,9 +199,8 @@ export const authAPI = {
 
   logout() {
     setAuthToken(null);
-    // Clear any cached data
-    localStorage.removeItem('cached_bookings');
-    localStorage.removeItem('cached_metrics');
+    // Clear all cached data
+    clearAllCachedData();
   },
 
   isAuthenticated(): boolean {
@@ -227,6 +242,9 @@ export const authAPI = {
 // API service for booking related operations
 export const bookingAPI = {
   async createBooking(bookingData: BookingRequest): Promise<any> {
+    // Clear cached data first to ensure fresh state after booking
+    clearAllCachedData();
+    
     return makeApiRequest(async () => {
       console.log('Creating booking with data:', bookingData);
       
@@ -257,7 +275,7 @@ export const bookingAPI = {
       
       // Use longer timeout for booking creation and clear response cache
       const response = await apiClient.post('/book', formattedData, {
-        timeout: 120000, // 120 seconds timeout for booking creation
+        timeout: 180000, // 3 minutes timeout for booking creation
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache',
@@ -271,15 +289,11 @@ export const bookingAPI = {
       }
       
       if (response.data.status === 'success') {
-        // Clear cached bookings to force a refresh on next dashboard visit
-        localStorage.removeItem('cached_bookings');
-        localStorage.removeItem('cached_metrics');
-        
         return response.data.data || response.data;
       } else {
         throw new Error(response.data.message || 'Failed to create booking: Unknown error');
       }
-    }, 4, 5000); // More retries with longer delay for booking creation
+    }, 5, 5000); // More retries with longer delay for booking creation
   },
 
   async getBooking(id: string): Promise<Booking> {
@@ -294,6 +308,9 @@ export const bookingAPI = {
   },
 
   async updateBooking(id: string, bookingData: any): Promise<any> {
+    // Clear cached data first
+    clearAllCachedData();
+    
     return makeApiRequest(async () => {
       const response = await apiClient.post(`/book/edit/${id}`, bookingData);
       if (response.data.status === 'success') {
@@ -334,7 +351,14 @@ export const bookingAPI = {
     return makeApiRequest(async () => {
       console.log('Admin: Fetching all bookings...');
       const timestamp = new Date().getTime();
-      const response = await apiClient.get(`/admin/bookings?_=${timestamp}`);
+      const response = await apiClient.get(`/admin/bookings?_=${timestamp}`, {
+        timeout: 60000, // 1 minute timeout for possibly large dataset
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
       
       if (response.data.status === 'success') {
         return response.data.data;
@@ -356,6 +380,7 @@ export const bookingAPI = {
       
       try {
         const response = await apiClient.get(url, {
+          timeout: 60000, // 1 minute timeout for metrics calculation
           headers: {
             'Cache-Control': 'no-cache, no-store, must-revalidate',
             'Pragma': 'no-cache',
@@ -388,6 +413,11 @@ export const bookingAPI = {
           };
         }
         
+        // Check if it's a 404 error
+        if (axios.isAxiosError(error) && error.response?.status === 404) {
+          throw new Error('API endpoint not found. Please check server configuration.');
+        }
+        
         // For other errors, throw normally
         throw handleApiError(error);
       }
@@ -405,6 +435,8 @@ export const bookingAPI = {
       
       const response = await apiClient.post(`/admin/booking/${bookingId}/status`, data);
       if (response.data.status === 'success') {
+        // Clear cached data after update
+        clearAllCachedData();
         return response.data;
       } else {
         throw new Error(response.data.message || 'Failed to update booking status');
@@ -424,6 +456,8 @@ export const bookingAPI = {
       
       const response = await apiClient.post(`/admin/booking/${bookingId}/assign-driver`, data);
       if (response.data.status === 'success') {
+        // Clear cached data after update
+        clearAllCachedData();
         return response.data;
       } else {
         throw new Error(response.data.message || 'Failed to assign driver');
