@@ -1,3 +1,4 @@
+
 <?php
 // Turn on error reporting for debugging - remove in production
 ini_set('display_errors', 0);
@@ -48,6 +49,9 @@ function sendJsonResponse($data, $statusCode = 200) {
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
         header('Pragma: no-cache');
         header('Expires: 0');
+        header('Access-Control-Allow-Origin: *');
+        header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+        header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
         http_response_code($statusCode);
     }
     
@@ -64,9 +68,9 @@ function sendJsonResponse($data, $statusCode = 200) {
 }
 
 // Helper function to generate JWT token with LONGER EXPIRATION
-function generateJwtToken($userId, $email, $role) {
+function generateJwtToken($userId, $email, $role, $name = 'User') {
     $issuedAt = time();
-    $expirationTime = $issuedAt + 60 * 60 * 24 * 14; // 14 days - doubled from previous 7 days
+    $expirationTime = $issuedAt + 60 * 60 * 24 * 30; // 30 days - increased from 14 days
     
     $payload = [
         'iat' => $issuedAt,
@@ -74,8 +78,8 @@ function generateJwtToken($userId, $email, $role) {
         'user_id' => $userId,
         'email' => $email,
         'role' => $role ?? 'user',
-        'name' => 'User', // Default name if none provided
-        'jti' => uniqid() // Add a unique token ID to prevent token reuse
+        'name' => $name, // Use provided name parameter
+        'jti' => uniqid(mt_rand(), true) // Add a more unique token ID to prevent token reuse
     ];
     
     $header = json_encode([
@@ -143,7 +147,11 @@ function verifyJwtToken($token) {
             return false;
         }
         
-        logError("Token verified successfully", ['user_id' => $payload['user_id'], 'exp' => date('Y-m-d H:i:s', $payload['exp'])]);
+        logError("Token verified successfully", [
+            'user_id' => $payload['user_id'], 
+            'exp' => date('Y-m-d H:i:s', $payload['exp']),
+            'time_remaining' => ($payload['exp'] - time()) . ' seconds'
+        ]);
         return $payload;
         
     } catch (Exception $e) {

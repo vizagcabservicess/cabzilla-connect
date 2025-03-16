@@ -47,7 +47,7 @@ try {
     unset($user['password']);
     
     // Generate JWT token with longer expiration
-    $token = generateJwtToken($user['id'], $user['email'], $user['role']);
+    $token = generateJwtToken($user['id'], $user['email'], $user['role'], $user['name']);
     
     // Log successful login
     logError("Login successful", ['user_id' => $user['id'], 'token_length' => strlen($token)]);

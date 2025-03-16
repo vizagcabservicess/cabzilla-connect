@@ -27,8 +27,12 @@ const setAuthToken = (token: string | null) => {
     apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     
     try {
+      // Store in both localStorage and sessionStorage for redundancy
       localStorage.setItem('auth_token', token);
-      sessionStorage.setItem('auth_token', token); // Add to sessionStorage as backup
+      sessionStorage.setItem('auth_token', token);
+      
+      // Also set a cookie as a third fallback
+      document.cookie = `auth_token=${token}; path=/; max-age=${60*60*24*30}; SameSite=Lax`;
     } catch (e) {
       console.error('Failed to set token in storage:', e);
     }
@@ -39,10 +43,24 @@ const setAuthToken = (token: string | null) => {
     try {
       localStorage.removeItem('auth_token');
       sessionStorage.removeItem('auth_token');
+      document.cookie = 'auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
     } catch (e) {
       console.error('Failed to remove token from storage:', e);
     }
   }
+};
+
+// Helper function to retrieve token from cookies
+const getTokenFromCookie = (): string | null => {
+  const cookieArr = document.cookie.split(';');
+  for (let i = 0; i < cookieArr.length; i++) {
+    const cookiePair = cookieArr[i].split('=');
+    const cookieName = cookiePair[0].trim();
+    if (cookieName === 'auth_token') {
+      return decodeURIComponent(cookiePair[1]);
+    }
+  }
+  return null;
 };
 
 // Improved token retrieval that tries multiple storage locations
@@ -50,13 +68,30 @@ const getStoredToken = (): string | null => {
   try {
     const localToken = localStorage.getItem('auth_token');
     const sessionToken = sessionStorage.getItem('auth_token');
+    const cookieToken = getTokenFromCookie();
     
     // Return whichever token is available, preferring localStorage
-    const token = localToken || sessionToken || null;
+    const token = localToken || sessionToken || cookieToken || null;
     
     if (token) {
       // Ensure the token is properly set in the headers
       apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      
+      // Verify the token is valid before returning
+      try {
+        const decodedToken: { exp: number } = jwtDecode(token);
+        const isValid = decodedToken.exp * 1000 > Date.now();
+        
+        if (!isValid) {
+          console.warn('Retrieved an expired token, removing it');
+          setAuthToken(null);
+          return null;
+        }
+      } catch (error) {
+        console.error('Retrieved an invalid token, removing it', error);
+        setAuthToken(null);
+        return null;
+      }
     }
     
     return token;
@@ -103,11 +138,9 @@ apiClient.interceptors.request.use(
     const url = config.url || 'unknown-url';
     console.log(`API Request: ${method} ${url}`, config.data ? 'with data' : 'no data');
     
-    // Add cache-busting query parameter to GET requests
-    if (method === 'GET' && url.indexOf('?') === -1) {
-      const separator = url.indexOf('?') === -1 ? '?' : '&';
-      config.url = `${url}${separator}_=${new Date().getTime()}`;
-    }
+    // Always add cache-busting query parameter
+    const separator = url.indexOf('?') === -1 ? '?' : '&';
+    config.url = `${url}${separator}_=${new Date().getTime()}`;
     
     // Re-check token validity before each request
     const token = getStoredToken();
@@ -164,10 +197,18 @@ apiClient.interceptors.response.use(
     // Handle authentication errors (401)
     if (axios.isAxiosError(error) && error.response?.status === 401) {
       console.warn('Received 401 Unauthorized, clearing auth tokens');
+      // Clear token from storage and headers
       setAuthToken(null);
       
-      // Don't redirect here - let the component handle redirection
-      // This prevents loops when multiple requests fail simultaneously
+      // If user is on a protected route, redirect to login
+      if (window.location.pathname.includes('/dashboard') || 
+          window.location.pathname.includes('/admin') ||
+          window.location.pathname.includes('/booking')) {
+        console.log('User on protected route, redirecting to login');
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 100);
+      }
     }
     
     return Promise.reject(error);
@@ -239,6 +280,18 @@ const makeApiRequest = async <T>(
 
 // API service for authentication
 export const authAPI = {
+  // Function to validate token without making API call
+  verifyToken(token: string): boolean {
+    try {
+      const decoded: { exp: number } = jwtDecode(token);
+      const currentTime = Date.now() / 1000;
+      return decoded.exp > currentTime;
+    } catch (error) {
+      console.error('Token verification failed:', error);
+      return false;
+    }
+  },
+
   async login(credentials: any): Promise<any> {
     console.log('Login attempt with:', { email: credentials.email });
     
@@ -247,7 +300,9 @@ export const authAPI = {
       this.clearTokens();
       
       console.log('Sending login request to:', `${apiBaseURL}/login`);
-      const response = await apiClient.post('/login', credentials);
+      // Add cache-busting directly to URL
+      const timestamp = new Date().getTime();
+      const response = await apiClient.post(`/login?_=${timestamp}`, credentials);
       
       // Log the full response structure for debugging
       console.log('Login response structure:', Object.keys(response.data));

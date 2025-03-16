@@ -44,65 +44,98 @@ export function LoginForm() {
     setError(null);
     
     try {
-      // Clear local storage first to remove any potentially corrupted tokens
+      // Clear all storage first to avoid conflicts
       localStorage.clear();
       sessionStorage.clear();
+      
+      // Also clear any existing cookies that might interfere
+      document.cookie.split(";").forEach(function(c) {
+        document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+      });
       
       // Clear any existing tokens first
       authAPI.logout(false); // Don't redirect on logout
       
       console.log('Attempting login with credentials:', { email: values.email, passwordLength: values.password.length });
       
-      // Attempt login
-      const response = await authAPI.login(values);
-      console.log('Login response received:', { status: response.status, hasToken: !!response.token });
-      
-      if (!response.token) {
-        throw new Error('No token received from server');
-      }
-      
-      // Add additional success messages and notifications
-      toast.success("Login Successful", {
-        description: "Welcome back!",
-        duration: 3000,
-      });
-      
-      uiToast({
-        title: "Login Successful",
-        description: "Welcome back!",
-        duration: 3000,
-      });
-      
-      console.log("Login successful, navigating to dashboard");
-      
-      // Use a slight delay to ensure token is properly set before navigation
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 300);
+      // Attempt login with a slight delay to ensure cleanup is complete
+      setTimeout(async () => {
+        try {
+          // Add a cache-busting parameter to the request
+          const timestamp = new Date().getTime();
+          const response = await authAPI.login({
+            ...values,
+            _: timestamp // Add cache-busting timestamp
+          });
+          
+          console.log('Login response received:', { 
+            status: response.status, 
+            hasToken: !!response.token,
+            tokenLength: response.token ? response.token.length : 0
+          });
+          
+          if (!response.token) {
+            throw new Error('No token received from server');
+          }
+          
+          // Immediate verification of token to ensure it's valid
+          const isValid = authAPI.verifyToken(response.token);
+          if (!isValid) {
+            throw new Error('Received token is invalid');
+          }
+          
+          // Add additional success messages and notifications
+          toast.success("Login Successful", {
+            description: "Welcome back!",
+            duration: 3000,
+          });
+          
+          uiToast({
+            title: "Login Successful",
+            description: "Welcome back!",
+            duration: 3000,
+          });
+          
+          console.log("Login successful, navigating to dashboard");
+          
+          // Use a slight delay to ensure token is properly set before navigation
+          setTimeout(() => {
+            navigate('/dashboard');
+          }, 300);
+        } catch (error) {
+          handleLoginError(error);
+        } finally {
+          setIsLoading(false);
+        }
+      }, 100);
       
     } catch (error) {
-      console.error("Login failed:", error);
-      setError(error as Error);
-      
-      // Show error in both toast systems for reliability
-      toast.error("Login Failed", {
-        description: error instanceof Error ? error.message : "Something went wrong",
-        duration: 5000,
-      });
-      
-      uiToast({
-        title: "Login Failed",
-        description: error instanceof Error ? error.message : "Something went wrong",
-        variant: "destructive",
-        duration: 5000,
-      });
-    } finally {
+      handleLoginError(error);
       setIsLoading(false);
     }
+  };
+  
+  const handleLoginError = (error: any) => {
+    console.error("Login failed:", error);
+    setError(error instanceof Error ? error : new Error(String(error)));
+    
+    // Show error in both toast systems for reliability
+    toast.error("Login Failed", {
+      description: error instanceof Error ? error.message : "Something went wrong",
+      duration: 5000,
+    });
+    
+    uiToast({
+      title: "Login Failed",
+      description: error instanceof Error ? error.message : "Something went wrong",
+      variant: "destructive",
+      duration: 5000,
+    });
   };
 
   const handleRetry = () => {
     setError(null);
+    form.reset();
   };
 
   if (error) {
