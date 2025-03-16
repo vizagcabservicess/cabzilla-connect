@@ -7,7 +7,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
-import { toast } from "sonner";
 import {
   Form,
   FormControl,
@@ -26,7 +25,7 @@ const loginSchema = z.object({
 });
 
 export function LoginForm() {
-  const { toast: uiToast } = useToast();
+  const { toast } = useToast();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -44,98 +43,28 @@ export function LoginForm() {
     setError(null);
     
     try {
-      // Clear all storage first to avoid conflicts
-      localStorage.clear();
-      sessionStorage.clear();
-      
-      // Also clear any existing cookies that might interfere
-      document.cookie.split(";").forEach(function(c) {
-        document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+      const response = await authAPI.login(values);
+      toast({
+        title: "Login Successful",
+        description: "Welcome back!",
+        duration: 3000,
       });
-      
-      // Clear any existing tokens first
-      authAPI.logout(false); // Don't redirect on logout
-      
-      console.log('Attempting login with credentials:', { email: values.email, passwordLength: values.password.length });
-      
-      // Attempt login with a slight delay to ensure cleanup is complete
-      setTimeout(async () => {
-        try {
-          // Add a cache-busting parameter to the request
-          const timestamp = new Date().getTime();
-          const response = await authAPI.login({
-            ...values,
-            _: timestamp // Add cache-busting timestamp
-          });
-          
-          console.log('Login response received:', { 
-            status: response.status, 
-            hasToken: !!response.token,
-            tokenLength: response.token ? response.token.length : 0
-          });
-          
-          if (!response.token) {
-            throw new Error('No token received from server');
-          }
-          
-          // Immediate verification of token to ensure it's valid
-          const isValid = authAPI.verifyToken(response.token);
-          if (!isValid) {
-            throw new Error('Received token is invalid');
-          }
-          
-          // Add additional success messages and notifications
-          toast.success("Login Successful", {
-            description: "Welcome back!",
-            duration: 3000,
-          });
-          
-          uiToast({
-            title: "Login Successful",
-            description: "Welcome back!",
-            duration: 3000,
-          });
-          
-          console.log("Login successful, navigating to dashboard");
-          
-          // Use a slight delay to ensure token is properly set before navigation
-          setTimeout(() => {
-            navigate('/dashboard');
-          }, 300);
-        } catch (error) {
-          handleLoginError(error);
-        } finally {
-          setIsLoading(false);
-        }
-      }, 100);
-      
+      navigate('/dashboard');
     } catch (error) {
-      handleLoginError(error);
+      setError(error as Error);
+      toast({
+        title: "Login Failed",
+        description: error instanceof Error ? error.message : "Something went wrong",
+        variant: "destructive",
+        duration: 5000,
+      });
+    } finally {
       setIsLoading(false);
     }
-  };
-  
-  const handleLoginError = (error: any) => {
-    console.error("Login failed:", error);
-    setError(error instanceof Error ? error : new Error(String(error)));
-    
-    // Show error in both toast systems for reliability
-    toast.error("Login Failed", {
-      description: error instanceof Error ? error.message : "Something went wrong",
-      duration: 5000,
-    });
-    
-    uiToast({
-      title: "Login Failed",
-      description: error instanceof Error ? error.message : "Something went wrong",
-      variant: "destructive",
-      duration: 5000,
-    });
   };
 
   const handleRetry = () => {
     setError(null);
-    form.reset();
   };
 
   if (error) {

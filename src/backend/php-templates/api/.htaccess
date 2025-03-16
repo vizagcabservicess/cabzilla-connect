@@ -20,26 +20,14 @@ RewriteRule ^admin/km-price/update$ admin/km-price-update.php [L]
     Header set Content-Type "application/json"
 </FilesMatch>
 
-# Prevent caching of API responses (strengthened)
+# Enable CORS
 <IfModule mod_headers.c>
-    Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0, private"
-    Header always set Pragma "no-cache"
-    Header always set Expires "0"
-    
-    # Enable CORS with more permissive settings
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization"
     Header always set Access-Control-Max-Age "3600"
-    Header always set Access-Control-Expose-Headers "Content-Length, X-JSON"
-    Header always set Vary "Origin, Access-Control-Request-Headers, Access-Control-Request-Method"
 </IfModule>
 
 # Handle OPTIONS method for CORS preflight
 RewriteCond %{REQUEST_METHOD} OPTIONS
-RewriteRule ^(.*)$ $1 [R=200,L]
-
-# Add unique request identifier for debugging
-<IfModule mod_headers.c>
-    Header set X-Request-ID "%{REQUEST_TIME}e-%{REMOTE_ADDR}e"
-</IfModule>
+RewriteRule .* - [R=200,L]

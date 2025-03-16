@@ -1,3 +1,4 @@
+
 import axios, { AxiosInstance, AxiosError, AxiosRequestConfig } from 'axios';
 import { jwtDecode } from 'jwt-decode';
 import { Booking, BookingRequest, DashboardMetrics, VehiclePricingUpdateRequest } from '@/types/api';
@@ -12,9 +13,6 @@ const apiClient: AxiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
-    'Cache-Control': 'no-cache, no-store, must-revalidate',
-    'Pragma': 'no-cache',
-    'Expires': '0',
   },
   withCredentials: false,
   timeout: 30000, // Increased timeout for slower connections
@@ -23,151 +21,24 @@ const apiClient: AxiosInstance = axios.create({
 // Function to set the auth token in the headers
 const setAuthToken = (token: string | null) => {
   if (token) {
-    console.log('Setting auth token in headers and storage');
     apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    
-    try {
-      // Store in both localStorage and sessionStorage for redundancy
-      localStorage.setItem('auth_token', token);
-      sessionStorage.setItem('auth_token', token);
-      
-      // Also set a cookie as a third fallback
-      document.cookie = `auth_token=${token}; path=/; max-age=${60*60*24*30}; SameSite=Lax`;
-    } catch (e) {
-      console.error('Failed to set token in storage:', e);
-    }
+    localStorage.setItem('auth_token', token);
   } else {
-    console.log('Removing auth token from headers and storage');
     delete apiClient.defaults.headers.common['Authorization'];
-    
-    try {
-      localStorage.removeItem('auth_token');
-      sessionStorage.removeItem('auth_token');
-      document.cookie = 'auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
-    } catch (e) {
-      console.error('Failed to remove token from storage:', e);
-    }
+    localStorage.removeItem('auth_token');
   }
 };
 
-// Helper function to retrieve token from cookies
-const getTokenFromCookie = (): string | null => {
-  const cookieArr = document.cookie.split(';');
-  for (let i = 0; i < cookieArr.length; i++) {
-    const cookiePair = cookieArr[i].split('=');
-    const cookieName = cookiePair[0].trim();
-    if (cookieName === 'auth_token') {
-      return decodeURIComponent(cookiePair[1]);
-    }
-  }
-  return null;
-};
+// Load token from localStorage on app initialization
+const storedToken = localStorage.getItem('auth_token');
+if (storedToken) {
+  setAuthToken(storedToken);
+}
 
-// Improved token retrieval that tries multiple storage locations
-const getStoredToken = (): string | null => {
-  try {
-    const localToken = localStorage.getItem('auth_token');
-    const sessionToken = sessionStorage.getItem('auth_token');
-    const cookieToken = getTokenFromCookie();
-    
-    // Return whichever token is available, preferring localStorage
-    const token = localToken || sessionToken || cookieToken || null;
-    
-    if (token) {
-      // Ensure the token is properly set in the headers
-      apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      
-      // Verify the token is valid before returning
-      try {
-        const decodedToken: { exp: number } = jwtDecode(token);
-        const isValid = decodedToken.exp * 1000 > Date.now();
-        
-        if (!isValid) {
-          console.warn('Retrieved an expired token, removing it');
-          setAuthToken(null);
-          return null;
-        }
-      } catch (error) {
-        console.error('Retrieved an invalid token, removing it', error);
-        setAuthToken(null);
-        return null;
-      }
-    }
-    
-    return token;
-  } catch (e) {
-    console.error('Error accessing token storage:', e);
-    return null;
-  }
-};
-
-// Load token from storage on app initialization with improved validation
-const initializeAuth = () => {
-  try {
-    const storedToken = getStoredToken();
-    if (storedToken) {
-      try {
-        // Verify token expiration before setting
-        const decodedToken: { exp: number } = jwtDecode(storedToken);
-        const isValid = decodedToken.exp * 1000 > Date.now();
-        
-        if (isValid) {
-          console.log('Found valid stored token on initialization');
-          setAuthToken(storedToken);
-        } else {
-          console.warn('Found expired token on initialization, removing it');
-          setAuthToken(null);
-        }
-      } catch (error) {
-        console.error('Invalid token found in storage, removing it', error);
-        setAuthToken(null);
-      }
-    }
-  } catch (e) {
-    console.error('Error in auth initialization:', e);
-  }
-};
-
-// Initialize auth on module load
-initializeAuth();
-
-// Add request interceptor for debugging and token validation
+// Add request interceptor for debugging
 apiClient.interceptors.request.use(
   (config) => {
-    const method = config.method?.toUpperCase() || 'UNKNOWN';
-    const url = config.url || 'unknown-url';
-    console.log(`API Request: ${method} ${url}`, config.data ? 'with data' : 'no data');
-    
-    // Always add cache-busting query parameter
-    const separator = url.indexOf('?') === -1 ? '?' : '&';
-    config.url = `${url}${separator}_=${new Date().getTime()}`;
-    
-    // Re-check token validity before each request
-    const token = getStoredToken();
-    if (token) {
-      try {
-        const decoded: { exp: number } = jwtDecode(token);
-        const currentTime = Date.now() / 1000;
-        
-        // If token expires in less than 10 minutes, log a warning
-        if (decoded.exp - currentTime < 600) {
-          console.warn('Token will expire soon:', {
-            expiresIn: (decoded.exp - currentTime).toFixed(0) + ' seconds',
-            expDate: new Date(decoded.exp * 1000).toISOString()
-          });
-        }
-        
-        if (decoded.exp <= currentTime) {
-          console.warn('Token expired before request, removing it');
-          setAuthToken(null);
-          // We'll let the request proceed and the 401 handler will redirect
-        }
-      } catch (error) {
-        console.error('Invalid token found before request', error);
-        setAuthToken(null);
-      }
-    }
-    
+    console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`, config.data);
     return config;
   },
   (error) => {
@@ -176,41 +47,14 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Add response interceptor for debugging and handling auth errors
+// Add response interceptor for debugging
 apiClient.interceptors.response.use(
   (response) => {
-    const method = response.config.method?.toUpperCase() || 'UNKNOWN';
-    const url = response.config.url || 'unknown-url';
-    console.log(`API Response: ${response.status} ${method} ${url}`);
-    
-    // Check for token in successful response (for login)
-    if (response.data && response.data.token) {
-      console.log('Found token in response data, setting it');
-      setAuthToken(response.data.token);
-    }
-    
+    console.log(`API Response: ${response.status} ${response.config.url}`, response.data);
     return response;
   },
   (error) => {
     console.error('Response error:', error);
-    
-    // Handle authentication errors (401)
-    if (axios.isAxiosError(error) && error.response?.status === 401) {
-      console.warn('Received 401 Unauthorized, clearing auth tokens');
-      // Clear token from storage and headers
-      setAuthToken(null);
-      
-      // If user is on a protected route, redirect to login
-      if (window.location.pathname.includes('/dashboard') || 
-          window.location.pathname.includes('/admin') ||
-          window.location.pathname.includes('/booking')) {
-        console.log('User on protected route, redirecting to login');
-        setTimeout(() => {
-          window.location.href = '/login';
-        }, 100);
-      }
-    }
-    
     return Promise.reject(error);
   }
 );
@@ -280,59 +124,14 @@ const makeApiRequest = async <T>(
 
 // API service for authentication
 export const authAPI = {
-  // Function to validate token without making API call
-  verifyToken(token: string): boolean {
-    try {
-      const decoded: { exp: number } = jwtDecode(token);
-      const currentTime = Date.now() / 1000;
-      return decoded.exp > currentTime;
-    } catch (error) {
-      console.error('Token verification failed:', error);
-      return false;
-    }
-  },
-
   async login(credentials: any): Promise<any> {
-    console.log('Login attempt with:', { email: credentials.email });
-    
     return makeApiRequest(async () => {
-      // Clear any existing tokens first
-      this.clearTokens();
-      
-      console.log('Sending login request to:', `${apiBaseURL}/login`);
-      // Add cache-busting directly to URL
-      const timestamp = new Date().getTime();
-      const response = await apiClient.post(`/login?_=${timestamp}`, credentials);
-      
-      // Log the full response structure for debugging
-      console.log('Login response structure:', Object.keys(response.data));
-      
-      if (response.data.status === 'success' || response.data.success) {
+      const response = await apiClient.post('/login', credentials);
+      if (response.data.status === 'success') {
         const token = response.data.token;
-        
-        if (!token) {
-          console.error('Login successful but no token received');
-          throw new Error('Authentication token missing from response');
-        }
-        
-        console.log('Login successful, token received:', token.substring(0, 20) + '...');
         setAuthToken(token);
-        
-        // Decode and verify the token immediately
-        try {
-          const decoded: { exp: number, user_id: number, role: string } = jwtDecode(token);
-          console.log('Token decoded successfully:', {
-            userId: decoded.user_id,
-            role: decoded.role,
-            expiresAt: new Date(decoded.exp * 1000).toISOString()
-          });
-        } catch (e) {
-          console.error('Error decoding the received token:', e);
-        }
-        
         return response.data;
       } else {
-        console.error('Login failed with response:', response.data);
         throw new Error(response.data.message || 'Login failed');
       }
     });
@@ -354,55 +153,24 @@ export const authAPI = {
     return this.register(userData);
   },
 
-  // Clear tokens without redirect
-  clearTokens() {
-    console.log('Clearing auth tokens');
+  logout() {
     setAuthToken(null);
   },
 
-  // Logout with optional redirect
-  logout(redirect = true) {
-    console.log('Logging out user');
-    this.clearTokens();
-    
-    if (redirect) {
-      window.location.href = '/login';
-    }
-  },
-
   isAuthenticated(): boolean {
-    const token = getStoredToken();
-    if (!token) {
-      console.log('No token found, user is not authenticated');
-      return false;
-    }
-    
+    const token = localStorage.getItem('auth_token');
+    if (!token) return false;
     try {
       const decodedToken: { exp: number } = jwtDecode(token);
-      const currentTime = Date.now() / 1000;
-      const isValid = decodedToken.exp > currentTime;
-      
-      console.log('Token validation:', {
-        isValid,
-        expiresIn: (decodedToken.exp - currentTime).toFixed(0) + ' seconds',
-        expDate: new Date(decodedToken.exp * 1000).toISOString()
-      });
-      
-      if (!isValid) {
-        console.warn('Token is expired, clearing it');
-        setAuthToken(null);
-      }
-      
-      return isValid;
+      return decodedToken.exp * 1000 > Date.now();
     } catch (error) {
       console.error('Error decoding token:', error);
-      setAuthToken(null);
       return false;
     }
   },
 
   isAdmin(): boolean {
-    const token = getStoredToken();
+    const token = localStorage.getItem('auth_token');
     if (!token) return false;
     try {
       const decodedToken: { role?: string } = jwtDecode(token);
@@ -414,7 +182,7 @@ export const authAPI = {
   },
 
   getCurrentUser(): any | null {
-    const token = getStoredToken();
+    const token = localStorage.getItem('auth_token');
     if (!token) return null;
     try {
       return jwtDecode(token);
@@ -423,11 +191,6 @@ export const authAPI = {
       return null;
     }
   },
-  
-  // Alias for backward compatibility
-  getUser(): any | null {
-    return this.getCurrentUser();
-  }
 };
 
 // API service for booking related operations
@@ -435,12 +198,7 @@ export const bookingAPI = {
   async createBooking(bookingData: BookingRequest): Promise<any> {
     return makeApiRequest(async () => {
       console.log('Creating booking with data:', bookingData);
-      // Add flag to request email notifications
-      const requestWithNotification = {
-        ...bookingData,
-        sendEmailNotification: true // Enable email notifications
-      };
-      const response = await apiClient.post('/book', requestWithNotification);
+      const response = await apiClient.post('/book', bookingData);
       if (response.data.status === 'success') {
         return response.data;
       } else {
@@ -515,55 +273,6 @@ export const bookingAPI = {
       }
     });
   },
-  
-  // New function to update booking status
-  async updateBookingStatus(bookingId: string, status: string, notes?: string): Promise<any> {
-    return makeApiRequest(async () => {
-      const data = {
-        status,
-        notes,
-        notifyCustomer: true // Send email notification to customer about status change
-      };
-      
-      const response = await apiClient.post(`/admin/booking/${bookingId}/status`, data);
-      if (response.data.status === 'success') {
-        return response.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to update booking status');
-      }
-    });
-  },
-  
-  // New function to assign driver to booking
-  async assignDriver(bookingId: string, driverId: string, driverName: string, driverPhone: string): Promise<any> {
-    return makeApiRequest(async () => {
-      const data = {
-        driverId,
-        driverName,
-        driverPhone,
-        notifyCustomer: true // Send email notification to customer about driver assignment
-      };
-      
-      const response = await apiClient.post(`/admin/booking/${bookingId}/assign-driver`, data);
-      if (response.data.status === 'success') {
-        return response.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to assign driver');
-      }
-    });
-  },
-  
-  // New function to generate/get booking receipt
-  async getBookingReceipt(bookingId: string): Promise<any> {
-    return makeApiRequest(async () => {
-      const response = await apiClient.get(`/admin/booking/${bookingId}/receipt`);
-      if (response.data.status === 'success') {
-        return response.data.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to get booking receipt');
-      }
-    });
-  },
 };
 
 // API service for fare management
@@ -614,30 +323,6 @@ export const fareAPI = {
         return response.data;
       } else {
         throw new Error(response.data.message || 'Failed to update vehicle pricing');
-      }
-    });
-  },
-  
-  // New method to add a new tour fare
-  async addTourFare(tourData: any): Promise<any> {
-    return makeApiRequest(async () => {
-      const response = await apiClient.post('/fares/add-tour', tourData);
-      if (response.data.status === 'success') {
-        return response.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to add new tour fare');
-      }
-    });
-  },
-  
-  // New method to delete a tour fare
-  async deleteTourFare(tourId: string): Promise<any> {
-    return makeApiRequest(async () => {
-      const response = await apiClient.delete(`/fares/delete-tour/${tourId}`);
-      if (response.data.status === 'success') {
-        return response.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to delete tour fare');
       }
     });
   }

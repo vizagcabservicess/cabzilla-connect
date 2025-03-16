@@ -1,4 +1,3 @@
-
 <?php
 // Turn on error reporting for debugging - remove in production
 ini_set('display_errors', 0);
@@ -46,12 +45,6 @@ function sendJsonResponse($data, $statusCode = 200) {
     // Make sure we're sending JSON
     if (!headers_sent()) {
         header('Content-Type: application/json');
-        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-        header('Pragma: no-cache');
-        header('Expires: 0');
-        header('Access-Control-Allow-Origin: *');
-        header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-        header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
         http_response_code($statusCode);
     }
     
@@ -67,19 +60,17 @@ function sendJsonResponse($data, $statusCode = 200) {
     exit;
 }
 
-// Helper function to generate JWT token with LONGER EXPIRATION
-function generateJwtToken($userId, $email, $role, $name = 'User') {
+// Helper function to generate JWT token
+function generateJwtToken($userId, $email, $role) {
     $issuedAt = time();
-    $expirationTime = $issuedAt + 60 * 60 * 24 * 30; // 30 days - increased from 14 days
+    $expirationTime = $issuedAt + 60 * 60 * 24 * 7; // 7 days - increased from 24 hours
     
     $payload = [
         'iat' => $issuedAt,
         'exp' => $expirationTime,
         'user_id' => $userId,
         'email' => $email,
-        'role' => $role ?? 'user',
-        'name' => $name, // Use provided name parameter
-        'jti' => uniqid(mt_rand(), true) // Add a more unique token ID to prevent token reuse
+        'role' => $role ?? 'user'
     ];
     
     $header = json_encode([
@@ -96,7 +87,7 @@ function generateJwtToken($userId, $email, $role, $name = 'User') {
     return "$base64UrlHeader.$base64UrlPayload.$base64UrlSignature";
 }
 
-// Improved function to verify JWT token with better debugging
+// Helper function to verify JWT token - improved for better base64 handling
 function verifyJwtToken($token) {
     try {
         // Log token verification attempt for debugging
@@ -141,17 +132,12 @@ function verifyJwtToken($token) {
             logError("Token expired or missing expiration", [
                 'has_exp' => isset($payload['exp']),
                 'current_time' => time(),
-                'exp_time' => $payload['exp'] ?? 'missing',
-                'difference' => isset($payload['exp']) ? ($payload['exp'] - time()) : 'N/A'
+                'exp_time' => $payload['exp'] ?? 'missing'
             ]);
             return false;
         }
         
-        logError("Token verified successfully", [
-            'user_id' => $payload['user_id'], 
-            'exp' => date('Y-m-d H:i:s', $payload['exp']),
-            'time_remaining' => ($payload['exp'] - time()) . ' seconds'
-        ]);
+        logError("Token verified successfully", ['user_id' => $payload['user_id']]);
         return $payload;
         
     } catch (Exception $e) {
@@ -169,7 +155,7 @@ function addBase64Padding($input) {
     return $input;
 }
 
-// Improved authenticate function with better error handling
+// Check if user is authenticated
 function authenticate() {
     $headers = getallheaders();
     
@@ -179,19 +165,13 @@ function authenticate() {
     }
     
     $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
-    logError("Auth header received", ['header_length' => strlen($authHeader)]);
+    logError("Auth header", ['header' => $authHeader]);
     
     // Extract token from "Bearer <token>"
     if (strpos($authHeader, 'Bearer ') === 0) {
         $token = substr($authHeader, 7);
     } else {
         $token = $authHeader; // Try using the header value directly if "Bearer " prefix is missing
-    }
-    
-    // Validate token length before verification
-    if (strlen($token) < 20) {
-        logError("Token too short", ['token_length' => strlen($token)]);
-        sendJsonResponse(['status' => 'error', 'message' => 'Invalid token format'], 401);
     }
     
     // Additional logging for token verification
@@ -202,7 +182,7 @@ function authenticate() {
     
     $payload = verifyJwtToken($token);
     if (!$payload) {
-        logError("Token verification failed", ['token_start' => substr($token, 0, 20) . '...']);
+        logError("Token verification failed", ['token' => substr($token, 0, 20) . '...']);
         sendJsonResponse(['status' => 'error', 'message' => 'Invalid or expired token'], 401);
     }
     

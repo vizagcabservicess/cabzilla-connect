@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -10,32 +11,13 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertCircle, RefreshCw, Save, Plus, Edit, Trash2 } from "lucide-react";
+import { AlertCircle, RefreshCw, Save } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { TourFare, FareUpdateRequest } from '@/types/api';
 import { fareAPI } from '@/services/api';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 
 const formSchema = z.object({
   tourId: z.string().min(1, { message: "Tour is required" }),
-  sedan: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  ertiga: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  innova: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  tempo: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  luxury: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-});
-
-const newTourSchema = z.object({
-  tourName: z.string().min(3, { message: "Tour name must be at least 3 characters" }),
-  tourDescription: z.string().optional(),
   sedan: z.coerce.number().min(0, { message: "Price cannot be negative" }),
   ertiga: z.coerce.number().min(0, { message: "Price cannot be negative" }),
   innova: z.coerce.number().min(0, { message: "Price cannot be negative" }),
@@ -50,9 +32,6 @@ export function FareManagement() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { toast: uiToast } = useToast();
   
-  const [isNewTourDialogOpen, setIsNewTourDialogOpen] = useState(false);
-  const [isAddingTour, setIsAddingTour] = useState(false);
-  
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -65,19 +44,7 @@ export function FareManagement() {
     },
   });
   
-  const newTourForm = useForm<z.infer<typeof newTourSchema>>({
-    resolver: zodResolver(newTourSchema),
-    defaultValues: {
-      tourName: "",
-      tourDescription: "",
-      sedan: 0,
-      ertiga: 0,
-      innova: 0,
-      tempo: 0,
-      luxury: 0,
-    },
-  });
-  
+  // Handle form submission
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       setIsLoading(true);
@@ -96,40 +63,20 @@ export function FareManagement() {
     }
   };
   
-  const onAddTour = async (values: z.infer<typeof newTourSchema>) => {
-    try {
-      setIsAddingTour(true);
-      console.log("Adding new tour:", values);
-      
-      const newTourData = {
-        tourName: values.tourName,
-        tourDescription: values.tourDescription || '',
-        sedan: values.sedan,
-        ertiga: values.ertiga,
-        innova: values.innova,
-        tempo: values.tempo,
-        luxury: values.luxury,
-      };
-      
-      const data = await fareAPI.addTourFare(newTourData);
-      console.log("New tour added:", data);
-      
-      toast.success("New tour added successfully");
-      
-      newTourForm.reset();
-      
-      setIsNewTourDialogOpen(false);
-      
-      await fetchTourFares();
-    } catch (error) {
-      console.error("Error adding new tour:", error);
-      toast.error("Failed to add new tour");
-    } finally {
-      setIsAddingTour(false);
-    }
-  };
-  
   useEffect(() => {
+    const fetchTourFares = async () => {
+      try {
+        // Add cache-busting timestamp (without passing to API)
+        console.log("Fetching tour fares with cache busting...");
+        const data = await fareAPI.getTourFares();
+        console.log("Fetched tour fares:", data);
+        setTourFares(data);
+      } catch (error) {
+        console.error("Error fetching tour fares:", error);
+        setError("Failed to load tour fares. Please try again.");
+      }
+    };
+    
     fetchTourFares();
   }, []);
   
@@ -137,6 +84,7 @@ export function FareManagement() {
     try {
       setIsRefreshing(true);
       setError(null);
+      // Cache busting log
       console.log("Manually refreshing tour fares...");
       const data = await fareAPI.getTourFares();
       setTourFares(data);
@@ -162,24 +110,6 @@ export function FareManagement() {
     }
   };
 
-  const handleDeleteTour = async (tourId: string) => {
-    try {
-      if (!confirm("Are you sure you want to delete this tour?")) {
-        return;
-      }
-      
-      console.log("Deleting tour:", tourId);
-      await fareAPI.deleteTourFare(tourId);
-      
-      toast.success("Tour deleted successfully");
-      
-      await fetchTourFares();
-    } catch (error) {
-      console.error("Error deleting tour:", error);
-      toast.error("Failed to delete tour");
-    }
-  };
-
   return (
     <Tabs defaultValue="update">
       <TabsList>
@@ -192,24 +122,15 @@ export function FareManagement() {
           <CardHeader>
             <div className="flex justify-between items-center">
               <CardTitle>Update Tour Fares</CardTitle>
-              <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={fetchTourFares} 
-                  disabled={isRefreshing}
-                >
-                  <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                  Refresh
-                </Button>
-                <Button 
-                  size="sm" 
-                  onClick={() => setIsNewTourDialogOpen(true)}
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add New Tour
-                </Button>
-              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={fetchTourFares} 
+                disabled={isRefreshing}
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
             </div>
           </CardHeader>
           <CardContent>
@@ -349,24 +270,15 @@ export function FareManagement() {
           <CardHeader>
             <div className="flex justify-between items-center">
               <CardTitle>All Tour Fares</CardTitle>
-              <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={fetchTourFares} 
-                  disabled={isRefreshing}
-                >
-                  <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                  Refresh
-                </Button>
-                <Button 
-                  size="sm" 
-                  onClick={() => setIsNewTourDialogOpen(true)}
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add New Tour
-                </Button>
-              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={fetchTourFares} 
+                disabled={isRefreshing}
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
             </div>
           </CardHeader>
           <CardContent>
@@ -392,7 +304,6 @@ export function FareManagement() {
                       <th className="text-right py-2 px-2">Innova</th>
                       <th className="text-right py-2 px-2">Tempo</th>
                       <th className="text-right py-2 px-2">Luxury</th>
-                      <th className="text-right py-2 px-2">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -404,34 +315,6 @@ export function FareManagement() {
                         <td className="text-right py-2 px-2">₹{fare.innova.toLocaleString('en-IN')}</td>
                         <td className="text-right py-2 px-2">₹{fare.tempo.toLocaleString('en-IN')}</td>
                         <td className="text-right py-2 px-2">₹{fare.luxury.toLocaleString('en-IN')}</td>
-                        <td className="text-right py-2 px-2">
-                          <div className="flex justify-end gap-2">
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              onClick={() => {
-                                handleTourSelect(fare.tourId);
-                                form.setValue("tourId", fare.tourId);
-                                const updateTab = document.querySelector('[data-value="update"]');
-                                if (updateTab instanceof HTMLElement) {
-                                  updateTab.click();
-                                }
-                              }}
-                            >
-                              <Edit className="h-4 w-4" />
-                              <span className="sr-only">Edit</span>
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              onClick={() => handleDeleteTour(fare.tourId)}
-                              className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                              <span className="sr-only">Delete</span>
-                            </Button>
-                          </div>
-                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -445,140 +328,6 @@ export function FareManagement() {
           </CardContent>
         </Card>
       </TabsContent>
-      
-      <Dialog open={isNewTourDialogOpen} onOpenChange={setIsNewTourDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add New Tour</DialogTitle>
-            <DialogDescription>
-              Create a new tour with pricing for different vehicle types.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <Form {...newTourForm}>
-            <form onSubmit={newTourForm.handleSubmit(onAddTour)} className="space-y-4">
-              <FormField
-                control={newTourForm.control}
-                name="tourName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Tour Name</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="e.g., Araku Valley Tour" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={newTourForm.control}
-                name="tourDescription"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description (Optional)</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="Brief description of the tour" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={newTourForm.control}
-                  name="sedan"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Sedan Price</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={newTourForm.control}
-                  name="ertiga"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Ertiga Price</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={newTourForm.control}
-                  name="innova"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Innova Price</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={newTourForm.control}
-                  name="tempo"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tempo Price</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={newTourForm.control}
-                  name="luxury"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Luxury Price</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              
-              <DialogFooter>
-                <Button variant="outline" type="button" onClick={() => setIsNewTourDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isAddingTour}>
-                  {isAddingTour ? (
-                    <>
-                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                      Adding...
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Add Tour
-                    </>
-                  )}
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
     </Tabs>
   );
 }

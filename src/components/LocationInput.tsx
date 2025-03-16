@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from "react";
 import { Autocomplete } from "@react-google-maps/api";
 import { Search, X, MapPin } from "lucide-react";
@@ -81,7 +82,7 @@ export function LocationInput({
     }
   }, [isAirportTransfer, isPickupLocation, label, onChange]);
 
-  // Handle Google Places selection - Fix for locations outside Andhra Pradesh
+  // Handle Google Places selection
   const onPlaceChanged = () => {
     if (autocomplete) {
       const place = autocomplete.getPlace();
@@ -126,8 +127,8 @@ export function LocationInput({
           name: place.formatted_address,
           lat: place.geometry.location.lat(),
           lng: place.geometry.location.lng(),
-          city: city || "Unknown City", // Default to Unknown if city not found
-          state: state || "Unknown State", // Default to Unknown if state not found
+          city: city || "Visakhapatnam", // Default to Visakhapatnam if city not found
+          state: state || "Andhra Pradesh", // Default to Andhra Pradesh if state not found
           type: determineLocationType(place.types),
           popularityScore: 50, // Default popularity score
         };
@@ -138,7 +139,7 @@ export function LocationInput({
       }
     }
   };
-
+  
   // Function to map Google Place types to valid Location.type values
   const determineLocationType = (placeTypes: string[] | undefined): Location["type"] => {
     if (!placeTypes) return "other";
@@ -151,14 +152,14 @@ export function LocationInput({
   
     return "other";
   };
-
+  
   // Select a suggested location
   const handleSelectSuggestion = (location: Location) => {
     onChange(location);
     setSearchQuery(location.name);
     setShowSuggestions(false);
   };
-
+  
   // Clear search input
   const handleClear = () => {
     onChange(null);
