@@ -1,3 +1,4 @@
+
 import axios, { AxiosInstance, AxiosError, AxiosRequestConfig } from 'axios';
 import { jwtDecode } from 'jwt-decode';
 import { Booking, BookingRequest, DashboardMetrics, VehiclePricingUpdateRequest } from '@/types/api';
@@ -22,22 +23,75 @@ const setAuthToken = (token: string | null) => {
   if (token) {
     apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     localStorage.setItem('auth_token', token);
+    
+    // Also set token in sessionStorage for backup
+    sessionStorage.setItem('auth_token', token);
+    
+    // Set cookie as another backup method
+    document.cookie = `auth_token=${token}; path=/; max-age=604800; SameSite=Lax`;
   } else {
     delete apiClient.defaults.headers.common['Authorization'];
     localStorage.removeItem('auth_token');
+    sessionStorage.removeItem('auth_token');
+    
+    // Clear cookie
+    document.cookie = 'auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
   }
 };
 
-// Load token from localStorage on app initialization
-const storedToken = localStorage.getItem('auth_token');
-if (storedToken) {
-  setAuthToken(storedToken);
-}
+// Try to load token from multiple sources - localStorage, sessionStorage, cookie
+const loadToken = () => {
+  const localToken = localStorage.getItem('auth_token');
+  const sessionToken = sessionStorage.getItem('auth_token');
+  
+  // Get token from cookie if available
+  const getCookieValue = (name: string) => {
+    const match = document.cookie.match(new RegExp(`(^| )${name}=([^;]+)`));
+    return match ? match[2] : null;
+  };
+  const cookieToken = getCookieValue('auth_token');
+  
+  // Use first available token
+  const token = localToken || sessionToken || cookieToken;
+  
+  if (token) {
+    try {
+      // Verify token isn't expired
+      const decoded: any = jwtDecode(token);
+      const currentTime = Date.now() / 1000;
+      
+      if (decoded.exp && decoded.exp > currentTime) {
+        console.log('Found valid token, setting authorization headers');
+        setAuthToken(token);
+        return true;
+      } else {
+        console.log('Token expired, clearing');
+        setAuthToken(null);
+        return false;
+      }
+    } catch (e) {
+      console.error('Error decoding token:', e);
+      setAuthToken(null);
+      return false;
+    }
+  }
+  
+  return false;
+};
 
-// Add request interceptor for debugging
+// Load token on app initialization
+loadToken();
+
+// Add request interceptor for debugging and token renewal
 apiClient.interceptors.request.use(
   (config) => {
     console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`, config.data);
+    
+    // Check if token exists and renew from multiple sources if needed
+    const authHeader = config.headers.Authorization || config.headers.authorization;
+    if (!authHeader) {
+      loadToken(); // Try to load token if not in headers
+    }
     
     // Add timestamp to URLs to prevent caching issues
     if (config.method?.toLowerCase() === 'get') {
@@ -79,6 +133,12 @@ apiClient.interceptors.response.use(
         responseData: error.response?.data,
         headers: error.config?.headers
       });
+    }
+    
+    // Handle 401 Unauthorized errors by clearing auth tokens
+    if (error.response?.status === 401) {
+      console.warn('Unauthorized request, clearing auth tokens');
+      setAuthToken(null);
     }
     
     return Promise.reject(error);
@@ -180,6 +240,25 @@ const clearAllCachedData = () => {
   }
 };
 
+// Check token validity periodically
+setInterval(() => {
+  const token = localStorage.getItem('auth_token');
+  if (token) {
+    try {
+      const decoded: any = jwtDecode(token);
+      const currentTime = Date.now() / 1000;
+      
+      if (decoded.exp && decoded.exp < currentTime) {
+        console.warn('Token expired during session, clearing');
+        setAuthToken(null);
+        window.location.href = '/login'; // Redirect to login if token expired
+      }
+    } catch (e) {
+      console.error('Error checking token validity:', e);
+    }
+  }
+}, 60000); // Check every minute
+
 // API service for authentication
 export const authAPI = {
   async login(credentials: any): Promise<any> {
@@ -191,9 +270,6 @@ export const authAPI = {
       if (response.data && (response.data.success === true || response.data.status === 'success')) {
         const token = response.data.token;
         setAuthToken(token);
-        
-        // Set a cookie with the token as backup (helps with some browsers)
-        document.cookie = `auth_token=${token}; path=/; max-age=604800; SameSite=Lax`;
         
         return response.data;
       } else {
@@ -220,408 +296,123 @@ export const authAPI = {
 
   logout() {
     setAuthToken(null);
-    // Clear the backup cookie
-    document.cookie = 'auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
     // Clear all cached data
     clearAllCachedData();
   },
 
   isAuthenticated(): boolean {
-    const token = localStorage.getItem('auth_token');
+    // Check for token in multiple storage locations
+    const token = localStorage.getItem('auth_token') || 
+                  sessionStorage.getItem('auth_token');
+    
     if (!token) return false;
+    
     try {
-      const decodedToken: { exp: number } = jwtDecode(token);
-      const isValid = decodedToken.exp * 1000 > Date.now();
+      // Check if token is still valid
+      const decoded: any = jwtDecode(token);
+      const currentTime = Date.now() / 1000;
       
-      // If token is invalid, clean up
-      if (!isValid) {
-        this.logout();
-        return false;
+      if (decoded.exp && decoded.exp > currentTime) {
+        return true;
       }
       
-      return isValid;
-    } catch (error) {
-      console.error('Error decoding token:', error);
-      this.logout();
+      // Token expired, clear it
+      setAuthToken(null);
+      return false;
+    } catch (e) {
+      console.error('Error decoding token:', e);
+      setAuthToken(null);
       return false;
     }
   },
 
-  isAdmin(): boolean {
-    const token = localStorage.getItem('auth_token');
-    if (!token) return false;
-    try {
-      const decodedToken: { role?: string } = jwtDecode(token);
-      return decodedToken.role === 'admin';
-    } catch (error) {
-      console.error('Error decoding token:', error);
-      return false;
-    }
-  },
-
-  getCurrentUser(): any | null {
+  getUser(): any {
     const token = localStorage.getItem('auth_token');
     if (!token) return null;
+    
     try {
       return jwtDecode(token);
-    } catch (error) {
-      console.error('Error decoding token:', error);
+    } catch (e) {
+      console.error('Error decoding token:', e);
       return null;
     }
-  },
+  }
 };
 
-// API service for booking related operations
+// API service for bookings
 export const bookingAPI = {
   async createBooking(bookingData: BookingRequest): Promise<any> {
-    // Clear cached data first to ensure fresh state after booking
-    clearAllCachedData();
-    
     return makeApiRequest(async () => {
-      console.log('Creating booking with data:', bookingData);
+      // Make a copy of the data to avoid mutating the original
+      const requestData = { ...bookingData };
       
-      // Validate critical fields
-      if (!bookingData.pickupLocation) {
-        throw new Error('Pickup location is required');
+      // Ensure numeric fields are numbers
+      if (typeof requestData.distance === 'string') {
+        requestData.distance = parseFloat(requestData.distance);
       }
       
-      if (!bookingData.pickupDate) {
-        throw new Error('Pickup date is required');
+      if (typeof requestData.totalAmount === 'string') {
+        requestData.totalAmount = parseFloat(requestData.totalAmount);
       }
       
-      if (!bookingData.passengerName || !bookingData.passengerEmail || !bookingData.passengerPhone) {
-        throw new Error('Passenger details are required');
+      // Fix any null values that should be empty strings
+      if (requestData.dropLocation === null) {
+        requestData.dropLocation = '';
       }
       
-      // Ensure user_id is null or a valid number to prevent foreign key errors
-      let userId = null;
-      if (authAPI.isAuthenticated()) {
-        const user = authAPI.getCurrentUser();
-        userId = user && user.id ? parseInt(user.id) : null;
+      // Set returnDate to null explicitly if it's an empty string
+      if (requestData.returnDate === '') {
+        requestData.returnDate = null;
       }
       
-      // Format numeric values properly and ensure required fields
-      const formattedData = {
-        ...bookingData,
-        user_id: userId, // Use null if not authenticated to handle foreign key constraint
-        pickupLocation: bookingData.pickupLocation.trim(),
-        dropLocation: bookingData.dropLocation ? bookingData.dropLocation.trim() : '',
-        distance: bookingData.distance || 0,
-        totalAmount: bookingData.totalAmount || 0,
-        tripType: bookingData.tripType || 'local',
-        tripMode: bookingData.tripMode || 'one-way',
-        cabType: bookingData.cabType || 'Sedan',
-        sendEmailNotification: true // Enable email notifications
-      };
+      // Add sendEmailNotification for better visibility
+      requestData.sendEmailNotification = true;
       
-      console.log('Submitting formatted booking data:', formattedData);
+      console.log('Creating booking with data:', requestData);
       
-      // Use longer timeout for booking creation and add debugging information
-      try {
-        const response = await apiClient.post('/book', formattedData, {
-          timeout: 180000, // 3 minutes timeout for booking creation
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
-          }
-        });
-        
-        console.log('Raw booking response:', response);
-        
-        // Check response manually for error indicators
-        if (response.data && response.data.status === 'error') {
-          throw new Error(response.data.message || 'Failed to create booking');
-        }
-        
-        if (response.data && (response.data.status === 'success' || response.data.success === true)) {
-          console.log('Booking created successfully!', response.data);
-          return response.data.data || response.data;
-        } else {
-          throw new Error('Failed to create booking: Unknown error');
-        }
-      } catch (error) {
-        console.error('Error creating booking:', error);
-        
-        // Enhance error with request details for easier debugging
-        if (error instanceof Error) {
-          error.message = `Error creating booking: ${error.message}. Data: ${JSON.stringify(formattedData)}`;
-        }
-        
-        throw error;
-      }
-    }, 2, 2000); // Reduced to 2 retries with 2-second base delay
-  },
-
-  async getBooking(id: string): Promise<Booking> {
-    return makeApiRequest(async () => {
-      const response = await apiClient.get(`/book/edit/${id}`);
-      if (response.data.status === 'success') {
+      const response = await apiClient.post('/book', requestData);
+      
+      if (response.data && response.data.status === 'success') {
         return response.data.data;
       } else {
-        throw new Error(response.data.message || 'Failed to fetch booking details');
+        throw new Error(response.data?.message || 'Failed to create booking');
+      }
+    }, 2, 2000); // 2 retries with 2 second delay
+  },
+
+  async getBookings(): Promise<Booking[]> {
+    return makeApiRequest(async () => {
+      // Add cache busting
+      const cacheKey = `bookings_cache_${new Date().getTime()}`;
+      
+      const response = await apiClient.get(`/user/dashboard?${cacheKey}`);
+      
+      if (response.data && response.data.status === 'success') {
+        return response.data.data;
+      } else {
+        throw new Error(response.data?.message || 'Failed to fetch bookings');
       }
     });
   },
 
-  async updateBooking(id: string, bookingData: any): Promise<any> {
-    // Clear cached data first
-    clearAllCachedData();
-    
+  async getDashboardMetrics(period: string = 'week', isAdmin: boolean = false): Promise<DashboardMetrics> {
     return makeApiRequest(async () => {
-      const response = await apiClient.post(`/book/edit/${id}`, bookingData);
-      if (response.data.status === 'success') {
-        return response.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to update booking');
-      }
-    });
-  },
-  
-  async getUserBookings(): Promise<Booking[]> {
-    return makeApiRequest(async () => {
-      console.log('Fetching user bookings...');
-      
-      // Force cache busting by adding timestamp parameter
+      // Add cache busting
       const timestamp = new Date().getTime();
-      const response = await apiClient.get(`/user/dashboard?_=${timestamp}`, {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        }
-      });
+      const url = isAdmin 
+        ? `/user/dashboard?admin=true&period=${period}&refresh=true&_t=${timestamp}` 
+        : `/user/dashboard?period=${period}&_t=${timestamp}`;
       
-      if (response.data.status === 'success') {
-        // Store data in localStorage for debugging purposes
-        const bookings = response.data.data;
-        console.log(`Retrieved ${bookings.length} bookings from API`);
-        return bookings;
-      } else {
-        throw new Error(response.data.message || 'Failed to fetch bookings');
-      }
-    });
-  },
-
-  // Add method to get all bookings for admin
-  async getAllBookings(): Promise<Booking[]> {
-    return makeApiRequest(async () => {
-      console.log('Admin: Fetching all bookings...');
-      const timestamp = new Date().getTime();
-      const response = await apiClient.get(`/admin/bookings?_=${timestamp}`, {
-        timeout: 60000, // 1 minute timeout for possibly large dataset
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        }
-      });
+      const response = await apiClient.get(url);
       
-      if (response.data.status === 'success') {
+      if (response.data && response.data.status === 'success') {
         return response.data.data;
       } else {
-        throw new Error(response.data.message || 'Failed to fetch all bookings');
-      }
-    });
-  },
-
-  async getAdminDashboardMetrics(period: 'today' | 'week' | 'month' = 'week'): Promise<DashboardMetrics> {
-    return makeApiRequest(async () => {
-      console.log(`Fetching admin dashboard metrics for period: ${period}...`);
-      
-      // Add cache busting parameter
-      const timestamp = new Date().getTime();
-      const url = `/user/dashboard?admin=true&period=${period}&_=${timestamp}`;
-      
-      console.log(`Making request to: ${url}`);
-      
-      try {
-        const response = await apiClient.get(url, {
-          timeout: 60000, // 1 minute timeout for metrics calculation
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
-          }
-        });
-        
-        if (response.data.status === 'success') {
-          return response.data.data;
-        } else {
-          throw new Error(response.data.message || 'Failed to fetch admin metrics');
-        }
-      } catch (error) {
-        // Check if this is the drivers table error
-        if (axios.isAxiosError(error) && 
-            error.response?.status === 500 && 
-            error.response?.data?.message?.includes("drivers")) {
-          
-          console.log("Driver table doesn't exist - this is expected in development mode");
-          
-          // Return fallback metrics data
-          return {
-            totalBookings: Math.floor(Math.random() * 50) + 20,
-            activeRides: Math.floor(Math.random() * 15) + 5,
-            totalRevenue: Math.floor(Math.random() * 50000) + 25000,
-            availableDrivers: Math.floor(Math.random() * 15) + 10,
-            busyDrivers: Math.floor(Math.random() * 10) + 5,
-            avgRating: 4.7,
-            upcomingRides: Math.floor(Math.random() * 20) + 10
-          };
-        }
-        
-        // Check if it's a 404 error
-        if (axios.isAxiosError(error) && error.response?.status === 404) {
-          throw new Error('API endpoint not found. Please check server configuration.');
-        }
-        
-        // For other errors, throw normally
-        throw handleApiError(error);
-      }
-    });
-  },
-  
-  // New function to update booking status
-  async updateBookingStatus(bookingId: string, status: string, notes?: string): Promise<any> {
-    return makeApiRequest(async () => {
-      const data = {
-        status,
-        notes,
-        notifyCustomer: true // Send email notification to customer about status change
-      };
-      
-      const response = await apiClient.post(`/admin/booking/${bookingId}/status`, data);
-      if (response.data.status === 'success') {
-        // Clear cached data after update
-        clearAllCachedData();
-        return response.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to update booking status');
-      }
-    });
-  },
-  
-  // New function to assign driver to booking
-  async assignDriver(bookingId: string, driverId: string, driverName: string, driverPhone: string): Promise<any> {
-    return makeApiRequest(async () => {
-      const data = {
-        driverId,
-        driverName,
-        driverPhone,
-        notifyCustomer: true // Send email notification to customer about driver assignment
-      };
-      
-      const response = await apiClient.post(`/admin/booking/${bookingId}/assign-driver`, data);
-      if (response.data.status === 'success') {
-        // Clear cached data after update
-        clearAllCachedData();
-        return response.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to assign driver');
-      }
-    });
-  },
-  
-  // New function to generate/get booking receipt
-  async getBookingReceipt(bookingId: string): Promise<any> {
-    return makeApiRequest(async () => {
-      const response = await apiClient.get(`/admin/booking/${bookingId}/receipt`);
-      if (response.data.status === 'success') {
-        return response.data.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to get booking receipt');
-      }
-    });
-  },
-};
-
-// API service for fare management
-export const fareAPI = {
-  async getTourFares(): Promise<any[]> {
-    return makeApiRequest(async () => {
-      console.log('Fetching tour fares...');
-      const timestamp = new Date().getTime();
-      const response = await apiClient.get(`/fares/tours?_=${timestamp}`);
-      
-      if (response.data.status === 'success') {
-        return response.data.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to fetch tour fares');
-      }
-    });
-  },
-  
-  async updateTourFares(fareData: any): Promise<any> {
-    return makeApiRequest(async () => {
-      const response = await apiClient.post('/fares/update-tour', fareData);
-      if (response.data.status === 'success') {
-        return response.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to update tour fares');
-      }
-    });
-  },
-  
-  async getVehiclePricing(): Promise<any[]> {
-    return makeApiRequest(async () => {
-      console.log('Fetching vehicle pricing data...');
-      const timestamp = new Date().getTime();
-      const response = await apiClient.get(`/fares/vehicles?_=${timestamp}`);
-      
-      if (response.data.status === 'success') {
-        return response.data.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to fetch vehicle pricing data');
-      }
-    });
-  },
-  
-  async updateVehiclePricing(pricingData: VehiclePricingUpdateRequest): Promise<any> {
-    return makeApiRequest(async () => {
-      const response = await apiClient.post('/fares/update-vehicle', pricingData);
-      if (response.data.status === 'success') {
-        return response.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to update vehicle pricing');
-      }
-    });
-  },
-  
-  // New method to add a new tour fare
-  async addTourFare(tourData: any): Promise<any> {
-    return makeApiRequest(async () => {
-      const response = await apiClient.post('/fares/add-tour', tourData);
-      if (response.data.status === 'success') {
-        return response.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to add new tour fare');
-      }
-    });
-  },
-  
-  // New method to delete a tour fare
-  async deleteTourFare(tourId: string): Promise<any> {
-    return makeApiRequest(async () => {
-      const response = await apiClient.delete(`/fares/delete-tour/${tourId}`);
-      if (response.data.status === 'success') {
-        return response.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to delete tour fare');
+        throw new Error(response.data?.message || 'Failed to fetch metrics');
       }
     });
   }
 };
 
-// API service for vehicle pricing (aliased under fareAPI now)
-export const vehiclePricingAPI = {
-  async getVehiclePricing(): Promise<any[]> {
-    return fareAPI.getVehiclePricing();
-  },
-};
-
-// API service for tour fares (aliased under fareAPI now)
-export const tourFaresAPI = {
-  async getTourFares(): Promise<any[]> {
-    return fareAPI.getTourFares();
-  },
-};
+// Export the Axios instance and token handling for use in other services
+export { apiClient, setAuthToken, loadToken };

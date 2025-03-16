@@ -1,3 +1,4 @@
+
 <?php
 // Adjust the path to config.php correctly
 require_once __DIR__ . '/../config.php';
@@ -101,61 +102,82 @@ try {
     // Debug log the user ID
     logError("User ID for booking", ['user_id' => $userId === null ? 'NULL' : $userId]);
 
-    // Prepare SQL query with explicit NULL handling
-    $sql = "INSERT INTO bookings 
-            (user_id, booking_number, pickup_location, drop_location, pickup_date, 
-            return_date, cab_type, distance, trip_type, trip_mode, 
-            total_amount, passenger_name, passenger_phone, passenger_email, 
-            hourly_package, tour_id, status, created_at, updated_at) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
-
-    $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        logError("Prepare statement failed", ['error' => $conn->error, 'sql' => $sql]);
-        sendJsonResponse(['status' => 'error', 'message' => 'Database prepare error: ' . $conn->error], 500);
-        exit;
-    }
-
-    // Get values and sanitize/validate them
-    $pickupLocation = trim($data['pickupLocation']);
-    $dropLocation = isset($data['dropLocation']) ? trim($data['dropLocation']) : null;
-    $pickupDate = trim($data['pickupDate']);
-    $returnDate = isset($data['returnDate']) && $data['returnDate'] ? trim($data['returnDate']) : null;
-    $cabType = trim($data['cabType']);
-    $distance = isset($data['distance']) ? floatval($data['distance']) : 0;
-    $tripType = trim($data['tripType']);
-    $tripMode = trim($data['tripMode']);
-    $totalAmount = floatval($data['totalAmount']);
-    $passengerName = trim($data['passengerName']);
-    $passengerPhone = trim($data['passengerPhone']);
-    $passengerEmail = trim($data['passengerEmail']);
-    $hourlyPackage = isset($data['hourlyPackage']) && $data['hourlyPackage'] ? trim($data['hourlyPackage']) : null;
-    $tourId = isset($data['tourId']) && $data['tourId'] ? trim($data['tourId']) : null;
-    $status = 'pending'; // Default status for new bookings
-    
-    // Log the sanitized data
-    logError("Sanitized booking data", [
-        'pickup' => $pickupLocation,
-        'dropoff' => $dropLocation,
-        'pickup_date' => $pickupDate,
-        'return_date' => $returnDate,
-        'total' => $totalAmount,
-        'user_id' => $userId
-    ]);
-
-    // Properly bind parameters based on whether userId is null
+    // Create new booking with explicit NULL for user_id if not authenticated
     if ($userId === null) {
+        // Insert with NULL user_id for anonymous booking
+        $sql = "INSERT INTO bookings 
+                (booking_number, pickup_location, drop_location, pickup_date, 
+                return_date, cab_type, distance, trip_type, trip_mode, 
+                total_amount, passenger_name, passenger_phone, passenger_email, 
+                hourly_package, tour_id, status, created_at, updated_at) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
+
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            logError("Prepare statement failed", ['error' => $conn->error, 'sql' => $sql]);
+            sendJsonResponse(['status' => 'error', 'message' => 'Database prepare error: ' . $conn->error], 500);
+            exit;
+        }
+
+        // Get values and sanitize them
+        $pickupLocation = trim($data['pickupLocation']);
+        $dropLocation = isset($data['dropLocation']) ? trim($data['dropLocation']) : '';
+        $pickupDate = trim($data['pickupDate']);
+        $returnDate = isset($data['returnDate']) && $data['returnDate'] ? trim($data['returnDate']) : null;
+        $cabType = trim($data['cabType']);
+        $distance = isset($data['distance']) ? floatval($data['distance']) : 0;
+        $tripType = trim($data['tripType']);
+        $tripMode = trim($data['tripMode']);
+        $totalAmount = floatval($data['totalAmount']);
+        $passengerName = trim($data['passengerName']);
+        $passengerPhone = trim($data['passengerPhone']);
+        $passengerEmail = trim($data['passengerEmail']);
+        $hourlyPackage = isset($data['hourlyPackage']) && $data['hourlyPackage'] ? trim($data['hourlyPackage']) : null;
+        $tourId = isset($data['tourId']) && $data['tourId'] ? trim($data['tourId']) : null;
+        $status = 'pending'; // Default status for new bookings
+
         $stmt->bind_param(
-            "ssssssdssdsssiss",
-            $userId, // This will be NULL because $userId is null
+            "ssssssdssdsssss",
             $bookingNumber, $pickupLocation, $dropLocation, $pickupDate,
             $returnDate, $cabType, $distance, $tripType, $tripMode,
             $totalAmount, $passengerName, $passengerPhone, $passengerEmail,
             $hourlyPackage, $tourId, $status
         );
     } else {
+        // Insert with user_id for authenticated booking
+        $sql = "INSERT INTO bookings 
+                (user_id, booking_number, pickup_location, drop_location, pickup_date, 
+                return_date, cab_type, distance, trip_type, trip_mode, 
+                total_amount, passenger_name, passenger_phone, passenger_email, 
+                hourly_package, tour_id, status, created_at, updated_at) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
+
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            logError("Prepare statement failed", ['error' => $conn->error, 'sql' => $sql]);
+            sendJsonResponse(['status' => 'error', 'message' => 'Database prepare error: ' . $conn->error], 500);
+            exit;
+        }
+
+        // Get values and sanitize them
+        $pickupLocation = trim($data['pickupLocation']);
+        $dropLocation = isset($data['dropLocation']) ? trim($data['dropLocation']) : '';
+        $pickupDate = trim($data['pickupDate']);
+        $returnDate = isset($data['returnDate']) && $data['returnDate'] ? trim($data['returnDate']) : null;
+        $cabType = trim($data['cabType']);
+        $distance = isset($data['distance']) ? floatval($data['distance']) : 0;
+        $tripType = trim($data['tripType']);
+        $tripMode = trim($data['tripMode']);
+        $totalAmount = floatval($data['totalAmount']);
+        $passengerName = trim($data['passengerName']);
+        $passengerPhone = trim($data['passengerPhone']);
+        $passengerEmail = trim($data['passengerEmail']);
+        $hourlyPackage = isset($data['hourlyPackage']) && $data['hourlyPackage'] ? trim($data['hourlyPackage']) : null;
+        $tourId = isset($data['tourId']) && $data['tourId'] ? trim($data['tourId']) : null;
+        $status = 'pending'; // Default status for new bookings
+
         $stmt->bind_param(
-            "issssssdssdsssiss",
+            "issssssdssdsssss",
             $userId, $bookingNumber, $pickupLocation, $dropLocation, $pickupDate,
             $returnDate, $cabType, $distance, $tripType, $tripMode,
             $totalAmount, $passengerName, $passengerPhone, $passengerEmail,
@@ -163,48 +185,15 @@ try {
         );
     }
 
+    // Execute the SQL
     if (!$stmt->execute()) {
         logError("Execute statement failed", ['error' => $stmt->error]);
-        
-        // Explicitly try with NULL user_id if that wasn't already tried
-        if ($userId !== null && strpos($stmt->error, 'foreign key constraint') !== false) {
-            logError("Foreign key constraint error. Retrying with NULL user_id");
-            $stmt->close();
-            
-            // Create a new prepared statement with NULL user_id
-            $retryStmt = $conn->prepare($sql);
-            if (!$retryStmt) {
-                logError("Retry prepare statement failed", ['error' => $conn->error]);
-                sendJsonResponse(['status' => 'error', 'message' => 'Database retry error: ' . $conn->error], 500);
-                exit;
-            }
-            
-            // Set userId to NULL and bind parameters again
-            $userId = null;
-            $retryStmt->bind_param(
-                "ssssssdssdsssiss",
-                $userId, $bookingNumber, $pickupLocation, $dropLocation, $pickupDate,
-                $returnDate, $cabType, $distance, $tripType, $tripMode,
-                $totalAmount, $passengerName, $passengerPhone, $passengerEmail,
-                $hourlyPackage, $tourId, $status
-            );
-            
-            if (!$retryStmt->execute()) {
-                logError("Retry execute failed", ['error' => $retryStmt->error]);
-                sendJsonResponse(['status' => 'error', 'message' => 'Database retry failed: ' . $retryStmt->error], 500);
-                exit;
-            }
-            
-            $bookingId = $conn->insert_id;
-            $retryStmt->close();
-        } else {
-            sendJsonResponse(['status' => 'error', 'message' => 'Failed to create booking: ' . $stmt->error], 500);
-            exit;
-        }
-    } else {
-        $bookingId = $conn->insert_id;
-        $stmt->close();
+        sendJsonResponse(['status' => 'error', 'message' => 'Failed to create booking: ' . $stmt->error], 500);
+        exit;
     }
+
+    $bookingId = $conn->insert_id;
+    $stmt->close();
 
     logError("Booking created", ['booking_id' => $bookingId, 'booking_number' => $bookingNumber, 'user_id' => $userId]);
 
@@ -258,7 +247,7 @@ try {
     $emailSent = sendBookingEmailNotification($formattedBooking, 'narendrakumarupwork@gmail.com');
     logError("Email notification status", [
         'sent' => $emailSent ? 'yes' : 'no', 
-        'recipient' => $passengerEmail,
+        'recipient' => $booking['passenger_email'],
         'mail_enabled' => function_exists('mail') ? 'yes' : 'no'
     ]);
 

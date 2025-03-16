@@ -107,23 +107,34 @@ export const hourlyPackages: HourlyPackage[] = [
   }
 ];
 
-export const localPackagePrices = {
-  '8hrs-80km': {
-    sedan: 5160,
-    suv: 6550,
-    ertiga: 6550,
-    innova: 7440,
-    tempo: 11500,
-    luxury: 14000
-  },
-  '10hrs-100km': {
-    sedan: 5800,
-    suv: 7200,
-    ertiga: 7200,
-    innova: 8500,
-    tempo: 13000,
-    luxury: 15500
+// These are the official package prices - not using caching anymore
+// to prevent hardcoded values from persisting
+export const getBaseLocalPackagePrices = (packageId: string, cabId: string): number => {
+  // Direct calculation without caching
+  if (packageId === '8hrs-80km') {
+    switch (cabId.toLowerCase()) {
+      case 'sedan': return 5160;
+      case 'ertiga': 
+      case 'suv': return 6550;
+      case 'innova': return 7440;
+      case 'tempo': return 11500;
+      case 'luxury': return 14000;
+      default: return 5160;
+    }
+  } else if (packageId === '10hrs-100km') {
+    switch (cabId.toLowerCase()) {
+      case 'sedan': return 5800;
+      case 'ertiga': 
+      case 'suv': return 7200;
+      case 'innova': return 8500;
+      case 'tempo': return 13000;
+      case 'luxury': return 15500;
+      default: return 5800;
+    }
   }
+  
+  // Default fallback
+  return 5000;
 };
 
 export const extraCharges = {
@@ -212,39 +223,17 @@ const normalizeCabType = (cabType: string): string => {
   return 'sedan';
 };
 
-// Removed packagePriceCache using Map to force dynamic calculations every time
-
+// NO MORE CACHING - Recalculate every time to prevent hardcoded values
 export const getLocalPackagePrice = (packageId: string, cabType: string): number => {
   const normalizedCabType = normalizeCabType(cabType);
   
-  // Create a cache key but don't actually use any persistent cache object
-  const cacheKey = `${packageId}_${normalizedCabType}`;
-  console.log(`Calculating price for ${cacheKey}`);
+  console.log(`Calculating price for ${packageId}_${normalizedCabType}`);
   
-  // Direct lookup price from the static localPackagePrices object
-  if (packageId in localPackagePrices && normalizedCabType in localPackagePrices[packageId as keyof typeof localPackagePrices]) {
-    const price = localPackagePrices[packageId as keyof typeof localPackagePrices][normalizedCabType as keyof typeof localPackagePrices[keyof typeof localPackagePrices]];
-    console.log(`Found direct price for ${packageId}/${normalizedCabType}: ${price}`);
-    return price;
-  } 
+  // Direct calculation without caching
+  const basePrice = getBaseLocalPackagePrices(packageId, normalizedCabType);
+  console.log(`Calculated base price for ${packageId}/${normalizedCabType}: ${basePrice}`);
   
-  // Fallback calculation if direct lookup fails
-  console.log(`No direct price found for ${packageId}/${normalizedCabType}, calculating...`);
-  
-  let price = 0;
-  if (normalizedCabType === 'sedan') price = 5160; // 8hr package
-  else if (normalizedCabType === 'ertiga' || normalizedCabType === 'suv') price = 6550;
-  else if (normalizedCabType === 'innova') price = 7440;
-  else if (normalizedCabType === 'tempo') price = 11500;
-  else if (normalizedCabType === 'luxury') price = 14000;
-  else price = hourlyPackages.find(p => p.id === packageId)?.basePrice || 2400; // Fallback
-  
-  if (packageId === '10hrs-100km') {
-    price = Math.round(price * 1.12); // 12% more for 10hr package
-  }
-  
-  console.log(`Calculated price for ${packageId}/${normalizedCabType}: ${price}`);
-  return price;
+  return basePrice;
 };
 
 export function calculateFare(
@@ -271,17 +260,22 @@ export function calculateFare(
     return baseFare;
   }
   else if (tripType === 'local' && hourlyPackageId) {
-    const basePackagePrice = getLocalPackagePrice(hourlyPackageId, cabType.id);
+    // Calculate base package price directly
+    const normalizedCabType = normalizeCabType(cabType.id);
+    
+    // Get the base price for this package
+    const basePackagePrice = getLocalPackagePrice(hourlyPackageId, normalizedCabType);
     totalFare = basePackagePrice;
     
     console.log(`Local package base price for ${cabType.name}: ${basePackagePrice}`);
     
     const selectedPackage = hourlyPackages.find(pkg => pkg.id === hourlyPackageId);
     
+    // Calculate any extra km charges
     if (selectedPackage && distance > selectedPackage.kilometers) {
       const extraKm = distance - selectedPackage.kilometers;
       
-      const normalizedCabType = normalizeCabType(cabType.id);
+      // Get the per-km rate for this cab type
       const extraChargeRates = extraCharges[normalizedCabType as keyof typeof extraCharges];
       const extraChargeRate = extraChargeRates?.perKm || cabType.pricePerKm;
       
@@ -398,6 +392,9 @@ export function clearFareCaches() {
       sessionStorage.removeItem(key);
     }
   });
+  
+  // Clear selected cab which may have stale fare data
+  sessionStorage.removeItem('selectedCab');
   
   // Clear specific package price caches
   hourlyPackages.forEach(pkg => {

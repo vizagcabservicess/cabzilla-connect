@@ -16,7 +16,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { authAPI } from '@/services/api';
+import { authAPI, loadToken } from '@/services/api';
 import { LoginRequest } from '@/types/api';
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 
@@ -75,12 +75,13 @@ export function LoginForm() {
       
       const response = await authAPI.login(values);
       
-      // Store user data in localStorage as backup
+      // Store user data in localStorage and sessionStorage as backup
       if (response.user) {
         localStorage.setItem('user_data', JSON.stringify(response.user));
+        sessionStorage.setItem('user_data', JSON.stringify(response.user));
       }
       
-      // Show success toast
+      // Show success toast with useToast hook
       toast({
         title: "Login Successful",
         description: "Welcome back! Redirecting to dashboard...",
@@ -93,14 +94,21 @@ export function LoginForm() {
         duration: 3000,
       });
       
+      // Double-check token was properly set
+      if (!loadToken()) {
+        // If token wasn't properly set in headers, try again
+        console.warn("Token not properly set in headers, attempting to reload token");
+        setTimeout(loadToken, 500);
+      }
+      
       // Short delay before redirect to ensure token is properly stored
       setTimeout(() => {
         navigate('/dashboard');
-      }, 500);
+      }, 800);
     } catch (error) {
       setError(error as Error);
       
-      // Show error toast
+      // Show error toast with useToast hook
       toast({
         title: "Login Failed",
         description: error instanceof Error ? error.message : "Something went wrong",
