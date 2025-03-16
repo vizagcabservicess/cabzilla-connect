@@ -1,22 +1,15 @@
-
 <?php
 // Turn on error reporting for debugging - remove in production
-ini_set('display_errors', 1);
+ini_set('display_errors', 0);
 error_reporting(E_ALL);
-
-// Create a log directory if it doesn't exist
-$logDir = __DIR__ . '/logs';
-if (!file_exists($logDir)) {
-    mkdir($logDir, 0755, true);
-}
 
 // Ensure all responses are JSON
 header('Content-Type: application/json');
 
 // Database configuration - use correct database credentials from the hosting account
 define('DB_HOST', 'localhost');
-define('DB_USERNAME', 'u644605165_bookinguser');  // Database username
-define('DB_PASSWORD', 'BookingPass123#');         // Database password
+define('DB_USERNAME', 'u644605165_bookinguser');  // Updated database username
+define('DB_PASSWORD', 'BookingPass123#');         // Updated database password
 define('DB_DATABASE', 'u644605165_db_booking');
 
 // JWT Secret Key for authentication - should be a strong secure key
@@ -49,17 +42,10 @@ function getDbConnection() {
 
 // Helper function to send JSON response
 function sendJsonResponse($data, $statusCode = 200) {
-    // Set HTTP response code
-    http_response_code($statusCode);
-    
-    // Set cache control headers to prevent caching
-    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-    header('Pragma: no-cache');
-    header('Expires: 0');
-    
     // Make sure we're sending JSON
     if (!headers_sent()) {
         header('Content-Type: application/json');
+        http_response_code($statusCode);
     }
     
     // Ensure consistent response format
@@ -74,10 +60,10 @@ function sendJsonResponse($data, $statusCode = 200) {
     exit;
 }
 
-// Helper function to generate JWT token with longer expiration
+// Helper function to generate JWT token
 function generateJwtToken($userId, $email, $role) {
     $issuedAt = time();
-    $expirationTime = $issuedAt + 60 * 60 * 24 * 30; // 30 days - increased for better user experience
+    $expirationTime = $issuedAt + 60 * 60 * 24 * 7; // 7 days - increased from 24 hours
     
     $payload = [
         'iat' => $issuedAt,
@@ -92,22 +78,16 @@ function generateJwtToken($userId, $email, $role) {
         'typ' => 'JWT'
     ]);
     
-    $base64UrlHeader = rtrim(strtr(base64_encode($header), '+/', '-_'), '=');
-    $base64UrlPayload = rtrim(strtr(base64_encode(json_encode($payload)), '+/', '-_'), '=');
+    $base64UrlHeader = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($header));
+    $base64UrlPayload = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode(json_encode($payload)));
     
     $signature = hash_hmac('sha256', "$base64UrlHeader.$base64UrlPayload", JWT_SECRET, true);
-    $base64UrlSignature = rtrim(strtr(base64_encode($signature), '+/', '-_'), '=');
-    
-    logError("Generated new token", [
-        'user_id' => $userId,
-        'expiration' => date('Y-m-d H:i:s', $expirationTime),
-        'token_length' => strlen("$base64UrlHeader.$base64UrlPayload.$base64UrlSignature")
-    ]);
+    $base64UrlSignature = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($signature));
     
     return "$base64UrlHeader.$base64UrlPayload.$base64UrlSignature";
 }
 
-// Helper function to verify JWT token - improved version
+// Helper function to verify JWT token - improved for better base64 handling
 function verifyJwtToken($token) {
     try {
         // Log token verification attempt for debugging
@@ -121,9 +101,14 @@ function verifyJwtToken($token) {
         
         list($base64UrlHeader, $base64UrlPayload, $base64UrlSignature) = $parts;
         
-        // Decode header and payload - handling base64url format correctly
-        $header = json_decode(base64_decode(strtr($base64UrlHeader, '-_', '+/') . str_repeat('=', 4 - (strlen($base64UrlHeader) % 4))), true);
-        $payload = json_decode(base64_decode(strtr($base64UrlPayload, '-_', '+/') . str_repeat('=', 4 - (strlen($base64UrlPayload) % 4))), true);
+        // Add padding to base64 strings if needed
+        $base64UrlHeader = addBase64Padding($base64UrlHeader);
+        $base64UrlPayload = addBase64Padding($base64UrlPayload);
+        $base64UrlSignature = addBase64Padding($base64UrlSignature);
+        
+        // Decode header and payload
+        $header = json_decode(base64_decode(strtr($base64UrlHeader, '-_', '+/')), true);
+        $payload = json_decode(base64_decode(strtr($base64UrlPayload, '-_', '+/')), true);
         
         if (!$header || !$payload) {
             logError("Failed to decode header or payload", [
@@ -134,10 +119,10 @@ function verifyJwtToken($token) {
         }
         
         // Verify signature
+        $signature = base64_decode(strtr($base64UrlSignature, '-_', '+/'));
         $expectedSignature = hash_hmac('sha256', "$base64UrlHeader.$base64UrlPayload", JWT_SECRET, true);
-        $actualSignature = base64_decode(strtr($base64UrlSignature, '-_', '+/') . str_repeat('=', 4 - (strlen($base64UrlSignature) % 4)));
         
-        if (!hash_equals($expectedSignature, $actualSignature)) {
+        if (!hash_equals($signature, $expectedSignature)) {
             logError("Signature verification failed");
             return false;
         }
@@ -147,16 +132,12 @@ function verifyJwtToken($token) {
             logError("Token expired or missing expiration", [
                 'has_exp' => isset($payload['exp']),
                 'current_time' => time(),
-                'exp_time' => $payload['exp'] ?? 'missing',
-                'diff_seconds' => isset($payload['exp']) ? $payload['exp'] - time() : 'N/A'
+                'exp_time' => $payload['exp'] ?? 'missing'
             ]);
             return false;
         }
         
-        logError("Token verified successfully", [
-            'user_id' => $payload['user_id'],
-            'expiration' => date('Y-m-d H:i:s', $payload['exp'])
-        ]);
+        logError("Token verified successfully", ['user_id' => $payload['user_id']]);
         return $payload;
         
     } catch (Exception $e) {
@@ -165,9 +146,18 @@ function verifyJwtToken($token) {
     }
 }
 
+// Helper function to add padding to base64 strings
+function addBase64Padding($input) {
+    $padLength = 4 - (strlen($input) % 4);
+    if ($padLength < 4) {
+        $input .= str_repeat('=', $padLength);
+    }
+    return $input;
+}
+
 // Check if user is authenticated
 function authenticate() {
-    $headers = getAllHeaders();
+    $headers = getallheaders();
     
     if (!isset($headers['Authorization']) && !isset($headers['authorization'])) {
         logError("Authorization header missing", ['headers' => array_keys($headers)]);
@@ -223,68 +213,23 @@ function generateBookingNumber() {
 
 // Log errors to file for debugging
 function logError($message, $data = []) {
-    $logFile = __DIR__ . '/logs/error_' . date('Y-m-d') . '.log';
+    $logFile = __DIR__ . '/error.log';
     $timestamp = date('Y-m-d H:i:s');
     $logMessage = "[$timestamp] $message " . json_encode($data) . PHP_EOL;
     error_log($logMessage, 3, $logFile);
 }
 
-// Helper function to get all headers (case-insensitive)
-function getAllHeaders() {
-    $headers = [];
-    foreach ($_SERVER as $key => $value) {
-        if (substr($key, 0, 5) === 'HTTP_') {
-            $header = str_replace(' ', '-', ucwords(str_replace('_', ' ', strtolower(substr($key, 5)))));
-            $headers[$header] = $value;
-        } else if ($key === 'CONTENT_TYPE' || $key === 'CONTENT_LENGTH') {
-            $header = str_replace(' ', '-', ucwords(str_replace('_', ' ', strtolower($key))));
-            $headers[$header] = $value;
-        }
-    }
-    
-    // Also check for specific Authorization header
-    if (isset($_SERVER['HTTP_AUTHORIZATION'])) {
-        $headers['Authorization'] = $_SERVER['HTTP_AUTHORIZATION'];
-    } else if (isset($_SERVER['Authorization'])) {
-        $headers['Authorization'] = $_SERVER['Authorization'];
-    } else if (function_exists('apache_request_headers')) {
-        $requestHeaders = apache_request_headers();
-        if (isset($requestHeaders['Authorization'])) {
-            $headers['Authorization'] = $requestHeaders['Authorization'];
-        }
-    }
-    
-    return $headers;
-}
-
 // Set error handler to catch PHP errors
 set_error_handler(function($errno, $errstr, $errfile, $errline) {
     logError("PHP Error [$errno]: $errstr in $errfile on line $errline");
-    if (error_reporting() & $errno) {
-        throw new ErrorException($errstr, 0, $errno, $errfile, $errline);
-    }
-}, E_ALL);
+    sendJsonResponse(['status' => 'error', 'message' => 'Server error occurred'], 500);
+});
 
 // Set exception handler
 set_exception_handler(function($exception) {
     logError("Uncaught Exception: " . $exception->getMessage(), [
         'file' => $exception->getFile(),
-        'line' => $exception->getLine(),
-        'trace' => $exception->getTraceAsString()
+        'line' => $exception->getLine()
     ]);
-    sendJsonResponse(['status' => 'error', 'message' => 'Server error occurred: ' . $exception->getMessage()], 500);
-});
-
-// Make sure we're handling fatal errors too
-register_shutdown_function(function() {
-    $error = error_get_last();
-    if ($error !== null && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
-        logError("Fatal Error: " . $error['message'], [
-            'file' => $error['file'],
-            'line' => $error['line']
-        ]);
-        if (!headers_sent()) {
-            sendJsonResponse(['status' => 'error', 'message' => 'A fatal error occurred on the server'], 500);
-        }
-    }
+    sendJsonResponse(['status' => 'error', 'message' => 'Server error occurred'], 500);
 });

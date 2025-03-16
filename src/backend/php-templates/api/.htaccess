@@ -6,7 +6,6 @@ RewriteEngine On
 RewriteRule ^signup$ signup.php [L]
 RewriteRule ^login$ login.php [L]
 RewriteRule ^user/dashboard$ user/dashboard.php [L]
-RewriteRule ^booking/create$ book.php [L]
 RewriteRule ^book$ book.php [L]
 RewriteRule ^book/edit/([0-9]+)$ book-edit.php?id=$1 [L]
 RewriteRule ^admin/bookings$ admin/bookings.php [L]
@@ -18,14 +17,9 @@ RewriteRule ^admin/km-price/update$ admin/km-price-update.php [L]
 # Set content type
 <FilesMatch "\.(php)$">
     Header set Content-Type "application/json"
-    
-    # Prevent caching
-    Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
-    Header always set Pragma "no-cache"
-    Header always set Expires "0"
 </FilesMatch>
 
-# Enable CORS - Explicitly allow any origin
+# Enable CORS
 <IfModule mod_headers.c>
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
@@ -35,8 +29,4 @@ RewriteRule ^admin/km-price/update$ admin/km-price-update.php [L]
 
 # Handle OPTIONS method for CORS preflight
 RewriteCond %{REQUEST_METHOD} OPTIONS
-RewriteRule ^(.*)$ $1 [R=200,L]
-
-# Enable PHP error logging
-php_flag display_errors On
-php_value error_reporting E_ALL
+RewriteRule .* - [R=200,L]

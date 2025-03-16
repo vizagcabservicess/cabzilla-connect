@@ -12,7 +12,6 @@ import { Book, CircleOff, RefreshCw, Calendar, MapPin, Car, ShieldAlert, LogOut,
 import { bookingAPI, authAPI } from '@/services/api';
 import { Booking } from '@/types/api';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { DashboardMetrics } from '@/components/admin/DashboardMetrics';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1500; // 1.5 seconds
@@ -26,7 +25,6 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const user = authAPI.getCurrentUser();
-  const isAdmin = user?.role === 'admin';
   
   // Check if coming from booking confirmation
   const comingFromBooking = location.state?.fromBooking;
@@ -63,12 +61,6 @@ export default function DashboardPage() {
       }
       
       try {
-        // Add cache busting without passing parameter to API function
-        console.log('Fetching bookings with cache busting...');
-        // We'll use a custom timestamp as a signal here, but we won't pass it to the function
-        const cacheBust = new Date().getTime();
-        console.log(`Cache busting with timestamp: ${cacheBust}`);
-        
         const data = await bookingAPI.getUserBookings();
         console.log('Bookings received:', data);
         
@@ -147,10 +139,6 @@ export default function DashboardPage() {
     authAPI.logout();
   };
 
-  const handleViewReceipt = (bookingId: number | string) => {
-    window.open(`/receipt/${bookingId}`, '_blank');
-  };
-
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case 'confirmed': return 'bg-green-100 text-green-800';
@@ -201,13 +189,6 @@ export default function DashboardPage() {
           </Button>
         </div>
       </div>
-
-      {isAdmin && (
-        <div className="mb-6">
-          <h2 className="text-xl font-bold mb-4">Admin Metrics</h2>
-          <DashboardMetrics />
-        </div>
-      )}
 
       {error && (
         <Alert variant="destructive" className="mb-6">
@@ -318,10 +299,7 @@ export default function DashboardPage() {
                     </div>
                   </CardContent>
                   <CardFooter className="flex justify-between">
-                    <Button 
-                      variant="outline" 
-                      onClick={() => handleViewReceipt(booking.id)}
-                    >
+                    <Button variant="outline" onClick={() => window.open(`/receipt/${booking.id}`, '_blank')}>
                       View Receipt
                     </Button>
                     <Button onClick={() => navigate(`/booking/${booking.id}/edit`)}>
@@ -399,11 +377,8 @@ export default function DashboardPage() {
                     </div>
                   </CardContent>
                   <CardFooter>
-                    <Button 
-                      variant="outline" 
-                      className="w-full" 
-                      onClick={() => handleViewReceipt(booking.id)}
-                    >
+                    <Button variant="outline" className="w-full" 
+                      onClick={() => window.open(`/receipt/${booking.id}`, '_blank')}>
                       View Receipt
                     </Button>
                   </CardFooter>

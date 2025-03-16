@@ -55,8 +55,7 @@ export function BookingSummary({
     setBookingId(generateBookingId());
   }, []);
 
-  // Return early only if we don't have the absolute minimum required information
-  if (!pickupLocation || !pickupDate) {
+  if (!pickupLocation || !pickupDate || !selectedCab) {
     return null;
   }
 
@@ -65,15 +64,6 @@ export function BookingSummary({
     : 1;
 
   const renderFareBreakdown = () => {
-    // Show a placeholder message if cab isn't selected yet
-    if (!selectedCab) {
-      return (
-        <div className="text-center py-3 text-gray-500">
-          <p>Select a cab to view fare details</p>
-        </div>
-      );
-    }
-    
     if (tripType === 'airport') {
       return (
         <>
@@ -115,9 +105,9 @@ export function BookingSummary({
     
     if (tripType === 'outstation') {
       const allocatedKm = 300;
-      // For one-way, consider the total effective distance for the driver's return journey
-      const totalDistance = distance;
-      const effectiveDistance = tripMode === 'one-way' ? distance * 2 : distance * 2;
+      // For both one-way and round-trip, calculate total distance appropriately
+      const effectiveDistance = tripMode === "one-way" ? distance : distance * 2;
+      const totalDistance = effectiveDistance; // Show actual distance
       
       let baseRate = 0, perKmRate = 0, driverAllowance = 250, nightHaltCharge = 0;
 
@@ -148,17 +138,10 @@ export function BookingSummary({
       
       // Calculate distance covered by base fare
       const totalBaseFare = tripMode === "one-way" ? baseRate : totalDays * baseRate;
+      const baseCoveredKm = allocatedKm * totalDays;
       
-      // Calculate extra distance fare correctly based on trip mode
-      let extraKm = 0;
-      if (tripMode === "one-way") {
-        // For one-way, consider the driver's return distance (distance * 2) and subtract base allocated km
-        extraKm = Math.max(0, effectiveDistance - allocatedKm);
-      } else {
-        // For round-trip, consider total distance over multiple days
-        extraKm = Math.max(0, effectiveDistance - (allocatedKm * totalDays));
-      }
-      
+      // Calculate extra distance and fare
+      const extraKm = Math.max(effectiveDistance - baseCoveredKm, 0);
       const totalDistanceFare = extraKm * perKmRate;
       
       // Calculate other expenses
@@ -169,28 +152,18 @@ export function BookingSummary({
         <>
           <div className="flex justify-between text-sm">
             <span className="text-gray-600">
-              Base fare {tripMode === "round-trip" 
-                ? `(${days} days, ${allocatedKm} km/day)` 
-                : `(${allocatedKm} km included)`}
+              Base fare {tripMode === "round-trip" ? `(${days} days, ${allocatedKm} km/day)` : `(${allocatedKm} km included)`}
             </span>
             <span className="text-gray-800">₹{totalBaseFare.toLocaleString('en-IN')}</span>
           </div>
-          {tripMode === "one-way" && (
-            <div className="flex justify-between text-sm mt-1">
-              <span className="text-gray-600">
-                Total distance: {totalDistance} km (effective: {effectiveDistance} km with driver return)
-              </span>
-              <span className="text-gray-600"></span>
-            </div>
-          )}
-          {tripMode === "round-trip" && (
-            <div className="flex justify-between text-sm mt-1">
-              <span className="text-gray-600">
-                Total distance: {totalDistance * 2} km ({totalDistance} km each way)
-              </span>
-              <span className="text-gray-600"></span>
-            </div>
-          )}
+          <div className="flex justify-between text-sm mt-1">
+            <span className="text-gray-600">
+              {tripMode === "one-way" 
+                ? `Total distance: ${totalDistance} km`
+                : `Total distance: ${totalDistance} km (${distance} km each way)`}
+            </span>
+            <span className="text-gray-600"></span>
+          </div>
           {extraKm > 0 && (
             <div className="flex justify-between text-sm mt-1">
               <span className="text-gray-600">
@@ -278,21 +251,14 @@ export function BookingSummary({
             </div>
           </div>
         )}
-         
-        {selectedCab ? (
-          <div className="flex items-start space-x-3">
-            <Users className="text-blue-500 mt-1 flex-shrink-0" size={18} />
-            <div>
-              <p className="text-xs text-gray-500">CAB TYPE</p>
-              <p className="font-medium text-gray-800">{selectedCab.name}</p>
-              <p className="text-xs text-gray-600">{selectedCab.capacity} persons • {selectedCab.luggage} bags</p>
-            </div>
+         <div className="flex items-start space-x-3">
+          <Users className="text-blue-500 mt-1 flex-shrink-0" size={18} />
+          <div>
+            <p className="text-xs text-gray-500">CAB TYPE</p>
+            <p className="font-medium text-gray-800">{selectedCab.name}</p>
+            <p className="text-xs text-gray-600">{selectedCab.capacity} persons • {selectedCab.luggage} bags</p>
           </div>
-        ) : (
-          <div className="border-t border-gray-100 pt-3 mt-2">
-            <p className="text-sm text-center text-gray-500">Please select a cab to proceed</p>
-          </div>
-        )}
+        </div>
 
         <div className="border-t border-gray-200 pt-4 mt-4">
           {renderFareBreakdown()}
@@ -300,9 +266,7 @@ export function BookingSummary({
 
         <div className="border-t border-gray-200 pt-4 flex justify-between items-center">
           <span className="font-semibold text-gray-800">Total Amount</span>
-          <span className="font-semibold text-xl text-gray-800">
-            {selectedCab ? formatPrice(totalPrice) : "—"}
-          </span>
+          <span className="font-semibold text-xl text-gray-800">{formatPrice(totalPrice)}</span>
         </div>
       </div>
     </div>

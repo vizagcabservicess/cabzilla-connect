@@ -1,106 +1,115 @@
 
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useEffect } from "react";
+import { TripMode, TripType } from "@/lib/cabData";
+import { cn } from "@/lib/utils";
+import { CarTaxiFront, Clock, Plane, RotateCw } from "lucide-react";
 
 interface TabTripSelectorProps {
-  selectedTab: 'outstation' | 'local' | 'airport' | 'tour';
-  tripMode: 'one-way' | 'round-trip';
-  onTabChange: (tab: 'outstation' | 'local' | 'airport' | 'tour') => void;
-  onTripModeChange: (mode: 'one-way' | 'round-trip') => void;
+  selectedTab: TripType | string;
+  tripMode?: TripMode;
+  onTabChange: (tab: TripType) => void;
+  onTripModeChange?: (mode: TripMode) => void;
 }
 
-export function TabTripSelector({ 
-  selectedTab, 
-  tripMode, 
-  onTabChange, 
-  onTripModeChange 
+export function TabTripSelector({
+  selectedTab,
+  tripMode = "one-way",
+  onTabChange,
+  onTripModeChange,
 }: TabTripSelectorProps) {
-  // Function to thoroughly clear all cache data
-  const clearAllCacheData = () => {
-    console.log("Clearing all cached data");
-    
-    // Clear all booking and fare related data
-    sessionStorage.removeItem('selectedCab');
-    sessionStorage.removeItem('hourlyPackage');
-    sessionStorage.removeItem('tourPackage');
-    sessionStorage.removeItem('bookingDetails');
-    sessionStorage.removeItem('cabFares');
-    sessionStorage.removeItem('dropLocation');
-    sessionStorage.removeItem('pickupLocation');
-    sessionStorage.removeItem('pickupDate');
-    sessionStorage.removeItem('returnDate');
-    
-    // Force clear local cache variables
-    const localKeys = ['fare-', 'discount-', 'cab-', 'location-', 'trip-'];
-    
-    // Loop through sessionStorage to find items with these keys
-    for (let i = 0; i < sessionStorage.length; i++) {
-      const key = sessionStorage.key(i);
-      if (key) {
-        for (const prefix of localKeys) {
-          if (key.startsWith(prefix)) {
-            console.log(`Removing cached item: ${key}`);
-            sessionStorage.removeItem(key);
-            break;
-          }
-        }
-      }
-    }
-  };
-  
-  // Clear any cached fare data when tab changes
+  // Load previously selected tab and trip mode from session storage on component mount
   useEffect(() => {
-    clearAllCacheData();
+    const savedTab = sessionStorage.getItem('selectedTab') as TripType;
+    const savedTripMode = sessionStorage.getItem('tripMode') as TripMode;
     
-    // Reset drop location when switching to local
-    if (selectedTab === 'local') {
-      sessionStorage.removeItem('dropLocation');
+    if (savedTab && savedTab !== selectedTab) {
+      onTabChange(savedTab);
     }
-  }, [selectedTab]);
-  
-  // Function to handle tab change with complete data reset
-  const handleTabChange = (value: string) => {
-    // Force clear all cached data
-    clearAllCacheData();
     
-    // Then update the tab
-    onTabChange(value as 'outstation' | 'local' | 'airport' | 'tour');
+    if (savedTripMode && onTripModeChange && savedTripMode !== tripMode) {
+      onTripModeChange(savedTripMode);
+    }
+  }, []);
+
+  const handleTabChange = (tab: TripType) => {
+    onTabChange(tab);
+    // Save selected tab in session storage
+    sessionStorage.setItem('selectedTab', tab);
   };
-  
+
+  const handleTripModeChange = (mode: TripMode) => {
+    if (onTripModeChange) {
+      onTripModeChange(mode);
+      // Save trip mode in session storage
+      sessionStorage.setItem('tripMode', mode);
+    }
+  };
+
   return (
-    <div className="space-y-4">
-      <Tabs value={selectedTab} className="w-full" onValueChange={handleTabChange}>
-        <TabsList className="grid grid-cols-4 w-full">
-          <TabsTrigger value="outstation">Outstation</TabsTrigger>
-          <TabsTrigger value="local">Local</TabsTrigger>
-          <TabsTrigger value="airport">Airport</TabsTrigger>
-          <TabsTrigger value="tour">Tour Packages</TabsTrigger>
-        </TabsList>
-      </Tabs>
-      
-      {selectedTab === 'outstation' && (
-        <div className="flex gap-3 mt-2">
-          <Button
-            type="button"
-            variant={tripMode === 'one-way' ? 'default' : 'outline'}
-            size="sm"
-            className="flex-1"
-            onClick={() => onTripModeChange('one-way')}
-          >
-            One Way
-          </Button>
-          <Button
-            type="button"
-            variant={tripMode === 'round-trip' ? 'default' : 'outline'}
-            size="sm"
-            className="flex-1"
-            onClick={() => onTripModeChange('round-trip')}
-          >
-            Round Trip
-          </Button>
-        </div>
-      )}
+    <div className="w-full mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-1 bg-gray-100 p-1 rounded-lg">
+        {/* Outstation One-Way Tab */}
+        <button
+          onClick={() => {
+            handleTabChange("outstation");
+            handleTripModeChange("one-way");
+          }}
+          className={cn(
+            "flex items-center justify-center py-3 px-4 rounded-md transition-all text-sm font-medium",
+            (selectedTab === "outstation" && tripMode === "one-way")
+              ? "bg-white shadow-sm text-blue-600"
+              : "hover:bg-white/50 text-gray-600"
+          )}
+        >
+          <CarTaxiFront size={18} className="mr-2" />
+          <span>Outstation One-Way</span>
+        </button>
+
+        {/* Outstation Round-Trip Tab */}
+        <button
+          onClick={() => {
+            handleTabChange("outstation");
+            handleTripModeChange("round-trip");
+          }}
+          className={cn(
+            "flex items-center justify-center py-3 px-4 rounded-md transition-all text-sm font-medium",
+            (selectedTab === "outstation" && tripMode === "round-trip")
+              ? "bg-white shadow-sm text-blue-600"
+              : "hover:bg-white/50 text-gray-600"
+          )}
+        >
+          <RotateCw size={18} className="mr-2" />
+          <span>Outstation Round-Trip</span>
+        </button>
+
+        {/* Airport Transfers Tab */}
+        <button
+          onClick={() => handleTabChange("airport")}
+          className={cn(
+            "flex items-center justify-center py-3 px-4 rounded-md transition-all text-sm font-medium",
+            selectedTab === "airport"
+              ? "bg-white shadow-sm text-blue-600"
+              : "hover:bg-white/50 text-gray-600"
+          )}
+        >
+          <Plane size={18} className="mr-2" />
+          <span>Airport Transfers</span>
+        </button>
+
+        {/* Hourly Rentals Tab */}
+        <button
+          onClick={() => handleTabChange("local")}
+          className={cn(
+            "flex items-center justify-center py-3 px-4 rounded-md transition-all text-sm font-medium",
+            selectedTab === "local"
+              ? "bg-white shadow-sm text-blue-600"
+              : "hover:bg-white/50 text-gray-600"
+          )}
+        >
+          <Clock size={18} className="mr-2" />
+          <span>Hourly Rentals</span>
+        </button>
+      </div>
     </div>
   );
 }

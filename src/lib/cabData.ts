@@ -185,22 +185,15 @@ export const getLocalPackagePrice = (packageId: string, cabType: string): number
   if (packageId === '8hrs-80km') {
     if (cabLower === 'sedan') return 2400;
     if (cabLower === 'ertiga') return 3000;
-    if (cabLower === 'innova') return 3500;
     if (cabLower === 'innova crysta') return 3500;
   } 
   else if (packageId === '10hrs-100km') {
     if (cabLower === 'sedan') return 3000;
     if (cabLower === 'ertiga') return 3500;
-    if (cabLower === 'innova') return 4000;
     if (cabLower === 'innova crysta') return 4000;
   }
   
-  if (cabLower === 'sedan') return 2400;
-  if (cabLower === 'ertiga') return 3000;
-  if (cabLower === 'innova' || cabLower === 'innova crysta') return 3500;
-  if (cabLower.includes('tempo')) return 5000;
-  
-  return pkg.basePrice; // Fallback to package base price
+  return pkg.basePrice; // Fallback
 };
 
 export function calculateFare(
@@ -213,8 +206,6 @@ export function calculateFare(
   returnDate?: Date,
   tourId?: string
 ): number {
-  console.log(`Calculating fare for: ${cabType.name}, distance: ${distance}, tripType: ${tripType}, tripMode: ${tripMode}, package: ${hourlyPackageId}`);
-  
   let baseFare = cabType.price;
   let totalFare = 0;
   
@@ -227,11 +218,8 @@ export function calculateFare(
     return baseFare;
   }
   else if (tripType === 'local' && hourlyPackageId) {
-    // For local packages, get the specific package price based on cab type
     const basePackagePrice = getLocalPackagePrice(hourlyPackageId, cabType.name);
     totalFare = basePackagePrice;
-    
-    console.log(`Local package base price for ${cabType.name}: ${basePackagePrice}`);
     
     const selectedPackage = hourlyPackages.find(pkg => pkg.id === hourlyPackageId);
     
@@ -239,17 +227,11 @@ export function calculateFare(
       const extraKm = distance - selectedPackage.kilometers;
       const extraChargeRates = extraCharges[cabType.id as keyof typeof extraCharges];
       if (extraChargeRates) {
-        const extraCost = extraKm * extraChargeRates.perKm;
-        console.log(`Extra ${extraKm}km at rate ${extraChargeRates.perKm}: ${extraCost}`);
-        totalFare += extraCost;
+        totalFare += extraKm * extraChargeRates.perKm;
       } else {
-        const extraCost = extraKm * cabType.pricePerKm;
-        console.log(`Extra ${extraKm}km at default rate ${cabType.pricePerKm}: ${extraCost}`);
-        totalFare += extraCost;
+        totalFare += extraKm * cabType.pricePerKm;
       }
     }
-    
-    console.log(`Final local package fare: ${totalFare}`);
   } 
   else if (tripType === 'airport') {
     const { calculateAirportFare } = require('./locationData');

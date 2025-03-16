@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { CabType, formatPrice, TripType, TripMode, getLocalPackagePrice, oneWayRates } from '@/lib/cabData';
 import { Users, Briefcase, Tag, Info, Check } from 'lucide-react';
@@ -31,32 +30,7 @@ export function CabOptions({
 }: CabOptionsProps) {
   const [expandedCab, setExpandedCab] = useState<string | null>(null);
   const [selectedCabId, setSelectedCabId] = useState<string | null>(selectedCab?.id || null);
-  const [cabFares, setCabFares] = useState<Record<string, number>>({});
 
-  // Reset cab selection when key parameters change
-  useEffect(() => {
-    setSelectedCabId(null);
-    setCabFares({});
-    
-    if (selectedCab) {
-      onSelectCab(null as any); // Reset the selected cab
-    }
-  }, [tripType, tripMode, hourlyPackage, onSelectCab]);
-
-  // Calculate fares for all cab types whenever relevant parameters change
-  useEffect(() => {
-    if (distance > 0) {
-      const newFares: Record<string, number> = {};
-      cabTypes.forEach(cab => {
-        newFares[cab.id] = calculateCabFare(cab);
-      });
-      setCabFares(newFares);
-    } else {
-      setCabFares({});
-    }
-  }, [distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate, cabTypes]);
-
-  // Update selectedCabId when selectedCab changes from parent
   useEffect(() => {
     if (selectedCab) {
       setSelectedCabId(selectedCab.id);
@@ -88,10 +62,8 @@ export function CabOptions({
       totalFare = calculateAirportFare(cab.name, distance);
     }
     else if (tripType === 'local' && hourlyPackage) {
-      // Get base package price for local rental
       totalFare = getLocalPackagePrice(hourlyPackage, cab.name);
       
-      // Calculate extra km charges if any
       const packageKm = hourlyPackage === '8hrs-80km' ? 80 : 100;
       if (distance > packageKm) {
         const extraKm = distance - packageKm;
@@ -99,7 +71,7 @@ export function CabOptions({
       }
     }
     else if (tripType === 'outstation') {
-      let baseRate = 0, perKmRate = 0, nightHaltCharge = 0, driverAllowance = 250;
+      let baseRate = 0, perKmRate = 0, nightHaltCharge = 0;
       
       switch (cab.name.toLowerCase()) {
         case "sedan":
@@ -124,8 +96,8 @@ export function CabOptions({
       }
       
       if (tripMode === "one-way") {
-        // One-way calculation - double the distance to account for driver return
-        const effectiveDistance = distance * 2;
+        // For one-way, we still calculate both ways distance
+        const effectiveDistance = distance * 2; // Consider both ways for one-way trips
         const allocatedKm = 300;
         const totalBaseFare = baseRate;
         let totalDistanceFare = 0;
@@ -133,11 +105,12 @@ export function CabOptions({
         // Calculate extra kilometers beyond the base 300km
         if (effectiveDistance > allocatedKm) {
           const extraKm = effectiveDistance - allocatedKm;
-          totalDistanceFare = extraKm * perKmRate;
+          const oneWayRate = oneWayRates[cab.id as keyof typeof oneWayRates] || 13;
+          totalDistanceFare = extraKm * oneWayRate;
         }
         
         // Add driver allowance
-        totalFare = totalBaseFare + totalDistanceFare + driverAllowance;
+        totalFare = totalBaseFare + totalDistanceFare + 250;
       } else {
         // Round trip calculation
         let days = returnDate ? Math.max(1, differenceInDays(returnDate, pickupDate || new Date()) + 1) : 1;
@@ -157,11 +130,11 @@ export function CabOptions({
         
         let totalNightHalt = (days - 1) * nightHaltCharge;
         
-        totalFare = totalBaseFare + totalDistanceFare + totalNightHalt + (days * driverAllowance);
+        totalFare = totalBaseFare + totalDistanceFare + totalNightHalt + (days * 250);
       }
     }
     
-    return Math.ceil(totalFare / 10) * 10; // Round to nearest 10
+    return Math.ceil(totalFare / 10) * 10;
   };
 
   return (
@@ -173,7 +146,7 @@ export function CabOptions({
       
       <div className="space-y-3">
         {cabTypes.slice(0, 3).map((cab) => {
-          const fare = cabFares[cab.id] || calculateCabFare(cab);
+          const fare = calculateCabFare(cab);
           const isSelected = selectedCabId === cab.id;
           
           let fareDetails = "";
@@ -183,16 +156,15 @@ export function CabOptions({
             const packageInfo = hourlyPackage === '8hrs-80km' ? '8 hrs / 80 km' : '10 hrs / 100 km';
             fareDetails = packageInfo;
           } else if (tripType === 'outstation') {
-            const totalDistance = distance;
-            const effectiveDistance = distance * 2; // Driver return distance
+            const totalDistance = tripMode === 'one-way' ? distance : distance * 2;
             const allocatedKm = 300;
             const extraKm = tripMode === 'one-way' 
-              ? Math.max(0, effectiveDistance - allocatedKm)
-              : Math.max(0, effectiveDistance - (allocatedKm * (returnDate ? Math.max(1, differenceInDays(returnDate, pickupDate || new Date()) + 1) : 1)));
+              ? Math.max(0, distance - allocatedKm)
+              : Math.max(0, totalDistance - (allocatedKm * (returnDate ? Math.max(1, differenceInDays(returnDate, pickupDate || new Date()) + 1) : 1)));
               
             fareDetails = tripMode === 'one-way' 
-              ? `One way - ${totalDistance}km (${extraKm > 0 ? extraKm + 'km extra' : 'within base km'})` 
-              : `Round trip - ${totalDistance * 2}km total`;
+              ? `One way - ${distance}km (${extraKm > 0 ? extraKm + 'km extra' : 'within base km'})` 
+              : `Round trip - ${totalDistance}km total`;
           }
 
           return (
