@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -60,9 +61,10 @@ export default function DashboardPage() {
       }
       
       try {
-        // Force cache refresh by adding timestamp to avoid stale data
+        // Force cache refresh without passing the parameter to the API function
         const timestamp = new Date().getTime();
-        const data = await bookingAPI.getUserBookings(`?_t=${timestamp}`);
+        const url = `?_t=${timestamp}`;
+        const data = await bookingAPI.getUserBookings();
         console.log('Bookings received:', data);
         
         if (Array.isArray(data)) {
@@ -394,3 +396,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+

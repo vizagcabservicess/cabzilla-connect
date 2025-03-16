@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -60,9 +59,10 @@ export function VehiclePricingManagement() {
   useEffect(() => {
     const fetchVehiclePricing = async () => {
       try {
-        // Add timestamp to force cache refresh
+        // Add timestamp to URL but not pass to the API function
         const timestamp = new Date().getTime();
-        const data = await fareAPI.getVehiclePricing(`?_t=${timestamp}`);
+        const url = `?_t=${timestamp}`;
+        const data = await fareAPI.getVehiclePricing();
         console.log("Fetched vehicle pricing:", data);
         setVehiclePricing(data);
         if (data.length > 0) {
