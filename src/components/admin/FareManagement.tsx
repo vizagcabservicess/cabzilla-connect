@@ -191,6 +191,15 @@ export function FareManagement() {
     }
   };
 
+  // Function to switch to update tab
+  const switchToUpdateTab = () => {
+    const updateTabElement = document.querySelector('[data-value="update"]');
+    if (updateTabElement) {
+      // Cast the element to HTMLElement which has the click method
+      (updateTabElement as HTMLElement).click();
+    }
+  };
+
   return (
     <Tabs defaultValue="update">
       <TabsList>
@@ -423,7 +432,7 @@ export function FareManagement() {
                               onClick={() => {
                                 handleTourSelect(fare.tourId);
                                 form.setValue("tourId", fare.tourId);
-                                document.querySelector('[data-value="update"]')?.click();
+                                switchToUpdateTab();
                               }}
                             >
                               <Edit className="h-4 w-4" />
