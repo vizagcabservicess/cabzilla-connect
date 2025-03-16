@@ -42,6 +42,15 @@ export function ApiErrorFallback({
     
     cacheKeys.forEach(key => sessionStorage.removeItem(key));
     
+    // Clear any cached API responses
+    if (window.caches) {
+      caches.keys().then(names => {
+        names.forEach(name => {
+          caches.delete(name);
+        });
+      });
+    }
+    
     if (onRetry) {
       onRetry();
     } else if (resetErrorBoundary) {

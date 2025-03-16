@@ -272,7 +272,7 @@ export const bookingAPI = {
       console.log('Creating booking with data:', bookingData);
       
       // Try multiple endpoints for booking creation
-      const endpoints = ['/book', '/api/book', '/booking', '/api/booking'];
+      const endpoints = ['/book', '/booking', '/booking/create', '/api/book', '/api/booking'];
       let lastError: any = null;
 
       for (const endpoint of endpoints) {
@@ -303,45 +303,36 @@ export const bookingAPI = {
       console.log(`Fetching booking details for ID: ${id}`);
       
       // Try multiple endpoint formats with proper error handling
-      try {
-        console.log(`Trying first endpoint format: /booking/${id}/edit`);
-        const response = await apiClient.get(`/booking/${id}/edit`);
-        if (response.data.status === 'success') {
-          return response.data.data;
-        } else {
-          throw new Error(response.data.message || 'Failed to fetch booking');
-        }
-      } catch (firstError) {
-        console.log('First endpoint format failed, error:', firstError);
-        
+      const endpoints = [
+        `/booking/${id}/edit`,
+        `/book/edit/${id}`,
+        `/booking/edit/${id}`,
+        `/api/booking/${id}/edit`,
+        `/api/booking/edit/${id}`,
+        `/api/book/edit/${id}`
+      ];
+      let lastError: any = null;
+      
+      for (const endpoint of endpoints) {
         try {
-          console.log(`Trying second endpoint format: /book/edit/${id}`);
-          const response = await apiClient.get(`/book/edit/${id}`);
+          console.log(`Trying booking details endpoint: ${endpoint}`);
+          const response = await apiClient.get(endpoint);
+          
           if (response.data.status === 'success') {
+            console.log(`Booking details retrieved using endpoint: ${endpoint}`);
             return response.data.data;
           } else {
-            throw new Error(response.data.message || 'Failed to fetch booking');
+            lastError = new Error(response.data.message || `Failed to fetch booking at ${endpoint}`);
           }
-        } catch (secondError) {
-          console.log('Second endpoint format failed, error:', secondError);
-          
-          // Try a third format as a last resort
-          try {
-            console.log(`Trying third endpoint format: /api/booking/edit/${id}`);
-            const response = await apiClient.get(`/api/booking/edit/${id}`);
-            if (response.data.status === 'success') {
-              return response.data.data;
-            }
-          } catch (thirdError) {
-            console.log('All endpoint formats failed');
-            // Re-throw the first error for consistent error reporting
-            throw firstError;
-          }
+        } catch (error) {
+          console.error(`Booking details endpoint ${endpoint} failed:`, error);
+          lastError = error;
+          // Continue trying next endpoint
         }
-        
-        // If we somehow get here without returning or throwing, throw the first error
-        throw firstError;
       }
+      
+      // If we get here, all endpoints failed
+      throw lastError || new Error('Failed to fetch booking details after trying all endpoints');
     });
   },
 
@@ -349,10 +340,12 @@ export const bookingAPI = {
     return makeApiRequest(async () => {
       console.log(`Updating booking ID: ${id} with data:`, bookingData);
       
-      // Try multiple endpoint formats with proper error handling
+      // Try multiple endpoint formats for updating bookings
       const endpoints = [
         `/booking/${id}/edit`,
         `/book/edit/${id}`,
+        `/booking/edit/${id}`,
+        `/api/booking/${id}/edit`,
         `/api/booking/edit/${id}`,
         `/api/book/edit/${id}`
       ];
@@ -361,7 +354,7 @@ export const bookingAPI = {
       
       for (const endpoint of endpoints) {
         try {
-          console.log(`Trying endpoint for update: ${endpoint}`);
+          console.log(`Trying update endpoint: ${endpoint}`);
           const response = await apiClient.post(endpoint, bookingData);
           
           if (response.data.status === 'success') {
@@ -392,6 +385,7 @@ export const bookingAPI = {
         { url: `/booking/${id}/cancel`, data: { reason } },
         { url: `/book/cancel/${id}`, data: { reason } },
         { url: `/api/booking/cancel`, data: { bookingId: id, reason } },
+        { url: `/api/booking/${id}/cancel`, data: { reason } },
         { url: `/api/book/cancel/${id}`, data: { reason } }
       ];
       
@@ -428,8 +422,10 @@ export const bookingAPI = {
       const endpoints = [
         `/receipt/${id}`,
         `/booking/${id}/receipt`,
+        `/booking/${id}`,
         `/book/${id}/receipt`,
         `/api/receipt/${id}`,
+        `/api/booking/${id}/receipt`,
         `/api/booking/${id}`
       ];
       
@@ -466,6 +462,8 @@ export const bookingAPI = {
       const endpoints = [
         '/user/dashboard',
         '/user/dashboard/',
+        '/api/user/dashboard',
+        '/api/user/dashboard/',
         '/api/user/dashboard.php'
       ];
       
@@ -500,22 +498,36 @@ export const bookingAPI = {
   async getAllBookings(): Promise<Booking[]> {
     return makeApiRequest(async () => {
       console.log('Admin: Fetching all bookings...');
+      
+      const endpoints = [
+        '/admin/bookings',
+        '/api/admin/bookings',
+        '/api/admin/bookings.php'
+      ];
+      
+      let lastError: any = null;
       const timestamp = new Date().getTime();
       
-      try {
-        const response = await apiClient.get(`/admin/bookings?_t=${timestamp}`);
-        
-        if (response.data.status === 'success') {
-          return response.data.data;
-        } else {
-          throw new Error(response.data.message || 'Failed to fetch all bookings');
+      for (const endpoint of endpoints) {
+        try {
+          console.log(`Trying admin bookings endpoint: ${endpoint}`);
+          const response = await apiClient.get(`${endpoint}?_t=${timestamp}`);
+          
+          if (response.data.status === 'success') {
+            console.log(`Admin bookings successfully retrieved using endpoint: ${endpoint}`);
+            return response.data.data;
+          } else {
+            lastError = new Error(response.data.message || `Failed to fetch all bookings at ${endpoint}`);
+          }
+        } catch (error) {
+          console.error(`Admin bookings endpoint ${endpoint} failed:`, error);
+          lastError = error;
+          // Continue trying next endpoint
         }
-      } catch (error) {
-        console.log('Admin bookings endpoint failed:', error);
-        
-        // Fallback to empty array if failed
-        return [];
       }
+      
+      // Fallback to empty array if failed
+      return [];
     });
   },
 
@@ -523,49 +535,45 @@ export const bookingAPI = {
     return makeApiRequest(async () => {
       console.log(`Fetching admin dashboard metrics for period: ${period}...`);
       
-      try {
-        // First attempt
-        console.log('Trying primary admin metrics endpoint');
-        const timestamp = new Date().getTime();
-        const response = await apiClient.get(`/user/dashboard?admin=true&period=${period}&_t=${timestamp}`);
-        
-        if (response.data.status === 'success') {
-          console.log('Primary admin metrics endpoint succeeded');
-          return response.data.data;
-        } else {
-          throw new Error(response.data.message || 'Failed to fetch admin metrics');
-        }
-      } catch (firstError) {
-        console.log('Primary admin metrics endpoint failed:', firstError);
-        
+      const endpoints = [
+        `/user/dashboard?admin=true&period=${period}`,
+        `/user/dashboard/?admin=true&period=${period}`,
+        `/api/user/dashboard?admin=true&period=${period}`,
+        `/api/user/dashboard/?admin=true&period=${period}`
+      ];
+      
+      let lastError: any = null;
+      const timestamp = new Date().getTime();
+      
+      for (const endpoint of endpoints) {
         try {
-          // Second attempt with trailing slash
-          console.log('Trying admin metrics endpoint with trailing slash');
-          const timestamp = new Date().getTime();
-          const response = await apiClient.get(`/user/dashboard/?admin=true&period=${period}&_t=${timestamp}`);
+          console.log(`Trying admin metrics endpoint: ${endpoint}`);
+          const response = await apiClient.get(`${endpoint}&_t=${timestamp}`);
           
           if (response.data.status === 'success') {
-            console.log('Admin metrics endpoint with trailing slash succeeded');
+            console.log(`Admin metrics successfully retrieved using endpoint: ${endpoint}`);
             return response.data.data;
           } else {
-            throw new Error(response.data.message || 'Failed to fetch admin metrics');
+            lastError = new Error(response.data.message || `Failed to fetch admin metrics at ${endpoint}`);
           }
-        } catch (secondError) {
-          console.log('Both admin metrics endpoints failed');
-          
-          // Emergency fallback: return dummy data to prevent UI breaks
-          console.log('Using emergency fallback data for dashboard metrics');
-          return {
-            totalBookings: 0,
-            activeRides: 0,
-            totalRevenue: 0,
-            availableDrivers: 0,
-            busyDrivers: 0,
-            avgRating: 0,
-            upcomingRides: 0
-          };
+        } catch (error) {
+          console.error(`Admin metrics endpoint ${endpoint} failed:`, error);
+          lastError = error;
+          // Continue trying next endpoint
         }
       }
+      
+      // Emergency fallback: return dummy data to prevent UI breaks
+      console.log('Using emergency fallback data for dashboard metrics');
+      return {
+        totalBookings: 0,
+        activeRides: 0,
+        totalRevenue: 0,
+        availableDrivers: 0,
+        busyDrivers: 0,
+        avgRating: 0,
+        upcomingRides: 0
+      };
     });
   },
 };
@@ -575,50 +583,138 @@ export const fareAPI = {
   async getTourFares(): Promise<any[]> {
     return makeApiRequest(async () => {
       console.log('Fetching tour fares...');
-      const timestamp = new Date().getTime();
-      const response = await apiClient.get(`/fares/tours?_t=${timestamp}`);
       
-      if (response.data.status === 'success') {
-        return response.data.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to fetch tour fares');
+      const endpoints = [
+        '/fares/tours',
+        '/api/fares/tours',
+        '/api/fares/tours.php'
+      ];
+      
+      let lastError: any = null;
+      const timestamp = new Date().getTime();
+      
+      for (const endpoint of endpoints) {
+        try {
+          console.log(`Trying tour fares endpoint: ${endpoint}`);
+          const response = await apiClient.get(`${endpoint}?_t=${timestamp}`);
+          
+          if (response.data.status === 'success') {
+            console.log(`Tour fares successfully retrieved using endpoint: ${endpoint}`);
+            return response.data.data;
+          } else {
+            lastError = new Error(response.data.message || `Failed to fetch tour fares at ${endpoint}`);
+          }
+        } catch (error) {
+          console.error(`Tour fares endpoint ${endpoint} failed:`, error);
+          lastError = error;
+          // Continue trying next endpoint
+        }
       }
+      
+      // If all endpoints failed, throw the last error
+      throw lastError || new Error('Failed to fetch tour fares after trying all endpoints');
     });
   },
   
   async updateTourFares(fareData: any): Promise<any> {
     return makeApiRequest(async () => {
-      const response = await apiClient.post('/fares/update-tour', fareData);
-      if (response.data.status === 'success') {
-        return response.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to update tour fares');
+      const endpoints = [
+        '/fares/update-tour',
+        '/api/fares/update-tour',
+        '/api/admin/fares/update'
+      ];
+      
+      let lastError: any = null;
+      
+      for (const endpoint of endpoints) {
+        try {
+          console.log(`Trying tour fares update endpoint: ${endpoint}`);
+          const response = await apiClient.post(endpoint, fareData);
+          
+          if (response.data.status === 'success') {
+            console.log(`Tour fares successfully updated using endpoint: ${endpoint}`);
+            return response.data;
+          } else {
+            lastError = new Error(response.data.message || `Failed to update tour fares at ${endpoint}`);
+          }
+        } catch (error) {
+          console.error(`Tour fares update endpoint ${endpoint} failed:`, error);
+          lastError = error;
+          // Continue trying next endpoint
+        }
       }
+      
+      // If all endpoints failed, throw the last error
+      throw lastError || new Error('Failed to update tour fares after trying all endpoints');
     });
   },
   
   async getVehiclePricing(): Promise<any[]> {
     return makeApiRequest(async () => {
       console.log('Fetching vehicle pricing data...');
-      const timestamp = new Date().getTime();
-      const response = await apiClient.get(`/fares/vehicles?_t=${timestamp}`);
       
-      if (response.data.status === 'success') {
-        return response.data.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to fetch vehicle pricing data');
+      const endpoints = [
+        '/fares/vehicles',
+        '/api/fares/vehicles',
+        '/api/fares/vehicles.php'
+      ];
+      
+      let lastError: any = null;
+      const timestamp = new Date().getTime();
+      
+      for (const endpoint of endpoints) {
+        try {
+          console.log(`Trying vehicle pricing endpoint: ${endpoint}`);
+          const response = await apiClient.get(`${endpoint}?_t=${timestamp}`);
+          
+          if (response.data.status === 'success') {
+            console.log(`Vehicle pricing successfully retrieved using endpoint: ${endpoint}`);
+            return response.data.data;
+          } else {
+            lastError = new Error(response.data.message || `Failed to fetch vehicle pricing data at ${endpoint}`);
+          }
+        } catch (error) {
+          console.error(`Vehicle pricing endpoint ${endpoint} failed:`, error);
+          lastError = error;
+          // Continue trying next endpoint
+        }
       }
+      
+      // If all endpoints failed, throw the last error
+      throw lastError || new Error('Failed to fetch vehicle pricing data after trying all endpoints');
     });
   },
   
   async updateVehiclePricing(pricingData: VehiclePricingUpdateRequest): Promise<any> {
     return makeApiRequest(async () => {
-      const response = await apiClient.post('/fares/update-vehicle', pricingData);
-      if (response.data.status === 'success') {
-        return response.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to update vehicle pricing');
+      const endpoints = [
+        '/fares/update-vehicle',
+        '/api/fares/update-vehicle',
+        '/api/admin/km-price/update'
+      ];
+      
+      let lastError: any = null;
+      
+      for (const endpoint of endpoints) {
+        try {
+          console.log(`Trying vehicle pricing update endpoint: ${endpoint}`);
+          const response = await apiClient.post(endpoint, pricingData);
+          
+          if (response.data.status === 'success') {
+            console.log(`Vehicle pricing successfully updated using endpoint: ${endpoint}`);
+            return response.data;
+          } else {
+            lastError = new Error(response.data.message || `Failed to update vehicle pricing at ${endpoint}`);
+          }
+        } catch (error) {
+          console.error(`Vehicle pricing update endpoint ${endpoint} failed:`, error);
+          lastError = error;
+          // Continue trying next endpoint
+        }
       }
+      
+      // If all endpoints failed, throw the last error
+      throw lastError || new Error('Failed to update vehicle pricing after trying all endpoints');
     });
   }
 };

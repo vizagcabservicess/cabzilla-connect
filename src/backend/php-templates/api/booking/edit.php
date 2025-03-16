@@ -23,6 +23,15 @@ if (!$bookingId && isset($_SERVER['PATH_INFO'])) {
     $bookingId = intval(end($pathParts));
 }
 
+// Try to get id from the last part of the URL if still no ID
+if (!$bookingId) {
+    $url = $_SERVER['REQUEST_URI'];
+    if (preg_match('/edit\/([0-9]+)/', $url, $matches) || 
+        preg_match('/([0-9]+)\/edit/', $url, $matches)) {
+        $bookingId = intval($matches[1]);
+    }
+}
+
 if (!$bookingId) {
     logError("Missing booking ID in request", ['GET' => $_GET, 'URL' => $_SERVER['REQUEST_URI'], 'PATH_INFO' => $_SERVER['PATH_INFO'] ?? 'none']);
     sendJsonResponse(['status' => 'error', 'message' => 'Invalid booking ID'], 400);
@@ -43,6 +52,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     
     // Authenticate the user
     $userData = authenticate();
+    if (!$userData) {
+        sendJsonResponse(['status' => 'error', 'message' => 'Authentication required'], 401);
+        exit;
+    }
     
     // Connect to database
     $conn = getDbConnection();
@@ -116,6 +129,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     
     // Authenticate the user
     $userData = authenticate();
+    if (!$userData) {
+        sendJsonResponse(['status' => 'error', 'message' => 'Authentication required'], 401);
+        exit;
+    }
     
     // Get the request body
     $data = json_decode(file_get_contents('php://input'), true);
@@ -304,18 +321,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $conn->commit();
         
         // Send email notifications - improved implementation
-        sendEmailNotification(
-            $updatedBooking['passenger_email'],
-            "Your booking #{$updatedBooking['booking_number']} has been updated",
-            generateBookingEmailContent($formattedBooking, false)
-        );
-        
-        // Send admin notification
-        sendEmailNotification(
-            ADMIN_EMAIL,
-            "Booking #{$updatedBooking['booking_number']} has been updated",
-            generateBookingEmailContent($formattedBooking, true)
-        );
+        try {
+            sendEmailNotification(
+                $updatedBooking['passenger_email'],
+                "Your booking #{$updatedBooking['booking_number']} has been updated",
+                generateBookingEmailContent($formattedBooking, false)
+            );
+            
+            // Send admin notification
+            sendEmailNotification(
+                ADMIN_EMAIL,
+                "Booking #{$updatedBooking['booking_number']} has been updated",
+                generateBookingEmailContent($formattedBooking, true)
+            );
+        } catch (Exception $e) {
+            // Log email error but continue with success response
+            logError("Failed to send email notifications", ['error' => $e->getMessage()]);
+        }
         
         sendJsonResponse([
             'status' => 'success',

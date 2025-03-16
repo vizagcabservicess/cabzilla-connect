@@ -13,8 +13,8 @@ RewriteRule ^receipt/([0-9]+)/?$ ../receipt.php?id=$1 [QSA,L]
 RewriteRule ^([0-9]+)/cancel/?$ cancel.php?id=$1 [QSA,L]
 RewriteRule ^cancel/([0-9]+)/?$ cancel.php?id=$1 [QSA,L]
 
-# Allow direct access to cancel.php
-RewriteCond %{REQUEST_URI} ^/api/booking/cancel(\.php)?$
+# Critical fix - allow direct access to PHP files
+RewriteCond %{REQUEST_URI} \.(php)$
 RewriteRule .* - [L]
 
 # Set CORS headers

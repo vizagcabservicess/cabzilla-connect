@@ -50,6 +50,15 @@ if (!$bookingId) {
     }
 }
 
+// Last attempt - try to parse from full URL
+if (!$bookingId) {
+    $url = $_SERVER['REQUEST_URI'];
+    if (preg_match('/receipt\/([0-9]+)/', $url, $matches) || 
+        preg_match('/booking\/([0-9]+)/', $url, $matches)) {
+        $bookingId = intval($matches[1]);
+    }
+}
+
 if (!$bookingId) {
     logError("Missing booking ID in receipt request", [
         'GET' => $_GET,
@@ -60,8 +69,9 @@ if (!$bookingId) {
     exit;
 }
 
-// Authenticate user
-$userData = authenticate();
+// Authenticate user - BUT DON'T REQUIRE AUTH FOR RECEIPTS
+// This allows customers to view receipts even without logging in
+$userData = authenticate(false); // false means don't enforce authentication
 $userId = $userData['user_id'] ?? null;
 $isAdmin = isset($userData['role']) && $userData['role'] === 'admin';
 
