@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/form";
 import { authAPI } from '@/services/api';
 import { LoginRequest } from '@/types/api';
+import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -27,6 +28,7 @@ export function LoginForm() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
 
   const form = useForm<LoginRequest>({
     resolver: zodResolver(loginSchema),
@@ -38,6 +40,8 @@ export function LoginForm() {
 
   const onSubmit = async (values: LoginRequest) => {
     setIsLoading(true);
+    setError(null);
+    
     try {
       const response = await authAPI.login(values);
       toast({
@@ -47,6 +51,7 @@ export function LoginForm() {
       });
       navigate('/dashboard');
     } catch (error) {
+      setError(error as Error);
       toast({
         title: "Login Failed",
         description: error instanceof Error ? error.message : "Something went wrong",
@@ -57,6 +62,20 @@ export function LoginForm() {
       setIsLoading(false);
     }
   };
+
+  const handleRetry = () => {
+    setError(null);
+  };
+
+  if (error) {
+    return (
+      <ApiErrorFallback 
+        error={error} 
+        onRetry={handleRetry}
+        title="Login Failed" 
+      />
+    );
+  }
 
   return (
     <Form {...form}>

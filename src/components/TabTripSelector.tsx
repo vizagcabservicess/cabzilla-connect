@@ -18,10 +18,12 @@ export function TabTripSelector({
 }: TabTripSelectorProps) {
   // Clear any cached fare data when tab changes
   useEffect(() => {
-    // Clear any session storage related to fares
+    // Clear all session storage related to fares and booking details
     sessionStorage.removeItem('selectedCab');
     sessionStorage.removeItem('hourlyPackage');
     sessionStorage.removeItem('tourPackage');
+    sessionStorage.removeItem('bookingDetails');
+    sessionStorage.removeItem('cabFares');
     
     // Reset drop location when switching to local
     if (selectedTab === 'local') {
@@ -29,11 +31,23 @@ export function TabTripSelector({
     }
   }, [selectedTab]);
   
+  // Function to handle tab change with complete data reset
+  const handleTabChange = (value: string) => {
+    // Force clear all cached data
+    sessionStorage.removeItem('selectedCab');
+    sessionStorage.removeItem('hourlyPackage');
+    sessionStorage.removeItem('tourPackage');
+    sessionStorage.removeItem('bookingDetails');
+    sessionStorage.removeItem('cabFares');
+    sessionStorage.removeItem('dropLocation');
+    
+    // Then update the tab
+    onTabChange(value as 'outstation' | 'local' | 'airport' | 'tour');
+  };
+  
   return (
     <div className="space-y-4">
-      <Tabs value={selectedTab} className="w-full" onValueChange={(value) => {
-        onTabChange(value as 'outstation' | 'local' | 'airport' | 'tour');
-      }}>
+      <Tabs value={selectedTab} className="w-full" onValueChange={handleTabChange}>
         <TabsList className="grid grid-cols-4 w-full">
           <TabsTrigger value="outstation">Outstation</TabsTrigger>
           <TabsTrigger value="local">Local</TabsTrigger>

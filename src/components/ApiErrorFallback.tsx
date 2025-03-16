@@ -21,7 +21,9 @@ export function ApiErrorFallback({
   const isNetworkError = errorMessage.includes("Network") || 
                           errorMessage.includes("connection") ||
                           errorMessage.includes("ERR_NETWORK") ||
-                          errorMessage.includes("ECONNABORTED");
+                          errorMessage.includes("ECONNABORTED") ||
+                          errorMessage.includes("404") || 
+                          errorMessage.includes("failed");
 
   const handleRetry = () => {
     if (onRetry) {
@@ -58,8 +60,10 @@ export function ApiErrorFallback({
             <ul className="list-disc pl-5 mt-2 space-y-1">
               <li>Your internet connection may be unstable</li>
               <li>The server might be temporarily down</li>
+              <li>The API endpoint may have changed or is incorrect</li>
               <li>There might be a firewall or network restriction</li>
             </ul>
+            <p className="mt-3 text-xs text-gray-500">Error details: {errorMessage}</p>
           </div>
         )}
       </CardContent>

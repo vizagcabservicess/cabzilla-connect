@@ -1,10 +1,10 @@
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { jwtDecode } from 'jwt-decode';
-import { Booking, BookingRequest, DashboardMetrics, TourFare, VehiclePricingUpdateRequest, VehiclePricing } from '@/types/api';
+import { Booking, BookingRequest, DashboardMetrics, VehiclePricingUpdateRequest } from '@/types/api';
 
-// Define API base URL - modify to use import.meta.env for Vite instead of process.env
-const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+// Define API base URL - use import.meta.env for Vite
+const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com/api';
 
 // Create Axios instance
 const apiClient: AxiosInstance = axios.create({
@@ -135,11 +135,25 @@ export const authAPI = {
 export const bookingAPI = {
   async createBooking(bookingData: BookingRequest): Promise<any> {
     try {
-      const response = await apiClient.post('/booking/create.php', bookingData);
-      if (response.data.status === 'success') {
-        return response.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to create booking');
+      // Add retry logic for better reliability
+      let retries = 0;
+      const maxRetries = 3;
+      
+      while (retries < maxRetries) {
+        try {
+          const response = await apiClient.post('/booking/create.php', bookingData);
+          if (response.data.status === 'success') {
+            return response.data;
+          } else {
+            throw new Error(response.data.message || 'Failed to create booking');
+          }
+        } catch (error) {
+          retries++;
+          if (retries >= maxRetries) throw error;
+          
+          // Wait before retrying (exponential backoff)
+          await new Promise(r => setTimeout(r, 1000 * retries));
+        }
       }
     } catch (error) {
       throw handleApiError(error);
@@ -229,7 +243,7 @@ export const bookingAPI = {
 
 // API service for fare management
 export const fareAPI = {
-  async getTourFares(): Promise<TourFare[]> {
+  async getTourFares(): Promise<any[]> {
     try {
       console.log('Fetching tour fares...');
       const timestamp = new Date().getTime();
@@ -259,7 +273,7 @@ export const fareAPI = {
     }
   },
   
-  async getVehiclePricing(): Promise<VehiclePricing[]> {
+  async getVehiclePricing(): Promise<any[]> {
     try {
       console.log('Fetching vehicle pricing data...');
       const timestamp = new Date().getTime();
@@ -292,14 +306,14 @@ export const fareAPI = {
 
 // API service for vehicle pricing (aliased under fareAPI now)
 export const vehiclePricingAPI = {
-  async getVehiclePricing(): Promise<VehiclePricing[]> {
+  async getVehiclePricing(): Promise<any[]> {
     return fareAPI.getVehiclePricing();
   },
 };
 
 // API service for tour fares (aliased under fareAPI now)
 export const tourFaresAPI = {
-  async getTourFares(): Promise<TourFare[]> {
+  async getTourFares(): Promise<any[]> {
     return fareAPI.getTourFares();
   },
 };
