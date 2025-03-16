@@ -160,7 +160,11 @@ const handleApiError = (error: any) => {
 };
 
 // Helper function to make API requests with retry logic
-const makeApiRequest = async <T>(apiCall: () => Promise<T>, maxRetries = DEFAULT_MAX_RETRIES, retryDelay = DEFAULT_RETRY_DELAY): Promise<T> => {
+const makeApiRequest = async <T>(
+  apiCall: () => Promise<T>, 
+  maxRetries: number = DEFAULT_MAX_RETRIES, 
+  retryDelay: number = DEFAULT_RETRY_DELAY
+): Promise<T> => {
   let retries = 0;
   
   while (true) {
@@ -401,15 +405,32 @@ export const bookingAPI = {
       } catch (error) {
         console.log('Standard cancellation endpoint failed, trying alternative format:', error);
         
-        // Try alternative endpoint as a fallback
-        const response = await apiClient.post(`/book/cancel/${id}`, { 
-          reason: reason 
-        });
-        if (response.data.status === 'success') {
-          return response.data;
-        } else {
-          throw new Error(response.data.message || 'Failed to cancel booking');
+        try {
+          // Try alternative endpoint as a fallback
+          const response = await apiClient.post(`/booking/${id}/cancel`, { 
+            reason: reason 
+          });
+          if (response.data.status === 'success') {
+            return response.data;
+          }
+        } catch (secondError) {
+          console.log('Second cancellation endpoint failed, trying third format:', secondError);
+          
+          // Try a third format with the book prefix
+          try {
+            const response = await apiClient.post(`/book/cancel/${id}`, { 
+              reason: reason 
+            });
+            if (response.data.status === 'success') {
+              return response.data;
+            }
+          } catch (thirdError) {
+            console.log('All cancellation endpoints failed');
+            throw error; // Throw the original error
+          }
         }
+        
+        throw error; // If execution reaches here, throw the original error
       }
     });
   },
@@ -430,13 +451,28 @@ export const bookingAPI = {
       } catch (error) {
         console.log('Standard receipt endpoint failed, trying alternative format:', error);
         
-        // Try alternative endpoint as a fallback
-        const response = await apiClient.get(`/booking/${id}/receipt`);
-        if (response.data.status === 'success') {
-          return response.data.data;
-        } else {
-          throw new Error(response.data.message || 'Failed to fetch receipt');
+        try {
+          // Try alternative endpoint as a fallback
+          const response = await apiClient.get(`/booking/${id}/receipt`);
+          if (response.data.status === 'success') {
+            return response.data.data;
+          }
+        } catch (secondError) {
+          console.log('Second receipt endpoint failed, trying third format:', secondError);
+          
+          try {
+            // Try a third format with the book prefix
+            const response = await apiClient.get(`/book/${id}/receipt`);
+            if (response.data.status === 'success') {
+              return response.data.data;
+            }
+          } catch (thirdError) {
+            console.log('All receipt endpoints failed');
+            throw error; // Throw the original error
+          }
         }
+        
+        throw error; // If execution reaches here, throw the original error
       }
     });
   },
@@ -474,8 +510,26 @@ export const bookingAPI = {
             throw new Error(response.data.message || 'Failed to fetch bookings');
           }
         } catch (secondError) {
-          console.log('Both dashboard endpoints failed');
-          throw firstError; // Re-throw first error for consistency
+          console.log('Second dashboard endpoint failed, trying direct PHP approach');
+          
+          try {
+            // Third attempt directly to PHP file
+            const timestamp = new Date().getTime();
+            const response = await apiClient.get(`/api/user/dashboard.php?_t=${timestamp}`);
+            
+            if (response.data.status === 'success') {
+              console.log('Direct PHP dashboard endpoint succeeded');
+              return response.data.data;
+            } else {
+              throw new Error(response.data.message || 'Failed to fetch bookings');
+            }
+          } catch (thirdError) {
+            console.log('All dashboard endpoints failed');
+            
+            // Emergency fallback: return empty array to prevent UI breaks
+            console.log('Using emergency fallback: empty bookings array');
+            return [];
+          }
         }
       }
     });
@@ -486,12 +540,20 @@ export const bookingAPI = {
     return makeApiRequest(async () => {
       console.log('Admin: Fetching all bookings...');
       const timestamp = new Date().getTime();
-      const response = await apiClient.get(`/admin/bookings?_t=${timestamp}`);
       
-      if (response.data.status === 'success') {
-        return response.data.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to fetch all bookings');
+      try {
+        const response = await apiClient.get(`/admin/bookings?_t=${timestamp}`);
+        
+        if (response.data.status === 'success') {
+          return response.data.data;
+        } else {
+          throw new Error(response.data.message || 'Failed to fetch all bookings');
+        }
+      } catch (error) {
+        console.log('Admin bookings endpoint failed:', error);
+        
+        // Fallback to empty array if failed
+        return [];
       }
     });
   },

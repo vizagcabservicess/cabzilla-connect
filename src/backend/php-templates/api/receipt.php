@@ -24,10 +24,28 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     exit;
 }
 
+// Log the request for debugging
+logError("Receipt request received", [
+    'method' => $_SERVER['REQUEST_METHOD'],
+    'request_uri' => $_SERVER['REQUEST_URI'],
+    'query_string' => $_SERVER['QUERY_STRING'] ?? 'none'
+]);
+
 // Get booking ID from URL
 $bookingId = isset($_GET['id']) ? intval($_GET['id']) : 0;
 
+// If ID is not in query string, try to get it from URL path
+if (!$bookingId && isset($_SERVER['PATH_INFO'])) {
+    $pathParts = explode('/', trim($_SERVER['PATH_INFO'], '/'));
+    $bookingId = intval(end($pathParts));
+}
+
 if (!$bookingId) {
+    logError("Missing booking ID in receipt request", [
+        'GET' => $_GET,
+        'URL' => $_SERVER['REQUEST_URI'],
+        'PATH_INFO' => $_SERVER['PATH_INFO'] ?? 'none'
+    ]);
     sendJsonResponse(['status' => 'error', 'message' => 'Invalid booking ID'], 400);
     exit;
 }

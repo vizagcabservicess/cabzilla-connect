@@ -1,3 +1,4 @@
+
 <?php
 // Turn on error reporting for debugging - remove in production
 ini_set('display_errors', 0);
@@ -278,7 +279,10 @@ function logError($message, $data = []) {
 // Set error handler to catch PHP errors
 set_error_handler(function($errno, $errstr, $errfile, $errline) {
     logError("PHP Error [$errno]: $errstr in $errfile on line $errline");
-    sendJsonResponse(['status' => 'error', 'message' => 'Server error occurred'], 500);
+    // Only send JSON response if headers haven't been sent already
+    if (!headers_sent()) {
+        sendJsonResponse(['status' => 'error', 'message' => 'Server error occurred'], 500);
+    }
 });
 
 // Set exception handler
@@ -287,5 +291,8 @@ set_exception_handler(function($exception) {
         'file' => $exception->getFile(),
         'line' => $exception->getLine()
     ]);
-    sendJsonResponse(['status' => 'error', 'message' => 'Server error occurred'], 500);
+    // Only send JSON response if headers haven't been sent already
+    if (!headers_sent()) {
+        sendJsonResponse(['status' => 'error', 'message' => 'Server error occurred'], 500);
+    }
 });

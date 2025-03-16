@@ -33,7 +33,7 @@ RewriteRule ^booking/edit/([0-9]+)/?$ booking/edit.php?id=$1 [QSA,L]
 
 # Process booking receipt URLs
 RewriteRule ^receipt/([0-9]+)/?$ receipt.php?id=$1 [QSA,L]
-RewriteRule ^booking/([0-9]+)/receipt/?$ receipt.php?id=$1 [QSA,L]
+RewriteRule ^booking/([0-9]+)/?$ receipt.php?id=$1 [QSA,L]
 
 # Process booking cancellation URLs
 RewriteRule ^booking/cancel/?$ booking/cancel.php [QSA,L]
