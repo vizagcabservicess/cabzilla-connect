@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -11,7 +12,8 @@ import {
   Location, 
   vizagLocations, 
   apDestinations,
-  formatTravelTime 
+  formatTravelTime,
+  isVizagLocation
 } from "@/lib/locationData";
 import { 
   CabType, 
