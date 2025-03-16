@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DashboardMetrics as DashboardMetricsType } from '@/types/api';
@@ -25,60 +26,41 @@ export function DashboardMetrics({ initialMetrics, period = 'week', onRefresh }:
   const [isLoading, setIsLoading] = useState(!initialMetrics);
   const [error, setError] = useState<string | null>(null);
 
+  // Initial data fetch when component mounts (only if no initialMetrics provided)
   useEffect(() => {
-    const fetchMetrics = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        console.log('Fetching dashboard metrics...');
-        const data = await bookingAPI.getAdminDashboardMetrics();
-        console.log('Dashboard metrics received:', data);
-        setMetrics(data);
-        if (onRefresh) onRefresh();
-      } catch (error) {
-        console.error('Error fetching dashboard metrics:', error);
-        setError('Failed to load dashboard metrics');
-        toast({
-          title: "Error",
-          description: error instanceof Error ? error.message : 'Failed to load dashboard metrics',
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     if (!initialMetrics) {
       fetchMetrics();
     }
-  }, [initialMetrics, toast, period, onRefresh]);
+  }, [initialMetrics]);
 
+  // Fetch metrics data when period changes
   useEffect(() => {
-    if (initialMetrics) return;
-    
-    const fetchMetricsForPeriod = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        console.log(`Fetching dashboard metrics for period: ${period}...`);
-        const data = await bookingAPI.getAdminDashboardMetrics();
-        console.log('Dashboard metrics received:', data);
-        setMetrics(data);
-      } catch (error) {
-        console.error('Error fetching dashboard metrics:', error);
-        setError('Failed to load dashboard metrics');
-        toast({
-          title: "Error",
-          description: error instanceof Error ? error.message : 'Failed to load dashboard metrics',
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    fetchMetricsForPeriod();
-  }, [period, toast, initialMetrics]);
+    if (!initialMetrics) {
+      fetchMetrics();
+    }
+  }, [period]);
+
+  const fetchMetrics = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      console.log(`Fetching dashboard metrics for period: ${period}...`);
+      const data = await bookingAPI.getAdminDashboardMetrics(period);
+      console.log('Dashboard metrics received:', data);
+      setMetrics(data);
+      if (onRefresh) onRefresh();
+    } catch (error) {
+      console.error('Error fetching dashboard metrics:', error);
+      setError('Failed to load dashboard metrics');
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : 'Failed to load dashboard metrics',
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   if (isLoading) {
     return (

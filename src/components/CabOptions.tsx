@@ -33,30 +33,35 @@ export function CabOptions({
   const [selectedCabId, setSelectedCabId] = useState<string | null>(selectedCab?.id || null);
   const [cabFares, setCabFares] = useState<Record<string, number>>({});
 
-  // Reset selected cab when trip type changes
+  // Reset cab selection and fares when key parameters change
   useEffect(() => {
+    setSelectedCabId(null);
     setCabFares({});
+    
     if (selectedCab) {
+      onSelectCab(null as any); // Reset the selected cab
+    }
+  }, [tripType, tripMode, hourlyPackage, distance, onSelectCab]);
+
+  // Calculate fares for all cab types whenever relevant parameters change
+  useEffect(() => {
+    if (distance > 0) {
       const newFares: Record<string, number> = {};
       cabTypes.forEach(cab => {
         newFares[cab.id] = calculateCabFare(cab);
       });
       setCabFares(newFares);
+    } else {
+      setCabFares({});
     }
-  }, [tripType, tripMode, hourlyPackage, distance]);
+  }, [distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate, cabTypes]);
 
+  // Update selectedCabId when selectedCab changes from parent
   useEffect(() => {
     if (selectedCab) {
       setSelectedCabId(selectedCab.id);
     }
-    
-    // Calculate fares for all cab types when any relevant parameter changes
-    const newFares: Record<string, number> = {};
-    cabTypes.forEach(cab => {
-      newFares[cab.id] = calculateCabFare(cab);
-    });
-    setCabFares(newFares);
-  }, [selectedCab, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate]);
+  }, [selectedCab]);
 
   const toggleExpand = (id: string) => {
     setExpandedCab(expandedCab === id ? null : id);
@@ -92,7 +97,7 @@ export function CabOptions({
       }
     }
     else if (tripType === 'outstation') {
-      let baseRate = 0, perKmRate = 0, nightHaltCharge = 0;
+      let baseRate = 0, perKmRate = 0, nightHaltCharge = 0, driverAllowance = 250;
       
       switch (cab.name.toLowerCase()) {
         case "sedan":
@@ -117,7 +122,7 @@ export function CabOptions({
       }
       
       if (tripMode === "one-way") {
-        // For one-way, calculate correctly for the return journey of the driver
+        // One-way calculation - double the distance to account for driver return
         const effectiveDistance = distance * 2;
         const allocatedKm = 300;
         const totalBaseFare = baseRate;
@@ -126,12 +131,11 @@ export function CabOptions({
         // Calculate extra kilometers beyond the base 300km
         if (effectiveDistance > allocatedKm) {
           const extraKm = effectiveDistance - allocatedKm;
-          // Use perKmRate for calculation to match the booking summary
           totalDistanceFare = extraKm * perKmRate;
         }
         
         // Add driver allowance
-        totalFare = totalBaseFare + totalDistanceFare + 250;
+        totalFare = totalBaseFare + totalDistanceFare + driverAllowance;
       } else {
         // Round trip calculation
         let days = returnDate ? Math.max(1, differenceInDays(returnDate, pickupDate || new Date()) + 1) : 1;
@@ -151,11 +155,11 @@ export function CabOptions({
         
         let totalNightHalt = (days - 1) * nightHaltCharge;
         
-        totalFare = totalBaseFare + totalDistanceFare + totalNightHalt + (days * 250);
+        totalFare = totalBaseFare + totalDistanceFare + totalNightHalt + (days * driverAllowance);
       }
     }
     
-    return Math.ceil(totalFare / 10) * 10;
+    return Math.ceil(totalFare / 10) * 10; // Round to nearest 10
   };
 
   return (
@@ -178,7 +182,7 @@ export function CabOptions({
             fareDetails = packageInfo;
           } else if (tripType === 'outstation') {
             const totalDistance = distance;
-            const effectiveDistance = tripMode === 'one-way' ? distance * 2 : distance * 2;
+            const effectiveDistance = distance * 2; // Driver return distance
             const allocatedKm = 300;
             const extraKm = tripMode === 'one-way' 
               ? Math.max(0, effectiveDistance - allocatedKm)
@@ -186,7 +190,7 @@ export function CabOptions({
               
             fareDetails = tripMode === 'one-way' 
               ? `One way - ${totalDistance}km (${extraKm > 0 ? extraKm + 'km extra' : 'within base km'})` 
-              : `Round trip - ${effectiveDistance}km total`;
+              : `Round trip - ${totalDistance * 2}km total`;
           }
 
           return (

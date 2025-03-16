@@ -62,6 +62,7 @@ const CabsPage = () => {
     setTotalPrice(0);
   }, [tripType, tripMode]);
 
+  // Set airport as pickup for airport trips
   useEffect(() => {
     if (tripType === "airport") {
       const airport = vizagLocations.find(loc => loc.type === 'airport');
@@ -73,6 +74,7 @@ const CabsPage = () => {
     }
   }, [tripType, pickup, dropoff]);
 
+  // Check if locations are valid for airport transfer and switch to outstation if needed
   useEffect(() => {
     if (tripType === "airport" && pickup && dropoff) {
       const isPickupInVizag = isVizagLocation(pickup);
@@ -138,6 +140,7 @@ const CabsPage = () => {
     }
   };
 
+  // Calculate distance based on locations or package selection
   useEffect(() => {
     const fetchDistance = async () => {
       if (tripType === "local") {
@@ -192,6 +195,7 @@ const CabsPage = () => {
     fetchDistance();
   }, [pickup, dropoff, tripType, hourlyPackage, toast]);
 
+  // Calculate total price when needed inputs change
   useEffect(() => {
     if (selectedCab && distance > 0) {
       const fare = calculateFare(
