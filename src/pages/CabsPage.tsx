@@ -56,6 +56,12 @@ const CabsPage = () => {
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState<boolean>(false);
   const [bookingComplete, setBookingComplete] = useState<boolean>(false);
 
+  // Clear price and selected cab when trip type or mode changes
+  useEffect(() => {
+    setSelectedCab(null);
+    setTotalPrice(0);
+  }, [tripType, tripMode]);
+
   useEffect(() => {
     if (tripType === "airport") {
       const airport = vizagLocations.find(loc => loc.type === 'airport');
@@ -86,11 +92,18 @@ const CabsPage = () => {
     }
   }, [pickup, dropoff, tripType, toast, navigate]);
 
+  // Clear selected cab when locations change
+  useEffect(() => {
+    setSelectedCab(null);
+    setTotalPrice(0);
+  }, [pickup, dropoff]);
+
   const handleTripTypeChange = (type: TripType) => {
     setSelectedCab(null);
     setDistance(0);
     setTravelTime(0);
     setShowMap(false);
+    setTotalPrice(0);
     
     setTripType(type);
     navigate(`/cabs/${type}`);
@@ -133,6 +146,7 @@ const CabsPage = () => {
           setDistance(selectedPackage.kilometers);
           const estimatedTime = selectedPackage.hours * 60;
           setTravelTime(estimatedTime);
+          setSelectedCab(null); // Reset selected cab when package changes
         }
         return;
       }
@@ -140,6 +154,7 @@ const CabsPage = () => {
       if (pickup && dropoff) {
         setIsCalculatingDistance(true);
         setShowMap(false);
+        setSelectedCab(null); // Reset selected cab when locations change
   
         try {
           const result = await calculateDistanceMatrix(pickup, dropoff);
@@ -196,6 +211,7 @@ const CabsPage = () => {
 
   const handleHourlyPackageChange = (packageId: string) => {
     setHourlyPackage(packageId);
+    setSelectedCab(null); // Reset selected cab when package changes
     
     const selectedPackage = hourlyPackages.find((pkg) => pkg.id === packageId);
     if (selectedPackage) {

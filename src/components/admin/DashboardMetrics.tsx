@@ -53,6 +53,33 @@ export function DashboardMetrics({ initialMetrics, period = 'week', onRefresh }:
     }
   }, [initialMetrics, toast, period, onRefresh]);
 
+  useEffect(() => {
+    if (initialMetrics) return;
+    
+    const fetchMetricsForPeriod = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        console.log(`Fetching dashboard metrics for period: ${period}...`);
+        const data = await bookingAPI.getAdminDashboardMetrics();
+        console.log('Dashboard metrics received:', data);
+        setMetrics(data);
+      } catch (error) {
+        console.error('Error fetching dashboard metrics:', error);
+        setError('Failed to load dashboard metrics');
+        toast({
+          title: "Error",
+          description: error instanceof Error ? error.message : 'Failed to load dashboard metrics',
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchMetricsForPeriod();
+  }, [period, toast, initialMetrics]);
+
   if (isLoading) {
     return (
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-8">
