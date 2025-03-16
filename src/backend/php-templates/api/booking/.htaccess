@@ -1,0 +1,14 @@
+
+RewriteEngine On
+
+# Handle booking edit endpoints
+RewriteRule ^([0-9]+)/edit/?$ edit.php?id=$1 [QSA,L]
+RewriteRule ^edit/([0-9]+)/?$ edit.php?id=$1 [QSA,L]
+
+# Handle booking receipt endpoints
+RewriteRule ^([0-9]+)/receipt/?$ ../receipt.php?id=$1 [QSA,L]
+RewriteRule ^receipt/([0-9]+)/?$ ../receipt.php?id=$1 [QSA,L]
+
+# Handle booking cancel endpoints
+RewriteRule ^([0-9]+)/cancel/?$ cancel.php?id=$1 [QSA,L]
+RewriteRule ^cancel/([0-9]+)/?$ cancel.php?id=$1 [QSA,L]

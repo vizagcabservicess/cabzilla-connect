@@ -1,4 +1,3 @@
-
 import axios, { AxiosInstance, AxiosError, AxiosRequestConfig } from 'axios';
 import { jwtDecode } from 'jwt-decode';
 import { Booking, BookingRequest, DashboardMetrics, VehiclePricingUpdateRequest } from '@/types/api';
@@ -286,23 +285,46 @@ export const bookingAPI = {
   async getBooking(id: string): Promise<Booking> {
     return makeApiRequest(async () => {
       console.log(`Fetching booking details for ID: ${id}`);
-      // Try all possible endpoint formats
+      
+      // Try multiple endpoint formats with proper error handling
       try {
+        console.log(`Trying first endpoint format: /booking/${id}/edit`);
         const response = await apiClient.get(`/booking/${id}/edit`);
         if (response.data.status === 'success') {
           return response.data.data;
         } else {
           throw new Error(response.data.message || 'Failed to fetch booking');
         }
-      } catch (error) {
-        // If first endpoint fails, try alternative endpoint
-        console.log('First endpoint failed, trying alternative format');
-        const response = await apiClient.get(`/book/edit/${id}`);
-        if (response.data.status === 'success') {
-          return response.data.data;
-        } else {
-          throw new Error(response.data.message || 'Failed to fetch booking');
+      } catch (firstError) {
+        console.log('First endpoint format failed, error:', firstError);
+        
+        try {
+          console.log(`Trying second endpoint format: /book/edit/${id}`);
+          const response = await apiClient.get(`/book/edit/${id}`);
+          if (response.data.status === 'success') {
+            return response.data.data;
+          } else {
+            throw new Error(response.data.message || 'Failed to fetch booking');
+          }
+        } catch (secondError) {
+          console.log('Second endpoint format failed, error:', secondError);
+          
+          // Try a third format as a last resort
+          try {
+            console.log(`Trying third endpoint format: /api/booking/edit/${id}`);
+            const response = await apiClient.get(`/api/booking/edit/${id}`);
+            if (response.data.status === 'success') {
+              return response.data.data;
+            }
+          } catch (thirdError) {
+            console.log('All endpoint formats failed');
+            // Re-throw the first error for consistent error reporting
+            throw firstError;
+          }
         }
+        
+        // If we somehow get here without returning or throwing, throw the first error
+        throw firstError;
       }
     });
   },
@@ -310,22 +332,46 @@ export const bookingAPI = {
   async updateBooking(id: string, bookingData: any): Promise<any> {
     return makeApiRequest(async () => {
       console.log(`Updating booking ID: ${id} with data:`, bookingData);
+      
+      // Try multiple endpoint formats with proper error handling
       try {
+        console.log(`Trying first endpoint format for update: /booking/${id}/edit`);
         const response = await apiClient.post(`/booking/${id}/edit`, bookingData);
         if (response.data.status === 'success') {
           return response.data;
         } else {
           throw new Error(response.data.message || 'Failed to update booking');
         }
-      } catch (error) {
-        // If first endpoint fails, try alternative endpoint
-        console.log('First endpoint failed, trying alternative format');
-        const response = await apiClient.post(`/book/edit/${id}`, bookingData);
-        if (response.data.status === 'success') {
-          return response.data;
-        } else {
-          throw new Error(response.data.message || 'Failed to update booking');
+      } catch (firstError) {
+        console.log('First endpoint format failed for update, error:', firstError);
+        
+        try {
+          console.log(`Trying second endpoint format for update: /book/edit/${id}`);
+          const response = await apiClient.post(`/book/edit/${id}`, bookingData);
+          if (response.data.status === 'success') {
+            return response.data;
+          } else {
+            throw new Error(response.data.message || 'Failed to update booking');
+          }
+        } catch (secondError) {
+          console.log('Second endpoint format failed for update, error:', secondError);
+          
+          // Try a third format as a last resort
+          try {
+            console.log(`Trying third endpoint format for update: /api/booking/edit/${id}`);
+            const response = await apiClient.post(`/api/booking/edit/${id}`, bookingData);
+            if (response.data.status === 'success') {
+              return response.data;
+            }
+          } catch (thirdError) {
+            console.log('All endpoint formats failed for update');
+            // Re-throw the first error for consistent error reporting
+            throw firstError;
+          }
         }
+        
+        // If we somehow get here without returning or throwing, throw the first error
+        throw firstError;
       }
     });
   },
@@ -333,25 +379,58 @@ export const bookingAPI = {
   async cancelBooking(id: string, reason: string = ''): Promise<any> {
     return makeApiRequest(async () => {
       console.log(`Cancelling booking ID: ${id} with reason: ${reason}`);
-      const response = await apiClient.post('/booking/cancel', { 
-        bookingId: id,
-        reason: reason 
-      });
-      if (response.data.status === 'success') {
-        return response.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to cancel booking');
+      
+      // Try multiple endpoint formats with proper error handling
+      try {
+        console.log(`Trying standard cancellation endpoint: /booking/cancel`);
+        const response = await apiClient.post('/booking/cancel', { 
+          bookingId: id,
+          reason: reason 
+        });
+        if (response.data.status === 'success') {
+          return response.data;
+        } else {
+          throw new Error(response.data.message || 'Failed to cancel booking');
+        }
+      } catch (error) {
+        console.log('Standard cancellation endpoint failed, trying alternative format:', error);
+        
+        // Try alternative endpoint as a fallback
+        const response = await apiClient.post(`/book/cancel/${id}`, { 
+          reason: reason 
+        });
+        if (response.data.status === 'success') {
+          return response.data;
+        } else {
+          throw new Error(response.data.message || 'Failed to cancel booking');
+        }
       }
     });
   },
   
   async getReceipt(id: string): Promise<any> {
     return makeApiRequest(async () => {
-      const response = await apiClient.get(`/receipt/${id}`);
-      if (response.data.status === 'success') {
-        return response.data.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to fetch receipt');
+      console.log(`Fetching receipt for booking ID: ${id}`);
+      
+      // Try multiple endpoint formats with proper error handling
+      try {
+        console.log(`Trying standard receipt endpoint: /receipt/${id}`);
+        const response = await apiClient.get(`/receipt/${id}`);
+        if (response.data.status === 'success') {
+          return response.data.data;
+        } else {
+          throw new Error(response.data.message || 'Failed to fetch receipt');
+        }
+      } catch (error) {
+        console.log('Standard receipt endpoint failed, trying alternative format:', error);
+        
+        // Try alternative endpoint as a fallback
+        const response = await apiClient.get(`/booking/${id}/receipt`);
+        if (response.data.status === 'success') {
+          return response.data.data;
+        } else {
+          throw new Error(response.data.message || 'Failed to fetch receipt');
+        }
       }
     });
   },
@@ -468,4 +547,3 @@ export const tourFaresAPI = {
     return fareAPI.getTourFares();
   },
 };
-
