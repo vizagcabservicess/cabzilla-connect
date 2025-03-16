@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import {
   Form,
   FormControl,
@@ -29,6 +30,25 @@ export function LoginForm() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const [loginAttempts, setLoginAttempts] = useState(0);
+
+  // Clear all caches on component mount to ensure fresh state
+  useEffect(() => {
+    // Clear sessionStorage of any potential stale data
+    Object.keys(sessionStorage).forEach(key => {
+      if (key !== 'auth_token') {
+        sessionStorage.removeItem(key);
+      }
+    });
+    
+    // Also clear localStorage of any stale caches
+    const keysToPreserve = ['auth_token', 'user_data'];
+    Object.keys(localStorage).forEach(key => {
+      if (!keysToPreserve.includes(key)) {
+        localStorage.removeItem(key);
+      }
+    });
+  }, []);
 
   const form = useForm<LoginRequest>({
     resolver: zodResolver(loginSchema),
@@ -41,21 +61,56 @@ export function LoginForm() {
   const onSubmit = async (values: LoginRequest) => {
     setIsLoading(true);
     setError(null);
+    setLoginAttempts(prev => prev + 1);
+    
+    console.log(`Login attempt ${loginAttempts + 1} for email: ${values.email}`);
     
     try {
-      const response = await authAPI.login(values);
+      // Show loading toast
       toast({
-        title: "Login Successful",
-        description: "Welcome back!",
+        title: "Logging in...",
+        description: "Please wait while we verify your credentials",
         duration: 3000,
       });
-      navigate('/dashboard');
+      
+      const response = await authAPI.login(values);
+      
+      // Store user data in localStorage as backup
+      if (response.user) {
+        localStorage.setItem('user_data', JSON.stringify(response.user));
+      }
+      
+      // Show success toast
+      toast({
+        title: "Login Successful",
+        description: "Welcome back! Redirecting to dashboard...",
+        duration: 3000,
+      });
+      
+      // Also use Sonner toast for additional visibility
+      toast.success("Login successful", {
+        description: "Welcome back! Redirecting to dashboard...",
+        duration: 3000,
+      });
+      
+      // Short delay before redirect to ensure token is properly stored
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 500);
     } catch (error) {
       setError(error as Error);
+      
+      // Show error toast
       toast({
         title: "Login Failed",
         description: error instanceof Error ? error.message : "Something went wrong",
         variant: "destructive",
+        duration: 5000,
+      });
+      
+      // Also use Sonner toast for additional visibility
+      toast.error("Login failed", {
+        description: error instanceof Error ? error.message : "Something went wrong",
         duration: 5000,
       });
     } finally {

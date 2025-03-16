@@ -1,3 +1,4 @@
+
 export interface CabType {
   id: string;
   name: string;
@@ -211,48 +212,38 @@ const normalizeCabType = (cabType: string): string => {
   return 'sedan';
 };
 
-const packagePriceCache = new Map<string, number>();
+// Removed packagePriceCache using Map to force dynamic calculations every time
 
 export const getLocalPackagePrice = (packageId: string, cabType: string): number => {
   const normalizedCabType = normalizeCabType(cabType);
   
+  // Create a cache key but don't actually use any persistent cache object
   const cacheKey = `${packageId}_${normalizedCabType}`;
+  console.log(`Calculating price for ${cacheKey}`);
   
-  if (packagePriceCache.has(cacheKey)) {
-    console.log(`Using cached price for ${cacheKey}:`, packagePriceCache.get(cacheKey));
-    return packagePriceCache.get(cacheKey) || 0;
-  }
+  // Direct lookup price from the static localPackagePrices object
+  if (packageId in localPackagePrices && normalizedCabType in localPackagePrices[packageId as keyof typeof localPackagePrices]) {
+    const price = localPackagePrices[packageId as keyof typeof localPackagePrices][normalizedCabType as keyof typeof localPackagePrices[keyof typeof localPackagePrices]];
+    console.log(`Found direct price for ${packageId}/${normalizedCabType}: ${price}`);
+    return price;
+  } 
   
-  const pkg = hourlyPackages.find(p => p.id === packageId);
-  if (!pkg) {
-    console.error(`Package not found: ${packageId}`);
-    return 0;
-  }
+  // Fallback calculation if direct lookup fails
+  console.log(`No direct price found for ${packageId}/${normalizedCabType}, calculating...`);
   
   let price = 0;
+  if (normalizedCabType === 'sedan') price = 5160; // 8hr package
+  else if (normalizedCabType === 'ertiga' || normalizedCabType === 'suv') price = 6550;
+  else if (normalizedCabType === 'innova') price = 7440;
+  else if (normalizedCabType === 'tempo') price = 11500;
+  else if (normalizedCabType === 'luxury') price = 14000;
+  else price = hourlyPackages.find(p => p.id === packageId)?.basePrice || 2400; // Fallback
   
-  if (packageId in localPackagePrices && normalizedCabType in localPackagePrices[packageId as keyof typeof localPackagePrices]) {
-    price = localPackagePrices[packageId as keyof typeof localPackagePrices][normalizedCabType as keyof typeof localPackagePrices[keyof typeof localPackagePrices]];
-    console.log(`Found direct price for ${packageId}/${normalizedCabType}: ${price}`);
-  } 
-  else {
-    console.log(`No direct price found for ${packageId}/${normalizedCabType}, calculating...`);
-    
-    if (normalizedCabType === 'sedan') price = 5160; // 8hr package
-    else if (normalizedCabType === 'ertiga') price = 6550;
-    else if (normalizedCabType === 'innova') price = 7440;
-    else if (normalizedCabType === 'tempo') price = 11500;
-    else if (normalizedCabType === 'luxury') price = 14000;
-    else price = pkg.basePrice; // Fallback
-    
-    if (packageId === '10hrs-100km') {
-      price = Math.round(price * 1.12); // 12% more for 10hr package
-    }
+  if (packageId === '10hrs-100km') {
+    price = Math.round(price * 1.12); // 12% more for 10hr package
   }
   
-  packagePriceCache.set(cacheKey, price);
-  console.log(`Caching price for ${cacheKey}:`, price);
-  
+  console.log(`Calculated price for ${packageId}/${normalizedCabType}: ${price}`);
   return price;
 };
 
@@ -402,7 +393,7 @@ export function clearFareCaches() {
   console.log("Clearing fare caches...");
   // Clear all fare-related cache items from sessionStorage
   Object.keys(sessionStorage).forEach(key => {
-    if (key.includes('fare_') || key.includes('price_') || key.includes('_price') || key.includes('_fare')) {
+    if (key.includes('fare_') || key.includes('price_') || key.includes('_price') || key.includes('_fare') || key.includes('_sedan') || key.includes('_ertiga') || key.includes('_innova') || key.includes('_tempo') || key.includes('_luxury')) {
       console.log(`Clearing cache for ${key}`);
       sessionStorage.removeItem(key);
     }
@@ -415,5 +406,13 @@ export function clearFareCaches() {
       console.log(`Clearing cache for ${cacheKey}`);
       sessionStorage.removeItem(cacheKey);
     });
+  });
+  
+  // Also clear localStorage items that might be caching data
+  Object.keys(localStorage).forEach(key => {
+    if (key.includes('fare_') || key.includes('price_') || key.includes('_price') || key.includes('_fare') || key.includes('cached')) {
+      console.log(`Clearing localStorage cache for ${key}`);
+      localStorage.removeItem(key);
+    }
   });
 }

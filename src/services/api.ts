@@ -169,19 +169,35 @@ const clearAllCachedData = () => {
   sessionStorage.removeItem('pickupLocation');
   sessionStorage.removeItem('pickupDate');
   sessionStorage.removeItem('returnDate');
+  
+  // Clear all fare caches
+  for (let i = 0; i < sessionStorage.length; i++) {
+    const key = sessionStorage.key(i);
+    if (key && (key.includes('_price') || key.includes('_fare') || key.includes('price_') || key.includes('fare_'))) {
+      console.log(`Clearing cache for ${key}`);
+      sessionStorage.removeItem(key);
+    }
+  }
 };
 
 // API service for authentication
 export const authAPI = {
   async login(credentials: any): Promise<any> {
     return makeApiRequest(async () => {
+      // Clear all caches before login to ensure fresh state
+      clearAllCachedData();
+      
       const response = await apiClient.post('/login', credentials);
-      if (response.data.status === 'success') {
+      if (response.data && (response.data.success === true || response.data.status === 'success')) {
         const token = response.data.token;
         setAuthToken(token);
+        
+        // Set a cookie with the token as backup (helps with some browsers)
+        document.cookie = `auth_token=${token}; path=/; max-age=604800; SameSite=Lax`;
+        
         return response.data;
       } else {
-        throw new Error(response.data.message || 'Login failed');
+        throw new Error(response.data?.message || 'Login failed');
       }
     });
   },
@@ -204,6 +220,8 @@ export const authAPI = {
 
   logout() {
     setAuthToken(null);
+    // Clear the backup cookie
+    document.cookie = 'auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
     // Clear all cached data
     clearAllCachedData();
   },
@@ -213,9 +231,18 @@ export const authAPI = {
     if (!token) return false;
     try {
       const decodedToken: { exp: number } = jwtDecode(token);
-      return decodedToken.exp * 1000 > Date.now();
+      const isValid = decodedToken.exp * 1000 > Date.now();
+      
+      // If token is invalid, clean up
+      if (!isValid) {
+        this.logout();
+        return false;
+      }
+      
+      return isValid;
     } catch (error) {
       console.error('Error decoding token:', error);
+      this.logout();
       return false;
     }
   },
@@ -266,9 +293,17 @@ export const bookingAPI = {
         throw new Error('Passenger details are required');
       }
       
+      // Ensure user_id is null or a valid number to prevent foreign key errors
+      let userId = null;
+      if (authAPI.isAuthenticated()) {
+        const user = authAPI.getCurrentUser();
+        userId = user && user.id ? parseInt(user.id) : null;
+      }
+      
       // Format numeric values properly and ensure required fields
       const formattedData = {
         ...bookingData,
+        user_id: userId, // Use null if not authenticated to handle foreign key constraint
         pickupLocation: bookingData.pickupLocation.trim(),
         dropLocation: bookingData.dropLocation ? bookingData.dropLocation.trim() : '',
         distance: bookingData.distance || 0,
@@ -299,7 +334,7 @@ export const bookingAPI = {
           throw new Error(response.data.message || 'Failed to create booking');
         }
         
-        if (response.data && response.data.status === 'success') {
+        if (response.data && (response.data.status === 'success' || response.data.success === true)) {
           console.log('Booking created successfully!', response.data);
           return response.data.data || response.data;
         } else {

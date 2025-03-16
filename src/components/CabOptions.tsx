@@ -35,17 +35,20 @@ export function CabOptions({
 
   // Clear fare caches when component mounts to ensure fresh calculations
   useEffect(() => {
+    console.log("CabOptions: Component mounted, clearing fare caches");
     clearFareCaches();
   }, []);
 
   // Force recalculation of fares when any parameter changes
   useEffect(() => {
+    console.log("CabOptions: Parameters changed, resetting selections and clearing caches");
     setSelectedCabId(null);
     setCabFares({});
     clearFareCaches();
     
     // Clear any previously selected cab from sessionStorage to prevent caching issues
     sessionStorage.removeItem('selectedCab');
+    localStorage.removeItem('selectedCab');
     
     if (selectedCab) {
       onSelectCab(null as any); // Reset the selected cab
@@ -55,6 +58,7 @@ export function CabOptions({
   // Calculate fares for all cab types whenever relevant parameters change
   useEffect(() => {
     if (distance > 0) {
+      console.log("CabOptions: Calculating new fares for all cab types");
       const newFares: Record<string, number> = {};
       cabTypes.forEach(cab => {
         newFares[cab.id] = calculateCabFare(cab);
@@ -77,10 +81,25 @@ export function CabOptions({
   };
 
   const handleSelectCab = (cab: CabType) => {
+    console.log(`CabOptions: Selected cab ${cab.id}`);
     setSelectedCabId(cab.id);
     onSelectCab(cab);
     
-    sessionStorage.setItem('selectedCab', JSON.stringify(cab));
+    // Refresh fare calculation when selecting
+    const fare = calculateCabFare(cab);
+    console.log(`CabOptions: Calculated fare for ${cab.id}: ${fare}`);
+    
+    // Update the fare in state
+    setCabFares(prev => ({
+      ...prev,
+      [cab.id]: fare
+    }));
+    
+    // Store in sessionStorage for immediate use but avoid localStorage
+    sessionStorage.setItem('selectedCab', JSON.stringify({
+      ...cab,
+      calculatedFare: fare
+    }));
     
     const bookingSummary = document.getElementById('booking-summary');
     if (bookingSummary) {
@@ -91,21 +110,28 @@ export function CabOptions({
   };
 
   const calculateCabFare = (cab: CabType): number => {
+    console.log(`CabOptions: Calculating fare for ${cab.name}, trip type: ${tripType}, package: ${hourlyPackage}`);
     let totalFare = 0;
     
     if (tripType === 'airport') {
       totalFare = calculateAirportFare(cab.name, distance);
+      console.log(`CabOptions: Airport fare for ${cab.name}: ${totalFare}`);
     }
     else if (tripType === 'local' && hourlyPackage) {
       // Get base package price for local rental using the improved function
       totalFare = getLocalPackagePrice(hourlyPackage, cab.id);
+      console.log(`CabOptions: Local base fare for ${cab.name}, package ${hourlyPackage}: ${totalFare}`);
       
       // Calculate extra km charges if any
       const packageKm = hourlyPackage === '8hrs-80km' ? 80 : 100;
       if (distance > packageKm) {
         const extraKm = distance - packageKm;
-        totalFare += extraKm * cab.pricePerKm;
+        const extraFare = extraKm * cab.pricePerKm;
+        console.log(`CabOptions: Extra km charge: ${extraKm}km x ${cab.pricePerKm} = ${extraFare}`);
+        totalFare += extraFare;
       }
+      
+      console.log(`CabOptions: Final local fare for ${cab.name}: ${totalFare}`);
     }
     else if (tripType === 'outstation') {
       let baseRate = 0, perKmRate = 0, nightHaltCharge = 0, driverAllowance = 250;
@@ -132,6 +158,8 @@ export function CabOptions({
           nightHaltCharge = 1000;
       }
       
+      console.log(`CabOptions: Outstation rates for ${cab.name}: base=${baseRate}, perKm=${perKmRate}`);
+      
       if (tripMode === "one-way") {
         // One-way calculation - double the distance to account for driver return
         const effectiveDistance = distance * 2;
@@ -143,10 +171,12 @@ export function CabOptions({
         if (effectiveDistance > allocatedKm) {
           const extraKm = effectiveDistance - allocatedKm;
           totalDistanceFare = extraKm * perKmRate;
+          console.log(`CabOptions: Extra distance charge: ${extraKm}km x ${perKmRate} = ${totalDistanceFare}`);
         }
         
         // Add driver allowance
         totalFare = totalBaseFare + totalDistanceFare + driverAllowance;
+        console.log(`CabOptions: One-way fare for ${cab.name}: ${totalFare}`);
       } else {
         // Round trip calculation
         let days = returnDate ? Math.max(1, differenceInDays(returnDate, pickupDate || new Date()) + 1) : 1;
@@ -162,15 +192,19 @@ export function CabOptions({
         if (effectiveDistance > totalAllocatedKm) {
           const extraKm = effectiveDistance - totalAllocatedKm;
           totalDistanceFare = extraKm * perKmRate;
+          console.log(`CabOptions: Round-trip extra distance: ${extraKm}km x ${perKmRate} = ${totalDistanceFare}`);
         }
         
         let totalNightHalt = (days - 1) * nightHaltCharge;
         
         totalFare = totalBaseFare + totalDistanceFare + totalNightHalt + (days * driverAllowance);
+        console.log(`CabOptions: Round-trip fare for ${cab.name}: ${totalFare} (${days} days)`);
       }
     }
     
-    return Math.ceil(totalFare / 10) * 10; // Round to nearest 10
+    const roundedFare = Math.ceil(totalFare / 10) * 10; // Round to nearest 10
+    console.log(`CabOptions: Final rounded fare for ${cab.name}: ${roundedFare}`);
+    return roundedFare;
   };
 
   return (
