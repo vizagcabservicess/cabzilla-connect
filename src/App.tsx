@@ -11,6 +11,13 @@ import ErrorBoundaryClass from './components/ErrorBoundary';
 import { apiProxy } from './services/apiProxy';
 import { toast } from 'sonner';
 
+// Declare the global window property for appInitTime
+declare global {
+  interface Window {
+    appInitTime: string;
+  }
+}
+
 // Create a query client with retries and caching disabled
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -18,7 +25,7 @@ const queryClient = new QueryClient({
       retry: 1,
       refetchOnWindowFocus: false,
       staleTime: 0,
-      cacheTime: 0,
+      gcTime: 0, // Updated from cacheTime to gcTime which is the current property
     },
   },
 });

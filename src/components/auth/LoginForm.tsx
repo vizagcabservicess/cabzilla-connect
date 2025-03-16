@@ -17,7 +17,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { authAPI } from '@/services/api';
-import { LoginRequest } from '@/types/api';
+import { LoginRequest, AuthResponse } from '@/types/api';
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { AlertCircle, ExternalLink, RefreshCw } from 'lucide-react';
 import { apiProxy } from '@/services/apiProxy';
@@ -116,9 +116,9 @@ export function LoginForm() {
       toast.loading("Logging in...", { id: "login-attempt" });
       
       // Use direct API call to avoid any middleware issues
-      const response = await apiProxy.post('/login', values);
+      const response = await apiProxy.post<AuthResponse>('/login', values);
       
-      if (response.token) {
+      if (response && response.token) {
         // Store token in localStorage and a backup in sessionStorage
         localStorage.setItem('auth_token', response.token);
         sessionStorage.setItem('auth_token', response.token); // Backup storage
