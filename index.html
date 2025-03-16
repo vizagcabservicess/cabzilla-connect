@@ -1,67 +1,18 @@
-
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta http-equiv="Pragma" content="no-cache" />
-    <meta http-equiv="Expires" content="0" />
-    <title>Express Cab Booking & Tours</title>
-    <!-- Preconnect to API server to speed up requests -->
-    <link rel="preconnect" href="https://saddlebrown-oryx-227656.hostingersite.com" />
-    <!-- Disable any service workers that might be causing caching issues -->
-    <script>
-      // Clear any service workers
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(function(registrations) {
-          for (let registration of registrations) {
-            registration.unregister();
-          }
-        });
-      }
-      
-      // This will help handle CORS issues by providing a clear error
-      window.addEventListener('error', function(e) {
-        console.error('Global error handler:', e.message, e);
-        
-        // Check if it's a CORS error
-        if (e.message && (
-            e.message.includes('CORS') || 
-            e.message.includes('Cross-Origin') ||
-            e.message.includes('Access-Control')
-          )) {
-          console.error('CORS issue detected. This is usually a server configuration problem.');
-        }
-      });
-      
-      // Disable page caching
-      window.addEventListener('load', function() {
-        if (performance && performance.navigation.type === 1) {
-          console.log('Page was reloaded. Clearing localStorage...');
-          // Get auth token first
-          const authToken = localStorage.getItem('auth_token');
-          
-          // Clear everything except auth
-          for (var key in localStorage) {
-            if (key !== 'auth_token') {
-              localStorage.removeItem(key);
-            }
-          }
-          
-          // Re-add auth token if it existed
-          if (authToken) {
-            localStorage.setItem('auth_token', authToken);
-          }
-        }
-      });
-    </script>
-    <!-- Required Lovable script tag for Select feature -->
-    <script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>
+    <title>cabzilla-connect</title>
+    <meta name="description" content="Lovable Generated Project" />
+    <meta name="author" content="Lovable" />
+    <meta property="og:image" content="/og-image.png" />
   </head>
+
   <body>
     <div id="root"></div>
+    <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS VERY COMMENT! -->
+    <script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

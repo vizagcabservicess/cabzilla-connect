@@ -1,4 +1,3 @@
-
 // User related types
 export interface User {
   id: number;
@@ -49,9 +48,6 @@ export interface Booking {
   passengerEmail: string;
   driverName?: string;
   driverPhone?: string;
-  hourlyPackage?: string;
-  vehicleNumber?: string;
-  tourId?: string;
   createdAt: string;
   updatedAt: string;
 }

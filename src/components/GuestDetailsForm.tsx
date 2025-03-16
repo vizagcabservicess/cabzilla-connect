@@ -1,9 +1,9 @@
 
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { EditableContactDetailsForm } from "@/components/EditableContactDetailsForm";
-import { ArrowLeft, Edit2, Loader2, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Edit2, Loader2 } from 'lucide-react';
 import { bookingAPI } from '@/services/api';
 import { BookingRequest } from '@/types/api';
 
@@ -30,19 +30,9 @@ export function GuestDetailsForm({
   const { toast } = useToast();
   const [isEditMode, setIsEditMode] = useState(isEditing);
   const [isSaving, setIsSaving] = useState(false);
-  const [updateSuccess, setUpdateSuccess] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
-  const maxRetries = 3;
-
-  useEffect(() => {
-    // Reset success state when edit mode changes
-    if (isEditMode) {
-      setUpdateSuccess(false);
-    }
-  }, [isEditMode]);
 
   const handleSubmit = async (details: any) => {
-    if (isSubmitting || isSaving) return; // Prevent double submission
+    if (isSubmitting) return; // Prevent double submission
     
     setIsSaving(true);
     
@@ -56,36 +46,15 @@ export function GuestDetailsForm({
           ...initialData
         };
         
-        // Try to update the booking with retries
-        try {
-          const result = await bookingAPI.updateBooking(bookingId.toString(), updatedData);
-          
-          toast({
-            title: "Booking Updated",
-            description: "Your booking details have been updated successfully",
-            duration: 3000,
-          });
-          
-          setUpdateSuccess(true);
-          setIsEditMode(false);
-        } catch (error) {
-          // If we haven't reached max retries yet, try again
-          if (retryCount < maxRetries) {
-            setRetryCount(retryCount + 1);
-            toast({
-              title: "Retrying update",
-              description: `Attempt ${retryCount + 1} of ${maxRetries}...`,
-              duration: 2000,
-            });
-            
-            // Wait a moment before retrying
-            setTimeout(() => handleSubmit(details), 2000);
-            return;
-          } else {
-            // Max retries reached, show error
-            throw error;
-          }
-        }
+        await bookingAPI.updateBooking(bookingId.toString(), updatedData);
+        
+        toast({
+          title: "Booking Updated",
+          description: "Your booking details have been updated successfully",
+          duration: 3000,
+        });
+        
+        setIsEditMode(false);
       } else {
         // For new bookings
         onSubmit(details);
@@ -130,13 +99,6 @@ export function GuestDetailsForm({
         )}
       </div>
       
-      {updateSuccess && (
-        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md text-green-700 flex items-center">
-          <CheckCircle size={18} className="mr-2" />
-          <p>Your changes have been saved successfully.</p>
-        </div>
-      )}
-      
       <EditableContactDetailsForm 
         onSubmit={handleSubmit}
         totalPrice={totalPrice}
@@ -149,12 +111,6 @@ export function GuestDetailsForm({
         <div className="mt-4 flex items-center justify-center bg-blue-50 p-2 rounded text-blue-700">
           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
           <p>Processing your booking...</p>
-        </div>
-      )}
-      
-      {retryCount > 0 && (
-        <div className="mt-2 text-xs text-amber-600">
-          Update retry attempt {retryCount} of {maxRetries}
         </div>
       )}
     </div>

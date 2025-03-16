@@ -8,7 +8,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     // Send CORS headers
     header('Access-Control-Allow-Origin: *');
     header('Access-Control-Allow-Methods: POST, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization');
     header('Content-Type: application/json');
     http_response_code(200);
     exit;
@@ -19,9 +19,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     // Add CORS headers
     header('Access-Control-Allow-Origin: *');
     header('Access-Control-Allow-Methods: POST, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization');
     
-    sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed', 'method' => $_SERVER['REQUEST_METHOD']], 405);
+    sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
 }
 
 // Disable caching for authentication endpoints
@@ -30,14 +30,6 @@ header("Pragma: no-cache");
 header("Expires: 0");
 
 try {
-    // Log request details for debugging
-    logError("Login endpoint accessed", [
-        'method' => $_SERVER['REQUEST_METHOD'],
-        'content_type' => $_SERVER['CONTENT_TYPE'] ?? 'none',
-        'ip' => $_SERVER['REMOTE_ADDR'],
-        'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'none'
-    ]);
-    
     // Get the request body
     $input = file_get_contents('php://input');
     logError("Login request received", ['input' => $input]);

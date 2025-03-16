@@ -1,22 +1,17 @@
 
-import ReactDOM from 'react-dom/client';
-import App from './App';
-import './index.css';
-import ErrorBoundaryClass from './components/ErrorBoundary';
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App'
+import './index.css'
 
-// Setup global error handler
-window.addEventListener('error', (event) => {
-  console.error('Global error:', event.error);
-});
+// Mount the app with React 18 createRoot API
+const root = ReactDOM.createRoot(document.getElementById('root')!);
 
-// Setup global unhandled promise rejection handler
-window.addEventListener('unhandledrejection', (event) => {
-  console.error('Unhandled promise rejection:', event.reason);
-});
-
-// Render app with error boundary
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <ErrorBoundaryClass>
+root.render(
+  <React.StrictMode>
     <App />
-  </ErrorBoundaryClass>
-);
+  </React.StrictMode>,
+)
+
+// Log for debugging
+console.log('Application initialized successfully');

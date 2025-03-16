@@ -9,137 +9,62 @@ import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import DashboardPage from './pages/DashboardPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
-import BookingEditPage from './pages/BookingEditPage';
-import ReceiptPage from './pages/ReceiptPage';
-import { FallbackErrorComponent } from './components/FallbackErrorComponent';
-import ErrorBoundaryClass from './components/ErrorBoundary';
-
-// Wrap component with error boundary
-const withErrorBoundary = (Component: React.ComponentType<any>) => {
-  return (props: any) => (
-    <ErrorBoundaryClass fallback={<FallbackErrorComponent />}>
-      <Component {...props} />
-    </ErrorBoundaryClass>
-  );
-};
 
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: withErrorBoundary(Index)({}),
-    errorElement: <FallbackErrorComponent />,
+    element: <Index />,
   },
   {
     path: '/cabs/:tripType?',
-    element: withErrorBoundary(CabsPage)({}),
-    errorElement: <FallbackErrorComponent />,
+    element: <CabsPage />,
   },
   {
     path: '/booking-confirmation',
-    element: withErrorBoundary(BookingConfirmationPage)({}),
-    errorElement: <FallbackErrorComponent />,
+    element: <BookingConfirmationPage />,
   },
   {
     path: '/tours',
-    element: withErrorBoundary(ToursPage)({}),
-    errorElement: <FallbackErrorComponent />,
+    element: <ToursPage />,
   },
   {
     path: '/login',
-    element: withErrorBoundary(LoginPage)({}),
-    errorElement: <FallbackErrorComponent />,
+    element: <LoginPage />,
   },
   {
     path: '/signup',
-    element: withErrorBoundary(SignupPage)({}),
-    errorElement: <FallbackErrorComponent />,
+    element: <SignupPage />,
   },
   {
     path: '/dashboard',
-    element: withErrorBoundary(DashboardPage)({}),
-    errorElement: <FallbackErrorComponent />,
-  },
-  // IMPORTANT: Multiple route patterns for booking edit for better compatibility
-  {
-    path: '/booking/:id/edit',
-    element: withErrorBoundary(BookingEditPage)({}),
-    errorElement: <FallbackErrorComponent />,
-  },
-  {
-    path: '/booking/edit/:id',
-    element: withErrorBoundary(BookingEditPage)({}),
-    errorElement: <FallbackErrorComponent />,
-  },
-  {
-    path: '/book/edit/:id',
-    element: withErrorBoundary(BookingEditPage)({}),
-    errorElement: <FallbackErrorComponent />,
-  },
-  // Multiple route patterns for receipts
-  {
-    path: '/receipt/:id',
-    element: withErrorBoundary(ReceiptPage)({}),
-    errorElement: <FallbackErrorComponent />,
-  },
-  {
-    path: '/booking/:id/receipt',
-    element: withErrorBoundary(ReceiptPage)({}),
-    errorElement: <FallbackErrorComponent />,
-  },
-  {
-    path: '/booking/receipt/:id',
-    element: withErrorBoundary(ReceiptPage)({}),
-    errorElement: <FallbackErrorComponent />,
-  },
-  {
-    path: '/booking/:id',
-    element: withErrorBoundary(ReceiptPage)({}),
-    errorElement: <FallbackErrorComponent />,
-  },
-  // CRITICAL FIX: Add explicit cancel routes
-  {
-    path: '/booking/:id/cancel',
-    element: withErrorBoundary(DashboardPage)({}),
-    errorElement: <FallbackErrorComponent />,
-  },
-  {
-    path: '/booking/cancel/:id',
-    element: withErrorBoundary(DashboardPage)({}),
-    errorElement: <FallbackErrorComponent />,
+    element: <DashboardPage />,
   },
   {
     path: '/admin',
-    element: withErrorBoundary(AdminDashboardPage)({}),
-    errorElement: <FallbackErrorComponent />,
+    element: <AdminDashboardPage />,
   },
   {
     path: '/admin/drivers',
-    element: withErrorBoundary(AdminDashboardPage)({}),
-    errorElement: <FallbackErrorComponent />,
+    element: <AdminDashboardPage />,
   },
   {
     path: '/admin/customers',
-    element: withErrorBoundary(AdminDashboardPage)({}),
-    errorElement: <FallbackErrorComponent />,
+    element: <AdminDashboardPage />,
   },
   {
     path: '/admin/reports',
-    element: withErrorBoundary(AdminDashboardPage)({}),
-    errorElement: <FallbackErrorComponent />,
+    element: <AdminDashboardPage />,
   },
   {
     path: '/admin/pricing',
-    element: withErrorBoundary(AdminDashboardPage)({}),
-    errorElement: <FallbackErrorComponent />,
+    element: <AdminDashboardPage />,
   },
   {
     path: '/admin/notifications',
-    element: withErrorBoundary(AdminDashboardPage)({}),
-    errorElement: <FallbackErrorComponent />,
+    element: <AdminDashboardPage />,
   },
   {
     path: '*',
-    element: withErrorBoundary(NotFound)({}),
-    errorElement: <FallbackErrorComponent />,
+    element: <NotFound />,
   },
 ]);

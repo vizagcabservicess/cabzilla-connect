@@ -1,67 +1,40 @@
 
-# Enable URL rewriting
+# Enable rewrite engine
 RewriteEngine On
 
-# Set default PHP handler - critical for proper execution
-AddHandler application/x-httpd-php .php
-SetHandler application/x-httpd-php
+# Parse API routes to PHP files
+RewriteRule ^signup$ signup.php [L]
+RewriteRule ^login$ login.php [L]
+RewriteRule ^user/dashboard$ user/dashboard.php [L]
+RewriteRule ^booking/create$ book.php [L]
+RewriteRule ^book$ book.php [L]
+RewriteRule ^book/edit/([0-9]+)$ book-edit.php?id=$1 [L]
+RewriteRule ^admin/bookings$ admin/bookings.php [L]
+RewriteRule ^fares/tours$ fares/tours.php [L]
+RewriteRule ^fares/vehicles$ fares/vehicles.php [L]
+RewriteRule ^admin/fares/update$ admin/fares-update.php [L]
+RewriteRule ^admin/km-price/update$ admin/km-price-update.php [L]
 
-# Allow CORS (Cross-Origin Resource Sharing)
+# Disable caching for API endpoints
 <IfModule mod_headers.c>
-    Header always set Access-Control-Allow-Origin "*"
-    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
-    Header always set Access-Control-Max-Age "3600"
-    
-    # Aggressive cache prevention headers
     Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
     Header always set Pragma "no-cache"
     Header always set Expires "0"
 </IfModule>
 
-# Handle OPTIONS method for CORS preflight requests
+# Set content type
+<FilesMatch "\.(php)$">
+    Header set Content-Type "application/json"
+</FilesMatch>
+
+# Enable CORS
+<IfModule mod_headers.c>
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization"
+    Header always set Access-Control-Max-Age "3600"
+</IfModule>
+
+# Handle OPTIONS method for CORS preflight
 RewriteCond %{REQUEST_METHOD} OPTIONS
-RewriteRule ^(.*)$ $1 [R=200,L]
-
-# Set default index for directories
-DirectoryIndex index.php
-
-# Process dashboard route with both formats
-RewriteRule ^user/dashboard$ user/dashboard.php [QSA,L]
-RewriteRule ^user/dashboard/$ user/dashboard.php [QSA,L]
-
-# CRITICAL FIX: Direct handler for all PHP files
-<FilesMatch "\.php$">
-    RewriteEngine Off
-    SetHandler application/x-httpd-php
-</FilesMatch>
-
-# CRITICAL FIX: Process booking modification URLs - MULTIPLE formats for compatibility
-RewriteRule ^booking/([0-9]+)/edit/?$ booking/edit.php?id=$1 [QSA,L]
-RewriteRule ^booking/edit/([0-9]+)/?$ booking/edit.php?id=$1 [QSA,L]
-RewriteRule ^book/edit/([0-9]+)/?$ booking/edit.php?id=$1 [QSA,L]
-
-# CRITICAL FIX: Process booking receipt URLs - MULTIPLE formats
-RewriteRule ^receipt/([0-9]+)/?$ receipt.php?id=$1 [QSA,L]
-RewriteRule ^booking/([0-9]+)/?$ receipt.php?id=$1 [QSA,L]
-RewriteRule ^booking/receipt/([0-9]+)/?$ receipt.php?id=$1 [QSA,L]
-RewriteRule ^booking/([0-9]+)/receipt/?$ receipt.php?id=$1 [QSA,L]
-
-# CRITICAL FIX: Process booking cancellation URLs - MULTIPLE formats
-RewriteRule ^booking/cancel$ booking/cancel.php [QSA,L]
-RewriteRule ^booking/([0-9]+)/cancel/?$ booking/cancel.php?id=$1 [QSA,L]
-RewriteRule ^booking/cancel/([0-9]+)/?$ booking/cancel.php?id=$1 [QSA,L]
-RewriteRule ^book/cancel/([0-9]+)/?$ booking/cancel.php?id=$1 [QSA,L]
-
-# Prevent viewing of .htaccess and other hidden files
-<FilesMatch "^\.ht">
-    Order allow,deny
-    Deny from all
-</FilesMatch>
-
-# Disable directory listing
-Options -Indexes
-
-# Direct access fallback for PHP files that don't match other rules
-RewriteCond %{REQUEST_URI} \.php$
-RewriteRule ^(.*)$ $1 [L]
+RewriteRule .* - [R=200,L]

@@ -5,7 +5,6 @@ import { DashboardMetrics as DashboardMetricsType } from '@/types/api';
 import { bookingAPI } from '@/services/api';
 import { Car, Users, DollarSign, Star, Clock, AlertTriangle, Calendar, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
@@ -17,7 +16,7 @@ interface DashboardMetricsProps {
 }
 
 export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week', onRefresh }: DashboardMetricsProps) {
-  const { toast: uiToast } = useToast();
+  const { toast } = useToast();
   const [metrics, setMetrics] = useState<DashboardMetricsType>(initialMetrics || {
     totalBookings: 0,
     activeRides: 0,
@@ -54,11 +53,6 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
       if (data) {
         setMetrics(data);
         if (onRefresh) onRefresh();
-        
-        // Show success toast if data was fetched successfully after initial load
-        if (retryCount > 0) {
-          toast.success("Dashboard metrics updated successfully");
-        }
       } else {
         throw new Error('No data received from metrics API');
       }
@@ -66,27 +60,11 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
       console.error('Error fetching dashboard metrics:', error);
       setError(error instanceof Error ? error.message : 'Failed to load dashboard metrics');
       
-      // Only show error toast if we're not already displaying an error
-      if (!error) {
-        uiToast({
-          title: "Error",
-          description: error instanceof Error ? error.message : 'Failed to load dashboard metrics',
-          variant: "destructive",
-        });
-      }
-      
-      // Use fallback dummy data for emergency UI rendering
-      if (!initialMetrics) {
-        setMetrics({
-          totalBookings: 0,
-          activeRides: 0,
-          totalRevenue: 0,
-          availableDrivers: 0,
-          busyDrivers: 0,
-          avgRating: 0,
-          upcomingRides: 0
-        });
-      }
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : 'Failed to load dashboard metrics',
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }

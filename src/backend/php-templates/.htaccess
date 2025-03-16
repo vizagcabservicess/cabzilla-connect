@@ -2,91 +2,48 @@
 # Enable rewrite engine
 RewriteEngine On
 
-# Set default PHP handler - critical for proper execution
-AddHandler application/x-httpd-php .php
+# Ensure API requests go directly to PHP files, not React frontend
+RewriteRule ^api/ - [L]
 
-# Ensure PHP files are processed as PHP regardless of URL structure
-<FilesMatch "\.php$">
-    SetHandler application/x-httpd-php
-</FilesMatch>
+# API routing rules
+RewriteRule ^api/signup$ api/signup.php [L]
+RewriteRule ^api/login$ api/login.php [L]
+RewriteRule ^api/user/dashboard$ api/user/dashboard.php [L]
+RewriteRule ^api/booking/create$ api/book.php [L]
+RewriteRule ^api/book$ api/book.php [L]
+RewriteRule ^api/book/edit/([0-9]+)$ api/book-edit.php?id=$1 [L]
+RewriteRule ^api/admin/bookings$ api/admin/bookings.php [L]
+RewriteRule ^api/fares/tours$ api/fares/tours.php [L]
+RewriteRule ^api/fares/vehicles$ api/fares/vehicles.php [L]
+RewriteRule ^api/admin/fares/update$ api/admin/fares-update.php [L]
+RewriteRule ^api/admin/km-price/update$ api/admin/km-price-update.php [L]
 
-# CORS headers for all requests
+# Set the default character set
+AddDefaultCharset UTF-8
+
+# Disable caching for API endpoints
+<IfModule mod_headers.c>
+    <FilesMatch "^api/">
+        Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+        Header always set Pragma "no-cache"
+        Header always set Expires "0"
+    </FilesMatch>
+</IfModule>
+
+# Enable CORS
 <IfModule mod_headers.c>
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization"
     Header always set Access-Control-Max-Age "3600"
-    
-    # Prevent caching for API responses
-    Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
-    Header set Pragma "no-cache"
-    Header set Expires "0"
 </IfModule>
 
-# Handle OPTIONS requests for CORS preflight - CRITICAL FIX
+# Handle OPTIONS requests for CORS preflight
 RewriteCond %{REQUEST_METHOD} OPTIONS
-RewriteRule ^(.*)$ $1 [R=200,L]
-
-# Ensure API requests go directly to PHP files, not React frontend
-# CRITICAL FIX: All API routes must be properly handled
-
-# Basic API endpoints
-RewriteRule ^api/signup$ api/signup.php [QSA,L]
-RewriteRule ^api/login$ api/login.php [QSA,L]
-
-# User dashboard endpoints - multiple formats
-RewriteRule ^api/user/dashboard$ api/user/dashboard.php [QSA,L]
-RewriteRule ^api/user/dashboard/$ api/user/dashboard.php [QSA,L]
-
-# Booking creation endpoints - multiple formats
-RewriteRule ^api/book$ api/book.php [QSA,L]
-RewriteRule ^api/book/$ api/book.php [QSA,L]
-RewriteRule ^api/booking$ api/book.php [QSA,L]
-RewriteRule ^api/booking/$ api/book.php [QSA,L]
-RewriteRule ^api/booking/create$ api/book.php [QSA,L]
-
-# CRITICAL FIX FOR CANCELLATION - Add explicit rules with highest priority
-RewriteRule ^api/booking/cancel$ api/booking/cancel.php [QSA,L]
-RewriteRule ^api/booking/([0-9]+)/cancel/?$ api/booking/cancel.php?id=$1 [QSA,L]
-RewriteRule ^api/booking/cancel/([0-9]+)/?$ api/booking/cancel.php?id=$1 [QSA,L]
-RewriteRule ^api/book/cancel/([0-9]+)/?$ api/booking/cancel.php?id=$1 [QSA,L]
-RewriteRule ^api/cancel/booking/([0-9]+)/?$ api/booking/cancel.php?id=$1 [QSA,L]
-
-# CRITICAL FIX: Booking edit endpoints - multiple formats
-RewriteRule ^api/booking/([0-9]+)/edit/?$ api/booking/edit.php?id=$1 [QSA,L]
-RewriteRule ^api/booking/edit/([0-9]+)/?$ api/booking/edit.php?id=$1 [QSA,L]
-RewriteRule ^api/book/edit/([0-9]+)/?$ api/booking/edit.php?id=$1 [QSA,L]
-RewriteRule ^api/edit/booking/([0-9]+)/?$ api/booking/edit.php?id=$1 [QSA,L]
-
-# CRITICAL FIX: Receipt endpoints - multiple formats
-RewriteRule ^api/receipt/([0-9]+)/?$ api/receipt.php?id=$1 [QSA,L]
-RewriteRule ^api/booking/([0-9]+)/receipt/?$ api/receipt.php?id=$1 [QSA,L]
-RewriteRule ^api/booking/receipt/([0-9]+)/?$ api/receipt.php?id=$1 [QSA,L]
-RewriteRule ^api/booking/([0-9]+)/?$ api/receipt.php?id=$1 [QSA,L]
-
-# Admin endpoints
-RewriteRule ^api/admin/bookings$ api/admin/bookings.php [QSA,L]
-RewriteRule ^api/fares/tours$ api/fares/tours.php [QSA,L]
-RewriteRule ^api/fares/vehicles$ api/fares/vehicles.php [QSA,L]
-RewriteRule ^api/admin/fares/update$ api/admin/fares-update.php [QSA,L]
-RewriteRule ^api/admin/km-price/update$ api/admin/km-price-update.php [QSA,L]
-
-# Direct access to PHP files - highest priority
-RewriteCond %{REQUEST_URI} \.php$
-RewriteRule ^(.*)$ $1 [L]
-
-# CRITICAL FIX: More specific fallback for booking cancellation
-RewriteCond %{REQUEST_URI} ^/api/booking/cancel
-RewriteRule ^api/booking/cancel(.*)$ api/booking/cancel.php [QSA,L]
-
-# Fallback for all other API paths to maintain compatibility
-RewriteCond %{REQUEST_URI} ^/api/
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^api/(.*)$ api/$1.php [QSA,L]
+RewriteRule .* - [R=200,L]
 
 # Redirect all non-file/directory/API requests to index.html for React Router
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
-RewriteCond %{REQUEST_URI} !^/api/
+RewriteCond %{REQUEST_URI} !^/api
 RewriteRule ^ index.html [QSA,L]
