@@ -105,9 +105,9 @@ export function BookingSummary({
     
     if (tripType === 'outstation') {
       const allocatedKm = 300;
-      // For both one-way and round-trip, calculate total distance appropriately
-      const effectiveDistance = tripMode === "one-way" ? distance : distance * 2;
-      const totalDistance = effectiveDistance; // Show actual distance
+      // For one-way, consider the total effective distance as distance × 2
+      const effectiveDistance = tripMode === "one-way" ? distance * 2 : distance * 2;
+      const totalDistance = tripMode === "one-way" ? distance : distance * 2; // Show actual distance
       
       let baseRate = 0, perKmRate = 0, driverAllowance = 250, nightHaltCharge = 0;
 
@@ -159,7 +159,7 @@ export function BookingSummary({
           <div className="flex justify-between text-sm mt-1">
             <span className="text-gray-600">
               {tripMode === "one-way" 
-                ? `Total distance: ${totalDistance} km`
+                ? `Total distance: ${totalDistance} km (effective: ${effectiveDistance} km)`
                 : `Total distance: ${totalDistance} km (${distance} km each way)`}
             </span>
             <span className="text-gray-600"></span>

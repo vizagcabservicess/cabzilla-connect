@@ -65,13 +65,33 @@ const CabsPage = () => {
     }
   }, [tripType, pickup, dropoff]);
 
+  useEffect(() => {
+    if (tripType === "airport" && pickup && dropoff) {
+      const isPickupInVizag = isVizagLocation(pickup);
+      const isDropoffInVizag = isVizagLocation(dropoff);
+      
+      if (!isPickupInVizag || !isDropoffInVizag) {
+        console.log("Locations not within Vizag city limits. Switching to outstation mode.");
+        toast({
+          title: "Trip type updated",
+          description: "One of your locations is outside Vizag city limits. We've updated your trip type to Outstation.",
+          duration: 3000,
+        });
+        setTripType("outstation");
+        setTripMode("one-way");
+        navigate("/cabs/outstation");
+      }
+    }
+  }, [pickup, dropoff, tripType, toast, navigate]);
+
   const handleTripTypeChange = (type: TripType) => {
-    setTripType(type);
-    navigate(`/cabs/${type}`);
     setSelectedCab(null);
     setDistance(0);
     setTravelTime(0);
     setShowMap(false);
+    
+    setTripType(type);
+    navigate(`/cabs/${type}`);
 
     if (type === "airport") {
       const airport = vizagLocations.find(loc => loc.type === 'airport');
