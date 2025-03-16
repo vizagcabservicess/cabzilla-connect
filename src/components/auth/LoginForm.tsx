@@ -44,11 +44,22 @@ export function LoginForm() {
     setError(null);
     
     try {
+      // Clear local storage first to remove any potentially corrupted tokens
+      localStorage.clear();
+      sessionStorage.clear();
+      
       // Clear any existing tokens first
-      authAPI.logout();
+      authAPI.logout(false); // Don't redirect on logout
+      
+      console.log('Attempting login with credentials:', { email: values.email, passwordLength: values.password.length });
       
       // Attempt login
       const response = await authAPI.login(values);
+      console.log('Login response received:', { status: response.status, hasToken: !!response.token });
+      
+      if (!response.token) {
+        throw new Error('No token received from server');
+      }
       
       // Add additional success messages and notifications
       toast.success("Login Successful", {
@@ -64,12 +75,13 @@ export function LoginForm() {
       
       console.log("Login successful, navigating to dashboard");
       
-      // Use a slight delay to ensure token is properly set
+      // Use a slight delay to ensure token is properly set before navigation
       setTimeout(() => {
         navigate('/dashboard');
-      }, 100);
+      }, 300);
       
     } catch (error) {
+      console.error("Login failed:", error);
       setError(error as Error);
       
       // Show error in both toast systems for reliability
@@ -84,8 +96,6 @@ export function LoginForm() {
         variant: "destructive",
         duration: 5000,
       });
-      
-      console.error("Login failed:", error);
     } finally {
       setIsLoading(false);
     }
