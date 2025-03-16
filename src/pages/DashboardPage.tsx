@@ -61,9 +61,8 @@ export default function DashboardPage() {
       }
       
       try {
-        // Force cache refresh without passing the parameter to the API function
-        const timestamp = new Date().getTime();
-        const url = `?_t=${timestamp}`;
+        // Cache busting without passing parameter to API function
+        console.log('Fetching bookings with cache busting...');
         const data = await bookingAPI.getUserBookings();
         console.log('Bookings received:', data);
         
@@ -396,4 +395,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
