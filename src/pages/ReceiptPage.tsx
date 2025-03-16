@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { format } from 'date-fns';
-import { bookingAPI, authAPI } from '@/services/api';
+import { bookingAPI } from '@/services/api';
 import { 
   AlertCircle, 
   ArrowLeft, 
@@ -70,17 +70,6 @@ export default function ReceiptPage() {
   const receiptRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Check auth
-    if (!authAPI.isAuthenticated()) {
-      uiToast({
-        title: "Authentication Required",
-        description: "Please login to view this receipt",
-        variant: "destructive",
-      });
-      navigate('/login', { state: { returnTo: `/receipt/${id}` } });
-      return;
-    }
-
     const fetchReceipt = async () => {
       try {
         setIsLoading(true);
@@ -107,17 +96,168 @@ export default function ReceiptPage() {
     };
 
     fetchReceipt();
-  }, [id, navigate, uiToast]);
+  }, [id, uiToast]);
 
   const handlePrint = () => {
     window.print();
   };
 
   const handleDownloadPDF = () => {
-    uiToast({
-      title: "PDF Download",
-      description: "PDF download functionality will be available soon.",
-    });
+    // Create a function to generate PDF using browser's print functionality
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      uiToast({
+        title: "Popup Blocked",
+        description: "Please allow popups to download PDF",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Write the receipt HTML to the new window
+    if (receiptRef.current) {
+      printWindow.document.write('<html><head><title>Receipt</title>');
+      printWindow.document.write('<style>');
+      printWindow.document.write(`
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .receipt-container { max-width: 800px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; margin-bottom: 20px; }
+        .section { margin-bottom: 15px; }
+        .company-name { font-size: 24px; font-weight: bold; }
+        .title { font-size: 20px; font-weight: bold; margin-bottom: 10px; }
+        .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
+        .flex { display: flex; align-items: start; margin-bottom: 8px; }
+        .label { font-size: 12px; color: #666; text-transform: uppercase; }
+        .value { font-weight: 500; }
+        .separator { border-top: 1px solid #eee; margin: 15px 0; }
+        .total { font-weight: bold; font-size: 18px; }
+        .footer { text-align: center; margin-top: 30px; font-size: 14px; color: #666; }
+        @media print {
+          body { -webkit-print-color-adjust: exact; }
+        }
+      `);
+      printWindow.document.write('</style></head><body>');
+      
+      // Create a simplified HTML version of the receipt
+      printWindow.document.write('<div class="receipt-container">');
+      
+      // Header
+      printWindow.document.write('<div class="header">');
+      printWindow.document.write(`<div>
+        <div class="company-name">${receipt?.companyName}</div>
+        <div>${receipt?.companyAddress}</div>
+        <div>${receipt?.companyPhone} | ${receipt?.companyEmail}</div>
+      </div>`);
+      printWindow.document.write(`<div>
+        <div class="title">Receipt</div>
+        <div>#${receipt?.bookingNumber}</div>
+        <div>Date: ${receipt?.bookingDate ? format(new Date(receipt.bookingDate), 'dd MMM yyyy') : ''}</div>
+      </div>`);
+      printWindow.document.write('</div>');
+      
+      // Customer info
+      printWindow.document.write('<div class="section">');
+      printWindow.document.write('<div class="title">Customer Information</div>');
+      printWindow.document.write(`<div>
+        <div class="value">${receipt?.passengerName}</div>
+        <div>${receipt?.passengerPhone}</div>
+        <div>${receipt?.passengerEmail}</div>
+      </div>`);
+      printWindow.document.write('</div>');
+      
+      // Trip details
+      printWindow.document.write('<div class="section">');
+      printWindow.document.write('<div class="title">Trip Details</div>');
+      printWindow.document.write('<div class="grid">');
+      
+      printWindow.document.write(`<div>
+        <div class="label">Pickup Location</div>
+        <div class="value">${receipt?.pickupLocation}</div>
+      </div>`);
+      
+      if (receipt?.dropLocation) {
+        printWindow.document.write(`<div>
+          <div class="label">Drop Location</div>
+          <div class="value">${receipt.dropLocation}</div>
+        </div>`);
+      }
+      
+      printWindow.document.write(`<div>
+        <div class="label">Pickup Date</div>
+        <div class="value">${receipt?.pickupDate ? format(new Date(receipt.pickupDate), 'dd MMM yyyy, h:mm a') : ''}</div>
+      </div>`);
+      
+      if (receipt?.returnDate) {
+        printWindow.document.write(`<div>
+          <div class="label">Return Date</div>
+          <div class="value">${format(new Date(receipt.returnDate), 'dd MMM yyyy, h:mm a')}</div>
+        </div>`);
+      }
+      
+      printWindow.document.write(`<div>
+        <div class="label">Vehicle</div>
+        <div class="value">${receipt?.cabType}</div>
+      </div>`);
+      
+      printWindow.document.write(`<div>
+        <div class="label">Trip Type</div>
+        <div class="value">${receipt?.tripType} - ${receipt?.tripMode}</div>
+      </div>`);
+      
+      printWindow.document.write('</div>'); // Close grid
+      printWindow.document.write('</div>'); // Close section
+      
+      // Payment details
+      printWindow.document.write('<div class="section">');
+      printWindow.document.write('<div class="title">Payment Details</div>');
+      printWindow.document.write('<div class="separator"></div>');
+      
+      printWindow.document.write(`<div class="flex" style="justify-content: space-between">
+        <div>Base Fare</div>
+        <div>₹${receipt?.totalAmount ? (receipt.totalAmount * 0.9).toFixed(2) : ''}</div>
+      </div>`);
+      
+      printWindow.document.write(`<div class="flex" style="justify-content: space-between">
+        <div>Taxes & Fees (10%)</div>
+        <div>₹${receipt?.totalAmount ? (receipt.totalAmount * 0.1).toFixed(2) : ''}</div>
+      </div>`);
+      
+      printWindow.document.write('<div class="separator"></div>');
+      
+      printWindow.document.write(`<div class="flex" style="justify-content: space-between">
+        <div class="total">Total Amount</div>
+        <div class="total">₹${receipt?.totalAmount?.toLocaleString('en-IN')}</div>
+      </div>`);
+      
+      printWindow.document.write(`<div style="text-align: right; margin-top: 5px;">${receipt?.paymentStatus}</div>`);
+      
+      printWindow.document.write('</div>'); // Close section
+      
+      // Footer
+      printWindow.document.write('<div class="footer">');
+      printWindow.document.write(`<div>Thank you for choosing ${receipt?.companyName}!</div>`);
+      printWindow.document.write(`<div>For any assistance, please contact us at ${receipt?.companyPhone}</div>`);
+      printWindow.document.write('</div>');
+      
+      printWindow.document.write('</div>'); // Close receipt container
+      printWindow.document.write('</body></html>');
+      
+      // Trigger print
+      printWindow.document.close();
+      printWindow.focus();
+      
+      // Short delay to allow styles to be applied
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 250);
+    } else {
+      uiToast({
+        title: "PDF Download",
+        description: "Unable to generate PDF. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const formatStatus = (status: string) => {
@@ -132,6 +272,18 @@ export default function ReceiptPage() {
         return <span className="text-red-600 font-medium">{status.toUpperCase()}</span>;
       default:
         return <span className="text-gray-600 font-medium">{status.toUpperCase()}</span>;
+    }
+  };
+
+  const handleGoBack = () => {
+    // Check if we came from the dashboard or from somewhere else
+    const referrer = document.referrer;
+    if (referrer.includes('/dashboard')) {
+      navigate('/dashboard');
+    } else if (referrer.includes('/booking')) {
+      navigate(`/booking/${id}/edit`);
+    } else {
+      navigate('/');
     }
   };
 
@@ -155,10 +307,10 @@ export default function ReceiptPage() {
         </Alert>
         <Button 
           variant="outline" 
-          onClick={() => navigate('/dashboard')}
+          onClick={handleGoBack}
           className="mt-4"
         >
-          <ArrowLeft className="h-4 w-4 mr-2" /> Return to Dashboard
+          <ArrowLeft className="h-4 w-4 mr-2" /> Go Back
         </Button>
       </div>
     );
@@ -174,10 +326,10 @@ export default function ReceiptPage() {
         </Alert>
         <Button 
           variant="outline" 
-          onClick={() => navigate('/dashboard')}
+          onClick={handleGoBack}
           className="mt-4"
         >
-          <ArrowLeft className="h-4 w-4 mr-2" /> Return to Dashboard
+          <ArrowLeft className="h-4 w-4 mr-2" /> Go Back
         </Button>
       </div>
     );
@@ -188,10 +340,10 @@ export default function ReceiptPage() {
       <div className="flex items-center justify-between mb-6 print:hidden">
         <Button 
           variant="outline" 
-          onClick={() => navigate('/dashboard')}
+          onClick={handleGoBack}
           className="flex items-center gap-2"
         >
-          <ArrowLeft size={16} /> Back to Dashboard
+          <ArrowLeft size={16} /> Back
         </Button>
         <div className="flex gap-2">
           <Button 

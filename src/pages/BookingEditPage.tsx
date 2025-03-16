@@ -25,6 +25,7 @@ import {
   MapPin, 
   Trash2,  
   AlertTriangle,
+  FileText,
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -157,7 +158,38 @@ export default function BookingEditPage() {
 
   const handleViewReceipt = () => {
     if (!id) return;
+    // Open receipt in new tab for better user experience
     window.open(`/receipt/${id}`, '_blank');
+  };
+
+  const handleShareReceipt = () => {
+    if (!id) return;
+    
+    // Create shareable link
+    const receiptUrl = `${window.location.origin}/receipt/${id}`;
+    
+    // Try to use the clipboard API to copy the URL
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(receiptUrl)
+        .then(() => {
+          toast.success('Receipt link copied to clipboard!', {
+            description: 'You can now share it with others'
+          });
+        })
+        .catch(() => {
+          // Fallback for clipboard API failure
+          uiToast({
+            title: "Couldn't copy automatically",
+            description: `Share this link: ${receiptUrl}`,
+          });
+        });
+    } else {
+      // Fallback for browsers without clipboard API
+      uiToast({
+        title: "Share Receipt",
+        description: `Copy this link: ${receiptUrl}`,
+      });
+    }
   };
 
   if (isLoading) {
@@ -368,20 +400,34 @@ export default function BookingEditPage() {
             </Card>
           )}
 
-          <div className="flex items-center justify-between gap-4">
-            <Button 
-              variant="outline" 
-              className="flex-1"
-              onClick={handleViewReceipt}
-            >
-              View Receipt
-            </Button>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between gap-4">
+              <Button 
+                variant="outline" 
+                className="flex-1 flex items-center gap-2"
+                onClick={handleViewReceipt}
+              >
+                <FileText size={16} /> View Receipt
+              </Button>
+              <Button 
+                variant="secondary" 
+                className="flex-1 flex items-center gap-2"
+                onClick={handleShareReceipt}
+              >
+                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="mr-1">
+                  <path d="M3.5 7.5C2.67157 7.5 2 6.82843 2 6C2 5.17157 2.67157 4.5 3.5 4.5C4.32843 4.5 5 5.17157 5 6C5 6.82843 4.32843 7.5 3.5 7.5ZM11.5 4.5C10.6716 4.5 10 3.82843 10 3C10 2.17157 10.6716 1.5 11.5 1.5C12.3284 1.5 13 2.17157 13 3C13 3.82843 12.3284 4.5 11.5 4.5ZM11.5 13.5C10.6716 13.5 10 12.8284 10 12C10 11.1716 10.6716 10.5 11.5 10.5C12.3284 10.5 13 11.1716 13 12C13 12.8284 12.3284 13.5 11.5 13.5Z" stroke="currentColor" fill="none" />
+                  <path d="M5 6L10 3.5M5 6L10 11.5" stroke="currentColor" />
+                </svg>
+                Share Receipt
+              </Button>
+            </div>
+            
             {canModify && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button 
                     variant="destructive" 
-                    className="flex items-center gap-2 flex-1"
+                    className="flex items-center gap-2"
                     disabled={isSubmitting}
                   >
                     <Trash2 size={16} /> Cancel Booking
