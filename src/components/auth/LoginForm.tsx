@@ -20,6 +20,7 @@ import { authAPI } from '@/services/api';
 import { LoginRequest } from '@/types/api';
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { AlertCircle, ExternalLink, RefreshCw } from 'lucide-react';
+import { apiProxy } from '@/services/apiProxy';
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -34,10 +35,11 @@ export function LoginForm() {
   const [apiUrl, setApiUrl] = useState<string>('');
   const [debugMode, setDebugMode] = useState(false);
   const [connectionTested, setConnectionTested] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState({success: false, message: 'Not tested'});
 
   useEffect(() => {
     // Display API URL for debugging
-    const url = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com/api';
+    const url = apiProxy.getCurrentEndpoint();
     setApiUrl(url);
     
     // Clear any stale tokens on login page load
@@ -49,6 +51,9 @@ export function LoginForm() {
     if (urlParams.get('error')) {
       setDebugMode(true);
     }
+    
+    // Automatically test API connection on load
+    testApiConnection();
   }, []);
 
   const form = useForm<LoginRequest>({
@@ -61,80 +66,34 @@ export function LoginForm() {
 
   const testApiConnection = async () => {
     setConnectionTested(true);
+    setConnectionStatus({success: false, message: 'Testing...'});
+    
     try {
-      // Test multiple endpoints
-      const endpoints = [
-        '/login',
-        '/api/login',
-        '/signup',
-        '/api/signup',
-        '/user/dashboard',
-        '/api/user/dashboard'
-      ];
+      const result = await apiProxy.testConnectivity();
       
-      let successCount = 0;
-      let failCount = 0;
-      
-      for (const endpoint of endpoints) {
-        try {
-          console.log(`Testing endpoint: ${apiUrl}${endpoint}`);
-          
-          const response = await fetch(`${apiUrl}${endpoint}`, {
-            method: 'OPTIONS',
-            headers: {
-              'Accept': 'application/json',
-              'Content-Type': 'application/json',
-              'Cache-Control': 'no-cache',
-            }
-          });
-          
-          console.log(`Endpoint ${endpoint} status:`, response.status);
-          
-          if (response.ok) {
-            successCount++;
-          } else {
-            failCount++;
-          }
-        } catch (err) {
-          console.error(`Error testing ${endpoint}:`, err);
-          failCount++;
-        }
-      }
-      
-      toast.success(`API Connection Test Results`, {
-        description: `${successCount} endpoints accessible, ${failCount} failed`,
-        duration: 5000,
-      });
-      
-      // Try login directly
-      try {
-        const loginResponse = await fetch(`${apiUrl}/login`, {
-          method: 'OPTIONS',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-          }
-        });
+      if (result) {
+        // Update API URL display after successful connection
+        setApiUrl(apiProxy.getCurrentEndpoint());
+        setConnectionStatus({success: true, message: 'Connected'});
         
-        uiToast({
-          title: `Login Endpoint Test: ${loginResponse.status}`,
-          description: loginResponse.ok 
-            ? "Login endpoint is accessible"
-            : "Login endpoint is not accessible with OPTIONS request",
+        toast.success(`API Connection Successful`, {
+          description: `Connected to: ${apiProxy.getCurrentEndpoint()}`,
           duration: 5000,
         });
-      } catch (error) {
-        uiToast({
-          title: "Login Endpoint Test Failed",
-          description: error instanceof Error ? error.message : "Unknown network error",
-          variant: "destructive",
+      } else {
+        setConnectionStatus({success: false, message: 'Failed'});
+        toast.error(`API Connection Failed`, {
+          description: "Could not connect to any API endpoint",
           duration: 5000,
         });
       }
-    } catch (error) {
+    } catch (err) {
+      setConnectionStatus({success: false, message: 'Error'});
+      console.error('API connection test error:', err);
+      
       uiToast({
         title: "API Connectivity Test Failed",
-        description: error instanceof Error ? error.message : "Unknown error",
+        description: err instanceof Error ? err.message : "Unknown error",
         variant: "destructive",
         duration: 5000,
       });
@@ -156,7 +115,8 @@ export function LoginForm() {
       // Show toast to indicate attempt
       toast.loading("Logging in...", { id: "login-attempt" });
       
-      const response = await authAPI.login(values);
+      // Use direct API call to avoid any middleware issues
+      const response = await apiProxy.post('/login', values);
       
       if (response.token) {
         // Store token in localStorage and a backup in sessionStorage
@@ -223,14 +183,21 @@ export function LoginForm() {
 
   return (
     <>
-      <div className="mb-4 p-2 bg-blue-50 rounded-md text-xs text-blue-700 flex items-center justify-between">
+      <div className={`mb-4 p-2 rounded-md text-xs flex items-center justify-between ${
+        connectionStatus.success ? 'bg-green-50 text-green-700' : 'bg-blue-50 text-blue-700'
+      }`}>
         <div className="flex items-center">
           <AlertCircle className="w-4 h-4 mr-1" />
-          <span>API URL: {apiUrl}</span>
+          <span>API: {apiUrl}</span>
         </div>
-        <Button variant="ghost" size="sm" onClick={testApiConnection}>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={testApiConnection}
+          className={connectionStatus.success ? "text-green-700" : ""}
+        >
           {connectionTested ? <RefreshCw className="w-3 h-3 mr-1" /> : null}
-          Test API <ExternalLink className="ml-1 w-3 h-3" />
+          {connectionStatus.message} <ExternalLink className="ml-1 w-3 h-3" />
         </Button>
       </div>
       

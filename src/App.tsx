@@ -1,111 +1,106 @@
 
-import { useEffect } from 'react';
 import { RouterProvider } from 'react-router-dom';
 import { router } from './routes';
-import { GoogleMapsProvider } from './providers/GoogleMapsProvider';
-import { Toaster as ToastUIToaster } from './components/ui/toaster';
-import { Toaster as SonnerToaster } from './components/ui/sonner';
+import { useEffect, useState } from 'react';
+import { Toaster } from "./components/ui/sonner";
+import { Toaster as UIToaster } from "./components/ui/toaster";
 import { ThemeProvider } from './providers/ThemeProvider';
+import { GoogleMapsProvider } from './providers/GoogleMapsProvider';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import ErrorBoundaryClass from './components/ErrorBoundary';
+import { apiProxy } from './services/apiProxy';
+import { toast } from 'sonner';
+
+// Create a query client with retries and caching disabled
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+      staleTime: 0,
+      cacheTime: 0,
+    },
+  },
+});
 
 function App() {
+  const [apiConnected, setApiConnected] = useState<boolean | null>(null);
+  
+  // Function to check API connectivity
+  const checkApiConnectivity = async () => {
+    try {
+      console.log('Checking API connectivity...');
+      const isConnected = await apiProxy.testConnectivity();
+      setApiConnected(isConnected);
+      
+      if (isConnected) {
+        console.log('API connectivity check successful');
+      } else {
+        console.error('API connectivity check failed - no endpoints reachable');
+        toast.error('API Connection Failed', {
+          description: 'Unable to connect to any API endpoint. Some features may not work.',
+          duration: 5000,
+        });
+      }
+    } catch (error) {
+      console.error('API connectivity check failed:', error);
+      setApiConnected(false);
+    }
+  };
+  
+  // Clear all data on initial load
+  const clearStaleData = () => {
+    console.log('Clearing all cached data');
+    
+    // Clear auth state
+    localStorage.removeItem('auth_token');
+    sessionStorage.removeItem('auth_token');
+    
+    // Clear booking data
+    localStorage.removeItem('selectedCab');
+    localStorage.removeItem('hourlyPackage');
+    localStorage.removeItem('tourPackage');
+    localStorage.removeItem('bookingDetails');
+    localStorage.removeItem('cabFares');
+    localStorage.removeItem('dropLocation');
+    localStorage.removeItem('pickupLocation');
+    localStorage.removeItem('pickupDate');
+    localStorage.removeItem('returnDate');
+    
+    // Clear API cache
+    queryClient.clear();
+  };
+  
   useEffect(() => {
-    // Set page title
-    document.title = 'Vizag Cabs - Book Cabs in Visakhapatnam';
+    console.log('Application initialized successfully');
+    clearStaleData();
     
-    // Log navigation for debugging routes
-    const handleRouteChange = () => {
-      console.log('Route changed to:', window.location.pathname);
-    };
+    // Add timestamp to help debug
+    window.appInitTime = new Date().toISOString();
     
-    // Log all unhandled errors for better debugging
-    const handleUnhandledError = (event: ErrorEvent) => {
-      console.error('Unhandled error:', {
-        message: event.message,
-        source: event.filename,
-        line: event.lineno,
-        column: event.colno,
-        error: event.error,
-        timestamp: new Date().toISOString(),
-        url: window.location.href
-      });
-    };
-    
-    // Log all unhandled promise rejections
-    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      console.error('Unhandled promise rejection:', {
-        reason: event.reason,
-        timestamp: new Date().toISOString(),
-        url: window.location.href
-      });
-    };
-    
-    // Add event listeners
-    window.addEventListener('popstate', handleRouteChange);
-    window.addEventListener('error', handleUnhandledError);
-    window.addEventListener('unhandledrejection', handleUnhandledRejection);
-    
-    // Log startup information
-    console.info('API Base URL:', import.meta.env.VITE_API_URL || 'https://saddlebrown-oryx-227656.hostingersite.com/api');
-    console.info('Application initialized successfully');
-    
-    // Clear any stale data on application load
-    const clearCachedData = () => {
-      try {
-        console.info('Clearing all cached data');
-        const storageKeys = [
-          'authToken', 'userId', 'userProfile', 'bookingDetails', 
-          'selectedCab', 'pickupLocation', 'dropLocation', 
-          'pickupDate', 'returnDate', 'auth_token',
-          'cabFares', 'hourlyPackage', 'tourPackage',
-          'bookingData', 'passengerDetails', 'tripDetails'
-        ];
-        
-        storageKeys.forEach(key => {
-          sessionStorage.removeItem(key);
-          localStorage.removeItem(key);
-        });
-      } catch (e) {
-        console.error('Failed to clear cached data:', e);
-      }
-    };
-    clearCachedData();
-    
-    // Verify API connectivity at startup
-    const checkApiConnectivity = async () => {
-      try {
-        const apiUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com/api';
-        console.info('Checking API connectivity to:', apiUrl);
-        
-        const response = await fetch(`${apiUrl}/login`, { 
-          method: 'OPTIONS',
-          headers: { 'Accept': 'application/json' },
-          // Prevent caching with a random number
-          cache: 'no-cache'
-        });
-        
-        console.info(`API connectivity check: ${response.status} ${response.ok ? 'OK' : 'Failed'}`);
-      } catch (error) {
-        console.error('API connectivity check failed:', error);
-      }
-    };
+    // Check API connectivity
     checkApiConnectivity();
     
-    return () => {
-      // Cleanup
-      window.removeEventListener('popstate', handleRouteChange);
-      window.removeEventListener('error', handleUnhandledError);
-      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
-    };
+    // Add periodic check for API connectivity
+    const interval = setInterval(() => {
+      checkApiConnectivity();
+    }, 60000); // Check every minute
+    
+    return () => clearInterval(interval);
   }, []);
 
   return (
-    <ThemeProvider defaultTheme="light" storageKey="vizag-cabs-theme">
-      <GoogleMapsProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
-        <RouterProvider router={router} />
-        <ToastUIToaster />
-        <SonnerToaster position="top-right" closeButton richColors />
-      </GoogleMapsProvider>
-    </ThemeProvider>
+    <ErrorBoundaryClass>
+      <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
+        <GoogleMapsProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
+          <QueryClientProvider client={queryClient}>
+            <RouterProvider router={router} />
+            <Toaster position="top-center" closeButton richColors />
+            <UIToaster />
+          </QueryClientProvider>
+        </GoogleMapsProvider>
+      </ThemeProvider>
+    </ErrorBoundaryClass>
   );
 }
 
