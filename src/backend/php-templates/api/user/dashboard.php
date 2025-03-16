@@ -47,6 +47,9 @@ try {
     // Get period filter if provided (today, week, month)
     $period = isset($_GET['period']) ? $_GET['period'] : 'week';
     
+    // Log the period parameter
+    logError("Period parameter", ['period' => $period]);
+    
     // Authenticate user with improved logging
     $headers = getallheaders();
     logError("Request headers", ['headers' => $headers]);
@@ -68,7 +71,7 @@ try {
     }
     
     $userId = $userData['user_id'];
-    $isAdmin = isset($userData['is_admin']) && $userData['is_admin'] === true;
+    $isAdmin = isset($userData['role']) && $userData['role'] === 'admin';
     
     logError("User authenticated successfully", [
         'user_id' => $userId, 
@@ -101,6 +104,9 @@ try {
                 $dateCondition = "WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
                 break;
         }
+        
+        // Log the SQL condition being used
+        logError("Date condition for metrics", ['sql_condition' => $dateCondition]);
         
         // Get total bookings for the period
         $totalBookingsQuery = "SELECT COUNT(*) as total FROM bookings $dateCondition";
@@ -144,7 +150,7 @@ try {
             'upcomingRides' => (int)$upcomingRides
         ];
         
-        logError("Sending admin metrics response", ['metrics' => $metrics]);
+        logError("Sending admin metrics response", ['metrics' => $metrics, 'period' => $period]);
         sendJsonResponse(['status' => 'success', 'data' => $metrics]);
         exit;
     }

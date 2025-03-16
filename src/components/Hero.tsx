@@ -86,6 +86,20 @@ export function Hero() {
         });
         setTripType('airport');
       }
+    } else if (tripType === 'airport' && pickupLocation && dropLocation) {
+      const isPickupInVizag = isVizagLocation(pickupLocation);
+      const isDropoffInVizag = isVizagLocation(dropLocation);
+      
+      if (!isPickupInVizag || !isDropoffInVizag) {
+        console.log("Locations not within Vizag city limits. Switching to outstation mode.");
+        toast({
+          title: "Trip Type Updated",
+          description: "One of your locations is outside Vizag city limits. We've updated your trip type to Outstation.",
+          duration: 3000,
+        });
+        setTripType('outstation');
+        setTripMode('one-way');
+      }
     }
   }, [pickupLocation, dropLocation, tripType, toast]);
 
@@ -215,7 +229,7 @@ export function Hero() {
       if (tripMode === 'one-way') {
         const days = 1;
         const totalMinKm = days * 300;
-        const effectiveDistance = distance;
+        const effectiveDistance = distance * 2;
         const extraKm = Math.max(effectiveDistance - totalMinKm, 0);
         const totalBaseFare = basePrice;
         const totalDistanceFare = extraKm * perKmRate;

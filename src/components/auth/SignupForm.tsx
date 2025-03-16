@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/form";
 import { authAPI } from '@/services/api';
 import { SignupRequest } from '@/types/api';
+import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 
 const signupSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -29,6 +30,7 @@ export function SignupForm() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
 
   const form = useForm<SignupRequest>({
     resolver: zodResolver(signupSchema),
@@ -42,8 +44,10 @@ export function SignupForm() {
 
   const onSubmit = async (values: SignupRequest) => {
     setIsLoading(true);
+    setError(null);
+    
     try {
-      const response = await authAPI.signup(values);
+      const response = await authAPI.register(values);
       toast({
         title: "Account Created",
         description: "Your account has been created successfully!",
@@ -51,6 +55,7 @@ export function SignupForm() {
       });
       navigate('/dashboard');
     } catch (error) {
+      setError(error as Error);
       toast({
         title: "Signup Failed",
         description: error instanceof Error ? error.message : "Something went wrong",
@@ -61,6 +66,20 @@ export function SignupForm() {
       setIsLoading(false);
     }
   };
+
+  const handleRetry = () => {
+    setError(null);
+  };
+
+  if (error) {
+    return (
+      <ApiErrorFallback 
+        error={error} 
+        onRetry={handleRetry}
+        title="Signup Failed" 
+      />
+    );
+  }
 
   return (
     <Form {...form}>

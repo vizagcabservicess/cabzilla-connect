@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -11,7 +12,8 @@ import {
   Location, 
   vizagLocations, 
   apDestinations,
-  formatTravelTime 
+  formatTravelTime,
+  isVizagLocation
 } from "@/lib/locationData";
 import { 
   CabType, 
@@ -54,6 +56,13 @@ const CabsPage = () => {
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState<boolean>(false);
   const [bookingComplete, setBookingComplete] = useState<boolean>(false);
 
+  // Clear price and selected cab when trip type or mode changes
+  useEffect(() => {
+    setSelectedCab(null);
+    setTotalPrice(0);
+  }, [tripType, tripMode]);
+
+  // Set airport as pickup for airport trips
   useEffect(() => {
     if (tripType === "airport") {
       const airport = vizagLocations.find(loc => loc.type === 'airport');
@@ -65,13 +74,41 @@ const CabsPage = () => {
     }
   }, [tripType, pickup, dropoff]);
 
+  // Check if locations are valid for airport transfer and switch to outstation if needed
+  useEffect(() => {
+    if (tripType === "airport" && pickup && dropoff) {
+      const isPickupInVizag = isVizagLocation(pickup);
+      const isDropoffInVizag = isVizagLocation(dropoff);
+      
+      if (!isPickupInVizag || !isDropoffInVizag) {
+        console.log("Locations not within Vizag city limits. Switching to outstation mode.");
+        toast({
+          title: "Trip type updated",
+          description: "One of your locations is outside Vizag city limits. We've updated your trip type to Outstation.",
+          duration: 3000,
+        });
+        setTripType("outstation");
+        setTripMode("one-way");
+        navigate("/cabs/outstation");
+      }
+    }
+  }, [pickup, dropoff, tripType, toast, navigate]);
+
+  // Clear selected cab when locations change
+  useEffect(() => {
+    setSelectedCab(null);
+    setTotalPrice(0);
+  }, [pickup, dropoff]);
+
   const handleTripTypeChange = (type: TripType) => {
-    setTripType(type);
-    navigate(`/cabs/${type}`);
     setSelectedCab(null);
     setDistance(0);
     setTravelTime(0);
     setShowMap(false);
+    setTotalPrice(0);
+    
+    setTripType(type);
+    navigate(`/cabs/${type}`);
 
     if (type === "airport") {
       const airport = vizagLocations.find(loc => loc.type === 'airport');
@@ -103,6 +140,7 @@ const CabsPage = () => {
     }
   };
 
+  // Calculate distance based on locations or package selection
   useEffect(() => {
     const fetchDistance = async () => {
       if (tripType === "local") {
@@ -111,6 +149,7 @@ const CabsPage = () => {
           setDistance(selectedPackage.kilometers);
           const estimatedTime = selectedPackage.hours * 60;
           setTravelTime(estimatedTime);
+          setSelectedCab(null); // Reset selected cab when package changes
         }
         return;
       }
@@ -118,6 +157,7 @@ const CabsPage = () => {
       if (pickup && dropoff) {
         setIsCalculatingDistance(true);
         setShowMap(false);
+        setSelectedCab(null); // Reset selected cab when locations change
   
         try {
           const result = await calculateDistanceMatrix(pickup, dropoff);
@@ -155,6 +195,7 @@ const CabsPage = () => {
     fetchDistance();
   }, [pickup, dropoff, tripType, hourlyPackage, toast]);
 
+  // Calculate total price when needed inputs change
   useEffect(() => {
     if (selectedCab && distance > 0) {
       const fare = calculateFare(
@@ -174,6 +215,7 @@ const CabsPage = () => {
 
   const handleHourlyPackageChange = (packageId: string) => {
     setHourlyPackage(packageId);
+    setSelectedCab(null); // Reset selected cab when package changes
     
     const selectedPackage = hourlyPackages.find((pkg) => pkg.id === packageId);
     if (selectedPackage) {
