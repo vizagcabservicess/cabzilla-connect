@@ -33,15 +33,18 @@ export function CabOptions({
   const [selectedCabId, setSelectedCabId] = useState<string | null>(selectedCab?.id || null);
   const [cabFares, setCabFares] = useState<Record<string, number>>({});
 
-  // Reset cab selection when key parameters change
+  // Force recalculation of fares when any parameter changes
   useEffect(() => {
     setSelectedCabId(null);
     setCabFares({});
     
+    // Clear any previously selected cab from sessionStorage to prevent caching issues
+    sessionStorage.removeItem('selectedCab');
+    
     if (selectedCab) {
       onSelectCab(null as any); // Reset the selected cab
     }
-  }, [tripType, tripMode, hourlyPackage, onSelectCab]);
+  }, [tripType, tripMode, hourlyPackage, distance, onSelectCab]);
 
   // Calculate fares for all cab types whenever relevant parameters change
   useEffect(() => {

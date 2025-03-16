@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -58,6 +57,10 @@ const CabsPage = () => {
 
   // Clear price and selected cab when trip type or mode changes
   useEffect(() => {
+    // Clear all cached data to prevent stale data issues
+    sessionStorage.removeItem('selectedCab');
+    sessionStorage.removeItem('bookingDetails');
+    
     setSelectedCab(null);
     setTotalPrice(0);
   }, [tripType, tripMode]);
@@ -74,7 +77,7 @@ const CabsPage = () => {
     }
   }, [tripType, pickup, dropoff]);
 
-  // Check if locations are valid for airport transfer and switch to outstation if needed
+  // FIX: Remove the auto-switching to airport, only check for Vizag locations
   useEffect(() => {
     if (tripType === "airport" && pickup && dropoff) {
       const isPickupInVizag = isVizagLocation(pickup);
@@ -92,15 +95,22 @@ const CabsPage = () => {
         navigate("/cabs/outstation");
       }
     }
+    // We DON'T switch to airport mode for locations outside AP
   }, [pickup, dropoff, tripType, toast, navigate]);
 
   // Clear selected cab when locations change
   useEffect(() => {
     setSelectedCab(null);
     setTotalPrice(0);
+    // Also clear session storage to prevent cached data
+    sessionStorage.removeItem('selectedCab');
   }, [pickup, dropoff]);
 
   const handleTripTypeChange = (type: TripType) => {
+    // Clear all cached data when changing trip type
+    sessionStorage.removeItem('selectedCab');
+    sessionStorage.removeItem('bookingDetails');
+    
     setSelectedCab(null);
     setDistance(0);
     setTravelTime(0);
@@ -140,7 +150,7 @@ const CabsPage = () => {
     }
   };
 
-  // Calculate distance based on locations or package selection
+  // Calculate distance based on locations or package selection - updated to avoid caching issues
   useEffect(() => {
     const fetchDistance = async () => {
       if (tripType === "local") {
@@ -150,6 +160,7 @@ const CabsPage = () => {
           const estimatedTime = selectedPackage.hours * 60;
           setTravelTime(estimatedTime);
           setSelectedCab(null); // Reset selected cab when package changes
+          sessionStorage.removeItem('selectedCab'); // Clear cached cab
         }
         return;
       }
@@ -158,6 +169,7 @@ const CabsPage = () => {
         setIsCalculatingDistance(true);
         setShowMap(false);
         setSelectedCab(null); // Reset selected cab when locations change
+        sessionStorage.removeItem('selectedCab'); // Clear cached cab
   
         try {
           const result = await calculateDistanceMatrix(pickup, dropoff);

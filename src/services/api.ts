@@ -1,4 +1,3 @@
-
 import axios, { AxiosInstance, AxiosError, AxiosRequestConfig } from 'axios';
 import { jwtDecode } from 'jwt-decode';
 import { Booking, BookingRequest, DashboardMetrics, VehiclePricingUpdateRequest } from '@/types/api';
@@ -198,7 +197,12 @@ export const bookingAPI = {
   async createBooking(bookingData: BookingRequest): Promise<any> {
     return makeApiRequest(async () => {
       console.log('Creating booking with data:', bookingData);
-      const response = await apiClient.post('/book', bookingData);
+      // Add flag to request email notifications
+      const requestWithNotification = {
+        ...bookingData,
+        sendEmailNotification: true // Enable email notifications
+      };
+      const response = await apiClient.post('/book', requestWithNotification);
       if (response.data.status === 'success') {
         return response.data;
       } else {
@@ -273,6 +277,55 @@ export const bookingAPI = {
       }
     });
   },
+  
+  // New function to update booking status
+  async updateBookingStatus(bookingId: string, status: string, notes?: string): Promise<any> {
+    return makeApiRequest(async () => {
+      const data = {
+        status,
+        notes,
+        notifyCustomer: true // Send email notification to customer about status change
+      };
+      
+      const response = await apiClient.post(`/admin/booking/${bookingId}/status`, data);
+      if (response.data.status === 'success') {
+        return response.data;
+      } else {
+        throw new Error(response.data.message || 'Failed to update booking status');
+      }
+    });
+  },
+  
+  // New function to assign driver to booking
+  async assignDriver(bookingId: string, driverId: string, driverName: string, driverPhone: string): Promise<any> {
+    return makeApiRequest(async () => {
+      const data = {
+        driverId,
+        driverName,
+        driverPhone,
+        notifyCustomer: true // Send email notification to customer about driver assignment
+      };
+      
+      const response = await apiClient.post(`/admin/booking/${bookingId}/assign-driver`, data);
+      if (response.data.status === 'success') {
+        return response.data;
+      } else {
+        throw new Error(response.data.message || 'Failed to assign driver');
+      }
+    });
+  },
+  
+  // New function to generate/get booking receipt
+  async getBookingReceipt(bookingId: string): Promise<any> {
+    return makeApiRequest(async () => {
+      const response = await apiClient.get(`/admin/booking/${bookingId}/receipt`);
+      if (response.data.status === 'success') {
+        return response.data.data;
+      } else {
+        throw new Error(response.data.message || 'Failed to get booking receipt');
+      }
+    });
+  },
 };
 
 // API service for fare management
@@ -323,6 +376,30 @@ export const fareAPI = {
         return response.data;
       } else {
         throw new Error(response.data.message || 'Failed to update vehicle pricing');
+      }
+    });
+  },
+  
+  // New method to add a new tour fare
+  async addTourFare(tourData: any): Promise<any> {
+    return makeApiRequest(async () => {
+      const response = await apiClient.post('/fares/add-tour', tourData);
+      if (response.data.status === 'success') {
+        return response.data;
+      } else {
+        throw new Error(response.data.message || 'Failed to add new tour fare');
+      }
+    });
+  },
+  
+  // New method to delete a tour fare
+  async deleteTourFare(tourId: string): Promise<any> {
+    return makeApiRequest(async () => {
+      const response = await apiClient.delete(`/fares/delete-tour/${tourId}`);
+      if (response.data.status === 'success') {
+        return response.data;
+      } else {
+        throw new Error(response.data.message || 'Failed to delete tour fare');
       }
     });
   }
