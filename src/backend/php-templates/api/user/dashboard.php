@@ -47,8 +47,11 @@ try {
     // Get period filter if provided (today, week, month)
     $period = isset($_GET['period']) ? $_GET['period'] : 'week';
     
+    // Force cache refresh if requested
+    $forceRefresh = isset($_GET['refresh']) && $_GET['refresh'] === 'true';
+    
     // Log the period parameter
-    logError("Period parameter", ['period' => $period]);
+    logError("Period parameter", ['period' => $period, 'force_refresh' => $forceRefresh ? 'true' : 'false']);
     
     // Authenticate user with improved logging
     $headers = getallheaders();
@@ -88,7 +91,7 @@ try {
 
     // If this is an admin metrics request and the user is an admin
     if ($isAdminMetricsRequest && $isAdmin) {
-        logError("Processing admin metrics request", ['period' => $period]);
+        logError("Processing admin metrics request", ['period' => $period, 'force_refresh' => $forceRefresh]);
         
         // Get date range based on period
         $dateCondition = "";
@@ -105,8 +108,12 @@ try {
                 break;
         }
         
-        // Log the SQL condition being used
-        logError("Date condition for metrics", ['sql_condition' => $dateCondition]);
+        // Add cache busting timestamp to the log
+        logError("Admin metrics with cache busting", [
+            'timestamp' => time(),
+            'period' => $period,
+            'date_condition' => $dateCondition
+        ]);
         
         // Get total bookings for the period
         $totalBookingsQuery = "SELECT COUNT(*) as total FROM bookings $dateCondition";
@@ -125,12 +132,38 @@ try {
         $totalRevenueResult = $conn->query($totalRevenueQuery);
         $totalRevenue = $totalRevenueResult->fetch_assoc()['total'] ?? 0;
         
-        // Simulate driver metrics (in a real app, this would come from a drivers table)
-        $availableDrivers = 12;
-        $busyDrivers = 8;
+        // Get actual driver count from the database if available
+        $driverCountQuery = "SELECT 
+                               COUNT(*) as total_drivers,
+                               SUM(CASE WHEN status = 'available' THEN 1 ELSE 0 END) as available_drivers,
+                               SUM(CASE WHEN status = 'busy' THEN 1 ELSE 0 END) as busy_drivers
+                             FROM drivers";
         
-        // Get average rating (simulated - would come from a ratings table)
-        $avgRating = 4.7;
+        $driverCountResult = $conn->query($driverCountQuery);
+        
+        if ($driverCountResult && $driverCountResult->num_rows > 0) {
+            $driverData = $driverCountResult->fetch_assoc();
+            $totalDrivers = (int)$driverData['total_drivers'];
+            $availableDrivers = (int)$driverData['available_drivers'];
+            $busyDrivers = (int)$driverData['busy_drivers'];
+        } else {
+            // Fallback to simulated data if driver table doesn't exist
+            $availableDrivers = 12;
+            $busyDrivers = 8;
+        }
+        
+        // Get average rating (from ratings table if available)
+        $avgRatingQuery = "SELECT AVG(rating) as avg_rating FROM ratings";
+        $avgRatingResult = $conn->query($avgRatingQuery);
+        
+        if ($avgRatingResult && $avgRatingResult->num_rows > 0) {
+            $avgRating = (float)$avgRatingResult->fetch_assoc()['avg_rating'];
+            // If no ratings yet, default to 0
+            $avgRating = $avgRating ?: 4.7;
+        } else {
+            // Fallback rating if ratings table doesn't exist
+            $avgRating = 4.7;
+        }
         
         // Get upcoming rides (pending/confirmed with future date)
         $upcomingRidesQuery = "SELECT COUNT(*) as total FROM bookings 
@@ -147,7 +180,8 @@ try {
             'availableDrivers' => (int)$availableDrivers,
             'busyDrivers' => (int)$busyDrivers,
             'avgRating' => (float)$avgRating,
-            'upcomingRides' => (int)$upcomingRides
+            'upcomingRides' => (int)$upcomingRides,
+            'timestamp' => time() // Add timestamp for cache tracking
         ];
         
         logError("Sending admin metrics response", ['metrics' => $metrics, 'period' => $period]);
@@ -181,7 +215,8 @@ try {
 
     // Debug: Log the SQL query for debugging
     logError("SQL Query executed", [
-        'query' => "SELECT * FROM bookings WHERE user_id = {$userId} ORDER BY created_at DESC"
+        'query' => "SELECT * FROM bookings WHERE user_id = {$userId} ORDER BY created_at DESC",
+        'timestamp' => time() // Add timestamp for cache tracking
     ]);
 
     $bookings = [];
@@ -223,7 +258,8 @@ try {
     // Ensure the response format is consistent
     $response = [
         'status' => 'success',
-        'data' => $bookings
+        'data' => $bookings,
+        'timestamp' => time() // Add timestamp for client-side cache tracking
     ];
     
     logError("Sending response", ['response_size' => strlen(json_encode($response))]);

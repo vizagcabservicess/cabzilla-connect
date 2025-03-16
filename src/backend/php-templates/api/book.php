@@ -176,6 +176,10 @@ $formattedBooking = [
     'updatedAt' => $booking['updated_at']
 ];
 
+// Send email notification
+$emailSent = sendBookingEmailNotification($formattedBooking);
+logError("Email notification status", ['sent' => $emailSent ? 'yes' : 'no']);
+
 // Send response
 sendJsonResponse([
     'status' => 'success',

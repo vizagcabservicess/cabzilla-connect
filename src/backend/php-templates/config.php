@@ -1,3 +1,4 @@
+
 <?php
 // Turn on error reporting for debugging - remove in production
 ini_set('display_errors', 0);
@@ -14,6 +15,10 @@ define('DB_DATABASE', 'u644605165_db_booking');
 
 // JWT Secret Key for authentication - should be a strong secure key
 define('JWT_SECRET', 'hJ8iP2qR5sT7vZ9xB4nM6cF3jL1oA0eD');  // Secure JWT secret
+
+// Admin email for notifications
+define('ADMIN_EMAIL', 'admin@cabzilla.com');
+define('NOTIFICATION_FROM_EMAIL', 'bookings@cabzilla.com');
 
 // Connect to database with improved error reporting
 function getDbConnection() {
@@ -209,6 +214,145 @@ function generateBookingNumber() {
     $timestamp = time();
     $random = rand(1000, 9999);
     return $prefix . $timestamp . $random;
+}
+
+// Function to send email notifications for new bookings
+function sendBookingEmailNotification($bookingData) {
+    try {
+        // Format the date more nicely
+        $pickupDateTime = new DateTime($bookingData['pickupDate']);
+        $formattedPickupDate = $pickupDateTime->format('F j, Y \a\t g:i A');
+        
+        // Prepare customer email
+        $customerSubject = "Your Booking Confirmation - " . $bookingData['bookingNumber'];
+        $customerBody = "
+            <html>
+            <head>
+                <style>
+                    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                    .header { background-color: #3b82f6; color: white; padding: 10px 20px; text-align: center; }
+                    .content { padding: 20px; }
+                    .booking-details { background-color: #f9fafb; padding: 15px; border-radius: 5px; margin: 15px 0; }
+                    .footer { font-size: 12px; text-align: center; margin-top: 30px; color: #6b7280; }
+                </style>
+            </head>
+            <body>
+                <div class='container'>
+                    <div class='header'>
+                        <h2>Booking Confirmation</h2>
+                    </div>
+                    <div class='content'>
+                        <p>Dear " . htmlspecialchars($bookingData['passengerName']) . ",</p>
+                        <p>Thank you for booking with CabZilla. Your booking has been confirmed.</p>
+                        
+                        <div class='booking-details'>
+                            <h3>Booking Details</h3>
+                            <p><strong>Booking Reference:</strong> " . $bookingData['bookingNumber'] . "</p>
+                            <p><strong>Pickup Location:</strong> " . htmlspecialchars($bookingData['pickupLocation']) . "</p>";
+        
+        if (!empty($bookingData['dropLocation'])) {
+            $customerBody .= "<p><strong>Drop Location:</strong> " . htmlspecialchars($bookingData['dropLocation']) . "</p>";
+        }
+        
+        $customerBody .= "
+                            <p><strong>Pickup Date & Time:</strong> " . $formattedPickupDate . "</p>
+                            <p><strong>Vehicle Type:</strong> " . htmlspecialchars($bookingData['cabType']) . "</p>
+                            <p><strong>Trip Type:</strong> " . ucfirst($bookingData['tripType']) . " (" . ucfirst($bookingData['tripMode']) . ")</p>
+                            <p><strong>Amount:</strong> ₹" . number_format($bookingData['totalAmount'], 2) . "</p>
+                        </div>
+                        
+                        <p>A driver will be assigned to your booking soon. You will receive driver details before your trip.</p>
+                        <p>If you need to make any changes to your booking, please contact our customer service.</p>
+                        <p>We wish you a pleasant journey!</p>
+                        <p>Best regards,<br>CabZilla Team</p>
+                    </div>
+                    <div class='footer'>
+                        <p>© " . date('Y') . " CabZilla. All rights reserved.</p>
+                        <p>This is an automated email. Please do not reply.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+        ";
+        
+        // Prepare admin email
+        $adminSubject = "New Booking Alert - " . $bookingData['bookingNumber'];
+        $adminBody = "
+            <html>
+            <head>
+                <style>
+                    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                    .header { background-color: #3b82f6; color: white; padding: 10px 20px; text-align: center; }
+                    .content { padding: 20px; }
+                    .booking-details { background-color: #f9fafb; padding: 15px; border-radius: 5px; margin: 15px 0; }
+                    .footer { font-size: 12px; text-align: center; margin-top: 30px; color: #6b7280; }
+                </style>
+            </head>
+            <body>
+                <div class='container'>
+                    <div class='header'>
+                        <h2>New Booking Alert</h2>
+                    </div>
+                    <div class='content'>
+                        <p>A new booking has been created in the system.</p>
+                        
+                        <div class='booking-details'>
+                            <h3>Booking Details</h3>
+                            <p><strong>Booking Reference:</strong> " . $bookingData['bookingNumber'] . "</p>
+                            <p><strong>Customer Name:</strong> " . htmlspecialchars($bookingData['passengerName']) . "</p>
+                            <p><strong>Customer Phone:</strong> " . htmlspecialchars($bookingData['passengerPhone']) . "</p>
+                            <p><strong>Customer Email:</strong> " . htmlspecialchars($bookingData['passengerEmail']) . "</p>
+                            <p><strong>Pickup Location:</strong> " . htmlspecialchars($bookingData['pickupLocation']) . "</p>";
+        
+        if (!empty($bookingData['dropLocation'])) {
+            $adminBody .= "<p><strong>Drop Location:</strong> " . htmlspecialchars($bookingData['dropLocation']) . "</p>";
+        }
+        
+        $adminBody .= "
+                            <p><strong>Pickup Date & Time:</strong> " . $formattedPickupDate . "</p>
+                            <p><strong>Vehicle Type:</strong> " . htmlspecialchars($bookingData['cabType']) . "</p>
+                            <p><strong>Trip Type:</strong> " . ucfirst($bookingData['tripType']) . " (" . ucfirst($bookingData['tripMode']) . ")</p>
+                            <p><strong>Distance:</strong> " . $bookingData['distance'] . " km</p>
+                            <p><strong>Amount:</strong> ₹" . number_format($bookingData['totalAmount'], 2) . "</p>
+                            <p><strong>Status:</strong> " . ucfirst($bookingData['status']) . "</p>
+                        </div>
+                        
+                        <p>Please assign a driver to this booking.</p>
+                    </div>
+                    <div class='footer'>
+                        <p>© " . date('Y') . " CabZilla Admin System</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+        ";
+        
+        // Set headers for HTML email
+        $headers = "MIME-Version: 1.0" . "\r\n";
+        $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+        $headers .= "From: " . NOTIFICATION_FROM_EMAIL . "\r\n";
+        
+        // Send emails
+        $customerEmailSent = mail($bookingData['passengerEmail'], $customerSubject, $customerBody, $headers);
+        $adminEmailSent = mail(ADMIN_EMAIL, $adminSubject, $adminBody, $headers);
+        
+        logError("Email notification attempt", [
+            'customer_email' => $bookingData['passengerEmail'],
+            'admin_email' => ADMIN_EMAIL,
+            'customer_email_sent' => $customerEmailSent ? 'yes' : 'no',
+            'admin_email_sent' => $adminEmailSent ? 'yes' : 'no'
+        ]);
+        
+        return $customerEmailSent && $adminEmailSent;
+    } catch (Exception $e) {
+        logError("Error sending email notification", [
+            'error' => $e->getMessage(),
+            'booking_number' => $bookingData['bookingNumber']
+        ]);
+        return false;
+    }
 }
 
 // Log errors to file for debugging

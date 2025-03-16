@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DashboardMetrics as DashboardMetricsType } from '@/types/api';
 import { bookingAPI } from '@/services/api';
@@ -30,28 +30,25 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>(initialPeriod);
   const [retryCount, setRetryCount] = useState(0);
+  const [lastRefreshTime, setLastRefreshTime] = useState<Date>(new Date());
 
-  // Initial data fetch when component mounts or period changes
-  useEffect(() => {
-    fetchMetrics();
-  }, [period]);
-
-  const fetchMetrics = async () => {
+  // Function to fetch metrics with cache busting
+  const fetchMetrics = useCallback(async (forceRefresh = false) => {
     try {
       setIsLoading(true);
       setError(null);
-      console.log(`Fetching dashboard metrics for period: ${period}...`);
       
-      // Add a timestamp for cache busting - not passed to API but just logged
+      // Log with timestamp for debugging
       const timestamp = new Date().getTime();
-      console.log(`Cache busting with timestamp: ${timestamp}`);
+      console.log(`Fetching dashboard metrics for period: ${period} at ${timestamp}...`);
       
-      // Call the API with the period
-      const data = await bookingAPI.getAdminDashboardMetrics(period);
+      // Force cache refresh if requested
+      const data = await bookingAPI.getAdminDashboardMetrics(period, forceRefresh);
       console.log('Dashboard metrics received:', data);
       
       if (data) {
         setMetrics(data);
+        setLastRefreshTime(new Date());
         if (onRefresh) onRefresh();
       } else {
         throw new Error('No data received from metrics API');
@@ -68,7 +65,12 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [period, onRefresh, toast]);
+
+  // Initial data fetch when component mounts or period changes
+  useEffect(() => {
+    fetchMetrics(true); // Force refresh on period change
+  }, [period]);
 
   const handlePeriodChange = (newPeriod: 'today' | 'week' | 'month') => {
     setPeriod(newPeriod);
@@ -76,7 +78,15 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
 
   const handleRetry = () => {
     setRetryCount(prev => prev + 1);
-    fetchMetrics();
+    fetchMetrics(true); // Force refresh on retry
+  };
+
+  const handleRefresh = () => {
+    fetchMetrics(true); // Force refresh on manual refresh
+    toast({
+      title: "Refreshing Data",
+      description: "Dashboard metrics are being updated..."
+    });
   };
 
   if (error) {
@@ -144,7 +154,7 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
           </TabsList>
         </Tabs>
         
-        <Button variant="outline" size="sm" onClick={handleRetry} className="ml-2">
+        <Button variant="outline" size="sm" onClick={handleRefresh} className="ml-2">
           <RefreshCw className="h-4 w-4 mr-2" />
           Refresh
         </Button>
@@ -226,7 +236,7 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{metrics.upcomingRides}</div>
-            <p className="text-xs text-gray-500">Scheduled for today</p>
+            <p className="text-xs text-gray-500">Scheduled for future dates</p>
           </CardContent>
         </Card>
         <Card className="bg-green-50">
@@ -237,7 +247,7 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-700">Active</div>
-            <p className="text-xs text-green-600">Last updated: {new Date().toLocaleTimeString()}</p>
+            <p className="text-xs text-green-600">Last updated: {lastRefreshTime.toLocaleTimeString()}</p>
           </CardContent>
         </Card>
       </div>

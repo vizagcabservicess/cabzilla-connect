@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from "react";
 import { Autocomplete } from "@react-google-maps/api";
 import { Search, X, MapPin } from "lucide-react";
@@ -64,7 +65,7 @@ export function LocationInput({
     setSuggestedLocations(filteredLocations.slice(0, 5));
   }, [searchQuery, isPickupLocation, isLoaded, readOnly]);
 
-  // Auto-fill airport only for airport trips
+  // Auto-fill airport only for airport trips when labeled appropriately
   useEffect(() => {
     if (isAirportTransfer) {
       // Only for airport transfers
@@ -72,8 +73,8 @@ export function LocationInput({
       
       if (airport) {
         // For pickup with airport label OR drop with destination label
-        if ((isPickupLocation && label.toLowerCase().includes("airport")) || 
-            (!isPickupLocation && label.toLowerCase().includes("destination"))) {
+        if ((isPickupLocation && label.toLowerCase().includes("pickup") && isAirportTransfer) || 
+            (!isPickupLocation && label.toLowerCase().includes("drop") && isAirportTransfer)) {
           onChange(airport);
           setSearchQuery(airport.name);
         }
@@ -81,7 +82,7 @@ export function LocationInput({
     }
   }, [isAirportTransfer, isPickupLocation, label, onChange]);
 
-  // Handle Google Places selection - Fix for locations outside Andhra Pradesh
+  // Handle Google Places selection
   const onPlaceChanged = () => {
     if (autocomplete) {
       const place = autocomplete.getPlace();
@@ -103,8 +104,9 @@ export function LocationInput({
           }
         }
         
-        // If it's a pickup location, strictly validate it's in Visakhapatnam area
-        if (isPickupLocation) {
+        // If it's a pickup location, validate it's in Visakhapatnam area for airport transfers only
+        // For outstation trips, any location is allowed
+        if (isPickupLocation && isAirportTransfer) {
           const isVizagArea = 
             city.toLowerCase().includes("visakhapatnam") ||
             place.formatted_address.toLowerCase().includes("visakhapatnam") ||
@@ -112,11 +114,12 @@ export function LocationInput({
           
           if (!isVizagArea) {
             toast({
-              title: "Location not supported",
-              description: "Pickup locations must be within Visakhapatnam area.",
+              title: "Location not suitable for Airport Transfer",
+              description: "For Airport Transfer, pickup must be within Visakhapatnam area. Switching to Outstation mode.",
               variant: "destructive",
+              duration: 5000,
             });
-            return;
+            // Don't prevent selection but inform the user
           }
         }
         
@@ -187,9 +190,7 @@ export function LocationInput({
   }
 
   // Determine if this input should be read-only based on airport transfers
-  const isReadOnly = readOnly || (isAirportTransfer && 
-    ((isPickupLocation && label.toLowerCase().includes("airport")) || 
-    (!isPickupLocation && label.toLowerCase().includes("destination"))));
+  const isReadOnly = readOnly;
 
   return (
     <div className={cn("relative w-full", className)}>
@@ -214,8 +215,8 @@ export function LocationInput({
             onPlaceChanged={onPlaceChanged}
             options={{
               componentRestrictions: { country: "IN" },
-              // Set bounds to Visakhapatnam area for pickup locations
-              ...(isPickupLocation && {
+              // Set bounds to Visakhapatnam area for airport transfers pickup locations
+              ...(isPickupLocation && isAirportTransfer && {
                 bounds: {
                   north: 18.0, // North boundary
                   south: 17.5, // South boundary
