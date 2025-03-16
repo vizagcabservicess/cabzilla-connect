@@ -97,22 +97,30 @@ try {
         exit;
     }
 
-    // Get values
-    $pickupLocation = $data['pickupLocation'];
-    $dropLocation = isset($data['dropLocation']) ? $data['dropLocation'] : null;
-    $pickupDate = $data['pickupDate'];
-    $returnDate = isset($data['returnDate']) ? $data['returnDate'] : null;
-    $cabType = $data['cabType'];
-    $distance = isset($data['distance']) ? $data['distance'] : 0;
-    $tripType = $data['tripType'];
-    $tripMode = $data['tripMode'];
-    $totalAmount = $data['totalAmount'];
-    $passengerName = $data['passengerName'];
-    $passengerPhone = $data['passengerPhone'];
-    $passengerEmail = $data['passengerEmail'];
-    $hourlyPackage = isset($data['hourlyPackage']) ? $data['hourlyPackage'] : null;
-    $tourId = isset($data['tourId']) ? $data['tourId'] : null;
+    // Get values and sanitize/validate them
+    $pickupLocation = trim($data['pickupLocation']);
+    $dropLocation = isset($data['dropLocation']) ? trim($data['dropLocation']) : null;
+    $pickupDate = trim($data['pickupDate']);
+    $returnDate = isset($data['returnDate']) ? trim($data['returnDate']) : null;
+    $cabType = trim($data['cabType']);
+    $distance = isset($data['distance']) ? floatval($data['distance']) : 0;
+    $tripType = trim($data['tripType']);
+    $tripMode = trim($data['tripMode']);
+    $totalAmount = floatval($data['totalAmount']);
+    $passengerName = trim($data['passengerName']);
+    $passengerPhone = trim($data['passengerPhone']);
+    $passengerEmail = trim($data['passengerEmail']);
+    $hourlyPackage = isset($data['hourlyPackage']) ? trim($data['hourlyPackage']) : null;
+    $tourId = isset($data['tourId']) ? trim($data['tourId']) : null;
     $status = 'pending'; // Default status for new bookings
+    
+    // Log the sanitized data
+    logError("Sanitized booking data", [
+        'pickup' => $pickupLocation,
+        'dropoff' => $dropLocation,
+        'pickup_date' => $pickupDate,
+        'total' => $totalAmount
+    ]);
 
     $stmt->bind_param(
         "issssssdssdsssiss",
@@ -177,15 +185,20 @@ try {
         'updatedAt' => $booking['updated_at']
     ];
 
-    // FIX: Improved email notification function
+    // Send email notification
     $emailSent = sendBookingEmailNotification($formattedBooking);
-    logError("Email notification status", ['sent' => $emailSent ? 'yes' : 'no', 'recipient' => $passengerEmail]);
+    logError("Email notification status", [
+        'sent' => $emailSent ? 'yes' : 'no', 
+        'recipient' => $passengerEmail,
+        'mail_enabled' => function_exists('mail') ? 'yes' : 'no'
+    ]);
 
     // Send response
     sendJsonResponse([
         'status' => 'success',
         'message' => 'Booking created successfully',
-        'data' => $formattedBooking
+        'data' => $formattedBooking,
+        'emailSent' => $emailSent
     ], 201);
 
 } catch (Exception $e) {
@@ -193,7 +206,7 @@ try {
     sendJsonResponse(['status' => 'error', 'message' => 'Server error: ' . $e->getMessage()], 500);
 }
 
-// Enhanced email notification function
+// Enhanced email notification function with improved error handling
 function sendBookingEmailNotification($booking) {
     try {
         // Log the attempt
@@ -295,13 +308,22 @@ function sendBookingEmailNotification($booking) {
         $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
         $headers .= 'From: CabBooking <noreply@cabbooking.com>' . "\r\n";
         
+        // Add detailed logging before sending
+        logError("Email content ready to send", [
+            'to' => $to,
+            'subject' => $subject,
+            'headers' => $headers,
+            'message_length' => strlen($message)
+        ]);
+        
         // Attempt to send the email and log the result
         $mailSent = @mail($to, $subject, $message, $headers);
         
         logError("Email sending result", [
             'sent' => $mailSent ? 'success' : 'failed',
             'to' => $to,
-            'subject' => $subject
+            'subject' => $subject,
+            'php_error' => error_get_last()
         ]);
         
         return $mailSent;

@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { EditableContactDetailsForm } from "@/components/EditableContactDetailsForm";
-import { ArrowLeft, Edit2, Loader2 } from 'lucide-react';
+import { ArrowLeft, Edit2, Loader2, AlertTriangle } from 'lucide-react';
 import { bookingAPI } from '@/services/api';
 import { BookingRequest } from '@/types/api';
 
@@ -30,11 +30,13 @@ export function GuestDetailsForm({
   const { toast } = useToast();
   const [isEditMode, setIsEditMode] = useState(isEditing);
   const [isSaving, setIsSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleSubmit = async (details: any) => {
-    if (isSubmitting) return; // Prevent double submission
+    if (isSubmitting || isSaving) return; // Prevent double submission
     
     setIsSaving(true);
+    setErrorMessage(null);
     
     try {
       if (bookingId && isEditMode) {
@@ -60,9 +62,12 @@ export function GuestDetailsForm({
         onSubmit(details);
       }
     } catch (error) {
+      console.error("Booking error:", error);
+      setErrorMessage(error instanceof Error ? error.message : "Something went wrong with your booking. Please try again.");
+      
       toast({
-        title: "Operation Failed",
-        description: error instanceof Error ? error.message : "Something went wrong",
+        title: "Booking Failed",
+        description: error instanceof Error ? error.message : "Something went wrong with your booking",
         variant: "destructive",
         duration: 5000,
       });
@@ -98,6 +103,17 @@ export function GuestDetailsForm({
           </Button>
         )}
       </div>
+      
+      {errorMessage && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-md flex items-start">
+          <AlertTriangle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium">Booking Error</p>
+            <p className="text-sm">{errorMessage}</p>
+            <p className="text-sm mt-1">Please check your details and try again, or contact support if the problem persists.</p>
+          </div>
+        </div>
+      )}
       
       <EditableContactDetailsForm 
         onSubmit={handleSubmit}
