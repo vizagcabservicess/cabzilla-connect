@@ -2,15 +2,20 @@
 # Enable rewrite engine
 RewriteEngine On
 
-# Ensure API requests go directly to PHP files, not React frontend
-RewriteRule ^api/ - [L]
-
 # Set default PHP handler - critical for proper execution
 AddHandler application/x-httpd-php .php
+
+# Ensure API requests go directly to PHP files, not React frontend
+RewriteRule ^api/ - [L]
 
 # For direct PHP file access within the API directory
 RewriteCond %{REQUEST_URI} ^/api/.*\.php$
 RewriteRule ^(.*)$ $1 [L]
+
+# Critical fix - allow direct access to all PHP files
+<FilesMatch "\.php$">
+    RewriteEngine Off
+</FilesMatch>
 
 # API routing rules - Fixed endpoint formats with alternatives for compatibility
 RewriteRule ^api/signup$ api/signup.php [L]
@@ -18,27 +23,28 @@ RewriteRule ^api/login$ api/login.php [L]
 RewriteRule ^api/user/dashboard$ api/user/dashboard.php [QSA,L]
 RewriteRule ^api/user/dashboard/$ api/user/dashboard.php [QSA,L]
 
-# Critical booking endpoints - book.php must be directly accessible
+# Critical booking endpoints with multiple compatible formats
 RewriteRule ^api/book$ api/book.php [L]
 RewriteRule ^api/book/$ api/book.php [L]
 RewriteRule ^api/booking$ api/book.php [L]
 RewriteRule ^api/booking/$ api/book.php [L]
 RewriteRule ^api/booking/create$ api/book.php [L]
 
-# Booking edit endpoints - multiple formats for compatibility
-RewriteRule ^api/booking/([0-9]+)/edit$ api/booking/edit.php?id=$1 [QSA,L]
-RewriteRule ^api/booking/edit/([0-9]+)$ api/booking/edit.php?id=$1 [QSA,L]
-RewriteRule ^api/book/edit/([0-9]+)$ api/booking/edit.php?id=$1 [QSA,L]
+# FIXED: Booking edit endpoints - multiple formats for compatibility
+RewriteRule ^api/booking/([0-9]+)/edit/?$ api/booking/edit.php?id=$1 [QSA,L]
+RewriteRule ^api/booking/edit/([0-9]+)/?$ api/booking/edit.php?id=$1 [QSA,L]
+RewriteRule ^api/book/edit/([0-9]+)/?$ api/booking/edit.php?id=$1 [QSA,L]
 
-# Receipt endpoints - multiple formats for compatibility
-RewriteRule ^api/receipt/([0-9]+)$ api/receipt.php?id=$1 [QSA,L]
-RewriteRule ^api/booking/([0-9]+)/receipt$ api/receipt.php?id=$1 [QSA,L]
-RewriteRule ^api/booking/([0-9]+)$ api/receipt.php?id=$1 [QSA,L]
+# FIXED: Receipt endpoints - multiple formats for compatibility
+RewriteRule ^api/receipt/([0-9]+)/?$ api/receipt.php?id=$1 [QSA,L]
+RewriteRule ^api/booking/([0-9]+)/receipt/?$ api/receipt.php?id=$1 [QSA,L]
+RewriteRule ^api/booking/receipt/([0-9]+)/?$ api/receipt.php?id=$1 [QSA,L]
+RewriteRule ^api/booking/([0-9]+)/?$ api/receipt.php?id=$1 [QSA,L]
 
-# Cancel endpoints - multiple formats for compatibility
-RewriteRule ^api/booking/([0-9]+)/cancel$ api/booking/cancel.php?id=$1 [QSA,L]
-RewriteRule ^api/booking/cancel/([0-9]+)$ api/booking/cancel.php?id=$1 [QSA,L]
-RewriteRule ^api/book/cancel/([0-9]+)$ api/booking/cancel.php?id=$1 [QSA,L]
+# FIXED: Cancel endpoints - multiple formats for compatibility
+RewriteRule ^api/booking/([0-9]+)/cancel/?$ api/booking/cancel.php?id=$1 [QSA,L]
+RewriteRule ^api/booking/cancel/([0-9]+)/?$ api/booking/cancel.php?id=$1 [QSA,L]
+RewriteRule ^api/book/cancel/([0-9]+)/?$ api/booking/cancel.php?id=$1 [QSA,L]
 
 # Admin endpoints
 RewriteRule ^api/admin/bookings$ api/admin/bookings.php [L]
@@ -70,11 +76,6 @@ AddDefaultCharset UTF-8
 # Handle OPTIONS requests for CORS preflight
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
-
-# Critical fix - let PHP files be accessed directly
-<FilesMatch "\.php$">
-    RewriteEngine Off
-</FilesMatch>
 
 # Redirect all non-file/directory/API requests to index.html for React Router
 RewriteCond %{REQUEST_FILENAME} !-f

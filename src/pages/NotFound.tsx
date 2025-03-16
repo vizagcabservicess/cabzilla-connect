@@ -4,13 +4,14 @@ import { useEffect, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertTriangle, Home, ArrowLeft, RefreshCw, FileSearch } from "lucide-react";
+import { AlertTriangle, Home, ArrowLeft, RefreshCw, FileSearch, ExternalLink } from "lucide-react";
 import { ApiErrorFallback } from "@/components/ApiErrorFallback";
 
 const NotFound = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [isApiPath, setIsApiPath] = useState(false);
+  const [isBookingPath, setIsBookingPath] = useState(false);
   
   useEffect(() => {
     // Log detailed error information for debugging
@@ -21,15 +22,28 @@ const NotFound = () => {
         search: location.search,
         hash: location.hash,
         state: location.state,
-        key: location.key
+        key: location.key,
+        timestamp: new Date().toISOString(),
+        userAgent: navigator.userAgent
       }
     );
     
     // Check if this is likely an API path that's failing
-    const apiPathRegex = /\/(api|booking|receipt|edit|cancel)\//i;
+    const apiPathRegex = /\/(api|receipt)\//i;
+    const bookingPathRegex = /\/(booking|book|edit|cancel)\//i;
+    
     setIsApiPath(apiPathRegex.test(location.pathname));
+    setIsBookingPath(bookingPathRegex.test(location.pathname));
     
   }, [location]);
+
+  const extractBookingId = () => {
+    // Try to extract a booking ID from the URL if it contains one
+    const matches = location.pathname.match(/\/([0-9]+)(\/|$)/);
+    return matches ? matches[1] : null;
+  };
+
+  const bookingId = extractBookingId();
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
@@ -37,15 +51,18 @@ const NotFound = () => {
         <CardHeader className="bg-red-50 border-b border-red-100">
           <CardTitle className="flex items-center text-red-800">
             <AlertTriangle className="h-5 w-5 mr-2" />
-            Page Not Found
+            {isApiPath ? "API Error" : (isBookingPath ? "Booking Not Found" : "Page Not Found")}
           </CardTitle>
         </CardHeader>
         
         <CardContent className="pt-6">
-          {isApiPath ? (
+          {isApiPath || isBookingPath ? (
             <ApiErrorFallback 
-              error={`404 Not Found: The API endpoint "${location.pathname}" could not be found. This might indicate a server configuration issue.`}
-              title="API Endpoint Not Found"
+              error={`404 Not Found: The ${isApiPath ? "API endpoint" : "booking"} "${location.pathname}" could not be found. ${
+                bookingId ? `Booking ID ${bookingId} may be invalid or have been deleted.` : 
+                "This might indicate a server configuration issue or an invalid URL."
+              }`}
+              title={isApiPath ? "API Endpoint Not Found" : "Booking Not Found"}
               onRetry={() => window.location.reload()}
             />
           ) : (
@@ -78,6 +95,17 @@ const NotFound = () => {
             <Home className="h-4 w-4" />
             Go to Home
           </Button>
+          
+          {isBookingPath && (
+            <Button 
+              onClick={() => navigate('/dashboard')} 
+              variant="default"
+              className="gap-2"
+            >
+              <ExternalLink className="h-4 w-4" />
+              View Bookings
+            </Button>
+          )}
           
           <Button 
             onClick={() => navigate(-1)} 

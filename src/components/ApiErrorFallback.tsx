@@ -2,7 +2,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, RefreshCw, WifiOff, Server, FileQuestion, Mail, ArrowLeft, Home } from "lucide-react";
+import { AlertTriangle, RefreshCw, WifiOff, Server, FileQuestion, Mail, ArrowLeft, Home, ExternalLink } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 interface ApiErrorFallbackProps {
@@ -21,16 +21,25 @@ export function ApiErrorFallback({
   const navigate = useNavigate();
   const errorMessage = typeof error === "string" ? error : error.message;
   
-  // Better error classification
+  // Enhanced error classification for better diagnosis
   const isNetworkError = 
     /network|connection|failed|ERR_NETWORK|ECONNABORTED|timeout/i.test(errorMessage);
   
   const isServerError = 
     /server|500|503|unavailable|internal server error/i.test(errorMessage);
   
-  const is404Error = /404|not found/i.test(errorMessage);
+  const is404Error = 
+    /404|not found/i.test(errorMessage);
   
-  const isEmailError = /email|mail|notification|smtp/i.test(errorMessage);
+  const isEmailError = 
+    /email|mail|notification|smtp/i.test(errorMessage);
+    
+  const isAuthError =
+    /auth|unauthorized|unauthenticated|login|401/i.test(errorMessage);
+
+  // Extract URL from error message if present
+  const urlMatch = errorMessage.match(/(https?:\/\/[^\s]+)/);
+  const failedUrl = urlMatch ? urlMatch[0] : null;
 
   const handleRetry = () => {
     console.log("Retrying after error...", errorMessage);
@@ -39,7 +48,8 @@ export function ApiErrorFallback({
     const cacheKeys = [
       'selectedCab', 'hourlyPackage', 'tourPackage', 
       'bookingDetails', 'cabFares', 'dropLocation',
-      'pickupLocation', 'pickupDate', 'returnDate'
+      'pickupLocation', 'pickupDate', 'returnDate',
+      'authToken', 'userId', 'userProfile'
     ];
     
     cacheKeys.forEach(key => {
@@ -69,6 +79,20 @@ export function ApiErrorFallback({
     }
   };
 
+  // Log detailed information about the error for server-side debugging
+  console.error("API Error Details:", {
+    errorMessage,
+    errorType: is404Error ? "404 Not Found" : 
+              isNetworkError ? "Network Error" : 
+              isServerError ? "Server Error" : 
+              isEmailError ? "Email Error" :
+              isAuthError ? "Authentication Error" : "Unknown Error",
+    failedUrl,
+    userAgent: navigator.userAgent,
+    timestamp: new Date().toISOString(),
+    location: window.location.href
+  });
+
   // Pick the most appropriate icon
   const ErrorIcon = isEmailError 
     ? Mail 
@@ -82,7 +106,8 @@ export function ApiErrorFallback({
         <CardTitle className="flex items-center text-red-700">
           <ErrorIcon className="h-5 w-5 mr-2" />
           {isEmailError ? "Email Notification Error" : 
-           is404Error ? "404 Not Found Error" : title}
+           is404Error ? "404 Not Found Error" : 
+           isAuthError ? "Authentication Error" : title}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -97,29 +122,40 @@ export function ApiErrorFallback({
                   ? "Server Error" 
                   : (is404Error 
                     ? "Resource Not Found" 
-                    : "Error")))}
+                    : (isAuthError 
+                      ? "Authentication Required"
+                      : "Error"))))}
           </AlertTitle>
           <AlertDescription>
             {isEmailError 
               ? "The system failed to send email notifications. Your booking was processed, but confirmation emails could not be sent."
               : (is404Error
-                ? "The requested API endpoint could not be found. This may be a server configuration issue."
+                ? `The requested endpoint ${failedUrl ? `(${failedUrl})` : ''} could not be found. This may be a server configuration issue.`
                 : (isNetworkError 
                   ? "Unable to connect to the server. Please check your internet connection or try again later."
-                  : errorMessage))}
+                  : (isAuthError
+                    ? "You need to be logged in to access this feature. Please log in and try again."
+                    : errorMessage)))}
           </AlertDescription>
         </Alert>
         
         {is404Error && (
           <div className="text-sm text-gray-700 mt-4">
-            <p className="font-medium">Possible solutions:</p>
+            <p className="font-medium">Debug Information:</p>
+            <ul className="list-disc pl-5 mt-2 space-y-1">
+              <li>Failed URL: {failedUrl || 'Unknown'}</li>
+              <li>Current page: {window.location.pathname}</li>
+              <li>Error message: {errorMessage}</li>
+              <li>Timestamp: {new Date().toLocaleString()}</li>
+            </ul>
+            <p className="font-medium mt-4">Possible solutions:</p>
             <ul className="list-disc pl-5 mt-2 space-y-1">
               <li>Check that the URL is correct</li>
-              <li>The server might be misconfigured or .htaccess rules might be incorrect</li>
+              <li>Try a different booking ID if you're viewing a specific booking</li>
+              <li>Clear your browser cache and cookies</li>
               <li>Try refreshing the page or navigating back to the dashboard</li>
               <li>Contact support if this issue persists</li>
             </ul>
-            <p className="mt-3 text-xs text-gray-500">Error details: {errorMessage}</p>
           </div>
         )}
         
@@ -131,7 +167,6 @@ export function ApiErrorFallback({
               <li>Contact support to verify your booking details</li>
               <li>Try the operation again later</li>
             </ul>
-            <p className="mt-3 text-xs text-gray-500">Error details: {errorMessage}</p>
           </div>
         )}
         
@@ -144,7 +179,6 @@ export function ApiErrorFallback({
               <li>The API endpoint may have changed or is incorrect</li>
               <li>There might be a firewall or network restriction</li>
             </ul>
-            <p className="mt-3 text-xs text-gray-500">Error details: {errorMessage}</p>
           </div>
         )}
         
@@ -156,7 +190,17 @@ export function ApiErrorFallback({
               <li>Clear your browser cache and cookies</li>
               <li>Contact support if the problem persists</li>
             </ul>
-            <p className="mt-3 text-xs text-gray-500">Error details: {errorMessage}</p>
+          </div>
+        )}
+        
+        {isAuthError && (
+          <div className="text-sm text-gray-700 mt-4">
+            <p className="font-medium">What you can try:</p>
+            <ul className="list-disc pl-5 mt-2 space-y-1">
+              <li>Log in again as your session may have expired</li>
+              <li>Check that you have permission to access this resource</li>
+              <li>Try clearing browser cookies and logging in again</li>
+            </ul>
           </div>
         )}
       </CardContent>
@@ -169,6 +213,17 @@ export function ApiErrorFallback({
           <RefreshCw className="h-4 w-4" />
           Retry Connection
         </Button>
+        
+        {isAuthError && (
+          <Button 
+            onClick={() => navigate('/login')} 
+            variant="default" 
+            className="gap-2"
+          >
+            <ExternalLink className="h-4 w-4" />
+            Login
+          </Button>
+        )}
         
         <Button 
           onClick={() => navigate('/')} 
