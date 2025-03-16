@@ -281,27 +281,41 @@ export const bookingAPI = {
       
       console.log('Submitting formatted booking data:', formattedData);
       
-      // Use longer timeout for booking creation and clear response cache
-      const response = await apiClient.post('/book', formattedData, {
-        timeout: 180000, // 3 minutes timeout for booking creation
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
+      // Use longer timeout for booking creation and add debugging information
+      try {
+        const response = await apiClient.post('/book', formattedData, {
+          timeout: 180000, // 3 minutes timeout for booking creation
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        });
+        
+        console.log('Raw booking response:', response);
+        
+        // Check response manually for error indicators
+        if (response.data && response.data.status === 'error') {
+          throw new Error(response.data.message || 'Failed to create booking');
         }
-      });
-      
-      // Check response manually for error indicators
-      if (response.data.status === 'error') {
-        throw new Error(response.data.message || 'Failed to create booking');
+        
+        if (response.data && response.data.status === 'success') {
+          console.log('Booking created successfully!', response.data);
+          return response.data.data || response.data;
+        } else {
+          throw new Error('Failed to create booking: Unknown error');
+        }
+      } catch (error) {
+        console.error('Error creating booking:', error);
+        
+        // Enhance error with request details for easier debugging
+        if (error instanceof Error) {
+          error.message = `Error creating booking: ${error.message}. Data: ${JSON.stringify(formattedData)}`;
+        }
+        
+        throw error;
       }
-      
-      if (response.data.status === 'success') {
-        return response.data.data || response.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to create booking: Unknown error');
-      }
-    }, 5, 5000); // 5 retries with 5-second base delay for booking creation
+    }, 2, 2000); // Reduced to 2 retries with 2-second base delay
   },
 
   async getBooking(id: string): Promise<Booking> {

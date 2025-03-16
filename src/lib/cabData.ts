@@ -399,6 +399,21 @@ export function formatPrice(price: number): string {
 }
 
 export function clearFareCaches() {
-  packagePriceCache.clear();
-  console.log("Fare caches cleared");
+  console.log("Clearing fare caches...");
+  // Clear all fare-related cache items from sessionStorage
+  Object.keys(sessionStorage).forEach(key => {
+    if (key.includes('fare_') || key.includes('price_') || key.includes('_price') || key.includes('_fare')) {
+      console.log(`Clearing cache for ${key}`);
+      sessionStorage.removeItem(key);
+    }
+  });
+  
+  // Clear specific package price caches
+  hourlyPackages.forEach(pkg => {
+    cabTypes.forEach(cab => {
+      const cacheKey = `${pkg.id}_${cab.id.toLowerCase()}`;
+      console.log(`Clearing cache for ${cacheKey}`);
+      sessionStorage.removeItem(cacheKey);
+    });
+  });
 }
