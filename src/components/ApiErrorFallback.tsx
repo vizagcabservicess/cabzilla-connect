@@ -2,7 +2,8 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, RefreshCw, WifiOff, Server, FileQuestion, Mail } from "lucide-react";
+import { AlertTriangle, RefreshCw, WifiOff, Server, FileQuestion, Mail, ArrowLeft, Home } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 interface ApiErrorFallbackProps {
   error: Error | string;
@@ -17,11 +18,12 @@ export function ApiErrorFallback({
   onRetry,
   title = "Connection Error"
 }: ApiErrorFallbackProps) {
+  const navigate = useNavigate();
   const errorMessage = typeof error === "string" ? error : error.message;
   
   // Better error classification
   const isNetworkError = 
-    /network|connection|failed|ERR_NETWORK|ECONNABORTED|404|400|timeout/i.test(errorMessage);
+    /network|connection|failed|ERR_NETWORK|ECONNABORTED|timeout/i.test(errorMessage);
   
   const isServerError = 
     /server|500|503|unavailable|internal server error/i.test(errorMessage);
@@ -31,7 +33,7 @@ export function ApiErrorFallback({
   const isEmailError = /email|mail|notification|smtp/i.test(errorMessage);
 
   const handleRetry = () => {
-    console.log("Retrying after error...");
+    console.log("Retrying after error...", errorMessage);
     
     // Clear any cached data that might be causing issues
     const cacheKeys = [
@@ -40,10 +42,17 @@ export function ApiErrorFallback({
       'pickupLocation', 'pickupDate', 'returnDate'
     ];
     
-    cacheKeys.forEach(key => sessionStorage.removeItem(key));
+    cacheKeys.forEach(key => {
+      try {
+        sessionStorage.removeItem(key);
+        localStorage.removeItem(key);
+      } catch (e) {
+        console.error("Error clearing cache:", e);
+      }
+    });
     
-    // Clear any cached API responses
-    if (window.caches) {
+    // Try to clear the browser's cache for API requests
+    if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {
           caches.delete(name);
@@ -72,7 +81,8 @@ export function ApiErrorFallback({
       <CardHeader>
         <CardTitle className="flex items-center text-red-700">
           <ErrorIcon className="h-5 w-5 mr-2" />
-          {isEmailError ? "Email Notification Error" : title}
+          {isEmailError ? "Email Notification Error" : 
+           is404Error ? "404 Not Found Error" : title}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -92,11 +102,26 @@ export function ApiErrorFallback({
           <AlertDescription>
             {isEmailError 
               ? "The system failed to send email notifications. Your booking was processed, but confirmation emails could not be sent."
-              : (isNetworkError 
-                ? "Unable to connect to the server. Please check your internet connection or try again later."
-                : errorMessage)}
+              : (is404Error
+                ? "The requested API endpoint could not be found. This may be a server configuration issue."
+                : (isNetworkError 
+                  ? "Unable to connect to the server. Please check your internet connection or try again later."
+                  : errorMessage))}
           </AlertDescription>
         </Alert>
+        
+        {is404Error && (
+          <div className="text-sm text-gray-700 mt-4">
+            <p className="font-medium">Possible solutions:</p>
+            <ul className="list-disc pl-5 mt-2 space-y-1">
+              <li>Check that the URL is correct</li>
+              <li>The server might be misconfigured or .htaccess rules might be incorrect</li>
+              <li>Try refreshing the page or navigating back to the dashboard</li>
+              <li>Contact support if this issue persists</li>
+            </ul>
+            <p className="mt-3 text-xs text-gray-500">Error details: {errorMessage}</p>
+          </div>
+        )}
         
         {isEmailError && (
           <div className="text-sm text-gray-700 mt-4">
@@ -138,7 +163,7 @@ export function ApiErrorFallback({
       <CardFooter className="flex flex-wrap gap-3">
         <Button 
           onClick={handleRetry} 
-          variant="outline" 
+          variant="default" 
           className="gap-2"
         >
           <RefreshCw className="h-4 w-4" />
@@ -146,11 +171,21 @@ export function ApiErrorFallback({
         </Button>
         
         <Button 
-          onClick={() => window.location.href = '/'} 
+          onClick={() => navigate('/')} 
+          variant="outline" 
+          className="gap-2"
+        >
+          <Home className="h-4 w-4" />
+          Go to Home
+        </Button>
+        
+        <Button 
+          onClick={() => navigate(-1)} 
           variant="ghost" 
           className="gap-2"
         >
-          Return to Home
+          <ArrowLeft className="h-4 w-4" />
+          Go Back
         </Button>
       </CardFooter>
     </Card>

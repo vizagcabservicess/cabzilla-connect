@@ -2,6 +2,9 @@
 # Enable URL rewriting
 RewriteEngine On
 
+# Set default PHP handler - critical for proper execution
+AddHandler application/x-httpd-php .php
+
 # Allow CORS (Cross-Origin Resource Sharing)
 <IfModule mod_headers.c>
     Header set Access-Control-Allow-Origin "*"
@@ -26,10 +29,10 @@ DirectoryIndex index.php
 RewriteRule ^user/dashboard$ user/dashboard.php [QSA,L]
 RewriteRule ^user/dashboard/$ user/dashboard.php [QSA,L]
 
-# Critical fix for book.php endpoint - must be reachable directly
-RewriteCond %{REQUEST_URI} ^/api/book(\.php)?$ [OR]
-RewriteCond %{REQUEST_URI} ^/api/booking(\.php)?$
-RewriteRule .* - [L]
+# Critical fix for PHP files - allow direct access
+<FilesMatch "\.php$">
+    RewriteEngine Off
+</FilesMatch>
 
 # Process booking URLs - multiple formats for compatibility
 RewriteRule ^booking/([0-9]+)/edit/?$ booking/edit.php?id=$1 [QSA,L]
@@ -45,10 +48,6 @@ RewriteRule ^booking/([0-9]+)/receipt/?$ receipt.php?id=$1 [QSA,L]
 RewriteRule ^booking/cancel/?$ booking/cancel.php [QSA,L]
 RewriteRule ^book/cancel/([0-9]+)/?$ booking/cancel.php?id=$1 [QSA,L]
 RewriteRule ^booking/([0-9]+)/cancel/?$ booking/cancel.php?id=$1 [QSA,L]
-
-# Critical fix - allow direct access to PHP files
-RewriteCond %{REQUEST_URI} \.(php)$
-RewriteRule .* - [L]
 
 # Prevent viewing of .htaccess and other hidden files
 <FilesMatch "^\.ht">

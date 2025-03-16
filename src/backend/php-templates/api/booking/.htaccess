@@ -1,6 +1,9 @@
 
 RewriteEngine On
 
+# Set default PHP handler - critical for proper execution
+AddHandler application/x-httpd-php .php
+
 # Handle booking edit endpoints
 RewriteRule ^([0-9]+)/edit/?$ edit.php?id=$1 [QSA,L]
 RewriteRule ^edit/([0-9]+)/?$ edit.php?id=$1 [QSA,L]
@@ -14,8 +17,9 @@ RewriteRule ^([0-9]+)/cancel/?$ cancel.php?id=$1 [QSA,L]
 RewriteRule ^cancel/([0-9]+)/?$ cancel.php?id=$1 [QSA,L]
 
 # Critical fix - allow direct access to PHP files
-RewriteCond %{REQUEST_URI} \.(php)$
-RewriteRule .* - [L]
+<FilesMatch "\.php$">
+    RewriteEngine Off
+</FilesMatch>
 
 # Set CORS headers
 <IfModule mod_headers.c>

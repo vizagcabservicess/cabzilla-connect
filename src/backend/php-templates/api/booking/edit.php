@@ -1,6 +1,6 @@
 
 <?php
-// Adjust the path to config.php correctly
+// Include configuration
 require_once __DIR__ . '/../../config.php';
 
 // For CORS preflight request
@@ -14,37 +14,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+// Enable error reporting for debugging
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
+
+// Log request details
+logError("Booking edit.php request", [
+    'method' => $_SERVER['REQUEST_METHOD'],
+    'request_uri' => $_SERVER['REQUEST_URI'],
+    'query_string' => $_SERVER['QUERY_STRING'],
+    'get_params' => $_GET
+]);
+
 // Get booking ID from URL
 $bookingId = isset($_GET['id']) ? intval($_GET['id']) : 0;
 
-// If ID is not in query string, try to get it from URL path
-if (!$bookingId && isset($_SERVER['PATH_INFO'])) {
-    $pathParts = explode('/', trim($_SERVER['PATH_INFO'], '/'));
-    $bookingId = intval(end($pathParts));
-}
-
-// Try to get id from the last part of the URL if still no ID
 if (!$bookingId) {
-    $url = $_SERVER['REQUEST_URI'];
-    if (preg_match('/edit\/([0-9]+)/', $url, $matches) || 
-        preg_match('/([0-9]+)\/edit/', $url, $matches)) {
-        $bookingId = intval($matches[1]);
-    }
-}
-
-if (!$bookingId) {
-    logError("Missing booking ID in request", ['GET' => $_GET, 'URL' => $_SERVER['REQUEST_URI'], 'PATH_INFO' => $_SERVER['PATH_INFO'] ?? 'none']);
+    logError("Missing booking ID in request", ['GET' => $_GET]);
     sendJsonResponse(['status' => 'error', 'message' => 'Invalid booking ID'], 400);
     exit;
 }
-
-// Log request details for debugging
-logError("Booking edit request", [
-    'method' => $_SERVER['REQUEST_METHOD'],
-    'booking_id' => $bookingId,
-    'request_uri' => $_SERVER['REQUEST_URI'],
-    'query_string' => $_SERVER['QUERY_STRING'] ?? 'none'
-]);
 
 // Check if this is a GET or POST request
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
@@ -52,10 +41,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     
     // Authenticate the user
     $userData = authenticate();
-    if (!$userData) {
-        sendJsonResponse(['status' => 'error', 'message' => 'Authentication required'], 401);
-        exit;
-    }
     
     // Connect to database
     $conn = getDbConnection();
@@ -129,14 +114,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     
     // Authenticate the user
     $userData = authenticate();
-    if (!$userData) {
-        sendJsonResponse(['status' => 'error', 'message' => 'Authentication required'], 401);
-        exit;
-    }
     
     // Get the request body
-    $data = json_decode(file_get_contents('php://input'), true);
-    logError("Booking update request data", ['data' => $data]);
+    $rawInput = file_get_contents('php://input');
+    $data = json_decode($rawInput, true);
+    
+    logError("Booking update request data", [
+        'raw_input' => $rawInput,
+        'decoded_data' => $data
+    ]);
     
     if (!$data) {
         sendJsonResponse(['status' => 'error', 'message' => 'Invalid request data'], 400);
@@ -269,11 +255,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             throw new Exception("Failed to execute update: " . $stmt->error);
         }
         
-        if ($stmt->affected_rows === 0) {
-            // No rows were updated - might be because no changes were made
-            logError("No rows affected in update", ['booking_id' => $bookingId]);
-        }
-        
         // Get the updated booking
         $sql = "SELECT * FROM bookings WHERE id = ?";
         $stmt = $conn->prepare($sql);
@@ -320,24 +301,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         // Commit the transaction
         $conn->commit();
         
-        // Send email notifications - improved implementation
-        try {
-            sendEmailNotification(
-                $updatedBooking['passenger_email'],
-                "Your booking #{$updatedBooking['booking_number']} has been updated",
-                generateBookingEmailContent($formattedBooking, false)
-            );
-            
-            // Send admin notification
-            sendEmailNotification(
-                ADMIN_EMAIL,
-                "Booking #{$updatedBooking['booking_number']} has been updated",
-                generateBookingEmailContent($formattedBooking, true)
-            );
-        } catch (Exception $e) {
-            // Log email error but continue with success response
-            logError("Failed to send email notifications", ['error' => $e->getMessage()]);
-        }
+        // Send email notifications
+        sendBookingUpdateNotification($formattedBooking);
         
         sendJsonResponse([
             'status' => 'success',
@@ -369,40 +334,81 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
 }
 
-// Function to generate booking email content
-function generateBookingEmailContent($booking, $isAdminEmail = false) {
-    $message = "";
+// Function to send email notifications for booking updates
+function sendBookingUpdateNotification($booking) {
+    // Admin email
+    $adminEmail = 'narendrakumarupwork@gmail.com';
     
-    if ($isAdminEmail) {
-        $message .= "Booking #{$booking['bookingNumber']} has been updated.\n\n";
-        $message .= "Customer: {$booking['passengerName']} ({$booking['passengerEmail']})\n";
-        $message .= "Phone: {$booking['passengerPhone']}\n";
-    } else {
-        $message .= "Dear {$booking['passengerName']},\n\n";
-        $message .= "Your booking with reference number #{$booking['bookingNumber']} has been updated.\n\n";
-        $message .= "Updated booking details:\n";
-    }
+    // Log the notification attempt
+    logError("Sending booking update notification", [
+        'booking_id' => $booking['id'],
+        'booking_number' => $booking['bookingNumber'],
+        'user_email' => $booking['passengerEmail'],
+        'admin_email' => $adminEmail
+    ]);
     
-    $message .= "Pickup: {$booking['pickupLocation']}\n";
+    // Prepare the email subject and message for user
+    $userSubject = "Your booking #{$booking['bookingNumber']} has been updated";
+    $userMessage = "Dear {$booking['passengerName']},\n\n";
+    $userMessage .= "Your booking with reference number #{$booking['bookingNumber']} has been updated.\n\n";
+    $userMessage .= "Updated booking details:\n";
+    $userMessage .= "Pickup: {$booking['pickupLocation']}\n";
     if (!empty($booking['dropLocation'])) {
-        $message .= "Drop-off: {$booking['dropLocation']}\n";
+        $userMessage .= "Drop-off: {$booking['dropLocation']}\n";
     }
-    $message .= "Pickup Date: {$booking['pickupDate']}\n";
+    $userMessage .= "Pickup Date: {$booking['pickupDate']}\n";
     if (!empty($booking['returnDate'])) {
-        $message .= "Return Date: {$booking['returnDate']}\n";
+        $userMessage .= "Return Date: {$booking['returnDate']}\n";
     }
-    $message .= "Vehicle: {$booking['cabType']}\n";
+    $userMessage .= "Vehicle: {$booking['cabType']}\n";
+    $userMessage .= "Status: {$booking['status']}\n";
+    $userMessage .= "Total Amount: ₹{$booking['totalAmount']}\n\n";
+    $userMessage .= "Thank you for choosing our service.\n";
     
-    if ($isAdminEmail) {
-        $message .= "Trip Type: {$booking['tripType']} ({$booking['tripMode']})\n";
+    // Prepare the email subject and message for admin
+    $adminSubject = "Booking #{$booking['bookingNumber']} has been updated";
+    $adminMessage = "Booking #{$booking['bookingNumber']} has been updated.\n\n";
+    $adminMessage .= "Customer: {$booking['passengerName']} ({$booking['passengerEmail']})\n";
+    $adminMessage .= "Phone: {$booking['passengerPhone']}\n";
+    $adminMessage .= "Pickup: {$booking['pickupLocation']}\n";
+    if (!empty($booking['dropLocation'])) {
+        $adminMessage .= "Drop-off: {$booking['dropLocation']}\n";
     }
-    
-    $message .= "Status: {$booking['status']}\n";
-    $message .= "Total Amount: ₹{$booking['totalAmount']}\n\n";
-    
-    if (!$isAdminEmail) {
-        $message .= "Thank you for choosing our service.\n";
+    $adminMessage .= "Pickup Date: {$booking['pickupDate']}\n";
+    if (!empty($booking['returnDate'])) {
+        $adminMessage .= "Return Date: {$booking['returnDate']}\n";
     }
+    $adminMessage .= "Vehicle: {$booking['cabType']}\n";
+    $adminMessage .= "Trip Type: {$booking['tripType']} ({$booking['tripMode']})\n";
+    $adminMessage .= "Status: {$booking['status']}\n";
+    $adminMessage .= "Total Amount: ₹{$booking['totalAmount']}\n";
     
-    return $message;
+    // Set mail headers
+    $headers = "From: noreply@yourdomain.com\r\n";
+    $headers .= "Reply-To: noreply@yourdomain.com\r\n";
+    $headers .= "X-Mailer: PHP/" . phpversion();
+    
+    // Send emails
+    try {
+        // Send email to user
+        @mail($booking['passengerEmail'], $userSubject, $userMessage, $headers);
+        
+        // Send email to admin
+        @mail($adminEmail, $adminSubject, $adminMessage, $headers);
+        
+        logError("Email notifications sent", [
+            'user_email' => $booking['passengerEmail'],
+            'admin_email' => $adminEmail
+        ]);
+        
+        return true;
+    } catch (Exception $e) {
+        logError("Failed to send email notifications", [
+            'error' => $e->getMessage(),
+            'booking_id' => $booking['id']
+        ]);
+        
+        return false;
+    }
 }
+?>
