@@ -1,3 +1,4 @@
+
 import axios, { AxiosInstance, AxiosError, AxiosRequestConfig } from 'axios';
 import { jwtDecode } from 'jwt-decode';
 import { Booking, BookingRequest, DashboardMetrics, VehiclePricingUpdateRequest } from '@/types/api';
@@ -300,6 +301,31 @@ export const bookingAPI = {
         return response.data;
       } else {
         throw new Error(response.data.message || 'Failed to update booking');
+      }
+    });
+  },
+  
+  async cancelBooking(id: string, reason: string = ''): Promise<any> {
+    return makeApiRequest(async () => {
+      const response = await apiClient.post('/booking/cancel', { 
+        bookingId: id,
+        reason: reason 
+      });
+      if (response.data.status === 'success') {
+        return response.data;
+      } else {
+        throw new Error(response.data.message || 'Failed to cancel booking');
+      }
+    });
+  },
+  
+  async getReceipt(id: string): Promise<any> {
+    return makeApiRequest(async () => {
+      const response = await apiClient.get(`/receipt/${id}`);
+      if (response.data.status === 'success') {
+        return response.data.data;
+      } else {
+        throw new Error(response.data.message || 'Failed to fetch receipt');
       }
     });
   },
