@@ -26,7 +26,7 @@ const withErrorBoundary = (Component: React.ComponentType<any>) => {
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: withErrorBoundary(Index)({}), // Pass an empty object as props
+    element: withErrorBoundary(Index)({}),
     errorElement: <FallbackErrorComponent />,
   },
   {
