@@ -288,7 +288,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         // Commit the transaction
         $conn->commit();
         
-        // Send email notifications
+        // Send email notifications - improved implementation
         sendBookingUpdateNotification($formattedBooking);
         
         sendJsonResponse([
@@ -334,15 +334,73 @@ function sendBookingUpdateNotification($booking) {
         'admin_email' => $adminEmail
     ]);
     
-    // In a real implementation, this would use PHP's mail() function or a library like PHPMailer
-    // For this example, we'll just log the notification
-    logError("Email notification would be sent", [
-        'to_user' => $booking['passengerEmail'],
-        'to_admin' => $adminEmail,
-        'subject' => "Booking #{$booking['bookingNumber']} has been updated",
-        'booking_details' => $booking
-    ]);
+    // In a production environment, this would use PHP's mail() function
+    // For this implementation, we'll use PHP's mail() function directly
     
-    // Return true to indicate notification was "sent"
-    return true;
+    // Prepare the email subject and message for user
+    $userSubject = "Your booking #{$booking['bookingNumber']} has been updated";
+    $userMessage = "Dear {$booking['passengerName']},\n\n";
+    $userMessage .= "Your booking with reference number #{$booking['bookingNumber']} has been updated.\n\n";
+    $userMessage .= "Updated booking details:\n";
+    $userMessage .= "Pickup: {$booking['pickupLocation']}\n";
+    if (!empty($booking['dropLocation'])) {
+        $userMessage .= "Drop-off: {$booking['dropLocation']}\n";
+    }
+    $userMessage .= "Pickup Date: {$booking['pickupDate']}\n";
+    if (!empty($booking['returnDate'])) {
+        $userMessage .= "Return Date: {$booking['returnDate']}\n";
+    }
+    $userMessage .= "Vehicle: {$booking['cabType']}\n";
+    $userMessage .= "Status: {$booking['status']}\n";
+    $userMessage .= "Total Amount: ₹{$booking['totalAmount']}\n\n";
+    $userMessage .= "Thank you for choosing our service.\n";
+    
+    // Prepare the email subject and message for admin
+    $adminSubject = "Booking #{$booking['bookingNumber']} has been updated";
+    $adminMessage = "Booking #{$booking['bookingNumber']} has been updated.\n\n";
+    $adminMessage .= "Customer: {$booking['passengerName']} ({$booking['passengerEmail']})\n";
+    $adminMessage .= "Phone: {$booking['passengerPhone']}\n";
+    $adminMessage .= "Pickup: {$booking['pickupLocation']}\n";
+    if (!empty($booking['dropLocation'])) {
+        $adminMessage .= "Drop-off: {$booking['dropLocation']}\n";
+    }
+    $adminMessage .= "Pickup Date: {$booking['pickupDate']}\n";
+    if (!empty($booking['returnDate'])) {
+        $adminMessage .= "Return Date: {$booking['returnDate']}\n";
+    }
+    $adminMessage .= "Vehicle: {$booking['cabType']}\n";
+    $adminMessage .= "Trip Type: {$booking['tripType']} ({$booking['tripMode']})\n";
+    $adminMessage .= "Status: {$booking['status']}\n";
+    $adminMessage .= "Total Amount: ₹{$booking['totalAmount']}\n";
+    
+    // Set mail headers
+    $headers = "From: noreply@yourdomain.com\r\n";
+    $headers .= "Reply-To: noreply@yourdomain.com\r\n";
+    $headers .= "X-Mailer: PHP/" . phpversion();
+    
+    // Send emails
+    $userMailSent = false;
+    $adminMailSent = false;
+    
+    try {
+        // Send email to user
+        $userMailSent = @mail($booking['passengerEmail'], $userSubject, $userMessage, $headers);
+        
+        // Send email to admin
+        $adminMailSent = @mail($adminEmail, $adminSubject, $adminMessage, $headers);
+        
+        logError("Email notification sent results", [
+            'user_email' => $booking['passengerEmail'],
+            'user_mail_sent' => $userMailSent ? 'success' : 'failed',
+            'admin_email' => $adminEmail,
+            'admin_mail_sent' => $adminMailSent ? 'success' : 'failed'
+        ]);
+    } catch (Exception $e) {
+        logError("Failed to send email notifications", [
+            'error' => $e->getMessage(),
+            'booking_id' => $booking['id']
+        ]);
+    }
+    
+    return $userMailSent || $adminMailSent;
 }

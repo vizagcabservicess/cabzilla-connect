@@ -9,6 +9,8 @@ import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import DashboardPage from './pages/DashboardPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
+import BookingEditPage from './pages/BookingEditPage';
+import ReceiptPage from './pages/ReceiptPage';
 
 export const router = createBrowserRouter([
   {
@@ -38,6 +40,14 @@ export const router = createBrowserRouter([
   {
     path: '/dashboard',
     element: <DashboardPage />,
+  },
+  {
+    path: '/booking/:id/edit',
+    element: <BookingEditPage />,
+  },
+  {
+    path: '/receipt/:id',
+    element: <ReceiptPage />,
   },
   {
     path: '/admin',
