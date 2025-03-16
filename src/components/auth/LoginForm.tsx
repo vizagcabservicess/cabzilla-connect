@@ -6,8 +6,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useToast } from "@/components/ui/use-toast";
-import { toast } from "sonner";
+import { useToast } from "@/hooks/use-toast";
+import { toast as sonnerToast } from "sonner";
 import {
   Form,
   FormControl,
@@ -88,7 +88,7 @@ export function LoginForm() {
       });
       
       // Also use Sonner toast for additional visibility
-      toast.success("Login successful", {
+      sonnerToast.success("Login successful", {
         description: "Welcome back! Redirecting to dashboard...",
         duration: 3000,
       });
@@ -109,7 +109,7 @@ export function LoginForm() {
       });
       
       // Also use Sonner toast for additional visibility
-      toast.error("Login failed", {
+      sonnerToast.error("Login failed", {
         description: error instanceof Error ? error.message : "Something went wrong",
         duration: 5000,
       });
