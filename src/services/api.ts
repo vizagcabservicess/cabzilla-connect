@@ -1,3 +1,4 @@
+
 import axios, { AxiosInstance, AxiosError, AxiosRequestConfig } from 'axios';
 import { jwtDecode } from 'jwt-decode';
 import { Booking, BookingRequest, DashboardMetrics, VehiclePricingUpdateRequest } from '@/types/api';
@@ -149,8 +150,12 @@ const handleApiError = (error: any) => {
   return error instanceof Error ? error : new Error('An unknown error occurred');
 };
 
+// Define retry constants
+const DEFAULT_MAX_RETRIES = 3;
+const DEFAULT_RETRY_DELAY = 1000;
+
 // Helper function to make API requests with retry logic
-const makeApiRequest = async <T>(apiCall: () => Promise<T>): Promise<T> => {
+const makeApiRequest = async <T>(apiCall: () => Promise<T>, maxRetries = DEFAULT_MAX_RETRIES, retryDelay = DEFAULT_RETRY_DELAY): Promise<T> => {
   let retries = 0;
   
   while (true) {
@@ -192,7 +197,7 @@ export const authAPI = {
       } else {
         throw new Error(response.data.message || 'Login failed - no token received');
       }
-    }, 3, 1500); // 3 retries with 1.5s initial delay
+    });
   },
 
   async register(userData: any): Promise<any> {
@@ -275,7 +280,7 @@ export const bookingAPI = {
       } else {
         throw new Error(response.data.message || 'Failed to create booking');
       }
-    }, 3, 2000); // More retries with longer delay for booking creation
+    });
   },
 
   async getBooking(id: string): Promise<Booking> {
@@ -463,3 +468,4 @@ export const tourFaresAPI = {
     return fareAPI.getTourFares();
   },
 };
+
