@@ -42,8 +42,9 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
       const timestamp = new Date().getTime();
       console.log(`Fetching dashboard metrics for period: ${period} at ${timestamp}...`);
       
-      // Force cache refresh if requested
-      const data = await bookingAPI.getAdminDashboardMetrics(period, forceRefresh);
+      // Updated to pass only one argument instead of two
+      // The API expects either no arguments or just the period
+      const data = await bookingAPI.getAdminDashboardMetrics(period);
       console.log('Dashboard metrics received:', data);
       
       if (data) {
