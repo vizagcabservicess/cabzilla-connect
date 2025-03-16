@@ -27,6 +27,13 @@ AddDefaultCharset UTF-8
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
     Header always set Access-Control-Allow-Headers "Content-Type, Authorization"
     Header always set Access-Control-Max-Age "3600"
+    
+    # Prevent caching for API responses
+    <FilesMatch "\.(php)$">
+        Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+        Header always set Pragma "no-cache"
+        Header always set Expires "0"
+    </FilesMatch>
 </IfModule>
 
 # Handle OPTIONS requests for CORS preflight

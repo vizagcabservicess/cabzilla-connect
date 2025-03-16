@@ -8,6 +8,11 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     sendJsonResponse(['error' => 'Method not allowed'], 405);
 }
 
+// Set cache control headers to prevent caching
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
+
 try {
     // Get the request body
     $input = file_get_contents('php://input');
@@ -48,6 +53,13 @@ try {
     
     // Generate JWT token
     $token = generateJwtToken($user['id'], $user['email'], $user['role']);
+    
+    // Log successful login
+    logError("Login successful for user", [
+        'user_id' => $user['id'],
+        'email' => $user['email'],
+        'token_length' => strlen($token)
+    ]);
     
     // Send response
     sendJsonResponse([

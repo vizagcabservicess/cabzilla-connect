@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import {
   Form,
   FormControl,
@@ -25,10 +26,22 @@ const loginSchema = z.object({
 });
 
 export function LoginForm() {
-  const { toast } = useToast();
+  const { toast: uiToast } = useToast();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+
+  // Clear any existing tokens when the login form is mounted
+  useEffect(() => {
+    // Clear all possible storage locations to ensure clean login
+    localStorage.removeItem('auth_token');
+    sessionStorage.removeItem('auth_token');
+    
+    // Also clear any lingering auth cookies
+    document.cookie = "auth_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+    
+    console.log('Cleared existing auth tokens for fresh login');
+  }, []);
 
   const form = useForm<LoginRequest>({
     resolver: zodResolver(loginSchema),
@@ -43,18 +56,58 @@ export function LoginForm() {
     setError(null);
     
     try {
+      console.log('Attempting login with:', values.email);
       const response = await authAPI.login(values);
-      toast({
+      
+      if (!response.token) {
+        throw new Error('No token received from server');
+      }
+      
+      console.log('Login successful, token received');
+      
+      // Store token in multiple places for redundancy
+      localStorage.setItem('auth_token', response.token);
+      sessionStorage.setItem('auth_token', response.token);
+      
+      // Also set as cookie with HttpOnly and Secure flags if possible
+      document.cookie = `auth_token=${response.token}; path=/; max-age=${60*60*24*30}; SameSite=Strict`;
+      
+      toast.success("Login Successful", {
+        description: "Welcome back!",
+        duration: 3000,
+      });
+      
+      uiToast({
         title: "Login Successful",
         description: "Welcome back!",
         duration: 3000,
       });
-      navigate('/dashboard');
+      
+      // Short delay before navigation to ensure token is properly saved
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 500);
     } catch (error) {
+      console.error('Login failed:', error);
       setError(error as Error);
-      toast({
+      
+      let errorMessage = error instanceof Error 
+        ? error.message 
+        : "Something went wrong. Please try again.";
+        
+      // Special handling for common auth errors
+      if (errorMessage.includes('401') || errorMessage.includes('Invalid email or password')) {
+        errorMessage = 'Invalid email or password. Please try again.';
+      }
+      
+      toast.error("Login Failed", {
+        description: errorMessage,
+        duration: 5000,
+      });
+      
+      uiToast({
         title: "Login Failed",
-        description: error instanceof Error ? error.message : "Something went wrong",
+        description: errorMessage,
         variant: "destructive",
         duration: 5000,
       });

@@ -18,6 +18,11 @@ RewriteRule ^admin/km-price/update$ admin/km-price-update.php [L]
 # Set content type
 <FilesMatch "\.(php)$">
     Header set Content-Type "application/json"
+    
+    # Prevent caching
+    Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    Header always set Pragma "no-cache"
+    Header always set Expires "0"
 </FilesMatch>
 
 # Enable CORS
