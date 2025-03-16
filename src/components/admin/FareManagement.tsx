@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -51,7 +50,6 @@ export function FareManagement() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { toast: uiToast } = useToast();
   
-  // New tour dialog state
   const [isNewTourDialogOpen, setIsNewTourDialogOpen] = useState(false);
   const [isAddingTour, setIsAddingTour] = useState(false);
   
@@ -80,7 +78,6 @@ export function FareManagement() {
     },
   });
   
-  // Handle form submission for updating existing tour
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       setIsLoading(true);
@@ -99,13 +96,11 @@ export function FareManagement() {
     }
   };
   
-  // Handle form submission for adding new tour
   const onAddTour = async (values: z.infer<typeof newTourSchema>) => {
     try {
       setIsAddingTour(true);
       console.log("Adding new tour:", values);
       
-      // Create a new tour with the provided data
       const newTourData = {
         tourName: values.tourName,
         tourDescription: values.tourDescription || '',
@@ -116,19 +111,15 @@ export function FareManagement() {
         luxury: values.luxury,
       };
       
-      // Call the API to add the new tour
       const data = await fareAPI.addTourFare(newTourData);
       console.log("New tour added:", data);
       
       toast.success("New tour added successfully");
       
-      // Reset the form
       newTourForm.reset();
       
-      // Close the dialog
       setIsNewTourDialogOpen(false);
       
-      // Refresh the tour fares
       await fetchTourFares();
     } catch (error) {
       console.error("Error adding new tour:", error);
@@ -146,7 +137,6 @@ export function FareManagement() {
     try {
       setIsRefreshing(true);
       setError(null);
-      // Cache busting log
       console.log("Manually refreshing tour fares...");
       const data = await fareAPI.getTourFares();
       setTourFares(data);
@@ -183,7 +173,6 @@ export function FareManagement() {
       
       toast.success("Tour deleted successfully");
       
-      // Refresh the tour fares
       await fetchTourFares();
     } catch (error) {
       console.error("Error deleting tour:", error);
@@ -423,7 +412,10 @@ export function FareManagement() {
                               onClick={() => {
                                 handleTourSelect(fare.tourId);
                                 form.setValue("tourId", fare.tourId);
-                                document.querySelector('[data-value="update"]')?.click();
+                                const updateTab = document.querySelector('[data-value="update"]');
+                                if (updateTab instanceof HTMLElement) {
+                                  updateTab.click();
+                                }
                               }}
                             >
                               <Edit className="h-4 w-4" />
@@ -454,7 +446,6 @@ export function FareManagement() {
         </Card>
       </TabsContent>
       
-      {/* Add New Tour Dialog */}
       <Dialog open={isNewTourDialogOpen} onOpenChange={setIsNewTourDialogOpen}>
         <DialogContent>
           <DialogHeader>
