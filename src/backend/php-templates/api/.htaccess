@@ -17,6 +17,10 @@ RewriteRule ^fares/vehicles$ fares/vehicles.php [L]
 RewriteRule ^admin/fares/update$ admin/fares-update.php [L]
 RewriteRule ^admin/km-price/update$ admin/km-price-update.php [L]
 
+# Debug header to help troubleshoot routing
+Header set X-Requested-Path "%{REQUEST_URI}e"
+Header set X-Query-String "%{QUERY_STRING}e"
+
 # Disable caching for API endpoints
 <IfModule mod_headers.c>
     Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"

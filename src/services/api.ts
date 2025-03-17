@@ -123,6 +123,7 @@ export const bookingAPI: {
 } = {
   async createBooking(bookingData: BookingRequest): Promise<Booking> {
     try {
+      console.log('Creating booking with data:', bookingData);
       const response = await axiosInstance.post('/book', bookingData);
 
       if (response.data.status === 'success') {
@@ -178,7 +179,12 @@ export const bookingAPI: {
   async getBookingById(bookingId: string): Promise<Booking> {
     try {
       console.log(`Fetching booking details for ID: ${bookingId}`);
-      const response = await axiosInstance.get(`/user/booking/${bookingId}`);
+      const url = `/user/booking/${bookingId}`;
+      console.log('Requesting URL:', `${API_BASE_URL}${url}`);
+      
+      const response = await axiosInstance.get(url);
+      
+      console.log('Booking API response:', response.data);
       
       if (response.data.status === 'success') {
         return response.data.data;
@@ -187,8 +193,11 @@ export const bookingAPI: {
       }
     } catch (error) {
       console.error('Error fetching booking details:', error);
-      if (axios.isAxiosError(error) && error.response) {
-        throw new Error(error.response.data.message || 'Failed to get booking details');
+      if (axios.isAxiosError(error)) {
+        const statusCode = error.response?.status;
+        const errorMessage = error.response?.data?.message || 'Failed to get booking details';
+        console.error(`Status code: ${statusCode}, Message: ${errorMessage}`);
+        throw new Error(errorMessage);
       }
       throw new Error('Network error when fetching booking details');
     }
@@ -216,14 +225,12 @@ export const bookingAPI: {
             processedData[key] = value;
           }
         } else if (key === 'pickupDate' || key === 'returnDate') {
-          if (value !== null && value !== undefined && typeof value === 'object') {
-            if (value && 'toISOString' in value && typeof (value as Date).toISOString === 'function') {
+          if (value !== null && value !== undefined) {
+            if (typeof value === 'object' && value && 'toISOString' in value && typeof (value as Date).toISOString === 'function') {
               processedData[key] = (value as Date).toISOString();
-            } else if (value !== null && value !== undefined) {
+            } else {
               processedData[key] = value;
             }
-          } else if (value !== null && value !== undefined) {
-            processedData[key] = value;
           }
         } else if (value !== null && value !== undefined) {
           processedData[key] = value;
@@ -232,7 +239,12 @@ export const bookingAPI: {
       
       console.log("Processed data for API:", processedData);
       
-      const response = await axiosInstance.put(`/update-booking/${bookingId}`, processedData);
+      const url = `/update-booking/${bookingId}`;
+      console.log('Requesting URL:', `${API_BASE_URL}${url}`);
+      
+      const response = await axiosInstance.put(url, processedData);
+      
+      console.log('Update booking response:', response.data);
       
       if (response.data.status === 'success') {
         return response.data.data;
@@ -241,8 +253,11 @@ export const bookingAPI: {
       }
     } catch (error) {
       console.error('Error updating booking:', error);
-      if ('response' in error && error.response?.data?.message) {
-        throw new Error(error.response.data.message);
+      if (axios.isAxiosError(error)) {
+        const statusCode = error.response?.status;
+        const errorMessage = error.response?.data?.message || 'Failed to update booking';
+        console.error(`Status code: ${statusCode}, Message: ${errorMessage}`);
+        throw new Error(errorMessage);
       }
       throw new Error('Network error when updating booking');
     }
