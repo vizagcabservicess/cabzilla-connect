@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { LoginRequest, SignupRequest, User, BookingRequest, Booking, 
   FareUpdateRequest, VehiclePricingUpdateRequest, TourFare, VehiclePricing,
@@ -25,6 +26,7 @@ const setAuthToken = (token: string | null) => {
 const storedToken = localStorage.getItem('auth_token');
 if (storedToken) {
   setAuthToken(storedToken);
+}
 
 interface AuthAPI {
   login(credentials: LoginRequest): Promise<{ user: User; token: string }>;
