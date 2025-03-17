@@ -1,3 +1,4 @@
+
 import axios, { AxiosInstance, AxiosError, AxiosRequestConfig } from 'axios';
 import { jwtDecode } from 'jwt-decode';
 import { Booking, BookingRequest, DashboardMetrics, VehiclePricingUpdateRequest } from '@/types/api';
@@ -310,16 +311,22 @@ export const bookingAPI = {
       }
       
       // Make sure the date strings are in ISO format
-      if (bookingData.pickupDate) {
-        if (typeof bookingData.pickupDate === 'object' && bookingData.pickupDate instanceof Date) {
-          bookingData.pickupDate = bookingData.pickupDate.toISOString();
-        }
-      } else {
+      if (!bookingData.pickupDate) {
         throw new Error('Pickup date is required');
       }
       
-      if (bookingData.returnDate) {
-        if (typeof bookingData.returnDate === 'object' && bookingData.returnDate instanceof Date) {
+      // Safely convert pickupDate to ISO string
+      if (typeof bookingData.pickupDate === 'object') {
+        // Check if it's a Date object by looking for the toISOString method
+        if (bookingData.pickupDate && 'toISOString' in bookingData.pickupDate) {
+          bookingData.pickupDate = bookingData.pickupDate.toISOString();
+        }
+      }
+      
+      // Safely convert returnDate to ISO string if it exists
+      if (bookingData.returnDate && typeof bookingData.returnDate === 'object') {
+        // Check if it's a Date object by looking for the toISOString method
+        if ('toISOString' in bookingData.returnDate) {
           bookingData.returnDate = bookingData.returnDate.toISOString();
         }
       }
