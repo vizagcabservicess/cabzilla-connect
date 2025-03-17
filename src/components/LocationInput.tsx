@@ -35,11 +35,12 @@ export function LocationInput({
   const locationData = location || value || { address: '' };
   const handleLocationChange = onLocationChange || onChange;
   
-  const [address, setAddress] = useState(locationData?.address || "");
+  const [address, setAddress] = useState<string>('');
   const { google } = useGoogleMaps();
 
+  // Update the address when the location data changes
   useEffect(() => {
-    if (locationData?.address) {
+    if (locationData && typeof locationData.address === 'string') {
       setAddress(locationData.address);
     }
   }, [locationData]);
@@ -80,29 +81,41 @@ export function LocationInput({
           try {
             const place = autocomplete.getPlace();
 
-            // Safely check that place and geometry exist
-            if (!place || !place.geometry || !place.geometry.location) {
-              console.log("Autocomplete's returned place contains no geometry");
+            // Ensure place exists and has the required geometry
+            if (!place) {
+              console.log("No place details returned from autocomplete");
               return;
             }
 
+            if (!place.geometry || !place.geometry.location) {
+              console.log("Autocomplete returned place with no geometry");
+              return;
+            }
+
+            // Get a safe formatted address
+            const formattedAddress = place.formatted_address || address || '';
+            
             // Create location object with safe default values
             const newLocation: Location = {
-              address: place.formatted_address || address || '',
+              address: formattedAddress,
               lat: place.geometry.location.lat(),
               lng: place.geometry.location.lng(),
-              name: place.name || place.formatted_address || '',
-              // Retain other properties if they exist
-              ...(locationData && locationData.id && { id: locationData.id }),
-              ...(locationData && locationData.city && { city: locationData.city }),
-              ...(locationData && locationData.state && { state: locationData.state }),
-              ...(locationData && locationData.type && { type: locationData.type }),
-              ...(locationData && locationData.popularityScore && { popularityScore: locationData.popularityScore }),
-              ...(locationData && locationData.isPickupLocation && { isPickupLocation: locationData.isPickupLocation }),
-              ...(locationData && locationData.isDropLocation && { isDropLocation: locationData.isDropLocation }),
+              name: place.name || formattedAddress,
             };
 
-            setAddress(place.formatted_address || address || '');
+            // Only add optional properties if they exist
+            if (locationData && locationData.id) newLocation.id = locationData.id;
+            if (locationData && locationData.city) newLocation.city = locationData.city;
+            if (locationData && locationData.state) newLocation.state = locationData.state;
+            if (locationData && locationData.type) newLocation.type = locationData.type;
+            if (locationData && locationData.popularityScore) newLocation.popularityScore = locationData.popularityScore;
+            if (locationData && locationData.isPickupLocation !== undefined) newLocation.isPickupLocation = locationData.isPickupLocation;
+            if (locationData && locationData.isDropLocation !== undefined) newLocation.isDropLocation = locationData.isDropLocation;
+
+            // Update the input value
+            setAddress(formattedAddress);
+            
+            // Call the handler if it exists
             if (handleLocationChange) {
               handleLocationChange(newLocation);
             }
@@ -137,18 +150,29 @@ export function LocationInput({
     const newAddress = e.target.value;
     setAddress(newAddress);
     
-    if (handleLocationChange) {
+    // Only update the location through the handler if we have enough characters
+    // This prevents the toLowerCase error during typing empty strings
+    if (handleLocationChange && newAddress.trim() !== '') {
       // Create a new location object with the updated address while preserving other properties
       const updatedLocation: Location = {
-        ...locationData,
         address: newAddress
       };
       
-      // Only update the location through the handler if we have enough length
-      // This prevents the toLowerCase error during typing
-      if (newAddress.length > 0) {
-        handleLocationChange(updatedLocation);
+      // Only add optional properties if they exist in locationData
+      if (locationData) {
+        if (locationData.id) updatedLocation.id = locationData.id;
+        if (locationData.name) updatedLocation.name = locationData.name;
+        if (locationData.city) updatedLocation.city = locationData.city;
+        if (locationData.state) updatedLocation.state = locationData.state;
+        if (locationData.lat) updatedLocation.lat = locationData.lat;
+        if (locationData.lng) updatedLocation.lng = locationData.lng;
+        if (locationData.type) updatedLocation.type = locationData.type;
+        if (locationData.popularityScore) updatedLocation.popularityScore = locationData.popularityScore;
+        if (locationData.isPickupLocation !== undefined) updatedLocation.isPickupLocation = locationData.isPickupLocation;
+        if (locationData.isDropLocation !== undefined) updatedLocation.isDropLocation = locationData.isDropLocation;
       }
+      
+      handleLocationChange(updatedLocation);
     }
   };
 
@@ -164,7 +188,7 @@ export function LocationInput({
         id="location-input"
         placeholder={placeholder}
         className={className}
-        value={address || ''}
+        value={address}
         onChange={handleChange}
         disabled={disabled || readOnly}
         autoComplete="off" // Prevent browser's default autocomplete
