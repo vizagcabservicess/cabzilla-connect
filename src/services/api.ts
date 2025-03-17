@@ -287,15 +287,17 @@ export const bookingAPI = {
           }
           
           try {
+            // Cast to 'any' first to safely use instanceof
+            const dateValue: any = bookingData.pickupDate;
             // Check if it's a Date object or has toISOString method
-            if (bookingData.pickupDate instanceof Date || 
-                (typeof bookingData.pickupDate === 'object' && 
-                 bookingData.pickupDate !== null && 
-                 typeof (bookingData.pickupDate as any).toISOString === 'function')) {
-              return (bookingData.pickupDate as Date).toISOString();
+            if (dateValue instanceof Date || 
+                (typeof dateValue === 'object' && 
+                 dateValue !== null && 
+                 typeof dateValue.toISOString === 'function')) {
+              return dateValue.toISOString();
             } else {
               // Fallback to creating a new Date
-              return new Date(bookingData.pickupDate as any).toISOString();
+              return new Date(dateValue).toISOString();
             }
           } catch (e) {
             console.error('Error formatting pickup date:', e);
@@ -310,15 +312,17 @@ export const bookingAPI = {
             }
             
             try {
+              // Cast to 'any' first to safely use instanceof
+              const dateValue: any = bookingData.returnDate;
               // Check if it's a Date object or has toISOString method
-              if (bookingData.returnDate instanceof Date || 
-                  (typeof bookingData.returnDate === 'object' && 
-                   bookingData.returnDate !== null && 
-                   typeof (bookingData.returnDate as any).toISOString === 'function')) {
-                return (bookingData.returnDate as Date).toISOString();
+              if (dateValue instanceof Date || 
+                  (typeof dateValue === 'object' && 
+                   dateValue !== null && 
+                   typeof dateValue.toISOString === 'function')) {
+                return dateValue.toISOString();
               } else {
                 // Fallback to creating a new Date
-                return new Date(bookingData.returnDate as any).toISOString();
+                return new Date(dateValue).toISOString();
               }
             } catch (e) {
               console.error('Error formatting return date:', e);
@@ -474,3 +478,4 @@ export const tourFaresAPI = {
     return fareAPI.getTourFares();
   },
 };
+
