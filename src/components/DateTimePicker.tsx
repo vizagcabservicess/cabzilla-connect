@@ -1,7 +1,9 @@
-import React from 'react';
+
+import React, { useState } from 'react';
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { Calendar as CalendarIcon } from "lucide-react";
@@ -11,13 +13,15 @@ export interface DateTimePickerProps {
   onDateChange: (date: Date | undefined) => void;
   minDate?: Date;
   className?: string;
+  label?: string; // Make label optional
 }
 
 export function DateTimePicker({ 
   date, 
   onDateChange, 
   minDate, 
-  className 
+  className,
+  label
 }: DateTimePickerProps) {
   const [selectedTime, setSelectedTime] = useState<string | null>(
     date ? format(date, "HH:mm") : null
@@ -46,18 +50,20 @@ export function DateTimePicker({
 
   return (
     <div className="space-y-2">
-      <label
-        htmlFor="date"
-        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-      >
-        {label}
-      </label>
+      {label && (
+        <label
+          htmlFor="date"
+          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+        >
+          {label}
+        </label>
+      )}
       <Popover>
         <PopoverTrigger asChild>
           <Button
             variant={"outline"}
             className={cn(
-              "w-[280px] justify-start text-left font-normal",
+              "w-full justify-start text-left font-normal",
               !date && "text-muted-foreground"
             )}
           >

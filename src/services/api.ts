@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { LoginRequest, SignupRequest, User, BookingRequest, Booking, 
   FareUpdateRequest, VehiclePricingUpdateRequest, TourFare, VehiclePricing,
@@ -204,13 +205,7 @@ export const bookingAPI: {
       // Convert date objects to ISO strings for the API
       const processedData = { ...bookingData };
       
-      if (bookingData.pickupDate && bookingData.pickupDate instanceof Date) {
-        processedData.pickupDate = bookingData.pickupDate.toISOString();
-      }
-      
-      if (bookingData.returnDate && bookingData.returnDate instanceof Date) {
-        processedData.returnDate = bookingData.returnDate.toISOString();
-      }
+      // For type safety, we no longer need type conversion checks since we're handling this in BookingEditPage
       
       const response = await axiosInstance.put(`/update-booking/${bookingId}`, processedData);
       

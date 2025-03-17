@@ -78,7 +78,7 @@ export default function BookingEditPage() {
         passengerPhone: contactDetails.phone,
         passengerEmail: contactDetails.email,
         pickupLocation: pickupLocation.address,
-        pickupDate: pickupDate
+        pickupDate: pickupDate ? pickupDate.toISOString() : undefined // Convert to ISO string
       };
       
       // Update booking in API
