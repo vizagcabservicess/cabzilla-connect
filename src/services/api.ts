@@ -213,26 +213,28 @@ export const bookingAPI: {
               processedData[key] = String(locationValue);
             }
           } else {
-            processedData[key] = value;
+            if (value !== null && value !== undefined) {
+              processedData[key] = value;
+            }
           }
         } else if (key === 'pickupDate' || key === 'returnDate') {
-          // Fix null check and add type guard for the toISOString method
           if (value !== null && value !== undefined && typeof value === 'object') {
-            // Verify toISOString exists and is a function before calling it
             if ('toISOString' in value && typeof (value as Date).toISOString === 'function') {
               processedData[key] = (value as Date).toISOString();
             } else {
-              // Make sure value is not null before assignment
-              processedData[key] = value;
+              if (value !== null && value !== undefined) {
+                processedData[key] = value;
+              }
             }
           } else {
-            // Make sure value is not null before assignment 
             if (value !== null && value !== undefined) {
               processedData[key] = value;
             }
           }
         } else {
-          processedData[key] = value;
+          if (value !== null && value !== undefined) {
+            processedData[key] = value;
+          }
         }
       }
       
