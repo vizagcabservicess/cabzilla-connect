@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Input } from "@/components/ui/input";
 import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
@@ -47,6 +48,7 @@ export function LocationInput({
   // Flag to track if we should update address from props
   const skipNextPropsUpdate = useRef(false);
   const isInternalUpdate = useRef(false);
+  const userIsTyping = useRef(false);
 
   // Update the address when the location data changes (only if not being edited)
   useEffect(() => {
@@ -59,6 +61,11 @@ export function LocationInput({
     // Don't update if this is from internal state changes (typing)
     if (isInternalUpdate.current) {
       isInternalUpdate.current = false;
+      return;
+    }
+    
+    // Don't update if user is currently typing
+    if (userIsTyping.current) {
       return;
     }
 
@@ -92,6 +99,9 @@ export function LocationInput({
     const newAddress = e.target.value;
     console.log('Input changed to:', newAddress);
     
+    // Mark that user is typing
+    userIsTyping.current = true;
+    
     // Always update internal state for controlled input behavior
     setAddress(newAddress);
     
@@ -108,6 +118,14 @@ export function LocationInput({
     // Use the debounced function for the parent component update
     debouncedUpdateParent(updatedLocation);
   }, [debouncedUpdateParent, locationData]);
+  
+  // Handle blur to indicate typing has finished
+  const handleBlur = useCallback(() => {
+    // Small delay to allow autocomplete to process
+    setTimeout(() => {
+      userIsTyping.current = false;
+    }, 200);
+  }, []);
 
   // Setup and teardown of Google Maps autocomplete
   useEffect(() => {
@@ -131,8 +149,16 @@ export function LocationInput({
           fields: ['address_components', 'geometry', 'name', 'formatted_address'],
         };
         
-        // Only apply country restriction for India if specified
-        if (isAirportTransfer === true) {
+        // Apply location restrictions - For pickup locations or airport transfers, restrict to Visakhapatnam, India
+        if (isPickupLocation === true || isAirportTransfer === true) {
+          // Set bounds to Visakhapatnam region
+          const vizagBounds = new google.maps.LatLngBounds(
+            new google.maps.LatLng(17.6, 83.1),  // SW corner
+            new google.maps.LatLng(17.9, 83.4)   // NE corner
+          );
+          
+          options.bounds = vizagBounds;
+          options.strictBounds = isPickupLocation === true;
           options.componentRestrictions = { country: 'in' };
         }
 
@@ -160,13 +186,10 @@ export function LocationInput({
             }
 
             // Get formatted address safely with fallback
-            const formattedAddress = place.formatted_address || place.name || '';
+            const formattedAddress = place.formatted_address || place.name || address || '';
             
-            // Keep current address value if no formatted address is available
-            if (!formattedAddress && address) {
-              console.log("No formatted address from place, keeping current:", address);
-              return;
-            }
+            // Reset user typing flag
+            userIsTyping.current = false;
             
             // Update internal state first with the formatted address
             setAddress(formattedAddress);
@@ -215,7 +238,7 @@ export function LocationInput({
         }
       }
     };
-  }, [google, handleLocationChange, disabled, readOnly, locationData, isAirportTransfer, isLoaded, address]);
+  }, [google, handleLocationChange, disabled, readOnly, locationData, isAirportTransfer, isPickupLocation, isLoaded, address]);
 
   return (
     <div className="space-y-2">
@@ -231,6 +254,7 @@ export function LocationInput({
         className={className}
         value={address} // Always use our controlled state value
         onChange={handleChange}
+        onBlur={handleBlur}
         disabled={disabled}
         readOnly={readOnly}
         autoComplete="off" // Prevent browser's default autocomplete

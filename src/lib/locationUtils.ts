@@ -1,67 +1,97 @@
 
 import { Location as ApiLocation } from '@/types/api';
-import { Location as LocationDataType } from '@/lib/locationData';
+import { Location as AppLocation } from '@/lib/locationData';
 
 /**
- * Converts a frontend location object to the API location type
+ * Converts a location from the application format to the API format
  */
-export function convertToApiLocation(location: LocationDataType | ApiLocation | null): ApiLocation | undefined {
+export const convertToApiLocation = (location: AppLocation | null): ApiLocation | undefined => {
   if (!location) return undefined;
   
-  // Create a new object that meets the ApiLocation interface requirements
   return {
-    id: location.id,
-    // Ensure we have a valid address string
-    address: typeof location.address === 'string' 
-      ? location.address 
-      : (location.name || ''),
+    id: location.id || '',
     name: location.name || '',
-    lat: location.lat,
-    lng: location.lng,
-    city: location.city,
-    state: location.state,
-    type: location.type,
-    popularityScore: location.popularityScore,
-    isPickupLocation: location.isPickupLocation,
-    isDropLocation: location.isDropLocation
+    address: location.address || location.name || '',
+    lat: location.lat || 0,
+    lng: location.lng || 0
   };
+};
+
+/**
+ * Creates a location change handler function for components
+ */
+export const createLocationChangeHandler = (
+  setLocation: (location: AppLocation | null) => void,
+  additionalCallback?: (location: AppLocation | null) => void
+) => {
+  return (newLocation: ApiLocation) => {
+    // Handle potentially incomplete location data
+    const id = newLocation.id || `loc_${Date.now()}`;
+    
+    // Convert API location format to app location format
+    const appLocation: AppLocation = {
+      id,
+      name: newLocation.name || newLocation.address || '',
+      address: newLocation.address || newLocation.name || '',
+      city: extractCityFromAddress(newLocation.address || ''),
+      state: extractStateFromAddress(newLocation.address || ''),
+      lat: newLocation.lat || 0,
+      lng: newLocation.lng || 0,
+      type: 'other',
+      popularityScore: 50
+    };
+    
+    // Update state with the new location
+    setLocation(appLocation);
+    
+    // Call additional callback if provided
+    if (additionalCallback) {
+      additionalCallback(appLocation);
+    }
+    
+    return appLocation;
+  };
+};
+
+/**
+ * Extract city from a formatted address
+ */
+function extractCityFromAddress(address: string): string {
+  // Simple extraction - get the first part that might be a city
+  const parts = address.split(',').map(part => part.trim());
+  
+  // Try to find a likely city name
+  // Usually cities are the second or third element in the comma-separated address
+  if (parts.length >= 3) {
+    return parts[1]; // Often city is the second element
+  } else if (parts.length >= 2) {
+    return parts[0]; // Fallback to first element
+  }
+  
+  return 'Visakhapatnam'; // Default fallback
 }
 
 /**
- * Creates a location change handler function for React components
- * This function creates a handler that can accept either Location type
- * and converts it to the proper format for state management
+ * Extract state from a formatted address
  */
-export function createLocationChangeHandler(
-  setLocationState: React.Dispatch<React.SetStateAction<LocationDataType | null>> | 
-                    React.Dispatch<React.SetStateAction<ApiLocation | null>>
-) {
-  return (location: ApiLocation | LocationDataType) => {
-    console.log('Location change handler called with:', location);
-    
-    // Make sure we have a valid address
-    const address = typeof location.address === 'string' 
-      ? location.address 
-      : (location.name || '');
-    
-    // Create a normalized location object that has all required fields
-    const normalizedLocation = {
-      id: location.id || '',
-      name: location.name || '',
-      city: location.city || '',
-      state: location.state || '',
-      lat: location.lat || 0,
-      lng: location.lng || 0,
-      type: location.type || 'other',
-      popularityScore: location.popularityScore || 0,
-      isPickupLocation: location.isPickupLocation,
-      isDropLocation: location.isDropLocation,
-      // Always include the address property
-      address: address
-    };
-    
-    // Set the state with the updated location
-    // Use type assertion to handle the type mismatch
-    (setLocationState as any)(normalizedLocation);
-  };
+function extractStateFromAddress(address: string): string {
+  // Try to find Andhra Pradesh or other state names in the address
+  if (address.includes('Andhra Pradesh')) {
+    return 'Andhra Pradesh';
+  }
+  
+  // Check for other common Indian states
+  const indianStates = [
+    'Telangana', 'Tamil Nadu', 'Karnataka', 'Kerala', 'Maharashtra', 
+    'Gujarat', 'Rajasthan', 'Punjab', 'Haryana', 'Uttar Pradesh',
+    'Madhya Pradesh', 'Bihar', 'West Bengal', 'Odisha', 'Assam'
+  ];
+  
+  for (const state of indianStates) {
+    if (address.includes(state)) {
+      return state;
+    }
+  }
+  
+  return 'Andhra Pradesh'; // Default fallback
 }
