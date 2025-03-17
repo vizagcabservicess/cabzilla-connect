@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Input } from "@/components/ui/input";
 import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
 import { Location } from '@/types/api';
@@ -35,15 +35,61 @@ export function LocationInput({
   const locationData = location || value || { address: '' };
   const handleLocationChange = onLocationChange || onChange;
   
-  const [address, setAddress] = useState<string>('');
+  // Ensure address is a string to prevent type errors
+  const initialAddress = typeof locationData.address === 'string' ? locationData.address : '';
+  const [address, setAddress] = useState<string>(initialAddress);
   const { google } = useGoogleMaps();
 
   // Update the address when the location data changes
   useEffect(() => {
+    // Ensure we're working with string data
     if (locationData && typeof locationData.address === 'string') {
       setAddress(locationData.address);
+    } else if (locationData && typeof locationData.name === 'string') {
+      setAddress(locationData.name);
+    } else {
+      setAddress('');
     }
   }, [locationData]);
+
+  // Memoize the handleChange function to prevent unnecessary rerenders
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const newAddress = e.target.value;
+    
+    // Always update internal state for controlled input behavior
+    setAddress(newAddress);
+    
+    // Only call the location change handler if it exists
+    if (handleLocationChange) {
+      // Create a new location object with just the address for typing
+      const updatedLocation: Location = { 
+        address: newAddress 
+      };
+      
+      // Preserve other fields from the existing location if available
+      if (locationData) {
+        if (locationData.id) updatedLocation.id = locationData.id;
+        if (locationData.name) updatedLocation.name = locationData.name;
+        if (locationData.city) updatedLocation.city = locationData.city;
+        if (locationData.state) updatedLocation.state = locationData.state;
+        if (typeof locationData.lat === 'number') updatedLocation.lat = locationData.lat;
+        if (typeof locationData.lng === 'number') updatedLocation.lng = locationData.lng;
+        if (locationData.type) updatedLocation.type = locationData.type;
+        if (typeof locationData.popularityScore === 'number') {
+          updatedLocation.popularityScore = locationData.popularityScore;
+        }
+        if (typeof locationData.isPickupLocation === 'boolean') {
+          updatedLocation.isPickupLocation = locationData.isPickupLocation;
+        }
+        if (typeof locationData.isDropLocation === 'boolean') {
+          updatedLocation.isDropLocation = locationData.isDropLocation;
+        }
+      }
+      
+      // Call the handler with the updated location
+      handleLocationChange(updatedLocation);
+    }
+  }, [handleLocationChange, locationData]);
 
   useEffect(() => {
     // Early return if conditions aren't met
@@ -93,10 +139,10 @@ export function LocationInput({
               return;
             }
 
-            // Safely get formatted address
-            const formattedAddress = place.formatted_address || address || '';
+            // Get formatted address safely
+            const formattedAddress = place.formatted_address || '';
             
-            // Create location object with safe default values
+            // Use safe defaults for all values
             const newLocation: Location = {
               address: formattedAddress,
               lat: place.geometry.location.lat(),
@@ -104,7 +150,7 @@ export function LocationInput({
               name: place.name || formattedAddress,
             };
 
-            // Safely add optional properties by using proper null checks
+            // Safely add optional properties from previous location
             if (locationData) {
               if (locationData.id) newLocation.id = locationData.id;
               if (locationData.city) newLocation.city = locationData.city;
@@ -121,7 +167,7 @@ export function LocationInput({
               }
             }
 
-            // Update internal state first
+            // Update internal state first with the formatted address
             setAddress(formattedAddress);
             
             // Call the handler if it exists
@@ -153,45 +199,7 @@ export function LocationInput({
         }
       }
     };
-  }, [google, handleLocationChange, address, disabled, readOnly, locationData, isAirportTransfer]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newAddress = e.target.value;
-    
-    // Always update internal state for controlled input behavior
-    setAddress(newAddress);
-    
-    // Only call the location change handler if the address is not empty
-    if (handleLocationChange) {
-      // Create a new location object with just the address for typing
-      const updatedLocation: Location = { 
-        address: newAddress 
-      };
-      
-      // Preserve other fields from the existing location if available
-      if (locationData) {
-        if (locationData.id) updatedLocation.id = locationData.id;
-        if (locationData.name) updatedLocation.name = locationData.name;
-        if (locationData.city) updatedLocation.city = locationData.city;
-        if (locationData.state) updatedLocation.state = locationData.state;
-        if (typeof locationData.lat === 'number') updatedLocation.lat = locationData.lat;
-        if (typeof locationData.lng === 'number') updatedLocation.lng = locationData.lng;
-        if (locationData.type) updatedLocation.type = locationData.type;
-        if (typeof locationData.popularityScore === 'number') {
-          updatedLocation.popularityScore = locationData.popularityScore;
-        }
-        if (typeof locationData.isPickupLocation === 'boolean') {
-          updatedLocation.isPickupLocation = locationData.isPickupLocation;
-        }
-        if (typeof locationData.isDropLocation === 'boolean') {
-          updatedLocation.isDropLocation = locationData.isDropLocation;
-        }
-      }
-      
-      // Call the handler with the updated location
-      handleLocationChange(updatedLocation);
-    }
-  };
+  }, [google, handleLocationChange, disabled, readOnly, locationData, isAirportTransfer]);
 
   return (
     <div className="space-y-2">
@@ -205,9 +213,10 @@ export function LocationInput({
         id="location-input"
         placeholder={placeholder}
         className={className}
-        value={address || ''} // Ensure value is never undefined or null
+        value={address} // Always use our controlled state value
         onChange={handleChange}
-        disabled={disabled || readOnly}
+        disabled={disabled}
+        readOnly={readOnly}
         autoComplete="off" // Prevent browser's default autocomplete
       />
     </div>

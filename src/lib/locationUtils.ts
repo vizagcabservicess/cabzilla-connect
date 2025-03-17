@@ -1,4 +1,3 @@
-
 import { Location as ApiLocation } from '@/types/api';
 import { Location as LibLocation } from '@/lib/locationData';
 
@@ -6,25 +5,33 @@ import { Location as LibLocation } from '@/lib/locationData';
  * Converts a Location from locationData.ts format to the api.ts Location format
  */
 export function convertToApiLocation(location: LibLocation | null): ApiLocation {
+  // If location is null or undefined, return a minimal valid location object
   if (!location) return { address: '' };
   
+  // Create a base result with required address field
   const result: ApiLocation = {
     address: location.name || ''  // Use name as address since locationData.ts doesn't have address
   };
   
-  // Only add properties that exist in the location object
-  if (location.id) result.id = location.id;
-  if (location.name) result.name = location.name;
-  if (location.city) result.city = location.city;
-  if (location.state) result.state = location.state;
-  if (typeof location.lat === 'number') result.lat = location.lat;
-  if (typeof location.lng === 'number') result.lng = location.lng;
-  if (location.type) result.type = location.type;
-  if (typeof location.popularityScore === 'number') result.popularityScore = location.popularityScore;
+  // Only add properties that exist and are of the correct type in the location object
+  if (location.id && typeof location.id === 'string') result.id = location.id;
+  if (location.name && typeof location.name === 'string') result.name = location.name;
+  if (location.city && typeof location.city === 'string') result.city = location.city;
+  if (location.state && typeof location.state === 'string') result.state = location.state;
+  if (typeof location.lat === 'number' && !isNaN(location.lat)) result.lat = location.lat;
+  if (typeof location.lng === 'number' && !isNaN(location.lng)) result.lng = location.lng;
+  if (location.type && typeof location.type === 'string') result.type = location.type;
+  if (typeof location.popularityScore === 'number' && !isNaN(location.popularityScore)) {
+    result.popularityScore = location.popularityScore;
+  }
   
   // Explicit boolean check to avoid issues with falsy values
-  if (typeof location.isPickupLocation === 'boolean') result.isPickupLocation = location.isPickupLocation;
-  if (typeof location.isDropLocation === 'boolean') result.isDropLocation = location.isDropLocation;
+  if (typeof location.isPickupLocation === 'boolean') {
+    result.isPickupLocation = location.isPickupLocation;
+  }
+  if (typeof location.isDropLocation === 'boolean') {
+    result.isDropLocation = location.isDropLocation;
+  }
   
   return result;
 }
@@ -42,25 +49,49 @@ export function createLocationChangeHandler(
       return;
     }
     
-    // If there is just an empty address field, preserve the existing location
-    // This allows for partial input without resetting the location
+    // Handle empty address field with a partial update instead of full reset
+    // This allows for user typing without clearing the entire location
     if (
-      Object.keys(apiLocation).length === 1 && 
-      (!apiLocation.address || apiLocation.address.trim() === '')
+      !apiLocation.address || 
+      (typeof apiLocation.address === 'string' && apiLocation.address.trim() === '')
     ) {
+      // Create a minimal location object that won't cause type errors in downstream components
+      const partialLocation: LibLocation = {
+        id: '',
+        name: '',
+        city: '',
+        state: '',
+        lat: 0,
+        lng: 0,
+        type: 'other',
+        popularityScore: 0
+      };
+      
+      // If we have an existing location, preserve its ID and other properties
+      setter((prevLocation) => {
+        if (!prevLocation) return partialLocation;
+        
+        // Keep previous values except address/name which we set to empty string
+        return {
+          ...prevLocation,
+          name: ''
+        };
+      });
       return;
     }
     
     // Convert API location to Library location format with safe defaults
     const libLocation: LibLocation = {
-      id: apiLocation.id || '',
-      name: apiLocation.name || apiLocation.address || '',
-      city: apiLocation.city || '',
-      state: apiLocation.state || '',
-      lat: typeof apiLocation.lat === 'number' ? apiLocation.lat : 0,
-      lng: typeof apiLocation.lng === 'number' ? apiLocation.lng : 0,
-      type: apiLocation.type || 'other',
-      popularityScore: typeof apiLocation.popularityScore === 'number' ? apiLocation.popularityScore : 0,
+      id: typeof apiLocation.id === 'string' ? apiLocation.id : '',
+      name: typeof apiLocation.name === 'string' ? apiLocation.name : 
+            typeof apiLocation.address === 'string' ? apiLocation.address : '',
+      city: typeof apiLocation.city === 'string' ? apiLocation.city : '',
+      state: typeof apiLocation.state === 'string' ? apiLocation.state : '',
+      lat: typeof apiLocation.lat === 'number' && !isNaN(apiLocation.lat) ? apiLocation.lat : 0,
+      lng: typeof apiLocation.lng === 'number' && !isNaN(apiLocation.lng) ? apiLocation.lng : 0,
+      type: typeof apiLocation.type === 'string' ? apiLocation.type : 'other',
+      popularityScore: typeof apiLocation.popularityScore === 'number' && !isNaN(apiLocation.popularityScore) 
+        ? apiLocation.popularityScore : 0,
       isPickupLocation: typeof apiLocation.isPickupLocation === 'boolean' ? apiLocation.isPickupLocation : false,
       isDropLocation: typeof apiLocation.isDropLocation === 'boolean' ? apiLocation.isDropLocation : false
     };
