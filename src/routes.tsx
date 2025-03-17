@@ -1,49 +1,31 @@
 
-import { createBrowserRouter, Navigate } from 'react-router-dom';
-import NotFound from './pages/NotFound';
+import { createBrowserRouter } from 'react-router-dom';
 import Index from './pages/Index';
+import CabsPage from './pages/CabsPage';
+import BookingConfirmationPage from './pages/BookingConfirmationPage';
+import NotFound from './pages/NotFound';
+import ToursPage from './pages/ToursPage';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import DashboardPage from './pages/DashboardPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
-import CabsPage from './pages/CabsPage';
-import BookingConfirmationPage from './pages/BookingConfirmationPage';
-import ToursPage from './pages/ToursPage';
-import ReceiptPage from './pages/ReceiptPage';
-import { authAPI } from './services/api';
-
-// Protected route component
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const isAuthenticated = authAPI.isAuthenticated();
-  
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-  
-  return <>{children}</>;
-};
-
-// Admin only route
-const AdminRoute = ({ children }: { children: React.ReactNode }) => {
-  const isAuthenticated = authAPI.isAuthenticated();
-  const isAdmin = authAPI.isAdmin();
-  
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-  
-  if (!isAdmin) {
-    return <Navigate to="/dashboard" replace />;
-  }
-  
-  return <>{children}</>;
-};
 
 export const router = createBrowserRouter([
   {
     path: '/',
     element: <Index />,
-    errorElement: <NotFound />,
+  },
+  {
+    path: '/cabs/:tripType?',
+    element: <CabsPage />,
+  },
+  {
+    path: '/booking-confirmation',
+    element: <BookingConfirmationPage />,
+  },
+  {
+    path: '/tours',
+    element: <ToursPage />,
   },
   {
     path: '/login',
@@ -55,27 +37,31 @@ export const router = createBrowserRouter([
   },
   {
     path: '/dashboard',
-    element: <ProtectedRoute><DashboardPage /></ProtectedRoute>,
+    element: <DashboardPage />,
   },
   {
     path: '/admin',
-    element: <AdminRoute><AdminDashboardPage /></AdminRoute>,
+    element: <AdminDashboardPage />,
   },
   {
-    path: '/cabs/:tripType?',
-    element: <CabsPage />,
+    path: '/admin/drivers',
+    element: <AdminDashboardPage />,
   },
   {
-    path: '/tours',
-    element: <ToursPage />,
+    path: '/admin/customers',
+    element: <AdminDashboardPage />,
   },
   {
-    path: '/booking-confirmation',
-    element: <BookingConfirmationPage />,
+    path: '/admin/reports',
+    element: <AdminDashboardPage />,
   },
   {
-    path: '/receipt/:id',
-    element: <ReceiptPage />,
+    path: '/admin/pricing',
+    element: <AdminDashboardPage />,
+  },
+  {
+    path: '/admin/notifications',
+    element: <AdminDashboardPage />,
   },
   {
     path: '*',

@@ -31,17 +31,8 @@ logError("Book.php request initiated", [
 ]);
 
 // Get the request body
-$jsonData = file_get_contents('php://input');
-logError("Raw request data", ['json' => $jsonData]);
-
-$data = json_decode($jsonData, true);
-if (json_last_error() !== JSON_ERROR_NONE) {
-    logError("JSON parsing error", ['error' => json_last_error_msg()]);
-    sendJsonResponse(['status' => 'error', 'message' => 'Invalid JSON data: ' . json_last_error_msg()], 400);
-    exit;
-}
-
-logError("Booking request data parsed", ['data' => $data]);
+$data = json_decode(file_get_contents('php://input'), true);
+logError("Booking request data", ['data' => $data]);
 
 // Different validation rules based on trip type
 $requiredFields = [
@@ -77,20 +68,11 @@ if (isset($data['tripType']) && $data['tripType'] === 'local') {
 }
 
 // Validate required fields
-$missingFields = [];
 foreach ($requiredFields as $field) {
     if (!isset($data[$field]) || (is_string($data[$field]) && trim($data[$field]) === '')) {
-        $missingFields[] = $field;
+        sendJsonResponse(['status' => 'error', 'message' => "Field $field is required"], 400);
+        exit;
     }
-}
-
-if (!empty($missingFields)) {
-    logError("Missing required fields", ['missing' => $missingFields]);
-    sendJsonResponse([
-        'status' => 'error', 
-        'message' => "Required fields are missing: " . implode(', ', $missingFields)
-    ], 400);
-    exit;
 }
 
 // Get user ID if authenticated
@@ -127,41 +109,9 @@ $bookingNumber = generateBookingNumber();
 logError("User ID for booking", ['user_id' => $userId]);
 
 // Begin transaction for data consistency
+$conn->begin_transaction();
+
 try {
-    $conn->begin_transaction();
-
-    // Sanitize and prepare data
-    $pickupLocation = $conn->real_escape_string($data['pickupLocation']);
-    $dropLocation = isset($data['dropLocation']) ? $conn->real_escape_string($data['dropLocation']) : '';
-    $pickupDate = $conn->real_escape_string($data['pickupDate']);
-    $returnDate = isset($data['returnDate']) ? $conn->real_escape_string($data['returnDate']) : null;
-    $cabType = $conn->real_escape_string($data['cabType']);
-    $distance = floatval($data['distance']); 
-    $tripType = $conn->real_escape_string($data['tripType']);
-    $tripMode = $conn->real_escape_string($data['tripMode']);
-    $totalAmount = floatval($data['totalAmount']);
-    $passengerName = $conn->real_escape_string($data['passengerName']);
-    $passengerPhone = $conn->real_escape_string($data['passengerPhone']);
-    $passengerEmail = $conn->real_escape_string($data['passengerEmail']);
-    $hourlyPackage = isset($data['hourlyPackage']) ? $conn->real_escape_string($data['hourlyPackage']) : null;
-    $tourId = isset($data['tourId']) ? intval($data['tourId']) : null;
-    $status = 'pending'; // Default status for new bookings
-
-    // Log prepared data
-    logError("Prepared data for insertion", [
-        'pickupLocation' => $pickupLocation,
-        'dropLocation' => $dropLocation,
-        'pickupDate' => $pickupDate,
-        'returnDate' => $returnDate,
-        'cabType' => $cabType,
-        'distance' => $distance,
-        'tripType' => $tripType,
-        'tripMode' => $tripMode,
-        'totalAmount' => $totalAmount,
-        'hourlyPackage' => $hourlyPackage,
-        'tourId' => $tourId
-    ]);
-
     // Prepare the SQL query
     $sql = "INSERT INTO bookings 
             (user_id, booking_number, pickup_location, drop_location, pickup_date, 
@@ -175,7 +125,22 @@ try {
         throw new Exception("Prepare statement failed: " . $conn->error);
     }
 
-    logError("SQL prepared", ['sql' => $sql]);
+    // Get values
+    $pickupLocation = $data['pickupLocation'];
+    $dropLocation = isset($data['dropLocation']) ? $data['dropLocation'] : '';
+    $pickupDate = $data['pickupDate'];
+    $returnDate = isset($data['returnDate']) ? $data['returnDate'] : null;
+    $cabType = $data['cabType'];
+    $distance = $data['distance']; // This will now always have a value
+    $tripType = $data['tripType'];
+    $tripMode = $data['tripMode'];
+    $totalAmount = $data['totalAmount'];
+    $passengerName = $data['passengerName'];
+    $passengerPhone = $data['passengerPhone'];
+    $passengerEmail = $data['passengerEmail'];
+    $hourlyPackage = isset($data['hourlyPackage']) ? $data['hourlyPackage'] : null;
+    $tourId = isset($data['tourId']) ? $data['tourId'] : null;
+    $status = 'pending'; // Default status for new bookings
 
     $stmt->bind_param(
         "issssssdssdsssiss",
@@ -244,14 +209,11 @@ try {
 
 } catch (Exception $e) {
     // Roll back the transaction on error
-    if (isset($conn) && $conn->ping()) {
-        $conn->rollback();
-    }
+    $conn->rollback();
     
     logError("Booking creation failed", [
         'error' => $e->getMessage(),
-        'data' => $data,
-        'trace' => $e->getTraceAsString()
+        'data' => $data
     ]);
     
     sendJsonResponse([

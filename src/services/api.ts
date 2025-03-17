@@ -1,4 +1,3 @@
-
 import axios, { AxiosInstance, AxiosError, AxiosRequestConfig } from 'axios';
 import { jwtDecode } from 'jwt-decode';
 import { Booking, BookingRequest, DashboardMetrics, VehiclePricingUpdateRequest } from '@/types/api';
@@ -76,7 +75,7 @@ apiClient.interceptors.request.use(
     }
     
     console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`, 
-      config.method?.toLowerCase() === 'post' ? JSON.stringify(config.data).slice(0, 500) : '');
+      config.method?.toLowerCase() === 'post' ? config.data : '');
     return config;
   },
   (error) => {
@@ -88,21 +87,11 @@ apiClient.interceptors.request.use(
 // Add response interceptor for debugging
 apiClient.interceptors.response.use(
   (response) => {
-    console.log(`API Response: ${response.status} ${response.config.url}`, 
-      typeof response.data === 'object' ? JSON.stringify(response.data).slice(0, 500) : response.data);
+    console.log(`API Response: ${response.status} ${response.config.url}`, response.data);
     return response;
   },
   (error) => {
     console.error('Response error:', error);
-    
-    if (axios.isAxiosError(error)) {
-      const axiosError = error as AxiosError;
-      console.error('Status:', axiosError.response?.status);
-      console.error('Response data:', axiosError.response?.data);
-      console.error('Request URL:', axiosError.config?.url);
-      console.error('Request method:', axiosError.config?.method);
-      console.error('Request data:', axiosError.config?.data);
-    }
     
     // Check if error is due to token expiration
     if (axios.isAxiosError(error) && error.response?.status === 401) {
@@ -132,22 +121,13 @@ const handleApiError = (error: any) => {
       console.error('Status Code:', axiosError.response.status);
       console.error('Response Data:', axiosError.response.data);
       
-      // Return error with response data if available
-      const errorData = axiosError.response.data as any;
-      let errorMessage = 'Unknown server error';
-      
-      if (typeof errorData === 'object' && errorData !== null) {
-        // Try to extract error message from different common formats
-        errorMessage = errorData.message || 
-                      errorData.error || 
-                      (errorData.errors ? JSON.stringify(errorData.errors) : 
-                      JSON.stringify(errorData));
-      } else if (typeof errorData === 'string') {
-        errorMessage = errorData;
-      }
-      
+      // Return error with response data if available - FIX: Handle different response data types properly
       return new Error(
-        `Error ${axiosError.response.status}: ${errorMessage}`
+        `Error ${axiosError.response.status}: ${
+          typeof axiosError.response.data === 'object' && axiosError.response.data !== null
+          ? (axiosError.response.data as any).message || JSON.stringify(axiosError.response.data)
+          : axiosError.message
+        }`
       );
     }
     
@@ -173,27 +153,23 @@ const handleApiError = (error: any) => {
 const makeApiRequest = async <T>(
   requestFn: () => Promise<T>,
   maxRetries = 3,
-  retryDelay = 1000,
-  description = 'API Request'
+  retryDelay = 1000
 ): Promise<T> => {
   let retries = 0;
   
   while (true) {
     try {
-      console.log(`${description} - attempt ${retries + 1}/${maxRetries + 1}`);
       return await requestFn();
     } catch (error) {
       retries++;
-      console.log(`${description} failed (attempt ${retries}/${maxRetries})`, error);
+      console.log(`API request failed (attempt ${retries}/${maxRetries})`, error);
       
       if (retries >= maxRetries) {
         throw handleApiError(error);
       }
       
       // Wait before retrying (with exponential backoff)
-      const delay = retryDelay * Math.pow(1.5, retries - 1);
-      console.log(`Retrying in ${delay}ms...`);
-      await new Promise(r => setTimeout(r, delay));
+      await new Promise(r => setTimeout(r, retryDelay * retries));
     }
   }
 };
@@ -283,11 +259,7 @@ export const authAPI = {
 export const bookingAPI = {
   async createBooking(bookingData: BookingRequest): Promise<any> {
     return makeApiRequest(async () => {
-      console.log('Creating booking with data:', JSON.stringify(bookingData, null, 2));
-      
-      // Clear local cache to prevent using stale data
-      sessionStorage.removeItem('cabFares');
-      localStorage.removeItem('fare-cache');
+      console.log('Creating booking with data:', bookingData);
       
       // For local bookings, ensure distance is set based on package
       if (bookingData.tripType === 'local' && (!bookingData.distance || bookingData.distance === 0)) {
@@ -301,54 +273,18 @@ export const bookingAPI = {
         console.log('Set default distance for local booking:', bookingData.distance);
       }
       
-      // Make sure all numeric fields are actually numbers, not strings
-      if (typeof bookingData.distance === 'string') {
-        bookingData.distance = parseFloat(bookingData.distance);
-      }
-      
-      if (typeof bookingData.totalAmount === 'string') {
-        bookingData.totalAmount = parseFloat(bookingData.totalAmount);
-      }
-      
-      // Make sure the date strings are in ISO format
-      if (!bookingData.pickupDate) {
-        throw new Error('Pickup date is required');
-      }
-      
-      // Safely convert pickupDate to ISO string
-      if (typeof bookingData.pickupDate === 'object') {
-        // Check if it's a Date object by checking if toISOString method exists
-        if (bookingData.pickupDate && typeof bookingData.pickupDate.toISOString === 'function') {
-          bookingData.pickupDate = bookingData.pickupDate.toISOString();
-        }
-      }
-      
-      // Safely convert returnDate to ISO string if it exists
-      if (bookingData.returnDate && typeof bookingData.returnDate === 'object') {
-        // Check if it's a Date object by checking if toISOString method exists
-        if (typeof bookingData.returnDate.toISOString === 'function') {
-          bookingData.returnDate = bookingData.returnDate.toISOString();
-        }
-      }
-      
-      // Log the sanitized data
-      console.log('Sanitized booking data:', JSON.stringify(bookingData, null, 2));
-      
       const response = await apiClient.post('/book', bookingData);
       if (response.data.status === 'success') {
         return response.data;
       } else {
         throw new Error(response.data.message || 'Failed to create booking');
       }
-    }, 3, 2000, 'Create Booking'); // More retries with longer delay for booking creation
+    }, 3, 2000); // More retries with longer delay for booking creation
   },
 
   async getBooking(id: string): Promise<Booking> {
     return makeApiRequest(async () => {
-      // Add cache busting parameter
-      const timestamp = new Date().getTime();
-      const response = await apiClient.get(`/book/edit/${id}?_=${timestamp}`);
-      
+      const response = await apiClient.get(`/book/edit/${id}`);
       if (response.data.status === 'success') {
         return response.data.data;
       } else {
@@ -359,10 +295,6 @@ export const bookingAPI = {
 
   async updateBooking(id: string, bookingData: any): Promise<any> {
     return makeApiRequest(async () => {
-      // Clear local cache when updating booking
-      sessionStorage.removeItem('cabFares');
-      localStorage.removeItem('fare-cache');
-      
       const response = await apiClient.post(`/book/edit/${id}`, bookingData);
       if (response.data.status === 'success') {
         return response.data;
@@ -416,33 +348,6 @@ export const bookingAPI = {
       }
     });
   },
-  
-  async getReceipt(id: string): Promise<Booking> {
-    return makeApiRequest(async () => {
-      // Add cache busting parameter
-      const timestamp = new Date().getTime();
-      const response = await apiClient.get(`/receipt/${id}?_=${timestamp}`);
-      
-      if (response.data.status === 'success') {
-        return response.data.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to fetch receipt');
-      }
-    });
-  },
-  
-  async sendReceiptEmail(bookingId: string, email?: string): Promise<any> {
-    return makeApiRequest(async () => {
-      const data = { bookingId, email };
-      const response = await apiClient.post('/send-receipt', data);
-      
-      if (response.data.status === 'success') {
-        return response.data;
-      } else {
-        throw new Error(response.data.message || 'Failed to send receipt');
-      }
-    });
-  }
 };
 
 // API service for fare management
@@ -450,14 +355,13 @@ export const fareAPI = {
   async getTourFares(): Promise<any[]> {
     return makeApiRequest(async () => {
       console.log('Fetching tour fares...');
-      // Add timestamp to prevent caching
       const timestamp = new Date().getTime();
       const response = await apiClient.get(`/fares/tours?_=${timestamp}`);
       
-      if (response.data) {
-        return response.data;
+      if (response.data.status === 'success') {
+        return response.data.data;
       } else {
-        throw new Error('Failed to fetch tour fares');
+        throw new Error(response.data.message || 'Failed to fetch tour fares');
       }
     });
   },
@@ -476,17 +380,13 @@ export const fareAPI = {
   async getVehiclePricing(): Promise<any[]> {
     return makeApiRequest(async () => {
       console.log('Fetching vehicle pricing data...');
-      // Clear any cached data first
-      sessionStorage.removeItem('cabFares');
-      localStorage.removeItem('fare-cache');
-      
       const timestamp = new Date().getTime();
       const response = await apiClient.get(`/fares/vehicles?_=${timestamp}`);
       
-      if (response.data) {
-        return response.data;
+      if (response.data.status === 'success') {
+        return response.data.data;
       } else {
-        throw new Error('Failed to fetch vehicle pricing data');
+        throw new Error(response.data.message || 'Failed to fetch vehicle pricing data');
       }
     });
   },
