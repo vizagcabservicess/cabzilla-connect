@@ -6,6 +6,8 @@ import { Location as LibLocation } from '@/lib/locationData';
  * Converts a Location from locationData.ts format to the api.ts Location format
  */
 export function convertToApiLocation(location: LibLocation): ApiLocation {
+  if (!location) return { address: '' };
+  
   return {
     id: location.id,
     name: location.name,
@@ -28,9 +30,14 @@ export function createLocationChangeHandler(
   setter: React.Dispatch<React.SetStateAction<LibLocation | null>>
 ): (location: ApiLocation) => void {
   return (apiLocation: ApiLocation) => {
+    if (!apiLocation) {
+      setter(null);
+      return;
+    }
+    
     const libLocation: LibLocation = {
       id: apiLocation.id || '',
-      name: apiLocation.name || apiLocation.address,
+      name: apiLocation.name || apiLocation.address || '',
       city: apiLocation.city || '',
       state: apiLocation.state || '',
       lat: apiLocation.lat || 0,

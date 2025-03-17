@@ -53,11 +53,17 @@ export function LocationInput({
       const inputElement = document.getElementById('location-input') as HTMLInputElement;
       if (!inputElement) return;
 
-      autocomplete = new google.maps.places.Autocomplete(inputElement, {
+      const options: google.maps.places.AutocompleteOptions = {
         types: ['geocode'],
-        componentRestrictions: { country: 'in' },
-        fields: ['address_components', 'geometry', 'name'],
-      });
+        fields: ['address_components', 'geometry', 'name', 'formatted_address'],
+      };
+      
+      // Only apply country restriction for India if specified
+      if (isAirportTransfer !== undefined) {
+        options.componentRestrictions = { country: 'in' };
+      }
+
+      autocomplete = new google.maps.places.Autocomplete(inputElement, options);
 
       autocomplete.addListener('place_changed', () => {
         const place = autocomplete.getPlace();
@@ -97,7 +103,7 @@ export function LocationInput({
         google.maps.event.clearInstanceListeners(autocomplete);
       }
     };
-  }, [google, handleLocationChange, address, disabled, readOnly, locationData]);
+  }, [google, handleLocationChange, address, disabled, readOnly, locationData, isAirportTransfer]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newAddress = e.target.value;
