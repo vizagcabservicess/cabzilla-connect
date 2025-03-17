@@ -102,9 +102,7 @@ export function LocationInput({
     const updatedLocation: Location = { 
       address: newAddress,
       // Keep all existing location data, just update the address
-      ...(locationData || {}),
-      // Make sure address is set
-      address: newAddress
+      ...locationData,
     };
     
     // Use the debounced function for the parent component update

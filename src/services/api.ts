@@ -213,11 +213,11 @@ export const bookingAPI: {
           // Handle location objects
           if (typeof value === 'object' && value !== null) {
             // Use address property if available
-            if ('address' in value && typeof value.address === 'string') {
+            if (value && 'address' in value && typeof value.address === 'string') {
               processedData[key] = value.address;
-            } else if ('name' in value && typeof value.name === 'string') {
+            } else if (value && 'name' in value && typeof value.name === 'string') {
               processedData[key] = value.name;
-            } else {
+            } else if (value !== null) {
               processedData[key] = String(value);
             }
           } else {
@@ -225,7 +225,7 @@ export const bookingAPI: {
           }
         } else if (key === 'pickupDate' || key === 'returnDate') {
           // Handle date objects
-          if (value instanceof Date) {
+          if (value && typeof value === 'object' && 'toISOString' in value && typeof value.toISOString === 'function') {
             processedData[key] = value.toISOString();
           } else {
             processedData[key] = value;
