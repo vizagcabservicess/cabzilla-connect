@@ -5,20 +5,24 @@ import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
 import { Location } from '@/types/api';
 
 interface LocationInputProps {
-  location: Location;
-  onLocationChange: (location: Location) => void;
+  location?: Location;  // Keep original prop
+  value?: Location;     // Add value as alias for location
+  onLocationChange?: (location: Location) => void;
+  onChange?: (location: Location) => void; // Add alias for onLocationChange
   placeholder?: string;
   className?: string;
   disabled?: boolean;
-  label?: string; // Add label prop
-  isPickupLocation?: boolean; // Add optional props used in other components
+  label?: string;
+  isPickupLocation?: boolean;
   isAirportTransfer?: boolean;
   readOnly?: boolean;
 }
 
 export function LocationInput({
   location,
+  value,
   onLocationChange,
+  onChange,
   placeholder = "Enter location",
   className = "",
   disabled = false,
@@ -27,14 +31,18 @@ export function LocationInput({
   isAirportTransfer,
   readOnly
 }: LocationInputProps) {
-  const [address, setAddress] = useState(location?.address || "");
+  // Use value prop if location is not provided
+  const locationData = location || value;
+  const handleLocationChange = onLocationChange || onChange;
+  
+  const [address, setAddress] = useState(locationData?.address || "");
   const { google } = useGoogleMaps();
 
   useEffect(() => {
-    if (location?.address) {
-      setAddress(location.address);
+    if (locationData?.address) {
+      setAddress(locationData.address);
     }
-  }, [location]);
+  }, [locationData]);
 
   useEffect(() => {
     if (!google || !google.maps || !google.maps.places || disabled || readOnly) return;
@@ -66,7 +74,9 @@ export function LocationInput({
         };
 
         setAddress(place.formatted_address || address);
-        onLocationChange(newLocation);
+        if (handleLocationChange) {
+          handleLocationChange(newLocation);
+        }
       });
     };
 
@@ -80,12 +90,14 @@ export function LocationInput({
         google.maps.event.clearInstanceListeners(autocomplete);
       }
     };
-  }, [google, onLocationChange, address, disabled, readOnly]);
+  }, [google, handleLocationChange, address, disabled, readOnly]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newAddress = e.target.value;
     setAddress(newAddress);
-    onLocationChange({ ...location, address: newAddress });
+    if (handleLocationChange) {
+      handleLocationChange({ ...locationData, address: newAddress });
+    }
   };
 
   return (
