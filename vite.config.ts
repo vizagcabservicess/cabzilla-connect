@@ -20,30 +20,18 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  optimizeDeps: {
-    esbuildOptions: {
-      // Fix html2canvas issues in development
-      define: {
-        global: 'globalThis',
-      },
-    },
-    include: ['html2canvas', 'jspdf']
-  },
   build: {
+    commonjsOptions: {
+      include: [/html2canvas/, /jspdf/, /node_modules/],
+      transformMixedEsModules: true,
+    },
     rollupOptions: {
-      // External packages that should not be bundled
       external: [],
       output: {
-        // Global variables to use in the UMD build for externalized deps
-        globals: {},
         manualChunks: {
           vendor: ['html2canvas', 'jspdf']
         }
-      },
-    },
-    commonjsOptions: {
-      // This helps with CommonJS modules that need special handling
-      transformMixedEsModules: true,
-    },
-  }
+      }
+    }
+  },
 }));
