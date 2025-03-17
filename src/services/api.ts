@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { LoginRequest, SignupRequest, User, BookingRequest, Booking, 
   FareUpdateRequest, VehiclePricingUpdateRequest, TourFare, VehiclePricing,
@@ -218,7 +217,7 @@ export const bookingAPI: {
           }
         } else if (key === 'pickupDate' || key === 'returnDate') {
           if (value !== null && value !== undefined && typeof value === 'object') {
-            if ('toISOString' in value && typeof (value as Date).toISOString === 'function') {
+            if (value && 'toISOString' in value && typeof (value as Date).toISOString === 'function') {
               processedData[key] = (value as Date).toISOString();
             } else if (value !== null && value !== undefined) {
               processedData[key] = value;
