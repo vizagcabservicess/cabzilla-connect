@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useEffect } from "react";
@@ -21,7 +20,7 @@ export function TabTripSelector({
 
   // Function to thoroughly clear all cache data
   const clearAllCacheData = () => {
-    console.log("Clearing all cached data");
+    console.log("Clearing all cached data for trip type change");
     
     // Clear all booking and fare related data
     sessionStorage.removeItem('selectedCab');
@@ -30,17 +29,20 @@ export function TabTripSelector({
     sessionStorage.removeItem('bookingDetails');
     sessionStorage.removeItem('cabFares');
     sessionStorage.removeItem('dropLocation');
-    sessionStorage.removeItem('pickupLocation');
-    sessionStorage.removeItem('pickupDate');
-    sessionStorage.removeItem('returnDate');
-    
-    // Force clear all calculated fare data
     sessionStorage.removeItem('calculatedFares');
     
     // Force clear trip specific data
-    sessionStorage.removeItem('tripType');
-    sessionStorage.removeItem('tripMode');
-    sessionStorage.removeItem('distance');
+    const oldTripType = sessionStorage.getItem('tripType');
+    if (oldTripType && oldTripType !== selectedTab) {
+      console.log(`Trip type changed from ${oldTripType} to ${selectedTab}`);
+      sessionStorage.removeItem('distance');
+      sessionStorage.removeItem('pickupLocation');
+      
+      // Only keep the airport location when switching to airport mode
+      if (selectedTab !== 'airport') {
+        sessionStorage.removeItem('dropLocation');
+      }
+    }
     
     // Clear localStorage items that might cache fare data
     localStorage.removeItem('cabFares');
@@ -51,40 +53,36 @@ export function TabTripSelector({
     const localKeys = ['fare-', 'discount-', 'cab-', 'location-', 'trip-', 'price-'];
     
     // Loop through sessionStorage to find items with these keys
-    for (let i = 0; i < sessionStorage.length; i++) {
-      const key = sessionStorage.key(i);
-      if (key) {
-        for (const prefix of localKeys) {
-          if (key.startsWith(prefix)) {
-            console.log(`Removing cached item: ${key}`);
-            sessionStorage.removeItem(key);
-            break;
-          }
+    Object.keys(sessionStorage).forEach(key => {
+      for (const prefix of localKeys) {
+        if (key.startsWith(prefix)) {
+          console.log(`Removing cached item: ${key}`);
+          sessionStorage.removeItem(key);
+          break;
         }
       }
-    }
+    });
     
     // Also clear any items in localStorage that might be caching fare data
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key) {
-        for (const prefix of localKeys) {
-          if (key.startsWith(prefix)) {
-            console.log(`Removing cached item from localStorage: ${key}`);
-            localStorage.removeItem(key);
-            break;
-          }
+    Object.keys(localStorage).forEach(key => {
+      for (const prefix of localKeys) {
+        if (key.startsWith(prefix)) {
+          console.log(`Removing cached item from localStorage: ${key}`);
+          localStorage.removeItem(key);
+          break;
         }
       }
-    }
+    });
+    
+    // Store current trip type in sessionStorage
+    sessionStorage.setItem('tripType', selectedTab);
+    sessionStorage.setItem('tripMode', tripMode);
+    sessionStorage.setItem('lastCacheClear', Date.now().toString());
   };
   
   // Clear any cached fare data when tab changes
   useEffect(() => {
     clearAllCacheData();
-    
-    // Store current trip type in sessionStorage to detect changes
-    sessionStorage.setItem('currentTripType', selectedTab);
     
     // Reset drop location when switching to local
     if (selectedTab === 'local') {

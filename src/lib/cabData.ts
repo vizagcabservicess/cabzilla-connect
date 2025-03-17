@@ -182,25 +182,32 @@ export const getLocalPackagePrice = (packageId: string, cabType: string): number
   
   const cabLower = cabType.toLowerCase();
   
+  console.log(`Getting local package price for: package=${packageId}, cab=${cabType} (${cabLower})`);
+  
   if (packageId === '8hrs-80km') {
     if (cabLower === 'sedan') return 2400;
     if (cabLower === 'ertiga') return 3000;
-    if (cabLower === 'innova') return 3500;
     if (cabLower === 'innova crysta') return 3500;
+    if (cabLower.includes('innova')) return 3500;
+    if (cabLower.includes('tempo') && cabLower.includes('12')) return 5000;
+    if (cabLower.includes('tempo') && cabLower.includes('17')) return 6000;
   } 
   else if (packageId === '10hrs-100km') {
     if (cabLower === 'sedan') return 3000;
     if (cabLower === 'ertiga') return 3500;
-    if (cabLower === 'innova') return 4000;
     if (cabLower === 'innova crysta') return 4000;
+    if (cabLower.includes('innova')) return 4000;
+    if (cabLower.includes('tempo') && cabLower.includes('12')) return 6000;
+    if (cabLower.includes('tempo') && cabLower.includes('17')) return 7000;
   }
   
   if (cabLower === 'sedan') return 2400;
   if (cabLower === 'ertiga') return 3000;
-  if (cabLower === 'innova' || cabLower === 'innova crysta') return 3500;
+  if (cabLower === 'innova' || cabLower.includes('innova')) return 3500;
   if (cabLower.includes('tempo')) return 5000;
   
-  return pkg.basePrice; // Fallback to package base price
+  console.log(`No specific pricing found, using base price: ${pkg.basePrice}`);
+  return pkg.basePrice;
 };
 
 export function calculateFare(
@@ -219,7 +226,6 @@ export function calculateFare(
   let totalFare = 0;
   
   if (tripType === 'tour' && tourId) {
-    // Use predefined tour fare if available
     const tourFareMatrix = tourFares[tourId as keyof typeof tourFares];
     if (tourFareMatrix) {
       return tourFareMatrix[cabType.id as keyof typeof tourFareMatrix] || baseFare;
@@ -227,7 +233,6 @@ export function calculateFare(
     return baseFare;
   }
   else if (tripType === 'local' && hourlyPackageId) {
-    // For local packages, get the specific package price based on cab type
     const basePackagePrice = getLocalPackagePrice(hourlyPackageId, cabType.name);
     totalFare = basePackagePrice;
     
@@ -256,10 +261,8 @@ export function calculateFare(
     totalFare = calculateAirportFare(cabType.name, distance);
   } 
   else if (tripType === 'outstation') {
-    // Set minimum distance
     const minimumDistance = Math.max(distance, 250);
     
-    // Get pricing factors based on cab type
     let basePrice = 0, perKmRate = 0, driverAllowance = 250, nightHaltCharge = 0;
     
     switch (cabType.name.toLowerCase()) {
@@ -285,25 +288,19 @@ export function calculateFare(
     }
     
     if (tripMode === 'one-way') {
-      // Consider both ways distance for one-way trips
       const effectiveDistance = minimumDistance * 2;
       
-      // Base fare for one-way
       totalFare = basePrice;
       
-      // Calculate base included kilometers
       const allocatedKm = 300;
       
-      // Calculate extra kilometers if any
       if (effectiveDistance > allocatedKm) {
         const extraKm = effectiveDistance - allocatedKm;
         totalFare += extraKm * perKmRate;
       }
       
-      // Add driver allowance
       totalFare += driverAllowance;
     } else {
-      // Calculate round-trip fare with days, distance charges and night halt
       let numberOfDays = 1;
       
       if (pickupDate && returnDate) {
@@ -314,37 +311,30 @@ export function calculateFare(
         numberOfDays = Math.max(1, differenceInDays);
       }
       
-      // Base fare per day
       totalFare = basePrice * numberOfDays;
       
-      // Calculate distance charges for round-trip
-      const allocatedKm = 300; // km included in base fare per day
+      const allocatedKm = 300;
       const totalAllocatedKm = allocatedKm * numberOfDays;
       const effectiveDistance = minimumDistance * 2;
       
-      // Add charges for extra kilometers if any
       if (effectiveDistance > totalAllocatedKm) {
         const extraKm = effectiveDistance - totalAllocatedKm;
         totalFare += (extraKm * perKmRate);
       }
       
-      // Add driver allowance for each day
       totalFare += driverAllowance * numberOfDays;
       
-      // Add night halt charges for multi-day trips
       if (numberOfDays > 1) {
         totalFare += (numberOfDays - 1) * nightHaltCharge;
       }
     }
     
-    // Add toll charges for both one-way and round-trip
     if (distance > 100) {
       const tollCharges = Math.floor(distance / 100) * 100;
       totalFare += tollCharges;
     }
   }
   
-  // Round the fare to the nearest 10
   return Math.ceil(totalFare / 10) * 10;
 }
 

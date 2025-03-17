@@ -33,9 +33,29 @@ export function CabOptions({
   const [selectedCabId, setSelectedCabId] = useState<string | null>(selectedCab?.id || null);
   const [cabFares, setCabFares] = useState<Record<string, number>>({});
   const [lastTripIdentifier, setLastTripIdentifier] = useState<string>('');
+  const [lastCalculationTimestamp, setLastCalculationTimestamp] = useState<number>(0);
 
   // Create a unique identifier for the current trip configuration
   const currentTripIdentifier = `${tripType}-${tripMode}-${hourlyPackage || 'none'}-${distance}`;
+
+  // Force recalculation when trip type changes
+  useEffect(() => {
+    // Clear the fares when trip type or mode changes
+    setCabFares({});
+    setSelectedCabId(null);
+    
+    if (selectedCab) {
+      onSelectCab(null as any); // Reset the selected cab
+    }
+    
+    // Clear all cached fare data
+    sessionStorage.removeItem('cabFares');
+    sessionStorage.removeItem('selectedCab');
+    sessionStorage.removeItem('calculatedFares');
+    
+    // Set a new timestamp to force recalculation
+    setLastCalculationTimestamp(Date.now());
+  }, [tripType, tripMode, hourlyPackage]);
 
   // Reset cab selection when key parameters change
   useEffect(() => {
@@ -65,7 +85,7 @@ export function CabOptions({
   // Calculate fares for all cab types whenever relevant parameters change
   useEffect(() => {
     if (distance > 0) {
-      console.log(`Calculating fares for ${tripType} trip, ${distance}km`);
+      console.log(`Calculating fares for ${tripType} trip, ${distance}km, package: ${hourlyPackage || 'none'}`);
       
       const newFares: Record<string, number> = {};
       cabTypes.forEach(cab => {
@@ -74,6 +94,7 @@ export function CabOptions({
       
       // Store the trip type with the fares to verify later
       const fareData = {
+        timestamp: Date.now(),
         tripType,
         tripMode,
         hourlyPackage,
@@ -86,7 +107,7 @@ export function CabOptions({
     } else {
       setCabFares({});
     }
-  }, [distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate, cabTypes]);
+  }, [distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate, cabTypes, lastCalculationTimestamp]);
 
   // Update selectedCabId when selectedCab changes from parent
   useEffect(() => {
@@ -131,12 +152,17 @@ export function CabOptions({
     else if (tripType === 'local' && hourlyPackage) {
       // Get base package price for local rental
       totalFare = getLocalPackagePrice(hourlyPackage, cab.name);
+      console.log(`Local fare calculation for ${cab.name}:`, { 
+        hourlyPackage, 
+        baseFare: totalFare 
+      });
       
       // Calculate extra km charges if any
       const packageKm = hourlyPackage === '8hrs-80km' ? 80 : 100;
       if (distance > packageKm) {
         const extraKm = distance - packageKm;
         totalFare += extraKm * cab.pricePerKm;
+        console.log(`Added ${extraKm}km extra at ${cab.pricePerKm}/km = ${extraKm * cab.pricePerKm}`);
       }
     }
     else if (tripType === 'outstation') {
@@ -202,6 +228,7 @@ export function CabOptions({
       }
     }
     
+    console.log(`Final fare for ${cab.name} (${tripType}): ${totalFare}`);
     return Math.ceil(totalFare / 10) * 10; // Round to nearest 10
   };
 
