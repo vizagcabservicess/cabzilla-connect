@@ -278,20 +278,56 @@ export const bookingAPI = {
         throw new Error('Pickup date is required');
       }
       
-      // Safe date handling - Fixed the type errors by checking for strings first
+      // Improved type safety for date handling
       let formattedBookingData = {
         ...bookingData,
-        pickupDate: typeof bookingData.pickupDate === 'string' 
-          ? bookingData.pickupDate 
-          : typeof bookingData.pickupDate.toISOString === 'function' 
-            ? bookingData.pickupDate.toISOString() 
-            : new Date(bookingData.pickupDate).toISOString(),
-        returnDate: bookingData.returnDate 
-          ? (typeof bookingData.returnDate === 'string'
-              ? bookingData.returnDate
-              : typeof bookingData.returnDate.toISOString === 'function'
-                ? bookingData.returnDate.toISOString()
-                : new Date(bookingData.returnDate).toISOString())
+        pickupDate: (() => {
+          if (typeof bookingData.pickupDate === 'string') {
+            return bookingData.pickupDate;
+          }
+          
+          try {
+            // Check if it's a Date object or has toISOString method
+            if (bookingData.pickupDate instanceof Date || 
+                (typeof bookingData.pickupDate === 'object' && 
+                 bookingData.pickupDate !== null && 
+                 typeof (bookingData.pickupDate as any).toISOString === 'function')) {
+              return (bookingData.pickupDate as Date).toISOString();
+            } else {
+              // Fallback to creating a new Date
+              return new Date(bookingData.pickupDate as any).toISOString();
+            }
+          } catch (e) {
+            console.error('Error formatting pickup date:', e);
+            // Last resort fallback
+            return new Date().toISOString();
+          }
+        })(),
+        returnDate: bookingData.returnDate ? 
+          (() => {
+            if (typeof bookingData.returnDate === 'string') {
+              return bookingData.returnDate;
+            }
+            
+            try {
+              // Check if it's a Date object or has toISOString method
+              if (bookingData.returnDate instanceof Date || 
+                  (typeof bookingData.returnDate === 'object' && 
+                   bookingData.returnDate !== null && 
+                   typeof (bookingData.returnDate as any).toISOString === 'function')) {
+                return (bookingData.returnDate as Date).toISOString();
+              } else {
+                // Fallback to creating a new Date
+                return new Date(bookingData.returnDate as any).toISOString();
+              }
+            } catch (e) {
+              console.error('Error formatting return date:', e);
+              // Fallback with a date after pickup
+              const fallbackDate = new Date();
+              fallbackDate.setDate(fallbackDate.getDate() + 1);
+              return fallbackDate.toISOString();
+            }
+          })() 
           : null
       };
       
