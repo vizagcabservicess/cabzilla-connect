@@ -3,7 +3,6 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Input } from "@/components/ui/input";
 import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
 import { Location } from '@/types/api';
-import { debounce } from '@/lib/utils';
 
 interface LocationInputProps {
   location?: Location;
@@ -58,7 +57,7 @@ export function LocationInput({
     });
   }, []);
   
-  // Update the address whenever locationData changes
+  // Update the address whenever locationData changes from outside
   useEffect(() => {
     if (locationData) {
       const newAddress = typeof locationData.address === 'string' && locationData.address.trim() !== '' 
@@ -72,7 +71,7 @@ export function LocationInput({
         setAddress(newAddress);
       }
     }
-  }, [locationData, address]);
+  }, [locationData]);
 
   // Handle direct input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -87,13 +86,23 @@ export function LocationInput({
         id: locationData.id || `loc_${Date.now()}`,
         lat: locationData.lat || 0,
         lng: locationData.lng || 0,
-        type: locationData.type || 'other'
+        type: locationData.type || 'other',
+        city: locationData.city || 'Visakhapatnam',
+        state: locationData.state || 'Andhra Pradesh',
+        popularityScore: locationData.popularityScore || 50,
+        isInVizag: isPickupLocation ? true : locationData.isInVizag
       });
     }
   };
 
-  // Setup Google Maps autocomplete
-  useEffect(() => {
+  // Setup Google Maps autocomplete when component mounts or dependencies change
+  const setupAutocomplete = useCallback(() => {
+    // Clear any existing listeners if they exist
+    if (autocompleteRef.current && google) {
+      google.maps.event.clearInstanceListeners(autocompleteRef.current);
+      autocompleteRef.current = null;
+    }
+    
     if (!google || !isLoaded || disabled || readOnly || !inputRef.current) {
       console.log("Not initializing autocomplete due to conditions:", {
         googleExists: !!google,
@@ -106,11 +115,6 @@ export function LocationInput({
     }
     
     try {
-      // Clear any existing autocomplete
-      if (autocompleteRef.current) {
-        google.maps.event.clearInstanceListeners(autocompleteRef.current);
-      }
-      
       const options: google.maps.places.AutocompleteOptions = {
         fields: ['address_components', 'geometry', 'name', 'formatted_address'],
       };
@@ -167,7 +171,10 @@ export function LocationInput({
           lat: place.geometry.location.lat(),
           lng: place.geometry.location.lng(),
           type: locationData.type || 'other',
-          isInVizag: isInVizag
+          city: 'Visakhapatnam',
+          state: 'Andhra Pradesh',
+          popularityScore: locationData.popularityScore || 50,
+          isInVizag: isPickupLocation ? true : isInVizag
         };
         
         console.log('Selected place from autocomplete:', newLocation);
@@ -180,6 +187,11 @@ export function LocationInput({
     } catch (error) {
       console.error("Error initializing autocomplete:", error);
     }
+  }, [google, isLoaded, handleLocationChange, disabled, readOnly, isPickupLocation, isAirportTransfer, locationData]);
+
+  // Initialize autocomplete
+  useEffect(() => {
+    setupAutocomplete();
     
     // Cleanup when component unmounts
     return () => {
@@ -187,7 +199,7 @@ export function LocationInput({
         google.maps.event.clearInstanceListeners(autocompleteRef.current);
       }
     };
-  }, [google, isLoaded, handleLocationChange, disabled, readOnly, isPickupLocation, isAirportTransfer, locationData]);
+  }, [google, isLoaded, setupAutocomplete]);
 
   return (
     <div className="space-y-2">
