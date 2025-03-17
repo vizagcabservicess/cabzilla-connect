@@ -3,6 +3,16 @@ import { differenceInCalendarDays } from 'date-fns';
 
 export type TripType = 'outstation' | 'local' | 'airport' | 'tour';
 export type TripMode = 'one-way' | 'round-trip';
+export type LocalTripPurpose = 'business' | 'personal' | 'city-tour';
+
+export interface HourlyPackage {
+  id: string;
+  name: string;
+  hours: number;
+  kilometers: number;
+  basePrice: number;
+  multiplier: number;
+}
 
 export interface CabType {
   id: string;
@@ -14,6 +24,7 @@ export interface CabType {
   image: string;
   amenities: string[];
   description: string;
+  ac?: boolean;
 }
 
 export const cabTypes: CabType[] = [
@@ -26,7 +37,8 @@ export const cabTypes: CabType[] = [
     pricePerKm: 14,
     image: '/cars/sedan.png',
     amenities: ['AC', 'Bottle Water', 'Music System'],
-    description: 'Comfortable sedan suitable for 4 passengers.'
+    description: 'Comfortable sedan suitable for 4 passengers.',
+    ac: true
   },
   {
     id: 'ertiga',
@@ -37,7 +49,8 @@ export const cabTypes: CabType[] = [
     pricePerKm: 18,
     image: '/cars/ertiga.png',
     amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
-    description: 'Spacious SUV suitable for 6 passengers.'
+    description: 'Spacious SUV suitable for 6 passengers.',
+    ac: true
   },
   {
     id: 'innova_crysta',
@@ -48,26 +61,85 @@ export const cabTypes: CabType[] = [
     pricePerKm: 20,
     image: '/cars/innova.png',
     amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
-    description: 'Premium SUV with ample space for 7 passengers.'
+    description: 'Premium SUV with ample space for 7 passengers.',
+    ac: true
   }
 ];
 
-export const hourlyPackages = [
+export const hourlyPackages: HourlyPackage[] = [
   {
     id: '8hrs-80km',
     name: '8 Hours / 80 KM',
     hours: 8,
     kilometers: 80,
-    basePrice: 2500
+    basePrice: 2500,
+    multiplier: 1
   },
   {
     id: '10hrs-100km',
     name: '10 Hours / 100 KM',
     hours: 10,
     kilometers: 100,
-    basePrice: 3000
+    basePrice: 3000,
+    multiplier: 1.2
   }
 ];
+
+export const extraCharges = {
+  sedan: { perHour: 250, perKm: 14 },
+  ertiga: { perHour: 300, perKm: 18 },
+  innova_crysta: { perHour: 350, perKm: 20 }
+};
+
+export const oneWayRates = {
+  sedan: 14,
+  ertiga: 18,
+  innova_crysta: 20
+};
+
+export const availableTours = [
+  {
+    id: 'araku_valley',
+    name: 'Araku Valley Tour',
+    distance: 120,
+    image: '/tours/araku_valley.jpg'
+  },
+  {
+    id: 'yarada_beach',
+    name: 'Yarada Beach Tour',
+    distance: 40,
+    image: '/tours/yarada_beach.jpg'
+  },
+  {
+    id: 'rushikonda',
+    name: 'Rushikonda Beach Tour',
+    distance: 25,
+    image: '/tours/rushikonda.jpg'
+  }
+];
+
+export const tourFares = {
+  araku_valley: {
+    sedan: 6000,
+    ertiga: 7500,
+    innova_crysta: 9000
+  },
+  yarada_beach: {
+    sedan: 2500,
+    ertiga: 3500,
+    innova_crysta: 4500
+  },
+  rushikonda: {
+    sedan: 2000,
+    ertiga: 3000,
+    innova_crysta: 4000
+  }
+};
+
+// Helper function to format price
+export const formatPrice = (price: number): string => {
+  return `₹${price.toLocaleString('en-IN')}`;
+};
 
 /**
  * Get local package price based on package ID and cab type

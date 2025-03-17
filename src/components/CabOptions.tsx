@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { CabType, formatPrice, TripType, TripMode, getLocalPackagePrice, oneWayRates } from '@/lib/cabData';
 import { Users, Briefcase, Tag, Info, Check } from 'lucide-react';
@@ -326,7 +325,7 @@ export function CabOptions({
                   </div>
                   <div className="flex items-center text-xs bg-gray-100 px-2 py-1 rounded">
                     <Briefcase size={12} className="mr-1" />
-                    {cab.luggage} bags
+                    {cab.luggageCapacity} bags
                   </div>
                   {cab.ac && (
                     <div className="flex items-center text-xs bg-gray-100 px-2 py-1 rounded">

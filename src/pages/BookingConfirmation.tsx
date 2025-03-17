@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { Button } from '@/components/ui/button';
@@ -139,7 +138,7 @@ const BookingConfirmation = () => {
                     <div>
                       <p className="font-medium text-cabGray-800">{booking.selectedCab.name}</p>
                       <p className="text-xs text-cabGray-600">
-                        {booking.selectedCab.capacity} persons • {booking.selectedCab.luggage} bags
+                        {booking.selectedCab.capacity} persons • {booking.selectedCab.luggageCapacity} bags
                       </p>
                     </div>
                   </div>
