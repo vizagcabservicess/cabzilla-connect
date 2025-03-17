@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -28,10 +27,8 @@ export default function DashboardPage() {
   const user = authAPI.getCurrentUser();
   const isAdmin = user?.role === 'admin';
   
-  // Check if coming from booking confirmation
   const comingFromBooking = location.state?.fromBooking;
 
-  // Check auth on page load
   useEffect(() => {
     if (!authAPI.isAuthenticated()) {
       console.log('User not authenticated, redirecting to login');
@@ -42,7 +39,6 @@ export default function DashboardPage() {
     
     console.log('User authenticated, proceeding with dashboard');
     
-    // Show notification if coming from booking
     if (comingFromBooking) {
       toast.success('Booking successful! Your dashboard has been updated.');
     }
@@ -54,7 +50,6 @@ export default function DashboardPage() {
       setError(null);
       console.log('Fetching user bookings...', { retry });
       
-      // Double-check authentication
       if (!authAPI.isAuthenticated()) {
         console.error('Auth token missing, redirecting to login');
         toast.error('Your session has expired. Please login again.');
@@ -63,9 +58,7 @@ export default function DashboardPage() {
       }
       
       try {
-        // Add cache busting without passing parameter to API function
         console.log('Fetching bookings with cache busting...');
-        // We'll use a custom timestamp as a signal here, but we won't pass it to the function
         const cacheBust = new Date().getTime();
         console.log(`Cache busting with timestamp: ${cacheBust}`);
         
@@ -74,7 +67,7 @@ export default function DashboardPage() {
         
         if (Array.isArray(data)) {
           setBookings(data);
-          setRetryCount(0); // Reset retry count on success
+          setRetryCount(0);
           if (data.length === 0) {
             toast.info('No bookings found. Book your first cab ride now!');
           } else {
@@ -87,7 +80,6 @@ export default function DashboardPage() {
       } catch (error) {
         console.error('Error in fetch:', error);
         
-        // Handle authentication errors
         if (error instanceof Error && 
             (error.message.includes('Invalid or expired token') || 
              error.message.includes('Authentication failed') ||
@@ -100,7 +92,7 @@ export default function DashboardPage() {
           return;
         }
         
-        throw error; // Re-throw to be caught by outer catch
+        throw error;
       }
     } catch (error) {
       console.error('Error fetching bookings:', error);
@@ -169,7 +161,6 @@ export default function DashboardPage() {
     ['completed', 'cancelled'].includes(booking.status.toLowerCase())
   );
 
-  // Empty state component for no bookings
   const NoBookingsCard = () => (
     <Card>
       <CardContent className="flex flex-col items-center justify-center py-10">

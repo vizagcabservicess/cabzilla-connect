@@ -1,31 +1,20 @@
 
 import { createBrowserRouter } from 'react-router-dom';
 import Index from './pages/Index';
-import CabsPage from './pages/CabsPage';
-import BookingConfirmationPage from './pages/BookingConfirmationPage';
 import NotFound from './pages/NotFound';
-import ToursPage from './pages/ToursPage';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import DashboardPage from './pages/DashboardPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
+import BookingConfirmationPage from './pages/BookingConfirmationPage';
+import CabsPage from './pages/CabsPage';
+import ToursPage from './pages/ToursPage';
+import BookingEditPage from './pages/BookingEditPage';
 
 export const router = createBrowserRouter([
   {
     path: '/',
     element: <Index />,
-  },
-  {
-    path: '/cabs/:tripType?',
-    element: <CabsPage />,
-  },
-  {
-    path: '/booking-confirmation',
-    element: <BookingConfirmationPage />,
-  },
-  {
-    path: '/tours',
-    element: <ToursPage />,
   },
   {
     path: '/login',
@@ -44,27 +33,25 @@ export const router = createBrowserRouter([
     element: <AdminDashboardPage />,
   },
   {
-    path: '/admin/drivers',
-    element: <AdminDashboardPage />,
+    path: '/booking/:bookingId/confirmation',
+    element: <BookingConfirmationPage />,
   },
   {
-    path: '/admin/customers',
-    element: <AdminDashboardPage />,
+    path: '/booking/:bookingId/edit',
+    element: <BookingEditPage />,
   },
   {
-    path: '/admin/reports',
-    element: <AdminDashboardPage />,
+    path: '/cabs',
+    element: <CabsPage />,
   },
   {
-    path: '/admin/pricing',
-    element: <AdminDashboardPage />,
-  },
-  {
-    path: '/admin/notifications',
-    element: <AdminDashboardPage />,
+    path: '/tours',
+    element: <ToursPage />,
   },
   {
     path: '*',
     element: <NotFound />,
   },
 ]);
+
+export default router;

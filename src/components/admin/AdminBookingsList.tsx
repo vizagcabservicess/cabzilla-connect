@@ -267,6 +267,9 @@ export function AdminBookingsList() {
                           <DropdownMenuItem onClick={() => navigate(`/admin/booking/${booking.id}`)}>
                             View Details
                           </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => navigate(`/booking/${booking.id}/edit`)}>
+                            Edit Booking
+                          </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           {booking.status === 'pending' && (
                             <>
