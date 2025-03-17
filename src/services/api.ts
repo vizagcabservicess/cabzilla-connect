@@ -310,12 +310,18 @@ export const bookingAPI = {
       }
       
       // Make sure the date strings are in ISO format
-      if (bookingData.pickupDate && typeof bookingData.pickupDate === 'object') {
-        bookingData.pickupDate = bookingData.pickupDate.toISOString();
+      if (bookingData.pickupDate) {
+        if (typeof bookingData.pickupDate === 'object' && bookingData.pickupDate instanceof Date) {
+          bookingData.pickupDate = bookingData.pickupDate.toISOString();
+        }
+      } else {
+        throw new Error('Pickup date is required');
       }
       
-      if (bookingData.returnDate && typeof bookingData.returnDate === 'object') {
-        bookingData.returnDate = bookingData.returnDate.toISOString();
+      if (bookingData.returnDate) {
+        if (typeof bookingData.returnDate === 'object' && bookingData.returnDate instanceof Date) {
+          bookingData.returnDate = bookingData.returnDate.toISOString();
+        }
       }
       
       // Log the sanitized data
