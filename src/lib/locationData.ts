@@ -9,6 +9,7 @@ export interface Location {
   popularityScore: number;
   isPickupLocation?: boolean;
   isDropLocation?: boolean;
+  address?: string; // Added address as optional property to make it compatible with api.Location
 }
 
 export const vizagLocations: Location[] = [
@@ -21,7 +22,8 @@ export const vizagLocations: Location[] = [
     popularityScore: 95,
     isPickupLocation: true,
     lat: 17.7215, 
-    lng: 83.2248 
+    lng: 83.2248,
+    address: 'Vizag RTC Complex, Visakhapatnam'
   },
   {
     id: 'vizag_railway',
@@ -32,7 +34,8 @@ export const vizagLocations: Location[] = [
     popularityScore: 98,
     isPickupLocation: true,
     lat: 17.7215, 
-    lng: 83.2248 
+    lng: 83.2248,
+    address: 'Visakhapatnam Railway Station, Visakhapatnam'
   },
   {
     id: 'vizag_airport',
@@ -43,7 +46,8 @@ export const vizagLocations: Location[] = [
     popularityScore: 99,
     isPickupLocation: true,
     lat: 17.7215, 
-    lng: 83.2248 
+    lng: 83.2248,
+    address: 'Visakhapatnam International Airport, Visakhapatnam'
   },
   {
     id: 'rk_beach',
@@ -54,7 +58,8 @@ export const vizagLocations: Location[] = [
     popularityScore: 92,
     isPickupLocation: true,
     lat: 17.7175,
-    lng: 83.3162
+    lng: 83.3162,
+    address: 'RK Beach, Visakhapatnam'
   },
   {
     id: 'jagadamba_junction',
@@ -65,7 +70,8 @@ export const vizagLocations: Location[] = [
     popularityScore: 90,
     isPickupLocation: true,
     lat: 17.7215, 
-    lng: 83.2248 
+    lng: 83.2248,
+    address: 'Jagadamba Junction, Visakhapatnam'
   },
   {
     id: 'mvp_colony',
@@ -76,7 +82,8 @@ export const vizagLocations: Location[] = [
     popularityScore: 88,
     isPickupLocation: true,
     lat: 17.7215, 
-    lng: 83.2248 
+    lng: 83.2248,
+    address: 'MVP Colony, Visakhapatnam'
   },
   {
     id: 'gajuwaka',
@@ -87,7 +94,8 @@ export const vizagLocations: Location[] = [
     popularityScore: 85,
     isPickupLocation: true,
     lat: 17.7337,
-    lng: 83.1385
+    lng: 83.1385,
+    address: 'Gajuwaka, Visakhapatnam'
   },
   {
     id: 'nad_junction',
@@ -98,7 +106,8 @@ export const vizagLocations: Location[] = [
     popularityScore: 83,
     isPickupLocation: true,
     lat: 17.7215, 
-    lng: 83.2248 
+    lng: 83.2248,
+    address: 'NAD Junction, Visakhapatnam'
   }
 ];
 
@@ -112,7 +121,8 @@ export const apDestinations: Location[] = [
     popularityScore: 95,
     isDropLocation: true,
     lat: 17.7215, 
-    lng: 83.2248 
+    lng: 83.2248,
+    address: 'Araku Valley, Andhra Pradesh'
   },
   {
     id: 'srikakulam',
@@ -123,7 +133,8 @@ export const apDestinations: Location[] = [
     popularityScore: 88,
     isDropLocation: true,
     lat: 17.7215, 
-    lng: 83.2248 
+    lng: 83.2248,
+    address: 'Srikakulam, Andhra Pradesh'
   },
   {
     id: 'rajahmundry',
@@ -134,7 +145,8 @@ export const apDestinations: Location[] = [
     popularityScore: 90,
     isDropLocation: true,
     lat: 17.7215, 
-    lng: 83.2248 
+    lng: 83.2248,
+    address: 'Rajahmundry, Andhra Pradesh'
   },
   {
     id: 'vijayawada',
@@ -145,7 +157,8 @@ export const apDestinations: Location[] = [
     popularityScore: 92,
     isDropLocation: true,
     lat: 17.7215, 
-    lng: 83.2248 
+    lng: 83.2248,
+    address: 'Vijayawada, Andhra Pradesh'
   },
   {
     id: 'tirupati',
@@ -156,7 +169,8 @@ export const apDestinations: Location[] = [
     popularityScore: 94,
     isDropLocation: true,
     lat: 17.7215, 
-    lng: 83.2248 
+    lng: 83.2248,
+    address: 'Tirupati, Andhra Pradesh'
   },
   {
     id: 'kakinada',
@@ -167,7 +181,8 @@ export const apDestinations: Location[] = [
     popularityScore: 87,
     isDropLocation: true,
     lat: 17.7215, 
-    lng: 83.2248 
+    lng: 83.2248,
+    address: 'Kakinada, Andhra Pradesh'
   },
   {
     id: 'guntur',
@@ -178,7 +193,8 @@ export const apDestinations: Location[] = [
     popularityScore: 89,
     isDropLocation: true,
     lat: 17.7215, 
-    lng: 83.2248 
+    lng: 83.2248,
+    address: 'Guntur, Andhra Pradesh'
   },
   {
     id: 'ongole',
@@ -189,7 +205,8 @@ export const apDestinations: Location[] = [
     popularityScore: 83,
     isDropLocation: true,
     lat: 17.7215, 
-    lng: 83.2248 
+    lng: 83.2248,
+    address: 'Ongole, Andhra Pradesh'
   },
   {
     id: 'kadapa',
@@ -200,7 +217,8 @@ export const apDestinations: Location[] = [
     popularityScore: 82,
     isDropLocation: true,
     lat: 17.7215, 
-    lng: 83.2248 
+    lng: 83.2248,
+    address: 'Kadapa, Andhra Pradesh'
   },
   {
     id: 'nellore',
@@ -211,7 +229,8 @@ export const apDestinations: Location[] = [
     popularityScore: 84,
     isDropLocation: true,
     lat: 17.7215, 
-    lng: 83.2248 
+    lng: 83.2248,
+    address: 'Nellore, Andhra Pradesh'
   }
 ];
 
