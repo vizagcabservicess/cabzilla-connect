@@ -20,6 +20,13 @@ RewriteRule ^api/admin/fares/vehicles$ api/fares/vehicles.php [L]
 RewriteRule ^api/admin/fares/update$ api/admin/fares-update.php [L]
 RewriteRule ^api/admin/km-price/update$ api/admin/km-price-update.php [L]
 
+# Add debug header for API paths
+<IfModule mod_headers.c>
+    <FilesMatch "^api/">
+        Header set X-Debug-Path "%{REQUEST_URI}e"
+    </FilesMatch>
+</IfModule>
+
 # Set the default character set
 AddDefaultCharset UTF-8
 
@@ -49,4 +56,3 @@ RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteCond %{REQUEST_URI} !^/api
 RewriteRule ^ index.html [QSA,L]
-

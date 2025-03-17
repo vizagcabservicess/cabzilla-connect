@@ -41,6 +41,15 @@ export const createLocationChangeHandler = (
       popularityScore: 50
     };
     
+    // Check if location is in Visakhapatnam
+    if (isLocationInVizag(appLocation)) {
+      appLocation.isInVizag = true;
+    } else {
+      appLocation.isInVizag = false;
+    }
+    
+    console.log('Location changed:', appLocation);
+    
     // Update state with the new location
     setLocation(appLocation);
     
@@ -51,6 +60,35 @@ export const createLocationChangeHandler = (
     
     return appLocation;
   };
+};
+
+/**
+ * Check if a location is in Visakhapatnam based on coordinates and address
+ */
+export const isLocationInVizag = (location: AppLocation): boolean => {
+  // Check by coordinates (Visakhapatnam approximate bounds)
+  if (location.lat && location.lng) {
+    const isInVizagBounds = 
+      location.lat >= 17.6 && location.lat <= 17.9 && 
+      location.lng >= 83.1 && location.lng <= 83.4;
+    
+    if (isInVizagBounds) return true;
+  }
+  
+  // Check by address text
+  const addressLower = (location.address || '').toLowerCase();
+  const nameLower = (location.name || '').toLowerCase();
+  const cityLower = (location.city || '').toLowerCase();
+  
+  const vizagNames = ['visakhapatnam', 'vizag', 'waltair', 'vizianagaram'];
+  
+  for (const name of vizagNames) {
+    if (addressLower.includes(name) || nameLower.includes(name) || cityLower.includes(name)) {
+      return true;
+    }
+  }
+  
+  return false;
 };
 
 /**

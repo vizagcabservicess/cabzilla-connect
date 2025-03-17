@@ -30,7 +30,7 @@ if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
 $bookingId = (int)$_GET['id'];
 
 // Log the request for debugging
-logError("Booking details request", ['booking_id' => $bookingId]);
+logError("Booking details request", ['booking_id' => $bookingId, 'method' => $_SERVER['REQUEST_METHOD']]);
 
 // Get user ID from JWT token
 $headers = getallheaders();
@@ -48,6 +48,8 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
     }
 }
 
+logError("Auth info for booking details", ['user_id' => $userId, 'is_admin' => $isAdmin]);
+
 // Connect to database
 $conn = getDbConnection();
 if (!$conn) {
@@ -56,34 +58,46 @@ if (!$conn) {
 }
 
 try {
-    // Prepare query - admins can view any booking, users can only view their own
+    // For debugging - log the database connection status
+    logError("Database connection established", ['connected' => true]);
+    
+    // For non-admin users, allow access to their own bookings or guest bookings
     if ($isAdmin) {
-        $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
-        $stmt->bind_param("i", $bookingId);
+        $sql = "SELECT * FROM bookings WHERE id = ?";
+        $params = [$bookingId];
+        $types = "i";
     } else {
-        // For regular users, either user_id must match or if null (guest booking), match by id and credential
-        if ($userId) {
-            $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ? AND (user_id = ? OR user_id IS NULL)");
-            $stmt->bind_param("ii", $bookingId, $userId);
-        } else {
-            // If no user ID (not logged in), only allow access if no user is associated with booking
-            $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ? AND user_id IS NULL");
-            $stmt->bind_param("i", $bookingId);
-        }
+        // For regular users, they can view their own bookings or guest bookings
+        $sql = "SELECT * FROM bookings WHERE id = ? AND (user_id IS NULL OR user_id = ?)";
+        $params = [$bookingId, $userId];
+        $types = "ii";
     }
     
-    // Execute the query
+    // Log the SQL query for debugging
+    logError("Executing SQL for booking", ['sql' => $sql, 'params' => $params]);
+    
+    // Prepare and execute the query
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new Exception("Failed to prepare query: " . $conn->error);
+    }
+    
+    $stmt->bind_param($types, ...$params);
     $stmt->execute();
     $result = $stmt->get_result();
     
     // Check if booking exists
     if ($result->num_rows === 0) {
+        logError("Booking not found or access denied", ['booking_id' => $bookingId, 'user_id' => $userId]);
         sendJsonResponse(['status' => 'error', 'message' => 'Booking not found or access denied'], 404);
         exit;
     }
     
     // Fetch booking data
     $booking = $result->fetch_assoc();
+    
+    // Log successful retrieval
+    logError("Booking found successfully", ['booking_id' => $booking['id'], 'status' => $booking['status']]);
     
     // Format response data
     $formattedBooking = [

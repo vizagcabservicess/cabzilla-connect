@@ -14,7 +14,7 @@ import {
   formatTravelTime,
   isVizagLocation
 } from "@/lib/locationData";
-import { convertToApiLocation, createLocationChangeHandler } from "@/lib/locationUtils";
+import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag } from "@/lib/locationUtils";
 import { 
   CabType, 
   cabTypes, 
@@ -73,20 +73,33 @@ const CabsPage = () => {
   }, [tripType, pickup, dropoff]);
 
   useEffect(() => {
-    if (tripType === "airport" && pickup && dropoff) {
-      const isPickupInVizag = isVizagLocation(pickup);
-      const isDropoffInVizag = isVizagLocation(dropoff);
+    if (pickup && dropoff) {
+      console.log("Validating locations:", { pickup, dropoff });
       
-      if (!isPickupInVizag || !isDropoffInVizag) {
-        console.log("Locations not within Vizag city limits. Switching to outstation mode.");
+      const isPickupInVizag = pickup.isInVizag || isLocationInVizag(pickup);
+      if (!isPickupInVizag) {
         toast({
-          title: "Trip type updated",
-          description: "One of your locations is outside Vizag city limits. We've updated your trip type to Outstation.",
+          title: "Invalid pickup location",
+          description: "Pickup location must be within Visakhapatnam city limits.",
+          variant: "destructive",
           duration: 3000,
         });
-        setTripType("outstation");
-        setTripMode("one-way");
-        navigate("/cabs/outstation");
+        return;
+      }
+      
+      if (tripType === "airport") {
+        const isDropoffInVizag = dropoff.isInVizag || isLocationInVizag(dropoff);
+        if (!isDropoffInVizag) {
+          console.log("Dropoff not in Vizag, switching to outstation");
+          toast({
+            title: "Trip type updated",
+            description: "Your destination is outside Vizag city limits. We've updated your trip type to Outstation.",
+            duration: 3000,
+          });
+          setTripType("outstation");
+          setTripMode("one-way");
+          navigate("/cabs/outstation");
+        }
       }
     }
   }, [pickup, dropoff, tripType, toast, navigate]);
@@ -261,7 +274,7 @@ const CabsPage = () => {
 
   const handleGuestDetailsSubmit = async (guestDetails: any) => {
     try {
-      if (!pickup || !dropoff || !selectedCab || !pickupDate) {
+      if (!pickup || (tripType !== "local" && !dropoff) || !selectedCab || !pickupDate) {
         toast({
           title: "Missing information",
           description: "Please complete all required fields",
@@ -272,8 +285,8 @@ const CabsPage = () => {
       }
       
       const bookingData: BookingRequest = {
-        pickupLocation: pickup.name,
-        dropLocation: dropoff?.name || '',
+        pickupLocation: pickup.address || pickup.name,
+        dropLocation: dropoff ? (dropoff.address || dropoff.name) : '',
         pickupDate: pickupDate.toISOString(),
         returnDate: returnDate?.toISOString() || null,
         cabType: selectedCab.name,
@@ -286,6 +299,8 @@ const CabsPage = () => {
         passengerEmail: guestDetails.email,
         hourlyPackage: tripType === 'local' ? hourlyPackage : null
       };
+      
+      console.log("Sending booking data:", bookingData);
       
       const response = await bookingAPI.createBooking(bookingData);
       console.log('Booking created:', response);
