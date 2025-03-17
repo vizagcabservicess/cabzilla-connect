@@ -12,7 +12,6 @@ const axiosInstance = axios.create({
   },
 });
 
-// Function to set the auth token in the headers
 const setAuthToken = (token: string | null) => {
   if (token) {
     axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
@@ -23,7 +22,6 @@ const setAuthToken = (token: string | null) => {
   }
 };
 
-// Load token from local storage on app initialization
 const storedToken = localStorage.getItem('auth_token');
 if (storedToken) {
   setAuthToken(storedToken);
@@ -35,7 +33,7 @@ interface AuthAPI {
   logout(): void;
   getCurrentUser(): User | null;
   isAuthenticated(): boolean;
-  isAdmin(): boolean; // Add isAdmin method
+  isAdmin(): boolean;
 }
 
 interface ApiService {
@@ -47,12 +45,9 @@ interface ApiService {
   createBooking(bookingData: BookingRequest): Promise<Booking>;
   getUserBookings(): Promise<Booking[]>;
   getAllBookings(): Promise<Booking[]>;
-  
-  // Update a booking
-  updateBooking(bookingId: string, bookingData: Partial<Booking>): Promise<Booking>;
-  
-  // Get a booking by ID
   getBookingById(bookingId: string): Promise<Booking>;
+  updateBooking(bookingId: string, bookingData: Partial<Booking>): Promise<Booking>;
+  getAdminDashboardMetrics(period: 'today' | 'week' | 'month'): Promise<DashboardMetrics>;
 }
 
 export const authAPI: AuthAPI = {
@@ -95,7 +90,6 @@ export const authAPI: AuthAPI = {
       const token = localStorage.getItem('auth_token');
       if (!token) return null;
 
-      // Decode the token to get the user information
       const base64Url = token.split('.')[1];
       const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
       const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
@@ -125,7 +119,7 @@ export const bookingAPI: {
   getAllBookings(): Promise<Booking[]>;
   getBookingById(bookingId: string): Promise<Booking>;
   updateBooking(bookingId: string, bookingData: Partial<Booking>): Promise<Booking>;
-  getAdminDashboardMetrics(period: 'today' | 'week' | 'month'): Promise<DashboardMetrics>; // Add dashboard metrics
+  getAdminDashboardMetrics(period: 'today' | 'week' | 'month'): Promise<DashboardMetrics>;
 } = {
   async createBooking(bookingData: BookingRequest): Promise<Booking> {
     try {
@@ -204,28 +198,26 @@ export const bookingAPI: {
     try {
       console.log(`Updating booking ${bookingId} with data:`, bookingData);
       
-      // Convert complex objects to strings for the API
       const processedData: Record<string, any> = {};
       
-      // Process each field
       for (const [key, value] of Object.entries(bookingData)) {
         if (key === 'pickupLocation' || key === 'dropLocation') {
-          // Handle location objects
           if (typeof value === 'object' && value !== null) {
-            // Use address property if available
-            if (value && 'address' in value && typeof value.address === 'string') {
-              processedData[key] = value.address;
-            } else if (value && 'name' in value && typeof value.name === 'string') {
-              processedData[key] = value.name;
-            } else if (value !== null) {
-              processedData[key] = String(value);
+            const locationValue = value as any;
+            
+            if (locationValue && 'address' in locationValue && typeof locationValue.address === 'string') {
+              processedData[key] = locationValue.address;
+            } else if (locationValue && 'name' in locationValue && typeof locationValue.name === 'string') {
+              processedData[key] = locationValue.name;
+            } else if (locationValue !== null) {
+              processedData[key] = String(locationValue);
             }
           } else {
             processedData[key] = value;
           }
         } else if (key === 'pickupDate' || key === 'returnDate') {
-          // Handle date objects
-          if (value && typeof value === 'object' && 'toISOString' in value && typeof value.toISOString === 'function') {
+          if (value !== null && typeof value === 'object' && 
+              'toISOString' in value && typeof value.toISOString === 'function') {
             processedData[key] = value.toISOString();
           } else {
             processedData[key] = value;
@@ -256,7 +248,6 @@ export const bookingAPI: {
     }
   },
 
-  // Add getAdminDashboardMetrics method
   async getAdminDashboardMetrics(period: 'today' | 'week' | 'month'): Promise<DashboardMetrics> {
     try {
       const response = await axiosInstance.get(`/admin/metrics?period=${period}`);
@@ -276,7 +267,6 @@ export const bookingAPI: {
   }
 };
 
-// Add fareAPI for managing tour fares and vehicle pricing
 export const fareAPI: {
   getTourFares(): Promise<TourFare[]>;
   updateTourFares(fareData: FareUpdateRequest): Promise<TourFare>;
