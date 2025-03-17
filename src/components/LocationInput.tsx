@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Input } from "@/components/ui/input";
 import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
 import { Location } from '@/types/api';
@@ -35,18 +35,26 @@ export function LocationInput({
   const locationData = location || value || { address: '' };
   const handleLocationChange = onLocationChange || onChange;
   
-  // Ensure address is a string to prevent type errors
+  // Ensure address is always a string to prevent type errors
   const initialAddress = typeof locationData.address === 'string' ? locationData.address : '';
   const [address, setAddress] = useState<string>(initialAddress);
   const { google } = useGoogleMaps();
+  
+  // Reference to the autocomplete instance
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Update the address when the location data changes
   useEffect(() => {
-    // Ensure we're working with string data
-    if (locationData && typeof locationData.address === 'string') {
-      setAddress(locationData.address);
-    } else if (locationData && typeof locationData.name === 'string') {
-      setAddress(locationData.name);
+    // Ensure we're working with string data and set default values
+    if (locationData) {
+      if (typeof locationData.address === 'string' && locationData.address.trim() !== '') {
+        setAddress(locationData.address);
+      } else if (typeof locationData.name === 'string' && locationData.name.trim() !== '') {
+        setAddress(locationData.name);
+      } else {
+        setAddress('');
+      }
     } else {
       setAddress('');
     }
@@ -54,7 +62,7 @@ export function LocationInput({
 
   // Memoize the handleChange function to prevent unnecessary rerenders
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const newAddress = e.target.value;
+    const newAddress = e.target.value || '';
     
     // Always update internal state for controlled input behavior
     setAddress(newAddress);
@@ -72,10 +80,10 @@ export function LocationInput({
         if (locationData.name) updatedLocation.name = locationData.name;
         if (locationData.city) updatedLocation.city = locationData.city;
         if (locationData.state) updatedLocation.state = locationData.state;
-        if (typeof locationData.lat === 'number') updatedLocation.lat = locationData.lat;
-        if (typeof locationData.lng === 'number') updatedLocation.lng = locationData.lng;
+        if (typeof locationData.lat === 'number' && !isNaN(locationData.lat)) updatedLocation.lat = locationData.lat;
+        if (typeof locationData.lng === 'number' && !isNaN(locationData.lng)) updatedLocation.lng = locationData.lng;
         if (locationData.type) updatedLocation.type = locationData.type;
-        if (typeof locationData.popularityScore === 'number') {
+        if (typeof locationData.popularityScore === 'number' && !isNaN(locationData.popularityScore)) {
           updatedLocation.popularityScore = locationData.popularityScore;
         }
         if (typeof locationData.isPickupLocation === 'boolean') {
@@ -91,17 +99,18 @@ export function LocationInput({
     }
   }, [handleLocationChange, locationData]);
 
+  // Setup and teardown of Google Maps autocomplete
   useEffect(() => {
     // Early return if conditions aren't met
-    if (!google || !google.maps || !google.maps.places || disabled || readOnly) return;
-    
-    // Reference to the autocomplete instance
-    let autocomplete: google.maps.places.Autocomplete | null = null;
+    if (!google || !google.maps || !google.maps.places || disabled || readOnly) {
+      return;
+    }
     
     // Function to create and set up the autocomplete
     const initAutocomplete = () => {
       try {
-        const inputElement = document.getElementById('location-input') as HTMLInputElement;
+        // Use ref instead of getElementById for better component isolation
+        const inputElement = inputRef.current;
         if (!inputElement) {
           console.error("Location input element not found");
           return;
@@ -118,7 +127,8 @@ export function LocationInput({
         }
 
         // Create the autocomplete instance
-        autocomplete = new google.maps.places.Autocomplete(inputElement, options);
+        const autocomplete = new google.maps.places.Autocomplete(inputElement, options);
+        autocompleteRef.current = autocomplete;
 
         // Add place_changed listener
         autocomplete.addListener('place_changed', () => {
@@ -139,8 +149,8 @@ export function LocationInput({
               return;
             }
 
-            // Get formatted address safely
-            const formattedAddress = place.formatted_address || '';
+            // Get formatted address safely with fallback
+            const formattedAddress = place.formatted_address || place.name || '';
             
             // Use safe defaults for all values
             const newLocation: Location = {
@@ -156,7 +166,7 @@ export function LocationInput({
               if (locationData.city) newLocation.city = locationData.city;
               if (locationData.state) newLocation.state = locationData.state;
               if (locationData.type) newLocation.type = locationData.type;
-              if (typeof locationData.popularityScore === 'number') {
+              if (typeof locationData.popularityScore === 'number' && !isNaN(locationData.popularityScore)) {
                 newLocation.popularityScore = locationData.popularityScore;
               }
               if (typeof locationData.isPickupLocation === 'boolean') {
@@ -185,15 +195,17 @@ export function LocationInput({
 
     // Initialize autocomplete if Google Maps API is loaded
     if (google && google.maps && google.maps.places) {
-      initAutocomplete();
+      // Add a small delay to make sure DOM is ready
+      setTimeout(initAutocomplete, 10);
     }
 
     // Cleanup function to remove listeners when the component unmounts
     return () => {
-      if (autocomplete) {
+      if (autocompleteRef.current) {
         // Safely clear instance listeners
         try {
-          google.maps.event.clearInstanceListeners(autocomplete);
+          google.maps.event.clearInstanceListeners(autocompleteRef.current);
+          autocompleteRef.current = null;
         } catch (error) {
           console.error("Error clearing instance listeners:", error);
         }
@@ -210,7 +222,7 @@ export function LocationInput({
       )}
       <Input
         type="text"
-        id="location-input"
+        ref={inputRef}
         placeholder={placeholder}
         className={className}
         value={address} // Always use our controlled state value

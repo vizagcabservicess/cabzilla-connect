@@ -49,19 +49,19 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
     if (isLoaded && !loadError && window.google) {
       setGoogleInstance(window.google);
       console.log("✅ Google Maps API loaded successfully");
+    } else if (loadError) {
+      console.error("❌ Error loading Google Maps API:", loadError);
     }
   }, [isLoaded, loadError]);
 
-  // Log load status
-  useEffect(() => {
-    if (loadError) {
-      console.error("❌ Error loading Google Maps API:", loadError);
-    }
-  }, [loadError]);
-
   // Provide context values
   return (
-    <GoogleMapsContext.Provider value={{ isLoaded, loadError, google: googleInstance }}>
+    <GoogleMapsContext.Provider value={{ 
+      isLoaded, 
+      loadError, 
+      // Always use window.google as a fallback to ensure it's available even if state hasn't updated
+      google: googleInstance || (isLoaded && window.google ? window.google : null) 
+    }}>
       {children}
     </GoogleMapsContext.Provider>
   );
