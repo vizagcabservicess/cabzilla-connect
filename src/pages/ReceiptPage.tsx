@@ -9,8 +9,7 @@ import { bookingAPI } from '@/services/api';
 import { Booking } from '@/types/api';
 import { useToast } from '@/components/ui/use-toast';
 import { Download, Printer, Share2, Mail } from 'lucide-react';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
+// Remove static imports and use dynamic imports instead
 
 export default function ReceiptPage() {
   const { id } = useParams<{ id: string }>();
@@ -54,6 +53,13 @@ export default function ReceiptPage() {
         title: 'Generating PDF',
         description: 'Your receipt is being generated as a PDF...',
       });
+      
+      // Dynamically import html2canvas and jspdf
+      const html2canvasModule = await import('html2canvas');
+      const html2canvas = html2canvasModule.default;
+      
+      const jsPDFModule = await import('jspdf');
+      const jsPDF = jsPDFModule.default;
       
       const canvas = await html2canvas(receiptRef.current, {
         scale: 2,

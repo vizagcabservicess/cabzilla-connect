@@ -21,15 +21,12 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: {
-    commonjsOptions: {
-      include: [/html2canvas/, /jspdf/, /node_modules/],
-      transformMixedEsModules: true,
-    },
     rollupOptions: {
-      external: [],
+      external: ['html2canvas', 'jspdf'],
       output: {
-        manualChunks: {
-          vendor: ['html2canvas', 'jspdf']
+        globals: {
+          'html2canvas': 'html2canvas',
+          'jspdf': 'jspdf'
         }
       }
     }
