@@ -9,7 +9,7 @@ import { GuestDetailsForm } from "@/components/GuestDetailsForm";
 import { DateTimePicker } from "@/components/DateTimePicker";
 import { LocationInput } from "@/components/LocationInput";
 import { bookingAPI, authAPI } from '@/services/api';
-import { Booking } from '@/types/api';
+import { Booking, Location } from '@/types/api';
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, AlertCircle, Loader2 } from 'lucide-react';
 
@@ -21,7 +21,7 @@ export default function BookingEditPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [pickupLocation, setPickupLocation] = useState('');
+  const [pickupLocation, setPickupLocation] = useState<Location>({ address: '' });
   const [pickupDate, setPickupDate] = useState<Date | undefined>(undefined);
 
   useEffect(() => {
@@ -48,7 +48,7 @@ export default function BookingEditPage() {
         setBooking(data);
         
         // Initialize form fields
-        setPickupLocation(data.pickupLocation);
+        setPickupLocation({ address: data.pickupLocation });
         setPickupDate(new Date(data.pickupDate));
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Failed to load booking details';
@@ -77,8 +77,8 @@ export default function BookingEditPage() {
         passengerName: contactDetails.name,
         passengerPhone: contactDetails.phone,
         passengerEmail: contactDetails.email,
-        pickupLocation,
-        pickupDate: pickupDate?.toISOString() || booking.pickupDate
+        pickupLocation: pickupLocation.address,
+        pickupDate: pickupDate
       };
       
       // Update booking in API
@@ -135,7 +135,7 @@ export default function BookingEditPage() {
         <Button variant="outline" onClick={() => navigate('/dashboard')} className="mr-4">
           <ArrowLeft className="mr-2 h-4 w-4" /> Back
         </Button>
-        <h1 className="text-3xl font-bold">Edit Booking #{booking.bookingNumber}</h1>
+        <h1 className="text-3xl font-bold">Edit Booking #{booking?.bookingNumber}</h1>
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -182,8 +182,8 @@ export default function BookingEditPage() {
               <div>
                 <p className="text-sm font-medium mb-1">Pickup Location</p>
                 <LocationInput
-                  value={pickupLocation}
-                  onChange={setPickupLocation}
+                  location={pickupLocation}
+                  onLocationChange={(location: Location) => setPickupLocation(location)}
                   placeholder="Enter pickup location"
                   className="w-full"
                 />
@@ -192,8 +192,8 @@ export default function BookingEditPage() {
               <div>
                 <p className="text-sm font-medium mb-1">Pickup Date & Time</p>
                 <DateTimePicker
-                  value={pickupDate}
-                  onChange={setPickupDate}
+                  date={pickupDate}
+                  onDateChange={setPickupDate}
                   minDate={new Date()}
                 />
               </div>
@@ -211,11 +211,11 @@ export default function BookingEditPage() {
             <CardContent>
               <GuestDetailsForm
                 onSubmit={handleSubmit}
-                totalPrice={booking.totalAmount}
+                totalPrice={booking?.totalAmount || 0}
                 initialData={{
-                  name: booking.passengerName,
-                  email: booking.passengerEmail,
-                  phone: booking.passengerPhone
+                  name: booking?.passengerName || '',
+                  email: booking?.passengerEmail || '',
+                  phone: booking?.passengerPhone || ''
                 }}
                 bookingId={bookingId}
                 isEditing={true}

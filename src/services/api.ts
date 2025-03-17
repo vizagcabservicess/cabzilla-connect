@@ -1,7 +1,9 @@
 import axios from 'axios';
-import { LoginRequest, SignupRequest, User, BookingRequest, Booking } from '@/types/api';
+import { LoginRequest, SignupRequest, User, BookingRequest, Booking, 
+  FareUpdateRequest, VehiclePricingUpdateRequest, TourFare, VehiclePricing,
+  DashboardMetrics, Location } from '@/types/api';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -33,6 +35,7 @@ interface AuthAPI {
   logout(): void;
   getCurrentUser(): User | null;
   isAuthenticated(): boolean;
+  isAdmin(): boolean; // Add isAdmin method
 }
 
 interface ApiService {
@@ -109,6 +112,11 @@ export const authAPI: AuthAPI = {
   isAuthenticated(): boolean {
     return !!localStorage.getItem('auth_token');
   },
+
+  isAdmin(): boolean {
+    const user = this.getCurrentUser();
+    return !!user && user.role === 'admin';
+  },
 };
 
 export const bookingAPI: {
@@ -117,6 +125,7 @@ export const bookingAPI: {
   getAllBookings(): Promise<Booking[]>;
   getBookingById(bookingId: string): Promise<Booking>;
   updateBooking(bookingId: string, bookingData: Partial<Booking>): Promise<Booking>;
+  getAdminDashboardMetrics(period: 'today' | 'week' | 'month'): Promise<DashboardMetrics>; // Add dashboard metrics
 } = {
   async createBooking(bookingData: BookingRequest): Promise<Booking> {
     try {
@@ -195,12 +204,12 @@ export const bookingAPI: {
       // Convert date objects to ISO strings for the API
       const processedData = { ...bookingData };
       
-      if (bookingData.pickupDate && (bookingData.pickupDate as any) instanceof Date) {
-        processedData.pickupDate = (bookingData.pickupDate as Date).toISOString();
+      if (bookingData.pickupDate && bookingData.pickupDate instanceof Date) {
+        processedData.pickupDate = bookingData.pickupDate.toISOString();
       }
       
-      if (bookingData.returnDate && (bookingData.returnDate as any) instanceof Date) {
-        processedData.returnDate = (bookingData.returnDate as Date).toISOString();
+      if (bookingData.returnDate && bookingData.returnDate instanceof Date) {
+        processedData.returnDate = bookingData.returnDate.toISOString();
       }
       
       const response = await axiosInstance.put(`/update-booking/${bookingId}`, processedData);
@@ -216,6 +225,105 @@ export const bookingAPI: {
         throw new Error(error.response.data.message || 'Failed to update booking');
       }
       throw new Error('Network error when updating booking');
+    }
+  },
+
+  // Add getAdminDashboardMetrics method
+  async getAdminDashboardMetrics(period: 'today' | 'week' | 'month'): Promise<DashboardMetrics> {
+    try {
+      const response = await axiosInstance.get(`/admin/metrics?period=${period}`);
+      
+      if (response.data.status === 'success') {
+        return response.data.data;
+      } else {
+        throw new Error(response.data.message || 'Failed to fetch dashboard metrics');
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard metrics:', error);
+      if (axios.isAxiosError(error) && error.response) {
+        throw new Error(error.response.data.message || 'Failed to fetch dashboard metrics');
+      }
+      throw new Error('Network error when fetching dashboard metrics');
+    }
+  }
+};
+
+// Add fareAPI for managing tour fares and vehicle pricing
+export const fareAPI: {
+  getTourFares(): Promise<TourFare[]>;
+  updateTourFares(fareData: FareUpdateRequest): Promise<TourFare>;
+  getVehiclePricing(): Promise<VehiclePricing[]>;
+  updateVehiclePricing(pricingData: VehiclePricingUpdateRequest): Promise<VehiclePricing>;
+} = {
+  async getTourFares(): Promise<TourFare[]> {
+    try {
+      const response = await axiosInstance.get('/admin/fares/tours');
+      
+      if (response.data.status === 'success') {
+        return response.data.data;
+      } else {
+        throw new Error(response.data.message || 'Failed to fetch tour fares');
+      }
+    } catch (error) {
+      console.error('Error fetching tour fares:', error);
+      if (axios.isAxiosError(error) && error.response) {
+        throw new Error(error.response.data.message || 'Failed to fetch tour fares');
+      }
+      throw new Error('Network error when fetching tour fares');
+    }
+  },
+  
+  async updateTourFares(fareData: FareUpdateRequest): Promise<TourFare> {
+    try {
+      const response = await axiosInstance.put('/admin/fares/tours', fareData);
+      
+      if (response.data.status === 'success') {
+        return response.data.data;
+      } else {
+        throw new Error(response.data.message || 'Failed to update tour fares');
+      }
+    } catch (error) {
+      console.error('Error updating tour fares:', error);
+      if (axios.isAxiosError(error) && error.response) {
+        throw new Error(error.response.data.message || 'Failed to update tour fares');
+      }
+      throw new Error('Network error when updating tour fares');
+    }
+  },
+  
+  async getVehiclePricing(): Promise<VehiclePricing[]> {
+    try {
+      const response = await axiosInstance.get('/admin/fares/vehicles');
+      
+      if (response.data.status === 'success') {
+        return response.data.data;
+      } else {
+        throw new Error(response.data.message || 'Failed to fetch vehicle pricing');
+      }
+    } catch (error) {
+      console.error('Error fetching vehicle pricing:', error);
+      if (axios.isAxiosError(error) && error.response) {
+        throw new Error(error.response.data.message || 'Failed to fetch vehicle pricing');
+      }
+      throw new Error('Network error when fetching vehicle pricing');
+    }
+  },
+  
+  async updateVehiclePricing(pricingData: VehiclePricingUpdateRequest): Promise<VehiclePricing> {
+    try {
+      const response = await axiosInstance.put('/admin/fares/vehicles', pricingData);
+      
+      if (response.data.status === 'success') {
+        return response.data.data;
+      } else {
+        throw new Error(response.data.message || 'Failed to update vehicle pricing');
+      }
+    } catch (error) {
+      console.error('Error updating vehicle pricing:', error);
+      if (axios.isAxiosError(error) && error.response) {
+        throw new Error(error.response.data.message || 'Failed to update vehicle pricing');
+      }
+      throw new Error('Network error when updating vehicle pricing');
     }
   }
 };

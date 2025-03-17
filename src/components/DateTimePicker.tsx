@@ -1,30 +1,23 @@
-
-import { useState } from "react";
-import { Calendar } from "lucide-react";
-
-import { cn } from "@/lib/utils";
+import React from 'react';
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarComponent } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { Input } from "@/components/ui/input";
+import { Calendar as CalendarIcon } from "lucide-react";
 
-interface DateTimePickerProps {
-  label: string;
-  date: Date | undefined;
+export interface DateTimePickerProps {
+  date?: Date;
   onDateChange: (date: Date | undefined) => void;
   minDate?: Date;
+  className?: string;
 }
 
-export function DateTimePicker({
-  label,
-  date,
-  onDateChange,
-  minDate,
+export function DateTimePicker({ 
+  date, 
+  onDateChange, 
+  minDate, 
+  className 
 }: DateTimePickerProps) {
   const [selectedTime, setSelectedTime] = useState<string | null>(
     date ? format(date, "HH:mm") : null
@@ -68,12 +61,12 @@ export function DateTimePicker({
               !date && "text-muted-foreground"
             )}
           >
-            <Calendar className="mr-2 h-4 w-4" />
+            <CalendarIcon className="mr-2 h-4 w-4" />
             {date ? format(date, "PPP, hh:mm a") : <span>Pick a date</span>}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="center" side="bottom">
-          <CalendarComponent
+          <Calendar
             mode="single"
             selected={date}
             onSelect={onDateChange}

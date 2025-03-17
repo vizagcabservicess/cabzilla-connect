@@ -47,7 +47,7 @@ export function SignupForm() {
     setError(null);
     
     try {
-      const response = await authAPI.register(values);
+      const response = await authAPI.signup(values); // Changed from register to signup
       toast({
         title: "Account Created",
         description: "Your account has been created successfully!",

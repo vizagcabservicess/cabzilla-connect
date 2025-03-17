@@ -4,6 +4,7 @@ export interface User {
   name: string;
   email: string;
   phone: string;
+  role?: string; // Adding role property for admin checks
   createdAt: string;
 }
 
@@ -201,4 +202,24 @@ export interface RoutePopularity {
   revenue: number;
   avgFare: number;
   peakTime: string;
+}
+
+// Location type for LocationInput component
+export interface Location {
+  address: string;
+  lat?: number;
+  lng?: number;
+}
+
+// Admin API types for Fare management
+export interface FareAPI {
+  getTourFares(): Promise<TourFare[]>;
+  updateTourFares(fareData: FareUpdateRequest): Promise<TourFare>;
+  getVehiclePricing(): Promise<VehiclePricing[]>;
+  updateVehiclePricing(pricingData: VehiclePricingUpdateRequest): Promise<VehiclePricing>;
+}
+
+// Admin Dashboard API
+export interface AdminAPI {
+  getAdminDashboardMetrics(period: 'today' | 'week' | 'month'): Promise<DashboardMetrics>;
 }
