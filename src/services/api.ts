@@ -212,29 +212,21 @@ export const bookingAPI: {
             } else if (locationValue !== null) {
               processedData[key] = String(locationValue);
             }
-          } else {
-            if (value !== null && value !== undefined) {
-              processedData[key] = value;
-            }
+          } else if (value !== null && value !== undefined) {
+            processedData[key] = value;
           }
         } else if (key === 'pickupDate' || key === 'returnDate') {
           if (value !== null && value !== undefined && typeof value === 'object') {
             if ('toISOString' in value && typeof (value as Date).toISOString === 'function') {
               processedData[key] = (value as Date).toISOString();
-            } else {
-              if (value !== null && value !== undefined) {
-                processedData[key] = value;
-              }
-            }
-          } else {
-            if (value !== null && value !== undefined) {
+            } else if (value !== null && value !== undefined) {
               processedData[key] = value;
             }
-          }
-        } else {
-          if (value !== null && value !== undefined) {
+          } else if (value !== null && value !== undefined) {
             processedData[key] = value;
           }
+        } else if (value !== null && value !== undefined) {
+          processedData[key] = value;
         }
       }
       
