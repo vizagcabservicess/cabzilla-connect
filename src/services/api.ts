@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { LoginRequest, SignupRequest, User, BookingRequest, Booking, 
   FareUpdateRequest, VehiclePricingUpdateRequest, TourFare, VehiclePricing,
@@ -216,9 +217,14 @@ export const bookingAPI: {
             processedData[key] = value;
           }
         } else if (key === 'pickupDate' || key === 'returnDate') {
-          if (value !== null && typeof value === 'object' && 
-              'toISOString' in value && typeof value.toISOString === 'function') {
-            processedData[key] = value.toISOString();
+          // Fix null check and add type guard for the toISOString method
+          if (value !== null && value !== undefined && typeof value === 'object') {
+            // Verify toISOString exists and is a function before calling it
+            if ('toISOString' in value && typeof (value as Date).toISOString === 'function') {
+              processedData[key] = (value as Date).toISOString();
+            } else {
+              processedData[key] = value;
+            }
           } else {
             processedData[key] = value;
           }
@@ -238,11 +244,8 @@ export const bookingAPI: {
       }
     } catch (error) {
       console.error('Error updating booking:', error);
-      if (axios.isAxiosError(error)) {
-        console.error('Response data:', error.response?.data);
-        if (error.response?.data?.message) {
-          throw new Error(error.response.data.message);
-        }
+      if ('response' in error && error.response?.data?.message) {
+        throw new Error(error.response.data.message);
       }
       throw new Error('Network error when updating booking');
     }
