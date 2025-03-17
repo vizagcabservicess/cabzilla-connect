@@ -30,9 +30,14 @@ export function createLocationChangeHandler(
   setter: React.Dispatch<React.SetStateAction<LibLocation | null>>
 ): (location: ApiLocation) => void {
   return (apiLocation: ApiLocation) => {
-    // Handle null or empty location
-    if (!apiLocation || !apiLocation.address) {
+    // Safety check: ensure the location object and necessary properties exist
+    if (!apiLocation) {
       setter(null);
+      return;
+    }
+    
+    // If only address is empty string, this may be a user typing - don't reset the location
+    if (Object.keys(apiLocation).length === 1 && apiLocation.address === '') {
       return;
     }
     
@@ -46,8 +51,8 @@ export function createLocationChangeHandler(
       lng: apiLocation.lng || 0,
       type: apiLocation.type || 'other',
       popularityScore: apiLocation.popularityScore || 0,
-      isPickupLocation: apiLocation.isPickupLocation || false,
-      isDropLocation: apiLocation.isDropLocation || false
+      isPickupLocation: Boolean(apiLocation.isPickupLocation),
+      isDropLocation: Boolean(apiLocation.isDropLocation)
     };
     
     setter(libLocation);

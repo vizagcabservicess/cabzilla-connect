@@ -93,13 +93,13 @@ export function LocationInput({
               lng: place.geometry.location.lng(),
               name: place.name || place.formatted_address || '',
               // Retain other properties if they exist
-              ...(locationData.id && { id: locationData.id }),
-              ...(locationData.city && { city: locationData.city }),
-              ...(locationData.state && { state: locationData.state }),
-              ...(locationData.type && { type: locationData.type }),
-              ...(locationData.popularityScore && { popularityScore: locationData.popularityScore }),
-              ...(locationData.isPickupLocation && { isPickupLocation: locationData.isPickupLocation }),
-              ...(locationData.isDropLocation && { isDropLocation: locationData.isDropLocation }),
+              ...(locationData && locationData.id && { id: locationData.id }),
+              ...(locationData && locationData.city && { city: locationData.city }),
+              ...(locationData && locationData.state && { state: locationData.state }),
+              ...(locationData && locationData.type && { type: locationData.type }),
+              ...(locationData && locationData.popularityScore && { popularityScore: locationData.popularityScore }),
+              ...(locationData && locationData.isPickupLocation && { isPickupLocation: locationData.isPickupLocation }),
+              ...(locationData && locationData.isDropLocation && { isDropLocation: locationData.isDropLocation }),
             };
 
             setAddress(place.formatted_address || address || '');
@@ -134,7 +134,7 @@ export function LocationInput({
   }, [google, handleLocationChange, address, disabled, readOnly, locationData, isAirportTransfer]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newAddress = e.target.value || '';
+    const newAddress = e.target.value;
     setAddress(newAddress);
     
     if (handleLocationChange) {
@@ -143,7 +143,12 @@ export function LocationInput({
         ...locationData,
         address: newAddress
       };
-      handleLocationChange(updatedLocation);
+      
+      // Only update the location through the handler if we have enough length
+      // This prevents the toLowerCase error during typing
+      if (newAddress.length > 0) {
+        handleLocationChange(updatedLocation);
+      }
     }
   };
 
@@ -162,6 +167,7 @@ export function LocationInput({
         value={address || ''}
         onChange={handleChange}
         disabled={disabled || readOnly}
+        autoComplete="off" // Prevent browser's default autocomplete
       />
     </div>
   );
