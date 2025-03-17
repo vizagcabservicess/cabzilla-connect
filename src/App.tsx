@@ -1,6 +1,6 @@
 
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { Index } from '@/pages/Index';
+import Index from '@/pages/Index';
 import LoginPage from '@/pages/LoginPage';
 import SignupPage from '@/pages/SignupPage';
 import CabsPage from '@/pages/CabsPage';
@@ -10,7 +10,7 @@ import BookingConfirmationPage from '@/pages/BookingConfirmationPage';
 import DashboardPage from '@/pages/DashboardPage';
 import AdminDashboardPage from '@/pages/AdminDashboardPage';
 import { useState, useEffect } from 'react';
-import jwtDecode from 'jwt-decode';
+import { jwtDecode } from 'jwt-decode';
 import BookingEditPage from '@/pages/BookingEditPage';
 import ReceiptPage from '@/pages/ReceiptPage';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';

@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Navbar } from "@/components/Navbar";
@@ -29,7 +28,7 @@ const ReceiptPage = () => {
       try {
         setLoading(true);
         console.log(`Fetching booking with ID: ${id}`);
-        const response = await bookingAPI.getBooking(parseInt(id));
+        const response = await bookingAPI.getBookingById(id);
         console.log('Booking data:', response);
         setBooking(response);
         setLoading(false);
