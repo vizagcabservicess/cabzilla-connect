@@ -81,18 +81,19 @@ export function LocationInput({
           try {
             const place = autocomplete.getPlace();
 
-            // Ensure place exists and has the required geometry
+            // Safe guard against null or undefined place
             if (!place) {
               console.log("No place details returned from autocomplete");
               return;
             }
 
+            // Safely check for geometry and location
             if (!place.geometry || !place.geometry.location) {
               console.log("Autocomplete returned place with no geometry");
               return;
             }
 
-            // Get a safe formatted address
+            // Safely get formatted address
             const formattedAddress = place.formatted_address || address || '';
             
             // Create location object with safe default values
@@ -103,16 +104,24 @@ export function LocationInput({
               name: place.name || formattedAddress,
             };
 
-            // Only add optional properties if they exist
-            if (locationData && locationData.id) newLocation.id = locationData.id;
-            if (locationData && locationData.city) newLocation.city = locationData.city;
-            if (locationData && locationData.state) newLocation.state = locationData.state;
-            if (locationData && locationData.type) newLocation.type = locationData.type;
-            if (locationData && locationData.popularityScore) newLocation.popularityScore = locationData.popularityScore;
-            if (locationData && locationData.isPickupLocation !== undefined) newLocation.isPickupLocation = locationData.isPickupLocation;
-            if (locationData && locationData.isDropLocation !== undefined) newLocation.isDropLocation = locationData.isDropLocation;
+            // Safely add optional properties by using proper null checks
+            if (locationData) {
+              if (locationData.id) newLocation.id = locationData.id;
+              if (locationData.city) newLocation.city = locationData.city;
+              if (locationData.state) newLocation.state = locationData.state;
+              if (locationData.type) newLocation.type = locationData.type;
+              if (typeof locationData.popularityScore === 'number') {
+                newLocation.popularityScore = locationData.popularityScore;
+              }
+              if (typeof locationData.isPickupLocation === 'boolean') {
+                newLocation.isPickupLocation = locationData.isPickupLocation;
+              }
+              if (typeof locationData.isDropLocation === 'boolean') {
+                newLocation.isDropLocation = locationData.isDropLocation;
+              }
+            }
 
-            // Update the input value
+            // Update internal state first
             setAddress(formattedAddress);
             
             // Call the handler if it exists
@@ -148,30 +157,38 @@ export function LocationInput({
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newAddress = e.target.value;
+    
+    // Always update internal state for controlled input behavior
     setAddress(newAddress);
     
-    // Only update the location through the handler if we have enough characters
-    // This prevents the toLowerCase error during typing empty strings
-    if (handleLocationChange && newAddress.trim() !== '') {
-      // Create a new location object with the updated address while preserving other properties
-      const updatedLocation: Location = {
-        address: newAddress
+    // Only call the location change handler if the address is not empty
+    if (handleLocationChange) {
+      // Create a new location object with just the address for typing
+      const updatedLocation: Location = { 
+        address: newAddress 
       };
       
-      // Only add optional properties if they exist in locationData
+      // Preserve other fields from the existing location if available
       if (locationData) {
         if (locationData.id) updatedLocation.id = locationData.id;
         if (locationData.name) updatedLocation.name = locationData.name;
         if (locationData.city) updatedLocation.city = locationData.city;
         if (locationData.state) updatedLocation.state = locationData.state;
-        if (locationData.lat) updatedLocation.lat = locationData.lat;
-        if (locationData.lng) updatedLocation.lng = locationData.lng;
+        if (typeof locationData.lat === 'number') updatedLocation.lat = locationData.lat;
+        if (typeof locationData.lng === 'number') updatedLocation.lng = locationData.lng;
         if (locationData.type) updatedLocation.type = locationData.type;
-        if (locationData.popularityScore) updatedLocation.popularityScore = locationData.popularityScore;
-        if (locationData.isPickupLocation !== undefined) updatedLocation.isPickupLocation = locationData.isPickupLocation;
-        if (locationData.isDropLocation !== undefined) updatedLocation.isDropLocation = locationData.isDropLocation;
+        if (typeof locationData.popularityScore === 'number') {
+          updatedLocation.popularityScore = locationData.popularityScore;
+        }
+        if (typeof locationData.isPickupLocation === 'boolean') {
+          updatedLocation.isPickupLocation = locationData.isPickupLocation;
+        }
+        if (typeof locationData.isDropLocation === 'boolean') {
+          updatedLocation.isDropLocation = locationData.isDropLocation;
+        }
       }
       
+      // Call the handler with the updated location
       handleLocationChange(updatedLocation);
     }
   };
@@ -188,7 +205,7 @@ export function LocationInput({
         id="location-input"
         placeholder={placeholder}
         className={className}
-        value={address}
+        value={address || ''} // Ensure value is never undefined or null
         onChange={handleChange}
         disabled={disabled || readOnly}
         autoComplete="off" // Prevent browser's default autocomplete
