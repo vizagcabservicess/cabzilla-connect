@@ -278,16 +278,20 @@ export const bookingAPI = {
         throw new Error('Pickup date is required');
       }
       
-      // Safe date handling
+      // Safe date handling - Fixed the type errors by checking for strings first
       let formattedBookingData = {
         ...bookingData,
         pickupDate: typeof bookingData.pickupDate === 'string' 
           ? bookingData.pickupDate 
-          : bookingData.pickupDate.toISOString(),
+          : typeof bookingData.pickupDate.toISOString === 'function' 
+            ? bookingData.pickupDate.toISOString() 
+            : new Date(bookingData.pickupDate).toISOString(),
         returnDate: bookingData.returnDate 
           ? (typeof bookingData.returnDate === 'string'
               ? bookingData.returnDate
-              : bookingData.returnDate.toISOString())
+              : typeof bookingData.returnDate.toISOString === 'function'
+                ? bookingData.returnDate.toISOString()
+                : new Date(bookingData.returnDate).toISOString())
           : null
       };
       
