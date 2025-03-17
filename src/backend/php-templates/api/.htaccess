@@ -14,6 +14,8 @@ RewriteRule ^fares/tours$ fares/tours.php [L]
 RewriteRule ^fares/vehicles$ fares/vehicles.php [L]
 RewriteRule ^admin/fares/update$ admin/fares-update.php [L]
 RewriteRule ^admin/km-price/update$ admin/km-price-update.php [L]
+RewriteRule ^send-receipt$ send-receipt.php [L]
+RewriteRule ^receipt/([0-9]+)$ receipt.php?id=$1 [L]
 
 # Disable caching for API endpoints
 <IfModule mod_headers.c>

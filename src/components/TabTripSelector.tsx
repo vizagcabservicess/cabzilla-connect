@@ -30,6 +30,7 @@ export function TabTripSelector({
     sessionStorage.removeItem('pickupLocation');
     sessionStorage.removeItem('pickupDate');
     sessionStorage.removeItem('returnDate');
+    localStorage.removeItem('fare-cache');
     
     // Force clear local cache variables
     const localKeys = ['fare-', 'discount-', 'cab-', 'location-', 'trip-'];
@@ -42,6 +43,20 @@ export function TabTripSelector({
           if (key.startsWith(prefix)) {
             console.log(`Removing cached item: ${key}`);
             sessionStorage.removeItem(key);
+            break;
+          }
+        }
+      }
+    }
+    
+    // Loop through localStorage also
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key) {
+        for (const prefix of localKeys) {
+          if (key.startsWith(prefix)) {
+            console.log(`Removing cached item from localStorage: ${key}`);
+            localStorage.removeItem(key);
             break;
           }
         }

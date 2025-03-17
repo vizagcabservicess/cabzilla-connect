@@ -261,6 +261,10 @@ export const bookingAPI = {
     return makeApiRequest(async () => {
       console.log('Creating booking with data:', bookingData);
       
+      // Clear local cache to prevent using stale data
+      sessionStorage.removeItem('cabFares');
+      localStorage.removeItem('fare-cache');
+      
       // For local bookings, ensure distance is set based on package
       if (bookingData.tripType === 'local' && (!bookingData.distance || bookingData.distance === 0)) {
         if (bookingData.hourlyPackage === '8hrs-80km') {
@@ -284,7 +288,10 @@ export const bookingAPI = {
 
   async getBooking(id: string): Promise<Booking> {
     return makeApiRequest(async () => {
-      const response = await apiClient.get(`/book/edit/${id}`);
+      // Add cache busting parameter
+      const timestamp = new Date().getTime();
+      const response = await apiClient.get(`/book/edit/${id}?_=${timestamp}`);
+      
       if (response.data.status === 'success') {
         return response.data.data;
       } else {
@@ -295,6 +302,10 @@ export const bookingAPI = {
 
   async updateBooking(id: string, bookingData: any): Promise<any> {
     return makeApiRequest(async () => {
+      // Clear local cache when updating booking
+      sessionStorage.removeItem('cabFares');
+      localStorage.removeItem('fare-cache');
+      
       const response = await apiClient.post(`/book/edit/${id}`, bookingData);
       if (response.data.status === 'success') {
         return response.data;
@@ -348,6 +359,33 @@ export const bookingAPI = {
       }
     });
   },
+  
+  async getReceipt(id: string): Promise<Booking> {
+    return makeApiRequest(async () => {
+      // Add cache busting parameter
+      const timestamp = new Date().getTime();
+      const response = await apiClient.get(`/receipt/${id}?_=${timestamp}`);
+      
+      if (response.data.status === 'success') {
+        return response.data.data;
+      } else {
+        throw new Error(response.data.message || 'Failed to fetch receipt');
+      }
+    });
+  },
+  
+  async sendReceiptEmail(bookingId: string, email?: string): Promise<any> {
+    return makeApiRequest(async () => {
+      const data = { bookingId, email };
+      const response = await apiClient.post('/send-receipt', data);
+      
+      if (response.data.status === 'success') {
+        return response.data;
+      } else {
+        throw new Error(response.data.message || 'Failed to send receipt');
+      }
+    });
+  }
 };
 
 // API service for fare management
@@ -355,13 +393,14 @@ export const fareAPI = {
   async getTourFares(): Promise<any[]> {
     return makeApiRequest(async () => {
       console.log('Fetching tour fares...');
+      // Add timestamp to prevent caching
       const timestamp = new Date().getTime();
       const response = await apiClient.get(`/fares/tours?_=${timestamp}`);
       
-      if (response.data.status === 'success') {
-        return response.data.data;
+      if (response.data) {
+        return response.data;
       } else {
-        throw new Error(response.data.message || 'Failed to fetch tour fares');
+        throw new Error('Failed to fetch tour fares');
       }
     });
   },
@@ -380,13 +419,17 @@ export const fareAPI = {
   async getVehiclePricing(): Promise<any[]> {
     return makeApiRequest(async () => {
       console.log('Fetching vehicle pricing data...');
+      // Clear any cached data first
+      sessionStorage.removeItem('cabFares');
+      localStorage.removeItem('fare-cache');
+      
       const timestamp = new Date().getTime();
       const response = await apiClient.get(`/fares/vehicles?_=${timestamp}`);
       
-      if (response.data.status === 'success') {
-        return response.data.data;
+      if (response.data) {
+        return response.data;
       } else {
-        throw new Error(response.data.message || 'Failed to fetch vehicle pricing data');
+        throw new Error('Failed to fetch vehicle pricing data');
       }
     });
   },
@@ -416,3 +459,4 @@ export const tourFaresAPI = {
     return fareAPI.getTourFares();
   },
 };
+
