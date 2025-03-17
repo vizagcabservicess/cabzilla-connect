@@ -1,154 +1,152 @@
 
 <?php
-// Include database configuration
+// Include the configuration file
 require_once __DIR__ . '/../config.php';
 
-// Allow only GET requests
+// Set headers for CORS
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Content-Type: application/json');
+
+// Handle preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    // For CORS preflight requests
-    header('Access-Control-Allow-Origin: *');
-    header('Access-Control-Allow-Methods: GET, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization');
-    header('Content-Type: application/json');
     http_response_code(200);
     exit;
 }
 
+// Only allow GET requests
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
-    header('Access-Control-Allow-Origin: *');
-    header('Content-Type: application/json');
-    http_response_code(405);
-    echo json_encode(['status' => 'error', 'message' => 'Method not allowed']);
+    sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
     exit;
 }
 
-// Process authentication
+// Check if ID is provided
+if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
+    sendJsonResponse(['status' => 'error', 'message' => 'Invalid or missing booking ID'], 400);
+    exit;
+}
+
+$bookingId = $_GET['id'];
+
+// Log the receipt request
+logError("Receipt request", [
+    'booking_id' => $bookingId,
+    'method' => $_SERVER['REQUEST_METHOD'],
+    'uri' => $_SERVER['REQUEST_URI']
+]);
+
+// Check for authentication
 $headers = getallheaders();
-if (!isset($headers['Authorization']) && !isset($headers['authorization'])) {
-    header('Access-Control-Allow-Origin: *');
-    header('Content-Type: application/json');
-    http_response_code(401);
-    echo json_encode(['status' => 'error', 'message' => 'Authentication required']);
-    exit;
+$token = null;
+
+if (isset($headers['Authorization']) || isset($headers['authorization'])) {
+    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
+    $token = str_replace('Bearer ', '', $authHeader);
 }
 
-$authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
-$token = str_replace('Bearer ', '', $authHeader);
+// Verify token if provided
+$userId = null;
+$isAdmin = false;
 
-$userData = verifyJwtToken($token);
-if (!$userData || !isset($userData['user_id'])) {
-    header('Access-Control-Allow-Origin: *');
-    header('Content-Type: application/json');
-    http_response_code(401);
-    echo json_encode(['status' => 'error', 'message' => 'Invalid or expired token']);
-    exit;
-}
-
-$userId = $userData['user_id'];
-$isAdmin = isset($userData['role']) && $userData['role'] === 'admin';
-
-// Get booking ID from URL
-$bookingId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-if (!$bookingId) {
-    header('Access-Control-Allow-Origin: *');
-    header('Content-Type: application/json');
-    http_response_code(400);
-    echo json_encode(['status' => 'error', 'message' => 'Booking ID is required']);
-    exit;
+if ($token) {
+    $userData = verifyJwtToken($token);
+    
+    if ($userData && isset($userData['user_id'])) {
+        $userId = $userData['user_id'];
+        $isAdmin = isset($userData['role']) && $userData['role'] === 'admin';
+    }
 }
 
 // Connect to database
 $conn = getDbConnection();
 if (!$conn) {
-    header('Access-Control-Allow-Origin: *');
-    header('Content-Type: application/json');
-    http_response_code(500);
-    echo json_encode(['status' => 'error', 'message' => 'Database connection failed']);
+    logError("Database connection failed in receipt.php");
+    sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed'], 500);
     exit;
 }
 
-// Check if user has access to this booking
-$sql = "SELECT * FROM bookings WHERE id = ?";
-if (!$isAdmin) {
-    $sql .= " AND user_id = ?";
+try {
+    // Prepare the SQL query based on user role and authentication
+    if ($isAdmin) {
+        // Admin can view any booking
+        $sql = "SELECT * FROM bookings WHERE id = ?";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("i", $bookingId);
+    } else if ($userId) {
+        // Regular user can only view their own bookings
+        $sql = "SELECT * FROM bookings WHERE id = ? AND user_id = ?";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("ii", $bookingId, $userId);
+    } else {
+        // Allow public access to booking receipts (for sharing)
+        $sql = "SELECT * FROM bookings WHERE id = ?";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("i", $bookingId);
+    }
+    
+    if (!$stmt->execute()) {
+        throw new Exception("Failed to execute query: " . $stmt->error);
+    }
+    
+    $result = $stmt->get_result();
+    $booking = $result->fetch_assoc();
+    
+    if (!$booking) {
+        logError("Booking not found", ['booking_id' => $bookingId]);
+        sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
+        exit;
+    }
+    
+    // Check authorization for non-admin users
+    if ($userId && !$isAdmin && $booking['user_id'] != $userId) {
+        logError("Unauthorized booking access", [
+            'booking_id' => $bookingId,
+            'user_id' => $userId,
+            'booking_user_id' => $booking['user_id']
+        ]);
+        sendJsonResponse(['status' => 'error', 'message' => 'You are not authorized to view this booking'], 403);
+        exit;
+    }
+    
+    // Format the booking data for response
+    $formattedBooking = [
+        'id' => $booking['id'],
+        'userId' => $booking['user_id'],
+        'bookingNumber' => $booking['booking_number'],
+        'pickupLocation' => $booking['pickup_location'],
+        'dropLocation' => $booking['drop_location'],
+        'pickupDate' => $booking['pickup_date'],
+        'returnDate' => $booking['return_date'],
+        'cabType' => $booking['cab_type'],
+        'distance' => floatval($booking['distance']),
+        'tripType' => $booking['trip_type'],
+        'tripMode' => $booking['trip_mode'],
+        'totalAmount' => floatval($booking['total_amount']),
+        'status' => $booking['status'],
+        'passengerName' => $booking['passenger_name'],
+        'passengerPhone' => $booking['passenger_phone'],
+        'passengerEmail' => $booking['passenger_email'],
+        'driverName' => $booking['driver_name'],
+        'driverPhone' => $booking['driver_phone'],
+        'createdAt' => $booking['created_at'],
+        'updatedAt' => $booking['updated_at']
+    ];
+    
+    // Send the response
+    sendJsonResponse([
+        'status' => 'success',
+        'data' => $formattedBooking
+    ]);
+    
+} catch (Exception $e) {
+    logError("Error retrieving booking receipt", [
+        'error' => $e->getMessage(),
+        'booking_id' => $bookingId
+    ]);
+    
+    sendJsonResponse([
+        'status' => 'error',
+        'message' => 'Failed to retrieve booking receipt: ' . $e->getMessage()
+    ], 500);
 }
-
-$stmt = $conn->prepare($sql);
-if (!$stmt) {
-    header('Access-Control-Allow-Origin: *');
-    header('Content-Type: application/json');
-    http_response_code(500);
-    echo json_encode(['status' => 'error', 'message' => 'Database query failed: ' . $conn->error]);
-    exit;
-}
-
-if (!$isAdmin) {
-    $stmt->bind_param("ii", $bookingId, $userId);
-} else {
-    $stmt->bind_param("i", $bookingId);
-}
-
-if (!$stmt->execute()) {
-    header('Access-Control-Allow-Origin: *');
-    header('Content-Type: application/json');
-    http_response_code(500);
-    echo json_encode(['status' => 'error', 'message' => 'Failed to execute query: ' . $stmt->error]);
-    exit;
-}
-
-$result = $stmt->get_result();
-$booking = $result->fetch_assoc();
-
-if (!$booking) {
-    header('Access-Control-Allow-Origin: *');
-    header('Content-Type: application/json');
-    http_response_code(404);
-    echo json_encode(['status' => 'error', 'message' => 'Booking not found or access denied']);
-    exit;
-}
-
-// Format the booking data
-$formattedBooking = [
-    'id' => $booking['id'],
-    'userId' => $booking['user_id'],
-    'bookingNumber' => $booking['booking_number'],
-    'pickupLocation' => $booking['pickup_location'],
-    'dropLocation' => $booking['drop_location'],
-    'pickupDate' => $booking['pickup_date'],
-    'returnDate' => $booking['return_date'],
-    'cabType' => $booking['cab_type'],
-    'distance' => floatval($booking['distance']),
-    'tripType' => $booking['trip_type'],
-    'tripMode' => $booking['trip_mode'],
-    'totalAmount' => floatval($booking['total_amount']),
-    'status' => $booking['status'],
-    'passengerName' => $booking['passenger_name'],
-    'passengerPhone' => $booking['passenger_phone'],
-    'passengerEmail' => $booking['passenger_email'],
-    'driverName' => $booking['driver_name'],
-    'driverPhone' => $booking['driver_phone'],
-    'createdAt' => $booking['created_at'],
-    'updatedAt' => $booking['updated_at']
-];
-
-// Add payment details if they exist
-if (isset($booking['payment_method'])) {
-    $formattedBooking['paymentMethod'] = $booking['payment_method'];
-}
-
-if (isset($booking['payment_status'])) {
-    $formattedBooking['paymentStatus'] = $booking['payment_status'];
-}
-
-if (isset($booking['payment_date'])) {
-    $formattedBooking['paymentDate'] = $booking['payment_date'];
-}
-
-// Send the response
-header('Access-Control-Allow-Origin: *');
-header('Content-Type: application/json');
-echo json_encode([
-    'status' => 'success',
-    'data' => $formattedBooking
-]);
-exit;

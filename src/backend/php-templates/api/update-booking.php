@@ -29,7 +29,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'PUT') {
 logError("update-booking.php request initiated", [
     'method' => $_SERVER['REQUEST_METHOD'],
     'headers' => getallheaders(),
-    'uri' => $_SERVER['REQUEST_URI']
+    'uri' => $_SERVER['REQUEST_URI'],
+    'raw_input' => file_get_contents('php://input')
 ]);
 
 // Ensure user is authenticated
@@ -53,20 +54,24 @@ if (!$userData || !isset($userData['user_id'])) {
 $userId = $userData['user_id'];
 $isAdmin = isset($userData['role']) && $userData['role'] === 'admin';
 
-// Get the booking ID from URL
-$requestUri = $_SERVER['REQUEST_URI'];
-$parts = explode('/', trim($requestUri, '/'));
-$bookingId = end($parts);
-
-// Check if the ID contains any query parameters and remove them
-if (strpos($bookingId, '?') !== false) {
-    $bookingId = substr($bookingId, 0, strpos($bookingId, '?'));
+// Extract booking ID from the URI
+$bookingId = null;
+if (isset($_GET['id'])) {
+    $bookingId = $_GET['id'];
+    logError("Using booking ID from query params", ['id' => $bookingId]);
+} else {
+    // Extract from URL path if not in query params
+    $requestUri = $_SERVER['REQUEST_URI'];
+    $pattern = '/\/update-booking\/([0-9]+)/';
+    if (preg_match($pattern, $requestUri, $matches)) {
+        $bookingId = $matches[1];
+        logError("Extracted booking ID from URI", ['id' => $bookingId, 'uri' => $requestUri]);
+    }
 }
 
-logError("Extracted booking ID", ['id' => $bookingId, 'parts' => $parts, 'uri' => $requestUri]);
-
-if (!is_numeric($bookingId)) {
-    sendJsonResponse(['status' => 'error', 'message' => 'Invalid booking ID format: ' . $bookingId], 400);
+if (!$bookingId || !is_numeric($bookingId)) {
+    logError("Invalid or missing booking ID", ['uri' => $_SERVER['REQUEST_URI'], 'extracted_id' => $bookingId]);
+    sendJsonResponse(['status' => 'error', 'message' => 'Invalid or missing booking ID'], 400);
     exit;
 }
 
@@ -96,38 +101,34 @@ if (!$conn) {
 }
 
 // Check if booking exists and belongs to the user (or if admin)
-$stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
-if (!$stmt) {
-    logError("Prepare statement failed for booking check", ['error' => $conn->error]);
-    sendJsonResponse(['status' => 'error', 'message' => 'Database error: ' . $conn->error], 500);
-    exit;
-}
-
-$stmt->bind_param("i", $bookingId);
-if (!$stmt->execute()) {
-    logError("Execute statement failed for booking check", ['error' => $stmt->error]);
-    sendJsonResponse(['status' => 'error', 'message' => 'Database error: ' . $stmt->error], 500);
-    exit;
-}
-
-$result = $stmt->get_result();
-$booking = $result->fetch_assoc();
-
-if (!$booking) {
-    sendJsonResponse(['status' => 'error', 'message' => 'Booking not found with ID: ' . $bookingId], 404);
-    exit;
-}
-
-// Check if this user is authorized to update this booking
-if (!$isAdmin && $booking['user_id'] != $userId) {
-    sendJsonResponse(['status' => 'error', 'message' => 'You are not authorized to update this booking'], 403);
-    exit;
-}
-
-// Begin transaction for data consistency
-$conn->begin_transaction();
-
 try {
+    $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
+    if (!$stmt) {
+        throw new Exception("Prepare statement failed: " . $conn->error);
+    }
+
+    $stmt->bind_param("i", $bookingId);
+    if (!$stmt->execute()) {
+        throw new Exception("Execute statement failed: " . $stmt->error);
+    }
+
+    $result = $stmt->get_result();
+    $booking = $result->fetch_assoc();
+
+    if (!$booking) {
+        sendJsonResponse(['status' => 'error', 'message' => 'Booking not found with ID: ' . $bookingId], 404);
+        exit;
+    }
+
+    // Check if this user is authorized to update this booking
+    if (!$isAdmin && $booking['user_id'] != $userId) {
+        sendJsonResponse(['status' => 'error', 'message' => 'You are not authorized to update this booking'], 403);
+        exit;
+    }
+
+    // Begin transaction for data consistency
+    $conn->begin_transaction();
+
     // Prepare update fields
     $updateFields = [];
     $types = "";
@@ -207,13 +208,19 @@ try {
     
     // Bind parameters dynamically
     if (!empty($params)) {
-        $paramRefs = [];
+        // Create a new array of references
+        $ref_params = [];
+        
+        // First element should be the types string
+        $ref_params[] = &$types;
+        
+        // Add the rest of the parameters by reference
         foreach ($params as $key => $value) {
-            $paramRefs[] = &$params[$key];
+            $ref_params[] = &$params[$key];
         }
         
-        array_unshift($paramRefs, $types);
-        call_user_func_array([$stmt, 'bind_param'], $paramRefs);
+        // Call bind_param with our reference array
+        call_user_func_array([$stmt, 'bind_param'], $ref_params);
     }
     
     if (!$stmt->execute()) {
@@ -222,13 +229,6 @@ try {
     
     $affectedRows = $stmt->affected_rows;
     logError("Update affected rows", ['affected_rows' => $affectedRows]);
-    
-    // Log the update
-    logError("Booking updated successfully", [
-        'booking_id' => $bookingId,
-        'fields_updated' => implode(", ", array_keys($allowedFields)),
-        'updated_by' => $userId
-    ]);
     
     // Get the updated booking
     $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
@@ -284,12 +284,15 @@ try {
     
 } catch (Exception $e) {
     // Roll back the transaction on error
-    $conn->rollback();
+    if (isset($conn) && $conn->connect_errno === 0) {
+        $conn->rollback();
+    }
     
     logError("Booking update failed", [
         'error' => $e->getMessage(),
         'booking_id' => $bookingId,
-        'data' => $data
+        'data' => $data,
+        'trace' => $e->getTraceAsString()
     ]);
     
     sendJsonResponse([
