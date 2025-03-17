@@ -48,12 +48,28 @@ export default function BookingEditPage() {
         const data = await bookingAPI.getBookingById(bookingId);
         setBooking(data);
         
-        // Initialize form fields
-        setPickupLocation({ address: data.pickupLocation || '' });
-        if (data.dropLocation) {
-          setDropLocation({ address: data.dropLocation || '' });
+        // Initialize form fields with explicit location objects
+        if (data.pickupLocation) {
+          setPickupLocation({ 
+            address: data.pickupLocation,
+            name: data.pickupLocation
+          });
         }
-        setPickupDate(new Date(data.pickupDate));
+        
+        if (data.dropLocation) {
+          setDropLocation({ 
+            address: data.dropLocation,
+            name: data.dropLocation 
+          });
+        }
+        
+        if (data.pickupDate) {
+          setPickupDate(new Date(data.pickupDate));
+        }
+        
+        console.log("Loaded booking data:", data);
+        console.log("Initialized pickup location:", { address: data.pickupLocation });
+        console.log("Initialized drop location:", { address: data.dropLocation });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Failed to load booking details';
         setError(errorMessage);
@@ -74,6 +90,12 @@ export default function BookingEditPage() {
     if (!booking || !bookingId) return;
     
     setIsSubmitting(true);
+    console.log("Submitting updated booking with:", {
+      contactDetails,
+      pickupLocation,
+      dropLocation,
+      pickupDate
+    });
     
     try {
       // Prepare updated booking data
@@ -81,13 +103,16 @@ export default function BookingEditPage() {
         passengerName: contactDetails.name,
         passengerPhone: contactDetails.phone,
         passengerEmail: contactDetails.email,
-        pickupLocation: pickupLocation.address || '',
-        dropLocation: dropLocation.address || '',
-        pickupDate: pickupDate ? pickupDate.toISOString() : undefined // Convert to ISO string
+        pickupLocation: pickupLocation?.address || '',
+        dropLocation: dropLocation?.address || '',
+        pickupDate: pickupDate ? pickupDate.toISOString() : undefined
       };
+      
+      console.log("Sending update with data:", updatedData);
       
       // Update booking in API
       const result = await bookingAPI.updateBooking(bookingId, updatedData);
+      console.log("Update result:", result);
       
       toast({
         title: "Booking Updated",
@@ -97,6 +122,7 @@ export default function BookingEditPage() {
       // Redirect to dashboard
       navigate('/dashboard');
     } catch (error) {
+      console.error("Error updating booking:", error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to update booking';
       toast({
         title: "Update Failed",
@@ -188,7 +214,10 @@ export default function BookingEditPage() {
                 <p className="text-sm font-medium mb-1">Pickup Location</p>
                 <LocationInput
                   location={pickupLocation}
-                  onLocationChange={(location: Location) => setPickupLocation(location)}
+                  onLocationChange={(location: Location) => {
+                    console.log("Pickup location changed to:", location);
+                    setPickupLocation(location);
+                  }}
                   placeholder="Enter pickup location"
                   className="w-full"
                 />
@@ -200,7 +229,10 @@ export default function BookingEditPage() {
                     <p className="text-sm font-medium mb-1">Drop Location</p>
                     <LocationInput
                       location={dropLocation}
-                      onLocationChange={(location: Location) => setDropLocation(location)}
+                      onLocationChange={(location: Location) => {
+                        console.log("Drop location changed to:", location);
+                        setDropLocation(location);
+                      }}
                       placeholder="Enter drop location"
                       className="w-full"
                     />

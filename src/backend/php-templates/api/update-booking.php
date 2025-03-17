@@ -136,9 +136,12 @@ try {
         ]);
     }
     
+    // Log the data before processing
+    logError("Processing update with data", $data);
+    
     // Build the update statement dynamically
     foreach ($allowedFields as $dbField => $requestField) {
-        if (isset($data[$requestField]) && $data[$requestField] !== null) {
+        if (isset($data[$requestField])) {
             $updateFields[] = "$dbField = ?";
             
             // Determine the type for bind_param
@@ -148,13 +151,14 @@ try {
                 $types .= "s"; // string
             }
             
-            // Make sure empty strings don't become null
+            // Make sure empty strings are properly handled
             $value = $data[$requestField];
-            if (is_string($value) && empty($value)) {
+            if ($value === null) {
                 $value = '';
             }
             
             $params[] = $value;
+            logError("Adding field to update", ['field' => $dbField, 'value' => $value]);
         }
     }
     
@@ -173,6 +177,8 @@ try {
     $types .= "i"; // For the booking ID
     $params[] = $bookingId;
     
+    logError("Update SQL", ['sql' => $sql, 'types' => $types, 'params' => $params]);
+    
     $stmt = $conn->prepare($sql);
     if (!$stmt) {
         throw new Exception("Prepare statement failed: " . $conn->error);
@@ -184,6 +190,9 @@ try {
     if (!$stmt->execute()) {
         throw new Exception("Execute statement failed: " . $stmt->error);
     }
+    
+    $affectedRows = $stmt->affected_rows;
+    logError("Update affected rows", ['affected_rows' => $affectedRows]);
     
     // Log the update
     logError("Booking updated successfully", [

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,8 +40,13 @@ export function EditableContactDetailsForm({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const { toast } = useToast();
 
+  // Update form values when initialData changes
   useEffect(() => {
-    if (!contactData) {
+    if (contactData) {
+      setName(contactData.name || '');
+      setEmail(contactData.email || '');
+      setPhone(contactData.phone || '');
+    } else {
       const savedDetails = localStorage.getItem('contactDetails');
       if (savedDetails) {
         try {
@@ -107,6 +113,11 @@ export function EditableContactDetailsForm({
     const contactDetails = { name, email, phone };
     localStorage.setItem('contactDetails', JSON.stringify(contactDetails));
 
+    if (!isReadOnly) {
+      console.log("Submitting contact details:", contactDetails);
+      onSubmit(contactDetails);
+    }
+
     setIsEditing(false);
     setHasUnsavedChanges(false);
     
@@ -121,15 +132,21 @@ export function EditableContactDetailsForm({
 
     if (!validateContactDetails()) return;
 
-    setShowPaymentGateway(true);
-  };
+    if (isReadOnly) {
+      setIsEditing(false);
+      return;
+    }
 
-  const handlePaymentComplete = () => {
-    const contactDetails = { name, email, phone };
-    
-    localStorage.setItem('contactDetails', JSON.stringify(contactDetails));
-    
-    onSubmit(contactDetails);
+    // For existing bookings being edited
+    if (isEditing && contactData) {
+      console.log("Submitting updated contact details:", { name, email, phone });
+      onSubmit({ name, email, phone });
+      setIsEditing(false);
+      return;
+    }
+
+    // For new bookings
+    setShowPaymentGateway(true);
   };
 
   const handleCancelEdit = () => {
@@ -154,13 +171,19 @@ export function EditableContactDetailsForm({
     setHasUnsavedChanges(false);
   };
 
+  const handlePaymentComplete = () => {
+    const contactDetails = { name, email, phone };
+    localStorage.setItem('contactDetails', JSON.stringify(contactDetails));
+    onSubmit(contactDetails);
+  };
+
   return (
     <div className="space-y-6">
       {!showPaymentGateway ? (
         <div className="bg-white rounded-lg shadow-sm border p-6">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-xl font-semibold">Contact Information</h3>
-            {!isEditing && (
+            {!isEditing && !isReadOnly && (
               <Button 
                 variant="outline" 
                 size="sm" 
@@ -183,7 +206,7 @@ export function EditableContactDetailsForm({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                disabled={!isEditing}
+                disabled={!isEditing || isReadOnly}
                 className={!isEditing ? "bg-gray-50" : ""}
               />
             </div>
@@ -196,7 +219,7 @@ export function EditableContactDetailsForm({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                disabled={!isEditing}
+                disabled={!isEditing || isReadOnly}
                 className={!isEditing ? "bg-gray-50" : ""}
               />
             </div>
@@ -209,7 +232,7 @@ export function EditableContactDetailsForm({
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 required
-                disabled={!isEditing}
+                disabled={!isEditing || isReadOnly}
                 className={!isEditing ? "bg-gray-50" : ""}
               />
             </div>
@@ -229,7 +252,7 @@ export function EditableContactDetailsForm({
                   type="button" 
                   onClick={handleSaveDetails}
                   className="flex items-center gap-1"
-                  disabled={!hasUnsavedChanges}
+                  disabled={!hasUnsavedChanges || isSaving}
                 >
                   <Save size={16} />
                   Save Changes
@@ -241,7 +264,11 @@ export function EditableContactDetailsForm({
                   Total: 
                   <span className="font-semibold ml-1">₹{totalPrice.toLocaleString('en-IN')}</span>
                 </div>
-                <Button type="submit">Proceed to Payment</Button>
+                {!isReadOnly && (
+                  <Button type="submit" disabled={isSaving}>
+                    {isSaving ? "Saving..." : "Proceed to Payment"}
+                  </Button>
+                )}
               </div>
             )}
           </form>

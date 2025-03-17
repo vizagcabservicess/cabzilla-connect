@@ -39,6 +39,9 @@ export function GuestDetailsForm({
     try {
       if (bookingId && isEditMode) {
         // If editing an existing booking
+        console.log("Updating booking with ID:", bookingId);
+        console.log("Update data:", { ...details, ...initialData });
+        
         const updatedData = {
           passengerName: details.name,
           passengerPhone: details.phone,
@@ -46,7 +49,10 @@ export function GuestDetailsForm({
           ...initialData
         };
         
+        console.log("Sending update request with data:", updatedData);
+        
         const response = await bookingAPI.updateBooking(bookingId, updatedData);
+        console.log("Update response:", response);
         
         toast({
           title: "Booking Updated",
@@ -60,6 +66,7 @@ export function GuestDetailsForm({
         onSubmit(details);
       }
     } catch (error) {
+      console.error("Error updating booking:", error);
       toast({
         title: "Operation Failed",
         description: error instanceof Error ? error.message : "Something went wrong",

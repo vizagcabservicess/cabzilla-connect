@@ -3,7 +3,6 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Input } from "@/components/ui/input";
 import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
 import { Location } from '@/types/api';
-import { useMemo } from 'react';
 import { debounce } from '@/lib/utils';
 
 interface LocationInputProps {
@@ -45,9 +44,17 @@ export function LocationInput({
   // Reference to the autocomplete instance
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  
+  // Flag to track if we should update address from props
+  const ignoreNextPropsUpdate = useRef(false);
 
-  // Update the address when the location data changes
+  // Update the address when the location data changes (only if not being edited)
   useEffect(() => {
+    if (ignoreNextPropsUpdate.current) {
+      ignoreNextPropsUpdate.current = false;
+      return;
+    }
+
     if (locationData) {
       if (typeof locationData.address === 'string' && locationData.address.trim() !== '') {
         setAddress(locationData.address);
@@ -61,51 +68,54 @@ export function LocationInput({
     }
   }, [locationData]);
 
-  // Create a debouncedHandleChange function
-  const debouncedHandleChange = useMemo(
-    () =>
-      debounce((newAddress: string) => {
-        if (handleLocationChange) {
-          // Create a new location object with just the address for typing
-          const updatedLocation: Location = { address: newAddress };
-          
-          // Preserve other fields from the existing location if available
-          if (locationData) {
-            if (locationData.id) updatedLocation.id = locationData.id;
-            if (locationData.name) updatedLocation.name = locationData.name;
-            if (locationData.city) updatedLocation.city = locationData.city;
-            if (locationData.state) updatedLocation.state = locationData.state;
-            if (typeof locationData.lat === 'number' && !isNaN(locationData.lat)) updatedLocation.lat = locationData.lat;
-            if (typeof locationData.lng === 'number' && !isNaN(locationData.lng)) updatedLocation.lng = locationData.lng;
-            if (locationData.type) updatedLocation.type = locationData.type;
-            if (typeof locationData.popularityScore === 'number' && !isNaN(locationData.popularityScore)) {
-              updatedLocation.popularityScore = locationData.popularityScore;
-            }
-            if (typeof locationData.isPickupLocation === 'boolean') {
-              updatedLocation.isPickupLocation = locationData.isPickupLocation;
-            }
-            if (typeof locationData.isDropLocation === 'boolean') {
-              updatedLocation.isDropLocation = locationData.isDropLocation;
-            }
-          }
-          
-          // Call the handler with the updated location
-          handleLocationChange(updatedLocation);
-        }
-      }, 300),
-    [handleLocationChange, locationData]
+  // Create a debounced function to update the parent component
+  const debouncedUpdateParent = useCallback(
+    debounce((newLocation: Location) => {
+      console.log('Debounced update parent with:', newLocation);
+      if (handleLocationChange) {
+        handleLocationChange(newLocation);
+      }
+    }, 300),
+    [handleLocationChange]
   );
 
   // Handle input change immediately for UI responsiveness
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const newAddress = e.target.value || '';
+    const newAddress = e.target.value;
+    console.log('Input changed to:', newAddress);
     
     // Always update internal state for controlled input behavior
     setAddress(newAddress);
     
+    // Mark that we want to ignore the next props update
+    ignoreNextPropsUpdate.current = true;
+    
+    // Create a new location object with just the address for typing
+    const updatedLocation: Location = { address: newAddress };
+    
+    // Preserve other fields from the existing location if available
+    if (locationData) {
+      if (locationData.id) updatedLocation.id = locationData.id;
+      if (locationData.name) updatedLocation.name = locationData.name;
+      if (locationData.city) updatedLocation.city = locationData.city;
+      if (locationData.state) updatedLocation.state = locationData.state;
+      if (typeof locationData.lat === 'number' && !isNaN(locationData.lat)) updatedLocation.lat = locationData.lat;
+      if (typeof locationData.lng === 'number' && !isNaN(locationData.lng)) updatedLocation.lng = locationData.lng;
+      if (locationData.type) updatedLocation.type = locationData.type;
+      if (typeof locationData.popularityScore === 'number' && !isNaN(locationData.popularityScore)) {
+        updatedLocation.popularityScore = locationData.popularityScore;
+      }
+      if (typeof locationData.isPickupLocation === 'boolean') {
+        updatedLocation.isPickupLocation = locationData.isPickupLocation;
+      }
+      if (typeof locationData.isDropLocation === 'boolean') {
+        updatedLocation.isDropLocation = locationData.isDropLocation;
+      }
+    }
+    
     // Use the debounced function for the actual API calls
-    debouncedHandleChange(newAddress);
-  }, [debouncedHandleChange]);
+    debouncedUpdateParent(updatedLocation);
+  }, [debouncedUpdateParent, locationData]);
 
   // Setup and teardown of Google Maps autocomplete
   useEffect(() => {
@@ -185,11 +195,15 @@ export function LocationInput({
               }
             }
 
+            // Mark that we want to ignore the next props update
+            ignoreNextPropsUpdate.current = true;
+            
             // Update internal state first with the formatted address
             setAddress(formattedAddress);
             
-            // Call the handler if it exists
+            // Call the handler if it exists immediately (no debounce for selections)
             if (handleLocationChange) {
+              console.log('Place selected, updating with:', newLocation);
               handleLocationChange(newLocation);
             }
           } catch (error) {
