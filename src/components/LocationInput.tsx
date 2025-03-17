@@ -59,7 +59,7 @@ export function LocationInput({
       };
       
       // Only apply country restriction for India if specified
-      if (isAirportTransfer !== undefined) {
+      if (isAirportTransfer) {
         options.componentRestrictions = { country: 'in' };
       }
 
@@ -68,15 +68,15 @@ export function LocationInput({
       autocomplete.addListener('place_changed', () => {
         const place = autocomplete.getPlace();
 
-        if (!place.geometry) {
+        if (!place || !place.geometry) {
           console.log("Autocomplete's returned place contains no geometry");
           return;
         }
 
         const newLocation: Location = {
-          address: place.formatted_address || address,
-          lat: place.geometry.location.lat(),
-          lng: place.geometry.location.lng(),
+          address: place.formatted_address || address || '',
+          lat: place.geometry.location?.lat() || 0,
+          lng: place.geometry.location?.lng() || 0,
           name: place.name || place.formatted_address || '',
           // Retain other properties if they exist
           ...(locationData.id && { id: locationData.id }),
@@ -86,7 +86,7 @@ export function LocationInput({
           ...(locationData.popularityScore && { popularityScore: locationData.popularityScore }),
         };
 
-        setAddress(place.formatted_address || address);
+        setAddress(place.formatted_address || address || '');
         if (handleLocationChange) {
           handleLocationChange(newLocation);
         }
@@ -94,7 +94,11 @@ export function LocationInput({
     };
 
     if (google && google.maps && google.maps.places) {
-      initAutocomplete();
+      try {
+        initAutocomplete();
+      } catch (error) {
+        console.error("Error initializing autocomplete:", error);
+      }
     }
 
     return () => {
@@ -106,7 +110,7 @@ export function LocationInput({
   }, [google, handleLocationChange, address, disabled, readOnly, locationData, isAirportTransfer]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newAddress = e.target.value;
+    const newAddress = e.target.value || '';
     setAddress(newAddress);
     if (handleLocationChange) {
       // Create a new location object with the updated address while preserving other properties
@@ -130,7 +134,7 @@ export function LocationInput({
         id="location-input"
         placeholder={placeholder}
         className={className}
-        value={address}
+        value={address || ''}
         onChange={handleChange}
         disabled={disabled || readOnly}
       />
