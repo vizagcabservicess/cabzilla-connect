@@ -8,12 +8,13 @@ import { Location as LocationDataType } from '@/lib/locationData';
 export function convertToApiLocation(location: LocationDataType | ApiLocation | null): ApiLocation | undefined {
   if (!location) return undefined;
   
-  // Ensure we have an address property even if it's coming from locationData.ts
-  const address = 'address' in location ? location.address : (location.name || '');
-  
+  // Create a new object that meets the ApiLocation interface requirements
   return {
     id: location.id,
-    address: typeof address === 'string' ? address : '',
+    // Ensure we have a valid address string
+    address: typeof location.address === 'string' 
+      ? location.address 
+      : (location.name || ''),
     name: location.name || '',
     lat: location.lat,
     lng: location.lng,
@@ -35,18 +36,16 @@ export function createLocationChangeHandler(
   setLocationState: React.Dispatch<React.SetStateAction<LocationDataType | null>> | 
                     React.Dispatch<React.SetStateAction<ApiLocation | null>>
 ) {
-  return (location: ApiLocation) => {
+  return (location: ApiLocation | LocationDataType) => {
     console.log('Location change handler called with:', location);
     
-    // Ensure we always have a valid address
-    if (!location.address && location.name) {
-      location.address = location.name;
-    } else if (!location.address) {
-      location.address = '';
-    }
+    // Make sure we have a valid address
+    const address = typeof location.address === 'string' 
+      ? location.address 
+      : (location.name || '');
     
-    // Convert to the format expected by LocationDataType if needed
-    const normalizedLocation: LocationDataType = {
+    // Create a normalized location object that has all required fields
+    const normalizedLocation = {
       id: location.id || '',
       name: location.name || '',
       city: location.city || '',
@@ -57,13 +56,12 @@ export function createLocationChangeHandler(
       popularityScore: location.popularityScore || 0,
       isPickupLocation: location.isPickupLocation,
       isDropLocation: location.isDropLocation,
-      // Add the address property from the API location
-      address: location.address
+      // Always include the address property
+      address: address
     };
     
     // Set the state with the updated location
-    // We use any here to handle the type mismatch - TypeScript doesn't recognize
-    // that both dispatch functions can handle this normalized location
+    // Use type assertion to handle the type mismatch
     (setLocationState as any)(normalizedLocation);
   };
 }

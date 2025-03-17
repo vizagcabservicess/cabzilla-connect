@@ -46,6 +46,7 @@ export function EditableContactDetailsForm({
       setName(contactData.name || '');
       setEmail(contactData.email || '');
       setPhone(contactData.phone || '');
+      setHasUnsavedChanges(false);
     } else {
       const savedDetails = localStorage.getItem('contactDetails');
       if (savedDetails) {
@@ -107,18 +108,24 @@ export function EditableContactDetailsForm({
     return true;
   };
 
-  const handleSaveDetails = () => {
+  const handleSaveDetails = (event: React.MouseEvent) => {
+    event.preventDefault(); // Stop form submission
+    
     if (!validateContactDetails()) return;
-
+    
     const contactDetails = { name, email, phone };
+    
+    // For updating existing bookings
+    console.log("Submitting updated contact details:", contactDetails);
+    onSubmit(contactDetails);
+    
+    // Save to localStorage for future use
     localStorage.setItem('contactDetails', JSON.stringify(contactDetails));
-
+    
     if (!isReadOnly) {
-      console.log("Submitting contact details:", contactDetails);
-      onSubmit(contactDetails);
+      setIsEditing(false);
     }
-
-    setIsEditing(false);
+    
     setHasUnsavedChanges(false);
     
     toast({

@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { LoginRequest, SignupRequest, User, BookingRequest, Booking, 
   FareUpdateRequest, VehiclePricingUpdateRequest, TourFare, VehiclePricing,
@@ -184,6 +183,7 @@ export const bookingAPI: {
   
   async getBookingById(bookingId: string): Promise<Booking> {
     try {
+      console.log(`Fetching booking details for ID: ${bookingId}`);
       const response = await axiosInstance.get(`/user/booking/${bookingId}`);
       
       if (response.data.status === 'success') {
@@ -202,10 +202,40 @@ export const bookingAPI: {
   
   async updateBooking(bookingId: string, bookingData: Partial<Booking>): Promise<Booking> {
     try {
-      // Convert date objects to ISO strings for the API
-      const processedData = { ...bookingData };
+      console.log(`Updating booking ${bookingId} with data:`, bookingData);
       
-      // For type safety, we no longer need type conversion checks since we're handling this in BookingEditPage
+      // Convert complex objects to strings for the API
+      const processedData: Record<string, any> = {};
+      
+      // Process each field
+      for (const [key, value] of Object.entries(bookingData)) {
+        if (key === 'pickupLocation' || key === 'dropLocation') {
+          // Handle location objects
+          if (typeof value === 'object' && value !== null) {
+            // Use address property if available
+            if ('address' in value && typeof value.address === 'string') {
+              processedData[key] = value.address;
+            } else if ('name' in value && typeof value.name === 'string') {
+              processedData[key] = value.name;
+            } else {
+              processedData[key] = String(value);
+            }
+          } else {
+            processedData[key] = value;
+          }
+        } else if (key === 'pickupDate' || key === 'returnDate') {
+          // Handle date objects
+          if (value instanceof Date) {
+            processedData[key] = value.toISOString();
+          } else {
+            processedData[key] = value;
+          }
+        } else {
+          processedData[key] = value;
+        }
+      }
+      
+      console.log("Processed data for API:", processedData);
       
       const response = await axiosInstance.put(`/update-booking/${bookingId}`, processedData);
       
@@ -216,8 +246,11 @@ export const bookingAPI: {
       }
     } catch (error) {
       console.error('Error updating booking:', error);
-      if (axios.isAxiosError(error) && error.response) {
-        throw new Error(error.response.data.message || 'Failed to update booking');
+      if (axios.isAxiosError(error)) {
+        console.error('Response data:', error.response?.data);
+        if (error.response?.data?.message) {
+          throw new Error(error.response.data.message);
+        }
       }
       throw new Error('Network error when updating booking');
     }

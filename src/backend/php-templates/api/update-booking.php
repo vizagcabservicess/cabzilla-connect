@@ -28,7 +28,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'PUT') {
 // Log request data for debugging
 logError("update-booking.php request initiated", [
     'method' => $_SERVER['REQUEST_METHOD'],
-    'headers' => getallheaders()
+    'headers' => getallheaders(),
+    'uri' => $_SERVER['REQUEST_URI']
 ]);
 
 // Ensure user is authenticated
@@ -57,8 +58,15 @@ $requestUri = $_SERVER['REQUEST_URI'];
 $parts = explode('/', trim($requestUri, '/'));
 $bookingId = end($parts);
 
+// Check if the ID contains any query parameters and remove them
+if (strpos($bookingId, '?') !== false) {
+    $bookingId = substr($bookingId, 0, strpos($bookingId, '?'));
+}
+
+logError("Extracted booking ID", ['id' => $bookingId, 'parts' => $parts, 'uri' => $requestUri]);
+
 if (!is_numeric($bookingId)) {
-    sendJsonResponse(['status' => 'error', 'message' => 'Invalid booking ID'], 400);
+    sendJsonResponse(['status' => 'error', 'message' => 'Invalid booking ID: ' . $bookingId], 400);
     exit;
 }
 
@@ -78,14 +86,14 @@ if (!$conn) {
 $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
 if (!$stmt) {
     logError("Prepare statement failed for booking check", ['error' => $conn->error]);
-    sendJsonResponse(['status' => 'error', 'message' => 'Database error'], 500);
+    sendJsonResponse(['status' => 'error', 'message' => 'Database error: ' . $conn->error], 500);
     exit;
 }
 
 $stmt->bind_param("i", $bookingId);
 if (!$stmt->execute()) {
     logError("Execute statement failed for booking check", ['error' => $stmt->error]);
-    sendJsonResponse(['status' => 'error', 'message' => 'Database error'], 500);
+    sendJsonResponse(['status' => 'error', 'message' => 'Database error: ' . $stmt->error], 500);
     exit;
 }
 
@@ -93,7 +101,7 @@ $result = $stmt->get_result();
 $booking = $result->fetch_assoc();
 
 if (!$booking) {
-    sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
+    sendJsonResponse(['status' => 'error', 'message' => 'Booking not found with ID: ' . $bookingId], 404);
     exit;
 }
 
@@ -141,7 +149,7 @@ try {
     
     // Build the update statement dynamically
     foreach ($allowedFields as $dbField => $requestField) {
-        if (isset($data[$requestField])) {
+        if (array_key_exists($requestField, $data)) {
             $updateFields[] = "$dbField = ?";
             
             // Determine the type for bind_param
@@ -151,10 +159,10 @@ try {
                 $types .= "s"; // string
             }
             
-            // Make sure empty strings are properly handled
+            // Handle null values and empty strings properly
             $value = $data[$requestField];
-            if ($value === null) {
-                $value = '';
+            if ($value === null || $value === '') {
+                $value = null;
             }
             
             $params[] = $value;
@@ -185,7 +193,9 @@ try {
     }
     
     // Bind parameters dynamically
-    $stmt->bind_param($types, ...$params);
+    if (!empty($params)) {
+        $stmt->bind_param($types, ...$params);
+    }
     
     if (!$stmt->execute()) {
         throw new Exception("Execute statement failed: " . $stmt->error);

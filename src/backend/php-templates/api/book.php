@@ -40,6 +40,25 @@ $requiredFields = [
     'passengerName', 'passengerPhone', 'passengerEmail'
 ];
 
+// Handle complex object structures for locations
+if (isset($data['pickupLocation']) && is_array($data['pickupLocation'])) {
+    // Extract the address from the location object
+    if (isset($data['pickupLocation']['address'])) {
+        $data['pickupLocation'] = $data['pickupLocation']['address'];
+    } elseif (isset($data['pickupLocation']['name'])) {
+        $data['pickupLocation'] = $data['pickupLocation']['name'];
+    }
+}
+
+if (isset($data['dropLocation']) && is_array($data['dropLocation'])) {
+    // Extract the address from the location object
+    if (isset($data['dropLocation']['address'])) {
+        $data['dropLocation'] = $data['dropLocation']['address'];
+    } elseif (isset($data['dropLocation']['name'])) {
+        $data['dropLocation'] = $data['dropLocation']['name'];
+    }
+}
+
 // For local trips, don't require distance or dropLocation but set a default distance based on hourly package
 if (isset($data['tripType']) && $data['tripType'] === 'local') {
     // Set default distance based on hourly package if missing

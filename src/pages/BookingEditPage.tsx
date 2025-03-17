@@ -51,15 +51,15 @@ export default function BookingEditPage() {
         // Initialize form fields with explicit location objects
         if (data.pickupLocation) {
           setPickupLocation({ 
-            address: data.pickupLocation,
-            name: data.pickupLocation
+            address: typeof data.pickupLocation === 'string' ? data.pickupLocation : '',
+            name: typeof data.pickupLocation === 'string' ? data.pickupLocation : ''
           });
         }
         
         if (data.dropLocation) {
           setDropLocation({ 
-            address: data.dropLocation,
-            name: data.dropLocation 
+            address: typeof data.dropLocation === 'string' ? data.dropLocation : '',
+            name: typeof data.dropLocation === 'string' ? data.dropLocation : ''
           });
         }
         

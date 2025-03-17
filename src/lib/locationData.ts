@@ -1,3 +1,4 @@
+
 export interface Location {
   id: string;
   name: string;
@@ -9,7 +10,7 @@ export interface Location {
   popularityScore: number;
   isPickupLocation?: boolean;
   isDropLocation?: boolean;
-  address?: string; // Added address as optional property to make it compatible with api.Location
+  address: string; // Changed from optional to required to match with types/api.Location
 }
 
 export const vizagLocations: Location[] = [

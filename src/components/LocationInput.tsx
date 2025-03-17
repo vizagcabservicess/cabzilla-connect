@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Input } from "@/components/ui/input";
 import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
@@ -46,12 +45,20 @@ export function LocationInput({
   const inputRef = useRef<HTMLInputElement>(null);
   
   // Flag to track if we should update address from props
-  const ignoreNextPropsUpdate = useRef(false);
+  const skipNextPropsUpdate = useRef(false);
+  const isInternalUpdate = useRef(false);
 
   // Update the address when the location data changes (only if not being edited)
   useEffect(() => {
-    if (ignoreNextPropsUpdate.current) {
-      ignoreNextPropsUpdate.current = false;
+    // Skip this update if we just sent data to the parent
+    if (skipNextPropsUpdate.current) {
+      skipNextPropsUpdate.current = false;
+      return;
+    }
+
+    // Don't update if this is from internal state changes (typing)
+    if (isInternalUpdate.current) {
+      isInternalUpdate.current = false;
       return;
     }
 
@@ -72,6 +79,7 @@ export function LocationInput({
   const debouncedUpdateParent = useCallback(
     debounce((newLocation: Location) => {
       console.log('Debounced update parent with:', newLocation);
+      skipNextPropsUpdate.current = true;
       if (handleLocationChange) {
         handleLocationChange(newLocation);
       }
@@ -87,33 +95,19 @@ export function LocationInput({
     // Always update internal state for controlled input behavior
     setAddress(newAddress);
     
-    // Mark that we want to ignore the next props update
-    ignoreNextPropsUpdate.current = true;
+    // Mark that we're doing an internal update to prevent circular updates
+    isInternalUpdate.current = true;
     
     // Create a new location object with just the address for typing
-    const updatedLocation: Location = { address: newAddress };
+    const updatedLocation: Location = { 
+      address: newAddress,
+      // Keep all existing location data, just update the address
+      ...(locationData || {}),
+      // Make sure address is set
+      address: newAddress
+    };
     
-    // Preserve other fields from the existing location if available
-    if (locationData) {
-      if (locationData.id) updatedLocation.id = locationData.id;
-      if (locationData.name) updatedLocation.name = locationData.name;
-      if (locationData.city) updatedLocation.city = locationData.city;
-      if (locationData.state) updatedLocation.state = locationData.state;
-      if (typeof locationData.lat === 'number' && !isNaN(locationData.lat)) updatedLocation.lat = locationData.lat;
-      if (typeof locationData.lng === 'number' && !isNaN(locationData.lng)) updatedLocation.lng = locationData.lng;
-      if (locationData.type) updatedLocation.type = locationData.type;
-      if (typeof locationData.popularityScore === 'number' && !isNaN(locationData.popularityScore)) {
-        updatedLocation.popularityScore = locationData.popularityScore;
-      }
-      if (typeof locationData.isPickupLocation === 'boolean') {
-        updatedLocation.isPickupLocation = locationData.isPickupLocation;
-      }
-      if (typeof locationData.isDropLocation === 'boolean') {
-        updatedLocation.isDropLocation = locationData.isDropLocation;
-      }
-    }
-    
-    // Use the debounced function for the actual API calls
+    // Use the debounced function for the parent component update
     debouncedUpdateParent(updatedLocation);
   }, [debouncedUpdateParent, locationData]);
 
@@ -170,36 +164,26 @@ export function LocationInput({
             // Get formatted address safely with fallback
             const formattedAddress = place.formatted_address || place.name || '';
             
+            // Keep current address value if no formatted address is available
+            if (!formattedAddress && address) {
+              console.log("No formatted address from place, keeping current:", address);
+              return;
+            }
+            
+            // Update internal state first with the formatted address
+            setAddress(formattedAddress);
+            
             // Use safe defaults for all values
             const newLocation: Location = {
+              ...locationData, // Keep existing location data
               address: formattedAddress,
               lat: place.geometry.location.lat(),
               lng: place.geometry.location.lng(),
               name: place.name || formattedAddress,
             };
 
-            // Safely add optional properties from previous location
-            if (locationData) {
-              if (locationData.id) newLocation.id = locationData.id;
-              if (locationData.city) newLocation.city = locationData.city;
-              if (locationData.state) newLocation.state = locationData.state;
-              if (locationData.type) newLocation.type = locationData.type;
-              if (typeof locationData.popularityScore === 'number' && !isNaN(locationData.popularityScore)) {
-                newLocation.popularityScore = locationData.popularityScore;
-              }
-              if (typeof locationData.isPickupLocation === 'boolean') {
-                newLocation.isPickupLocation = locationData.isPickupLocation;
-              }
-              if (typeof locationData.isDropLocation === 'boolean') {
-                newLocation.isDropLocation = locationData.isDropLocation;
-              }
-            }
-
-            // Mark that we want to ignore the next props update
-            ignoreNextPropsUpdate.current = true;
-            
-            // Update internal state first with the formatted address
-            setAddress(formattedAddress);
+            // Mark that we're setting data from autocomplete
+            skipNextPropsUpdate.current = true;
             
             // Call the handler if it exists immediately (no debounce for selections)
             if (handleLocationChange) {
@@ -233,7 +217,7 @@ export function LocationInput({
         }
       }
     };
-  }, [google, handleLocationChange, disabled, readOnly, locationData, isAirportTransfer, isLoaded]);
+  }, [google, handleLocationChange, disabled, readOnly, locationData, isAirportTransfer, isLoaded, address]);
 
   return (
     <div className="space-y-2">

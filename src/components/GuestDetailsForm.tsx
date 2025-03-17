@@ -40,35 +40,35 @@ export function GuestDetailsForm({
       if (bookingId && isEditMode) {
         // If editing an existing booking
         console.log("Updating booking with ID:", bookingId);
-        console.log("Update data:", { ...details, ...initialData });
         
         const updatedData = {
           passengerName: details.name,
           passengerPhone: details.phone,
-          passengerEmail: details.email,
-          ...initialData
+          passengerEmail: details.email
+          // Note: Other data like pickupLocation, dropLocation, pickupDate 
+          // will be handled by the parent component
         };
         
-        console.log("Sending update request with data:", updatedData);
+        console.log("Sending contact details update:", updatedData);
         
         const response = await bookingAPI.updateBooking(bookingId, updatedData);
         console.log("Update response:", response);
         
         toast({
-          title: "Booking Updated",
-          description: "Your booking details have been updated successfully",
+          title: "Contact Details Updated",
+          description: "Your passenger information has been updated successfully",
           duration: 3000,
         });
         
         setIsEditMode(false);
       } else {
-        // For new bookings
+        // For new bookings or when parent handles the update
         onSubmit(details);
       }
     } catch (error) {
       console.error("Error updating booking:", error);
       toast({
-        title: "Operation Failed",
+        title: "Update Failed",
         description: error instanceof Error ? error.message : "Something went wrong",
         variant: "destructive",
         duration: 5000,
