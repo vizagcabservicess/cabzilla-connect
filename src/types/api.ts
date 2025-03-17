@@ -216,6 +216,7 @@ export interface Location {
   popularityScore?: number;
   isPickupLocation?: boolean;
   isDropLocation?: boolean;
+  isInVizag?: boolean; // Added this property
   address: string;
 }
 

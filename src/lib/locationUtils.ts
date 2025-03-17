@@ -1,4 +1,3 @@
-
 import { Location as ApiLocation } from '@/types/api';
 import { Location as AppLocation } from '@/lib/locationData';
 
@@ -42,11 +41,7 @@ export const createLocationChangeHandler = (
     };
     
     // Check if location is in Visakhapatnam
-    if (isLocationInVizag(appLocation)) {
-      appLocation.isInVizag = true;
-    } else {
-      appLocation.isInVizag = false;
-    }
+    appLocation.isInVizag = isLocationInVizag(appLocation);
     
     console.log('Location changed:', appLocation);
     
