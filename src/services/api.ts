@@ -75,7 +75,7 @@ apiClient.interceptors.request.use(
     }
     
     console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`, 
-      config.method?.toLowerCase() === 'post' ? config.data : '');
+      config.method?.toLowerCase() === 'post' ? JSON.stringify(config.data).slice(0, 500) : '');
     return config;
   },
   (error) => {
@@ -87,11 +87,21 @@ apiClient.interceptors.request.use(
 // Add response interceptor for debugging
 apiClient.interceptors.response.use(
   (response) => {
-    console.log(`API Response: ${response.status} ${response.config.url}`, response.data);
+    console.log(`API Response: ${response.status} ${response.config.url}`, 
+      typeof response.data === 'object' ? JSON.stringify(response.data).slice(0, 500) : response.data);
     return response;
   },
   (error) => {
     console.error('Response error:', error);
+    
+    if (axios.isAxiosError(error)) {
+      const axiosError = error as AxiosError;
+      console.error('Status:', axiosError.response?.status);
+      console.error('Response data:', axiosError.response?.data);
+      console.error('Request URL:', axiosError.config?.url);
+      console.error('Request method:', axiosError.config?.method);
+      console.error('Request data:', axiosError.config?.data);
+    }
     
     // Check if error is due to token expiration
     if (axios.isAxiosError(error) && error.response?.status === 401) {
@@ -121,13 +131,22 @@ const handleApiError = (error: any) => {
       console.error('Status Code:', axiosError.response.status);
       console.error('Response Data:', axiosError.response.data);
       
-      // Return error with response data if available - FIX: Handle different response data types properly
+      // Return error with response data if available
+      const errorData = axiosError.response.data as any;
+      let errorMessage = 'Unknown server error';
+      
+      if (typeof errorData === 'object' && errorData !== null) {
+        // Try to extract error message from different common formats
+        errorMessage = errorData.message || 
+                      errorData.error || 
+                      (errorData.errors ? JSON.stringify(errorData.errors) : 
+                      JSON.stringify(errorData));
+      } else if (typeof errorData === 'string') {
+        errorMessage = errorData;
+      }
+      
       return new Error(
-        `Error ${axiosError.response.status}: ${
-          typeof axiosError.response.data === 'object' && axiosError.response.data !== null
-          ? (axiosError.response.data as any).message || JSON.stringify(axiosError.response.data)
-          : axiosError.message
-        }`
+        `Error ${axiosError.response.status}: ${errorMessage}`
       );
     }
     
@@ -153,23 +172,27 @@ const handleApiError = (error: any) => {
 const makeApiRequest = async <T>(
   requestFn: () => Promise<T>,
   maxRetries = 3,
-  retryDelay = 1000
+  retryDelay = 1000,
+  description = 'API Request'
 ): Promise<T> => {
   let retries = 0;
   
   while (true) {
     try {
+      console.log(`${description} - attempt ${retries + 1}/${maxRetries + 1}`);
       return await requestFn();
     } catch (error) {
       retries++;
-      console.log(`API request failed (attempt ${retries}/${maxRetries})`, error);
+      console.log(`${description} failed (attempt ${retries}/${maxRetries})`, error);
       
       if (retries >= maxRetries) {
         throw handleApiError(error);
       }
       
       // Wait before retrying (with exponential backoff)
-      await new Promise(r => setTimeout(r, retryDelay * retries));
+      const delay = retryDelay * Math.pow(1.5, retries - 1);
+      console.log(`Retrying in ${delay}ms...`);
+      await new Promise(r => setTimeout(r, delay));
     }
   }
 };
@@ -259,7 +282,7 @@ export const authAPI = {
 export const bookingAPI = {
   async createBooking(bookingData: BookingRequest): Promise<any> {
     return makeApiRequest(async () => {
-      console.log('Creating booking with data:', bookingData);
+      console.log('Creating booking with data:', JSON.stringify(bookingData, null, 2));
       
       // Clear local cache to prevent using stale data
       sessionStorage.removeItem('cabFares');
@@ -277,13 +300,34 @@ export const bookingAPI = {
         console.log('Set default distance for local booking:', bookingData.distance);
       }
       
+      // Make sure all numeric fields are actually numbers, not strings
+      if (typeof bookingData.distance === 'string') {
+        bookingData.distance = parseFloat(bookingData.distance);
+      }
+      
+      if (typeof bookingData.totalAmount === 'string') {
+        bookingData.totalAmount = parseFloat(bookingData.totalAmount);
+      }
+      
+      // Make sure the date strings are in ISO format
+      if (bookingData.pickupDate && typeof bookingData.pickupDate === 'object') {
+        bookingData.pickupDate = bookingData.pickupDate.toISOString();
+      }
+      
+      if (bookingData.returnDate && typeof bookingData.returnDate === 'object') {
+        bookingData.returnDate = bookingData.returnDate.toISOString();
+      }
+      
+      // Log the sanitized data
+      console.log('Sanitized booking data:', JSON.stringify(bookingData, null, 2));
+      
       const response = await apiClient.post('/book', bookingData);
       if (response.data.status === 'success') {
         return response.data;
       } else {
         throw new Error(response.data.message || 'Failed to create booking');
       }
-    }, 3, 2000); // More retries with longer delay for booking creation
+    }, 3, 2000, 'Create Booking'); // More retries with longer delay for booking creation
   },
 
   async getBooking(id: string): Promise<Booking> {
@@ -459,4 +503,3 @@ export const tourFaresAPI = {
     return fareAPI.getTourFares();
   },
 };
-

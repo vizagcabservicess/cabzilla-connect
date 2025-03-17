@@ -17,6 +17,11 @@ RewriteRule ^admin/km-price/update$ admin/km-price-update.php [L]
 RewriteRule ^send-receipt$ send-receipt.php [L]
 RewriteRule ^receipt/([0-9]+)$ receipt.php?id=$1 [L]
 
+# Custom error handling for API
+ErrorDocument 500 '{"status":"error","message":"Internal Server Error","code":500}'
+ErrorDocument 404 '{"status":"error","message":"Not Found","code":404}'
+ErrorDocument 403 '{"status":"error","message":"Forbidden","code":403}'
+
 # Disable caching for API endpoints
 <IfModule mod_headers.c>
     Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
@@ -40,3 +45,7 @@ RewriteRule ^receipt/([0-9]+)$ receipt.php?id=$1 [L]
 # Handle OPTIONS method for CORS preflight
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
+
+# Disable PHP error display in response
+php_flag display_errors off
+php_value error_reporting 0
