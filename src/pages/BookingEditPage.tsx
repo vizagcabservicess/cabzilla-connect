@@ -22,6 +22,7 @@ export default function BookingEditPage() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pickupLocation, setPickupLocation] = useState<Location>({ address: '' });
+  const [dropLocation, setDropLocation] = useState<Location>({ address: '' });
   const [pickupDate, setPickupDate] = useState<Date | undefined>(undefined);
 
   useEffect(() => {
@@ -48,7 +49,10 @@ export default function BookingEditPage() {
         setBooking(data);
         
         // Initialize form fields
-        setPickupLocation({ address: data.pickupLocation });
+        setPickupLocation({ address: data.pickupLocation || '' });
+        if (data.dropLocation) {
+          setDropLocation({ address: data.dropLocation || '' });
+        }
         setPickupDate(new Date(data.pickupDate));
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Failed to load booking details';
@@ -77,12 +81,13 @@ export default function BookingEditPage() {
         passengerName: contactDetails.name,
         passengerPhone: contactDetails.phone,
         passengerEmail: contactDetails.email,
-        pickupLocation: pickupLocation.address,
+        pickupLocation: pickupLocation.address || '',
+        dropLocation: dropLocation.address || '',
         pickupDate: pickupDate ? pickupDate.toISOString() : undefined // Convert to ISO string
       };
       
       // Update booking in API
-      await bookingAPI.updateBooking(bookingId, updatedData);
+      const result = await bookingAPI.updateBooking(bookingId, updatedData);
       
       toast({
         title: "Booking Updated",
@@ -188,6 +193,20 @@ export default function BookingEditPage() {
                   className="w-full"
                 />
               </div>
+              {booking.dropLocation && (
+                <>
+                  <Separator />
+                  <div>
+                    <p className="text-sm font-medium mb-1">Drop Location</p>
+                    <LocationInput
+                      location={dropLocation}
+                      onLocationChange={(location: Location) => setDropLocation(location)}
+                      placeholder="Enter drop location"
+                      className="w-full"
+                    />
+                  </div>
+                </>
+              )}
               <Separator />
               <div>
                 <p className="text-sm font-medium mb-1">Pickup Date & Time</p>

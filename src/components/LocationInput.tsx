@@ -3,6 +3,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Input } from "@/components/ui/input";
 import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
 import { Location } from '@/types/api';
+import { useMemo } from 'react';
+import { debounce } from '@/lib/utils';
 
 interface LocationInputProps {
   location?: Location;
@@ -38,7 +40,7 @@ export function LocationInput({
   // Ensure address is always a string to prevent type errors
   const initialAddress = typeof locationData.address === 'string' ? locationData.address : '';
   const [address, setAddress] = useState<string>(initialAddress);
-  const { google } = useGoogleMaps();
+  const { google, isLoaded } = useGoogleMaps();
   
   // Reference to the autocomplete instance
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
@@ -46,7 +48,6 @@ export function LocationInput({
 
   // Update the address when the location data changes
   useEffect(() => {
-    // Ensure we're working with string data and set default values
     if (locationData) {
       if (typeof locationData.address === 'string' && locationData.address.trim() !== '') {
         setAddress(locationData.address);
@@ -60,49 +61,56 @@ export function LocationInput({
     }
   }, [locationData]);
 
-  // Memoize the handleChange function to prevent unnecessary rerenders
+  // Create a debouncedHandleChange function
+  const debouncedHandleChange = useMemo(
+    () =>
+      debounce((newAddress: string) => {
+        if (handleLocationChange) {
+          // Create a new location object with just the address for typing
+          const updatedLocation: Location = { address: newAddress };
+          
+          // Preserve other fields from the existing location if available
+          if (locationData) {
+            if (locationData.id) updatedLocation.id = locationData.id;
+            if (locationData.name) updatedLocation.name = locationData.name;
+            if (locationData.city) updatedLocation.city = locationData.city;
+            if (locationData.state) updatedLocation.state = locationData.state;
+            if (typeof locationData.lat === 'number' && !isNaN(locationData.lat)) updatedLocation.lat = locationData.lat;
+            if (typeof locationData.lng === 'number' && !isNaN(locationData.lng)) updatedLocation.lng = locationData.lng;
+            if (locationData.type) updatedLocation.type = locationData.type;
+            if (typeof locationData.popularityScore === 'number' && !isNaN(locationData.popularityScore)) {
+              updatedLocation.popularityScore = locationData.popularityScore;
+            }
+            if (typeof locationData.isPickupLocation === 'boolean') {
+              updatedLocation.isPickupLocation = locationData.isPickupLocation;
+            }
+            if (typeof locationData.isDropLocation === 'boolean') {
+              updatedLocation.isDropLocation = locationData.isDropLocation;
+            }
+          }
+          
+          // Call the handler with the updated location
+          handleLocationChange(updatedLocation);
+        }
+      }, 300),
+    [handleLocationChange, locationData]
+  );
+
+  // Handle input change immediately for UI responsiveness
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newAddress = e.target.value || '';
     
     // Always update internal state for controlled input behavior
     setAddress(newAddress);
     
-    // Only call the location change handler if it exists
-    if (handleLocationChange) {
-      // Create a new location object with just the address for typing
-      const updatedLocation: Location = { 
-        address: newAddress 
-      };
-      
-      // Preserve other fields from the existing location if available
-      if (locationData) {
-        if (locationData.id) updatedLocation.id = locationData.id;
-        if (locationData.name) updatedLocation.name = locationData.name;
-        if (locationData.city) updatedLocation.city = locationData.city;
-        if (locationData.state) updatedLocation.state = locationData.state;
-        if (typeof locationData.lat === 'number' && !isNaN(locationData.lat)) updatedLocation.lat = locationData.lat;
-        if (typeof locationData.lng === 'number' && !isNaN(locationData.lng)) updatedLocation.lng = locationData.lng;
-        if (locationData.type) updatedLocation.type = locationData.type;
-        if (typeof locationData.popularityScore === 'number' && !isNaN(locationData.popularityScore)) {
-          updatedLocation.popularityScore = locationData.popularityScore;
-        }
-        if (typeof locationData.isPickupLocation === 'boolean') {
-          updatedLocation.isPickupLocation = locationData.isPickupLocation;
-        }
-        if (typeof locationData.isDropLocation === 'boolean') {
-          updatedLocation.isDropLocation = locationData.isDropLocation;
-        }
-      }
-      
-      // Call the handler with the updated location
-      handleLocationChange(updatedLocation);
-    }
-  }, [handleLocationChange, locationData]);
+    // Use the debounced function for the actual API calls
+    debouncedHandleChange(newAddress);
+  }, [debouncedHandleChange]);
 
   // Setup and teardown of Google Maps autocomplete
   useEffect(() => {
     // Early return if conditions aren't met
-    if (!google || !google.maps || !google.maps.places || disabled || readOnly) {
+    if (!google || !google.maps || !google.maps.places || disabled || readOnly || !isLoaded) {
       return;
     }
     
@@ -194,7 +202,7 @@ export function LocationInput({
     };
 
     // Initialize autocomplete if Google Maps API is loaded
-    if (google && google.maps && google.maps.places) {
+    if (google && google.maps && google.maps.places && isLoaded) {
       // Add a small delay to make sure DOM is ready
       setTimeout(initAutocomplete, 10);
     }
@@ -211,7 +219,7 @@ export function LocationInput({
         }
       }
     };
-  }, [google, handleLocationChange, disabled, readOnly, locationData, isAirportTransfer]);
+  }, [google, handleLocationChange, disabled, readOnly, locationData, isAirportTransfer, isLoaded]);
 
   return (
     <div className="space-y-2">

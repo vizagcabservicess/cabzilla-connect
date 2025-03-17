@@ -66,35 +66,8 @@ export function createLocationChangeHandler(
       return;
     }
     
-    // Ensure address is always a string
+    // Ensure address is always a string, even if it's undefined or null
     const address = typeof apiLocation.address === 'string' ? apiLocation.address : '';
-    
-    // Handle empty address field with a partial update
-    if (address.trim() === '') {
-      // Create a minimal location object for user typing
-      const partialLocation: LibLocation = {
-        id: '',
-        name: '',
-        city: '',
-        state: '',
-        lat: 0,
-        lng: 0,
-        type: 'other',
-        popularityScore: 0
-      };
-      
-      // Preserve existing values when updating
-      setter((prevLocation) => {
-        if (!prevLocation) return partialLocation;
-        
-        // Keep previous values except address/name which we set to empty string
-        return {
-          ...prevLocation,
-          name: ''
-        };
-      });
-      return;
-    }
     
     // Convert API location to Library location format with safe defaults and strict type checking
     const libLocation: LibLocation = {
@@ -112,6 +85,7 @@ export function createLocationChangeHandler(
       isDropLocation: typeof apiLocation.isDropLocation === 'boolean' ? apiLocation.isDropLocation : false
     };
     
+    // Always update the state with the new location
     setter(libLocation);
   };
 }

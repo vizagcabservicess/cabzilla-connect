@@ -54,14 +54,16 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
     }
   }, [isLoaded, loadError]);
 
-  // Provide context values
+  // Provide context values - ensure we have a consistent value for the google object
+  const contextValue = {
+    isLoaded, 
+    loadError,
+    // Always use window.google as a fallback to ensure it's available even if state hasn't updated
+    google: googleInstance || (isLoaded && window.google ? window.google : null)
+  };
+
   return (
-    <GoogleMapsContext.Provider value={{ 
-      isLoaded, 
-      loadError, 
-      // Always use window.google as a fallback to ensure it's available even if state hasn't updated
-      google: googleInstance || (isLoaded && window.google ? window.google : null) 
-    }}>
+    <GoogleMapsContext.Provider value={contextValue}>
       {children}
     </GoogleMapsContext.Provider>
   );

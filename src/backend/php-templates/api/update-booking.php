@@ -118,13 +118,13 @@ try {
         'passenger_phone' => 'passengerPhone',
         'passenger_email' => 'passengerEmail',
         'pickup_date' => 'pickupDate',
-        'pickup_location' => 'pickupLocation'
+        'pickup_location' => 'pickupLocation',
+        'drop_location' => 'dropLocation'
     ];
     
     // Additional fields that can only be updated by admins
     if ($isAdmin) {
         $allowedFields = array_merge($allowedFields, [
-            'drop_location' => 'dropLocation',
             'return_date' => 'returnDate',
             'cab_type' => 'cabType',
             'trip_type' => 'tripType',
@@ -138,7 +138,7 @@ try {
     
     // Build the update statement dynamically
     foreach ($allowedFields as $dbField => $requestField) {
-        if (isset($data[$requestField])) {
+        if (isset($data[$requestField]) && $data[$requestField] !== null) {
             $updateFields[] = "$dbField = ?";
             
             // Determine the type for bind_param
@@ -148,7 +148,13 @@ try {
                 $types .= "s"; // string
             }
             
-            $params[] = $data[$requestField];
+            // Make sure empty strings don't become null
+            $value = $data[$requestField];
+            if (is_string($value) && empty($value)) {
+                $value = '';
+            }
+            
+            $params[] = $value;
         }
     }
     
@@ -178,6 +184,13 @@ try {
     if (!$stmt->execute()) {
         throw new Exception("Execute statement failed: " . $stmt->error);
     }
+    
+    // Log the update
+    logError("Booking updated successfully", [
+        'booking_id' => $bookingId,
+        'fields_updated' => implode(", ", array_keys($allowedFields)),
+        'updated_by' => $userId
+    ]);
     
     // Get the updated booking
     $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");

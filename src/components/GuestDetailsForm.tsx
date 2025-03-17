@@ -46,7 +46,7 @@ export function GuestDetailsForm({
           ...initialData
         };
         
-        await bookingAPI.updateBooking(bookingId.toString(), updatedData);
+        const response = await bookingAPI.updateBooking(bookingId, updatedData);
         
         toast({
           title: "Booking Updated",
