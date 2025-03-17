@@ -27,6 +27,7 @@ export default defineConfig(({ mode }) => ({
         global: 'globalThis',
       },
     },
+    include: ['html2canvas', 'jspdf']
   },
   build: {
     rollupOptions: {
@@ -35,6 +36,9 @@ export default defineConfig(({ mode }) => ({
       output: {
         // Global variables to use in the UMD build for externalized deps
         globals: {},
+        manualChunks: {
+          vendor: ['html2canvas', 'jspdf']
+        }
       },
     },
     commonjsOptions: {

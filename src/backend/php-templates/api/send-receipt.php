@@ -1,164 +1,119 @@
 
 <?php
 require_once '../config.php';
+require_once '../vendor/autoload.php';
 
-// Allow only POST requests
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
-    exit;
-}
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
 
-// Get request data
+// Set headers for JSON response
+header('Content-Type: application/json');
+
+// Get input data
 $data = json_decode(file_get_contents('php://input'), true);
+$bookingId = isset($data['bookingId']) ? intval($data['bookingId']) : null;
+$email = isset($data['email']) ? filter_var($data['email'], FILTER_VALIDATE_EMAIL) : null;
 
-// Validate request
-if (!isset($data['bookingId']) || !$data['bookingId']) {
-    sendJsonResponse(['status' => 'error', 'message' => 'Booking ID is required'], 400);
+// Validate input
+if (!$bookingId || !$email) {
+    echo json_encode([
+        'success' => false,
+        'message' => 'Missing or invalid booking ID or email address'
+    ]);
     exit;
 }
 
-// Connect to database
-$conn = getDbConnection();
-
-// Get booking details
-$sql = "SELECT b.*, u.name as user_name, u.email as user_email, u.phone as user_phone 
-        FROM bookings b 
-        LEFT JOIN users u ON b.user_id = u.id 
-        WHERE b.id = ?";
-
-$stmt = $conn->prepare($sql);
-$stmt->bind_param("i", $data['bookingId']);
-$stmt->execute();
-$result = $stmt->get_result();
-
-if ($result->num_rows === 0) {
-    sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
-    exit;
-}
-
-$booking = $result->fetch_assoc();
-
-// Set email recipient
-$to = $data['email'] ?? $booking['passenger_email'];
-if (!$to) {
-    sendJsonResponse(['status' => 'error', 'message' => 'Email address is required'], 400);
-    exit;
-}
-
-// Format date
-$pickupDate = date('d M Y, h:i A', strtotime($booking['pickup_date']));
-$returnDate = $booking['return_date'] ? date('d M Y, h:i A', strtotime($booking['return_date'])) : 'N/A';
-
-// Create receipt HTML
-$receiptUrl = "https://vizagtaxihub.com/receipt/" . $booking['id'];
-
-$subject = "Your Booking Receipt - " . $booking['booking_number'];
-
-$message = "
-<html>
-<head>
-    <title>Booking Receipt</title>
-    <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { width: 100%; max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background-color: #2563eb; color: white; padding: 15px; text-align: center; }
-        .content { padding: 20px; border: 1px solid #ddd; }
-        .booking-info { margin-bottom: 20px; }
-        .booking-info p { margin: 5px 0; }
-        .total { font-weight: bold; font-size: 18px; margin-top: 15px; }
-        .footer { margin-top: 20px; font-size: 12px; color: #666; text-align: center; }
-        .button { display: inline-block; background-color: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; }
-    </style>
-</head>
-<body>
-    <div class='container'>
-        <div class='header'>
-            <h2>Booking Confirmation</h2>
-        </div>
-        <div class='content'>
-            <p>Dear " . ($booking['passenger_name'] ?? 'Customer') . ",</p>
-            <p>Thank you for booking with Vizag Taxi Hub. Your booking has been confirmed.</p>
-            
-            <div class='booking-info'>
-                <h3>Booking Details</h3>
-                <p><strong>Booking Number:</strong> " . $booking['booking_number'] . "</p>
-                <p><strong>Trip Type:</strong> " . ucfirst($booking['trip_type']) . " (" . ucfirst($booking['trip_mode']) . ")</p>
-                <p><strong>Vehicle Type:</strong> " . $booking['cab_type'] . "</p>
-                <p><strong>From:</strong> " . $booking['pickup_location'] . "</p>
-                <p><strong>To:</strong> " . $booking['drop_location'] . "</p>
-                <p><strong>Pickup Date:</strong> " . $pickupDate . "</p>";
-
-if ($booking['trip_mode'] === 'round-trip') {
-    $message .= "<p><strong>Return Date:</strong> " . $returnDate . "</p>";
-}
-
-if ($booking['trip_type'] === 'local') {
-    $message .= "<p><strong>Package:</strong> " . $booking['hourly_package'] . "</p>";
-}
-
-$message .= "
-                <p><strong>Distance:</strong> " . $booking['distance'] . " km</p>
-                <p class='total'><strong>Total Amount:</strong> ₹" . number_format($booking['total_amount'], 2) . "</p>
-            </div>
-            
-            <p>You can view your booking receipt online at:</p>
-            <p style='text-align: center;'>
-                <a href='" . $receiptUrl . "' class='button'>View Receipt</a>
-            </p>
-            
-            <p>If you have any questions or need assistance, please contact our customer support.</p>
-            
-            <p>Thank you,<br>Team Vizag Taxi Hub</p>
-        </div>
-        <div class='footer'>
-            <p>This is an automated email. Please do not reply to this message.</p>
-            <p>&copy; " . date('Y') . " Vizag Taxi Hub. All rights reserved.</p>
-        </div>
-    </div>
-</body>
-</html>
-";
-
-// Send email using PHPMailer
 try {
-    // Setup SMTP configuration
+    // Connect to database
+    $db = new PDO("mysql:host=$db_host;dbname=$db_name;charset=utf8", $db_user, $db_pass);
+    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    
+    // Get booking details
+    $stmt = $db->prepare("SELECT * FROM bookings WHERE id = ?");
+    $stmt->execute([$bookingId]);
+    $booking = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    if (!$booking) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'Booking not found'
+        ]);
+        exit;
+    }
+    
+    // Create email content
     $mail = new PHPMailer(true);
+    
+    // Server settings
     $mail->isSMTP();
-    $mail->Host = 'smtp.hostinger.com';
+    $mail->Host = 'mail.vizagtaxihub.com';
     $mail->SMTPAuth = true;
-    $mail->Username = 'info@vizagtaxihub.com';  // SMTP username
-    $mail->Password = 'F@s4L[c;gkq4[MyY';       // SMTP password
-    $mail->SMTPSecure = 'tls';
-    $mail->Port = 587;
-
+    $mail->Username = 'info@vizagtaxihub.com';
+    $mail->Password = 'F@s4L[c;gkq4[MyY';
+    $mail->SMTPSecure = 'ssl';
+    $mail->Port = 465;
+    
     // Recipients
     $mail->setFrom('info@vizagtaxihub.com', 'Vizag Taxi Hub');
-    $mail->addAddress($to);
+    $mail->addAddress($email);
     
     // Content
     $mail->isHTML(true);
-    $mail->Subject = $subject;
-    $mail->Body = $message;
-    $mail->AltBody = strip_tags(str_replace('<br>', "\n", $message));
-
+    $mail->Subject = 'Your Booking Receipt - Vizag Taxi Hub';
+    
+    // Generate receipt HTML
+    $receiptUrl = "https://" . $_SERVER['HTTP_HOST'] . "/receipt/" . $booking['id'];
+    $pickupDate = date('M d, Y h:i A', strtotime($booking['pickup_date']));
+    
+    $mailBody = "
+    <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee;'>
+        <div style='text-align: center; padding-bottom: 20px; border-bottom: 2px solid #f0f0f0;'>
+            <h2 style='color: #3a86ff;'>Vizag Taxi Hub</h2>
+            <p>Booking Receipt #{$booking['booking_number']}</p>
+        </div>
+        
+        <div style='padding: 20px 0;'>
+            <h3>Dear {$booking['passenger_name']},</h3>
+            <p>Thank you for booking with Vizag Taxi Hub. Here is your receipt for booking #{$booking['booking_number']}.</p>
+            
+            <div style='background-color: #f9f9f9; padding: 15px; margin: 15px 0; border-radius: 5px;'>
+                <p><strong>Pickup Location:</strong> {$booking['pickup_location']}</p>
+                <p><strong>Drop Location:</strong> {$booking['drop_location']}</p>
+                <p><strong>Pickup Date & Time:</strong> {$pickupDate}</p>
+                <p><strong>Vehicle Type:</strong> {$booking['cab_type']}</p>
+                <p><strong>Total Amount:</strong> ₹{$booking['total_amount']}</p>
+                <p><strong>Status:</strong> {$booking['status']}</p>
+            </div>
+            
+            <p>You can view your detailed receipt online at: <a href='{$receiptUrl}' style='color: #3a86ff;'>{$receiptUrl}</a></p>
+        </div>
+        
+        <div style='padding-top: 20px; border-top: 1px solid #f0f0f0; text-align: center; font-size: 12px; color: #777;'>
+            <p>If you have any questions, please contact us at info@vizagtaxihub.com or call +91 8887776666.</p>
+            <p>&copy; 2025 Vizag Taxi Hub. All rights reserved.</p>
+        </div>
+    </div>
+    ";
+    
+    $mail->Body = $mailBody;
+    $mail->AltBody = strip_tags($mailBody);
+    
+    // Send email
     $mail->send();
     
-    // Log successful email
-    logError("Email sent successfully", ['to' => $to, 'booking_id' => $data['bookingId']]);
-    
-    sendJsonResponse([
-        'status' => 'success',
-        'message' => 'Receipt sent successfully'
+    echo json_encode([
+        'success' => true,
+        'message' => 'Receipt sent successfully to ' . $email
     ]);
+    
 } catch (Exception $e) {
-    logError("Email sending failed", [
-        'error' => $e->getMessage(),
-        'to' => $to,
-        'booking_id' => $data['bookingId']
+    echo json_encode([
+        'success' => false,
+        'message' => 'Error sending email: ' . $mail->ErrorInfo
     ]);
-    
-    sendJsonResponse([
-        'status' => 'error',
-        'message' => 'Failed to send receipt: ' . $e->getMessage()
-    ], 500);
+} catch (PDOException $e) {
+    echo json_encode([
+        'success' => false,
+        'message' => 'Database error: ' . $e->getMessage()
+    ]);
 }
