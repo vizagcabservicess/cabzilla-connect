@@ -1,5 +1,5 @@
 
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, BrowserRouter } from 'react-router-dom';
 import Index from '@/pages/Index';
 import LoginPage from '@/pages/LoginPage';
 import SignupPage from '@/pages/SignupPage';
@@ -53,39 +53,41 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <GoogleMapsProvider>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/signup" element={<SignupPage />} />
-          <Route path="/cabs/:tripType?" element={<CabsPage />} />
-          <Route path="/tours" element={<ToursPage />} />
-          <Route path="/booking-confirmation" element={<BookingConfirmationPage />} />
-          <Route path="/receipt/:id" element={<ReceiptPage />} />
-          <Route 
-            path="/dashboard" 
-            element={
-              localStorage.getItem('token') ? <DashboardPage /> : <Navigate to="/login" />
-            } 
-          />
-          <Route 
-            path="/admin-dashboard/*" 
-            element={
-              localStorage.getItem('token') && userRole === 'admin' 
-                ? <AdminDashboardPage /> 
-                : <Navigate to="/login" />
-            } 
-          />
-          <Route 
-            path="/booking/edit/:id" 
-            element={
-              localStorage.getItem('token') ? <BookingEditPage /> : <Navigate to="/login" />
-            } 
-          />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-        <Toaster />
-      </GoogleMapsProvider>
+      <BrowserRouter>
+        <GoogleMapsProvider>
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/signup" element={<SignupPage />} />
+            <Route path="/cabs/:tripType?" element={<CabsPage />} />
+            <Route path="/tours" element={<ToursPage />} />
+            <Route path="/booking-confirmation" element={<BookingConfirmationPage />} />
+            <Route path="/receipt/:id" element={<ReceiptPage />} />
+            <Route 
+              path="/dashboard" 
+              element={
+                localStorage.getItem('token') ? <DashboardPage /> : <Navigate to="/login" />
+              } 
+            />
+            <Route 
+              path="/admin-dashboard/*" 
+              element={
+                localStorage.getItem('token') && userRole === 'admin' 
+                  ? <AdminDashboardPage /> 
+                  : <Navigate to="/login" />
+              } 
+            />
+            <Route 
+              path="/booking/edit/:id" 
+              element={
+                localStorage.getItem('token') ? <BookingEditPage /> : <Navigate to="/login" />
+              } 
+            />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+          <Toaster />
+        </GoogleMapsProvider>
+      </BrowserRouter>
     </QueryClientProvider>
   );
 }
