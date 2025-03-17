@@ -78,9 +78,9 @@ export function LocationInput({
     const newAddress = e.target.value;
     setAddress(newAddress);
     
-    // Create a basic location object with the typed address
-    if (handleLocationChange) {
-      handleLocationChange({
+    // Only create a location object if we have an address
+    if (newAddress.trim() !== '' && handleLocationChange) {
+      const newLocation: Location = {
         address: newAddress,
         name: newAddress,
         id: locationData.id || `loc_${Date.now()}`,
@@ -90,8 +90,10 @@ export function LocationInput({
         city: locationData.city || 'Visakhapatnam',
         state: locationData.state || 'Andhra Pradesh',
         popularityScore: locationData.popularityScore || 50,
-        isInVizag: isPickupLocation ? true : locationData.isInVizag
-      });
+        isInVizag: isPickupLocation ? true : locationData.isInVizag || false
+      };
+      
+      handleLocationChange(newLocation);
     }
   };
 
@@ -155,7 +157,7 @@ export function LocationInput({
         // Update local state
         setAddress(formattedAddress);
         
-        // Create location object with Vizag information
+        // Check if location is in Visakhapatnam
         const isInVizag = formattedAddress.toLowerCase().includes('visakhapatnam') || 
                          formattedAddress.toLowerCase().includes('vizag') ||
                          (place.geometry.location.lat() >= 17.6 && 

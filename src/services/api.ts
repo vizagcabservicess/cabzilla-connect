@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { LoginRequest, SignupRequest, User, BookingRequest, Booking, 
   FareUpdateRequest, VehiclePricingUpdateRequest, TourFare, VehiclePricing,
@@ -34,20 +35,6 @@ interface AuthAPI {
   getCurrentUser(): User | null;
   isAuthenticated(): boolean;
   isAdmin(): boolean;
-}
-
-interface ApiService {
-  login(credentials: LoginRequest): Promise<{ user: User; token: string }>;
-  signup(userData: SignupRequest): Promise<{ user: User; token: string }>;
-  logout(): void;
-  getCurrentUser(): User | null;
-  isAuthenticated(): boolean;
-  createBooking(bookingData: BookingRequest): Promise<Booking>;
-  getUserBookings(): Promise<Booking[]>;
-  getAllBookings(): Promise<Booking[]>;
-  getBookingById(bookingId: string): Promise<Booking>;
-  updateBooking(bookingId: string, bookingData: Partial<Booking>): Promise<Booking>;
-  getAdminDashboardMetrics(period: 'today' | 'week' | 'month'): Promise<DashboardMetrics>;
 }
 
 export const authAPI: AuthAPI = {
@@ -179,6 +166,23 @@ export const bookingAPI: {
   async getBookingById(bookingId: string): Promise<Booking> {
     try {
       console.log(`Fetching booking details for ID: ${bookingId}`);
+      
+      // Try to use the receipt endpoint first
+      try {
+        const url = `/receipt/${bookingId}`;
+        console.log('Requesting URL:', `${API_BASE_URL}${url}`);
+        
+        const response = await axiosInstance.get(url);
+        
+        if (response.data.status === 'success') {
+          console.log('Receipt API response:', response.data);
+          return response.data.data;
+        }
+      } catch (error) {
+        console.log('Receipt endpoint failed, falling back to user/booking endpoint');
+      }
+      
+      // Fallback to the user/booking endpoint
       const url = `/user/booking/${bookingId}`;
       console.log('Requesting URL:', `${API_BASE_URL}${url}`);
       

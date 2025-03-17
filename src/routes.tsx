@@ -10,6 +10,7 @@ import BookingConfirmationPage from './pages/BookingConfirmationPage';
 import CabsPage from './pages/CabsPage';
 import ToursPage from './pages/ToursPage';
 import BookingEditPage from './pages/BookingEditPage';
+import ReceiptPage from './pages/ReceiptPage';
 
 export const router = createBrowserRouter([
   {
@@ -47,6 +48,10 @@ export const router = createBrowserRouter([
   {
     path: '/tours',
     element: <ToursPage />,
+  },
+  {
+    path: '/receipt/:id',
+    element: <ReceiptPage />,
   },
   // Add a catch-all route for the API
   {

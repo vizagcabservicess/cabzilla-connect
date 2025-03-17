@@ -21,42 +21,20 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     exit;
 }
 
-// Check if ID is provided
+// Get booking ID from URL parameter
 if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
-    sendJsonResponse(['status' => 'error', 'message' => 'Invalid or missing booking ID'], 400);
+    sendJsonResponse(['status' => 'error', 'message' => 'Invalid booking ID'], 400);
     exit;
 }
 
-$bookingId = $_GET['id'];
+$bookingId = intval($_GET['id']);
 
-// Log the receipt request
+// Log request for debugging
 logError("Receipt request", [
-    'booking_id' => $bookingId,
     'method' => $_SERVER['REQUEST_METHOD'],
-    'uri' => $_SERVER['REQUEST_URI']
+    'booking_id' => $bookingId,
+    'query' => $_SERVER['QUERY_STRING']
 ]);
-
-// Check for authentication
-$headers = getallheaders();
-$token = null;
-
-if (isset($headers['Authorization']) || isset($headers['authorization'])) {
-    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
-    $token = str_replace('Bearer ', '', $authHeader);
-}
-
-// Verify token if provided
-$userId = null;
-$isAdmin = false;
-
-if ($token) {
-    $userData = verifyJwtToken($token);
-    
-    if ($userData && isset($userData['user_id'])) {
-        $userId = $userData['user_id'];
-        $isAdmin = isset($userData['role']) && $userData['role'] === 'admin';
-    }
-}
 
 // Connect to database
 $conn = getDbConnection();
@@ -67,49 +45,29 @@ if (!$conn) {
 }
 
 try {
-    // Prepare the SQL query based on user role and authentication
-    if ($isAdmin) {
-        // Admin can view any booking
-        $sql = "SELECT * FROM bookings WHERE id = ?";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("i", $bookingId);
-    } else if ($userId) {
-        // Regular user can only view their own bookings
-        $sql = "SELECT * FROM bookings WHERE id = ? AND user_id = ?";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("ii", $bookingId, $userId);
-    } else {
-        // Allow public access to booking receipts (for sharing)
-        $sql = "SELECT * FROM bookings WHERE id = ?";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("i", $bookingId);
+    // Prepare SQL query to fetch booking details
+    $sql = "SELECT * FROM bookings WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    
+    if (!$stmt) {
+        throw new Exception("Prepare statement failed: " . $conn->error);
     }
     
+    $stmt->bind_param("i", $bookingId);
+    
     if (!$stmt->execute()) {
-        throw new Exception("Failed to execute query: " . $stmt->error);
+        throw new Exception("Execute statement failed: " . $stmt->error);
     }
     
     $result = $stmt->get_result();
     $booking = $result->fetch_assoc();
     
     if (!$booking) {
-        logError("Booking not found", ['booking_id' => $bookingId]);
         sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
         exit;
     }
     
-    // Check authorization for non-admin users
-    if ($userId && !$isAdmin && $booking['user_id'] != $userId) {
-        logError("Unauthorized booking access", [
-            'booking_id' => $bookingId,
-            'user_id' => $userId,
-            'booking_user_id' => $booking['user_id']
-        ]);
-        sendJsonResponse(['status' => 'error', 'message' => 'You are not authorized to view this booking'], 403);
-        exit;
-    }
-    
-    // Format the booking data for response
+    // Format booking data for response
     $formattedBooking = [
         'id' => $booking['id'],
         'userId' => $booking['user_id'],
@@ -127,13 +85,13 @@ try {
         'passengerName' => $booking['passenger_name'],
         'passengerPhone' => $booking['passenger_phone'],
         'passengerEmail' => $booking['passenger_email'],
-        'driverName' => $booking['driver_name'],
-        'driverPhone' => $booking['driver_phone'],
+        'driverName' => $booking['driver_name'] ?? null,
+        'driverPhone' => $booking['driver_phone'] ?? null,
         'createdAt' => $booking['created_at'],
         'updatedAt' => $booking['updated_at']
     ];
     
-    // Send the response
+    // Send success response
     sendJsonResponse([
         'status' => 'success',
         'data' => $formattedBooking
