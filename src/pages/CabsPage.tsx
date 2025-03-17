@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -15,6 +14,7 @@ import {
   formatTravelTime,
   isVizagLocation
 } from "@/lib/locationData";
+import { convertToApiLocation, createLocationChangeHandler } from "@/lib/locationUtils";
 import { 
   CabType, 
   cabTypes, 
@@ -56,13 +56,11 @@ const CabsPage = () => {
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState<boolean>(false);
   const [bookingComplete, setBookingComplete] = useState<boolean>(false);
 
-  // Clear price and selected cab when trip type or mode changes
   useEffect(() => {
     setSelectedCab(null);
     setTotalPrice(0);
   }, [tripType, tripMode]);
 
-  // Set airport as pickup for airport trips
   useEffect(() => {
     if (tripType === "airport") {
       const airport = vizagLocations.find(loc => loc.type === 'airport');
@@ -74,7 +72,6 @@ const CabsPage = () => {
     }
   }, [tripType, pickup, dropoff]);
 
-  // Check if locations are valid for airport transfer and switch to outstation if needed
   useEffect(() => {
     if (tripType === "airport" && pickup && dropoff) {
       const isPickupInVizag = isVizagLocation(pickup);
@@ -94,7 +91,6 @@ const CabsPage = () => {
     }
   }, [pickup, dropoff, tripType, toast, navigate]);
 
-  // Clear selected cab when locations change
   useEffect(() => {
     setSelectedCab(null);
     setTotalPrice(0);
@@ -140,7 +136,6 @@ const CabsPage = () => {
     }
   };
 
-  // Calculate distance based on locations or package selection
   useEffect(() => {
     const fetchDistance = async () => {
       if (tripType === "local") {
@@ -149,7 +144,7 @@ const CabsPage = () => {
           setDistance(selectedPackage.kilometers);
           const estimatedTime = selectedPackage.hours * 60;
           setTravelTime(estimatedTime);
-          setSelectedCab(null); // Reset selected cab when package changes
+          setSelectedCab(null);
         }
         return;
       }
@@ -157,7 +152,7 @@ const CabsPage = () => {
       if (pickup && dropoff) {
         setIsCalculatingDistance(true);
         setShowMap(false);
-        setSelectedCab(null); // Reset selected cab when locations change
+        setSelectedCab(null);
   
         try {
           const result = await calculateDistanceMatrix(pickup, dropoff);
@@ -195,7 +190,6 @@ const CabsPage = () => {
     fetchDistance();
   }, [pickup, dropoff, tripType, hourlyPackage, toast]);
 
-  // Calculate total price when needed inputs change
   useEffect(() => {
     if (selectedCab && distance > 0) {
       const fare = calculateFare(
@@ -215,7 +209,7 @@ const CabsPage = () => {
 
   const handleHourlyPackageChange = (packageId: string) => {
     setHourlyPackage(packageId);
-    setSelectedCab(null); // Reset selected cab when package changes
+    setSelectedCab(null);
     
     const selectedPackage = hourlyPackages.find((pkg) => pkg.id === packageId);
     if (selectedPackage) {
@@ -370,8 +364,8 @@ const CabsPage = () => {
                 <LocationInput 
                   label={tripType === "airport" ? "AIRPORT LOCATION" : "PICKUP LOCATION"} 
                   placeholder={tripType === "airport" ? "Visakhapatnam Airport" : "Enter pickup location"} 
-                  value={pickup} 
-                  onChange={setPickup}
+                  value={pickup ? convertToApiLocation(pickup) : undefined}
+                  onChange={createLocationChangeHandler(setPickup)}
                   isPickupLocation={true}
                   isAirportTransfer={tripType === "airport"}
                   readOnly={tripType === "airport" && !!pickup && pickup.type === "airport"}
@@ -380,8 +374,8 @@ const CabsPage = () => {
                 <LocationInput 
                   label={tripType === "airport" ? "DESTINATION LOCATION" : "DROP LOCATION"} 
                   placeholder="Enter destination location" 
-                  value={dropoff} 
-                  onChange={setDropoff}
+                  value={dropoff ? convertToApiLocation(dropoff) : undefined}
+                  onChange={createLocationChangeHandler(setDropoff)}
                   isPickupLocation={false}
                   isAirportTransfer={tripType === "airport"}
                   readOnly={tripType === "airport" && !!dropoff && dropoff.type === "airport"} 

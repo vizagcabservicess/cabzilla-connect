@@ -11,6 +11,7 @@ import {
   calculateAirportFare,
   Location
 } from '@/lib/locationData';
+import { convertToApiLocation, createLocationChangeHandler } from '@/lib/locationUtils';
 import { CabType, cabTypes, TripMode, TripType, hourlyPackages, getLocalPackagePrice } from '@/lib/cabData';
 import { ChevronRight, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -365,8 +366,8 @@ export function Hero() {
                   <LocationInput
                     label="PICKUP LOCATION"
                     placeholder="Enter pickup location"
-                    value={pickupLocation}
-                    onChange={setPickupLocation}
+                    value={pickupLocation ? convertToApiLocation(pickupLocation) : undefined}
+                    onChange={createLocationChangeHandler(setPickupLocation)}
                     isPickupLocation={true}
                     isAirportTransfer={tripType === 'airport'}
                   />
@@ -375,8 +376,8 @@ export function Hero() {
                     <LocationInput
                       label="DROP LOCATION"
                       placeholder="Enter drop location"
-                      value={dropLocation}
-                      onChange={setDropLocation}
+                      value={dropLocation ? convertToApiLocation(dropLocation) : undefined}
+                      onChange={createLocationChangeHandler(setDropLocation)}
                       isPickupLocation={false}
                       isAirportTransfer={tripType === 'airport'}
                     />

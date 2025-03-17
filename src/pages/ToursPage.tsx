@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -10,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
 import { Location, vizagLocations } from "@/lib/locationData";
+import { convertToApiLocation, createLocationChangeHandler } from "@/lib/locationUtils";
 import { CabType, cabTypes, availableTours, tourFares } from "@/lib/cabData";
 import { MapPin, Calendar, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -218,8 +218,8 @@ const ToursPage = () => {
                     <LocationInput
                       label="PICKUP LOCATION"
                       placeholder="Enter your pickup location"
-                      value={pickupLocation}
-                      onChange={setPickupLocation}
+                      value={pickupLocation ? convertToApiLocation(pickupLocation) : undefined}
+                      onChange={createLocationChangeHandler(setPickupLocation)}
                       isPickupLocation={true}
                     />
                     

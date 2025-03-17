@@ -204,11 +204,19 @@ export interface RoutePopularity {
   peakTime: string;
 }
 
-// Location type for LocationInput component
+// Updated Location type to be compatible with lib/locationData.ts Location
 export interface Location {
-  address: string;
+  id?: string;
+  name?: string;
+  city?: string;
+  state?: string;
   lat?: number;
   lng?: number;
+  type?: 'airport' | 'train_station' | 'bus_station' | 'hotel' | 'landmark' | 'other';
+  popularityScore?: number;
+  isPickupLocation?: boolean;
+  isDropLocation?: boolean;
+  address: string;
 }
 
 // Admin API types for Fare management

@@ -5,10 +5,10 @@ import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
 import { Location } from '@/types/api';
 
 interface LocationInputProps {
-  location?: Location;  // Keep original prop
-  value?: Location;     // Add value as alias for location
+  location?: Location;
+  value?: Location;
   onLocationChange?: (location: Location) => void;
-  onChange?: (location: Location) => void; // Add alias for onLocationChange
+  onChange?: (location: Location) => void;
   placeholder?: string;
   className?: string;
   disabled?: boolean;
@@ -32,7 +32,7 @@ export function LocationInput({
   readOnly
 }: LocationInputProps) {
   // Use value prop if location is not provided
-  const locationData = location || value;
+  const locationData = location || value || { address: '' };
   const handleLocationChange = onLocationChange || onChange;
   
   const [address, setAddress] = useState(locationData?.address || "");
@@ -71,6 +71,13 @@ export function LocationInput({
           address: place.formatted_address || address,
           lat: place.geometry.location.lat(),
           lng: place.geometry.location.lng(),
+          name: place.name || place.formatted_address || '',
+          // Retain other properties if they exist
+          ...(locationData.id && { id: locationData.id }),
+          ...(locationData.city && { city: locationData.city }),
+          ...(locationData.state && { state: locationData.state }),
+          ...(locationData.type && { type: locationData.type }),
+          ...(locationData.popularityScore && { popularityScore: locationData.popularityScore }),
         };
 
         setAddress(place.formatted_address || address);
@@ -90,13 +97,18 @@ export function LocationInput({
         google.maps.event.clearInstanceListeners(autocomplete);
       }
     };
-  }, [google, handleLocationChange, address, disabled, readOnly]);
+  }, [google, handleLocationChange, address, disabled, readOnly, locationData]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newAddress = e.target.value;
     setAddress(newAddress);
     if (handleLocationChange) {
-      handleLocationChange({ ...locationData, address: newAddress });
+      // Create a new location object with the updated address while preserving other properties
+      const updatedLocation: Location = {
+        ...locationData,
+        address: newAddress
+      };
+      handleLocationChange(updatedLocation);
     }
   };
 
