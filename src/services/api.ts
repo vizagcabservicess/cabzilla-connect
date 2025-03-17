@@ -317,16 +317,16 @@ export const bookingAPI = {
       
       // Safely convert pickupDate to ISO string
       if (typeof bookingData.pickupDate === 'object') {
-        // Check if it's a Date object by looking for the toISOString method
-        if (bookingData.pickupDate && 'toISOString' in bookingData.pickupDate) {
+        // Check if it's a Date object by checking if toISOString method exists
+        if (bookingData.pickupDate && typeof bookingData.pickupDate.toISOString === 'function') {
           bookingData.pickupDate = bookingData.pickupDate.toISOString();
         }
       }
       
       // Safely convert returnDate to ISO string if it exists
       if (bookingData.returnDate && typeof bookingData.returnDate === 'object') {
-        // Check if it's a Date object by looking for the toISOString method
-        if ('toISOString' in bookingData.returnDate) {
+        // Check if it's a Date object by checking if toISOString method exists
+        if (typeof bookingData.returnDate.toISOString === 'function') {
           bookingData.returnDate = bookingData.returnDate.toISOString();
         }
       }
