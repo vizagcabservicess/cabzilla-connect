@@ -12,15 +12,10 @@ RewriteRule ^book$ book.php [L]
 RewriteRule ^update-booking/([0-9]+)$ update-booking.php?id=$1 [QSA,L]
 RewriteRule ^admin/bookings$ admin/bookings.php [L]
 RewriteRule ^admin/metrics$ admin/metrics.php [QSA,L]
-RewriteRule ^admin/fares/tours$ admin/fares/tours.php [L]
-RewriteRule ^admin/fares/vehicles$ admin/fares/vehicles.php [L]
+RewriteRule ^fares/tours$ fares/tours.php [L]
+RewriteRule ^fares/vehicles$ fares/vehicles.php [L]
 RewriteRule ^admin/fares/update$ admin/fares-update.php [L]
 RewriteRule ^admin/km-price/update$ admin/km-price-update.php [L]
-RewriteRule ^receipt/([0-9]+)$ receipt.php?id=$1 [QSA,L]
-
-# Debug header to help troubleshoot routing
-Header set X-Requested-Path "%{REQUEST_URI}e"
-Header set X-Query-String "%{QUERY_STRING}e"
 
 # Disable caching for API endpoints
 <IfModule mod_headers.c>

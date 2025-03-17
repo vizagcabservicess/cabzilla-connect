@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { CabType, formatPrice, TripType, TripMode, getLocalPackagePrice, oneWayRates } from '@/lib/cabData';
 import { Users, Briefcase, Tag, Info, Check } from 'lucide-react';
@@ -55,8 +54,6 @@ export function CabOptions({
     
     // Set a new timestamp to force recalculation
     setLastCalculationTimestamp(Date.now());
-    
-    console.log(`Trip type changed to ${tripType}, clearing all cache data`);
   }, [tripType, tripMode, hourlyPackage]);
 
   // Reset cab selection when key parameters change
@@ -86,8 +83,7 @@ export function CabOptions({
 
   // Calculate fares for all cab types whenever relevant parameters change
   useEffect(() => {
-    // Only calculate fares if we have a valid distance or it's a local trip
-    if ((distance > 0 && tripType !== 'local') || (tripType === 'local' && hourlyPackage)) {
+    if (distance > 0) {
       console.log(`Calculating fares for ${tripType} trip, ${distance}km, package: ${hourlyPackage || 'none'}`);
       
       const newFares: Record<string, number> = {};
@@ -151,18 +147,26 @@ export function CabOptions({
     
     if (tripType === 'airport') {
       totalFare = calculateAirportFare(cab.name, distance);
-      console.log(`Airport fare calculation for ${cab.name}: ${totalFare}`);
     }
     else if (tripType === 'local' && hourlyPackage) {
-      // Get base package price for local rental - NEVER USE DISTANCE FOR LOCAL PACKAGES
+      // Get base package price for local rental
       totalFare = getLocalPackagePrice(hourlyPackage, cab.name);
       console.log(`Local fare calculation for ${cab.name}:`, { 
         hourlyPackage, 
         baseFare: totalFare 
       });
       
-      // For local packages, we don't calculate extra kilometers
-      // Local packages work purely on the hourly package basis
+      // For local packages, we shouldn't be calculating extra kilometers
+      // as the package already includes a set number of kilometers
+      const packageKm = hourlyPackage === '8hrs-80km' ? 80 : 100;
+      
+      // Only add extra km charges if the distance is manually set higher than package km
+      // AND it's not an unreasonably high value (to prevent calculation errors)
+      if (distance > packageKm && distance < 300) {
+        const extraKm = distance - packageKm;
+        totalFare += extraKm * cab.pricePerKm;
+        console.log(`Added ${extraKm}km extra at ${cab.pricePerKm}/km = ${extraKm * cab.pricePerKm}`);
+      }
     }
     else if (tripType === 'outstation') {
       let baseRate = 0, perKmRate = 0, nightHaltCharge = 0, driverAllowance = 250;

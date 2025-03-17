@@ -1,5 +1,5 @@
 
-import { hourlyPackages } from "@/lib/cabData";
+import { LocalTripPurpose, hourlyPackages } from "@/lib/cabData";
 import { 
   Select,
   SelectContent,
@@ -9,9 +9,6 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { useEffect } from "react";
-
-// Define LocalTripPurpose type locally since it was missing
-export type LocalTripPurpose = 'business' | 'personal' | 'city-tour';
 
 interface LocalTripSelectorProps {
   tripPurpose: LocalTripPurpose;

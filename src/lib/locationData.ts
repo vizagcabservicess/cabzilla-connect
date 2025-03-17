@@ -10,8 +10,7 @@ export interface Location {
   popularityScore: number;
   isPickupLocation?: boolean;
   isDropLocation?: boolean;
-  isInVizag?: boolean; // Added this property
-  address: string;
+  address: string; // Changed from optional to required to match with types/api.Location
 }
 
 export const vizagLocations: Location[] = [
@@ -244,11 +243,6 @@ export const popularLocations: Location[] = [
 // Helper function to check if a location is within Visakhapatnam
 export const isVizagLocation = (location: Location): boolean => {
   if (!location) return false;
-  
-  // Check if isInVizag is already set
-  if (location.isInVizag !== undefined) {
-    return location.isInVizag;
-  }
   
   return location.city.toLowerCase() === 'visakhapatnam' || 
          location.name.toLowerCase().includes('visakhapatnam') ||
