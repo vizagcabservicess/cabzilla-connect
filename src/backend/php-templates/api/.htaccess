@@ -20,6 +20,9 @@ RewriteRule ^admin/km-price/update$ admin/km-price-update.php [L]
     Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
     Header always set Pragma "no-cache"
     Header always set Expires "0"
+    Header always append X-Frame-Options "DENY"
+    Header always append X-Content-Type-Options "nosniff"
+    Header always append X-XSS-Protection "1; mode=block"
 </IfModule>
 
 # Set content type
@@ -27,14 +30,27 @@ RewriteRule ^admin/km-price/update$ admin/km-price-update.php [L]
     Header set Content-Type "application/json"
 </FilesMatch>
 
-# Enable CORS
+# Enable CORS - expanded for better browser compatibility
 <IfModule mod_headers.c>
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "Content-Type, Authorization"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, Cache-Control"
     Header always set Access-Control-Max-Age "3600"
+    Header always set Access-Control-Allow-Credentials "true"
+    
+    # Prevent browsers from incorrectly detecting non-scripts as scripts
+    Header always set X-Content-Type-Options "nosniff"
 </IfModule>
 
 # Handle OPTIONS method for CORS preflight
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
+
+# Prevent directory listing
+Options -Indexes
+
+# Deny access to hidden files and directories
+<FilesMatch "^\.">
+    Order allow,deny
+    Deny from all
+</FilesMatch>

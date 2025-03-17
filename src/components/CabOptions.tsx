@@ -32,24 +32,56 @@ export function CabOptions({
   const [expandedCab, setExpandedCab] = useState<string | null>(null);
   const [selectedCabId, setSelectedCabId] = useState<string | null>(selectedCab?.id || null);
   const [cabFares, setCabFares] = useState<Record<string, number>>({});
+  const [lastTripIdentifier, setLastTripIdentifier] = useState<string>('');
+
+  // Create a unique identifier for the current trip configuration
+  const currentTripIdentifier = `${tripType}-${tripMode}-${hourlyPackage || 'none'}-${distance}`;
 
   // Reset cab selection when key parameters change
   useEffect(() => {
-    setSelectedCabId(null);
-    setCabFares({});
-    
-    if (selectedCab) {
-      onSelectCab(null as any); // Reset the selected cab
+    // Check if trip type, mode or package has changed by comparing trip identifiers
+    if (lastTripIdentifier && lastTripIdentifier !== currentTripIdentifier) {
+      console.log('Trip parameters changed, resetting selections and fares');
+      console.log('Previous:', lastTripIdentifier);
+      console.log('Current:', currentTripIdentifier);
+      
+      setSelectedCabId(null);
+      setCabFares({});
+      
+      if (selectedCab) {
+        onSelectCab(null as any); // Reset the selected cab
+      }
+      
+      // Clear any fare-related session data
+      sessionStorage.removeItem('cabFares');
+      sessionStorage.removeItem('selectedCab');
+      sessionStorage.removeItem('calculatedFares');
     }
-  }, [tripType, tripMode, hourlyPackage, onSelectCab]);
+    
+    // Update the last trip identifier
+    setLastTripIdentifier(currentTripIdentifier);
+  }, [tripType, tripMode, hourlyPackage, distance, currentTripIdentifier, lastTripIdentifier, onSelectCab, selectedCab]);
 
   // Calculate fares for all cab types whenever relevant parameters change
   useEffect(() => {
     if (distance > 0) {
+      console.log(`Calculating fares for ${tripType} trip, ${distance}km`);
+      
       const newFares: Record<string, number> = {};
       cabTypes.forEach(cab => {
         newFares[cab.id] = calculateCabFare(cab);
       });
+      
+      // Store the trip type with the fares to verify later
+      const fareData = {
+        tripType,
+        tripMode,
+        hourlyPackage,
+        distance,
+        fares: newFares
+      };
+      
+      sessionStorage.setItem('calculatedFares', JSON.stringify(fareData));
       setCabFares(newFares);
     } else {
       setCabFares({});
@@ -71,7 +103,16 @@ export function CabOptions({
     setSelectedCabId(cab.id);
     onSelectCab(cab);
     
-    sessionStorage.setItem('selectedCab', JSON.stringify(cab));
+    // Store with trip type information to validate later
+    const cabData = {
+      cab: cab,
+      tripType: tripType,
+      tripMode: tripMode,
+      hourlyPackage: hourlyPackage,
+      fare: cabFares[cab.id]
+    };
+    
+    sessionStorage.setItem('selectedCab', JSON.stringify(cabData));
     
     const bookingSummary = document.getElementById('booking-summary');
     if (bookingSummary) {

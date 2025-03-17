@@ -273,7 +273,25 @@ export const bookingAPI = {
         console.log('Set default distance for local booking:', bookingData.distance);
       }
       
-      const response = await apiClient.post('/book', bookingData);
+      // Validate and format date fields
+      if (!bookingData.pickupDate) {
+        throw new Error('Pickup date is required');
+      }
+      
+      // Safe date handling
+      let formattedBookingData = {
+        ...bookingData,
+        pickupDate: typeof bookingData.pickupDate === 'string' 
+          ? bookingData.pickupDate 
+          : bookingData.pickupDate.toISOString(),
+        returnDate: bookingData.returnDate 
+          ? (typeof bookingData.returnDate === 'string'
+              ? bookingData.returnDate
+              : bookingData.returnDate.toISOString())
+          : null
+      };
+      
+      const response = await apiClient.post('/book', formattedBookingData);
       if (response.data.status === 'success') {
         return response.data;
       } else {

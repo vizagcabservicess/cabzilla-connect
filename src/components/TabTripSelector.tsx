@@ -2,6 +2,7 @@
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useEffect } from "react";
+import { useToast } from "@/components/ui/use-toast";
 
 interface TabTripSelectorProps {
   selectedTab: 'outstation' | 'local' | 'airport' | 'tour';
@@ -16,6 +17,8 @@ export function TabTripSelector({
   onTabChange, 
   onTripModeChange 
 }: TabTripSelectorProps) {
+  const { toast } = useToast();
+
   // Function to thoroughly clear all cache data
   const clearAllCacheData = () => {
     console.log("Clearing all cached data");
@@ -31,8 +34,21 @@ export function TabTripSelector({
     sessionStorage.removeItem('pickupDate');
     sessionStorage.removeItem('returnDate');
     
+    // Force clear all calculated fare data
+    sessionStorage.removeItem('calculatedFares');
+    
+    // Force clear trip specific data
+    sessionStorage.removeItem('tripType');
+    sessionStorage.removeItem('tripMode');
+    sessionStorage.removeItem('distance');
+    
+    // Clear localStorage items that might cache fare data
+    localStorage.removeItem('cabFares');
+    localStorage.removeItem('lastTripType');
+    localStorage.removeItem('lastTripMode');
+    
     // Force clear local cache variables
-    const localKeys = ['fare-', 'discount-', 'cab-', 'location-', 'trip-'];
+    const localKeys = ['fare-', 'discount-', 'cab-', 'location-', 'trip-', 'price-'];
     
     // Loop through sessionStorage to find items with these keys
     for (let i = 0; i < sessionStorage.length; i++) {
@@ -47,17 +63,49 @@ export function TabTripSelector({
         }
       }
     }
+    
+    // Also clear any items in localStorage that might be caching fare data
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key) {
+        for (const prefix of localKeys) {
+          if (key.startsWith(prefix)) {
+            console.log(`Removing cached item from localStorage: ${key}`);
+            localStorage.removeItem(key);
+            break;
+          }
+        }
+      }
+    }
   };
   
   // Clear any cached fare data when tab changes
   useEffect(() => {
     clearAllCacheData();
     
+    // Store current trip type in sessionStorage to detect changes
+    sessionStorage.setItem('currentTripType', selectedTab);
+    
     // Reset drop location when switching to local
     if (selectedTab === 'local') {
       sessionStorage.removeItem('dropLocation');
     }
-  }, [selectedTab]);
+    
+    // Notify user of tab change with toast
+    const tabNames = {
+      'outstation': 'Outstation Trip',
+      'local': 'Local Hourly Rental',
+      'airport': 'Airport Transfer',
+      'tour': 'Tour Package'
+    };
+    
+    toast({
+      title: `Switched to ${tabNames[selectedTab]}`,
+      description: "All previous selections have been reset.",
+      duration: 2000,
+    });
+    
+  }, [selectedTab, toast]);
   
   // Function to handle tab change with complete data reset
   const handleTabChange = (value: string) => {
