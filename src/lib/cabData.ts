@@ -240,7 +240,7 @@ export function calculateFare(
     
     const selectedPackage = hourlyPackages.find(pkg => pkg.id === hourlyPackageId);
     
-    if (selectedPackage && distance > selectedPackage.kilometers) {
+    if (selectedPackage && distance > selectedPackage.kilometers && distance < 300) {
       const extraKm = distance - selectedPackage.kilometers;
       const extraChargeRates = extraCharges[cabType.id as keyof typeof extraCharges];
       if (extraChargeRates) {

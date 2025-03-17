@@ -196,7 +196,8 @@ export function Hero() {
       totalPrice = getLocalPackagePrice(hourlyPackage, selectedCab.name);
       
       const packageKm = hourlyPackage === '8hrs-80km' ? 80 : 100;
-      if (distance > packageKm) {
+      
+      if (distance > packageKm && distance < 300) {
         const extraKm = distance - packageKm;
         const extraKmRate = selectedCab.pricePerKm;
         totalPrice += extraKm * extraKmRate;

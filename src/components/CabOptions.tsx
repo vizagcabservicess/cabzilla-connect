@@ -157,9 +157,13 @@ export function CabOptions({
         baseFare: totalFare 
       });
       
-      // Calculate extra km charges if any
+      // For local packages, we shouldn't be calculating extra kilometers
+      // as the package already includes a set number of kilometers
       const packageKm = hourlyPackage === '8hrs-80km' ? 80 : 100;
-      if (distance > packageKm) {
+      
+      // Only add extra km charges if the distance is manually set higher than package km
+      // AND it's not an unreasonably high value (to prevent calculation errors)
+      if (distance > packageKm && distance < 300) {
         const extraKm = distance - packageKm;
         totalFare += extraKm * cab.pricePerKm;
         console.log(`Added ${extraKm}km extra at ${cab.pricePerKm}/km = ${extraKm * cab.pricePerKm}`);
