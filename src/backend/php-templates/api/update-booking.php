@@ -66,12 +66,25 @@ if (strpos($bookingId, '?') !== false) {
 logError("Extracted booking ID", ['id' => $bookingId, 'parts' => $parts, 'uri' => $requestUri]);
 
 if (!is_numeric($bookingId)) {
-    sendJsonResponse(['status' => 'error', 'message' => 'Invalid booking ID: ' . $bookingId], 400);
+    sendJsonResponse(['status' => 'error', 'message' => 'Invalid booking ID format: ' . $bookingId], 400);
     exit;
 }
 
 // Get the request body
-$data = json_decode(file_get_contents('php://input'), true);
+$inputJSON = file_get_contents('php://input');
+if (empty($inputJSON)) {
+    logError("Empty request body in update-booking.php");
+    sendJsonResponse(['status' => 'error', 'message' => 'Empty request body'], 400);
+    exit;
+}
+
+$data = json_decode($inputJSON, true);
+if (json_last_error() !== JSON_ERROR_NONE) {
+    logError("JSON parsing error in update-booking.php", ['error' => json_last_error_msg(), 'input' => $inputJSON]);
+    sendJsonResponse(['status' => 'error', 'message' => 'Invalid JSON data: ' . json_last_error_msg()], 400);
+    exit;
+}
+
 logError("Booking update data", ['booking_id' => $bookingId, 'data' => $data]);
 
 // Connect to database
@@ -194,7 +207,13 @@ try {
     
     // Bind parameters dynamically
     if (!empty($params)) {
-        $stmt->bind_param($types, ...$params);
+        $paramRefs = [];
+        foreach ($params as $key => $value) {
+            $paramRefs[] = &$params[$key];
+        }
+        
+        array_unshift($paramRefs, $types);
+        call_user_func_array([$stmt, 'bind_param'], $paramRefs);
     }
     
     if (!$stmt->execute()) {

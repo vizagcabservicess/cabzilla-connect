@@ -1,3 +1,4 @@
+
 import { Location as ApiLocation } from '@/types/api';
 import { Location as AppLocation } from '@/lib/locationData';
 
@@ -12,7 +13,8 @@ export const convertToApiLocation = (location: AppLocation | null): ApiLocation 
     name: location.name || '',
     address: location.address || location.name || '',
     lat: location.lat || 0,
-    lng: location.lng || 0
+    lng: location.lng || 0,
+    isInVizag: location.isInVizag
   };
 };
 
@@ -40,8 +42,10 @@ export const createLocationChangeHandler = (
       popularityScore: 50
     };
     
-    // Check if location is in Visakhapatnam
-    appLocation.isInVizag = isLocationInVizag(appLocation);
+    // Check if location is in Visakhapatnam - either from API flag or by calculation
+    appLocation.isInVizag = newLocation.isInVizag !== undefined ? 
+      newLocation.isInVizag : 
+      isLocationInVizag(appLocation);
     
     console.log('Location changed:', appLocation);
     
@@ -61,6 +65,11 @@ export const createLocationChangeHandler = (
  * Check if a location is in Visakhapatnam based on coordinates and address
  */
 export const isLocationInVizag = (location: AppLocation): boolean => {
+  // If isInVizag is already set, use that value
+  if (location.isInVizag !== undefined) {
+    return location.isInVizag;
+  }
+  
   // Check by coordinates (Visakhapatnam approximate bounds)
   if (location.lat && location.lng) {
     const isInVizagBounds = 

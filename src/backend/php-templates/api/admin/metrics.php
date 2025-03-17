@@ -1,50 +1,47 @@
+
 <?php
-// Include configuration file
+// Include database configuration
 require_once __DIR__ . '/../../config.php';
 
-// CORS Headers
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
-header('Content-Type: application/json');
-
-// Handle preflight OPTIONS request
+// Handle CORS preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Methods: GET, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization');
+    header('Content-Type: application/json');
     http_response_code(200);
     exit;
 }
 
-// Only allow GET requests for this endpoint
+// Handle only GET requests
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+    header('Access-Control-Allow-Origin: *');
     sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
     exit;
 }
 
-// Get period from query params (today, week, month)
-$period = isset($_GET['period']) ? $_GET['period'] : 'week';
-if (!in_array($period, ['today', 'week', 'month'])) {
-    $period = 'week'; // Default to week if invalid period
-}
-
-// Get user ID from JWT token and check if admin
+// Check for authorization
 $headers = getallheaders();
-$userId = null;
-$isAdmin = false;
-
-if (isset($headers['Authorization']) || isset($headers['authorization'])) {
-    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
-    $token = str_replace('Bearer ', '', $authHeader);
-    
-    $payload = verifyJwtToken($token);
-    if ($payload && isset($payload['user_id'])) {
-        $userId = $payload['user_id'];
-        $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
-    }
+if (!isset($headers['Authorization']) && !isset($headers['authorization'])) {
+    sendJsonResponse(['status' => 'error', 'message' => 'Authentication required'], 401);
+    exit;
 }
 
-// Check if user is admin
-if (!$isAdmin) {
-    sendJsonResponse(['status' => 'error', 'message' => 'Unauthorized access. Admin privileges required.'], 403);
+$authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
+$token = str_replace('Bearer ', '', $authHeader);
+
+$userData = verifyJwtToken($token);
+if (!$userData || !isset($userData['user_id']) || !isset($userData['role']) || $userData['role'] !== 'admin') {
+    sendJsonResponse(['status' => 'error', 'message' => 'Admin access required'], 403);
+    exit;
+}
+
+// Get period from query parameter, default to 'day'
+$period = isset($_GET['period']) ? $_GET['period'] : 'day';
+$validPeriods = ['today', 'week', 'month', 'year'];
+
+if (!in_array($period, $validPeriods)) {
+    sendJsonResponse(['status' => 'error', 'message' => 'Invalid period parameter. Use today, week, month, or year'], 400);
     exit;
 }
 
@@ -56,71 +53,149 @@ if (!$conn) {
 }
 
 try {
-    // Set date range based on period
-    $startDate = '';
-    $endDate = date('Y-m-d H:i:s'); // Current time
+    // Get date ranges based on period
+    $now = new DateTime();
+    $nowFormatted = $now->format('Y-m-d H:i:s');
+    
+    $dateStart = new DateTime();
     
     switch ($period) {
         case 'today':
-            $startDate = date('Y-m-d 00:00:00'); // Today at midnight
+            $dateStart->setTime(0, 0, 0);
             break;
         case 'week':
-            $startDate = date('Y-m-d 00:00:00', strtotime('-7 days')); // 7 days ago
+            $dateStart->modify('-7 days');
             break;
         case 'month':
-            $startDate = date('Y-m-d 00:00:00', strtotime('-30 days')); // 30 days ago
+            $dateStart->modify('-30 days');
+            break;
+        case 'year':
+            $dateStart->modify('-365 days');
             break;
     }
     
-    // Get total bookings in the period
-    $stmt = $conn->prepare("SELECT COUNT(*) as total FROM bookings WHERE created_at BETWEEN ? AND ?");
-    $stmt->bind_param("ss", $startDate, $endDate);
+    $dateStartFormatted = $dateStart->format('Y-m-d H:i:s');
+    
+    // Calculate previous period for comparison
+    $previousPeriodStart = clone $dateStart;
+    $previousPeriodEnd = clone $dateStart;
+    
+    switch ($period) {
+        case 'today':
+            $previousPeriodStart->modify('-1 day');
+            break;
+        case 'week':
+            $previousPeriodStart->modify('-7 days');
+            break;
+        case 'month':
+            $previousPeriodStart->modify('-30 days');
+            break;
+        case 'year':
+            $previousPeriodStart->modify('-365 days');
+            break;
+    }
+    
+    $previousPeriodStartFormatted = $previousPeriodStart->format('Y-m-d H:i:s');
+    $previousPeriodEndFormatted = $previousPeriodEnd->format('Y-m-d H:i:s');
+    
+    // Log the query parameters for debugging
+    logError("Admin metrics query parameters", [
+        'period' => $period,
+        'dateStart' => $dateStartFormatted,
+        'dateEnd' => $nowFormatted,
+        'previousStart' => $previousPeriodStartFormatted,
+        'previousEnd' => $previousPeriodEndFormatted
+    ]);
+    
+    // Get total bookings for current period
+    $stmt = $conn->prepare("SELECT COUNT(*) as total_bookings FROM bookings WHERE created_at BETWEEN ? AND ?");
+    $stmt->bind_param("ss", $dateStartFormatted, $nowFormatted);
     $stmt->execute();
     $result = $stmt->get_result();
-    $totalBookingsData = $result->fetch_assoc();
-    $totalBookings = $totalBookingsData['total'];
+    $totalBookings = $result->fetch_assoc()['total_bookings'];
     
-    // Get active rides (confirmed status, not completed/cancelled)
-    $activeStatus = 'confirmed';
-    $stmt = $conn->prepare("SELECT COUNT(*) as active FROM bookings WHERE status = ? AND created_at BETWEEN ? AND ?");
-    $stmt->bind_param("sss", $activeStatus, $startDate, $endDate);
+    // Get active rides (with status 'confirmed')
+    $status = 'confirmed';
+    $stmt = $conn->prepare("SELECT COUNT(*) as active_rides FROM bookings WHERE status = ? AND pickup_date BETWEEN ? AND ?");
+    $stmt->bind_param("sss", $status, $dateStartFormatted, $nowFormatted);
     $stmt->execute();
     $result = $stmt->get_result();
-    $activeRidesData = $result->fetch_assoc();
-    $activeRides = $activeRidesData['active'];
+    $activeRides = $result->fetch_assoc()['active_rides'];
     
-    // Get total revenue in the period
-    $stmt = $conn->prepare("SELECT SUM(total_amount) as revenue FROM bookings WHERE created_at BETWEEN ? AND ?");
-    $stmt->bind_param("ss", $startDate, $endDate);
+    // Get total revenue
+    $stmt = $conn->prepare("SELECT SUM(total_amount) as total_revenue FROM bookings WHERE created_at BETWEEN ? AND ?");
+    $stmt->bind_param("ss", $dateStartFormatted, $nowFormatted);
     $stmt->execute();
     $result = $stmt->get_result();
-    $revenueData = $result->fetch_assoc();
-    $totalRevenue = $revenueData['revenue'] ? floatval($revenueData['revenue']) : 0;
+    $totalRevenue = $result->fetch_assoc()['total_revenue'] ?: 0;
     
-    // Get upcoming rides (with pickup_date in the future)
-    $now = date('Y-m-d H:i:s');
-    $stmt = $conn->prepare("SELECT COUNT(*) as upcoming FROM bookings WHERE pickup_date > ? AND status != 'cancelled'");
-    $stmt->bind_param("s", $now);
+    // Get driver statistics
+    $availableStatus = 'available';
+    $busyStatus = 'busy';
+    
+    $stmt = $conn->prepare("SELECT 
+        SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as available_drivers,
+        SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as busy_drivers
+        FROM drivers");
+    $stmt->bind_param("ss", $availableStatus, $busyStatus);
     $stmt->execute();
     $result = $stmt->get_result();
-    $upcomingRidesData = $result->fetch_assoc();
-    $upcomingRides = $upcomingRidesData['upcoming'];
+    $driverStats = $result->fetch_assoc();
     
-    // Create metrics response
+    // Get average rating
+    $stmt = $conn->prepare("SELECT AVG(rating) as avg_rating FROM drivers");
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $avgRating = $result->fetch_assoc()['avg_rating'] ?: 4.5;
+    
+    // Get upcoming rides
+    $currentDate = date('Y-m-d H:i:s');
+    $confirmedStatus = 'confirmed';
+    
+    $stmt = $conn->prepare("SELECT COUNT(*) as upcoming_rides FROM bookings 
+        WHERE status = ? AND pickup_date > ?");
+    $stmt->bind_param("ss", $confirmedStatus, $currentDate);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $upcomingRides = $result->fetch_assoc()['upcoming_rides'];
+    
+    // Get previous period revenue for comparison
+    $stmt = $conn->prepare("SELECT SUM(total_amount) as prev_revenue FROM bookings 
+        WHERE created_at BETWEEN ? AND ?");
+    $stmt->bind_param("ss", $previousPeriodStartFormatted, $previousPeriodEndFormatted);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $prevRevenue = $result->fetch_assoc()['prev_revenue'] ?: 0;
+    
+    // Calculate percentage change
+    $percentChange = 0;
+    if ($prevRevenue > 0) {
+        $percentChange = (($totalRevenue - $prevRevenue) / $prevRevenue) * 100;
+    }
+    
+    // Prepare response data
     $metrics = [
-        'totalBookings' => intval($totalBookings),
-        'activeRides' => intval($activeRides),
-        'totalRevenue' => $totalRevenue,
-        'availableDrivers' => 5, // Placeholder value, would be from drivers table 
-        'busyDrivers' => 3,      // Placeholder value, would be from drivers table
-        'avgRating' => 4.7,      // Placeholder value, would be calculated from ratings
-        'upcomingRides' => intval($upcomingRides)
+        'totalBookings' => (int)$totalBookings,
+        'activeRides' => (int)$activeRides,
+        'totalRevenue' => (float)$totalRevenue,
+        'availableDrivers' => (int)($driverStats['available_drivers'] ?? 5),
+        'busyDrivers' => (int)($driverStats['busy_drivers'] ?? 3),
+        'avgRating' => (float)$avgRating,
+        'upcomingRides' => (int)$upcomingRides,
+        'comparison' => [
+            'previous' => (float)$prevRevenue,
+            'percentChange' => round($percentChange, 2)
+        ],
+        'period' => $period
     ];
     
     // Send response
-    sendJsonResponse(['status' => 'success', 'data' => $metrics]);
+    sendJsonResponse([
+        'status' => 'success',
+        'data' => $metrics
+    ]);
     
 } catch (Exception $e) {
-    logError("Error fetching admin metrics", ['error' => $e->getMessage(), 'period' => $period]);
-    sendJsonResponse(['status' => 'error', 'message' => 'Failed to get metrics: ' . $e->getMessage()], 500);
+    logError("Error fetching admin metrics", ['error' => $e->getMessage()]);
+    sendJsonResponse(['status' => 'error', 'message' => 'Error fetching metrics: ' . $e->getMessage()], 500);
 }
