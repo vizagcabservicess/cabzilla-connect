@@ -44,10 +44,11 @@ export function LocationInput({
   // Reference to the autocomplete instance
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const locationChangedRef = useRef<boolean>(false);
   
   // Update the address whenever locationData changes
   useEffect(() => {
-    if (locationData) {
+    if (locationData && !locationChangedRef.current) {
       const newAddress = typeof locationData.address === 'string' && locationData.address.trim() !== '' 
         ? locationData.address 
         : typeof locationData.name === 'string' && locationData.name.trim() !== '' 
@@ -64,19 +65,33 @@ export function LocationInput({
   // Handle direct input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newAddress = e.target.value;
+    locationChangedRef.current = true;
     setAddress(newAddress);
     
     // Create a basic location object with the typed address
-    if (handleLocationChange) {
-      handleLocationChange({
+    if (handleLocationChange && newAddress) {
+      const updatedLocation: Location = {
+        ...locationData,
         address: newAddress,
         name: newAddress,
-        id: locationData.id || '',
-        lat: locationData.lat || 0,
-        lng: locationData.lng || 0
-      });
+        id: locationData.id || `loc_${Date.now()}`
+      };
+      
+      // Preserve lat/lng if they exist
+      if (locationData.lat) updatedLocation.lat = locationData.lat;
+      if (locationData.lng) updatedLocation.lng = locationData.lng;
+      
+      handleLocationChange(updatedLocation);
     }
   };
+
+  // Debounced version of handleInputChange to prevent too many state updates
+  const debouncedHandleChange = useCallback(
+    debounce((e: React.ChangeEvent<HTMLInputElement>) => {
+      handleInputChange(e);
+    }, 300),
+    [handleLocationChange, locationData]
+  );
 
   // Setup Google Maps autocomplete
   useEffect(() => {
@@ -86,6 +101,7 @@ export function LocationInput({
       // Clear any existing autocomplete
       if (autocompleteRef.current) {
         google.maps.event.clearInstanceListeners(autocompleteRef.current);
+        autocompleteRef.current = null;
       }
       
       const options: google.maps.places.AutocompleteOptions = {
@@ -122,6 +138,7 @@ export function LocationInput({
         const formattedAddress = place.formatted_address || place.name || '';
         
         // Update local state
+        locationChangedRef.current = true;
         setAddress(formattedAddress);
         
         // Create location object
@@ -152,6 +169,13 @@ export function LocationInput({
     };
   }, [google, isLoaded, handleLocationChange, disabled, readOnly, isPickupLocation, isAirportTransfer]);
 
+  // Reset locationChangedRef when location input changes
+  useEffect(() => {
+    return () => {
+      locationChangedRef.current = false;
+    };
+  }, []);
+
   return (
     <div className="space-y-2">
       {label && (
@@ -165,7 +189,10 @@ export function LocationInput({
         placeholder={placeholder}
         className={className}
         value={address}
-        onChange={handleInputChange}
+        onChange={(e) => {
+          setAddress(e.target.value);
+          debouncedHandleChange(e);
+        }}
         disabled={disabled}
         readOnly={readOnly}
         autoComplete="off" // Prevent browser's default autocomplete
