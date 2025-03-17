@@ -9,16 +9,16 @@ export function convertToApiLocation(location: LibLocation | null): ApiLocation 
   if (!location) return { address: '' };
   
   return {
-    id: location.id,
-    name: location.name,
-    city: location.city,
-    state: location.state,
-    lat: location.lat,
-    lng: location.lng,
-    type: location.type,
-    popularityScore: location.popularityScore,
-    isPickupLocation: location.isPickupLocation,
-    isDropLocation: location.isDropLocation,
+    id: location.id || '',
+    name: location.name || '',
+    city: location.city || '',
+    state: location.state || '',
+    lat: location.lat || 0,
+    lng: location.lng || 0,
+    type: location.type || 'other',
+    popularityScore: location.popularityScore || 0,
+    isPickupLocation: location.isPickupLocation || false,
+    isDropLocation: location.isDropLocation || false,
     address: location.name || '' // Use name as address since locationData.ts doesn't have address
   };
 }
@@ -30,11 +30,13 @@ export function createLocationChangeHandler(
   setter: React.Dispatch<React.SetStateAction<LibLocation | null>>
 ): (location: ApiLocation) => void {
   return (apiLocation: ApiLocation) => {
+    // Handle null or empty location
     if (!apiLocation || !apiLocation.address) {
       setter(null);
       return;
     }
     
+    // Convert API location to Library location format with safe defaults
     const libLocation: LibLocation = {
       id: apiLocation.id || '',
       name: apiLocation.name || apiLocation.address || '',
@@ -44,9 +46,10 @@ export function createLocationChangeHandler(
       lng: apiLocation.lng || 0,
       type: apiLocation.type || 'other',
       popularityScore: apiLocation.popularityScore || 0,
-      isPickupLocation: apiLocation.isPickupLocation,
-      isDropLocation: apiLocation.isDropLocation
+      isPickupLocation: apiLocation.isPickupLocation || false,
+      isDropLocation: apiLocation.isDropLocation || false
     };
+    
     setter(libLocation);
   };
 }

@@ -45,66 +45,90 @@ export function LocationInput({
   }, [locationData]);
 
   useEffect(() => {
+    // Early return if conditions aren't met
     if (!google || !google.maps || !google.maps.places || disabled || readOnly) return;
-
-    let autocomplete: google.maps.places.Autocomplete;
-
+    
+    // Reference to the autocomplete instance
+    let autocomplete: google.maps.places.Autocomplete | null = null;
+    
+    // Function to create and set up the autocomplete
     const initAutocomplete = () => {
-      const inputElement = document.getElementById('location-input') as HTMLInputElement;
-      if (!inputElement) return;
-
-      const options: google.maps.places.AutocompleteOptions = {
-        types: ['geocode'],
-        fields: ['address_components', 'geometry', 'name', 'formatted_address'],
-      };
-      
-      // Only apply country restriction for India if specified
-      if (isAirportTransfer) {
-        options.componentRestrictions = { country: 'in' };
-      }
-
-      autocomplete = new google.maps.places.Autocomplete(inputElement, options);
-
-      autocomplete.addListener('place_changed', () => {
-        const place = autocomplete.getPlace();
-
-        if (!place || !place.geometry) {
-          console.log("Autocomplete's returned place contains no geometry");
+      try {
+        const inputElement = document.getElementById('location-input') as HTMLInputElement;
+        if (!inputElement) {
+          console.error("Location input element not found");
           return;
         }
 
-        const newLocation: Location = {
-          address: place.formatted_address || address || '',
-          lat: place.geometry.location?.lat() || 0,
-          lng: place.geometry.location?.lng() || 0,
-          name: place.name || place.formatted_address || '',
-          // Retain other properties if they exist
-          ...(locationData.id && { id: locationData.id }),
-          ...(locationData.city && { city: locationData.city }),
-          ...(locationData.state && { state: locationData.state }),
-          ...(locationData.type && { type: locationData.type }),
-          ...(locationData.popularityScore && { popularityScore: locationData.popularityScore }),
+        const options: google.maps.places.AutocompleteOptions = {
+          types: ['geocode'],
+          fields: ['address_components', 'geometry', 'name', 'formatted_address'],
         };
-
-        setAddress(place.formatted_address || address || '');
-        if (handleLocationChange) {
-          handleLocationChange(newLocation);
+        
+        // Only apply country restriction for India if specified
+        if (isAirportTransfer === true) {
+          options.componentRestrictions = { country: 'in' };
         }
-      });
-    };
 
-    if (google && google.maps && google.maps.places) {
-      try {
-        initAutocomplete();
+        // Create the autocomplete instance
+        autocomplete = new google.maps.places.Autocomplete(inputElement, options);
+
+        // Add place_changed listener
+        autocomplete.addListener('place_changed', () => {
+          if (!autocomplete) return;
+          
+          try {
+            const place = autocomplete.getPlace();
+
+            // Safely check that place and geometry exist
+            if (!place || !place.geometry || !place.geometry.location) {
+              console.log("Autocomplete's returned place contains no geometry");
+              return;
+            }
+
+            // Create location object with safe default values
+            const newLocation: Location = {
+              address: place.formatted_address || address || '',
+              lat: place.geometry.location.lat(),
+              lng: place.geometry.location.lng(),
+              name: place.name || place.formatted_address || '',
+              // Retain other properties if they exist
+              ...(locationData.id && { id: locationData.id }),
+              ...(locationData.city && { city: locationData.city }),
+              ...(locationData.state && { state: locationData.state }),
+              ...(locationData.type && { type: locationData.type }),
+              ...(locationData.popularityScore && { popularityScore: locationData.popularityScore }),
+              ...(locationData.isPickupLocation && { isPickupLocation: locationData.isPickupLocation }),
+              ...(locationData.isDropLocation && { isDropLocation: locationData.isDropLocation }),
+            };
+
+            setAddress(place.formatted_address || address || '');
+            if (handleLocationChange) {
+              handleLocationChange(newLocation);
+            }
+          } catch (error) {
+            console.error("Error handling place_changed event:", error);
+          }
+        });
       } catch (error) {
         console.error("Error initializing autocomplete:", error);
       }
+    };
+
+    // Initialize autocomplete if Google Maps API is loaded
+    if (google && google.maps && google.maps.places) {
+      initAutocomplete();
     }
 
+    // Cleanup function to remove listeners when the component unmounts
     return () => {
-      // Cleanup when the component unmounts or google changes
       if (autocomplete) {
-        google.maps.event.clearInstanceListeners(autocomplete);
+        // Safely clear instance listeners
+        try {
+          google.maps.event.clearInstanceListeners(autocomplete);
+        } catch (error) {
+          console.error("Error clearing instance listeners:", error);
+        }
       }
     };
   }, [google, handleLocationChange, address, disabled, readOnly, locationData, isAirportTransfer]);
@@ -112,6 +136,7 @@ export function LocationInput({
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newAddress = e.target.value || '';
     setAddress(newAddress);
+    
     if (handleLocationChange) {
       // Create a new location object with the updated address while preserving other properties
       const updatedLocation: Location = {
