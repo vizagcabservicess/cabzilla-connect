@@ -60,7 +60,7 @@ export const createLocationChangeHandler = (
 /**
  * Check if a location is in Visakhapatnam based on coordinates and address
  */
-export const isLocationInVizag = (location: AppLocation | ApiLocation): boolean => {
+export const isLocationInVizag = (location: AppLocation | ApiLocation | null | undefined): boolean => {
   if (!location) return false;
   
   // Check by coordinates (Visakhapatnam approximate bounds)
@@ -97,6 +97,8 @@ export const isLocationInVizag = (location: AppLocation | ApiLocation): boolean 
  * Extract city from a formatted address
  */
 function extractCityFromAddress(address: string): string {
+  if (!address) return 'Visakhapatnam';
+  
   // Simple extraction - get the first part that might be a city
   const parts = address.split(',').map(part => part.trim());
   
@@ -115,6 +117,8 @@ function extractCityFromAddress(address: string): string {
  * Extract state from a formatted address
  */
 function extractStateFromAddress(address: string): string {
+  if (!address) return 'Andhra Pradesh';
+  
   // Try to find Andhra Pradesh or other state names in the address
   if (address.includes('Andhra Pradesh')) {
     return 'Andhra Pradesh';

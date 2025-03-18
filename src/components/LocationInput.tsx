@@ -53,7 +53,7 @@ export function LocationInput({
     if (!locationData) return;
     
     // Store current location to prevent unnecessary updates
-    if (JSON.stringify(prevLocationRef.current) === JSON.stringify(locationData)) {
+    if (prevLocationRef.current && JSON.stringify(prevLocationRef.current) === JSON.stringify(locationData)) {
       return;
     }
     
@@ -93,7 +93,9 @@ export function LocationInput({
       if (locationData.lng) updatedLocation.lng = locationData.lng;
       
       // Default isInVizag to false if it's undefined and we don't have coordinates to check
-      updatedLocation.isInVizag = locationData.isInVizag;
+      if (updatedLocation.isInVizag === undefined) {
+        updatedLocation.isInVizag = false;
+      }
       
       // Mark that we've manually changed the location
       locationChangedRef.current = true;
@@ -196,6 +198,8 @@ export function LocationInput({
 
   // Helper function to determine if a location is in Vizag
   function checkIfLocationIsInVizag(lat: number, lng: number, address: string): boolean {
+    if (!address) return false;
+    
     // Check coordinates (Visakhapatnam bounds)
     const isInVizagBounds = 
       lat >= 17.6 && lat <= 17.9 && 
