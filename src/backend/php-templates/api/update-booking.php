@@ -1,251 +1,159 @@
 
 <?php
-// Adjust the path to config.php correctly
+// Include configuration file
 require_once __DIR__ . '/../config.php';
 
-// For CORS preflight request
+// CORS Headers
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: *');
+header('Content-Type: application/json');
+
+// Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    // Send CORS headers
-    header('Access-Control-Allow-Origin: *');
-    header('Access-Control-Allow-Methods: PUT, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization');
-    header('Content-Type: application/json');
     http_response_code(200);
     exit;
 }
 
-// Allow only PUT requests
+// Only allow PUT requests for this endpoint
 if ($_SERVER['REQUEST_METHOD'] !== 'PUT') {
-    // Add CORS headers
-    header('Access-Control-Allow-Origin: *');
-    header('Access-Control-Allow-Methods: PUT, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization');
-    
     sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
     exit;
 }
 
-// Log request data for debugging
-logError("update-booking.php request initiated", [
-    'method' => $_SERVER['REQUEST_METHOD'],
-    'headers' => getallheaders(),
-    'uri' => $_SERVER['REQUEST_URI']
-]);
+// Get booking ID from URL
+$bookingId = null;
+if (isset($_GET['id'])) {
+    $bookingId = $_GET['id'];
+} else {
+    sendJsonResponse(['status' => 'error', 'message' => 'Booking ID is required'], 400);
+    exit;
+}
 
-// Ensure user is authenticated
+// Get user ID from JWT token
 $headers = getallheaders();
-if (!isset($headers['Authorization']) && !isset($headers['authorization'])) {
-    logError("Missing authorization header in update-booking.php");
+$userId = null;
+$isAdmin = false;
+
+if (isset($headers['Authorization']) || isset($headers['authorization'])) {
+    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
+    $token = str_replace('Bearer ', '', $authHeader);
+    
+    $payload = verifyJwtToken($token);
+    if ($payload && isset($payload['user_id'])) {
+        $userId = $payload['user_id'];
+        $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
+    }
+}
+
+if (!$userId && !$isAdmin) {
     sendJsonResponse(['status' => 'error', 'message' => 'Authentication required'], 401);
     exit;
 }
 
-$authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
-$token = str_replace('Bearer ', '', $authHeader);
-
-$userData = verifyJwtToken($token);
-if (!$userData || !isset($userData['user_id'])) {
-    logError("Authentication failed in update-booking.php");
-    sendJsonResponse(['status' => 'error', 'message' => 'Invalid or expired token'], 401);
-    exit;
-}
-
-$userId = $userData['user_id'];
-$isAdmin = isset($userData['role']) && $userData['role'] === 'admin';
-
-// Get the booking ID from URL
-$requestUri = $_SERVER['REQUEST_URI'];
-$parts = explode('/', trim($requestUri, '/'));
-$bookingId = end($parts);
-
-// Check if the ID contains any query parameters and remove them
-if (strpos($bookingId, '?') !== false) {
-    $bookingId = substr($bookingId, 0, strpos($bookingId, '?'));
-}
-
-logError("Extracted booking ID", ['id' => $bookingId, 'parts' => $parts, 'uri' => $requestUri]);
-
-if (!is_numeric($bookingId)) {
-    sendJsonResponse(['status' => 'error', 'message' => 'Invalid booking ID: ' . $bookingId], 400);
-    exit;
-}
-
-// Get the request body
+// Get data from request body
 $data = json_decode(file_get_contents('php://input'), true);
-logError("Booking update data", ['booking_id' => $bookingId, 'data' => $data]);
+if (!$data) {
+    sendJsonResponse(['status' => 'error', 'message' => 'Invalid request data'], 400);
+    exit;
+}
 
 // Connect to database
 $conn = getDbConnection();
 if (!$conn) {
-    logError("Database connection failed in update-booking.php");
     sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed'], 500);
     exit;
 }
 
-// Check if booking exists and belongs to the user (or if admin)
-$stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
-if (!$stmt) {
-    logError("Prepare statement failed for booking check", ['error' => $conn->error]);
-    sendJsonResponse(['status' => 'error', 'message' => 'Database error: ' . $conn->error], 500);
-    exit;
-}
-
-$stmt->bind_param("i", $bookingId);
-if (!$stmt->execute()) {
-    logError("Execute statement failed for booking check", ['error' => $stmt->error]);
-    sendJsonResponse(['status' => 'error', 'message' => 'Database error: ' . $stmt->error], 500);
-    exit;
-}
-
-$result = $stmt->get_result();
-$booking = $result->fetch_assoc();
-
-if (!$booking) {
-    sendJsonResponse(['status' => 'error', 'message' => 'Booking not found with ID: ' . $bookingId], 404);
-    exit;
-}
-
-// Check if this user is authorized to update this booking
-if (!$isAdmin && $booking['user_id'] != $userId) {
-    sendJsonResponse(['status' => 'error', 'message' => 'You are not authorized to update this booking'], 403);
-    exit;
-}
-
-// Begin transaction for data consistency
-$conn->begin_transaction();
-
 try {
-    // Prepare update fields
-    $updateFields = [];
-    $types = "";
-    $params = [];
+    // First check if the booking exists and belongs to the user or the user is an admin
+    $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
+    $stmt->bind_param("i", $bookingId);
+    $stmt->execute();
+    $result = $stmt->get_result();
     
-    // Fields that can be updated by users
-    $allowedFields = [
-        'passenger_name' => 'passengerName',
-        'passenger_phone' => 'passengerPhone',
-        'passenger_email' => 'passengerEmail',
-        'pickup_date' => 'pickupDate',
-        'pickup_location' => 'pickupLocation',
-        'drop_location' => 'dropLocation'
-    ];
-    
-    // Additional fields that can only be updated by admins
-    if ($isAdmin) {
-        $allowedFields = array_merge($allowedFields, [
-            'return_date' => 'returnDate',
-            'cab_type' => 'cabType',
-            'trip_type' => 'tripType',
-            'trip_mode' => 'tripMode',
-            'total_amount' => 'totalAmount',
-            'status' => 'status',
-            'driver_name' => 'driverName',
-            'driver_phone' => 'driverPhone'
-        ]);
-    }
-    
-    // Log the data before processing
-    logError("Processing update with data", $data);
-    
-    // Build the update statement dynamically
-    foreach ($allowedFields as $dbField => $requestField) {
-        if (array_key_exists($requestField, $data)) {
-            $updateFields[] = "$dbField = ?";
-            
-            // Determine the type for bind_param
-            if ($dbField === 'total_amount') {
-                $types .= "d"; // double
-            } else {
-                $types .= "s"; // string
-            }
-            
-            // Handle null values and empty strings properly
-            $value = $data[$requestField];
-            if ($value === null || $value === '') {
-                $value = null;
-            }
-            
-            $params[] = $value;
-            logError("Adding field to update", ['field' => $dbField, 'value' => $value]);
-        }
-    }
-    
-    // Always update the 'updated_at' field
-    $updateFields[] = "updated_at = NOW()";
-    
-    // If there are no fields to update, return success
-    if (empty($updateFields)) {
-        $conn->commit();
-        sendJsonResponse(['status' => 'success', 'message' => 'No changes to update']);
+    if ($result->num_rows === 0) {
+        sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
         exit;
     }
     
-    // Prepare and execute the update statement
-    $sql = "UPDATE bookings SET " . implode(", ", $updateFields) . " WHERE id = ?";
-    $types .= "i"; // For the booking ID
-    $params[] = $bookingId;
+    $booking = $result->fetch_assoc();
     
-    logError("Update SQL", ['sql' => $sql, 'types' => $types, 'params' => $params]);
-    
-    $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        throw new Exception("Prepare statement failed: " . $conn->error);
+    // Check if the booking belongs to the user or if the user is an admin
+    if ($booking['user_id'] != $userId && !$isAdmin) {
+        sendJsonResponse(['status' => 'error', 'message' => 'You do not have permission to update this booking'], 403);
+        exit;
     }
     
-    // Bind parameters dynamically
-    if (!empty($params)) {
-        $stmt->bind_param($types, ...$params);
+    // Build the update query based on provided fields
+    $updateFields = [];
+    $updateValues = [];
+    $updateTypes = "";
+    
+    $allowedFields = [
+        'pickup_location' => 'passengerName',
+        'drop_location' => 'dropLocation',
+        'pickup_date' => 'pickupDate',
+        'return_date' => 'returnDate',
+        'passenger_name' => 'passengerName',
+        'passenger_phone' => 'passengerPhone',
+        'passenger_email' => 'passengerEmail'
+    ];
+    
+    // Map API field names to database field names
+    foreach ($allowedFields as $dbField => $apiField) {
+        if (isset($data[$apiField])) {
+            $updateFields[] = "$dbField = ?";
+            $updateValues[] = $data[$apiField];
+            $updateTypes .= "s"; // Assume all fields are strings for simplicity
+        }
     }
     
-    if (!$stmt->execute()) {
-        throw new Exception("Execute statement failed: " . $stmt->error);
+    // Add the booking ID at the end of values
+    $updateValues[] = $bookingId;
+    $updateTypes .= "i";
+    
+    // If no fields to update, return success (no changes)
+    if (count($updateFields) === 0) {
+        sendJsonResponse(['status' => 'success', 'message' => 'No changes to apply']);
+        exit;
     }
     
-    $affectedRows = $stmt->affected_rows;
-    logError("Update affected rows", ['affected_rows' => $affectedRows]);
+    // Update the booking
+    $updateQuery = "UPDATE bookings SET " . implode(", ", $updateFields) . ", updated_at = NOW() WHERE id = ?";
+    $updateStmt = $conn->prepare($updateQuery);
     
-    // Log the update
-    logError("Booking updated successfully", [
-        'booking_id' => $bookingId,
-        'fields_updated' => implode(", ", array_keys($allowedFields)),
-        'updated_by' => $userId
-    ]);
+    // Dynamically bind parameters
+    $bindParams = array_merge([$updateTypes], $updateValues);
+    $updateStmt->bind_param(...$bindParams);
+    
+    $success = $updateStmt->execute();
+    
+    if (!$success) {
+        throw new Exception('Database error: ' . $updateStmt->error);
+    }
     
     // Get the updated booking
     $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
-    if (!$stmt) {
-        throw new Exception("Prepare statement failed for select: " . $conn->error);
-    }
-    
     $stmt->bind_param("i", $bookingId);
-    if (!$stmt->execute()) {
-        throw new Exception("Execute statement failed for select: " . $stmt->error);
-    }
-    
+    $stmt->execute();
     $result = $stmt->get_result();
     $updatedBooking = $result->fetch_assoc();
     
-    if (!$updatedBooking) {
-        throw new Exception("No booking found after update");
-    }
-    
-    // Commit the transaction
-    $conn->commit();
-    
-    // Format the booking data for response
-    $formattedBooking = [
-        'id' => $updatedBooking['id'],
-        'userId' => $updatedBooking['user_id'],
+    // Format the response
+    $booking = [
+        'id' => (int)$updatedBooking['id'],
+        'userId' => (int)$updatedBooking['user_id'],
         'bookingNumber' => $updatedBooking['booking_number'],
         'pickupLocation' => $updatedBooking['pickup_location'],
         'dropLocation' => $updatedBooking['drop_location'],
         'pickupDate' => $updatedBooking['pickup_date'],
         'returnDate' => $updatedBooking['return_date'],
         'cabType' => $updatedBooking['cab_type'],
-        'distance' => floatval($updatedBooking['distance']),
+        'distance' => (float)$updatedBooking['distance'],
         'tripType' => $updatedBooking['trip_type'],
         'tripMode' => $updatedBooking['trip_mode'],
-        'totalAmount' => floatval($updatedBooking['total_amount']),
+        'totalAmount' => (float)$updatedBooking['total_amount'],
         'status' => $updatedBooking['status'],
         'passengerName' => $updatedBooking['passenger_name'],
         'passengerPhone' => $updatedBooking['passenger_phone'],
@@ -256,25 +164,8 @@ try {
         'updatedAt' => $updatedBooking['updated_at']
     ];
     
-    // Send response
-    sendJsonResponse([
-        'status' => 'success',
-        'message' => 'Booking updated successfully',
-        'data' => $formattedBooking
-    ]);
+    sendJsonResponse(['status' => 'success', 'message' => 'Booking updated successfully', 'data' => $booking]);
     
 } catch (Exception $e) {
-    // Roll back the transaction on error
-    $conn->rollback();
-    
-    logError("Booking update failed", [
-        'error' => $e->getMessage(),
-        'booking_id' => $bookingId,
-        'data' => $data
-    ]);
-    
-    sendJsonResponse([
-        'status' => 'error',
-        'message' => 'Failed to update booking: ' . $e->getMessage()
-    ], 500);
+    sendJsonResponse(['status' => 'error', 'message' => 'Failed to update booking: ' . $e->getMessage()], 500);
 }

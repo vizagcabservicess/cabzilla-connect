@@ -12,6 +12,7 @@ import { bookingAPI, authAPI } from '@/services/api';
 import { Booking, Location } from '@/types/api';
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, AlertCircle, Loader2 } from 'lucide-react';
+import { safeGetString } from '@/lib/safeStringUtils';
 
 export default function BookingEditPage() {
   const { bookingId } = useParams<{ bookingId: string }>();
@@ -46,14 +47,21 @@ export default function BookingEditPage() {
         setError(null);
         
         const data = await bookingAPI.getBookingById(bookingId);
+        console.log("Loaded booking data:", data);
+        
+        if (!data) {
+          throw new Error('Booking not found');
+        }
+        
         setBooking(data);
         
-        // Initialize form fields with explicit location objects
+        // Initialize form fields with explicit location objects and safely handle values
         if (data.pickupLocation) {
           setPickupLocation({ 
             address: typeof data.pickupLocation === 'string' ? data.pickupLocation : '',
             name: typeof data.pickupLocation === 'string' ? data.pickupLocation : ''
           });
+          console.log("Initialized pickup location:", { address: data.pickupLocation });
         }
         
         if (data.dropLocation) {
@@ -61,15 +69,12 @@ export default function BookingEditPage() {
             address: typeof data.dropLocation === 'string' ? data.dropLocation : '',
             name: typeof data.dropLocation === 'string' ? data.dropLocation : ''
           });
+          console.log("Initialized drop location:", { address: data.dropLocation });
         }
         
         if (data.pickupDate) {
           setPickupDate(new Date(data.pickupDate));
         }
-        
-        console.log("Loaded booking data:", data);
-        console.log("Initialized pickup location:", { address: data.pickupLocation });
-        console.log("Initialized drop location:", { address: data.dropLocation });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Failed to load booking details';
         setError(errorMessage);
@@ -160,6 +165,16 @@ export default function BookingEditPage() {
     );
   }
 
+  // Helper function to safely display tripType
+  const getTripTypeDisplay = () => {
+    const tripType = safeGetString(booking, 'tripType');
+    const tripMode = safeGetString(booking, 'tripMode');
+    
+    if (!tripType) return 'Standard';
+    
+    return `${tripType.toUpperCase()} - ${tripMode || 'One Way'}`;
+  };
+
   return (
     <div className="container mx-auto py-10 px-4">
       <div className="flex items-center mb-6">
@@ -180,12 +195,12 @@ export default function BookingEditPage() {
             <CardContent className="space-y-4">
               <div>
                 <p className="text-sm font-medium mb-1">Trip Type</p>
-                <p className="text-gray-700">{booking.tripType.toUpperCase()} - {booking.tripMode}</p>
+                <p className="text-gray-700">{getTripTypeDisplay()}</p>
               </div>
               <Separator />
               <div>
                 <p className="text-sm font-medium mb-1">Vehicle</p>
-                <p className="text-gray-700">{booking.cabType}</p>
+                <p className="text-gray-700">{booking.cabType || 'Standard Vehicle'}</p>
               </div>
               <Separator />
               {booking.dropLocation && (
@@ -199,7 +214,9 @@ export default function BookingEditPage() {
               )}
               <div>
                 <p className="text-sm font-medium mb-1">Total Amount</p>
-                <p className="text-gray-700 text-lg font-semibold">₹{booking.totalAmount.toLocaleString('en-IN')}</p>
+                <p className="text-gray-700 text-lg font-semibold">
+                  ₹{booking.totalAmount ? booking.totalAmount.toLocaleString('en-IN') : '0'}
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -279,3 +296,4 @@ export default function BookingEditPage() {
     </div>
   );
 }
+
