@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from "@/components/ui/use-toast";
@@ -23,8 +22,16 @@ export default function BookingEditPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [pickupLocation, setPickupLocation] = useState<Location>({ address: '' });
-  const [dropLocation, setDropLocation] = useState<Location>({ address: '' });
+  const [pickupLocation, setPickupLocation] = useState<Location>({ 
+    id: 'pickup', 
+    name: 'Pickup Location',
+    address: '' 
+  });
+  const [dropLocation, setDropLocation] = useState<Location>({ 
+    id: 'drop', 
+    name: 'Drop Location',
+    address: '' 
+  });
   const [pickupDate, setPickupDate] = useState<Date | undefined>(undefined);
   const isAdmin = authAPI.isAdmin();
 
@@ -46,7 +53,6 @@ export default function BookingEditPage() {
         setIsLoading(true);
         setError(null);
         
-        // Convert bookingId from string to number
         const bookingIdNumber = parseInt(bookingId, 10);
         
         const response = await bookingAPI.getBookingById(bookingIdNumber);
@@ -58,24 +64,29 @@ export default function BookingEditPage() {
         setBooking(response);
         
         if (response.pickupLocation) {
-          setPickupLocation({ address: response.pickupLocation });
+          setPickupLocation({ 
+            id: 'pickup',
+            name: 'Pickup Location',
+            address: response.pickupLocation 
+          });
         }
         
         if (response.dropLocation) {
-          setDropLocation({ address: response.dropLocation });
+          setDropLocation({ 
+            id: 'drop',
+            name: 'Drop Location',
+            address: response.dropLocation 
+          });
         }
         
         if (response.pickupDate) {
-          // Handle both ISO strings and SQL datetime format
           let dateObj: Date;
           if (response.pickupDate.includes(' ')) {
-            // Handle SQL format (YYYY-MM-DD HH:MM:SS)
             const [datePart, timePart] = response.pickupDate.split(' ');
             const [year, month, day] = datePart.split('-').map(Number);
             const [hour, minute, second] = timePart.split(':').map(Number);
             dateObj = new Date(year, month - 1, day, hour, minute, second);
           } else {
-            // Handle ISO format
             dateObj = new Date(response.pickupDate);
           }
           
@@ -103,7 +114,6 @@ export default function BookingEditPage() {
     if (!booking || !bookingId) return;
     
     try {
-      // Convert bookingId from string to number
       const bookingIdNumber = parseInt(bookingId, 10);
       
       const response = await bookingAPI.updateBookingStatus(bookingIdNumber, newStatus);
@@ -133,7 +143,6 @@ export default function BookingEditPage() {
     if (!bookingId || !isAdmin) return;
     
     try {
-      // Convert bookingId from string to number
       const bookingIdNumber = parseInt(bookingId, 10);
       
       await bookingAPI.deleteBooking(bookingIdNumber);
@@ -166,7 +175,6 @@ export default function BookingEditPage() {
         pickupDate: pickupDate ? pickupDate.toISOString() : undefined
       };
       
-      // Convert bookingId from string to number
       const bookingIdNumber = parseInt(bookingId, 10);
       
       const result = await bookingAPI.updateBooking(bookingIdNumber, updatedData);
@@ -237,7 +245,6 @@ export default function BookingEditPage() {
     );
   }
 
-  // Ensure totalAmount is a number
   const totalAmount = typeof booking.totalAmount === 'number' 
     ? booking.totalAmount 
     : parseFloat(String(booking.totalAmount)) || 0;

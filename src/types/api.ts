@@ -1,4 +1,3 @@
-
 // src/types/api.ts
 export type BookingStatus =
   | 'pending'
@@ -79,6 +78,7 @@ export interface AuthUser {
   email: string;
   role: 'user' | 'admin';
   phone?: string;
+  createdAt: string;
 }
 
 export interface FareData {
@@ -114,11 +114,9 @@ export interface VehiclePricingData {
   driverAllowance?: number;
 }
 
-// Adding all the missing types that were causing errors
-
 export interface Location {
-  id: string;
-  name: string;
+  id?: string;
+  name?: string;
   address: string;
   lat?: number;
   lng?: number;
@@ -157,6 +155,7 @@ export interface BookingRequest {
   passengerPhone?: string;
   passengerEmail?: string;
   hourlyPackage?: string | null;
+  tourId?: string;
 }
 
 export interface TourFare {
@@ -179,7 +178,6 @@ export interface FareUpdateRequest {
   luxury: number;
 }
 
-// Aliasing VehiclePricing to VehiclePricingData to maintain compatibility
 export type VehiclePricing = VehiclePricingData;
 
 export interface VehiclePricingUpdateRequest {

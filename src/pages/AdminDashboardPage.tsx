@@ -163,11 +163,16 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* Dashboard Metrics with period parameter */}
+      {/* Dashboard Metrics with correct props */}
       <DashboardMetrics 
-        initialMetrics={metrics} 
-        period={selectedPeriod} 
-        onRefresh={fetchDashboardData} 
+        metrics={metrics}
+        isLoading={isLoading}
+        error={null}
+        onFilterChange={(status: BookingStatus | 'all') => {
+          console.log('Filtering by status:', status);
+          // You can add filtering logic here if needed
+        }}
+        selectedPeriod={selectedPeriod}
       />
 
       {/* Charts */}

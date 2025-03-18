@@ -11,7 +11,7 @@ import { Book, CircleOff, RefreshCw, Calendar, MapPin, Car, ShieldAlert, LogOut,
 import { bookingAPI, authAPI } from '@/services/api';
 import { Booking } from '@/types/api';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { DashboardMetrics } from '@/components/admin/DashboardMetrics';
+import { DashboardMetrics, DashboardMetricsType } from '@/components/admin/DashboardMetrics';
 import { ApiErrorFallback } from "@/components/ApiErrorFallback";
 
 const MAX_RETRIES = 3;
@@ -25,6 +25,10 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [metrics, setMetrics] = useState<DashboardMetricsType | null>(null);
+  const [metricsLoading, setMetricsLoading] = useState<boolean>(true);
+  const [metricsError, setMetricsError] = useState<Error | null>(null);
+  const [selectedMetricPeriod, setSelectedMetricPeriod] = useState<'today' | 'week' | 'month'>('week');
   const user = authAPI.getCurrentUser();
   const isAdmin = user?.role === 'admin';
   
@@ -229,6 +233,12 @@ export default function DashboardPage() {
     );
   }
 
+  const handleMetricsFilterChange = (status: BookingStatus | 'all') => {
+    console.log('Filtering metrics by status:', status);
+    // In a real implementation, this would fetch filtered metrics
+    // For now we just log the request
+  };
+
   return (
     <div className="container mx-auto py-10 px-4">
       <div className="flex justify-between items-center mb-8">
@@ -254,7 +264,13 @@ export default function DashboardPage() {
       {isAdmin && (
         <div className="mb-6">
           <h2 className="text-xl font-bold mb-4">Admin Metrics</h2>
-          <DashboardMetrics />
+          <DashboardMetrics 
+            metrics={metrics}
+            isLoading={metricsLoading}
+            error={metricsError}
+            onFilterChange={handleMetricsFilterChange}
+            selectedPeriod={selectedMetricPeriod}
+          />
         </div>
       )}
 

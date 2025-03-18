@@ -8,30 +8,43 @@ import { ArrowDown, ArrowUp, Calendar, CarTaxiFront, CircleDollarSign, Star, Use
 import { cn } from '@/lib/utils';
 
 interface DashboardMetricsProps {
-  metrics: DashboardMetricsType | null;
-  isLoading: boolean;
-  error: Error | null;
-  onFilterChange: (status: BookingStatus | 'all') => void;
-  selectedPeriod: 'today' | 'week' | 'month';
+  metrics?: DashboardMetricsType | null;
+  isLoading?: boolean;
+  error?: Error | null;
+  onFilterChange?: (status: BookingStatus | 'all') => void;
+  selectedPeriod?: 'today' | 'week' | 'month';
+  // Add support for the props used in AdminDashboardPage
+  initialMetrics?: DashboardMetricsType;
+  period?: 'today' | 'week' | 'month';
+  onRefresh?: () => void;
 }
 
 export function DashboardMetrics({ 
   metrics, 
-  isLoading, 
-  error, 
-  onFilterChange, 
-  selectedPeriod 
+  isLoading = false, 
+  error = null, 
+  onFilterChange = () => {}, 
+  selectedPeriod = 'week',
+  // Support for alternate prop naming
+  initialMetrics,
+  period,
+  onRefresh
 }: DashboardMetricsProps) {
+  // If metrics is not provided but initialMetrics is, use initialMetrics
+  const metricsData = metrics || initialMetrics || null;
+  // Same for period
+  const currentPeriod = selectedPeriod || period || 'week';
+  
   const [selectedStatus, setSelectedStatus] = useState<BookingStatus | 'all'>('all');
   const [availableStatuses, setAvailableStatuses] = useState<Array<BookingStatus | 'all'>>(['all']);
 
   useEffect(() => {
-    if (metrics?.availableStatuses) {
+    if (metricsData?.availableStatuses) {
       // Ensure 'all' is always the first option
       const statuses: Array<BookingStatus | 'all'> = ['all'];
       
       // Add all statuses from metrics that are valid BookingStatus types or can be cast as such
-      metrics.availableStatuses.forEach(status => {
+      metricsData.availableStatuses.forEach(status => {
         // Check if the status is a valid BookingStatus
         const isValidStatus = [
           'pending', 'confirmed', 'assigned', 'payment_received', 
@@ -45,14 +58,19 @@ export function DashboardMetrics({
       
       setAvailableStatuses(statuses);
     }
-  }, [metrics]);
+  }, [metricsData]);
 
   // Handle status change (fix the type issue)
   const handleStatusChange = (value: string) => {
     // Cast the string value to the appropriate type
     const newStatus = value as BookingStatus | 'all';
     setSelectedStatus(newStatus);
-    onFilterChange(newStatus);
+    if (onFilterChange) {
+      onFilterChange(newStatus);
+    } else if (onRefresh) {
+      // If onFilterChange isn't provided but onRefresh is, call that instead
+      onRefresh();
+    }
   };
 
   if (error) {
@@ -107,9 +125,9 @@ export function DashboardMetrics({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           title="Total Bookings"
-          value={metrics?.totalBookings}
+          value={metricsData?.totalBookings}
           icon={<Calendar />}
-          description={`${selectedPeriod === 'today' ? 'Today' : selectedPeriod === 'week' ? 'This week' : 'This month'}`}
+          description={`${currentPeriod === 'today' ? 'Today' : currentPeriod === 'week' ? 'This week' : 'This month'}`}
           isLoading={isLoading}
           color="bg-blue-50"
           textColor="text-blue-700"
@@ -117,7 +135,7 @@ export function DashboardMetrics({
         
         <MetricCard
           title="Active Rides"
-          value={metrics?.activeRides}
+          value={metricsData?.activeRides}
           icon={<CarTaxiFront />}
           description="Currently ongoing"
           isLoading={isLoading}
@@ -127,9 +145,9 @@ export function DashboardMetrics({
         
         <MetricCard
           title="Total Revenue"
-          value={metrics?.totalRevenue}
+          value={metricsData?.totalRevenue}
           icon={<CircleDollarSign />}
-          description={`${selectedPeriod === 'today' ? 'Today' : selectedPeriod === 'week' ? 'This week' : 'This month'}`}
+          description={`${currentPeriod === 'today' ? 'Today' : currentPeriod === 'week' ? 'This week' : 'This month'}`}
           isLoading={isLoading}
           color="bg-amber-50"
           textColor="text-amber-700"
@@ -138,7 +156,7 @@ export function DashboardMetrics({
         
         <MetricCard
           title="Upcoming Rides"
-          value={metrics?.upcomingRides}
+          value={metricsData?.upcomingRides}
           icon={<CarTaxiFront />}
           description="Next 24 hours"
           isLoading={isLoading}
@@ -150,7 +168,7 @@ export function DashboardMetrics({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <MetricCard
           title="Available Drivers"
-          value={metrics?.availableDrivers}
+          value={metricsData?.availableDrivers}
           icon={<Users />}
           description="Ready for assignment"
           isLoading={isLoading}
@@ -160,7 +178,7 @@ export function DashboardMetrics({
         
         <MetricCard
           title="Busy Drivers"
-          value={metrics?.busyDrivers}
+          value={metricsData?.busyDrivers}
           icon={<Users />}
           description="Currently on duty"
           isLoading={isLoading}
@@ -170,7 +188,7 @@ export function DashboardMetrics({
         
         <MetricCard
           title="Average Rating"
-          value={metrics?.avgRating}
+          value={metricsData?.avgRating}
           icon={<Star />}
           description="Customer satisfaction"
           isLoading={isLoading}
