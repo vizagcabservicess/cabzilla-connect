@@ -17,7 +17,7 @@ CREATE TABLE `users` (
 -- Bookings Table
 CREATE TABLE `bookings` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
-  `user_id` int(11) NULL, -- Can be NULL for guest bookings
+  `user_id` int(11) NULL, -- NULL for guest bookings
   `booking_number` varchar(20) NOT NULL UNIQUE,
   `pickup_location` varchar(255) NOT NULL,
   `drop_location` varchar(255) NULL,
@@ -67,7 +67,7 @@ CREATE TABLE `vehicle_pricing` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Vehicle Types Table (New)
+-- Vehicle Types Table
 CREATE TABLE `vehicle_types` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `vehicle_id` varchar(50) NOT NULL UNIQUE,
@@ -123,3 +123,4 @@ INSERT INTO `vehicle_types` (`vehicle_id`, `name`, `capacity`, `luggage_capacity
 INSERT INTO `users` (`name`, `email`, `phone`, `password`, `role`) VALUES
 ('Admin User', 'admin@example.com', '9876543210', '$2y$10$YPmH6FlAB8gQXI/qjLXVq.jlHCB1PRJKZRmj2aeMSCXvKBgNCHWc2', 'admin');
 -- Default password: admin123
+

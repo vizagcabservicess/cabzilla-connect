@@ -1,11 +1,10 @@
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { EditableContactDetailsForm } from "@/components/EditableContactDetailsForm";
 import { ArrowLeft, Edit2, Loader2 } from 'lucide-react';
 import { bookingAPI, authAPI } from '@/services/api';
-import { BookingRequest } from '@/types/api';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface GuestDetailsFormProps {
@@ -34,11 +33,11 @@ export function GuestDetailsForm({
   const [authStatus, setAuthStatus] = useState<'checking' | 'authenticated' | 'unauthenticated'>('checking');
 
   // Check authentication status on component mount
-  useState(() => {
+  useEffect(() => {
     const isAuthenticated = authAPI.isAuthenticated();
     setAuthStatus(isAuthenticated ? 'authenticated' : 'unauthenticated');
     console.log('Authentication status:', isAuthenticated ? 'authenticated' : 'unauthenticated');
-  });
+  }, []);
 
   const handleSubmit = async (details: any) => {
     if (isSubmitting || isSaving) return; // Prevent double submission

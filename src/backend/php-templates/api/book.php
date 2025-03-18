@@ -109,7 +109,21 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
     $payload = verifyJwtToken($token);
     if ($payload && isset($payload['user_id'])) {
         $userId = $payload['user_id'];
-        logError("Authenticated booking", ['user_id' => $userId]);
+        
+        // Verify user exists in the database
+        $conn = getDbConnection();
+        $checkUserStmt = $conn->prepare("SELECT id FROM users WHERE id = ?");
+        $checkUserStmt->bind_param("i", $userId);
+        $checkUserStmt->execute();
+        $userResult = $checkUserStmt->get_result();
+        
+        if ($userResult->num_rows === 0) {
+            logError("User ID from token not found in database", ['user_id' => $userId]);
+            // Don't set userId if user doesn't exist in db
+            $userId = null;
+        }
+        
+        logError("Authenticated booking", ['user_id' => $userId, 'verified' => ($userResult->num_rows > 0 ? 'yes' : 'no')]);
     } else {
         logError("Invalid token for booking", ['token_prefix' => substr($token, 0, 20) . '...']);
         // Continue with guest booking (user_id will be NULL)
@@ -138,64 +152,95 @@ logError("User ID for booking", ['user_id' => $userId, 'booking_number' => $book
 $conn->begin_transaction();
 
 try {
-    // Prepare the SQL query - Note that we're making user_id nullable
-    $sql = "INSERT INTO bookings 
-            (user_id, booking_number, pickup_location, drop_location, pickup_date, 
-             return_date, cab_type, distance, trip_type, trip_mode, 
-             total_amount, passenger_name, passenger_phone, passenger_email, 
-             hourly_package, tour_id, status, created_at, updated_at) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
-
-    $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        throw new Exception("Prepare statement failed: " . $conn->error);
+    // Check if the SQL needs user_id parameter
+    if ($userId === null) {
+        // SQL for guest booking (NULL user_id)
+        $sql = "INSERT INTO bookings 
+                (booking_number, pickup_location, drop_location, pickup_date, 
+                 return_date, cab_type, distance, trip_type, trip_mode, 
+                 total_amount, passenger_name, passenger_phone, passenger_email, 
+                 hourly_package, tour_id, status, created_at, updated_at) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
+                
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            throw new Exception("Prepare statement failed: " . $conn->error);
+        }
+        
+        // Get values
+        $pickupLocation = $data['pickupLocation'];
+        $dropLocation = isset($data['dropLocation']) ? $data['dropLocation'] : '';
+        $pickupDate = $data['pickupDate'];
+        $returnDate = isset($data['returnDate']) ? $data['returnDate'] : null;
+        $cabType = $data['cabType'];
+        $distance = $data['distance']; 
+        $tripType = $data['tripType'];
+        $tripMode = $data['tripMode'];
+        $totalAmount = $data['totalAmount'];
+        $passengerName = $data['passengerName'];
+        $passengerPhone = $data['passengerPhone'];
+        $passengerEmail = $data['passengerEmail'];
+        $hourlyPackage = isset($data['hourlyPackage']) ? $data['hourlyPackage'] : null;
+        $tourId = isset($data['tourId']) ? $data['tourId'] : null;
+        $status = 'pending'; // Default status for new bookings
+        
+        logError("Guest booking - binding values to SQL statement", [
+            'booking_number' => $bookingNumber,
+            'passenger_details' => $passengerName . ' / ' . $passengerPhone
+        ]);
+        
+        $stmt->bind_param(
+            "ssssssdssdsssiss",
+            $bookingNumber, $pickupLocation, $dropLocation, $pickupDate,
+            $returnDate, $cabType, $distance, $tripType, $tripMode,
+            $totalAmount, $passengerName, $passengerPhone, $passengerEmail,
+            $hourlyPackage, $tourId, $status
+        );
+    } else {
+        // SQL for authenticated user booking
+        $sql = "INSERT INTO bookings 
+                (user_id, booking_number, pickup_location, drop_location, pickup_date, 
+                 return_date, cab_type, distance, trip_type, trip_mode, 
+                 total_amount, passenger_name, passenger_phone, passenger_email, 
+                 hourly_package, tour_id, status, created_at, updated_at) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
+                
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            throw new Exception("Prepare statement failed: " . $conn->error);
+        }
+        
+        // Get values
+        $pickupLocation = $data['pickupLocation'];
+        $dropLocation = isset($data['dropLocation']) ? $data['dropLocation'] : '';
+        $pickupDate = $data['pickupDate'];
+        $returnDate = isset($data['returnDate']) ? $data['returnDate'] : null;
+        $cabType = $data['cabType'];
+        $distance = $data['distance']; 
+        $tripType = $data['tripType'];
+        $tripMode = $data['tripMode'];
+        $totalAmount = $data['totalAmount'];
+        $passengerName = $data['passengerName'];
+        $passengerPhone = $data['passengerPhone'];
+        $passengerEmail = $data['passengerEmail'];
+        $hourlyPackage = isset($data['hourlyPackage']) ? $data['hourlyPackage'] : null;
+        $tourId = isset($data['tourId']) ? $data['tourId'] : null;
+        $status = 'pending'; // Default status for new bookings
+        
+        logError("Authenticated booking - binding values to SQL statement", [
+            'user_id' => $userId,
+            'booking_number' => $bookingNumber,
+            'passenger_details' => $passengerName . ' / ' . $passengerPhone
+        ]);
+        
+        $stmt->bind_param(
+            "issssssdssdsssiss",
+            $userId, $bookingNumber, $pickupLocation, $dropLocation, $pickupDate,
+            $returnDate, $cabType, $distance, $tripType, $tripMode,
+            $totalAmount, $passengerName, $passengerPhone, $passengerEmail,
+            $hourlyPackage, $tourId, $status
+        );
     }
-
-    // Get values
-    $pickupLocation = $data['pickupLocation'];
-    $dropLocation = isset($data['dropLocation']) ? $data['dropLocation'] : '';
-    $pickupDate = $data['pickupDate'];
-    $returnDate = isset($data['returnDate']) ? $data['returnDate'] : null;
-    $cabType = $data['cabType'];
-    $distance = $data['distance']; // This will now always have a value
-    $tripType = $data['tripType'];
-    $tripMode = $data['tripMode'];
-    $totalAmount = $data['totalAmount'];
-    $passengerName = $data['passengerName'];
-    $passengerPhone = $data['passengerPhone'];
-    $passengerEmail = $data['passengerEmail'];
-    $hourlyPackage = isset($data['hourlyPackage']) ? $data['hourlyPackage'] : null;
-    $tourId = isset($data['tourId']) ? $data['tourId'] : null;
-    $status = 'pending'; // Default status for new bookings
-
-    // Log the values being bound to the statement
-    logError("Binding values to SQL statement", [
-        'user_id' => $userId,
-        'booking_number' => $bookingNumber,
-        'pickup_location' => $pickupLocation,
-        'drop_location' => $dropLocation,
-        'pickup_date' => $pickupDate,
-        'return_date' => $returnDate,
-        'cab_type' => $cabType,
-        'distance' => $distance,
-        'trip_type' => $tripType,
-        'trip_mode' => $tripMode,
-        'total_amount' => $totalAmount,
-        'passenger_name' => $passengerName,
-        'passenger_phone' => $passengerPhone,
-        'passenger_email' => $passengerEmail,
-        'hourly_package' => $hourlyPackage,
-        'tour_id' => $tourId,
-        'status' => $status
-    ]);
-
-    $stmt->bind_param(
-        "issssssdssdsssiss",
-        $userId, $bookingNumber, $pickupLocation, $dropLocation, $pickupDate,
-        $returnDate, $cabType, $distance, $tripType, $tripMode,
-        $totalAmount, $passengerName, $passengerPhone, $passengerEmail,
-        $hourlyPackage, $tourId, $status
-    );
 
     if (!$stmt->execute()) {
         throw new Exception("Execute statement failed: " . $stmt->error);
@@ -269,3 +314,4 @@ try {
         'message' => 'Failed to create booking: ' . $e->getMessage()
     ], 500);
 }
+
