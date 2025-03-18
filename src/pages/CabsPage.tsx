@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -6,6 +7,7 @@ import { CabOptions } from "@/components/CabOptions";
 import { TabTripSelector } from "@/components/TabTripSelector";
 import GoogleMapComponent from "@/components/GoogleMapComponent";
 import { GuestDetailsForm } from "@/components/GuestDetailsForm";
+import { BookingSummary } from "@/components/BookingSummary"; // Add this import
 import { 
   Location, 
   vizagLocations, 
