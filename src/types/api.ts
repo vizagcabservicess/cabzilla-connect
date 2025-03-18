@@ -1,4 +1,3 @@
-
 // User related types
 export interface User {
   id: number;
@@ -167,6 +166,8 @@ export interface DashboardMetrics {
   busyDrivers: number;
   avgRating: number;
   upcomingRides: number;
+  availableStatuses?: string[]; // Add this optional property
+  currentFilter?: string;       // Add this optional property
 }
 
 // Notification types

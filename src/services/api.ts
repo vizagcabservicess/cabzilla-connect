@@ -454,9 +454,7 @@ export const bookingAPI = {
         availableDrivers: 0,
         busyDrivers: 0,
         avgRating: 0,
-        upcomingRides: 0,
-        availableStatuses: [],
-        currentFilter: 'all'
+        upcomingRides: 0
       };
       
       return { ...defaultMetrics, ...metricsData };
