@@ -1,12 +1,11 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { useToast } from "@/hooks/use-toast";
 import { toast } from "sonner";
 import { Book, CircleOff, RefreshCw, Calendar, MapPin, Car, ShieldAlert, LogOut, Info } from "lucide-react";
 import { bookingAPI, authAPI } from '@/services/api';
@@ -16,483 +15,365 @@ import { DashboardMetrics } from '@/components/admin/DashboardMetrics';
 import { ApiErrorFallback } from "@/components/ApiErrorFallback";
 
 const MAX_RETRIES = 3;
-const RETRY_DELAY = 1500; // 1.5 seconds
 
 export default function DashboardPage() {
-  const { toast: uiToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
+  const [user, setUser] = useState<{ id: number; name: string; email: string; role: string } | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
   const [retryCount, setRetryCount] = useState(0);
-  const [metrics, setMetrics] = useState<DashboardMetricsType | null>(null);
-  const [metricsLoading, setMetricsLoading] = useState<boolean>(true);
-  const [metricsError, setMetricsError] = useState<Error | null>(null);
-  const [selectedMetricPeriod, setSelectedMetricPeriod] = useState<'today' | 'week' | 'month'>('week');
-  const user = authAPI.getCurrentUser();
-  const isAdmin = user?.role === 'admin';
-  
-  const comingFromBooking = location.state?.fromBooking;
+  const [adminMetrics, setAdminMetrics] = useState<DashboardMetricsType | null>(null);
+  const [isLoadingAdminMetrics, setIsLoadingAdminMetrics] = useState(false);
+  const [adminMetricsError, setAdminMetricsError] = useState<Error | null>(null);
 
+  // Check if user is logged in and get user data
   useEffect(() => {
+    const checkAuth = async () => {
+      if (!authAPI.isAuthenticated()) {
+        navigate('/login', { state: { from: location.pathname } });
+        return;
+      }
+
+      try {
+        const userData = authAPI.getCurrentUser();
+        if (userData) {
+          setUser(userData);
+          setIsAdmin(userData.role === 'admin');
+        } else {
+          throw new Error('User data not found');
+        }
+      } catch (error) {
+        console.error('Error getting user data:', error);
+        // Don't redirect here, just show an error message
+        toast.error('Error loading user data. Please try logging in again.');
+      }
+    };
+
+    checkAuth();
+  }, [navigate, location.pathname]);
+
+  // Fetch bookings data
+  const fetchBookings = useCallback(async () => {
     if (!authAPI.isAuthenticated()) {
-      console.log('User not authenticated, redirecting to login');
-      toast.error('Please login to access your dashboard');
       navigate('/login');
       return;
     }
-    
-    console.log('User authenticated, proceeding with dashboard');
-    
-    if (comingFromBooking) {
-      toast.success('Booking successful! Your dashboard has been updated.');
-    }
-  }, [navigate, comingFromBooking]);
 
-  const fetchBookings = useCallback(async (retry = 0) => {
     try {
-      setIsLoading(true);
+      setIsRefreshing(true);
       setError(null);
-      console.log('Fetching user bookings...', { retry });
-      
-      if (!authAPI.isAuthenticated()) {
-        console.error('Auth token missing, redirecting to login');
-        toast.error('Your session has expired. Please login again.');
-        navigate('/login');
-        return;
-      }
-      
-      try {
-        console.log('Fetching bookings with cache busting...');
-        const cacheBust = new Date().getTime();
-        console.log(`Cache busting with timestamp: ${cacheBust}`);
-        
-        const response = await bookingAPI.getUserBookings();
-        console.log('Bookings received:', response);
-        
-        if (Array.isArray(response)) {
-          setBookings(response);
-          setRetryCount(0);
-          if (response.length === 0) {
-            toast.info('No bookings found. Book your first cab ride now!');
-          } else {
-            toast.success(`Found ${response.length} booking(s)`);
-          }
-        } else {
-          console.error('Invalid data format received:', response);
-          throw new Error('Invalid data format received from server');
-        }
-      } catch (error) {
-        console.error('Error in fetch:', error);
-        
-        if (error instanceof Error && 
-            (error.message.includes('Invalid or expired token') || 
-             error.message.includes('Authentication failed') ||
-             error.message.includes('Not authenticated') ||
-             error.message.includes('401'))) {
-          console.log('Authentication error detected, clearing local storage');
-          localStorage.removeItem('auth_token');
-          localStorage.removeItem('authToken');
-          toast.error('Your session has expired. Please login again.');
-          navigate('/login');
-          return;
-        }
-        
-        throw error;
-      }
+      const data = await bookingAPI.getUserBookings();
+      setBookings(data);
+      setRetryCount(0); // Reset retry count on success
     } catch (error) {
       console.error('Error fetching bookings:', error);
+      setError(error instanceof Error ? error : new Error('Failed to fetch bookings'));
       
-      if (retry < MAX_RETRIES) {
-        toast.info(`Retrying... (${retry + 1}/${MAX_RETRIES})`, {
-          duration: RETRY_DELAY,
-        });
-        
+      // Only show toast on first error
+      if (retryCount === 0) {
+        toast.error('Error loading bookings. Retrying...');
+      }
+      
+      // Increment retry count
+      setRetryCount(prev => prev + 1);
+      
+      // Auto-retry if under max retries
+      if (retryCount < MAX_RETRIES) {
         setTimeout(() => {
-          setRetryCount(retry + 1);
-          fetchBookings(retry + 1);
-        }, RETRY_DELAY);
-      } else {
-        const errorMessage = error instanceof Error ? error.message : 'Failed to load your bookings. Please try again later.';
-        setError(errorMessage);
-        
-        uiToast({
-          title: "Error Loading Bookings",
-          description: errorMessage,
-          variant: "destructive",
-        });
-        
-        toast.error('Could not load your bookings after multiple attempts', {
-          description: "Please refresh the page or try again later",
-          duration: 5000,
-        });
+          fetchBookings();
+        }, 3000); // Wait 3 seconds before retrying
       }
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
-  }, [navigate, uiToast]);
+  }, [navigate, retryCount]);
 
+  // Fetch admin metrics if user is admin
+  const fetchAdminMetrics = useCallback(async () => {
+    if (!isAdmin) return;
+    
+    try {
+      setIsLoadingAdminMetrics(true);
+      setAdminMetricsError(null);
+      const data = await bookingAPI.getAdminDashboardMetrics('week');
+      setAdminMetrics(data);
+    } catch (error) {
+      console.error('Error fetching admin metrics:', error);
+      setAdminMetricsError(error instanceof Error ? error : new Error('Failed to fetch admin metrics'));
+    } finally {
+      setIsLoadingAdminMetrics(false);
+    }
+  }, [isAdmin]);
+
+  // Initial data fetch
   useEffect(() => {
     fetchBookings();
   }, [fetchBookings]);
 
-  const handleRetry = () => {
-    setRetryCount(0);
-    fetchBookings();
-  };
-  
+  // Fetch admin metrics if user is admin
+  useEffect(() => {
+    if (isAdmin) {
+      fetchAdminMetrics();
+    }
+  }, [isAdmin, fetchAdminMetrics]);
+
+  // Handle logout
   const handleLogout = () => {
     authAPI.logout();
     navigate('/login');
+    toast.success('Logged out successfully');
   };
 
-  const handleViewReceipt = (bookingId: number | string) => {
-    window.open(`/receipt/${bookingId}`, '_blank');
+  // Format date for display
+  const formatDate = (dateString: string) => {
+    const options: Intl.DateTimeFormatOptions = { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    };
+    return new Date(dateString).toLocaleDateString('en-US', options);
   };
 
+  // Get status badge color
   const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'confirmed': return 'bg-green-100 text-green-800';
+    switch (status) {
       case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'confirmed': return 'bg-green-100 text-green-800';
       case 'completed': return 'bg-blue-100 text-blue-800';
       case 'cancelled': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const getBookingValue = (booking: Booking, key: keyof Booking) => {
-    const value = booking[key];
-    if (value === null || value === undefined) return '';
-    
-    if (typeof value === 'number') {
-      try {
-        return value.toLocaleString('en-IN');
-      } catch (e) {
-        console.error('Error formatting number:', e);
-        return value.toString();
-      }
-    }
-    
-    return value;
-  };
-
-  const safeBookings = Array.isArray(bookings) ? bookings : [];
-  
-  const upcomingBookings = safeBookings.filter(booking => 
-    booking && booking.status && 
-    ['pending', 'confirmed'].includes(booking.status.toLowerCase())
-  );
-  
-  const pastBookings = safeBookings.filter(booking => 
-    booking && booking.status && 
-    ['completed', 'cancelled'].includes(booking.status.toLowerCase())
-  );
-
-  const NoBookingsCard = () => {
-    const navigate = useNavigate();
-    
-    return (
-      <Card>
-        <CardContent className="flex flex-col items-center justify-center py-10">
-          <Book className="h-16 w-16 text-gray-300 mb-4" />
-          <p className="text-gray-500 mb-4">You don't have any bookings yet.</p>
-          <Button onClick={() => navigate('/')} className="bg-blue-600 hover:bg-blue-700">Book a Cab Now</Button>
-        </CardContent>
-      </Card>
-    );
-  };
-
-  if (error && retryCount >= MAX_RETRIES) {
+  // If still loading initial data
+  if (isLoading && !error) {
     return (
       <div className="container mx-auto py-10 px-4">
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold">Dashboard</h1>
-            <p className="text-gray-500">Welcome back, {user?.name || 'User'}</p>
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={handleLogout} variant="outline" className="text-red-600 border-red-200 hover:bg-red-50">
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
-            </Button>
+            <p className="text-gray-500">Loading your bookings...</p>
           </div>
         </div>
         
-        <ApiErrorFallback
-          error={error}
-          onRetry={handleRetry}
-          title="Unable to Load Bookings"
-        />
-        
-        <div className="mt-6 text-center">
-          <Button onClick={() => navigate('/')} className="bg-blue-600 hover:bg-blue-700">
-            Book New Cab
-          </Button>
+        <div className="space-y-4">
+          {[1, 2, 3].map((i) => (
+            <Card key={i}>
+              <CardHeader>
+                <Skeleton className="h-8 w-[250px]" />
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-[80%]" />
+                  <Skeleton className="h-4 w-[60%]" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
     );
   }
 
-  const handleMetricsFilterChange = (status: BookingStatus | 'all') => {
-    console.log('Filtering metrics by status:', status);
-    // In a real implementation, this would fetch filtered metrics
-    // For now we just log the request
-  };
+  // If error occurred and max retries exceeded
+  if (error && retryCount >= MAX_RETRIES) {
+    return (
+      <ApiErrorFallback 
+        error={error} 
+        onRetry={fetchBookings}
+        title="Error Loading Dashboard"
+        description="We couldn't load your bookings. Please try again."
+      />
+    );
+  }
 
   return (
     <div className="container mx-auto py-10 px-4">
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-bold">Dashboard</h1>
           <p className="text-gray-500">Welcome back, {user?.name || 'User'}</p>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={handleRetry} variant="outline" className="mr-2" disabled={isLoading}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+        <div className="flex flex-col md:flex-row gap-2">
+          <Button variant="outline" size="sm" onClick={fetchBookings} disabled={isRefreshing}>
+            <RefreshCw className={`h-4 w-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
-          <Button onClick={() => navigate('/')} className="bg-blue-600 hover:bg-blue-700">
-            Book New Cab
-          </Button>
-          <Button onClick={handleLogout} variant="outline" className="text-red-600 border-red-200 hover:bg-red-50">
-            <LogOut className="h-4 w-4 mr-2" />
+          <Button onClick={() => navigate('/')}>Book New Cab</Button>
+          <Button variant="outline" onClick={handleLogout}>
+            <LogOut className="h-4 w-4 mr-1" />
             Logout
           </Button>
         </div>
       </div>
 
+      {/* Conditionally render admin metrics for admin users */}
       {isAdmin && (
-        <div className="mb-6">
-          <h2 className="text-xl font-bold mb-4">Admin Metrics</h2>
-          <DashboardMetrics 
-            metrics={metrics}
-            isLoading={metricsLoading}
-            error={metricsError}
-            onFilterChange={handleMetricsFilterChange}
-            selectedPeriod={selectedMetricPeriod}
-          />
+        <div className="mb-8">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ShieldAlert className="h-5 w-5 text-amber-500" />
+                Admin Metrics
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="mb-4 text-gray-600">You have admin privileges. <Button variant="link" className="p-0 h-auto text-blue-600" onClick={() => navigate('/admin')}>Go to Admin Dashboard</Button></p>
+              
+              <DashboardMetrics 
+                metrics={adminMetrics}
+                isLoading={isLoadingAdminMetrics}
+                error={adminMetricsError}
+                onFilterChange={(status: BookingStatus | 'all') => {
+                  console.log('Filtering by status:', status);
+                  // Logic to filter metrics by status if needed
+                }}
+                selectedPeriod="week"
+              />
+            </CardContent>
+          </Card>
         </div>
       )}
 
-      {error && (
-        <Alert variant="destructive" className="mb-6">
-          <ShieldAlert className="h-4 w-4" />
-          <AlertTitle>Error Loading Bookings</AlertTitle>
-          <AlertDescription className="flex items-center justify-between">
-            <span>{error}</span>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleRetry}
-              className="ml-4"
-              disabled={isLoading}
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-              Retry
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {retryCount > 0 && !error && (
-        <Alert className="mb-6">
-          <RefreshCw className="h-4 w-4 animate-spin" />
-          <AlertTitle>Retrying...</AlertTitle>
-          <AlertDescription>
-            Attempt {retryCount} of {MAX_RETRIES}
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {bookings.length === 0 && !isLoading && !error && (
-        <Alert className="mb-6">
-          <Info className="h-4 w-4" />
-          <AlertTitle>No Bookings Found</AlertTitle>
-          <AlertDescription>
-            You haven't made any bookings yet. Book your first cab ride now!
-          </AlertDescription>
-        </Alert>
-      )}
-
-      <Tabs defaultValue="upcoming" className="w-full">
-        <TabsList className="mb-6">
-          <TabsTrigger value="upcoming">Upcoming Bookings</TabsTrigger>
-          <TabsTrigger value="past">Past Bookings</TabsTrigger>
+      <Tabs defaultValue="all">
+        <TabsList>
+          <TabsTrigger value="all" className="flex items-center gap-1">
+            <Book className="h-4 w-4" /> All Bookings
+          </TabsTrigger>
+          <TabsTrigger value="upcoming" className="flex items-center gap-1">
+            <Calendar className="h-4 w-4" /> Upcoming
+          </TabsTrigger>
+          <TabsTrigger value="completed" className="flex items-center gap-1">
+            <Car className="h-4 w-4" /> Completed
+          </TabsTrigger>
+          <TabsTrigger value="cancelled" className="flex items-center gap-1">
+            <CircleOff className="h-4 w-4" /> Cancelled
+          </TabsTrigger>
         </TabsList>
         
-        <TabsContent value="upcoming">
-          {isLoading ? (
-            <div className="flex justify-center p-10">
-              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-900"></div>
-            </div>
-          ) : upcomingBookings.length > 0 ? (
-            <div className="grid gap-6 md:grid-cols-2">
-              {upcomingBookings.map((booking) => (
-                <Card key={booking.id} className="hover:shadow-md transition-shadow">
-                  <CardHeader>
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle className="text-xl">Booking #{booking.bookingNumber || 'N/A'}</CardTitle>
-                        <CardDescription>{booking.tripType ? booking.tripType.toUpperCase() : 'N/A'} - {booking.tripMode || 'N/A'}</CardDescription>
-                      </div>
-                      <Badge className={getStatusColor(booking.status || '')}>{booking.status || 'Unknown'}</Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="flex items-start">
-                          <MapPin className="h-4 w-4 mr-1 mt-1 text-gray-500" />
-                          <div>
-                            <p className="text-sm text-gray-500">Pickup</p>
-                            <p className="font-medium">{booking.pickupLocation || 'N/A'}</p>
-                          </div>
-                        </div>
-                        {booking.dropLocation && (
-                          <div className="flex items-start">
-                            <MapPin className="h-4 w-4 mr-1 mt-1 text-gray-500" />
-                            <div>
-                              <p className="text-sm text-gray-500">Drop</p>
-                              <p className="font-medium">{booking.dropLocation}</p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      <Separator />
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="flex items-start">
-                          <Calendar className="h-4 w-4 mr-1 mt-1 text-gray-500" />
-                          <div>
-                            <p className="text-sm text-gray-500">Date & Time</p>
-                            <p className="font-medium">
-                              {booking.pickupDate ? new Date(booking.pickupDate).toLocaleString() : 'N/A'}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-start">
-                          <Car className="h-4 w-4 mr-1 mt-1 text-gray-500" />
-                          <div>
-                            <p className="text-sm text-gray-500">Vehicle</p>
-                            <p className="font-medium">{booking.cabType || 'N/A'}</p>
-                          </div>
-                        </div>
-                      </div>
-                      <Separator />
-                      <div>
-                        <p className="text-sm text-gray-500">Amount</p>
-                        <p className="font-bold text-lg">
-                          ₹{typeof booking.totalAmount === 'number' 
-                              ? booking.totalAmount.toLocaleString('en-IN') 
-                              : (booking.totalAmount || 'N/A')}
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                  <CardFooter className="flex justify-between">
-                    <Button 
-                      variant="outline" 
-                      onClick={() => handleViewReceipt(booking.id)}
-                    >
-                      View Receipt
-                    </Button>
-                    <Button onClick={() => navigate(`/booking/${booking.id}/edit`)}>
-                      Modify Booking
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <NoBookingsCard />
-          )}
+        <TabsContent value="all">
+          <BookingsList 
+            bookings={bookings} 
+            isRefreshing={isRefreshing} 
+            formatDate={formatDate}
+            getStatusColor={getStatusColor}
+          />
         </TabsContent>
         
-        <TabsContent value="past">
-          {isLoading ? (
-            <div className="flex justify-center p-10">
-              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-900"></div>
-            </div>
-          ) : pastBookings.length > 0 ? (
-            <div className="grid gap-6 md:grid-cols-2">
-              {pastBookings.map((booking) => (
-                <Card key={booking.id} className="hover:shadow-md transition-shadow">
-                  <CardHeader>
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle className="text-xl">Booking #{booking.bookingNumber || 'N/A'}</CardTitle>
-                        <CardDescription>{booking.tripType ? booking.tripType.toUpperCase() : 'N/A'} - {booking.tripMode || 'N/A'}</CardDescription>
-                      </div>
-                      <Badge className={getStatusColor(booking.status || '')}>{booking.status || 'Unknown'}</Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="flex items-start">
-                          <MapPin className="h-4 w-4 mr-1 mt-1 text-gray-500" />
-                          <div>
-                            <p className="text-sm text-gray-500">Pickup</p>
-                            <p className="font-medium">{booking.pickupLocation || 'N/A'}</p>
-                          </div>
-                        </div>
-                        {booking.dropLocation && (
-                          <div className="flex items-start">
-                            <MapPin className="h-4 w-4 mr-1 mt-1 text-gray-500" />
-                            <div>
-                              <p className="text-sm text-gray-500">Drop</p>
-                              <p className="font-medium">{booking.dropLocation}</p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      <Separator />
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="flex items-start">
-                          <Calendar className="h-4 w-4 mr-1 mt-1 text-gray-500" />
-                          <div>
-                            <p className="text-sm text-gray-500">Date & Time</p>
-                            <p className="font-medium">
-                              {booking.pickupDate ? new Date(booking.pickupDate).toLocaleString() : 'N/A'}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-start">
-                          <Car className="h-4 w-4 mr-1 mt-1 text-gray-500" />
-                          <div>
-                            <p className="text-sm text-gray-500">Vehicle</p>
-                            <p className="font-medium">{booking.cabType || 'N/A'}</p>
-                          </div>
-                        </div>
-                      </div>
-                      <Separator />
-                      <div>
-                        <p className="text-sm text-gray-500">Amount</p>
-                        <p className="font-bold text-lg">
-                          ₹{typeof booking.totalAmount === 'number' 
-                              ? booking.totalAmount.toLocaleString('en-IN') 
-                              : (booking.totalAmount || 'N/A')}
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                  <CardFooter>
-                    <Button 
-                      variant="outline" 
-                      className="w-full" 
-                      onClick={() => handleViewReceipt(booking.id)}
-                    >
-                      View Receipt
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <NoBookingsCard />
-          )}
+        <TabsContent value="upcoming">
+          <BookingsList 
+            bookings={bookings.filter(b => ['pending', 'confirmed'].includes(b.status))} 
+            isRefreshing={isRefreshing}
+            formatDate={formatDate}
+            getStatusColor={getStatusColor}
+            emptyMessage="No upcoming bookings found."
+          />
+        </TabsContent>
+        
+        <TabsContent value="completed">
+          <BookingsList 
+            bookings={bookings.filter(b => b.status === 'completed')} 
+            isRefreshing={isRefreshing}
+            formatDate={formatDate}
+            getStatusColor={getStatusColor}
+            emptyMessage="No completed bookings found."
+          />
+        </TabsContent>
+        
+        <TabsContent value="cancelled">
+          <BookingsList 
+            bookings={bookings.filter(b => b.status === 'cancelled')} 
+            isRefreshing={isRefreshing}
+            formatDate={formatDate}
+            getStatusColor={getStatusColor}
+            emptyMessage="No cancelled bookings found."
+          />
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+interface BookingsListProps {
+  bookings: Booking[];
+  isRefreshing: boolean;
+  formatDate: (date: string) => string;
+  getStatusColor: (status: string) => string;
+  emptyMessage?: string;
+}
+
+function BookingsList({ bookings, isRefreshing, formatDate, getStatusColor, emptyMessage = "No bookings found." }: BookingsListProps) {
+  const navigate = useNavigate();
+  
+  if (isRefreshing) {
+    return (
+      <div className="flex justify-center items-center py-10">
+        <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
+      </div>
+    );
+  }
+  
+  if (bookings.length === 0) {
+    return (
+      <Alert className="mt-4">
+        <Info className="h-4 w-4" />
+        <AlertTitle>No Bookings</AlertTitle>
+        <AlertDescription>{emptyMessage}</AlertDescription>
+      </Alert>
+    );
+  }
+  
+  return (
+    <ScrollArea className="h-[600px] mt-4">
+      <div className="space-y-4">
+        {bookings.map((booking) => (
+          <Card key={booking.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate(`/booking/${booking.id}`)}>
+            <CardHeader className="pb-2">
+              <div className="flex justify-between items-start">
+                <div>
+                  <CardTitle className="text-lg">Booking #{booking.bookingNumber}</CardTitle>
+                  <p className="text-sm text-gray-500">{formatDate(booking.pickupDate)}</p>
+                </div>
+                <Badge className={getStatusColor(booking.status)}>
+                  {booking.status.charAt(0).toUpperCase() + booking.status.slice(1).replace('_', ' ')}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <div className="flex items-start gap-2">
+                  <MapPin className="h-4 w-4 text-gray-500 mt-1" />
+                  <div>
+                    <p className="font-medium">From: {booking.pickupLocation}</p>
+                    {booking.dropLocation && <p className="text-gray-600">To: {booking.dropLocation}</p>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Car className="h-4 w-4 text-gray-500" />
+                  <p>{booking.cabType} - {booking.tripType} ({booking.tripMode})</p>
+                </div>
+                <div className="flex justify-between items-center pt-2">
+                  <p className="font-semibold">₹{booking.totalAmount.toLocaleString('en-IN')}</p>
+                  <Button variant="outline" size="sm" onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/booking/${booking.id}`);
+                  }}>
+                    View Details
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </ScrollArea>
   );
 }

@@ -25,7 +25,7 @@ import { AdminNotifications } from '@/components/admin/AdminNotifications';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UserManagement } from '@/components/admin/UserManagement';
 import { NetworkStatusMonitor } from '@/components/NetworkStatusMonitor';
-import { BookingStatus } from '@/types/api';
+import { BookingStatus, DashboardMetrics as DashboardMetricsType } from '@/types/api';
 
 export default function AdminDashboardPage() {
   const { toast } = useToast();
@@ -33,7 +33,7 @@ export default function AdminDashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month'>('week');
-  const [metrics, setMetrics] = useState({
+  const [metrics, setMetrics] = useState<DashboardMetricsType>({
     totalBookings: 0,
     activeRides: 0,
     totalRevenue: 0,
