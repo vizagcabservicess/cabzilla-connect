@@ -7,7 +7,7 @@ import { CabOptions } from "@/components/CabOptions";
 import { TabTripSelector } from "@/components/TabTripSelector";
 import GoogleMapComponent from "@/components/GoogleMapComponent";
 import { GuestDetailsForm } from "@/components/GuestDetailsForm";
-import { BookingSummary } from "@/components/BookingSummary"; // Add this import
+import { BookingSummary } from "@/components/BookingSummary"; 
 import { 
   Location, 
   vizagLocations, 
@@ -394,7 +394,8 @@ const CabsPage = () => {
         duration: 3000,
       });
       
-      navigate("/booking-confirmation");
+      // Fix the navigation to match the route in router.tsx
+      navigate(`/booking-confirmation`);
     } catch (error) {
       console.error('Error creating booking:', error);
       toast({

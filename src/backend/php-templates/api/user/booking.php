@@ -36,6 +36,7 @@ logError("Booking details request", ['booking_id' => $bookingId, 'method' => $_S
 $headers = getallheaders();
 $userId = null;
 $isAdmin = false;
+$isAuthenticated = false;
 
 if (isset($headers['Authorization']) || isset($headers['authorization'])) {
     $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
@@ -45,10 +46,11 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
     if ($payload && isset($payload['user_id'])) {
         $userId = $payload['user_id'];
         $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
+        $isAuthenticated = true;
     }
 }
 
-logError("Auth info for booking details", ['user_id' => $userId, 'is_admin' => $isAdmin]);
+logError("Auth info for booking details", ['user_id' => $userId, 'is_admin' => $isAdmin, 'is_authenticated' => $isAuthenticated]);
 
 // Connect to database
 $conn = getDbConnection();
@@ -61,16 +63,22 @@ try {
     // For debugging - log the database connection status
     logError("Database connection established", ['connected' => true]);
     
-    // For non-admin users, allow access to their own bookings or guest bookings
+    // Build the query based on the user's authentication status
     if ($isAdmin) {
+        // Admins can access any booking
         $sql = "SELECT * FROM bookings WHERE id = ?";
         $params = [$bookingId];
         $types = "i";
-    } else {
-        // For regular users, they can view their own bookings or guest bookings
-        $sql = "SELECT * FROM bookings WHERE id = ? AND (user_id IS NULL OR user_id = ?)";
+    } elseif ($isAuthenticated) {
+        // Authenticated users can access their own bookings
+        $sql = "SELECT * FROM bookings WHERE id = ? AND (user_id = ? OR user_id IS NULL)";
         $params = [$bookingId, $userId];
         $types = "ii";
+    } else {
+        // Unauthenticated users can only access public bookings (guest bookings)
+        $sql = "SELECT * FROM bookings WHERE id = ? AND user_id IS NULL";
+        $params = [$bookingId];
+        $types = "i";
     }
     
     // Log the SQL query for debugging

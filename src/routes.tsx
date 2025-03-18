@@ -38,6 +38,10 @@ export const router = createBrowserRouter([
     element: <BookingConfirmationPage />,
   },
   {
+    path: '/booking-confirmation',
+    element: <BookingConfirmationPage />,
+  },
+  {
     path: '/booking/:bookingId/edit',
     element: <BookingEditPage />,
   },
@@ -52,11 +56,6 @@ export const router = createBrowserRouter([
   {
     path: '/tours',
     element: <ToursPage />,
-  },
-  // Add a catch-all route for the API
-  {
-    path: '/api/*',
-    element: null, // This ensures API requests are properly handled
   },
   {
     path: '*',

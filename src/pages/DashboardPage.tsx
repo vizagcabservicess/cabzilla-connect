@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import { bookingAPI, authAPI } from '@/services/api';
 import { Booking } from '@/types/api';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { DashboardMetrics } from '@/components/admin/DashboardMetrics';
+import { ApiErrorFallback } from "@/components/ApiErrorFallback";
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1500; // 1.5 seconds
@@ -73,6 +75,20 @@ export default function DashboardPage() {
           } else {
             toast.success(`Found ${data.length} booking(s)`);
           }
+        } else if (data && typeof data === 'object') {
+          // Handle case where API returns an object with data property
+          if (Array.isArray(data.data)) {
+            setBookings(data.data);
+            setRetryCount(0);
+            if (data.data.length === 0) {
+              toast.info('No bookings found. Book your first cab ride now!');
+            } else {
+              toast.success(`Found ${data.data.length} booking(s)`);
+            }
+          } else {
+            console.error('Invalid data format received:', data);
+            throw new Error('Invalid data format received from server');
+          }
         } else {
           console.error('Invalid data format received:', data);
           throw new Error('Invalid data format received from server');
@@ -87,6 +103,7 @@ export default function DashboardPage() {
              error.message.includes('401'))) {
           console.log('Authentication error detected, clearing local storage');
           localStorage.removeItem('auth_token');
+          localStorage.removeItem('authToken');
           toast.error('Your session has expired. Please login again.');
           navigate('/login');
           return;
@@ -137,6 +154,7 @@ export default function DashboardPage() {
   
   const handleLogout = () => {
     authAPI.logout();
+    navigate('/login');
   };
 
   const handleViewReceipt = (bookingId: number | string) => {
@@ -153,11 +171,34 @@ export default function DashboardPage() {
     }
   };
 
-  const upcomingBookings = bookings.filter(booking => 
+  // Safe getter for booking properties with built-in null checks
+  const getBookingValue = (booking: Booking, key: keyof Booking) => {
+    const value = booking[key];
+    if (value === null || value === undefined) return '';
+    
+    // Handle number formatting
+    if (typeof value === 'number') {
+      try {
+        return value.toLocaleString('en-IN');
+      } catch (e) {
+        console.error('Error formatting number:', e);
+        return value.toString();
+      }
+    }
+    
+    return value;
+  };
+
+  // Define upcomingBookings and pastBookings with safe null-checks
+  const safeBookings = Array.isArray(bookings) ? bookings : [];
+  
+  const upcomingBookings = safeBookings.filter(booking => 
+    booking && booking.status && 
     ['pending', 'confirmed'].includes(booking.status.toLowerCase())
   );
   
-  const pastBookings = bookings.filter(booking => 
+  const pastBookings = safeBookings.filter(booking => 
+    booking && booking.status && 
     ['completed', 'cancelled'].includes(booking.status.toLowerCase())
   );
 
@@ -170,6 +211,38 @@ export default function DashboardPage() {
       </CardContent>
     </Card>
   );
+
+  // If there's a serious error, show the API error fallback component
+  if (error && retryCount >= MAX_RETRIES) {
+    return (
+      <div className="container mx-auto py-10 px-4">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-3xl font-bold">Dashboard</h1>
+            <p className="text-gray-500">Welcome back, {user?.name || 'User'}</p>
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={handleLogout} variant="outline" className="text-red-600 border-red-200 hover:bg-red-50">
+              <LogOut className="h-4 w-4 mr-2" />
+              Logout
+            </Button>
+          </div>
+        </div>
+        
+        <ApiErrorFallback
+          error={error}
+          onRetry={handleRetry}
+          title="Unable to Load Bookings"
+        />
+        
+        <div className="mt-6 text-center">
+          <Button onClick={() => navigate('/')} className="bg-blue-600 hover:bg-blue-700">
+            Book New Cab
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto py-10 px-4">
@@ -258,10 +331,10 @@ export default function DashboardPage() {
                   <CardHeader>
                     <div className="flex justify-between items-start">
                       <div>
-                        <CardTitle className="text-xl">Booking #{booking.bookingNumber}</CardTitle>
-                        <CardDescription>{booking.tripType.toUpperCase()} - {booking.tripMode}</CardDescription>
+                        <CardTitle className="text-xl">Booking #{booking.bookingNumber || 'N/A'}</CardTitle>
+                        <CardDescription>{booking.tripType ? booking.tripType.toUpperCase() : 'N/A'} - {booking.tripMode || 'N/A'}</CardDescription>
                       </div>
-                      <Badge className={getStatusColor(booking.status)}>{booking.status}</Badge>
+                      <Badge className={getStatusColor(booking.status || '')}>{booking.status || 'Unknown'}</Badge>
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -271,7 +344,7 @@ export default function DashboardPage() {
                           <MapPin className="h-4 w-4 mr-1 mt-1 text-gray-500" />
                           <div>
                             <p className="text-sm text-gray-500">Pickup</p>
-                            <p className="font-medium">{booking.pickupLocation}</p>
+                            <p className="font-medium">{booking.pickupLocation || 'N/A'}</p>
                           </div>
                         </div>
                         {booking.dropLocation && (
@@ -290,21 +363,27 @@ export default function DashboardPage() {
                           <Calendar className="h-4 w-4 mr-1 mt-1 text-gray-500" />
                           <div>
                             <p className="text-sm text-gray-500">Date & Time</p>
-                            <p className="font-medium">{new Date(booking.pickupDate).toLocaleString()}</p>
+                            <p className="font-medium">
+                              {booking.pickupDate ? new Date(booking.pickupDate).toLocaleString() : 'N/A'}
+                            </p>
                           </div>
                         </div>
                         <div className="flex items-start">
                           <Car className="h-4 w-4 mr-1 mt-1 text-gray-500" />
                           <div>
                             <p className="text-sm text-gray-500">Vehicle</p>
-                            <p className="font-medium">{booking.cabType}</p>
+                            <p className="font-medium">{booking.cabType || 'N/A'}</p>
                           </div>
                         </div>
                       </div>
                       <Separator />
                       <div>
                         <p className="text-sm text-gray-500">Amount</p>
-                        <p className="font-bold text-lg">₹{booking.totalAmount.toLocaleString('en-IN')}</p>
+                        <p className="font-bold text-lg">
+                          ₹{typeof booking.totalAmount === 'number' 
+                              ? booking.totalAmount.toLocaleString('en-IN') 
+                              : (booking.totalAmount || 'N/A')}
+                        </p>
                       </div>
                     </div>
                   </CardContent>
@@ -339,10 +418,10 @@ export default function DashboardPage() {
                   <CardHeader>
                     <div className="flex justify-between items-start">
                       <div>
-                        <CardTitle className="text-xl">Booking #{booking.bookingNumber}</CardTitle>
-                        <CardDescription>{booking.tripType.toUpperCase()} - {booking.tripMode}</CardDescription>
+                        <CardTitle className="text-xl">Booking #{booking.bookingNumber || 'N/A'}</CardTitle>
+                        <CardDescription>{booking.tripType ? booking.tripType.toUpperCase() : 'N/A'} - {booking.tripMode || 'N/A'}</CardDescription>
                       </div>
-                      <Badge className={getStatusColor(booking.status)}>{booking.status}</Badge>
+                      <Badge className={getStatusColor(booking.status || '')}>{booking.status || 'Unknown'}</Badge>
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -352,7 +431,7 @@ export default function DashboardPage() {
                           <MapPin className="h-4 w-4 mr-1 mt-1 text-gray-500" />
                           <div>
                             <p className="text-sm text-gray-500">Pickup</p>
-                            <p className="font-medium">{booking.pickupLocation}</p>
+                            <p className="font-medium">{booking.pickupLocation || 'N/A'}</p>
                           </div>
                         </div>
                         {booking.dropLocation && (
@@ -371,21 +450,27 @@ export default function DashboardPage() {
                           <Calendar className="h-4 w-4 mr-1 mt-1 text-gray-500" />
                           <div>
                             <p className="text-sm text-gray-500">Date & Time</p>
-                            <p className="font-medium">{new Date(booking.pickupDate).toLocaleString()}</p>
+                            <p className="font-medium">
+                              {booking.pickupDate ? new Date(booking.pickupDate).toLocaleString() : 'N/A'}
+                            </p>
                           </div>
                         </div>
                         <div className="flex items-start">
                           <Car className="h-4 w-4 mr-1 mt-1 text-gray-500" />
                           <div>
                             <p className="text-sm text-gray-500">Vehicle</p>
-                            <p className="font-medium">{booking.cabType}</p>
+                            <p className="font-medium">{booking.cabType || 'N/A'}</p>
                           </div>
                         </div>
                       </div>
                       <Separator />
                       <div>
                         <p className="text-sm text-gray-500">Amount</p>
-                        <p className="font-bold text-lg">₹{booking.totalAmount.toLocaleString('en-IN')}</p>
+                        <p className="font-bold text-lg">
+                          ₹{typeof booking.totalAmount === 'number' 
+                              ? booking.totalAmount.toLocaleString('en-IN') 
+                              : (booking.totalAmount || 'N/A')}
+                        </p>
                       </div>
                     </div>
                   </CardContent>

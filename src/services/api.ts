@@ -124,7 +124,6 @@ export const authAPI = {
 export const bookingAPI = {
   createBooking: async (bookingData: BookingRequest) => {
     console.log('Creating booking with data:', bookingData);
-    // Fix: Ensure we're using the correct endpoint path
     const response = await axiosInstance.post('/api/book', bookingData);
     console.log('Booking API response:', response.data);
     return response.data;
@@ -147,10 +146,29 @@ export const bookingAPI = {
   },
   getUserBookings: async () => {
     console.log('Fetching user bookings with auth token');
-    // Add timestamp to bypass cache
-    const timestamp = new Date().getTime();
-    const response = await axiosInstance.get(`/api/user/bookings?_t=${timestamp}`);
-    return response.data;
+    try {
+      // Add timestamp to bypass cache
+      const timestamp = new Date().getTime();
+      const url = `/api/user/bookings?_t=${timestamp}`;
+      console.log('User bookings request URL:', url);
+      
+      const response = await axiosInstance.get(url);
+      console.log('User bookings response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Error in getUserBookings:', error);
+      // Check specific error types and provide better handling
+      if (axios.isAxiosError(error) && error.response) {
+        console.error('Axios error response:', error.response.status, error.response.data);
+        // If authentication issue, clear token
+        if (error.response.status === 401) {
+          localStorage.removeItem('authToken');
+          localStorage.removeItem('auth_token');
+          console.warn('Auth token cleared due to 401 response');
+        }
+      }
+      throw error;
+    }
   },
   getAdminDashboardMetrics: async (period: 'today' | 'week' | 'month'): Promise<DashboardMetrics> => {
     const response = await axiosInstance.get(`/api/admin/metrics?period=${period}`);
