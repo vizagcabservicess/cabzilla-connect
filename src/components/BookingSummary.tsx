@@ -14,7 +14,7 @@ interface BookingSummaryProps {
   distance: number;
   totalPrice: number;
   tripType: string;
-  tripMode: string;
+  tripMode?: string; // Make tripMode optional
 }
 
 export const BookingSummary = ({
@@ -26,10 +26,10 @@ export const BookingSummary = ({
   distance,
   totalPrice,
   tripType,
-  tripMode
+  tripMode = 'one-way' // Default value for tripMode
 }: BookingSummaryProps) => {
   // Ensure we have data to display
-  if (!pickupLocation || (!dropLocation && tripType !== 'local') || !pickupDate || !selectedCab) {
+  if (!pickupLocation || (!dropLocation && tripType !== 'local' && tripType !== 'tour') || !pickupDate || !selectedCab) {
     return <div className="p-4 bg-gray-100 rounded-lg">Booking information not available</div>;
   }
 
@@ -48,7 +48,7 @@ export const BookingSummary = ({
             </div>
           </div>
           
-          {tripType !== 'local' && dropLocation && (
+          {tripType !== 'local' && tripType !== 'tour' && dropLocation && (
             <div className="flex items-start gap-2 mt-3">
               <MapPin className="h-5 w-5 text-red-500 mt-0.5" />
               <div>
@@ -115,6 +115,8 @@ export const BookingSummary = ({
           <p className="text-xs text-gray-500 mt-2">
             {tripType === 'outstation' && tripMode === 'round-trip'
               ? 'Includes return journey fare'
+              : tripType === 'tour'
+              ? 'All-inclusive tour package fare'
               : 'Base fare for one-way trip'}
           </p>
         </div>
