@@ -81,31 +81,27 @@ export function LocationInput({
     const newAddress = e.target.value;
     setAddress(newAddress);
     
-    // Create a basic location object with the typed address
+    // Only trigger location change if we have a handler and an address
     if (handleLocationChange && newAddress) {
-      // Always ensure we have a valid location object with proper properties initialized
+      // Create a new location object with safe defaults
       const updatedLocation: Location = {
-        ...locationData,
-        address: newAddress,
+        id: locationData.id || `loc_${Date.now()}`,
         name: newAddress,
-        id: locationData.id || `loc_${Date.now()}`
+        address: newAddress,
+        // Don't include lat/lng if they're not numbers to avoid type errors
+        ...(typeof locationData.lat === 'number' && !isNaN(locationData.lat) ? { lat: locationData.lat } : {}),
+        ...(typeof locationData.lng === 'number' && !isNaN(locationData.lng) ? { lng: locationData.lng } : {}),
+        // Always set isInVizag to a boolean value
+        isInVizag: locationData.isInVizag === true
       };
-      
-      // Preserve lat/lng if they exist
-      if (locationData.lat) updatedLocation.lat = locationData.lat;
-      if (locationData.lng) updatedLocation.lng = locationData.lng;
-      
-      // Explicitly set isInVizag to false if it's undefined
-      updatedLocation.isInVizag = updatedLocation.isInVizag !== undefined ? 
-        updatedLocation.isInVizag : false;
       
       // Mark that we've manually changed the location
       locationChangedRef.current = true;
       
-      // Log the location to verify no undefined properties
-      console.log('Input changed location:', updatedLocation);
+      // Log the location data for debugging
+      console.log('Text input location update:', updatedLocation);
       
-      // Send the fully populated location object to parent
+      // Send the updated location to parent
       handleLocationChange(updatedLocation);
     }
   };
@@ -165,22 +161,22 @@ export function LocationInput({
         // Update local state
         setAddress(formattedAddress);
         
-        // Calculate if the location is in Vizag
+        // Get coordinates
         const lat = place.geometry.location.lat();
         const lng = place.geometry.location.lng();
-        const isInVizag = safeDetermineIfLocationIsInVizag(lat, lng, formattedAddress);
         
-        // Create location object - ensure all required properties are properly initialized
+        // Create location object with all required properties
         const newLocation: Location = {
-          address: formattedAddress,
-          name: place.name || formattedAddress,
           id: locationData.id || `loc_${Date.now()}`,
+          name: place.name || formattedAddress,
+          address: formattedAddress,
           lat: lat,
           lng: lng,
-          isInVizag: isInVizag
+          // Determine if location is in Vizag (with defaults)
+          isInVizag: isInVizagArea(lat, lng, formattedAddress)
         };
         
-        console.log('Selected place from autocomplete:', newLocation);
+        console.log('Autocomplete selected location:', newLocation);
         
         // Mark that we've manually changed the location
         locationChangedRef.current = true;
@@ -202,20 +198,19 @@ export function LocationInput({
     };
   }, [google, isLoaded, handleLocationChange, disabled, readOnly, isPickupLocation, isAirportTransfer]);
 
-  // A more robust version of isLocationInVizag
-  function safeDetermineIfLocationIsInVizag(lat: number, lng: number, address: string | undefined | null): boolean {
-    // Check if address is null, undefined, or not a string
-    if (address === null || address === undefined || typeof address !== 'string') {
-      // If we don't have valid address, just use coordinates
-      return lat >= 17.6 && lat <= 17.9 && lng >= 83.1 && lng <= 83.4;
-    }
-    
-    // Check coordinates (Visakhapatnam bounds)
+  // Helper function to safely determine if a location is in Vizag
+  function isInVizagArea(lat: number, lng: number, address: string | undefined | null): boolean {
+    // Check by coordinates first (Visakhapatnam bounds)
     const isInVizagBounds = 
       lat >= 17.6 && lat <= 17.9 && 
       lng >= 83.1 && lng <= 83.4;
     
-    // Safe toLowerCase - only call if address is a valid string
+    // If we don't have a valid address string, just use coordinates
+    if (!address || typeof address !== 'string') {
+      return isInVizagBounds;
+    }
+    
+    // Check if address contains any Vizag-related names
     const addressLower = address.toLowerCase();
     const vizagNames = ['visakhapatnam', 'vizag', 'waltair', 'vizianagaram'];
     

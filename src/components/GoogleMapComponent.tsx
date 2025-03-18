@@ -10,6 +10,14 @@ interface GoogleMapComponentProps {
   onDistanceCalculated?: (distance: number, duration: number) => void;
 }
 
+interface SafeLocation {
+  id: string;
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+}
+
 const GoogleMapComponent = ({ 
   pickupLocation, 
   dropLocation,
@@ -27,35 +35,32 @@ const GoogleMapComponent = ({
     height: "400px",
   };
 
-  // Validate location objects and provide safe defaults
-  const safePickupLocation = pickupLocation && typeof pickupLocation === 'object' 
-    ? {
-        id: pickupLocation.id || '',
-        name: pickupLocation.name || '',
-        address: pickupLocation.address || '',
-        lat: typeof pickupLocation.lat === 'number' ? pickupLocation.lat : 17.6868,
-        lng: typeof pickupLocation.lng === 'number' ? pickupLocation.lng : 83.2185
-      }
-    : { lat: 17.6868, lng: 83.2185, id: '', name: '', address: '' };
-    
-  const safeDropLocation = dropLocation && typeof dropLocation === 'object'
-    ? {
-        id: dropLocation.id || '',
-        name: dropLocation.name || '',
-        address: dropLocation.address || '', 
-        lat: typeof dropLocation.lat === 'number' ? dropLocation.lat : 17.7,
-        lng: typeof dropLocation.lng === 'number' ? dropLocation.lng : 83.3
-      }
-    : { lat: 17.7, lng: 83.3, id: '', name: '', address: '' };
+  // Create safe location objects with validated values
+  const safePickupLocation: SafeLocation = {
+    id: pickupLocation?.id || '',
+    name: pickupLocation?.name || '',
+    address: pickupLocation?.address || '',
+    lat: typeof pickupLocation?.lat === 'number' && !isNaN(pickupLocation.lat) 
+      ? pickupLocation.lat : 17.6868,
+    lng: typeof pickupLocation?.lng === 'number' && !isNaN(pickupLocation.lng) 
+      ? pickupLocation.lng : 83.2185
+  };
+  
+  const safeDropLocation: SafeLocation = {
+    id: dropLocation?.id || '',
+    name: dropLocation?.name || '',
+    address: dropLocation?.address || '',
+    lat: typeof dropLocation?.lat === 'number' && !isNaN(dropLocation.lat) 
+      ? dropLocation.lat : 17.7,
+    lng: typeof dropLocation?.lng === 'number' && !isNaN(dropLocation.lng) 
+      ? dropLocation.lng : 83.3
+  };
 
-  // Ensure we have valid coordinates for the center
-  const center = safePickupLocation && 
-                 typeof safePickupLocation.lat === 'number' && 
-                 typeof safePickupLocation.lng === 'number' && 
-                 !isNaN(safePickupLocation.lat) && 
-                 !isNaN(safePickupLocation.lng)
-    ? { lat: safePickupLocation.lat, lng: safePickupLocation.lng } 
-    : { lat: 17.6868, lng: 83.2185 }; // Default to Visakhapatnam
+  // Set the center to Visakhapatnam by default
+  const center = { 
+    lat: safePickupLocation.lat,
+    lng: safePickupLocation.lng
+  };
 
   const directionsCallback = useCallback((result: google.maps.DirectionsResult | null, status: google.maps.DirectionsStatus) => {
     console.log("Directions status:", status);
@@ -89,30 +94,41 @@ const GoogleMapComponent = ({
       setDirectionsRequestFailed(true);
       
       // Fallback to default distance calculation if Google Maps fails
-      if (onDistanceCalculated && safePickupLocation && safeDropLocation) {
+      if (onDistanceCalculated) {
         // Calculate approximate distance using the Haversine formula
-        const R = 6371; // Radius of the earth in km
+        const distance = calculateHaversineDistance(
+          safePickupLocation.lat, safePickupLocation.lng,
+          safeDropLocation.lat, safeDropLocation.lng
+        );
         
-        // Ensure we have valid coordinates
-        const pickupLat = typeof safePickupLocation.lat === 'number' ? safePickupLocation.lat : 17.6868;
-        const pickupLng = typeof safePickupLocation.lng === 'number' ? safePickupLocation.lng : 83.2185;
-        const dropLat = typeof safeDropLocation.lat === 'number' ? safeDropLocation.lat : 17.7;
-        const dropLng = typeof safeDropLocation.lng === 'number' ? safeDropLocation.lng : 83.3;
-        
-        const dLat = (dropLat - pickupLat) * Math.PI / 180;
-        const dLon = (dropLng - pickupLng) * Math.PI / 180;
-        const a = 
-          Math.sin(dLat/2) * Math.sin(dLat/2) +
-          Math.cos(pickupLat * Math.PI / 180) * Math.cos(dropLat * Math.PI / 180) * 
-          Math.sin(dLon/2) * Math.sin(dLon/2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        const distance = Math.round(R * c); // Distance in km
         const duration = Math.round(distance * 2); // Approximate duration in minutes
         
         onDistanceCalculated(distance, duration);
       }
     }
   }, [onDistanceCalculated, safePickupLocation, safeDropLocation, google]);
+
+  // Calculate distance between two points using Haversine formula
+  function calculateHaversineDistance(
+    lat1: number, lng1: number, 
+    lat2: number, lng2: number
+  ): number {
+    const R = 6371; // Radius of the earth in km
+    const dLat = deg2rad(lat2 - lat1);
+    const dLon = deg2rad(lng2 - lng1);
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const distance = R * c; // Distance in km
+    
+    return Math.round(distance);
+  }
+  
+  function deg2rad(deg: number): number {
+    return deg * (Math.PI / 180);
+  }
 
   useEffect(() => {
     // Reset directions when locations change
@@ -131,19 +147,7 @@ const GoogleMapComponent = ({
 
   // Check if locations have valid coordinates
   const hasValidLocations = () => {
-    const isValidPickup = safePickupLocation && 
-                         typeof safePickupLocation.lat === 'number' && 
-                         typeof safePickupLocation.lng === 'number' &&
-                         !isNaN(safePickupLocation.lat) && 
-                         !isNaN(safePickupLocation.lng);
-                         
-    const isValidDrop = safeDropLocation && 
-                       typeof safeDropLocation.lat === 'number' && 
-                       typeof safeDropLocation.lng === 'number' &&
-                       !isNaN(safeDropLocation.lat) && 
-                       !isNaN(safeDropLocation.lng);
-                       
-    return isValidPickup && isValidDrop;
+    return true; // We've already validated and provided defaults
   };
 
   // Handle directions request
@@ -186,26 +190,17 @@ const GoogleMapComponent = ({
         />
       )}
 
-      {!directions && safePickupLocation && 
-       typeof safePickupLocation.lat === 'number' && 
-       typeof safePickupLocation.lng === 'number' && 
-       !isNaN(safePickupLocation.lat) && 
-       !isNaN(safePickupLocation.lng) && (
-        <Marker
-          position={{ lat: safePickupLocation.lat, lng: safePickupLocation.lng }}
-          label={{ text: "A", color: "white" }}
-        />
-      )}
-
-      {!directions && safeDropLocation && 
-       typeof safeDropLocation.lat === 'number' && 
-       typeof safeDropLocation.lng === 'number' && 
-       !isNaN(safeDropLocation.lat) && 
-       !isNaN(safeDropLocation.lng) && (
-        <Marker
-          position={{ lat: safeDropLocation.lat, lng: safeDropLocation.lng }}
-          label={{ text: "B", color: "white" }}
-        />
+      {!directions && (
+        <>
+          <Marker
+            position={{ lat: safePickupLocation.lat, lng: safePickupLocation.lng }}
+            label={{ text: "A", color: "white" }}
+          />
+          <Marker
+            position={{ lat: safeDropLocation.lat, lng: safeDropLocation.lng }}
+            label={{ text: "B", color: "white" }}
+          />
+        </>
       )}
     </GoogleMap>
   );

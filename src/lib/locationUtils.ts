@@ -12,9 +12,9 @@ export const convertToApiLocation = (location: AppLocation | null): ApiLocation 
     id: location.id || '',
     name: location.name || '',
     address: location.address || location.name || '',
-    lat: location.lat || 0,
-    lng: location.lng || 0,
-    isInVizag: location.isInVizag !== undefined ? location.isInVizag : false
+    lat: typeof location.lat === 'number' ? location.lat : 0,
+    lng: typeof location.lng === 'number' ? location.lng : 0,
+    isInVizag: typeof location.isInVizag === 'boolean' ? location.isInVizag : false
   };
 };
 
@@ -28,7 +28,7 @@ export const safeIncludes = (str: any, target: string): boolean => {
     return false;
   }
   
-  // Check if the lowercase version of str includes target
+  // Both strings should be converted to lowercase for case-insensitive comparison
   return str.toLowerCase().includes(target.toLowerCase());
 };
 
@@ -51,18 +51,19 @@ export const createLocationChangeHandler = (
     // Safely extract address information
     const locationAddress = newLocation.address || newLocation.name || '';
     
-    // Convert API location format to app location format
+    // Convert API location format to app location format with safe defaults
     const appLocation: AppLocation = {
       id,
       name: newLocation.name || newLocation.address || '',
       address: locationAddress,
       city: extractCityFromAddress(locationAddress),
       state: extractStateFromAddress(locationAddress),
-      lat: newLocation.lat || 0,
-      lng: newLocation.lng || 0,
+      lat: typeof newLocation.lat === 'number' ? newLocation.lat : 0,
+      lng: typeof newLocation.lng === 'number' ? newLocation.lng : 0,
       type: 'other',
       popularityScore: 50,
-      isInVizag: newLocation.isInVizag !== undefined ? newLocation.isInVizag : isLocationInVizag(newLocation)
+      isInVizag: typeof newLocation.isInVizag === 'boolean' ? 
+        newLocation.isInVizag : determineIfLocationIsInVizag(newLocation)
     };
     
     console.log('Location changed:', appLocation);
@@ -80,11 +81,48 @@ export const createLocationChangeHandler = (
 };
 
 /**
+ * Safely determine if a location is in Visakhapatnam based on its properties
+ */
+function determineIfLocationIsInVizag(location: ApiLocation | null | undefined): boolean {
+  if (!location) return false;
+  
+  // Check if location has valid coordinates
+  if (typeof location.lat === 'number' && 
+      typeof location.lng === 'number' && 
+      !isNaN(location.lat) && 
+      !isNaN(location.lng)) {
+    
+    // Check if coordinates are within Vizag bounds
+    if (location.lat >= 17.6 && location.lat <= 17.9 && 
+        location.lng >= 83.1 && location.lng <= 83.4) {
+      return true;
+    }
+  }
+  
+  // Check location name and address for Vizag keywords
+  const vizagKeywords = ['visakhapatnam', 'vizag', 'waltair', 'vizianagaram'];
+  
+  for (const keyword of vizagKeywords) {
+    if (safeIncludes(location.address, keyword) || 
+        safeIncludes(location.name, keyword)) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+/**
  * Check if a location is in Visakhapatnam based on coordinates and address
  * Safe handling of potentially undefined values
  */
 export const isLocationInVizag = (location: AppLocation | ApiLocation | null | undefined): boolean => {
   if (!location) return false;
+  
+  // Check if isInVizag is already set
+  if (typeof location.isInVizag === 'boolean') {
+    return location.isInVizag;
+  }
   
   // Check by coordinates (Visakhapatnam approximate bounds)
   const hasValidCoordinates = 
@@ -102,22 +140,12 @@ export const isLocationInVizag = (location: AppLocation | ApiLocation | null | u
   // Using safeIncludes for all string checks to avoid toLowerCase on undefined
   const vizagNames = ['visakhapatnam', 'vizag', 'waltair', 'vizianagaram'];
   
-  // Get location address, name, city ensuring they are strings
-  const address = location.address || '';
-  const name = location.name || '';
-  const city = 'city' in location && location.city ? location.city : '';
-  
-  for (const vizagName of vizagNames) {
-    if (
-      safeIncludes(address, vizagName) ||
-      safeIncludes(name, vizagName) ||
-      safeIncludes(city, vizagName)
-    ) {
-      return true;
-    }
-  }
-  
-  return false;
+  // Check if any Vizag name appears in the location's address, name, or city
+  return vizagNames.some(vizagName => 
+    safeIncludes(location.address, vizagName) ||
+    safeIncludes(location.name, vizagName) ||
+    (location as AppLocation).city ? safeIncludes((location as AppLocation).city, vizagName) : false
+  );
 };
 
 /**
