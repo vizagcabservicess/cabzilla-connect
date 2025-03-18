@@ -7,6 +7,9 @@ import { BookingStatus, DashboardMetrics as DashboardMetricsType } from '@/types
 import { ArrowDown, ArrowUp, Calendar, CarTaxiFront, CircleDollarSign, Star, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+// Export the type for use in other components
+export type { DashboardMetricsType };
+
 interface DashboardMetricsProps {
   metrics?: DashboardMetricsType | null;
   isLoading?: boolean;

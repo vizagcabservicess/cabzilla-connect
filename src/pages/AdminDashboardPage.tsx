@@ -25,6 +25,7 @@ import { AdminNotifications } from '@/components/admin/AdminNotifications';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UserManagement } from '@/components/admin/UserManagement';
 import { NetworkStatusMonitor } from '@/components/NetworkStatusMonitor';
+import { BookingStatus } from '@/types/api';
 
 export default function AdminDashboardPage() {
   const { toast } = useToast();

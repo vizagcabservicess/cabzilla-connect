@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -9,9 +10,9 @@ import { useToast } from "@/hooks/use-toast";
 import { toast } from "sonner";
 import { Book, CircleOff, RefreshCw, Calendar, MapPin, Car, ShieldAlert, LogOut, Info } from "lucide-react";
 import { bookingAPI, authAPI } from '@/services/api';
-import { Booking } from '@/types/api';
+import { Booking, BookingStatus, DashboardMetrics as DashboardMetricsType } from '@/types/api';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { DashboardMetrics, DashboardMetricsType } from '@/components/admin/DashboardMetrics';
+import { DashboardMetrics } from '@/components/admin/DashboardMetrics';
 import { ApiErrorFallback } from "@/components/ApiErrorFallback";
 
 const MAX_RETRIES = 3;
