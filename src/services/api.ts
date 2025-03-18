@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { AuthResponse, LoginRequest, SignupRequest, BookingRequest, Booking, TourFare, VehiclePricing, FareUpdateRequest, VehiclePricingUpdateRequest, DashboardMetrics, User } from '@/types/api';
 
@@ -223,19 +224,30 @@ export const bookingAPI = {
       
       console.log('User bookings response:', response.data);
       
-      // Handle response data structure properly
+      // Process the response to consistently return a Booking array
       if (response.data && typeof response.data === 'object') {
+        // Case 1: The response is already an array of bookings
         if (Array.isArray(response.data)) {
           return response.data;
-        } else if (response.data.data && Array.isArray(response.data.data)) {
+        }
+        // Case 2: The response has a 'data' property that is an array
+        else if (response.data.data && Array.isArray(response.data.data)) {
           return response.data.data;
-        } else if (response.data.status === 'success' && response.data.data) {
+        }
+        // Case 3: The response has a 'status' property and a 'data' array
+        else if (response.data.status === 'success' && Array.isArray(response.data.data)) {
           return response.data.data;
+        }
+        // Case 4: The response has a non-array 'data' property (should not happen, but handle it)
+        else if (response.data.data && !Array.isArray(response.data.data)) {
+          console.warn('Unexpected data format - data is not an array:', response.data);
+          return [];
         }
       }
       
+      // If we reach here, the response format was unexpected
       console.error('Unexpected response format:', response.data);
-      throw new Error('Unexpected API response format');
+      return [];
     } catch (error) {
       console.error('Error in getUserBookings:', error);
       // Check specific error types and provide better handling
@@ -256,7 +268,7 @@ export const bookingAPI = {
       }
       
       // For network errors, provide a clearer message
-      if (error.message && error.message.includes('Network Error')) {
+      if (error instanceof Error && error.message && error.message.includes('Network Error')) {
         throw new Error('Unable to connect to the server. Please check your internet connection.');
       }
       
@@ -265,6 +277,11 @@ export const bookingAPI = {
   },
   getAdminDashboardMetrics: async (period: 'today' | 'week' | 'month'): Promise<DashboardMetrics> => {
     const response = await axiosInstance.get(`/api/admin/metrics?period=${period}`);
+    
+    // Make sure we return the proper data format
+    if (response.data && response.data.data) {
+      return response.data.data;
+    }
     return response.data;
   }
 };

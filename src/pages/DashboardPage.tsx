@@ -64,33 +64,22 @@ export default function DashboardPage() {
         const cacheBust = new Date().getTime();
         console.log(`Cache busting with timestamp: ${cacheBust}`);
         
-        const data = await bookingAPI.getUserBookings();
-        console.log('Bookings received:', data);
+        // Fix here: properly handle the data structure from getUserBookings()
+        const response = await bookingAPI.getUserBookings();
+        console.log('Bookings received:', response);
         
-        if (Array.isArray(data)) {
-          setBookings(data);
+        // Use the response directly as it's already an array of Booking objects
+        // The API client now handles the data extraction properly
+        if (Array.isArray(response)) {
+          setBookings(response);
           setRetryCount(0);
-          if (data.length === 0) {
+          if (response.length === 0) {
             toast.info('No bookings found. Book your first cab ride now!');
           } else {
-            toast.success(`Found ${data.length} booking(s)`);
-          }
-        } else if (data && typeof data === 'object') {
-          // Handle case where API returns an object with data property
-          if (Array.isArray(data.data)) {
-            setBookings(data.data);
-            setRetryCount(0);
-            if (data.data.length === 0) {
-              toast.info('No bookings found. Book your first cab ride now!');
-            } else {
-              toast.success(`Found ${data.data.length} booking(s)`);
-            }
-          } else {
-            console.error('Invalid data format received:', data);
-            throw new Error('Invalid data format received from server');
+            toast.success(`Found ${response.length} booking(s)`);
           }
         } else {
-          console.error('Invalid data format received:', data);
+          console.error('Invalid data format received:', response);
           throw new Error('Invalid data format received from server');
         }
       } catch (error) {
@@ -494,3 +483,54 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+const NoBookingsCard = () => (
+  <Card>
+    <CardContent className="flex flex-col items-center justify-center py-10">
+      <Book className="h-16 w-16 text-gray-300 mb-4" />
+      <p className="text-gray-500 mb-4">You don't have any bookings yet.</p>
+      <Button onClick={() => navigate('/')} className="bg-blue-600 hover:bg-blue-700">Book a Cab Now</Button>
+    </CardContent>
+  </Card>
+);
+
+const getStatusColor = (status: string) => {
+  switch (status.toLowerCase()) {
+    case 'confirmed': return 'bg-green-100 text-green-800';
+    case 'pending': return 'bg-yellow-100 text-yellow-800';
+    case 'completed': return 'bg-blue-100 text-blue-800';
+    case 'cancelled': return 'bg-red-100 text-red-800';
+    default: return 'bg-gray-100 text-gray-800';
+  }
+};
+
+// Safe getter for booking properties with built-in null checks
+const getBookingValue = (booking: Booking, key: keyof Booking) => {
+  const value = booking[key];
+  if (value === null || value === undefined) return '';
+  
+  // Handle number formatting
+  if (typeof value === 'number') {
+    try {
+      return value.toLocaleString('en-IN');
+    } catch (e) {
+      console.error('Error formatting number:', e);
+      return value.toString();
+    }
+  }
+  
+  return value;
+};
+
+// Define upcomingBookings and pastBookings with safe null-checks
+const safeBookings = Array.isArray(bookings) ? bookings : [];
+
+const upcomingBookings = safeBookings.filter(booking => 
+  booking && booking.status && 
+  ['pending', 'confirmed'].includes(booking.status.toLowerCase())
+);
+
+const pastBookings = safeBookings.filter(booking => 
+  booking && booking.status && 
+  ['completed', 'cancelled'].includes(booking.status.toLowerCase())
+);

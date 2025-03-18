@@ -3,13 +3,13 @@
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
 
-// Expanded CORS Headers to ensure client can access
+// CORS Headers - Updated to be more permissive
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, OPTIONS');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Cache-Control');
 header('Content-Type: application/json');
 
-// Handle preflight OPTIONS request explicitly
+// Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
@@ -21,88 +21,67 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     exit;
 }
 
-// Log the start of request handling
-logError("User bookings request initiated", [
-    'method' => $_SERVER['REQUEST_METHOD'],
-    'query' => $_GET,
-    'headers' => array_keys(getallheaders())
-]);
-
-// Authenticate user
+// Get user ID from JWT token
 $headers = getallheaders();
-if (!isset($headers['Authorization']) && !isset($headers['authorization'])) {
-    logError("Missing authorization header");
+$userId = null;
+$isAdmin = false;
+
+logError("Request received for user bookings", ["headers" => array_keys($headers)]);
+
+if (isset($headers['Authorization']) || isset($headers['authorization'])) {
+    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
+    $token = str_replace('Bearer ', '', $authHeader);
+    
+    $payload = verifyJwtToken($token);
+    if ($payload && isset($payload['user_id'])) {
+        $userId = $payload['user_id'];
+        $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
+    }
+}
+
+if (!$userId) {
+    logError("Missing or invalid authentication token");
     sendJsonResponse(['status' => 'error', 'message' => 'Authentication required'], 401);
     exit;
 }
 
-$authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
-$token = str_replace('Bearer ', '', $authHeader);
-
-logError("Token received for bookings", ['token_length' => strlen($token)]);
-
-$userData = verifyJwtToken($token);
-if (!$userData || !isset($userData['user_id'])) {
-    logError("Authentication failed in bookings.php", [
-        'token_length' => strlen($token),
-        'token_parts' => count(explode('.', $token))
-    ]);
-    sendJsonResponse(['status' => 'error', 'message' => 'Invalid or expired token'], 401);
-    exit;
-}
-
-$userId = $userData['user_id'];
-$isAdmin = isset($userData['role']) && $userData['role'] === 'admin';
-
-logError("User authenticated successfully for bookings", [
-    'user_id' => $userId, 
-    'is_admin' => $isAdmin ? 'true' : 'false'
-]);
-
 // Connect to database
 $conn = getDbConnection();
 if (!$conn) {
-    logError("Database connection failed in bookings.php");
+    logError("Database connection failed");
     sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed'], 500);
     exit;
 }
 
 try {
-    // Get user's bookings - add explicit query logging
-    logError("Preparing to fetch bookings for user", ['user_id' => $userId]);
+    // Log the user ID for debugging
+    logError("Fetching bookings for user", ['user_id' => $userId]);
     
-    $sql = "SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC";
-    logError("SQL Query", ['sql' => $sql, 'user_id' => $userId]);
-
-    $stmt = $conn->prepare($sql);
+    // Get user's bookings
+    $stmt = $conn->prepare("SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC");
     if (!$stmt) {
-        logError("Prepare statement failed", ['error' => $conn->error]);
-        throw new Exception('Database prepare error: ' . $conn->error);
+        logError("Failed to prepare query", ['error' => $conn->error]);
+        throw new Exception('Database error: ' . $conn->error);
     }
     
     $stmt->bind_param("i", $userId);
-    $executed = $stmt->execute();
+    $success = $stmt->execute();
     
-    if (!$executed) {
-        logError("Execute statement failed", ['error' => $stmt->error]);
-        throw new Exception('Database execute error: ' . $stmt->error);
+    if (!$success) {
+        logError("Failed to execute query", ['error' => $stmt->error]);
+        throw new Exception('Database error: ' . $stmt->error);
     }
     
     $result = $stmt->get_result();
     
     if (!$result) {
-        logError("Get result failed", ['error' => $stmt->error]);
-        throw new Exception('Database result error: ' . $stmt->error);
+        logError("Failed to get result", ['error' => $stmt->error]);
+        throw new Exception('Database error: ' . $stmt->error);
     }
-
-    // Log the SQL query for debugging
-    logError("SQL Query executed for bookings", [
-        'query' => "SELECT * FROM bookings WHERE user_id = {$userId} ORDER BY created_at DESC"
-    ]);
-
+    
+    // Create an array of bookings
     $bookings = [];
     while ($row = $result->fetch_assoc()) {
-        // Format each booking record consistently
         $booking = [
             'id' => (int)$row['id'],
             'userId' => (int)$row['user_id'],
@@ -110,16 +89,16 @@ try {
             'pickupLocation' => $row['pickup_location'],
             'dropLocation' => $row['drop_location'],
             'pickupDate' => $row['pickup_date'],
-            'returnDate' => $row['return_date'] ?? null,
-            'cabType' => $row['cab_type'] ?? 'Sedan',
-            'distance' => floatval($row['distance'] ?? 0),
-            'tripType' => $row['trip_type'] ?? 'local',
-            'tripMode' => $row['trip_mode'] ?? 'one-way',
-            'totalAmount' => floatval($row['total_amount'] ?? 0),
-            'status' => $row['status'] ?? 'pending',
-            'passengerName' => $row['passenger_name'] ?? $userData['name'] ?? '',
-            'passengerPhone' => $row['passenger_phone'] ?? '',
-            'passengerEmail' => $row['passenger_email'] ?? $userData['email'] ?? '',
+            'returnDate' => $row['return_date'],
+            'cabType' => $row['cab_type'],
+            'distance' => (float)$row['distance'],
+            'tripType' => $row['trip_type'],
+            'tripMode' => $row['trip_mode'],
+            'totalAmount' => (float)$row['total_amount'],
+            'status' => $row['status'],
+            'passengerName' => $row['passenger_name'],
+            'passengerPhone' => $row['passenger_phone'],
+            'passengerEmail' => $row['passenger_email'],
             'driverName' => $row['driver_name'] ?? null,
             'driverPhone' => $row['driver_phone'] ?? null,
             'createdAt' => $row['created_at'],
@@ -127,26 +106,18 @@ try {
         ];
         $bookings[] = $booking;
     }
-
-    // Log data found for debugging
-    logError("Bookings found", ['count' => count($bookings), 'user_id' => $userId]);
-
-    // Send response with consistent format
-    $response = [
-        'status' => 'success',
-        'data' => $bookings
-    ];
     
-    logError("Sending bookings response", ['booking_count' => count($bookings)]);
-    echo json_encode($response);
-    exit;
-    
-} catch (Exception $e) {
-    logError("Exception in bookings.php", [
-        'message' => $e->getMessage(),
-        'file' => $e->getFile(),
-        'line' => $e->getLine()
+    // Log the count of bookings found
+    logError("Bookings found for user", [
+        'user_id' => $userId, 
+        'count' => count($bookings)
     ]);
     
-    sendJsonResponse(['status' => 'error', 'message' => 'Server error: ' . $e->getMessage()], 500);
+    // Return the bookings data consistently
+    // IMPORTANT: This sends just the array directly without wrapping it in status/data
+    echo json_encode($bookings);
+    
+} catch (Exception $e) {
+    logError("Error fetching user bookings", ['error' => $e->getMessage(), 'user_id' => $userId]);
+    sendJsonResponse(['status' => 'error', 'message' => 'Failed to fetch bookings: ' . $e->getMessage()], 500);
 }
