@@ -1,10 +1,10 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Input } from "@/components/ui/input";
 import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
 import { Location } from '@/types/api';
 import { debounce } from '@/lib/utils';
-import { isLocationInVizag, safeIncludes } from '@/lib/locationUtils';
+import { isLocationInVizag } from '@/lib/locationUtils';
+import { safeIncludes } from '@/lib/safeStringUtils';
 
 interface LocationInputProps {
   location?: Location;
@@ -215,7 +215,7 @@ export function LocationInput({
     const vizagNames = ['visakhapatnam', 'vizag', 'waltair', 'vizianagaram'];
     
     for (const name of vizagNames) {
-      if (addressLower.includes(name)) {
+      if (safeIncludes(address, name)) {
         return true;
       }
     }

@@ -1,7 +1,9 @@
-
 import { Location as ApiLocation } from '@/types/api';
 import { Location as AppLocation } from '@/lib/locationData';
 import { safeIncludes, safeLowerCase, safeGetString } from '@/lib/safeStringUtils';
+
+// Re-export the safeIncludes function so it can be imported from locationUtils
+export { safeIncludes, safeLowerCase, safeGetString };
 
 /**
  * Converts a location from the application format to the API format
