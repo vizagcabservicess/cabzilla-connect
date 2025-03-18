@@ -73,7 +73,7 @@ export const isLocationInVizag = (location: AppLocation | ApiLocation): boolean 
   // Check by address text
   const addressLower = (location.address || '').toLowerCase();
   const nameLower = (location.name || '').toLowerCase();
-  const cityLower = (location.city as string || '').toLowerCase();
+  const cityLower = ((location as AppLocation).city || '').toLowerCase();
   
   const vizagNames = ['visakhapatnam', 'vizag', 'waltair', 'vizianagaram'];
   

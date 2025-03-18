@@ -1,4 +1,3 @@
-
 // User related types
 export interface User {
   id: number;
@@ -205,7 +204,7 @@ export interface RoutePopularity {
   peakTime: string;
 }
 
-// Updated Location type to be compatible with lib/locationData.ts Location
+// Updated Location type to include isInVizag property
 export interface Location {
   id?: string;
   name?: string;
@@ -217,11 +216,11 @@ export interface Location {
   popularityScore?: number;
   isPickupLocation?: boolean;
   isDropLocation?: boolean;
-  isInVizag?: boolean; // This property is now properly defined
+  isInVizag?: boolean;
   address: string;
 }
 
-// Admin API types for Fare management
+// Admin API types
 export interface FareAPI {
   getTourFares(): Promise<TourFare[]>;
   updateTourFares(fareData: FareUpdateRequest): Promise<TourFare>;
@@ -229,7 +228,6 @@ export interface FareAPI {
   updateVehiclePricing(pricingData: VehiclePricingUpdateRequest): Promise<VehiclePricing>;
 }
 
-// Admin Dashboard API
 export interface AdminAPI {
   getAdminDashboardMetrics(period: 'today' | 'week' | 'month'): Promise<DashboardMetrics>;
 }

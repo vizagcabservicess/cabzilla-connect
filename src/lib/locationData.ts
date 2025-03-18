@@ -10,7 +10,8 @@ export interface Location {
   popularityScore: number;
   isPickupLocation?: boolean;
   isDropLocation?: boolean;
-  address: string; // Changed from optional to required to match with types/api.Location
+  isInVizag?: boolean;
+  address: string;
 }
 
 export const vizagLocations: Location[] = [
