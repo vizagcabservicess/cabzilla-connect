@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
@@ -9,7 +10,7 @@ import { bookingAPI } from "@/services/api";
 import { MapPin, Calendar, Car, ArrowRight, DollarSign, Printer } from "lucide-react";
 import { BookingStatusManager } from "@/components/BookingStatusManager";
 import { BookingStatus } from "@/types/api";
-import { format } from "date-fns";
+import { format, parseISO, isValid } from "date-fns";
 
 const ReceiptPage = () => {
   const { bookingId } = useParams<{ bookingId: string }>();
@@ -28,6 +29,7 @@ const ReceiptPage = () => {
       }
 
       try {
+        setLoading(true);
         const response = await bookingAPI.getBookingById(bookingId);
         console.log("Booking details:", response);
         if (response && response.data) {
@@ -52,37 +54,69 @@ const ReceiptPage = () => {
   }, [bookingId, toast]);
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return "N/A";
+    
     try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) {
+      // Handle SQL datetime format (YYYY-MM-DD HH:MM:SS)
+      if (dateString.includes(' ')) {
+        const [datePart, timePart] = dateString.split(' ');
+        const [year, month, day] = datePart.split('-').map(Number);
+        const [hour, minute, second] = timePart.split(':').map(Number);
+        
+        const date = new Date(year, month - 1, day, hour, minute, second);
+        if (isNaN(date.getTime())) {
+          throw new Error("Invalid date");
+        }
+        return format(date, "PPpp");
+      }
+      
+      // Try standard ISO format
+      const date = parseISO(dateString);
+      if (!isValid(date)) {
         throw new Error("Invalid date");
       }
       return format(date, "PPpp");
     } catch (error) {
-      console.error("Date formatting error:", error);
+      console.error("Date formatting error:", error, "for date:", dateString);
       return "Invalid Date";
     }
   };
 
   const calculatePriceBreakdown = (totalAmount: number) => {
-    if (isNaN(totalAmount) || totalAmount <= 0) {
+    if (typeof totalAmount !== 'number' || isNaN(totalAmount) || totalAmount <= 0) {
       return { baseFare: 0, taxes: 0 };
     }
+    
     const baseFare = Math.round(totalAmount * 0.85);
     const taxes = Math.round(totalAmount * 0.15);
     return { baseFare, taxes };
   };
 
   const formatCurrency = (amount: number) => {
-    if (isNaN(amount)) return "₹0";
+    if (typeof amount !== 'number' || isNaN(amount)) return "₹0";
     return `₹${amount.toLocaleString('en-IN')}`;
   };
 
   const formatTripType = (tripType?: string, tripMode?: string) => {
     if (!tripType) return "Standard Trip";
+    
     const type = tripType.charAt(0).toUpperCase() + tripType.slice(1);
-    const mode = tripMode ? ` (${tripMode.replace('-', ' ')})` : '';
-    return `${type}${mode}`;
+    let formattedMode = "";
+    
+    if (tripMode) {
+      // Convert one-way to One Way, etc.
+      formattedMode = tripMode
+        .split('-')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+      return `${type} (${formattedMode})`;
+    }
+    
+    return type;
+  };
+
+  const handlePrint = () => {
+    window.print();
   };
 
   if (loading) {
@@ -121,7 +155,12 @@ const ReceiptPage = () => {
     );
   }
 
-  const { baseFare, taxes } = booking ? calculatePriceBreakdown(booking.totalAmount) : { baseFare: 0, taxes: 0 };
+  // Ensure totalAmount is a number
+  const totalAmount = typeof booking.totalAmount === 'number' 
+    ? booking.totalAmount 
+    : parseFloat(booking.totalAmount) || 0;
+    
+  const { baseFare, taxes } = calculatePriceBreakdown(totalAmount);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -133,11 +172,22 @@ const ReceiptPage = () => {
               <h1 className="text-xl font-bold">Booking Receipt</h1>
               <p className="text-sm mt-1">#{booking?.bookingNumber}</p>
             </div>
-            <BookingStatusManager
-              currentStatus={booking?.status as BookingStatus}
-              onStatusChange={() => {}}
-              isAdmin={false}
-            />
+            <div className="flex gap-2">
+              <BookingStatusManager
+                currentStatus={booking?.status as BookingStatus}
+                onStatusChange={async () => {}}
+                isAdmin={false}
+              />
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handlePrint} 
+                className="bg-white text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+              >
+                <Printer className="h-4 w-4 mr-2" />
+                Print
+              </Button>
+            </div>
           </div>
           
           <div className="p-6">
@@ -234,7 +284,7 @@ const ReceiptPage = () => {
                   <Separator className="my-2" />
                   <div className="flex justify-between font-bold">
                     <span>Total Amount</span>
-                    <span>{formatCurrency(booking?.totalAmount || 0)}</span>
+                    <span>{formatCurrency(totalAmount)}</span>
                   </div>
                   <div className="mt-3 text-sm text-green-600 font-medium">
                     <DollarSign className="w-4 h-4 inline mr-1" />

@@ -1,3 +1,4 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../config.php';
@@ -56,6 +57,9 @@ if (!$data) {
     sendJsonResponse(['status' => 'error', 'message' => 'Invalid request data'], 400);
     exit;
 }
+
+// Debug log the incoming data
+logError("Update booking request data", $data);
 
 // Connect to database
 $conn = getDbConnection();
@@ -119,9 +123,19 @@ try {
         exit;
     }
     
+    logError("Update query fields", [
+        'fields' => $updateFields,
+        'values' => $updateValues,
+        'types' => $updateTypes
+    ]);
+    
     // Update the booking
     $updateQuery = "UPDATE bookings SET " . implode(", ", $updateFields) . ", updated_at = NOW() WHERE id = ?";
     $updateStmt = $conn->prepare($updateQuery);
+    
+    if (!$updateStmt) {
+        throw new Exception("Prepare failed: " . $conn->error);
+    }
     
     // Dynamically bind parameters
     $bindParams = array_merge([$updateTypes], $updateValues);
@@ -167,5 +181,6 @@ try {
     sendJsonResponse(['status' => 'success', 'message' => 'Booking updated successfully', 'data' => $booking]);
     
 } catch (Exception $e) {
+    logError("Update booking error", ['message' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
     sendJsonResponse(['status' => 'error', 'message' => 'Failed to update booking: ' . $e->getMessage()], 500);
 }

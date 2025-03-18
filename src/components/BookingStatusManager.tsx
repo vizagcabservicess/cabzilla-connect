@@ -5,12 +5,13 @@ import { Button } from "@/components/ui/button";
 import { BookingStatus } from "@/types/api";
 import { Check, CheckCheck, Loader2, Trash2, CheckCircle, AlertCircle, XCircle } from 'lucide-react';
 import { cn } from "@/lib/utils";
+import { useToast } from "@/components/ui/use-toast";
 
 interface BookingStatusManagerProps {
   currentStatus: BookingStatus;
-  onStatusChange: (newStatus: BookingStatus) => void;
+  onStatusChange: (newStatus: BookingStatus) => Promise<void>;
   isAdmin?: boolean;
-  onDelete?: () => void;
+  onDelete?: () => Promise<void>;
 }
 
 export function BookingStatusManager({ 
@@ -20,6 +21,8 @@ export function BookingStatusManager({
   onDelete
 }: BookingStatusManagerProps) {
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const { toast } = useToast();
 
   const getStatusIcon = (status: BookingStatus) => {
     switch (status) {
@@ -60,11 +63,51 @@ export function BookingStatusManager({
   };
 
   const handleStatusChange = async (newStatus: string) => {
+    if (newStatus === currentStatus) return;
+    
     setIsUpdating(true);
     try {
       await onStatusChange(newStatus as BookingStatus);
+      toast({
+        title: "Status Updated",
+        description: `Booking status changed to ${newStatus.replace('_', ' ').toUpperCase()}`,
+      });
+    } catch (error) {
+      console.error("Error updating status:", error);
+      toast({
+        variant: "destructive",
+        title: "Status Update Failed",
+        description: error instanceof Error ? error.message : "Failed to update status",
+      });
     } finally {
       setIsUpdating(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!onDelete) return;
+    
+    // Confirm before deleting
+    if (!window.confirm("Are you sure you want to delete this booking? This action cannot be undone.")) {
+      return;
+    }
+    
+    setIsDeleting(true);
+    try {
+      await onDelete();
+      toast({
+        title: "Booking Deleted",
+        description: "The booking has been successfully deleted",
+      });
+    } catch (error) {
+      console.error("Error deleting booking:", error);
+      toast({
+        variant: "destructive",
+        title: "Delete Failed",
+        description: error instanceof Error ? error.message : "Failed to delete the booking",
+      });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -137,10 +180,14 @@ export function BookingStatusManager({
             <Button
               variant="destructive"
               size="sm"
-              onClick={onDelete}
-              disabled={isUpdating}
+              onClick={handleDelete}
+              disabled={isUpdating || isDeleting}
             >
-              <Trash2 className="h-4 w-4 mr-2" />
+              {isDeleting ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4 mr-2" />
+              )}
               Delete Booking
             </Button>
           )}

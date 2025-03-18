@@ -1,5 +1,6 @@
+
 import axios from 'axios';
-import { AuthResponse, LoginRequest, SignupRequest, BookingRequest, Booking, TourFare, VehiclePricing, FareUpdateRequest, VehiclePricingUpdateRequest, DashboardMetrics, User } from '@/types/api';
+import { AuthResponse, LoginRequest, SignupRequest, BookingRequest, Booking, TourFare, VehiclePricing, FareUpdateRequest, VehiclePricingUpdateRequest, DashboardMetrics, User, BookingStatus } from '@/types/api';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
@@ -46,6 +47,24 @@ axiosInstance.interceptors.response.use(
     if (error.response) {
       // Server responded with an error status code
       console.error(`❌ API Error: ${error.response.status}`, error.response.data);
+      
+      // Create a more descriptive error message
+      let errorMessage = 'An error occurred';
+      if (error.response.data && error.response.data.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response.status === 404) {
+        errorMessage = 'Resource not found';
+      } else if (error.response.status === 500) {
+        errorMessage = 'Server error. Please try again later.';
+      } else if (error.response.status === 401) {
+        errorMessage = 'Authentication required';
+      } else if (error.response.status === 403) {
+        errorMessage = 'You do not have permission to perform this action';
+      }
+      
+      const enhancedError = new Error(errorMessage);
+      enhancedError.name = 'ApiError';
+      return Promise.reject(enhancedError);
     } else if (error.request) {
       // Request was made but no response received (network error)
       console.error('❌ Network Error: No response received', error.request);
@@ -181,7 +200,7 @@ export const bookingAPI = {
     const response = await axiosInstance.get(`/api/user/booking/${bookingId}`);
     return response.data;
   },
-  updateBooking: async (bookingId: string, bookingData: Partial<BookingRequest>) => {
+  updateBooking: async (bookingId: string, bookingData: Partial<BookingRequest & { status?: BookingStatus }>) => {
     console.log('Updating booking:', bookingId, 'with data:', bookingData);
     try {
       const response = await axiosInstance.put(`/api/update-booking/${bookingId}`, bookingData);
@@ -296,11 +315,38 @@ export const bookingAPI = {
   deleteBooking: async (bookingId: string) => {
     console.log('Deleting booking:', bookingId);
     try {
-      const response = await axiosInstance.delete(`/api/admin/booking/${bookingId}`);
+      // Ensure we have a token set
+      const token = localStorage.getItem('authToken') || localStorage.getItem('auth_token');
+      if (!token) {
+        throw new Error('Authentication required to delete booking');
+      }
+      
+      // Set the token in headers explicitly for this request
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      };
+      
+      // Add a timestamp to prevent caching
+      const timestamp = new Date().getTime();
+      const response = await axiosInstance.delete(`/api/admin/booking/${bookingId}?_t=${timestamp}`, { headers });
+      
       console.log('Delete response:', response.data);
       return response.data;
     } catch (error) {
       console.error('Error deleting booking:', error);
+      
+      // Rethrow with better error message
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 404) {
+          throw new Error('Booking not found or already deleted');
+        } else if (error.response?.status === 403) {
+          throw new Error('You do not have permission to delete this booking');
+        } else if (error.response?.status === 500) {
+          throw new Error('Server error: Unable to delete booking. Please try again later.');
+        }
+      }
+      
       throw error;
     }
   }

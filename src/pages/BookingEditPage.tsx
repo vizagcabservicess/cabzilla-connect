@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from "@/components/ui/use-toast";
@@ -63,7 +64,22 @@ export default function BookingEditPage() {
         }
         
         if (data.pickupDate) {
-          setPickupDate(new Date(data.pickupDate));
+          // Handle both ISO strings and SQL datetime format
+          let dateObj: Date;
+          if (data.pickupDate.includes(' ')) {
+            // Handle SQL format (YYYY-MM-DD HH:MM:SS)
+            const [datePart, timePart] = data.pickupDate.split(' ');
+            const [year, month, day] = datePart.split('-').map(Number);
+            const [hour, minute, second] = timePart.split(':').map(Number);
+            dateObj = new Date(year, month - 1, day, hour, minute, second);
+          } else {
+            // Handle ISO format
+            dateObj = new Date(data.pickupDate);
+          }
+          
+          if (!isNaN(dateObj.getTime())) {
+            setPickupDate(dateObj);
+          }
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Failed to load booking details';
@@ -87,13 +103,18 @@ export default function BookingEditPage() {
     try {
       const response = await bookingAPI.updateBooking(bookingId, { status: newStatus });
       if (response.data) {
-        setBooking(response.data);
+        setBooking({
+          ...booking,
+          status: newStatus,
+          updatedAt: response.data.updatedAt || booking.updatedAt
+        });
         toast({
           title: "Status Updated",
           description: `Booking status changed to ${newStatus.replace('_', ' ').toUpperCase()}`,
         });
       }
     } catch (error) {
+      console.error("Status update error:", error);
       toast({
         title: "Update Failed",
         description: error instanceof Error ? error.message : "Failed to update status",
@@ -105,10 +126,6 @@ export default function BookingEditPage() {
   const handleDeleteBooking = async () => {
     if (!bookingId || !isAdmin) return;
     
-    if (!confirm("Are you sure you want to delete this booking? This action cannot be undone.")) {
-      return;
-    }
-    
     try {
       await bookingAPI.deleteBooking(bookingId);
       toast({
@@ -117,6 +134,7 @@ export default function BookingEditPage() {
       });
       navigate('/dashboard');
     } catch (error) {
+      console.error("Delete error:", error);
       toast({
         title: "Delete Failed",
         description: error instanceof Error ? error.message : "Failed to delete booking",
@@ -142,7 +160,10 @@ export default function BookingEditPage() {
       const result = await bookingAPI.updateBooking(bookingId, updatedData);
       
       if (result.data) {
-        setBooking(result.data);
+        setBooking({
+          ...booking,
+          ...result.data
+        });
         toast({
           title: "Booking Updated",
           description: "Your booking has been updated successfully!",
@@ -170,6 +191,9 @@ export default function BookingEditPage() {
   };
 
   const calculatePriceBreakdown = (totalAmount: number) => {
+    if (typeof totalAmount !== 'number' || isNaN(totalAmount) || totalAmount <= 0) {
+      return { baseFare: 0, taxes: 0 };
+    }
     const baseFare = Math.round(totalAmount * 0.85);
     const taxes = Math.round(totalAmount * 0.15);
     return { baseFare, taxes };
@@ -201,7 +225,12 @@ export default function BookingEditPage() {
     );
   }
 
-  const { baseFare, taxes } = calculatePriceBreakdown(booking.totalAmount);
+  // Ensure totalAmount is a number
+  const totalAmount = typeof booking.totalAmount === 'number' 
+    ? booking.totalAmount 
+    : parseFloat(String(booking.totalAmount)) || 0;
+    
+  const { baseFare, taxes } = calculatePriceBreakdown(totalAmount);
 
   return (
     <div className="container mx-auto py-10 px-4">
@@ -253,7 +282,7 @@ export default function BookingEditPage() {
               <div>
                 <p className="text-sm font-medium mb-1">Total Amount</p>
                 <p className="text-gray-700 text-lg font-semibold">
-                  ₹{booking.totalAmount.toLocaleString('en-IN')}
+                  ₹{totalAmount.toLocaleString('en-IN')}
                 </p>
               </div>
             </CardContent>
@@ -314,7 +343,7 @@ export default function BookingEditPage() {
             <CardContent>
               <GuestDetailsForm
                 onSubmit={handleSubmit}
-                totalPrice={booking.totalAmount}
+                totalPrice={totalAmount}
                 initialData={{
                   name: booking.passengerName || '',
                   email: booking.passengerEmail || '',
