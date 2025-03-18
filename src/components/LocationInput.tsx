@@ -52,6 +52,8 @@ export function LocationInput({
   const prevLocationRef = useRef<Location | null>(null);
   const wasLocationSelectedRef = useRef<boolean>(false);
   const autocompleteListenerRef = useRef<google.maps.MapsEventListener | null>(null);
+  const isManualInputRef = useRef<boolean>(false);
+  const pendingLocationUpdateRef = useRef<Location | null>(null);
   
   // Update the address whenever locationData changes
   useEffect(() => {
@@ -86,7 +88,7 @@ export function LocationInput({
     return lat >= 8.0 && lat <= 37.0 && lng >= 68.0 && lng <= 97.0;
   };
 
-  // Handle direct input changes
+  // Handle direct input changes (without using the debounced version)
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e || !e.target) return;
     
@@ -94,14 +96,44 @@ export function LocationInput({
     setAddress(newAddress);
     setLocationError(null);
     wasLocationSelectedRef.current = false;
+    isManualInputRef.current = true; // Mark that this is manual input
+  };
+
+  // Send location update to parent component
+  const updateParentLocation = useCallback((newLocation: Location) => {
+    if (!handleLocationChange) return;
     
-    // Only trigger location change if we have a handler and an address
-    if (handleLocationChange && newAddress) {
+    // Check if this is a duplicate update by comparing with the pending update
+    const pendingUpdate = pendingLocationUpdateRef.current;
+    if (pendingUpdate && JSON.stringify(pendingUpdate) === JSON.stringify(newLocation)) {
+      console.log('Skipping duplicate location update');
+      return;
+    }
+    
+    // Store this update as pending to prevent duplicates
+    pendingLocationUpdateRef.current = newLocation;
+    
+    // Mark that we've manually changed the location
+    locationChangedRef.current = true;
+    
+    // Send the updated location to parent
+    console.log('Sending location update to parent:', newLocation);
+    handleLocationChange(newLocation);
+  }, [handleLocationChange]);
+
+  // Debounced version to handle manual text input
+  const handleManualTextInput = useCallback(
+    debounce((address: string) => {
+      if (!handleLocationChange || !address || !isManualInputRef.current) return;
+      
+      // Only send update if this was a manual text input (not a selection from dropdown)
+      console.log("Manual address entry - not selected from dropdown:", address);
+      
       // Create a new location object with safe defaults
       const updatedLocation: Location = {
         id: locationData.id || `loc_${Date.now()}`,
-        name: newAddress,
-        address: newAddress,
+        name: address,
+        address: address,
         // Don't include lat/lng if they're not numbers to avoid type errors
         ...(typeof locationData.lat === 'number' && !isNaN(locationData.lat) ? { lat: locationData.lat } : {}),
         ...(typeof locationData.lng === 'number' && !isNaN(locationData.lng) ? { lng: locationData.lng } : {}),
@@ -109,20 +141,9 @@ export function LocationInput({
         isInVizag: locationData.isInVizag === true
       };
       
-      // Mark that we've manually changed the location
-      locationChangedRef.current = true;
-      
-      // Send the updated location to parent
-      handleLocationChange(updatedLocation);
-    }
-  };
-
-  // Debounced version of handleInputChange to prevent too many state updates
-  const debouncedHandleChange = useCallback(
-    debounce((e: React.ChangeEvent<HTMLInputElement>) => {
-      handleInputChange(e);
-    }, 300),
-    [handleLocationChange, locationData]
+      updateParentLocation(updatedLocation);
+    }, 500),
+    [handleLocationChange, locationData, updateParentLocation]
   );
 
   // Setup Google Maps autocomplete - using a ref to prevent multiple listeners
@@ -195,6 +216,7 @@ export function LocationInput({
         // Update local state
         setAddress(formattedAddress);
         wasLocationSelectedRef.current = true;
+        isManualInputRef.current = false; // Reset manual input flag since this was a selection
         
         // Get coordinates
         const lat = place.geometry.location.lat();
@@ -219,14 +241,7 @@ export function LocationInput({
         };
         
         console.log('Autocomplete selected location:', newLocation);
-        
-        // Mark that we've manually changed the location
-        locationChangedRef.current = true;
-        
-        // Update parent component
-        if (handleLocationChange) {
-          handleLocationChange(newLocation);
-        }
+        updateParentLocation(newLocation);
       });
     } catch (error) {
       console.error("Error initializing autocomplete:", error);
@@ -236,7 +251,7 @@ export function LocationInput({
     return () => {
       cleanupAutocomplete();
     };
-  }, [google, isLoaded, handleLocationChange, disabled, readOnly, isPickupLocation, isAirportTransfer]);
+  }, [google, isLoaded, handleLocationChange, disabled, readOnly, isPickupLocation, isAirportTransfer, updateParentLocation, locationData.id]);
 
   // Helper function to safely determine if a location is in Vizag
   function isInVizagArea(lat: number, lng: number, address: string | undefined | null): boolean {
@@ -280,14 +295,12 @@ export function LocationInput({
           className={className + (locationError ? " border-red-500" : "")}
           value={address}
           onChange={(e) => {
-            if (!e || !e.target) return;
-            setAddress(e.target.value);
-            debouncedHandleChange(e);
+            handleInputChange(e);
           }}
           onBlur={() => {
-            // If user didn't select from autocomplete and just typed
-            if (!wasLocationSelectedRef.current && address.trim() !== '') {
-              console.log("Manual address entry - not selected from dropdown:", address);
+            // If user typed but didn't select from autocomplete
+            if (!wasLocationSelectedRef.current && address.trim() !== '' && isManualInputRef.current) {
+              handleManualTextInput(address);
             }
           }}
           disabled={disabled}
