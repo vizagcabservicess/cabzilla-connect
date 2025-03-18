@@ -66,6 +66,9 @@ export function GuestDetailsForm({
         
         // Convert bookingId from string to number
         const bookingIdNumber = parseInt(bookingId, 10);
+        if (isNaN(bookingIdNumber)) {
+          throw new Error('Invalid booking ID format');
+        }
         
         const response = await bookingAPI.updateBooking(bookingIdNumber, updatedData);
         console.log("Update response:", response);

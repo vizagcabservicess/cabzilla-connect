@@ -51,7 +51,7 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
       setError(null);
       console.log(`Fetching dashboard metrics for period: ${period} and status: ${statusFilter}...`);
       
-      // Add a timestamp for cache busting - not passed to API but just logged
+      // Add a timestamp for cache busting
       const timestamp = new Date().getTime();
       console.log(`Cache busting with timestamp: ${timestamp}`);
       
@@ -67,11 +67,17 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
       }
     } catch (error) {
       console.error('Error fetching dashboard metrics:', error);
-      setError(error instanceof Error ? error.message : 'Failed to load dashboard metrics');
+      
+      // Set a more user-friendly error message
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'Failed to load dashboard metrics';
+      
+      setError(errorMessage);
       
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : 'Failed to load dashboard metrics',
+        title: "Error Loading Metrics",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {

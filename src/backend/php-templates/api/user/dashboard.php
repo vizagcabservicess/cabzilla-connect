@@ -262,14 +262,14 @@ try {
     // Log count of real bookings found
     logError("Real bookings found", ['count' => count($bookings), 'user_id' => $userId]);
 
-    // Ensure the response format is consistent
+    // IMPORTANT: Change to ALWAYS use the same consistent response format with status and data fields
     $response = [
         'status' => 'success',
         'data' => $bookings
     ];
     
-    logError("Sending dashboard response", ['bookings_count' => count($bookings)]);
-    sendJsonResponse($response);
+    logError("Sending dashboard response", ['bookings_count' => count($bookings), 'response_format' => 'standard']);
+    echo json_encode($response);
     
 } catch (Exception $e) {
     logError("Exception in dashboard.php", [
@@ -279,4 +279,11 @@ try {
     ]);
     
     sendJsonResponse(['status' => 'error', 'message' => 'Server error: ' . $e->getMessage()], 500);
+}
+
+// Helper function to send JSON responses with a consistent format
+function sendJsonResponse($data, $statusCode = 200) {
+    http_response_code($statusCode);
+    echo json_encode($data);
+    exit;
 }

@@ -244,7 +244,7 @@ export const bookingAPI = {
     }
   },
   
-  // Get user's bookings with better error handling
+  // Get user's bookings with better error handling and flexible response format
   async getUserBookings(): Promise<Booking[]> {
     try {
       console.log('Fetching user bookings with auth token');
@@ -261,13 +261,25 @@ export const bookingAPI = {
         throw new Error('Empty response received from server');
       }
       
-      if (!response.data.data || !Array.isArray(response.data.data)) {
+      // Handle both formats: direct array or wrapped in data property
+      let bookingsData: Booking[];
+      
+      if (Array.isArray(response.data)) {
+        console.log('Response is direct array format');
+        bookingsData = response.data;
+      } else if (response.data.data && Array.isArray(response.data.data)) {
+        console.log('Response is wrapped in data property');
+        bookingsData = response.data.data;
+      } else if (response.data.status === 'success' && Array.isArray(response.data.data)) {
+        console.log('Response is success object with data array');
+        bookingsData = response.data.data;
+      } else {
         console.error('Invalid bookings data format:', response.data);
         throw new Error('Invalid data format received from server');
       }
       
-      console.log('User bookings response:', response.data.data);
-      return response.data.data;
+      console.log('User bookings processed:', bookingsData.length, 'bookings found');
+      return bookingsData;
     } catch (error: any) {
       console.error('Get user bookings error:', error.response || error);
       
@@ -288,11 +300,20 @@ export const bookingAPI = {
     }
   },
   
-  // Get specific booking by ID
+  // Get specific booking by ID with flexible response format
   async getBookingById(id: number): Promise<Booking> {
     try {
       const response = await api.get(`/api/user/booking/${id}`);
-      return response.data.data;
+      
+      // Handle both formats: direct object or wrapped in data property
+      if (response.data && response.data.id) {
+        return response.data;
+      } else if (response.data && response.data.data && response.data.data.id) {
+        return response.data.data;
+      } else {
+        console.error('Invalid booking data format:', response.data);
+        throw new Error('Invalid data format received from server');
+      }
     } catch (error) {
       console.error(`Get booking ${id} error:`, error);
       throw new Error(error instanceof Error ? error.message : 'Failed to load booking details');
@@ -321,24 +342,42 @@ export const bookingAPI = {
     }
   },
   
-  // Get booking receipt
+  // Get booking receipt with flexible response format
   async getBookingReceipt(id: number): Promise<Booking> {
     try {
       const response = await api.get(`/api/receipt/${id}`);
-      return response.data.data;
+      
+      // Handle both formats: direct object or wrapped in data property
+      if (response.data && response.data.id) {
+        return response.data;
+      } else if (response.data && response.data.data && response.data.data.id) {
+        return response.data.data;
+      } else {
+        console.error('Invalid receipt data format:', response.data);
+        throw new Error('Invalid data format received from server');
+      }
     } catch (error) {
       console.error(`Get receipt for booking ${id} error:`, error);
       throw new Error(error instanceof Error ? error.message : 'Failed to load receipt');
     }
   },
   
-  // Admin-specific methods
+  // Admin-specific methods with flexible response formats
   
   // Get all bookings (admin only)
   async getAllBookings(): Promise<Booking[]> {
     try {
       const response = await api.get('/admin/bookings');
-      return response.data.data;
+      
+      // Handle both formats: direct array or wrapped in data property
+      if (Array.isArray(response.data)) {
+        return response.data;
+      } else if (response.data.data && Array.isArray(response.data.data)) {
+        return response.data.data;
+      } else {
+        console.error('Invalid admin bookings data format:', response.data);
+        throw new Error('Invalid data format received from server');
+      }
     } catch (error) {
       console.error('Get all bookings error:', error);
       throw new Error(error instanceof Error ? error.message : 'Failed to load all bookings');
@@ -366,16 +405,61 @@ export const bookingAPI = {
     }
   },
   
-  // Get admin dashboard metrics
+  // Get admin dashboard metrics with flexible response format and error handling
   async getAdminDashboardMetrics(period: 'today' | 'week' | 'month', status?: BookingStatus): Promise<DashboardMetrics> {
     try {
-      const params: Record<string, string> = { period };
+      const params: Record<string, string> = { 
+        period,
+        admin: 'true',  // Explicitly mark as admin request
+        '_t': Date.now().toString() // Add cache busting
+      };
+      
       if (status) {
         params.status = status;
       }
       
-      const response = await api.get('/admin/metrics', { params });
-      return response.data.data;
+      console.log('Requesting admin metrics with params:', params);
+      
+      const response = await api.get('/api/user/dashboard', { params });
+      console.log('Admin metrics raw response:', response.data);
+      
+      // Handle different response formats
+      if (!response.data) {
+        throw new Error('Empty response received from metrics API');
+      }
+      
+      let metricsData: DashboardMetrics;
+      
+      if (response.data.data && typeof response.data.data === 'object') {
+        // Standard API format with data property
+        metricsData = response.data.data;
+      } else if (response.data.status === 'success' && response.data.data) {
+        // Success object with data
+        metricsData = response.data.data;
+      } else if (typeof response.data === 'object' && 'totalBookings' in response.data) {
+        // Direct metrics object
+        metricsData = response.data;
+      } else {
+        console.error('Invalid metrics data format:', response.data);
+        throw new Error('Invalid data format received from metrics API');
+      }
+      
+      console.log('Processed metrics data:', metricsData);
+      
+      // Set defaults for any missing properties
+      const defaultMetrics: DashboardMetrics = {
+        totalBookings: 0,
+        activeRides: 0,
+        totalRevenue: 0,
+        availableDrivers: 0,
+        busyDrivers: 0,
+        avgRating: 0,
+        upcomingRides: 0,
+        availableStatuses: [],
+        currentFilter: 'all'
+      };
+      
+      return { ...defaultMetrics, ...metricsData };
     } catch (error) {
       console.error('Get admin metrics error:', error);
       throw new Error(error instanceof Error ? error.message : 'Failed to load dashboard metrics');
