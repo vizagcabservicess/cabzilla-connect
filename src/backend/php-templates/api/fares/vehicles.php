@@ -25,7 +25,8 @@ try {
             'basePrice' => floatval($row['base_price']),
             'pricePerKm' => floatval($row['price_per_km']),
             'nightHaltCharge' => floatval($row['night_halt_charge']),
-            'driverAllowance' => floatval($row['driver_allowance'])
+            'driverAllowance' => floatval($row['driver_allowance']),
+            'isActive' => true // Default value to prevent type errors
         ];
         
         $vehiclePricing[] = $pricing;

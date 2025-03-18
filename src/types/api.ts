@@ -1,4 +1,3 @@
-
 // src/types/api.ts
 export type BookingStatus =
   | 'pending'

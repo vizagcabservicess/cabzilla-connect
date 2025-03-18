@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -7,7 +6,6 @@ import { BookingStatus, DashboardMetrics as DashboardMetricsType } from '@/types
 import { ArrowDown, ArrowUp, Calendar, CarTaxiFront, CircleDollarSign, Star, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-// Export the type for use in other components
 export type { DashboardMetricsType };
 
 interface DashboardMetricsProps {
@@ -16,7 +14,6 @@ interface DashboardMetricsProps {
   error?: Error | null;
   onFilterChange?: (status: BookingStatus | 'all') => void;
   selectedPeriod?: 'today' | 'week' | 'month';
-  // Add support for the props used in AdminDashboardPage
   initialMetrics?: DashboardMetricsType;
   period?: 'today' | 'week' | 'month';
   onRefresh?: () => void;
@@ -28,14 +25,11 @@ export function DashboardMetrics({
   error = null, 
   onFilterChange = () => {}, 
   selectedPeriod = 'week',
-  // Support for alternate prop naming
   initialMetrics,
   period,
   onRefresh
 }: DashboardMetricsProps) {
-  // If metrics is not provided but initialMetrics is, use initialMetrics
   const metricsData = metrics || initialMetrics || null;
-  // Same for period
   const currentPeriod = selectedPeriod || period || 'week';
   
   const [selectedStatus, setSelectedStatus] = useState<BookingStatus | 'all'>('all');
@@ -43,26 +37,20 @@ export function DashboardMetrics({
 
   useEffect(() => {
     if (metricsData?.availableStatuses) {
-      // Ensure availableStatuses is an array
       let statusesArray: string[] = [];
       
       if (Array.isArray(metricsData.availableStatuses)) {
-        statusesArray = metricsData.availableStatuses as string[];
+        statusesArray = metricsData.availableStatuses.map(status => String(status));
       } else if (typeof metricsData.availableStatuses === 'object' && metricsData.availableStatuses !== null) {
-        statusesArray = Object.values(metricsData.availableStatuses) as string[];
+        statusesArray = Object.values(metricsData.availableStatuses).map(status => String(status));
       } else if (typeof metricsData.availableStatuses === 'string') {
-        // If it's a comma-separated string, split it
         statusesArray = (metricsData.availableStatuses as string).split(',').map(s => s.trim());
       }
       
-      // Ensure 'all' is always the first option
       const statuses: Array<BookingStatus | 'all'> = ['all'];
       
-      // Add all statuses from metrics that are valid BookingStatus types or can be cast as such
       statusesArray.forEach(status => {
-        // Make sure status is a string before comparing
         if (typeof status === 'string') {
-          // Check if the status is a valid BookingStatus
           const isValidStatus = [
             'pending', 'confirmed', 'assigned', 'payment_received', 
             'payment_pending', 'completed', 'continued', 'cancelled'
@@ -78,15 +66,12 @@ export function DashboardMetrics({
     }
   }, [metricsData]);
 
-  // Handle status change
   const handleStatusChange = (value: string) => {
-    // Cast the string value to the appropriate type
     const newStatus = value as BookingStatus | 'all';
     setSelectedStatus(newStatus);
     if (onFilterChange) {
       onFilterChange(newStatus);
     } else if (onRefresh) {
-      // If onFilterChange isn't provided but onRefresh is, call that instead
       onRefresh();
     }
   };

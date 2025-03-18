@@ -370,11 +370,11 @@ export const fareAPI = {
       
       // Handle different response formats
       if (response.data && Array.isArray(response.data)) {
-        return response.data;
+        return response.data as TourFare[];
       } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
-        return response.data.data;
+        return response.data.data as TourFare[];
       } else if (response.data && response.data.fares && Array.isArray(response.data.fares)) {
-        return response.data.fares;
+        return response.data.fares as TourFare[];
       }
       
       // If the data is an object with numbered keys, convert it to an array
@@ -387,15 +387,15 @@ export const fareAPI = {
             value && 
             typeof value === 'object'
           )
-          .map(([_, value]) => value);
-          
+          .map(([_, value]) => value as TourFare);
+        
         if (toursArray.length > 0) {
           return toursArray;
         }
       }
       
       console.warn('Unexpected tour fares response format:', response.data);
-      return [];
+      return [] as TourFare[];
     } catch (error) {
       return handleApiError(error);
     }
@@ -410,11 +410,11 @@ export const fareAPI = {
       
       // Handle different response formats
       if (response.data && Array.isArray(response.data)) {
-        return response.data;
+        return response.data as VehiclePricing[];
       } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
-        return response.data.data;
+        return response.data.data as VehiclePricing[];
       } else if (response.data && response.data.vehicles && Array.isArray(response.data.vehicles)) {
-        return response.data.vehicles;
+        return response.data.vehicles as VehiclePricing[];
       }
       
       // If the data is an object with numbered keys, convert it to an array
@@ -427,15 +427,15 @@ export const fareAPI = {
             value && 
             typeof value === 'object'
           )
-          .map(([_, value]) => value);
-          
+          .map(([_, value]) => value as VehiclePricing);
+        
         if (pricingArray.length > 0) {
           return pricingArray;
         }
       }
       
       console.warn('Unexpected vehicle pricing response format:', response.data);
-      return [];
+      return [] as VehiclePricing[];
     } catch (error) {
       return handleApiError(error);
     }

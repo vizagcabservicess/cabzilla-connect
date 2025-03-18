@@ -1,4 +1,3 @@
-
 import { differenceInCalendarDays } from 'date-fns';
 import { fareAPI } from '@/services/api';
 
@@ -183,9 +182,9 @@ export const loadTourFares = async (): Promise<any> => {
       tourFareData.forEach((tour) => {
         if (tour && tour.tourId) {
           dynamicTourFares[tour.tourId] = {
-            sedan: parseFloat(tour.sedan) || 0,
-            ertiga: parseFloat(tour.ertiga) || 0,
-            innova_crysta: parseFloat(tour.innova) || 0
+            sedan: tour.sedan || 0,
+            ertiga: tour.ertiga || 0,
+            innova_crysta: tour.innova || 0
           };
         }
       });

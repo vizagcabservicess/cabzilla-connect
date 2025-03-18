@@ -27,7 +27,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { UserManagement } from '@/components/admin/UserManagement';
 import { NetworkStatusMonitor } from '@/components/NetworkStatusMonitor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { BookingStatus, DashboardMetrics as DashboardMetricsType } from '@/types/api';
+import { BookingStatus, DashboardMetricsType } from '@/types/api';
 
 export default function AdminDashboardPage() {
   const { toast } = useToast();
@@ -41,7 +41,6 @@ export default function AdminDashboardPage() {
   const [activeTab, setActiveTab] = useState('bookings');
   const [metricsLoaded, setMetricsLoaded] = useState(false);
   
-  // Initialize with default values to prevent undefined errors
   const [metrics, setMetrics] = useState<DashboardMetricsType>({
     totalBookings: 0,
     activeRides: 0,
@@ -54,7 +53,6 @@ export default function AdminDashboardPage() {
     currentFilter: 'all'
   });
   
-  // Real-time data states
   const [revenueData, setRevenueData] = useState([
     { name: 'Jan', revenue: 35000 },
     { name: 'Feb', revenue: 42000 },
@@ -98,10 +96,8 @@ export default function AdminDashboardPage() {
       const metricsData = await bookingAPI.getAdminDashboardMetrics(selectedPeriod, statusFilter === 'all' ? undefined : statusFilter);
       console.log('Admin: Dashboard metrics received:', metricsData);
       
-      // Only update metrics if we have valid data
       if (metricsData && typeof metricsData === 'object') {
-        // Ensure all required properties exist
-        const validatedMetrics = {
+        const validatedMetrics: DashboardMetricsType = {
           totalBookings: metricsData.totalBookings || 0,
           activeRides: metricsData.activeRides || 0,
           totalRevenue: metricsData.totalRevenue || 0,
@@ -110,33 +106,28 @@ export default function AdminDashboardPage() {
           avgRating: metricsData.avgRating || 0,
           upcomingRides: metricsData.upcomingRides || 0,
           availableStatuses: Array.isArray(metricsData.availableStatuses) ? 
-            metricsData.availableStatuses : 
-            Object.values(metricsData.availableStatuses || {}), // Handle if it's an object
+            metricsData.availableStatuses.map(status => String(status)) : 
+            Object.values(metricsData.availableStatuses || {}).map(status => String(status)),
           currentFilter: metricsData.currentFilter || 'all'
         };
         
         setMetrics(validatedMetrics);
         setMetricsLoaded(true);
         
-        // Update revenue data based on real metrics
         updateRevenueData(validatedMetrics.totalRevenue);
         
-        // Update vehicle distribution
         fetchVehicleDistribution();
       }
       
-      setRefreshAttempts(0); // Reset refresh attempts on successful fetch
-      
+      setRefreshAttempts(0);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to load dashboard data';
       setRefreshError(errorMessage);
       
-      // Increase the refresh attempt counter but limit it to prevent too many retries
       if (refreshAttempts < 3) {
         setRefreshAttempts(prev => prev + 1);
       } else if (autoRefresh) {
-        // If we've tried 3 times and are still getting errors, turn off auto-refresh
         setAutoRefresh(false);
         toast({
           title: "Auto-refresh Disabled",
@@ -155,15 +146,12 @@ export default function AdminDashboardPage() {
     }
   }, [navigate, toast, selectedPeriod, statusFilter, refreshAttempts, autoRefresh]);
 
-  // Update revenue data based on real metrics
   const updateRevenueData = (currentRevenue: number) => {
     try {
-      // Generate realistic monthly revenue data based on current revenue
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-      const baseValue = currentRevenue / 2; // Use current revenue as reference
+      const baseValue = currentRevenue / 2;
       
       const newRevenueData = monthNames.map((name, index) => {
-        // Create a trend with some realistic randomness
         const factor = 0.7 + (index / 5) + (Math.random() * 0.3);
         return {
           name,
@@ -177,26 +165,19 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // Fetch vehicle distribution data
   const fetchVehicleDistribution = async () => {
     try {
-      // In a real app, this would come from the API
-      // For now, we'll simulate it with realistic data
       const vehicleTypes = ['Sedan', 'SUV', 'Hatchback', 'Luxury', 'Tempo'];
       
-      // Get all bookings to analyze vehicle distribution
       const allBookings = await bookingAPI.getAllBookings();
       
       if (Array.isArray(allBookings) && allBookings.length > 0) {
-        // Count by vehicle type
         const vehicleCounts: Record<string, number> = {};
         
-        // Initialize all types with 0
         vehicleTypes.forEach(type => {
           vehicleCounts[type] = 0;
         });
         
-        // Count bookings by vehicle type
         allBookings.forEach(booking => {
           const cabType = booking.cabType || 'Sedan';
           if (vehicleCounts[cabType] !== undefined) {
@@ -206,32 +187,28 @@ export default function AdminDashboardPage() {
           }
         });
         
-        // Create distribution data
         const newDistribution = Object.entries(vehicleCounts).map(([name, count]) => ({
           name,
-          value: count || Math.floor(Math.random() * 30) + 5 // Fallback to random if 0
+          value: count || Math.floor(Math.random() * 30) + 5
         }));
         
         setVehicleDistribution(newDistribution);
       }
     } catch (error) {
       console.error('Error fetching vehicle distribution:', error);
-      // Keep the existing distribution on error
     }
   };
 
   useEffect(() => {
-    // Only fetch data if it hasn't been loaded yet or if we're refreshing
     if (!metricsLoaded || autoRefresh) {
       fetchDashboardData();
     }
     
-    // Set up automatic refreshing if enabled, with a more reasonable interval
     let intervalId: number | undefined;
     if (autoRefresh && refreshAttempts < 3) {
       intervalId = window.setInterval(() => {
         fetchDashboardData();
-      }, 60000); // Refresh every minute
+      }, 60000);
     }
     
     return () => {
@@ -241,10 +218,8 @@ export default function AdminDashboardPage() {
 
   const handleFilterChange = (status: BookingStatus | 'all') => {
     setStatusFilter(status);
-    // Fetch will happen automatically due to the dependency in useCallback
   };
 
-  // Error-safe render for tabs
   const renderTabContent = (tabId: string) => {
     try {
       switch (tabId) {
@@ -420,7 +395,6 @@ export default function AdminDashboardPage() {
         </Alert>
       )}
 
-      {/* Dashboard Metrics with error handling */}
       <DashboardMetrics 
         metrics={metrics}
         isLoading={isLoading}
@@ -429,7 +403,6 @@ export default function AdminDashboardPage() {
         selectedPeriod={selectedPeriod}
       />
 
-      {/* Charts with real data */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <Card>
           <CardHeader>
@@ -484,7 +457,6 @@ export default function AdminDashboardPage() {
         </Card>
       </div>
 
-      {/* Admin Tabs with error handling */}
       <Tabs 
         defaultValue="bookings" 
         className="w-full"
@@ -503,7 +475,6 @@ export default function AdminDashboardPage() {
           <TabsTrigger value="settings" className="flex items-center gap-1"><Settings className="h-4 w-4" /> Settings</TabsTrigger>
         </TabsList>
         
-        {/* Error boundary wrapper around tab content */}
         <div className="tab-content">
           {renderTabContent(activeTab)}
         </div>
@@ -511,4 +482,3 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
-
