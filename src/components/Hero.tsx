@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { LocationInput } from './LocationInput';
 import { DateTimePicker } from './DateTimePicker';
@@ -11,7 +12,7 @@ import {
   calculateAirportFare,
   Location
 } from '@/lib/locationData';
-import { convertToApiLocation, createLocationChangeHandler } from '@/lib/locationUtils';
+import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag } from '@/lib/locationUtils';
 import { CabType, cabTypes, TripMode, TripType, hourlyPackages, getLocalPackagePrice } from '@/lib/cabData';
 import { ChevronRight, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -39,25 +40,39 @@ export function Hero() {
   const bookingSummaryRef = useRef<HTMLDivElement>(null);
   
   const loadFromSessionStorage = () => {
-    const pickupData = sessionStorage.getItem('pickupLocation');
-    const dropData = sessionStorage.getItem('dropLocation');
-    const pickupDateStr = sessionStorage.getItem('pickupDate');
-    const returnDateStr = sessionStorage.getItem('returnDate');
-    const tripTypeData = sessionStorage.getItem('tripType');
-    const tripModeData = sessionStorage.getItem('tripMode');
-    const hourlyPkgData = sessionStorage.getItem('hourlyPackage');
-    const cabData = sessionStorage.getItem('selectedCab');
-    
-    return {
-      pickupLocation: pickupData ? JSON.parse(pickupData) as Location : null,
-      dropLocation: dropData ? JSON.parse(dropData) as Location : null,
-      pickupDate: pickupDateStr ? new Date(pickupDateStr) : addDays(new Date(), 1),
-      returnDate: returnDateStr ? new Date(returnDateStr) : null,
-      tripType: tripTypeData as TripType || 'outstation',
-      tripMode: tripModeData as TripMode || 'one-way',
-      hourlyPackage: hourlyPkgData || hourlyPackageOptions[0].value,
-      selectedCab: cabData ? JSON.parse(cabData) as CabType : null
-    };
+    try {
+      const pickupData = sessionStorage.getItem('pickupLocation');
+      const dropData = sessionStorage.getItem('dropLocation');
+      const pickupDateStr = sessionStorage.getItem('pickupDate');
+      const returnDateStr = sessionStorage.getItem('returnDate');
+      const tripTypeData = sessionStorage.getItem('tripType');
+      const tripModeData = sessionStorage.getItem('tripMode');
+      const hourlyPkgData = sessionStorage.getItem('hourlyPackage');
+      const cabData = sessionStorage.getItem('selectedCab');
+      
+      return {
+        pickupLocation: pickupData ? JSON.parse(pickupData) as Location : null,
+        dropLocation: dropData ? JSON.parse(dropData) as Location : null,
+        pickupDate: pickupDateStr ? new Date(JSON.parse(pickupDateStr)) : addDays(new Date(), 1),
+        returnDate: returnDateStr ? new Date(JSON.parse(returnDateStr)) : null,
+        tripType: tripTypeData as TripType || 'outstation',
+        tripMode: tripModeData as TripMode || 'one-way',
+        hourlyPackage: hourlyPkgData || hourlyPackageOptions[0].value,
+        selectedCab: cabData ? JSON.parse(cabData) as CabType : null
+      };
+    } catch (error) {
+      console.error("Error loading data from session storage:", error);
+      return {
+        pickupLocation: null,
+        dropLocation: null,
+        pickupDate: addDays(new Date(), 1),
+        returnDate: null,
+        tripType: 'outstation' as TripType,
+        tripMode: 'one-way' as TripMode,
+        hourlyPackage: hourlyPackageOptions[0].value,
+        selectedCab: null
+      };
+    }
   };
   
   const savedData = loadFromSessionStorage();
@@ -77,6 +92,19 @@ export function Hero() {
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState<boolean>(false);
   const [isCalculatingDistance, setIsCalculatingDistance] = useState<boolean>(false);
 
+  // Handle pickup location change
+  const handlePickupLocationChange = (location: Location) => {
+    console.log("Pickup location changed:", location);
+    setPickupLocation(location);
+  };
+  
+  // Handle drop location change
+  const handleDropLocationChange = (location: Location) => {
+    console.log("Drop location changed:", location);
+    setDropLocation(location);
+  };
+
+  // Validate locations and update trip type as needed
   useEffect(() => {
     if (pickupLocation && dropLocation && tripType === 'outstation') {
       if (areBothLocationsInVizag(pickupLocation, dropLocation)) {
@@ -104,11 +132,14 @@ export function Hero() {
     }
   }, [pickupLocation, dropLocation, tripType, toast]);
 
+  // Save trip type and mode to sessionStorage
   useEffect(() => {
     sessionStorage.setItem('tripType', tripType);
     sessionStorage.setItem('tripMode', tripMode);
     
     if (tripType === 'airport' && airportLocation) {
+      // No automatic reset for airport transfers
+      // We'll let user choose source/destination
     }
     
     if (tripType === 'local') {
@@ -119,11 +150,13 @@ export function Hero() {
           sessionStorage.setItem('pickupLocation', JSON.stringify(defaultLocation));
         }
       }
+      // For local trips, we don't need drop location
       setDropLocation(null);
       sessionStorage.removeItem('dropLocation');
     }
-  }, [tripType, tripMode, pickupLocation]);
+  }, [tripType, tripMode]);
 
+  // Save locations to sessionStorage
   useEffect(() => {
     if (pickupLocation) {
       sessionStorage.setItem('pickupLocation', JSON.stringify(pickupLocation));
@@ -133,21 +166,24 @@ export function Hero() {
     }
   }, [pickupLocation, dropLocation]);
 
+  // Save dates to sessionStorage
   useEffect(() => {
     if (pickupDate) {
-      sessionStorage.setItem('pickupDate', pickupDate.toISOString());
+      sessionStorage.setItem('pickupDate', JSON.stringify(pickupDate));
     }
     if (returnDate) {
-      sessionStorage.setItem('returnDate', returnDate.toISOString());
+      sessionStorage.setItem('returnDate', JSON.stringify(returnDate));
     } else {
       sessionStorage.removeItem('returnDate');
     }
   }, [pickupDate, returnDate]);
 
+  // Save hourly package to sessionStorage
   useEffect(() => {
     sessionStorage.setItem('hourlyPackage', hourlyPackage);
   }, [hourlyPackage]);
 
+  // Validate form based on trip type
   useEffect(() => {
     if (tripType === 'local' && pickupLocation && pickupDate) {
       setIsFormValid(true);
@@ -367,7 +403,7 @@ export function Hero() {
                     label="PICKUP LOCATION"
                     placeholder="Enter pickup location"
                     value={pickupLocation ? convertToApiLocation(pickupLocation) : undefined}
-                    onChange={createLocationChangeHandler(setPickupLocation)}
+                    onLocationChange={handlePickupLocationChange}
                     isPickupLocation={true}
                     isAirportTransfer={tripType === 'airport'}
                   />
@@ -377,7 +413,7 @@ export function Hero() {
                       label="DROP LOCATION"
                       placeholder="Enter drop location"
                       value={dropLocation ? convertToApiLocation(dropLocation) : undefined}
-                      onChange={createLocationChangeHandler(setDropLocation)}
+                      onLocationChange={handleDropLocationChange}
                       isPickupLocation={false}
                       isAirportTransfer={tripType === 'airport'}
                     />

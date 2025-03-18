@@ -45,10 +45,21 @@ export function LocationInput({
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const locationChangedRef = useRef<boolean>(false);
+  const prevLocationRef = useRef<Location | null>(null);
   
   // Update the address whenever locationData changes
   useEffect(() => {
-    if (locationData && !locationChangedRef.current) {
+    if (!locationData) return;
+    
+    // Store current location to prevent unnecessary updates
+    if (JSON.stringify(prevLocationRef.current) === JSON.stringify(locationData)) {
+      return;
+    }
+    
+    prevLocationRef.current = locationData;
+    
+    // Only update if we haven't manually changed the location
+    if (!locationChangedRef.current) {
       const newAddress = typeof locationData.address === 'string' && locationData.address.trim() !== '' 
         ? locationData.address 
         : typeof locationData.name === 'string' && locationData.name.trim() !== '' 
@@ -60,12 +71,11 @@ export function LocationInput({
         setAddress(newAddress);
       }
     }
-  }, [locationData]);
+  }, [locationData, address]);
 
   // Handle direct input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newAddress = e.target.value;
-    locationChangedRef.current = true;
     setAddress(newAddress);
     
     // Create a basic location object with the typed address
@@ -80,6 +90,9 @@ export function LocationInput({
       // Preserve lat/lng if they exist
       if (locationData.lat) updatedLocation.lat = locationData.lat;
       if (locationData.lng) updatedLocation.lng = locationData.lng;
+      
+      // Mark that we've manually changed the location
+      locationChangedRef.current = true;
       
       handleLocationChange(updatedLocation);
     }
@@ -138,7 +151,6 @@ export function LocationInput({
         const formattedAddress = place.formatted_address || place.name || '';
         
         // Update local state
-        locationChangedRef.current = true;
         setAddress(formattedAddress);
         
         // Create location object
@@ -147,10 +159,14 @@ export function LocationInput({
           name: place.name || formattedAddress,
           id: locationData.id || `loc_${Date.now()}`,
           lat: place.geometry.location.lat(),
-          lng: place.geometry.location.lng()
+          lng: place.geometry.location.lng(),
+          isInVizag: isLocationInVizag(place.geometry.location.lat(), place.geometry.location.lng(), formattedAddress)
         };
         
         console.log('Selected place from autocomplete:', newLocation);
+        
+        // Mark that we've manually changed the location
+        locationChangedRef.current = true;
         
         // Update parent component
         if (handleLocationChange) {
@@ -169,12 +185,25 @@ export function LocationInput({
     };
   }, [google, isLoaded, handleLocationChange, disabled, readOnly, isPickupLocation, isAirportTransfer]);
 
-  // Reset locationChangedRef when location input changes
-  useEffect(() => {
-    return () => {
-      locationChangedRef.current = false;
-    };
-  }, []);
+  // Helper function to determine if a location is in Vizag
+  function isLocationInVizag(lat: number, lng: number, address: string): boolean {
+    // Check coordinates (Visakhapatnam bounds)
+    const isInVizagBounds = 
+      lat >= 17.6 && lat <= 17.9 && 
+      lng >= 83.1 && lng <= 83.4;
+    
+    // Check address text
+    const addressLower = address.toLowerCase();
+    const vizagNames = ['visakhapatnam', 'vizag', 'waltair', 'vizianagaram'];
+    
+    for (const name of vizagNames) {
+      if (addressLower.includes(name)) {
+        return true;
+      }
+    }
+    
+    return isInVizagBounds;
+  }
 
   return (
     <div className="space-y-2">

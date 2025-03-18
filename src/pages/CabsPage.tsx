@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -38,15 +39,30 @@ const CabsPage = () => {
   const { toast } = useToast();
   const { isLoaded } = useGoogleMaps();
   
-  const [tripType, setTripType] = useState<TripType>((urlTripType as TripType) || "outstation");
-  const [tripMode, setTripMode] = useState<TripMode>("one-way");
-  const [hourlyPackage, setHourlyPackage] = useState(hourlyPackages[0].id);
+  // Load initial state from session storage
+  const getInitialFromSession = (key: string, defaultValue: any) => {
+    try {
+      const value = sessionStorage.getItem(key);
+      return value ? JSON.parse(value) : defaultValue;
+    } catch (e) {
+      console.error(`Error loading ${key} from session storage:`, e);
+      return defaultValue;
+    }
+  };
   
-  const [pickup, setPickup] = useState<Location | null>(null);
-  const [dropoff, setDropoff] = useState<Location | null>(null);
-  const [pickupDate, setPickupDate] = useState<Date | undefined>(new Date());
-  const [returnDate, setReturnDate] = useState<Date | undefined>(undefined);
-  const [selectedCab, setSelectedCab] = useState<CabType | null>(null);
+  const [tripType, setTripType] = useState<TripType>((urlTripType as TripType) || "outstation");
+  const [tripMode, setTripMode] = useState<TripMode>(getInitialFromSession('tripMode', "one-way"));
+  const [hourlyPackage, setHourlyPackage] = useState(getInitialFromSession('hourlyPackage', hourlyPackages[0].id));
+  
+  const [pickup, setPickup] = useState<Location | null>(getInitialFromSession('pickupLocation', null));
+  const [dropoff, setDropoff] = useState<Location | null>(getInitialFromSession('dropLocation', null));
+  const [pickupDate, setPickupDate] = useState<Date | undefined>(
+    getInitialFromSession('pickupDate', new Date())
+  );
+  const [returnDate, setReturnDate] = useState<Date | undefined>(
+    getInitialFromSession('returnDate', undefined)
+  );
+  const [selectedCab, setSelectedCab] = useState<CabType | null>(getInitialFromSession('selectedCab', null));
   const [distance, setDistance] = useState<number>(0);
   const [travelTime, setTravelTime] = useState<number>(0);
   const [totalPrice, setTotalPrice] = useState<number>(0);
@@ -55,6 +71,18 @@ const CabsPage = () => {
   
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState<boolean>(false);
   const [bookingComplete, setBookingComplete] = useState<boolean>(false);
+  
+  // Save state to session storage
+  useEffect(() => {
+    if (pickup) sessionStorage.setItem('pickupLocation', JSON.stringify(pickup));
+    if (dropoff) sessionStorage.setItem('dropLocation', JSON.stringify(dropoff));
+    if (pickupDate) sessionStorage.setItem('pickupDate', JSON.stringify(pickupDate));
+    if (returnDate) sessionStorage.setItem('returnDate', JSON.stringify(returnDate));
+    if (selectedCab) sessionStorage.setItem('selectedCab', JSON.stringify(selectedCab));
+    sessionStorage.setItem('tripMode', tripMode);
+    sessionStorage.setItem('hourlyPackage', hourlyPackage);
+    sessionStorage.setItem('tripType', tripType);
+  }, [pickup, dropoff, pickupDate, returnDate, selectedCab, tripMode, hourlyPackage, tripType]);
 
   useEffect(() => {
     setSelectedCab(null);
@@ -72,11 +100,13 @@ const CabsPage = () => {
     }
   }, [tripType, pickup, dropoff]);
 
+  // This effect handles location validation and trip type switching
   useEffect(() => {
     if (pickup && dropoff) {
       console.log("Validating locations:", { pickup, dropoff });
       
       const isPickupInVizag = pickup.isInVizag || isLocationInVizag(pickup);
+      
       if (!isPickupInVizag) {
         toast({
           title: "Invalid pickup location",
@@ -89,6 +119,7 @@ const CabsPage = () => {
       
       if (tripType === "airport") {
         const isDropoffInVizag = dropoff.isInVizag || isLocationInVizag(dropoff);
+        
         if (!isDropoffInVizag) {
           console.log("Dropoff not in Vizag, switching to outstation");
           toast({
@@ -104,6 +135,7 @@ const CabsPage = () => {
     }
   }, [pickup, dropoff, tripType, toast, navigate]);
 
+  // Reset cab selection when location changes
   useEffect(() => {
     setSelectedCab(null);
     setTotalPrice(0);
@@ -123,16 +155,27 @@ const CabsPage = () => {
       const airport = vizagLocations.find(loc => loc.type === 'airport');
       if (airport) {
         setPickup(airport);
-        setDropoff(null);
+        // Don't reset dropoff here to maintain user selection
       }
     } else if (type === "local") {
-      setPickup(null);
+      // For local we only need pickup
+      // Don't reset pickup here to maintain user selection
       setDropoff(null);
       setHourlyPackage(hourlyPackages[0].id);
-    } else {
-      setPickup(null);
-      setDropoff(null);
     }
+    // For outstation, don't reset locations to maintain user selections
+  };
+  
+  // Handle pickup location change
+  const handlePickupLocationChange = (location: Location) => {
+    console.log("Pickup location changed:", location);
+    setPickup(location);
+  };
+  
+  // Handle dropoff location change
+  const handleDropoffLocationChange = (location: Location) => {
+    console.log("Dropoff location changed:", location);
+    setDropoff(location);
   };
 
   const handleMapDistanceCalculated = (mapDistance: number, mapDuration: number) => {
@@ -149,6 +192,7 @@ const CabsPage = () => {
     }
   };
 
+  // Calculate distance between locations
   useEffect(() => {
     const fetchDistance = async () => {
       if (tripType === "local") {
@@ -203,6 +247,7 @@ const CabsPage = () => {
     fetchDistance();
   }, [pickup, dropoff, tripType, hourlyPackage, toast]);
 
+  // Calculate price when cab is selected and distance is known
   useEffect(() => {
     if (selectedCab && distance > 0) {
       const fare = calculateFare(
@@ -233,7 +278,7 @@ const CabsPage = () => {
   };
 
   const handleSearch = () => {
-    if (!pickup || !dropoff) {
+    if (!pickup || (tripType !== "local" && !dropoff)) {
       toast({
         title: "Missing locations",
         description: "Please select both pickup and drop-off locations",
@@ -380,7 +425,7 @@ const CabsPage = () => {
                   label={tripType === "airport" ? "AIRPORT LOCATION" : "PICKUP LOCATION"} 
                   placeholder={tripType === "airport" ? "Visakhapatnam Airport" : "Enter pickup location"} 
                   value={pickup ? convertToApiLocation(pickup) : undefined}
-                  onChange={createLocationChangeHandler(setPickup)}
+                  onLocationChange={handlePickupLocationChange}
                   isPickupLocation={true}
                   isAirportTransfer={tripType === "airport"}
                   readOnly={tripType === "airport" && !!pickup && pickup.type === "airport"}
@@ -390,7 +435,7 @@ const CabsPage = () => {
                   label={tripType === "airport" ? "DESTINATION LOCATION" : "DROP LOCATION"} 
                   placeholder="Enter destination location" 
                   value={dropoff ? convertToApiLocation(dropoff) : undefined}
-                  onChange={createLocationChangeHandler(setDropoff)}
+                  onLocationChange={handleDropoffLocationChange}
                   isPickupLocation={false}
                   isAirportTransfer={tripType === "airport"}
                   readOnly={tripType === "airport" && !!dropoff && dropoff.type === "airport"} 
@@ -473,7 +518,7 @@ const CabsPage = () => {
 
                 <Button 
                   onClick={handleSearch} 
-                  disabled={!pickup || !dropoff || !selectedCab || distance <= 0}
+                  disabled={!pickup || (tripType !== "local" && !dropoff) || !selectedCab || distance <= 0}
                   className="bg-blue-600 text-white px-6 py-3 rounded-md mt-6 w-full md:w-auto"
                 >
                   {isCalculatingDistance ? (

@@ -13,7 +13,8 @@ export const convertToApiLocation = (location: AppLocation | null): ApiLocation 
     name: location.name || '',
     address: location.address || location.name || '',
     lat: location.lat || 0,
-    lng: location.lng || 0
+    lng: location.lng || 0,
+    isInVizag: location.isInVizag
   };
 };
 
@@ -38,15 +39,9 @@ export const createLocationChangeHandler = (
       lat: newLocation.lat || 0,
       lng: newLocation.lng || 0,
       type: 'other',
-      popularityScore: 50
+      popularityScore: 50,
+      isInVizag: newLocation.isInVizag !== undefined ? newLocation.isInVizag : isLocationInVizag(newLocation)
     };
-    
-    // Check if location is in Visakhapatnam
-    if (isLocationInVizag(appLocation)) {
-      appLocation.isInVizag = true;
-    } else {
-      appLocation.isInVizag = false;
-    }
     
     console.log('Location changed:', appLocation);
     
@@ -65,7 +60,7 @@ export const createLocationChangeHandler = (
 /**
  * Check if a location is in Visakhapatnam based on coordinates and address
  */
-export const isLocationInVizag = (location: AppLocation): boolean => {
+export const isLocationInVizag = (location: AppLocation | ApiLocation): boolean => {
   // Check by coordinates (Visakhapatnam approximate bounds)
   if (location.lat && location.lng) {
     const isInVizagBounds = 
@@ -78,7 +73,7 @@ export const isLocationInVizag = (location: AppLocation): boolean => {
   // Check by address text
   const addressLower = (location.address || '').toLowerCase();
   const nameLower = (location.name || '').toLowerCase();
-  const cityLower = (location.city || '').toLowerCase();
+  const cityLower = (location.city as string || '').toLowerCase();
   
   const vizagNames = ['visakhapatnam', 'vizag', 'waltair', 'vizianagaram'];
   
