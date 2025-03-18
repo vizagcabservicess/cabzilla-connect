@@ -51,6 +51,7 @@ export function LocationInput({
   const locationChangedRef = useRef<boolean>(false);
   const prevLocationRef = useRef<Location | null>(null);
   const wasLocationSelectedRef = useRef<boolean>(false);
+  const autocompleteListenerRef = useRef<google.maps.MapsEventListener | null>(null);
   
   // Update the address whenever locationData changes
   useEffect(() => {
@@ -111,9 +112,6 @@ export function LocationInput({
       // Mark that we've manually changed the location
       locationChangedRef.current = true;
       
-      // Log the location data for debugging
-      console.log('Text input location update:', updatedLocation);
-      
       // Send the updated location to parent
       handleLocationChange(updatedLocation);
     }
@@ -127,17 +125,27 @@ export function LocationInput({
     [handleLocationChange, locationData]
   );
 
-  // Setup Google Maps autocomplete
+  // Setup Google Maps autocomplete - using a ref to prevent multiple listeners
   useEffect(() => {
     if (!google || !isLoaded || disabled || readOnly || !inputRef.current) return;
     
-    try {
-      // Clear any existing autocomplete
-      if (autocompleteRef.current && google && google.maps) {
+    // Cleanup previous listeners to prevent duplication
+    const cleanupAutocomplete = () => {
+      if (autocompleteListenerRef.current && google.maps) {
+        google.maps.event.removeListener(autocompleteListenerRef.current);
+        autocompleteListenerRef.current = null;
+      }
+      
+      if (autocompleteRef.current && google.maps) {
         google.maps.event.clearInstanceListeners(autocompleteRef.current);
         autocompleteRef.current = null;
       }
-      
+    };
+    
+    // Cleanup any existing autocomplete
+    cleanupAutocomplete();
+    
+    try {
       const options: google.maps.places.AutocompleteOptions = {
         fields: ['address_components', 'geometry', 'name', 'formatted_address'],
         componentRestrictions: { country: 'in' }, // Restrict to India
@@ -168,9 +176,11 @@ export function LocationInput({
       const autocomplete = new google.maps.places.Autocomplete(inputRef.current, options);
       autocompleteRef.current = autocomplete;
       
-      // Add place_changed listener
-      autocomplete.addListener('place_changed', () => {
-        const place = autocomplete.getPlace();
+      // Add place_changed listener with a single reference
+      autocompleteListenerRef.current = autocomplete.addListener('place_changed', () => {
+        if (!autocompleteRef.current) return;
+        
+        const place = autocompleteRef.current.getPlace();
         setLocationError(null);
         
         if (!place || !place.geometry || !place.geometry.location) {
@@ -224,9 +234,7 @@ export function LocationInput({
     
     // Cleanup when component unmounts
     return () => {
-      if (autocompleteRef.current && google && google.maps) {
-        google.maps.event.clearInstanceListeners(autocompleteRef.current);
-      }
+      cleanupAutocomplete();
     };
   }, [google, isLoaded, handleLocationChange, disabled, readOnly, isPickupLocation, isAirportTransfer]);
 

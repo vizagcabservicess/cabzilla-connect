@@ -56,20 +56,15 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
       if (window.google.maps) {
         try {
           // Set default map options for all instances
-          const defaultBounds = new window.google.maps.LatLngBounds(
+          const indiaBounds = new window.google.maps.LatLngBounds(
             new window.google.maps.LatLng(8.0, 68.0),  // SW corner of India
             new window.google.maps.LatLng(37.0, 97.0)  // NE corner of India
           );
           
           // Store default bounds in window object for later use
-          (window as any).indiaBounds = defaultBounds;
+          (window as any).indiaBounds = indiaBounds;
           
-          // Set default Autocomplete options globally
-          if (window.google.maps.places && window.google.maps.places.Autocomplete) {
-            // Customize autocomplete behavior with session tokens
-            window.google.maps.places.Autocomplete.prototype.defaultBounds = defaultBounds;
-          }
-          
+          // We don't set defaultBounds here anymore as it's not a valid property
           console.log("Default India bounds set for Maps");
         } catch (error) {
           console.error("Error setting default bounds:", error);

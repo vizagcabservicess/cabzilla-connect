@@ -37,6 +37,7 @@ const GoogleMapComponent = ({
   const [routeNotFound, setRouteNotFound] = useState(false);
   const directionsRequestCount = useRef(0);
   const maxRetries = useRef(3);
+  const directionsServiceRef = useRef<any>(null);
 
   const mapContainerStyle = {
     width: "100%",
@@ -95,6 +96,7 @@ const GoogleMapComponent = ({
            inIndiaBounds(safeDropLocation.lat, safeDropLocation.lng);
   };
 
+  // Handle directions callback - single definition to avoid duplicates
   const handleDirectionsCallback = useCallback((result: google.maps.DirectionsResult | null, status: google.maps.DirectionsStatus) => {
     console.log("Directions status:", status);
     
@@ -192,6 +194,7 @@ const GoogleMapComponent = ({
     }
   }, [safePickupLocation, safeDropLocation]);
 
+  // Handle map load - single definition to avoid duplicates
   const handleMapLoad = useCallback(() => {
     console.log("Map loaded successfully");
     setMapLoaded(true);
