@@ -25,7 +25,7 @@ interface DashboardMetricsProps {
 }
 
 export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week', onRefresh }: DashboardMetricsProps) {
-  const { toast } = useToast();
+  const { toast: uiToast } = useToast();
   const [metrics, setMetrics] = useState<DashboardMetricsType>(initialMetrics || {
     totalBookings: 0,
     activeRides: 0,
@@ -82,8 +82,8 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
       
       setError(errorMessage);
       
-      // Show toast notification
-      toast({
+      // Show toast notification using useToast
+      uiToast({
         title: "Error Loading Metrics",
         description: errorMessage,
         variant: "destructive",
