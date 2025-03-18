@@ -1,4 +1,3 @@
-
 <?php
 // Turn on error reporting for debugging - remove in production
 ini_set('display_errors', 0);
@@ -48,6 +47,11 @@ function sendJsonResponse($data, $statusCode = 200) {
     header("Pragma: no-cache");
     header("Expires: 0");
     
+    // Add CORS headers to prevent browser restrictions
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization');
+    
     // Make sure we're sending JSON
     if (!headers_sent()) {
         header('Content-Type: application/json');
@@ -66,10 +70,10 @@ function sendJsonResponse($data, $statusCode = 200) {
     exit;
 }
 
-// Helper function to generate JWT token
+// Helper function to generate JWT token with improved debugging
 function generateJwtToken($userId, $email, $role) {
     $issuedAt = time();
-    $expirationTime = $issuedAt + 60 * 60 * 24 * 14; // 14 days - increased from 7 days
+    $expirationTime = $issuedAt + 60 * 60 * 24 * 30; // 30 days - increased from 14 days
     
     $payload = [
         'iat' => $issuedAt,
@@ -92,17 +96,28 @@ function generateJwtToken($userId, $email, $role) {
     
     $token = "$base64UrlHeader.$base64UrlPayload.$base64UrlSignature";
     
-    // Log token length to help debug truncation issues
-    logError("Generated token", ['length' => strlen($token), 'user_id' => $userId]);
+    // Log token details to help debug truncation issues
+    logError("Generated token", [
+        'length' => strlen($token), 
+        'parts' => substr_count($token, '.') + 1,
+        'user_id' => $userId,
+        'exp' => date('Y-m-d H:i:s', $expirationTime)
+    ]);
     
     return $token;
 }
 
-// Helper function to verify JWT token with improved debugging
+// Helper function to verify JWT token with enhanced error handling
 function verifyJwtToken($token) {
     try {
         // Log token verification attempt for debugging
-        logError("Verifying token", ['token_length' => strlen($token)]);
+        logError("Verifying token", ['token_length' => strlen($token), 'parts' => substr_count($token, '.') + 1]);
+        
+        // Check for token format issues
+        if (empty($token)) {
+            logError("Token is empty");
+            return false;
+        }
         
         $parts = explode('.', $token);
         if (count($parts) !== 3) {
@@ -173,17 +188,17 @@ function verifyJwtToken($token) {
     }
 }
 
-// Check if user is authenticated
+// Check if user is authenticated with improved error handling
 function authenticate() {
     $headers = getallheaders();
     
     if (!isset($headers['Authorization']) && !isset($headers['authorization'])) {
         logError("Authorization header missing", ['headers' => array_keys($headers)]);
         sendJsonResponse(['status' => 'error', 'message' => 'Authorization header missing'], 401);
+        exit;
     }
     
     $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
-    logError("Auth header", ['header' => substr($authHeader, 0, 30) . '...']);
     
     // Extract token from "Bearer <token>"
     if (strpos($authHeader, 'Bearer ') === 0) {
@@ -192,22 +207,18 @@ function authenticate() {
         $token = $authHeader; // Try using the header value directly if "Bearer " prefix is missing
     }
     
-    // Log token length for debugging truncation issues
+    // Log token for debugging
     logError("Token for authentication", [
         'token_length' => strlen($token),
-        'token_parts' => count(explode('.', $token))
+        'token_parts' => substr_count($token, '.') + 1
     ]);
     
     $payload = verifyJwtToken($token);
     if (!$payload) {
-        logError("Token verification failed", ['token' => substr($token, 0, 20) . '...']);
-        sendJsonResponse(['status' => 'error', 'message' => 'Invalid or expired token'], 401);
+        logError("Token verification failed", ['token_sample' => substr($token, 0, 30) . '...']);
+        sendJsonResponse(['status' => 'error', 'message' => 'Invalid or expired token. Please login again.'], 401);
+        exit;
     }
-    
-    logError("Authentication successful", [
-        'user_id' => $payload['user_id'],
-        'email' => $payload['email']
-    ]);
     
     return $payload;
 }

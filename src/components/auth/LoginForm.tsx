@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import {
   Form,
   FormControl,
@@ -18,7 +19,7 @@ import {
 import { authAPI } from '@/services/api';
 import { LoginRequest } from '@/types/api';
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
-import { AlertCircle, ExternalLink, ShieldCheck } from 'lucide-react';
+import { AlertCircle, ExternalLink, ShieldCheck, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const loginSchema = z.object({
@@ -27,12 +28,13 @@ const loginSchema = z.object({
 });
 
 export function LoginForm() {
-  const { toast } = useToast();
+  const { toast: uiToast } = useToast();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [apiUrl, setApiUrl] = useState<string>('');
-  const [connectionStatus, setConnectionStatus] = useState<'untested' | 'success' | 'failed'>('untested');
+  const [connectionStatus, setConnectionStatus] = useState<'untested' | 'testing' | 'success' | 'failed'>('untested');
+  const [isTesting, setIsTesting] = useState(false);
 
   useEffect(() => {
     // Display API URL for debugging
@@ -43,9 +45,12 @@ export function LoginForm() {
     localStorage.removeItem('authToken');
     localStorage.removeItem('auth_token');
     sessionStorage.removeItem('auth_token');
+    localStorage.removeItem('user');
     
-    // Test connection on component mount
-    testApiConnection();
+    // Only test connection on component mount if we have an API URL
+    if (url) {
+      testApiConnection();
+    }
   }, []);
 
   const form = useForm<LoginRequest>({
@@ -58,37 +63,56 @@ export function LoginForm() {
 
   const testApiConnection = async () => {
     try {
+      setConnectionStatus('testing');
+      setIsTesting(true);
       console.log(`Testing API connection to ${apiUrl}`);
+      
+      // Try OPTIONS request first (preflight)
       const response = await fetch(`${apiUrl}/api/login`, {
         method: 'OPTIONS',
         headers: {
           'Accept': 'application/json',
-        }
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store'
+        },
+        // Add cache busting
+        cache: 'no-store'
+      });
+      
+      // Log response information for debugging
+      console.log('API connection test response:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries([...response.headers.entries()])
       });
       
       if (response.ok) {
         setConnectionStatus('success');
         console.log('API connection test successful');
+        
+        toast.success('API connection successful', {
+          duration: 3000,
+          description: `Connected to ${apiUrl}`
+        });
       } else {
         setConnectionStatus('failed');
         console.error('API connection test failed with status:', response.status);
+        
+        toast.error('API connection failed', {
+          description: `Server returned status ${response.status}: ${response.statusText}`,
+          duration: 5000,
+        });
       }
-      
-      toast({
-        title: `API Connection: ${response.ok ? 'Successful' : 'Failed'}`,
-        description: `Connection to ${apiUrl} ${response.ok ? 'succeeded' : `failed with status ${response.status}`}`,
-        duration: 5000,
-      });
     } catch (error) {
       setConnectionStatus('failed');
       console.error('API connection test error:', error);
       
-      toast({
-        title: "API Connection Failed",
+      toast.error('API Connection Failed', {
         description: error instanceof Error ? error.message : "Unknown error",
-        variant: "destructive",
         duration: 5000,
       });
+    } finally {
+      setIsTesting(false);
     }
   };
 
@@ -97,53 +121,52 @@ export function LoginForm() {
     setError(null);
     
     try {
+      // Display a toast to show login is in progress
+      toast.loading('Logging in...', { id: 'login-toast' });
+      
       // Clear any existing tokens first
       localStorage.removeItem('authToken');
       localStorage.removeItem('auth_token');
       sessionStorage.removeItem('auth_token');
+      localStorage.removeItem('user');
       
       // Log form values for debugging
       console.log("Login attempt with email:", values.email);
       
+      // Use HTTP-only cookies to store authentication token
       const response = await authAPI.login(values);
       
       if (response.token) {
-        // Store token in multiple places for redundancy
-        localStorage.setItem('authToken', response.token);
-        localStorage.setItem('auth_token', response.token);
-        sessionStorage.setItem('auth_token', response.token);
+        // Login succeeded, update toast
+        toast.success('Login successful', { 
+          id: 'login-toast', 
+          description: `Welcome back, ${response.user?.name || 'User'}!` 
+        });
         
         console.log("Login successful, token saved", { 
           tokenLength: response.token.length,
+          tokenParts: response.token.split('.').length,
           user: response.user?.id
         });
         
-        // Store user data
-        if (response.user) {
-          localStorage.setItem('user', JSON.stringify(response.user));
-        }
-        
-        toast({
-          title: "Login Successful",
-          description: "Welcome back!",
-          duration: 3000,
-        });
-        
-        // Force page reload to ensure fresh state
-        window.location.href = '/dashboard';
+        // Force a page reload to ensure fresh state
+        setTimeout(() => {
+          window.location.href = '/dashboard';
+        }, 500);
       } else {
         throw new Error("Authentication failed: No token received");
       }
     } catch (error) {
       console.error("Login error details:", error);
-      setError(error as Error);
       
-      toast({
-        title: "Login Failed",
-        description: error instanceof Error ? error.message : "Something went wrong",
-        variant: "destructive",
-        duration: 5000,
+      // Update toast to show error
+      toast.error('Login Failed', {
+        id: 'login-toast',
+        description: error instanceof Error ? error.message : "Authentication failed"
       });
+      
+      // Set error state for UI display
+      setError(error as Error);
     } finally {
       setIsLoading(false);
     }
@@ -172,25 +195,45 @@ export function LoginForm() {
             <AlertCircle className="w-4 h-4 mr-1" />
             <span>API URL: {apiUrl}</span>
           </div>
-          <Button variant="ghost" size="sm" onClick={testApiConnection}>
-            Test <ExternalLink className="ml-1 w-3 h-3" />
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={testApiConnection}
+            disabled={isTesting}
+            className="gap-1"
+          >
+            {isTesting ? (
+              <>Testing <RefreshCw className="ml-1 w-3 h-3 animate-spin" /></>
+            ) : (
+              <>Test <ExternalLink className="ml-1 w-3 h-3" /></>
+            )}
           </Button>
         </div>
       )}
       
       {connectionStatus !== 'untested' && (
         <Alert 
-          className={`mb-4 ${connectionStatus === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}
+          className={`mb-4 ${
+            connectionStatus === 'testing' 
+              ? 'bg-blue-50 border-blue-200 text-blue-800' 
+              : connectionStatus === 'success' 
+                ? 'bg-green-50 border-green-200 text-green-800' 
+                : 'bg-red-50 border-red-200 text-red-800'
+          }`}
         >
-          {connectionStatus === 'success' ? (
+          {connectionStatus === 'testing' ? (
+            <RefreshCw className="h-4 w-4 text-blue-500 animate-spin" />
+          ) : connectionStatus === 'success' ? (
             <ShieldCheck className="h-4 w-4 text-green-500" />
           ) : (
             <AlertCircle className="h-4 w-4 text-red-500" />
           )}
           <AlertDescription>
-            {connectionStatus === 'success' 
-              ? 'Server connection successful. You can proceed with login.' 
-              : 'Server connection failed. The API may be unavailable.'}
+            {connectionStatus === 'testing' 
+              ? 'Testing server connection...' 
+              : connectionStatus === 'success' 
+                ? 'Server connection successful. You can proceed with login.' 
+                : 'Server connection failed. The API may be unavailable.'}
           </AlertDescription>
         </Alert>
       )}
@@ -204,7 +247,11 @@ export function LoginForm() {
               <FormItem>
                 <FormLabel>Email</FormLabel>
                 <FormControl>
-                  <Input placeholder="your@email.com" {...field} />
+                  <Input 
+                    placeholder="your@email.com" 
+                    {...field} 
+                    autoComplete="email"
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -217,13 +264,22 @@ export function LoginForm() {
               <FormItem>
                 <FormLabel>Password</FormLabel>
                 <FormControl>
-                  <Input type="password" placeholder="••••••••" {...field} />
+                  <Input 
+                    type="password" 
+                    placeholder="••••••••" 
+                    {...field} 
+                    autoComplete="current-password"
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
-          <Button type="submit" className="w-full" disabled={isLoading || connectionStatus === 'failed'}>
+          <Button 
+            type="submit" 
+            className="w-full" 
+            disabled={isLoading || connectionStatus === 'failed' || connectionStatus === 'testing'}
+          >
             {isLoading ? "Logging in..." : "Login"}
           </Button>
         </form>

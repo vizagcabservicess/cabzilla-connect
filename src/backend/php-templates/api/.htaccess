@@ -5,19 +5,19 @@ RewriteEngine On
 # Parse API routes to PHP files
 RewriteRule ^signup$ signup.php [L]
 RewriteRule ^login$ login.php [L]
-RewriteRule ^user/dashboard$ user/dashboard.php [L]
+RewriteRule ^user/dashboard$ user/dashboard.php [L,QSA]
 RewriteRule ^user/booking/([0-9]+)$ user/booking.php?id=$1 [QSA,L]
 RewriteRule ^user/bookings$ user/bookings.php [L,QSA]
-RewriteRule ^book$ book.php [L]
+RewriteRule ^book$ book.php [L,QSA]
 RewriteRule ^update-booking/([0-9]+)$ update-booking.php?id=$1 [QSA,L]
 RewriteRule ^admin/booking/([0-9]+)$ admin/booking.php?id=$1 [QSA,L]
-RewriteRule ^admin/bookings$ admin/bookings.php [L]
+RewriteRule ^admin/bookings$ admin/bookings.php [L,QSA]
 RewriteRule ^admin/metrics$ admin/metrics.php [QSA,L]
 RewriteRule ^admin/users$ admin/users.php [QSA,L]
-RewriteRule ^fares/tours$ fares/tours.php [L]
-RewriteRule ^fares/vehicles$ fares/vehicles.php [L]
+RewriteRule ^fares/tours$ fares/tours.php [L,QSA]
+RewriteRule ^fares/vehicles$ fares/vehicles.php [L,QSA]
 RewriteRule ^admin/fares/update$ admin/fares-update.php [QSA,L]
-RewriteRule ^admin/km-price/update$ admin/km-price-update.php [L]
+RewriteRule ^admin/km-price/update$ admin/km-price-update.php [L,QSA]
 RewriteRule ^receipt/([0-9]+)$ receipt.php?id=$1 [QSA,L]
 
 # Debug header to help troubleshoot routing
@@ -43,7 +43,7 @@ Header set X-Query-String "%{QUERY_STRING}e"
 <IfModule mod_headers.c>
     Header always set Access-Control-Allow-Origin "*" 
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "*"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, Accept"
     Header always set Access-Control-Max-Age "3600"
     # Remove credentials since we're using * for origin
     # Header always set Access-Control-Allow-Credentials "true"

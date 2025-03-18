@@ -32,7 +32,7 @@ header("Expires: 0");
 try {
     // Get the request body
     $input = file_get_contents('php://input');
-    logError("Login request received", ['input' => $input]);
+    logError("Login request received", ['input_length' => strlen($input)]);
     
     $data = json_decode($input, true);
     
@@ -44,13 +44,28 @@ try {
     $email = $data['email'];
     $password = $data['password'];
     
+    logError("Login attempt", ['email' => $email]);
+    
     // Connect to database
     $conn = getDbConnection();
     
     // Check if user exists
     $stmt = $conn->prepare("SELECT id, name, email, phone, password, role FROM users WHERE email = ?");
+    if (!$stmt) {
+        logError("Statement preparation failed", ['error' => $conn->error]);
+        sendJsonResponse(['status' => 'error', 'message' => 'Database error: ' . $conn->error], 500);
+        exit;
+    }
+    
     $stmt->bind_param("s", $email);
-    $stmt->execute();
+    $executed = $stmt->execute();
+    
+    if (!$executed) {
+        logError("Statement execution failed", ['error' => $stmt->error]);
+        sendJsonResponse(['status' => 'error', 'message' => 'Database error: ' . $stmt->error], 500);
+        exit;
+    }
+    
     $result = $stmt->get_result();
     
     if ($result->num_rows === 0) {
@@ -69,11 +84,15 @@ try {
     // Remove password from user data
     unset($user['password']);
     
-    // Generate JWT token with longer expiration (14 days)
+    // Generate JWT token with longer expiration (30 days)
     $token = generateJwtToken($user['id'], $user['email'], $user['role']);
-    logError("Login successful - token generated", ['user_id' => $user['id'], 'token_length' => strlen($token)]);
+    logError("Login successful - token generated", [
+        'user_id' => $user['id'], 
+        'token_length' => strlen($token),
+        'token_parts' => substr_count($token, '.') + 1
+    ]);
     
-    // Send response
+    // Send response with clear status and message
     sendJsonResponse([
         'status' => 'success',
         'message' => 'Login successful',
@@ -81,6 +100,6 @@ try {
         'user' => $user
     ]);
 } catch (Exception $e) {
-    logError('Login exception: ' . $e->getMessage());
+    logError('Login exception: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
     sendJsonResponse(['status' => 'error', 'message' => 'An unexpected error occurred: ' . $e->getMessage()], 500);
 }

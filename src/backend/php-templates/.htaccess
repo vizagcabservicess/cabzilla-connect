@@ -2,25 +2,28 @@
 # Enable rewrite engine
 RewriteEngine On
 
-# Ensure API requests go directly to PHP files, not React frontend
+# Set the base for relative path references
+# RewriteBase /
+
+# Ensure API requests go directly to PHP files
 RewriteRule ^api/ - [L]
 
 # API routing rules
-RewriteRule ^api/signup$ api/signup.php [L]
-RewriteRule ^api/login$ api/login.php [L]
-RewriteRule ^api/user/dashboard$ api/user/dashboard.php [L]
+RewriteRule ^api/signup$ api/signup.php [L,QSA]
+RewriteRule ^api/login$ api/login.php [L,QSA]
+RewriteRule ^api/user/dashboard$ api/user/dashboard.php [L,QSA]
 RewriteRule ^api/user/booking/([0-9]+)$ api/user/booking.php?id=$1 [QSA,L]
 RewriteRule ^api/user/bookings$ api/user/bookings.php [L,QSA]
-RewriteRule ^api/book$ api/book.php [L]
+RewriteRule ^api/book$ api/book.php [L,QSA]
 RewriteRule ^api/update-booking/([0-9]+)$ api/update-booking.php?id=$1 [QSA,L]
 RewriteRule ^api/admin/booking/([0-9]+)$ api/admin/booking.php?id=$1 [QSA,L]
-RewriteRule ^api/admin/bookings$ api/admin/bookings.php [L]
+RewriteRule ^api/admin/bookings$ api/admin/bookings.php [L,QSA]
 RewriteRule ^api/admin/metrics$ api/admin/metrics.php [QSA,L]
 RewriteRule ^api/admin/users$ api/admin/users.php [QSA,L]
-RewriteRule ^api/fares/tours$ api/fares/tours.php [L]
-RewriteRule ^api/fares/vehicles$ api/fares/vehicles.php [L]
+RewriteRule ^api/fares/tours$ api/fares/tours.php [L,QSA]
+RewriteRule ^api/fares/vehicles$ api/fares/vehicles.php [L,QSA]
 RewriteRule ^api/admin/fares/update$ api/admin/fares-update.php [QSA,L]
-RewriteRule ^api/admin/km-price/update$ api/admin/km-price-update.php [L]
+RewriteRule ^api/admin/km-price/update$ api/admin/km-price-update.php [L,QSA]
 RewriteRule ^api/receipt/([0-9]+)$ api/receipt.php?id=$1 [QSA,L]
 
 # Add debug header for API paths
@@ -42,19 +45,19 @@ AddDefaultCharset UTF-8
     </FilesMatch>
 </IfModule>
 
-# Enable CORS with maximum permissive settings
+# Enable CORS with maximum permissive settings for API endpoints
 <IfModule mod_headers.c>
-    Header always set Access-Control-Allow-Origin "*"
-    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization"
-    Header always set Access-Control-Max-Age "3600"
-    # Remove credentials since we're using * for origin
-    # Header always set Access-Control-Allow-Credentials "true"
+    <FilesMatch "^api/">
+        Header always set Access-Control-Allow-Origin "*"
+        Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+        Header always set Access-Control-Max-Age "3600"
+    </FilesMatch>
 </IfModule>
 
 # Handle OPTIONS requests for CORS preflight more aggressively
 RewriteCond %{REQUEST_METHOD} OPTIONS
-RewriteRule .* - [R=200,L]
+RewriteRule ^api/ - [R=200,L]
 
 # Return 200 OK with necessary CORS headers for OPTIONS
 <If "%{REQUEST_METHOD} == 'OPTIONS'">

@@ -52,12 +52,16 @@ try {
     // Get period filter if provided (today, week, month)
     $period = isset($_GET['period']) ? $_GET['period'] : 'week';
     
+    // Get status filter if provided
+    $statusFilter = isset($_GET['status']) ? $_GET['status'] : '';
+    
     // Get the timestamp to help prevent caching
     $timestamp = isset($_GET['_t']) ? $_GET['_t'] : time();
     
-    // Log the period parameter
+    // Log the parameters
     logError("Request parameters", [
         'period' => $period,
+        'status' => $statusFilter,
         'timestamp' => $timestamp,
         'admin' => $isAdminMetricsRequest ? 'true' : 'false'
     ]);
@@ -75,15 +79,15 @@ try {
     $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
     $token = str_replace('Bearer ', '', $authHeader);
     
-    logError("Token received", ['token_length' => strlen($token)]);
+    logError("Token received", ['token_length' => strlen($token), 'token_parts' => substr_count($token, '.') + 1]);
     
     $userData = verifyJwtToken($token);
     if (!$userData || !isset($userData['user_id'])) {
         logError("Authentication failed in dashboard.php", [
             'token_length' => strlen($token),
-            'token_parts' => count(explode('.', $token))
+            'token_parts' => substr_count($token, '.') + 1
         ]);
-        sendJsonResponse(['status' => 'error', 'message' => 'Invalid or expired token'], 401);
+        sendJsonResponse(['status' => 'error', 'message' => 'Invalid or expired token. Please login again.'], 401);
         exit;
     }
     
@@ -93,7 +97,7 @@ try {
     logError("User authenticated successfully", [
         'user_id' => $userId, 
         'is_admin' => $isAdmin ? 'true' : 'false',
-        'token_parts' => count(explode('.', $token))
+        'token_parts' => substr_count($token, '.') + 1
     ]);
 
     // Connect to database
@@ -105,7 +109,7 @@ try {
 
     // If this is an admin metrics request and the user is an admin
     if ($isAdminMetricsRequest && $isAdmin) {
-        logError("Processing admin metrics request", ['period' => $period]);
+        logError("Processing admin metrics request", ['period' => $period, 'status' => $statusFilter]);
         
         // Get date range based on period
         $dateCondition = "";
@@ -122,8 +126,17 @@ try {
                 break;
         }
         
+        // Add status filter if provided
+        if (!empty($statusFilter)) {
+            if (strpos($dateCondition, 'WHERE') !== false) {
+                $dateCondition .= " AND status = '" . $conn->real_escape_string($statusFilter) . "'";
+            } else {
+                $dateCondition = "WHERE status = '" . $conn->real_escape_string($statusFilter) . "'";
+            }
+        }
+        
         // Log the SQL condition being used
-        logError("Date condition for metrics", ['sql_condition' => $dateCondition]);
+        logError("SQL condition for metrics", ['sql_condition' => $dateCondition]);
         
         // Get total bookings for the period
         $totalBookingsQuery = "SELECT COUNT(*) as total FROM bookings $dateCondition";
@@ -131,9 +144,11 @@ try {
         $totalBookings = $totalBookingsResult->fetch_assoc()['total'] ?? 0;
         
         // Get active rides (confirmed status with today's date)
-        $activeRidesQuery = "SELECT COUNT(*) as total FROM bookings 
-                             WHERE status = 'confirmed' 
-                             AND DATE(pickup_date) = CURDATE()";
+        $activeRidesCondition = "WHERE status = 'confirmed' AND DATE(pickup_date) = CURDATE()";
+        if (!empty($statusFilter)) {
+            $activeRidesCondition = "WHERE status = '" . $conn->real_escape_string($statusFilter) . "' AND DATE(pickup_date) = CURDATE()";
+        }
+        $activeRidesQuery = "SELECT COUNT(*) as total FROM bookings $activeRidesCondition";
         $activeRidesResult = $conn->query($activeRidesQuery);
         $activeRides = $activeRidesResult->fetch_assoc()['total'] ?? 0;
         
@@ -142,19 +157,32 @@ try {
         $totalRevenueResult = $conn->query($totalRevenueQuery);
         $totalRevenue = $totalRevenueResult->fetch_assoc()['total'] ?? 0;
         
+        // Get upcoming rides (pending/confirmed with future date)
+        $upcomingRidesCondition = "WHERE (status = 'pending' OR status = 'confirmed') AND DATE(pickup_date) > CURDATE()";
+        if (!empty($statusFilter)) {
+            $upcomingRidesCondition = "WHERE status = '" . $conn->real_escape_string($statusFilter) . "' AND DATE(pickup_date) > CURDATE()";
+        }
+        $upcomingRidesQuery = "SELECT COUNT(*) as total FROM bookings $upcomingRidesCondition";
+        $upcomingRidesResult = $conn->query($upcomingRidesQuery);
+        $upcomingRides = $upcomingRidesResult->fetch_assoc()['total'] ?? 0;
+        
+        // Get all booking statuses for dropdown filtering
+        $statusesQuery = "SELECT DISTINCT status FROM bookings WHERE status IS NOT NULL AND status != ''";
+        $statusesResult = $conn->query($statusesQuery);
+        $statuses = [];
+        
+        if ($statusesResult) {
+            while ($statusRow = $statusesResult->fetch_assoc()) {
+                $statuses[] = $statusRow['status'];
+            }
+        }
+        
         // Simulate driver metrics (in a real app, this would come from a drivers table)
         $availableDrivers = 12;
         $busyDrivers = 8;
         
         // Get average rating (simulated - would come from a ratings table)
         $avgRating = 4.7;
-        
-        // Get upcoming rides (pending/confirmed with future date)
-        $upcomingRidesQuery = "SELECT COUNT(*) as total FROM bookings 
-                               WHERE (status = 'pending' OR status = 'confirmed')
-                               AND DATE(pickup_date) > CURDATE()";
-        $upcomingRidesResult = $conn->query($upcomingRidesQuery);
-        $upcomingRides = $upcomingRidesResult->fetch_assoc()['total'] ?? 0;
         
         // Prepare the metrics response
         $metrics = [
@@ -164,7 +192,9 @@ try {
             'availableDrivers' => (int)$availableDrivers,
             'busyDrivers' => (int)$busyDrivers,
             'avgRating' => (float)$avgRating,
-            'upcomingRides' => (int)$upcomingRides
+            'upcomingRides' => (int)$upcomingRides,
+            'availableStatuses' => $statuses,
+            'currentFilter' => $statusFilter
         ];
         
         logError("Sending admin metrics response", ['metrics' => $metrics, 'period' => $period]);
@@ -238,9 +268,8 @@ try {
         'data' => $bookings
     ];
     
-    logError("Sending response", ['response_size' => strlen(json_encode($response))]);
-    echo json_encode($response);
-    exit;
+    logError("Sending dashboard response", ['bookings_count' => count($bookings)]);
+    sendJsonResponse($response);
     
 } catch (Exception $e) {
     logError("Exception in dashboard.php", [
