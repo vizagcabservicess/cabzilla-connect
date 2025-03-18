@@ -1,4 +1,3 @@
-
 import { GoogleMap, Marker, DirectionsService, DirectionsRenderer } from "@react-google-maps/api";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Location } from "@/lib/locationData";
@@ -232,6 +231,58 @@ const GoogleMapComponent = ({
       )}
     </GoogleMap>
   );
+  
+  // Define the functions referenced in the code
+  function directionsCallback(result: google.maps.DirectionsResult | null, status: google.maps.DirectionsStatus) {
+    console.log("Directions status:", status);
+    
+    if (status === google.maps.DirectionsStatus.OK && result) {
+      setDirections(result);
+      setDirectionsRequestFailed(false);
+      
+      // Extract and log the actual distance from the directions result
+      const route = result.routes[0];
+      if (route && route.legs && route.legs.length > 0) {
+        const leg = route.legs[0];
+        const distanceValue = leg.distance?.value || 0;
+        const durationValue = leg.duration?.value || 0;
+        
+        console.log("Actual distance from Google:", leg.distance?.text);
+        console.log("Actual duration from Google:", leg.duration?.text);
+        
+        // Convert meters to kilometers and round to nearest integer
+        const distanceInKm = Math.round(distanceValue / 1000);
+        // Convert seconds to minutes
+        const durationInMinutes = Math.round(durationValue / 60);
+        
+        // Call the callback with the actual distance and duration
+        if (onDistanceCalculated) {
+          onDistanceCalculated(distanceInKm, durationInMinutes);
+        }
+      }
+    } else {
+      console.error("Directions request failed with status:", status);
+      setDirectionsRequestFailed(true);
+      
+      // Fallback to default distance calculation if Google Maps fails
+      if (onDistanceCalculated) {
+        // Calculate approximate distance using the Haversine formula
+        const distance = calculateHaversineDistance(
+          safePickupLocation.lat, safePickupLocation.lng,
+          safeDropLocation.lat, safeDropLocation.lng
+        );
+        
+        const duration = Math.round(distance * 2); // Approximate duration in minutes
+        
+        onDistanceCalculated(distance, duration);
+      }
+    }
+  }
+  
+  function onMapLoad() {
+    console.log("Map loaded successfully");
+    setMapLoaded(true);
+  }
 };
 
 export default GoogleMapComponent;

@@ -4,18 +4,15 @@ import { DateTimePicker } from './DateTimePicker';
 import { CabOptions } from './CabOptions';
 import { BookingSummary } from './BookingSummary';
 import { 
-  isVizagLocation, 
-  areBothLocationsInVizag, 
   vizagLocations, 
-  apDestinations, 
   calculateAirportFare,
   Location
 } from '@/lib/locationData';
 import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag } from '@/lib/locationUtils';
 import { CabType, cabTypes, TripMode, TripType, hourlyPackages, getLocalPackagePrice } from '@/lib/cabData';
-import { ChevronRight, ArrowLeft } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { addDays, differenceInCalendarDays, isSameDay } from 'date-fns';
+import { addDays, differenceInCalendarDays } from 'date-fns';
 import { TabTripSelector } from './TabTripSelector';
 import GoogleMapComponent from './GoogleMapComponent';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -32,6 +29,12 @@ const hourlyPackageOptions = [
 ];
 
 const airportLocation = vizagLocations.find(loc => loc.type === 'airport');
+
+function areBothLocationsInVizag(location1?: Location | null, location2?: Location | null): boolean {
+  return !!(location1 && location2 && 
+    isLocationInVizag(location1) && 
+    isLocationInVizag(location2));
+}
 
 export function Hero() {
   const { toast } = useToast();
@@ -126,8 +129,8 @@ export function Hero() {
         setTripType('airport');
       }
     } else if (tripType === 'airport' && pickupLocation && dropLocation) {
-      const isPickupInVizag = isVizagLocation(pickupLocation);
-      const isDropoffInVizag = isVizagLocation(dropLocation);
+      const isPickupInVizag = isLocationInVizag(pickupLocation);
+      const isDropoffInVizag = isLocationInVizag(dropLocation);
       
       if (!isPickupInVizag || !isDropoffInVizag) {
         console.log("Locations not within Vizag city limits. Switching to outstation mode.");
@@ -205,7 +208,7 @@ export function Hero() {
     }
   }, [pickupLocation, dropLocation, pickupDate, returnDate, tripMode, tripType]);
 
-  const handleContinue = () => {
+  function handleContinue() {
     if (!isFormValid) {
       toast({
         title: "Missing Information",
@@ -221,13 +224,13 @@ export function Hero() {
     }
   };
 
-  const handleDistanceCalculated = (calculatedDistance: number, calculatedDuration: number) => {
+  function handleDistanceCalculated(calculatedDistance: number, calculatedDuration: number) {
     setDistance(calculatedDistance);
     setDuration(calculatedDuration);
     setIsCalculatingDistance(false);
   };
 
-  const calculatePrice = () => {
+  function calculatePrice() {
     if (!selectedCab) return 0;
     
     let totalPrice = 0;
@@ -296,9 +299,9 @@ export function Hero() {
     return Math.ceil(totalPrice / 10) * 10;
   };
 
-  const totalPrice = calculatePrice();
+  let totalPrice = calculatePrice();
 
-  const handleGuestDetailsSubmit = async (guestDetails: any) => {
+  function handleGuestDetailsSubmit(guestDetails: any) {
     try {
       const bookingData: BookingRequest = {
         pickupLocation: pickupLocation?.name || '',
@@ -354,7 +357,7 @@ export function Hero() {
     }
   };
 
-  const handleBookNow = () => {
+  function handleBookNow() {
     if (!isFormValid || !selectedCab) {
       toast({
         title: "Missing information",
@@ -375,7 +378,7 @@ export function Hero() {
     }, 100);
   };
 
-  const handleBackToSelection = () => {
+  function handleBackToSelection() {
     setShowGuestDetailsForm(false);
     setCurrentStep(2);
   };
@@ -612,5 +615,3 @@ export function Hero() {
     </section>
   );
 }
-
-

@@ -211,11 +211,14 @@ export function LocationInput({
       return isInVizagBounds;
     }
     
-    // Check if address contains any Vizag-related names using safeIncludes
+    // Ensure address is a string and convert to lowercase safely
+    const safeAddressLower = address.toLowerCase();
+    
+    // Check if address contains any Vizag-related names
     const vizagNames = ['visakhapatnam', 'vizag', 'waltair', 'vizianagaram'];
     
     for (const name of vizagNames) {
-      if (safeIncludes(address, name)) {
+      if (safeAddressLower.includes(name)) {
         return true;
       }
     }
