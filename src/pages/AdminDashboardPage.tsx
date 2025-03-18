@@ -27,7 +27,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { UserManagement } from '@/components/admin/UserManagement';
 import { NetworkStatusMonitor } from '@/components/NetworkStatusMonitor';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { BookingStatus, DashboardMetricsType } from '@/types/api';
+import { BookingStatus, DashboardMetrics as DashboardMetricsType } from '@/types/api';
 
 export default function AdminDashboardPage() {
   const { toast } = useToast();
