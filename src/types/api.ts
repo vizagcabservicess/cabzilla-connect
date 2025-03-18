@@ -28,7 +28,15 @@ export interface SignupRequest {
 }
 
 // Booking related types
-export type BookingStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled';
+export type BookingStatus = 
+  'pending' | 
+  'confirmed' | 
+  'assigned' | 
+  'payment_received' | 
+  'payment_pending' | 
+  'completed' | 
+  'continued' | 
+  'cancelled';
 
 export interface Booking {
   id: number;

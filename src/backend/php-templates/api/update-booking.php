@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../config.php';
@@ -91,13 +90,14 @@ try {
     $updateTypes = "";
     
     $allowedFields = [
-        'pickup_location' => 'passengerName',
+        'pickup_location' => 'pickupLocation',
         'drop_location' => 'dropLocation',
         'pickup_date' => 'pickupDate',
         'return_date' => 'returnDate',
         'passenger_name' => 'passengerName',
         'passenger_phone' => 'passengerPhone',
-        'passenger_email' => 'passengerEmail'
+        'passenger_email' => 'passengerEmail',
+        'status' => 'status'
     ];
     
     // Map API field names to database field names

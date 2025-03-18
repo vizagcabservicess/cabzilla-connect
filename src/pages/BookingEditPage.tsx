@@ -8,8 +8,9 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { GuestDetailsForm } from "@/components/GuestDetailsForm";
 import { DateTimePicker } from "@/components/DateTimePicker";
 import { LocationInput } from "@/components/LocationInput";
+import { BookingStatusManager } from "@/components/BookingStatusManager";
 import { bookingAPI, authAPI } from '@/services/api';
-import { Booking, Location } from '@/types/api';
+import { Booking, Location, BookingStatus } from '@/types/api';
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, AlertCircle, Loader2 } from 'lucide-react';
 import { safeGetString } from '@/lib/safeStringUtils';
@@ -25,9 +26,9 @@ export default function BookingEditPage() {
   const [pickupLocation, setPickupLocation] = useState<Location>({ address: '' });
   const [dropLocation, setDropLocation] = useState<Location>({ address: '' });
   const [pickupDate, setPickupDate] = useState<Date | undefined>(undefined);
+  const isAdmin = authAPI.isAdmin();
 
   useEffect(() => {
-    // Check authentication
     if (!authAPI.isAuthenticated()) {
       toast({
         title: "Authentication Required",
@@ -38,7 +39,6 @@ export default function BookingEditPage() {
       return;
     }
 
-    // Fetch booking details
     const fetchBooking = async () => {
       if (!bookingId) return;
       
@@ -46,8 +46,8 @@ export default function BookingEditPage() {
         setIsLoading(true);
         setError(null);
         
-        const data = await bookingAPI.getBookingById(bookingId);
-        console.log("Loaded booking data:", data);
+        const response = await bookingAPI.getBookingById(bookingId);
+        const data = response.data;
         
         if (!data) {
           throw new Error('Booking not found');
@@ -55,21 +55,12 @@ export default function BookingEditPage() {
         
         setBooking(data);
         
-        // Initialize form fields with explicit location objects and safely handle values
         if (data.pickupLocation) {
-          setPickupLocation({ 
-            address: typeof data.pickupLocation === 'string' ? data.pickupLocation : '',
-            name: typeof data.pickupLocation === 'string' ? data.pickupLocation : ''
-          });
-          console.log("Initialized pickup location:", { address: data.pickupLocation });
+          setPickupLocation({ address: data.pickupLocation });
         }
         
         if (data.dropLocation) {
-          setDropLocation({ 
-            address: typeof data.dropLocation === 'string' ? data.dropLocation : '',
-            name: typeof data.dropLocation === 'string' ? data.dropLocation : ''
-          });
-          console.log("Initialized drop location:", { address: data.dropLocation });
+          setDropLocation({ address: data.dropLocation });
         }
         
         if (data.pickupDate) {
@@ -91,19 +82,55 @@ export default function BookingEditPage() {
     fetchBooking();
   }, [bookingId, navigate, toast]);
 
+  const handleStatusChange = async (newStatus: BookingStatus) => {
+    if (!booking || !bookingId) return;
+    
+    try {
+      const response = await bookingAPI.updateBooking(bookingId, { status: newStatus });
+      if (response.data) {
+        setBooking(response.data);
+        toast({
+          title: "Status Updated",
+          description: `Booking status changed to ${newStatus.replace('_', ' ').toUpperCase()}`,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Update Failed",
+        description: error instanceof Error ? error.message : "Failed to update status",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteBooking = async () => {
+    if (!bookingId || !isAdmin) return;
+    
+    if (!confirm("Are you sure you want to delete this booking? This action cannot be undone.")) {
+      return;
+    }
+    
+    try {
+      await bookingAPI.deleteBooking(bookingId);
+      toast({
+        title: "Booking Deleted",
+        description: "The booking has been successfully deleted",
+      });
+      navigate('/dashboard');
+    } catch (error) {
+      toast({
+        title: "Delete Failed",
+        description: error instanceof Error ? error.message : "Failed to delete booking",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleSubmit = async (contactDetails: any) => {
     if (!booking || !bookingId) return;
     
     setIsSubmitting(true);
-    console.log("Submitting updated booking with:", {
-      contactDetails,
-      pickupLocation,
-      dropLocation,
-      pickupDate
-    });
-    
     try {
-      // Prepare updated booking data
       const updatedData = {
         passengerName: contactDetails.name,
         passengerPhone: contactDetails.phone,
@@ -113,30 +140,41 @@ export default function BookingEditPage() {
         pickupDate: pickupDate ? pickupDate.toISOString() : undefined
       };
       
-      console.log("Sending update with data:", updatedData);
-      
-      // Update booking in API
       const result = await bookingAPI.updateBooking(bookingId, updatedData);
-      console.log("Update result:", result);
       
-      toast({
-        title: "Booking Updated",
-        description: "Your booking has been updated successfully!",
-      });
-      
-      // Redirect to dashboard
-      navigate('/dashboard');
+      if (result.data) {
+        setBooking(result.data);
+        toast({
+          title: "Booking Updated",
+          description: "Your booking has been updated successfully!",
+        });
+      }
     } catch (error) {
       console.error("Error updating booking:", error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to update booking';
       toast({
         title: "Update Failed",
-        description: errorMessage,
+        description: error instanceof Error ? error.message : 'Failed to update booking',
         variant: "destructive",
       });
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  // Booking display helpers
+  const formatTripType = (tripType?: string, tripMode?: string): string => {
+    if (!tripType) return 'Standard';
+    
+    const type = tripType.charAt(0).toUpperCase() + tripType.slice(1);
+    const mode = tripMode ? ` (${tripMode.replace('-', ' ')})` : '';
+    
+    return `${type}${mode}`;
+  };
+
+  const calculatePriceBreakdown = (totalAmount: number) => {
+    const baseFare = Math.round(totalAmount * 0.85);
+    const taxes = Math.round(totalAmount * 0.15);
+    return { baseFare, taxes };
   };
 
   if (isLoading) {
@@ -165,27 +203,29 @@ export default function BookingEditPage() {
     );
   }
 
-  // Helper function to safely display tripType
-  const getTripTypeDisplay = () => {
-    const tripType = safeGetString(booking, 'tripType');
-    const tripMode = safeGetString(booking, 'tripMode');
-    
-    if (!tripType) return 'Standard';
-    
-    return `${tripType.toUpperCase()} - ${tripMode || 'One Way'}`;
-  };
+  const { baseFare, taxes } = calculatePriceBreakdown(booking.totalAmount);
 
   return (
     <div className="container mx-auto py-10 px-4">
-      <div className="flex items-center mb-6">
-        <Button variant="outline" onClick={() => navigate('/dashboard')} className="mr-4">
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back
-        </Button>
-        <h1 className="text-3xl font-bold">Edit Booking #{booking?.bookingNumber}</h1>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <Button variant="outline" onClick={() => navigate('/dashboard')}>
+            <ArrowLeft className="mr-2 h-4 w-4" /> Back
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold">Booking #{booking.bookingNumber}</h1>
+            <p className="text-gray-500">ID: {booking.id}</p>
+          </div>
+        </div>
+        <BookingStatusManager
+          currentStatus={booking.status as BookingStatus}
+          onStatusChange={handleStatusChange}
+          isAdmin={isAdmin}
+          onDelete={isAdmin ? handleDeleteBooking : undefined}
+        />
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Booking details */}
         <div>
           <Card className="mb-6">
             <CardHeader>
@@ -195,27 +235,27 @@ export default function BookingEditPage() {
             <CardContent className="space-y-4">
               <div>
                 <p className="text-sm font-medium mb-1">Trip Type</p>
-                <p className="text-gray-700">{getTripTypeDisplay()}</p>
+                <p className="text-gray-700">{formatTripType(booking.tripType, booking.tripMode)}</p>
               </div>
               <Separator />
               <div>
                 <p className="text-sm font-medium mb-1">Vehicle</p>
-                <p className="text-gray-700">{booking.cabType || 'Standard Vehicle'}</p>
+                <p className="text-gray-700">{booking.cabType}</p>
               </div>
               <Separator />
-              {booking.dropLocation && (
-                <>
-                  <div>
-                    <p className="text-sm font-medium mb-1">Drop Location</p>
-                    <p className="text-gray-700">{booking.dropLocation}</p>
-                  </div>
-                  <Separator />
-                </>
-              )}
+              <div>
+                <p className="text-sm font-medium mb-1">Base Fare</p>
+                <p className="text-gray-700">₹{baseFare.toLocaleString('en-IN')}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium mb-1">Taxes & Fees</p>
+                <p className="text-gray-700">₹{taxes.toLocaleString('en-IN')}</p>
+              </div>
+              <Separator />
               <div>
                 <p className="text-sm font-medium mb-1">Total Amount</p>
                 <p className="text-gray-700 text-lg font-semibold">
-                  ₹{booking.totalAmount ? booking.totalAmount.toLocaleString('en-IN') : '0'}
+                  ₹{booking.totalAmount.toLocaleString('en-IN')}
                 </p>
               </div>
             </CardContent>
@@ -232,7 +272,6 @@ export default function BookingEditPage() {
                 <LocationInput
                   location={pickupLocation}
                   onLocationChange={(location: Location) => {
-                    console.log("Pickup location changed to:", location);
                     setPickupLocation(location);
                   }}
                   placeholder="Enter pickup location"
@@ -247,7 +286,6 @@ export default function BookingEditPage() {
                     <LocationInput
                       location={dropLocation}
                       onLocationChange={(location: Location) => {
-                        console.log("Drop location changed to:", location);
                         setDropLocation(location);
                       }}
                       placeholder="Enter drop location"
@@ -269,7 +307,6 @@ export default function BookingEditPage() {
           </Card>
         </div>
         
-        {/* Contact information form */}
         <div>
           <Card>
             <CardHeader>
@@ -279,11 +316,11 @@ export default function BookingEditPage() {
             <CardContent>
               <GuestDetailsForm
                 onSubmit={handleSubmit}
-                totalPrice={booking?.totalAmount || 0}
+                totalPrice={booking.totalAmount}
                 initialData={{
-                  name: booking?.passengerName || '',
-                  email: booking?.passengerEmail || '',
-                  phone: booking?.passengerPhone || ''
+                  name: booking.passengerName || '',
+                  email: booking.passengerEmail || '',
+                  phone: booking.passengerPhone || ''
                 }}
                 bookingId={bookingId}
                 isEditing={true}
@@ -296,4 +333,3 @@ export default function BookingEditPage() {
     </div>
   );
 }
-
