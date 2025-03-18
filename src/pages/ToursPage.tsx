@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -114,7 +115,7 @@ const ToursPage = () => {
       const fare = getTourFare(selectedTour!, selectedCab!.id);
       
       const bookingData: BookingRequest = {
-        pickupLocation: pickupLocation.name,
+        pickupLocation: pickupLocation.name || '',
         dropLocation: '', // Tours don't have specific drop locations
         pickupDate: pickupDate.toISOString(),
         returnDate: null, // Tours are considered one-way
@@ -169,6 +170,19 @@ const ToursPage = () => {
     } finally {
       setIsSubmitting(false);
     }
+  };
+  
+  // Handle pickup location change via LocationInput
+  const handlePickupLocationChange = (location: Location) => {
+    if (!location) return;
+    
+    // Ensure we set isInVizag property properly
+    if (location.isInVizag === undefined) {
+      location.isInVizag = isLocationInVizag(location);
+    }
+    
+    console.log("Pickup location changed:", location);
+    setPickupLocation(location);
   };
   
   return (
@@ -232,7 +246,7 @@ const ToursPage = () => {
                       label="PICKUP LOCATION"
                       placeholder="Enter your pickup location"
                       value={pickupLocation ? convertToApiLocation(pickupLocation) : undefined}
-                      onChange={createLocationChangeHandler(setPickupLocation)}
+                      onLocationChange={handlePickupLocationChange}
                       isPickupLocation={true}
                     />
                     

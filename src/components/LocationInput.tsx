@@ -205,8 +205,8 @@ export function LocationInput({
       lat >= 17.6 && lat <= 17.9 && 
       lng >= 83.1 && lng <= 83.4;
     
-    // Check address text
-    const addressLower = address.toLowerCase();
+    // Check address text - safely handle potentially undefined values
+    const addressLower = address ? address.toLowerCase() : '';
     const vizagNames = ['visakhapatnam', 'vizag', 'waltair', 'vizianagaram'];
     
     for (const name of vizagNames) {

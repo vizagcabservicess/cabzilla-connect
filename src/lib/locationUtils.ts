@@ -29,13 +29,16 @@ export const createLocationChangeHandler = (
     // Handle potentially incomplete location data
     const id = newLocation.id || `loc_${Date.now()}`;
     
+    // Safely extract address information
+    const locationAddress = newLocation.address || newLocation.name || '';
+    
     // Convert API location format to app location format
     const appLocation: AppLocation = {
       id,
       name: newLocation.name || newLocation.address || '',
-      address: newLocation.address || newLocation.name || '',
-      city: extractCityFromAddress(newLocation.address || ''),
-      state: extractStateFromAddress(newLocation.address || ''),
+      address: locationAddress,
+      city: extractCityFromAddress(locationAddress),
+      state: extractStateFromAddress(locationAddress),
       lat: newLocation.lat || 0,
       lng: newLocation.lng || 0,
       type: 'other',
@@ -73,8 +76,8 @@ export const isLocationInVizag = (location: AppLocation | ApiLocation | null | u
   }
   
   // Check by address text - safely handle potentially undefined values
-  const addressLower = (location.address || '').toLowerCase();
-  const nameLower = (location.name || '').toLowerCase();
+  const addressLower = typeof location.address === 'string' ? location.address.toLowerCase() : '';
+  const nameLower = typeof location.name === 'string' ? location.name.toLowerCase() : '';
   
   // Safely handle city which might not exist on ApiLocation
   let cityLower = '';
@@ -120,7 +123,7 @@ function extractStateFromAddress(address: string): string {
   if (!address) return 'Andhra Pradesh';
   
   // Try to find Andhra Pradesh or other state names in the address
-  if (address.includes('Andhra Pradesh')) {
+  if (address && address.includes('Andhra Pradesh')) {
     return 'Andhra Pradesh';
   }
   
@@ -132,7 +135,7 @@ function extractStateFromAddress(address: string): string {
   ];
   
   for (const state of indianStates) {
-    if (address.includes(state)) {
+    if (address && address.includes(state)) {
       return state;
     }
   }

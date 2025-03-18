@@ -331,8 +331,8 @@ const CabsPage = () => {
       }
       
       const bookingData: BookingRequest = {
-        pickupLocation: pickup.address || pickup.name,
-        dropLocation: dropoff ? (dropoff.address || dropoff.name) : '',
+        pickupLocation: pickup.address || pickup.name || '',
+        dropLocation: dropoff ? (dropoff.address || dropoff.name || '') : '',
         pickupDate: pickupDate.toISOString(),
         returnDate: returnDate?.toISOString() || null,
         cabType: selectedCab.name,
