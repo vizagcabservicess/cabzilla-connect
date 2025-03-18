@@ -4,7 +4,8 @@ import { toast } from 'sonner';
 import { 
   Booking, User, DashboardData, AuthResponse, LoginRequest, 
   SignupRequest, BookingRequest, FareData, TourFare, FareUpdateRequest,
-  DashboardMetrics, AuthUser, VehiclePricing, VehiclePricingUpdateRequest
+  DashboardMetrics, AuthUser, VehiclePricing, VehiclePricingUpdateRequest,
+  BookingUpdateRequest
 } from '@/types/api';
 
 const API_BASE_URL = '/api';
@@ -178,7 +179,8 @@ export const bookingAPI = {
     }
   },
   
-  getBookingDetails: async (bookingId: string | number): Promise<Booking> => {
+  // Get specific booking by ID
+  getBookingById: async (bookingId: number): Promise<Booking> => {
     try {
       const response = await api.get(`/user/booking.php?id=${bookingId}`);
       return response.data;
@@ -187,7 +189,21 @@ export const bookingAPI = {
     }
   },
   
-  cancelBooking: async (bookingId: string | number): Promise<any> => {
+  // Update booking details
+  updateBooking: async (bookingId: number, updateData: BookingUpdateRequest): Promise<Booking> => {
+    try {
+      const response = await api.post(`/update-booking.php`, { 
+        id: bookingId,
+        ...updateData
+      });
+      return response.data;
+    } catch (error) {
+      return handleApiError(error);
+    }
+  },
+  
+  // Cancel booking
+  cancelBooking: async (bookingId: number): Promise<any> => {
     try {
       const response = await api.post(`/update-booking.php`, { id: bookingId, status: 'cancelled' });
       return response.data;
@@ -196,8 +212,18 @@ export const bookingAPI = {
     }
   },
   
+  // Delete booking (admin only)
+  deleteBooking: async (bookingId: number): Promise<any> => {
+    try {
+      const response = await api.delete(`/admin/booking.php?id=${bookingId}`);
+      return response.data;
+    } catch (error) {
+      return handleApiError(error);
+    }
+  },
+  
   // Admin functions
-  getAdminBookings: async (status?: string): Promise<Booking[]> => {
+  getAllBookings: async (status?: string): Promise<Booking[]> => {
     try {
       const url = status && status !== 'all' 
         ? `/admin/booking.php?status=${status}`
@@ -210,7 +236,7 @@ export const bookingAPI = {
     }
   },
   
-  updateBookingStatus: async (bookingId: string | number, status: string): Promise<any> => {
+  updateBookingStatus: async (bookingId: number, status: string): Promise<any> => {
     try {
       const response = await api.post(`/admin/booking.php`, { id: bookingId, status });
       return response.data;

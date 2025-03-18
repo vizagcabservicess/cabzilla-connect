@@ -269,13 +269,13 @@ export async function calculateFare(
     // Try to get up-to-date pricing info
     try {
       const vehiclePricing = await fareAPI.getVehiclePricing();
-      const pricing = vehiclePricing.find(p => p.vehicle_type.toLowerCase() === cabType.id.toLowerCase());
+      const pricing = vehiclePricing.find(p => p.vehicleType.toLowerCase() === cabType.id.toLowerCase());
       
       if (pricing) {
-        basePrice = pricing.base_price;
-        perKmRate = pricing.price_per_km;
-        driverAllowance = pricing.driver_allowance || driverAllowance;
-        nightHaltCharge = pricing.night_halt_charge || nightHaltCharge;
+        basePrice = pricing.basePrice;
+        perKmRate = pricing.pricePerKm;
+        driverAllowance = pricing.driverAllowance || driverAllowance;
+        nightHaltCharge = pricing.nightHaltCharge || nightHaltCharge;
       }
     } catch (error) {
       console.warn('Could not fetch latest pricing data, using default values:', error);

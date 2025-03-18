@@ -1,3 +1,4 @@
+
 // src/types/api.ts
 export type BookingStatus =
   | 'pending'
@@ -186,4 +187,15 @@ export interface VehiclePricingUpdateRequest {
   pricePerKm: number;
   nightHaltCharge?: number;
   driverAllowance?: number;
+}
+
+// New interfaces for booking updates
+export interface BookingUpdateRequest {
+  passengerName?: string;
+  passengerPhone?: string;
+  passengerEmail?: string;
+  pickupLocation?: string;
+  dropLocation?: string;
+  pickupDate?: string;
+  status?: BookingStatus;
 }

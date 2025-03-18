@@ -37,7 +37,7 @@ if (!$result) {
 
 $vehicles = [];
 while ($row = $result->fetch_assoc()) {
-    // Format data
+    // Format data with camelCase keys for frontend consistency
     $vehicle = [
         'id' => $row['vehicle_id'],
         'name' => $row['name'],
