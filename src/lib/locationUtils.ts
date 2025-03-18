@@ -85,13 +85,13 @@ export const isLocationInVizag = (location: AppLocation | ApiLocation | null | u
     if (isInVizagBounds) return true;
   }
   
-  // SAFE handling of address with double null check
+  // SAFE handling of address with null/undefined check and type check
   let addressLower = '';
   if (location.address !== undefined && location.address !== null) {
     addressLower = typeof location.address === 'string' ? location.address.toLowerCase() : '';
   }
   
-  // SAFE handling of name with double null check  
+  // SAFE handling of name with null/undefined check and type check
   let nameLower = '';
   if (location.name !== undefined && location.name !== null) {
     nameLower = typeof location.name === 'string' ? location.name.toLowerCase() : '';
@@ -106,7 +106,11 @@ export const isLocationInVizag = (location: AppLocation | ApiLocation | null | u
   const vizagNames = ['visakhapatnam', 'vizag', 'waltair', 'vizianagaram'];
   
   for (const name of vizagNames) {
-    if (addressLower.includes(name) || nameLower.includes(name) || cityLower.includes(name)) {
+    if (
+      (addressLower && addressLower.includes(name)) || 
+      (nameLower && nameLower.includes(name)) || 
+      (cityLower && cityLower.includes(name))
+    ) {
       return true;
     }
   }

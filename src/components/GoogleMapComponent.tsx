@@ -118,6 +118,7 @@ const GoogleMapComponent = ({
           isNaN(pickupLocation.lat) || isNaN(pickupLocation.lng) ||
           isNaN(dropLocation.lat) || isNaN(dropLocation.lng)) {
         console.error("Invalid coordinates for directions", { pickupLocation, dropLocation });
+        setDirectionsRequestFailed(true);
         return;
       }
       

@@ -34,7 +34,7 @@ export function LocationInput({
   readOnly
 }: LocationInputProps) {
   // Use value prop if location is not provided
-  const locationData = location || value || { address: '' };
+  const locationData = location || value || { address: '', id: '', name: '' };
   const handleLocationChange = onLocationChange || onChange;
   
   // Ensure address is always a string to prevent type errors
