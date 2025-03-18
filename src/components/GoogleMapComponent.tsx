@@ -1,4 +1,3 @@
-
 import { GoogleMap, Marker, DirectionsService, DirectionsRenderer } from "@react-google-maps/api";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Location } from "@/lib/locationData";
@@ -23,6 +22,14 @@ interface SafeLocation {
 const DEFAULT_LAT = 17.6868;
 const DEFAULT_LNG = 83.2185;
 
+// Cache for directions results
+const directionsCache = new Map<string, google.maps.DirectionsResult>();
+
+// Generate a cache key for two locations
+const generateCacheKey = (origin: SafeLocation, destination: SafeLocation): string => {
+  return `${origin.lat},${origin.lng}_${destination.lat},${destination.lng}`;
+};
+
 const GoogleMapComponent = ({ 
   pickupLocation, 
   dropLocation,
@@ -38,6 +45,7 @@ const GoogleMapComponent = ({
   const directionsRequestCount = useRef(0);
   const maxRetries = useRef(3);
   const directionsServiceRef = useRef<any>(null);
+  const distanceCalculatedRef = useRef<boolean>(false);
 
   const mapContainerStyle = {
     width: "100%",
@@ -70,6 +78,7 @@ const GoogleMapComponent = ({
   
   const safePickupLocation = createSafeLocation(pickupLocation);
   const safeDropLocation = createSafeLocation(dropLocation);
+  const cacheKey = generateCacheKey(safePickupLocation, safeDropLocation);
 
   // Set the center to the pickup location
   const center = { 
@@ -100,7 +109,16 @@ const GoogleMapComponent = ({
   const handleDirectionsCallback = useCallback((result: google.maps.DirectionsResult | null, status: google.maps.DirectionsStatus) => {
     console.log("Directions status:", status);
     
+    // If we've already reported distance once, don't do it again
+    if (distanceCalculatedRef.current) {
+      if (result) setDirections(result);
+      return;
+    }
+    
     if (status === google.maps.DirectionsStatus.OK && result) {
+      // Cache the result
+      directionsCache.set(cacheKey, result);
+      
       setRouteNotFound(false);
       setDirections(result);
       setDirectionsRequestFailed(false);
@@ -119,6 +137,9 @@ const GoogleMapComponent = ({
         const distanceInKm = Math.round(distanceValue / 1000);
         // Convert seconds to minutes
         const durationInMinutes = Math.round(durationValue / 60);
+        
+        // Mark that we've calculated and reported the distance
+        distanceCalculatedRef.current = true;
         
         // Call the callback with the actual distance and duration
         if (onDistanceCalculated) {
@@ -148,13 +169,16 @@ const GoogleMapComponent = ({
           
           console.log("Using Haversine distance fallback:", distance, "km");
           
+          // Mark that we've calculated and reported the distance
+          distanceCalculatedRef.current = true;
+          
           if (onDistanceCalculated) {
             onDistanceCalculated(distance, duration);
           }
         }
       }
     }
-  }, [onDistanceCalculated, safePickupLocation, safeDropLocation, google]);
+  }, [onDistanceCalculated, safePickupLocation, safeDropLocation, google, cacheKey]);
 
   // Calculate distance between two points using Haversine formula
   function calculateHaversineDistance(
@@ -187,6 +211,7 @@ const GoogleMapComponent = ({
         setDirectionsRequestFailed(false);
         setRouteNotFound(false);
         directionsRequestCount.current = 0;
+        distanceCalculatedRef.current = false;
       }
     } catch (error) {
       console.error("Error in location change effect:", error);
@@ -200,7 +225,7 @@ const GoogleMapComponent = ({
     setMapLoaded(true);
   }, []);
 
-  // Handle directions request
+  // Handle directions request - now with caching
   useEffect(() => {
     try {
       if (mapLoaded && !directionsRequested && google) {
@@ -210,14 +235,41 @@ const GoogleMapComponent = ({
           setRouteNotFound(true);
           setDirectionsRequestFailed(true);
           
-          if (onDistanceCalculated) {
+          if (!distanceCalculatedRef.current && onDistanceCalculated) {
             // Provide a fallback distance for non-Indian locations
             const distance = calculateHaversineDistance(
               safePickupLocation.lat, safePickupLocation.lng,
               safeDropLocation.lat, safeDropLocation.lng
             );
             const duration = Math.round(distance * 2);
+            distanceCalculatedRef.current = true;
             onDistanceCalculated(distance, duration);
+          }
+          return;
+        }
+        
+        // Check for cached result first
+        if (directionsCache.has(cacheKey)) {
+          console.log('🔄 Using cached directions result');
+          const cachedDirections = directionsCache.get(cacheKey)!;
+          setDirections(cachedDirections);
+          
+          // If we have a cached result, extract the distance and duration
+          if (!distanceCalculatedRef.current && onDistanceCalculated) {
+            const route = cachedDirections.routes[0];
+            if (route && route.legs && route.legs.length > 0) {
+              const leg = route.legs[0];
+              const distanceValue = leg.distance?.value || 0;
+              const durationValue = leg.duration?.value || 0;
+              
+              // Convert meters to kilometers and round to nearest integer
+              const distanceInKm = Math.round(distanceValue / 1000);
+              // Convert seconds to minutes
+              const durationInMinutes = Math.round(durationValue / 60);
+              
+              distanceCalculatedRef.current = true;
+              onDistanceCalculated(distanceInKm, durationInMinutes);
+            }
           }
           return;
         }
@@ -235,7 +287,7 @@ const GoogleMapComponent = ({
       console.error("Error in directions request effect:", error);
       setMapError(error instanceof Error ? error : new Error(String(error)));
     }
-  }, [mapLoaded, directionsRequested, google, safePickupLocation, safeDropLocation, onDistanceCalculated]);
+  }, [mapLoaded, directionsRequested, google, cacheKey, safePickupLocation, safeDropLocation, onDistanceCalculated]);
 
   // Handle errors
   if (mapError) {

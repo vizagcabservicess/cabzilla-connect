@@ -1,4 +1,3 @@
-
 import { Location } from "./locationData";
 import { safeGetString } from "./safeStringUtils";
 
@@ -12,6 +11,14 @@ export interface DistanceResult {
 const DEFAULT_LAT = 17.6868;
 const DEFAULT_LNG = 83.2185;
 
+// Cache for distance calculations to prevent redundant API calls
+const distanceCache = new Map<string, DistanceResult>();
+
+// Generate a cache key for two locations
+const generateCacheKey = (origin: Location, destination: Location): string => {
+  return `${origin.lat},${origin.lng}_${destination.lat},${destination.lng}`;
+};
+
 // Function to fetch actual distance using Google Maps API directly
 export async function calculateDistanceMatrix(
   origin: Location,
@@ -20,6 +27,15 @@ export async function calculateDistanceMatrix(
   // Validate locations before proceeding
   const safeOrigin = validateLocation(origin);
   const safeDestination = validateLocation(destination);
+  
+  // Generate cache key for this location pair
+  const cacheKey = generateCacheKey(safeOrigin, safeDestination);
+  
+  // Check if we have a cached result
+  if (distanceCache.has(cacheKey)) {
+    console.log('🔄 Using cached distance calculation result');
+    return distanceCache.get(cacheKey)!;
+  }
   
   console.log(`🔍 Calculating distance between: ${safeOrigin.name} → ${safeDestination.name}`);
   
@@ -71,26 +87,46 @@ export async function calculateDistanceMatrix(
         
         console.log(`✅ Distance Matrix result: ${distanceInKm.toFixed(1)} km, ${durationInMinutes} minutes`);
         
-        return {
+        const result = {
           distance: Math.round(distanceInKm), // Round to nearest km
           duration: durationInMinutes,
-          status: "OK",
+          status: "OK" as const,
         };
+        
+        // Cache the result
+        distanceCache.set(cacheKey, result);
+        
+        return result;
       }
     }
     
     // If we couldn't get a proper response, try direct route calculation as backup
     console.warn("⚠️ Distance Matrix failed, trying DirectionsService...");
-    return await calculateDirectionsDistance(safeOrigin, safeDestination);
+    const result = await calculateDirectionsDistance(safeOrigin, safeDestination);
+    
+    // Cache the result
+    distanceCache.set(cacheKey, result);
+    
+    return result;
     
   } catch (error) {
     console.error("❌ Error in Distance Matrix API:", error);
     try {
       // If Distance Matrix fails, try DirectionsService as a fallback
-      return await calculateDirectionsDistance(safeOrigin, safeDestination);
+      const result = await calculateDirectionsDistance(safeOrigin, safeDestination);
+      
+      // Cache the result
+      distanceCache.set(cacheKey, result);
+      
+      return result;
     } catch (directionsError) {
       console.error("❌ Both distance calculation methods failed:", directionsError);
-      return fallbackDistanceCalculation(safeOrigin, safeDestination);
+      const result = fallbackDistanceCalculation(safeOrigin, safeDestination);
+      
+      // Cache the result even if it's a fallback
+      distanceCache.set(cacheKey, result);
+      
+      return result;
     }
   }
 }
@@ -103,6 +139,15 @@ async function calculateDirectionsDistance(
   // Validate locations before proceeding
   const safeOrigin = validateLocation(origin);
   const safeDestination = validateLocation(destination);
+  
+  // Generate cache key for this location pair
+  const cacheKey = generateCacheKey(safeOrigin, safeDestination);
+  
+  // Check if we have a cached result
+  if (distanceCache.has(cacheKey)) {
+    console.log('🔄 Using cached directions result');
+    return distanceCache.get(cacheKey)!;
+  }
   
   console.log("🗺️ Trying DirectionsService for distance calculation");
   
