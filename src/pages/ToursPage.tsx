@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
 import { Location, vizagLocations } from "@/lib/locationData";
-import { convertToApiLocation, createLocationChangeHandler } from "@/lib/locationUtils";
+import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag } from "@/lib/locationUtils";
 import { CabType, cabTypes, availableTours, tourFares } from "@/lib/cabData";
 import { MapPin, Calendar, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -56,6 +56,19 @@ const ToursPage = () => {
       toast({
         title: "No pickup location",
         description: "Please enter your pickup location",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    const isInVizag = pickupLocation.isInVizag !== undefined ? 
+      pickupLocation.isInVizag : 
+      isLocationInVizag(pickupLocation);
+      
+    if (!isInVizag) {
+      toast({
+        title: "Invalid pickup location",
+        description: "Pickup location must be within Visakhapatnam city limits.",
         variant: "destructive",
       });
       return;

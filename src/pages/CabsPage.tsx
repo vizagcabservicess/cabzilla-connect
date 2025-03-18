@@ -105,7 +105,8 @@ const CabsPage = () => {
     if (pickup && dropoff) {
       console.log("Validating locations:", { pickup, dropoff });
       
-      const isPickupInVizag = pickup.isInVizag || isLocationInVizag(pickup);
+      // Make sure both locations have isInVizag property defined
+      const isPickupInVizag = pickup.isInVizag !== undefined ? pickup.isInVizag : isLocationInVizag(pickup);
       
       if (!isPickupInVizag) {
         toast({
@@ -118,7 +119,7 @@ const CabsPage = () => {
       }
       
       if (tripType === "airport") {
-        const isDropoffInVizag = dropoff.isInVizag || isLocationInVizag(dropoff);
+        const isDropoffInVizag = dropoff.isInVizag !== undefined ? dropoff.isInVizag : isLocationInVizag(dropoff);
         
         if (!isDropoffInVizag) {
           console.log("Dropoff not in Vizag, switching to outstation");

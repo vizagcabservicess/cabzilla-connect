@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
 import { Location } from '@/types/api';
 import { debounce } from '@/lib/utils';
+import { isLocationInVizag } from '@/lib/locationUtils';
 
 interface LocationInputProps {
   location?: Location;
@@ -91,6 +92,9 @@ export function LocationInput({
       if (locationData.lat) updatedLocation.lat = locationData.lat;
       if (locationData.lng) updatedLocation.lng = locationData.lng;
       
+      // Default isInVizag to false if it's undefined and we don't have coordinates to check
+      updatedLocation.isInVizag = locationData.isInVizag;
+      
       // Mark that we've manually changed the location
       locationChangedRef.current = true;
       
@@ -153,14 +157,19 @@ export function LocationInput({
         // Update local state
         setAddress(formattedAddress);
         
+        // Calculate if the location is in Vizag
+        const lat = place.geometry.location.lat();
+        const lng = place.geometry.location.lng();
+        const isInVizag = checkIfLocationIsInVizag(lat, lng, formattedAddress);
+        
         // Create location object
         const newLocation: Location = {
           address: formattedAddress,
           name: place.name || formattedAddress,
           id: locationData.id || `loc_${Date.now()}`,
-          lat: place.geometry.location.lat(),
-          lng: place.geometry.location.lng(),
-          isInVizag: isLocationInVizag(place.geometry.location.lat(), place.geometry.location.lng(), formattedAddress)
+          lat: lat,
+          lng: lng,
+          isInVizag: isInVizag
         };
         
         console.log('Selected place from autocomplete:', newLocation);
@@ -186,7 +195,7 @@ export function LocationInput({
   }, [google, isLoaded, handleLocationChange, disabled, readOnly, isPickupLocation, isAirportTransfer]);
 
   // Helper function to determine if a location is in Vizag
-  function isLocationInVizag(lat: number, lng: number, address: string): boolean {
+  function checkIfLocationIsInVizag(lat: number, lng: number, address: string): boolean {
     // Check coordinates (Visakhapatnam bounds)
     const isInVizagBounds = 
       lat >= 17.6 && lat <= 17.9 && 
