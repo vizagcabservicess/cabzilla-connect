@@ -13,6 +13,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertCircle, RefreshCw, Save } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { VehiclePricing, VehiclePricingUpdateRequest } from '@/types/api';
 import { fareAPI } from '@/services/api';
 
@@ -101,10 +102,21 @@ export function VehiclePricingManagement() {
       form.setValue("vehicleType", selectedVehicle.vehicleType);
       form.setValue("basePrice", selectedVehicle.basePrice);
       form.setValue("pricePerKm", selectedVehicle.pricePerKm);
-      form.setValue("nightHaltCharge", selectedVehicle.nightHaltCharge);
-      form.setValue("driverAllowance", selectedVehicle.driverAllowance);
+      form.setValue("nightHaltCharge", selectedVehicle.nightHaltCharge || 0);
+      form.setValue("driverAllowance", selectedVehicle.driverAllowance || 0);
     }
   };
+  
+  if (error && !vehiclePricing.length) {
+    return (
+      <ApiErrorFallback 
+        error={error} 
+        onRetry={fetchVehiclePricing} 
+        title="Vehicle Pricing Error" 
+        description="Unable to load vehicle pricing data. This may be due to a network issue or server problem."
+      />
+    );
+  }
 
   return (
     <Tabs defaultValue="update">
@@ -293,8 +305,8 @@ export function VehiclePricingManagement() {
                         <td className="py-2 px-2">{pricing.vehicleType}</td>
                         <td className="text-right py-2 px-2">₹{pricing.basePrice.toLocaleString('en-IN')}</td>
                         <td className="text-right py-2 px-2">₹{pricing.pricePerKm.toLocaleString('en-IN')}</td>
-                        <td className="text-right py-2 px-2">₹{pricing.nightHaltCharge.toLocaleString('en-IN')}</td>
-                        <td className="text-right py-2 px-2">₹{pricing.driverAllowance.toLocaleString('en-IN')}</td>
+                        <td className="text-right py-2 px-2">₹{(pricing.nightHaltCharge || 0).toLocaleString('en-IN')}</td>
+                        <td className="text-right py-2 px-2">₹{(pricing.driverAllowance || 0).toLocaleString('en-IN')}</td>
                       </tr>
                     ))}
                   </tbody>

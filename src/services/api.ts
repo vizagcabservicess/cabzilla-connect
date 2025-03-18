@@ -213,21 +213,96 @@ export const authAPI = {
   
   async getAllUsers(): Promise<User[]> {
     try {
-      const response = await api.get('/admin/users');
-      return response.data.data;
-    } catch (error) {
-      console.error('Get users error:', error);
-      throw new Error(error instanceof Error ? error.message : 'Failed to get users');
+      console.log('Fetching all users with cache busting...');
+      
+      const timestamp = Date.now();
+      const url = `/admin/users?_t=${timestamp}`;
+      
+      const response = await api.get(url, {
+        timeout: 15000,  // 15 second timeout
+        headers: {
+          'X-Request-Time': new Date().toISOString()
+        }
+      });
+      
+      if (!response.data) {
+        throw new Error('Empty response received from server');
+      }
+      
+      let usersData: User[];
+      
+      if (Array.isArray(response.data)) {
+        console.log('Response is direct array format');
+        usersData = response.data;
+      } else if (response.data.data && Array.isArray(response.data.data)) {
+        console.log('Response is wrapped in data property');
+        usersData = response.data.data;
+      } else if (response.data.status === 'success' && Array.isArray(response.data.data)) {
+        console.log('Response is success object with data array');
+        usersData = response.data.data;
+      } else {
+        console.error('Invalid users data format:', response.data);
+        throw new Error('Invalid data format received from server');
+      }
+      
+      console.log('Users processed:', usersData.length, 'users found');
+      return usersData;
+    } catch (error: any) {
+      console.error('Get all users error:', error.response || error);
+      
+      if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
+        throw new Error('Network connection error: Unable to reach the server. Please check your internet connection and try again.');
+      }
+      
+      if (error.response?.status === 401 || 
+          (error.message && (
+            error.message.includes('Authentication failed') ||
+            error.message.includes('Invalid token') ||
+            error.message.includes('token')
+          ))) {
+        console.error('Authentication error in getAllUsers');
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('auth_token');
+        throw new Error('Authentication failed: Please log in again');
+      }
+      
+      throw new Error(error.response?.data?.message || error.message || 'Failed to load users');
     }
   },
   
   async updateUserRole(userId: number, role: string): Promise<User> {
     try {
+      console.log(`Updating user ${userId} role to ${role}`);
       const response = await api.put('/admin/users', { userId, role });
-      return response.data.data;
-    } catch (error) {
-      console.error('Update user role error:', error);
-      throw new Error(error instanceof Error ? error.message : 'Failed to update user role');
+      
+      if (!response.data) {
+        throw new Error('Empty response received from server');
+      }
+      
+      let updatedUser: User;
+      
+      if (response.data.data && response.data.data.id) {
+        console.log('Response is wrapped in data property');
+        updatedUser = response.data.data;
+      } else if (response.data.id) {
+        console.log('Response is direct user object');
+        updatedUser = response.data;
+      } else {
+        console.error('Invalid user update response format:', response.data);
+        throw new Error('Invalid data format received from server');
+      }
+      
+      console.log('User role updated successfully:', updatedUser);
+      return updatedUser;
+    } catch (error: any) {
+      console.error('Update user role error:', error.response || error);
+      
+      if (error.response?.status === 403 && 
+          error.response?.data?.message?.includes('own admin status')) {
+        throw new Error('You cannot change your own admin status');
+      }
+      
+      throw new Error(error.response?.data?.message || error.message || 'Failed to update user role');
     }
   }
 };

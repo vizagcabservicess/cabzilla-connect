@@ -125,7 +125,7 @@ export function UserManagement() {
     const matchesSearch = searchTerm === '' || 
       user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.phone.includes(searchTerm);
+      (user.phone && user.phone.includes(searchTerm));
       
     const matchesRole = roleFilter === 'all' || 
       (roleFilter === 'admin' && user.role === 'admin') ||
@@ -168,6 +168,7 @@ export function UserManagement() {
         error={error} 
         onRetry={fetchUsers} 
         title="User Management Error" 
+        description="Unable to load user data. This may be due to a network issue or server problem."
       />
     );
   }
@@ -277,7 +278,7 @@ export function UserManagement() {
                       <TableRow key={user.id}>
                         <TableCell className="font-medium">{user.name}</TableCell>
                         <TableCell>{user.email}</TableCell>
-                        <TableCell>{user.phone}</TableCell>
+                        <TableCell>{user.phone || '-'}</TableCell>
                         <TableCell>
                           {user.role === 'admin' ? (
                             <div className="flex items-center gap-1 text-purple-600">
@@ -379,7 +380,7 @@ export function UserManagement() {
                                 </div>
                               </TableCell>
                               <TableCell>{admin.email}</TableCell>
-                              <TableCell>{admin.phone}</TableCell>
+                              <TableCell>{admin.phone || '-'}</TableCell>
                               <TableCell>
                                 {admin.createdAt ? format(new Date(admin.createdAt), 'MMM d, yyyy') : 'N/A'}
                               </TableCell>
