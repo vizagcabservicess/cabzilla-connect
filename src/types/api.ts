@@ -110,4 +110,82 @@ export interface VehiclePricingData {
   acType?: string;
   description?: string;
   imageUrl?: string;
+  nightHaltCharge?: number;
+  driverAllowance?: number;
+}
+
+// Adding all the missing types that were causing errors
+
+export interface Location {
+  id: string;
+  name: string;
+  address: string;
+  lat?: number;
+  lng?: number;
+  isInVizag?: boolean;
+  type?: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: AuthUser;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface SignupRequest {
+  name: string;
+  email: string;
+  phone: string;
+  password: string;
+}
+
+export interface BookingRequest {
+  pickupLocation: string;
+  dropLocation?: string;
+  pickupDate: string;
+  returnDate?: string | null;
+  cabType: string;
+  distance?: number;
+  tripType: string;
+  tripMode: string;
+  totalAmount: number;
+  passengerName?: string;
+  passengerPhone?: string;
+  passengerEmail?: string;
+  hourlyPackage?: string | null;
+}
+
+export interface TourFare {
+  id: number;
+  tourId: string;
+  tourName: string;
+  sedan: number;
+  ertiga: number;
+  innova: number;
+  tempo: number;
+  luxury: number;
+}
+
+export interface FareUpdateRequest {
+  tourId: string;
+  sedan: number;
+  ertiga: number;
+  innova: number;
+  tempo: number;
+  luxury: number;
+}
+
+// Aliasing VehiclePricing to VehiclePricingData to maintain compatibility
+export type VehiclePricing = VehiclePricingData;
+
+export interface VehiclePricingUpdateRequest {
+  vehicleType: string;
+  basePrice: number;
+  pricePerKm: number;
+  nightHaltCharge?: number;
+  driverAllowance?: number;
 }
