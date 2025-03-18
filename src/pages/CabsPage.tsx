@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -270,16 +269,25 @@ const CabsPage = () => {
 
   useEffect(() => {
     if (selectedCab && distance > 0) {
-      const fare = calculateFare(
-        selectedCab, 
-        distance, 
-        tripType, 
-        tripMode, 
-        tripType === "local" ? hourlyPackage : undefined,
-        pickupDate,
-        returnDate
-      );
-      setTotalPrice(fare);
+      const fetchFare = async () => {
+        try {
+          const fare = await calculateFare(
+            selectedCab, 
+            distance, 
+            tripType, 
+            tripMode, 
+            tripType === "local" ? hourlyPackage : undefined,
+            pickupDate,
+            returnDate
+          );
+          setTotalPrice(fare);
+        } catch (error) {
+          console.error("Error calculating fare:", error);
+          setTotalPrice(0);
+        }
+      };
+      
+      fetchFare();
     } else {
       setTotalPrice(0);
     }
