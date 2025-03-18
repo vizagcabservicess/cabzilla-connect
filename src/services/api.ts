@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { toast } from 'sonner';
 import { 
@@ -267,14 +266,26 @@ export const bookingAPI = {
     }
   },
   
-  getAdminDashboardMetrics: async (period: 'today' | 'week' | 'month' = 'week'): Promise<DashboardMetrics> => {
+  getAdminDashboardMetrics: async (period: 'today' | 'week' | 'month' = 'week', status?: string): Promise<DashboardMetrics> => {
     try {
-      const response = await api.get(`/user/dashboard.php?admin=true&period=${period}`);
+      let url = `/admin/metrics.php?period=${period}`;
+      if (status && status !== 'all') {
+        url += `&status=${status}`;
+      }
+      
+      // Add cache-busting timestamp to prevent caching issues
+      url += `&_t=${Date.now()}`;
+      
+      console.log(`Admin: Fetching metrics from ${url}`);
+      const response = await api.get(url);
       
       // Check if the response has the metrics data in the expected format
       if (response.data && response.data.data) {
+        console.log('Admin: Metrics data received successfully');
         return response.data.data;
       }
+      
+      console.warn('Admin: Metrics response format unexpected', response.data);
       
       // Fallback if the data isn't in the expected format
       return {
@@ -289,7 +300,7 @@ export const bookingAPI = {
     } catch (error) {
       console.error('Error fetching admin metrics:', error);
       
-      // Return default values in case of error
+      // Return default values in case of error to prevent UI crashes
       return {
         totalBookings: 0,
         activeRides: 0,

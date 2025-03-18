@@ -6,7 +6,7 @@ require_once __DIR__ . '/../../config.php';
 // CORS Headers
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept');
 header('Content-Type: application/json');
 
 // Handle preflight OPTIONS request
@@ -30,52 +30,60 @@ if (!in_array($period, ['today', 'week', 'month'])) {
 // Get status filter if provided
 $statusFilter = isset($_GET['status']) ? $_GET['status'] : null;
 
+// Log the incoming request for debugging
+logError("Admin metrics request received", [
+    'period' => $period,
+    'status' => $statusFilter,
+    'method' => $_SERVER['REQUEST_METHOD'],
+    'query_string' => $_SERVER['QUERY_STRING']
+]);
+
 // Get user ID from JWT token and check if admin
 $headers = getallheaders();
 $userId = null;
 $isAdmin = false;
 
 // Log the incoming headers for debugging
-logError("Metrics.php headers received", ['headers' => $headers]);
-
-if (isset($headers['Authorization']) || isset($headers['authorization'])) {
-    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
-    $token = str_replace('Bearer ', '', $authHeader);
-    
-    logError("Token received in metrics.php", ['token_length' => strlen($token)]);
-    
-    $payload = verifyJwtToken($token);
-    if ($payload && isset($payload['user_id'])) {
-        $userId = $payload['user_id'];
-        $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
-        
-        logError("User authenticated in metrics.php", [
-            'user_id' => $userId,
-            'is_admin' => $isAdmin ? 'true' : 'false'
-        ]);
-    } else {
-        logError("JWT verification failed in metrics.php", ['payload' => $payload]);
-    }
-} else {
-    logError("No Authorization header found in metrics.php");
-}
-
-// Check if user is admin
-if (!$isAdmin) {
-    logError("Unauthorized access to metrics.php", ['user_id' => $userId]);
-    sendJsonResponse(['status' => 'error', 'message' => 'Unauthorized access. Admin privileges required.'], 403);
-    exit;
-}
-
-// Connect to database
-$conn = getDbConnection();
-if (!$conn) {
-    logError("Database connection failed in metrics.php");
-    sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed'], 500);
-    exit;
-}
+logError("Headers received in metrics.php", ['headers' => array_keys($headers)]);
 
 try {
+    if (isset($headers['Authorization']) || isset($headers['authorization'])) {
+        $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
+        $token = str_replace('Bearer ', '', $authHeader);
+        
+        logError("Token received in metrics.php", ['token_length' => strlen($token)]);
+        
+        $payload = verifyJwtToken($token);
+        if ($payload && isset($payload['user_id'])) {
+            $userId = $payload['user_id'];
+            $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
+            
+            logError("User authenticated in metrics.php", [
+                'user_id' => $userId,
+                'is_admin' => $isAdmin ? 'true' : 'false'
+            ]);
+        } else {
+            logError("JWT verification failed in metrics.php", ['payload' => $payload]);
+        }
+    } else {
+        logError("No Authorization header found in metrics.php");
+    }
+    
+    // Check if user is admin
+    if (!$isAdmin) {
+        logError("Unauthorized access to metrics.php", ['user_id' => $userId]);
+        sendJsonResponse(['status' => 'error', 'message' => 'Unauthorized access. Admin privileges required.'], 403);
+        exit;
+    }
+    
+    // Connect to database
+    $conn = getDbConnection();
+    if (!$conn) {
+        logError("Database connection failed in metrics.php");
+        sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed'], 500);
+        exit;
+    }
+    
     // Set date range based on period
     $startDate = '';
     $endDate = date('Y-m-d H:i:s'); // Current time
@@ -229,35 +237,9 @@ try {
         $availableStatuses = ['pending', 'confirmed', 'assigned', 'completed', 'cancelled'];
     }
     
-    // Check if drivers table exists to avoid error
-    $checkDriversTable = $conn->query("SHOW TABLES LIKE 'drivers'");
-    $driversTableExists = $checkDriversTable && $checkDriversTable->num_rows > 0;
-    
     // Add placeholder values for available and busy drivers
-    $availableDrivers = 0;
-    $busyDrivers = 0;
-    
-    if ($driversTableExists) {
-        // Only query the drivers table if it exists
-        $driverStmt = $conn->prepare("SELECT COUNT(*) as available FROM drivers WHERE status = 'available'");
-        if ($driverStmt && $driverStmt->execute()) {
-            $driverResult = $driverStmt->get_result();
-            $driverData = $driverResult->fetch_assoc();
-            $availableDrivers = $driverData['available'];
-        }
-        
-        $busyDriverStmt = $conn->prepare("SELECT COUNT(*) as busy FROM drivers WHERE status = 'busy'");
-        if ($busyDriverStmt && $busyDriverStmt->execute()) {
-            $busyDriverResult = $busyDriverStmt->get_result();
-            $busyDriverData = $busyDriverResult->fetch_assoc();
-            $busyDrivers = $busyDriverData['busy'];
-        }
-    } else {
-        // Use default placeholder values if drivers table doesn't exist
-        $availableDrivers = 5;
-        $busyDrivers = 3;
-        logError("Drivers table doesn't exist, using placeholder values");
-    }
+    $availableDrivers = 5; // Default value
+    $busyDrivers = 3; // Default value
     
     // Create metrics response
     $metrics = [
@@ -266,7 +248,7 @@ try {
         'totalRevenue' => floatval($totalRevenue),
         'availableDrivers' => intval($availableDrivers),
         'busyDrivers' => intval($busyDrivers),
-        'avgRating' => 4.7,      // Placeholder value, would be calculated from ratings
+        'avgRating' => 4.7,      // Placeholder value
         'upcomingRides' => intval($upcomingRides),
         'availableStatuses' => $availableStatuses,
         'currentFilter' => $statusFilter ?: 'all'

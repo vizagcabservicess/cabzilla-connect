@@ -27,14 +27,18 @@ import { AdminNotifications } from '@/components/admin/AdminNotifications';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UserManagement } from '@/components/admin/UserManagement';
 import { NetworkStatusMonitor } from '@/components/NetworkStatusMonitor';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { BookingStatus, DashboardMetrics as DashboardMetricsType } from '@/types/api';
 
 export default function AdminDashboardPage() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
-  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [autoRefresh, setAutoRefresh] = useState(false); // Changed to false by default to prevent constant refreshing
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [refreshAttempts, setRefreshAttempts] = useState(0);
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month'>('week');
+  const [statusFilter, setStatusFilter] = useState<BookingStatus | 'all'>('all');
   const [metrics, setMetrics] = useState<DashboardMetricsType>({
     totalBookings: 0,
     activeRides: 0,
@@ -80,8 +84,13 @@ export default function AdminDashboardPage() {
     
     try {
       setIsLoading(true);
-      const metricsData = await bookingAPI.getAdminDashboardMetrics(selectedPeriod);
+      setRefreshError(null);
+      console.log(`Admin: Fetching dashboard metrics for period: ${selectedPeriod}, status: ${statusFilter}`);
+      
+      const metricsData = await bookingAPI.getAdminDashboardMetrics(selectedPeriod, statusFilter === 'all' ? undefined : statusFilter);
+      console.log('Admin: Dashboard metrics received:', metricsData);
       setMetrics(metricsData);
+      setRefreshAttempts(0); // Reset refresh attempts on successful fetch
       
       // Simulate revenue data updates (in a real app, this would be fetched from the API)
       const updatedRevenueData = [...revenueData];
@@ -97,33 +106,54 @@ export default function AdminDashboardPage() {
       
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load dashboard data';
+      setRefreshError(errorMessage);
+      
+      // Increase the refresh attempt counter but limit it to prevent too many retries
+      if (refreshAttempts < 3) {
+        setRefreshAttempts(prev => prev + 1);
+      } else if (autoRefresh) {
+        // If we've tried 3 times and are still getting errors, turn off auto-refresh
+        setAutoRefresh(false);
+        toast({
+          title: "Auto-refresh Disabled",
+          description: "Too many errors, automatic refresh has been disabled",
+          variant: "destructive",
+        });
+      }
+      
       toast({
         title: "Error",
-        description: "Failed to load dashboard data",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
       setIsLoading(false);
     }
-  }, [navigate, toast, revenueData, vehicleDistribution, selectedPeriod]);
+  }, [navigate, toast, revenueData, vehicleDistribution, selectedPeriod, statusFilter, refreshAttempts, autoRefresh]);
 
   useEffect(() => {
     fetchDashboardData();
     
-    // Set up automatic refreshing if enabled
+    // Set up automatic refreshing if enabled, with a more reasonable interval
     let intervalId: number | undefined;
-    if (autoRefresh) {
+    if (autoRefresh && refreshAttempts < 3) {
       intervalId = window.setInterval(() => {
         fetchDashboardData();
-      }, 60000); // Refresh every minute
+      }, 60000); // Refresh every minute instead of constantly
     }
     
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [fetchDashboardData, autoRefresh]);
+  }, [fetchDashboardData, autoRefresh, refreshAttempts]);
 
-  if (isLoading && !metrics.totalBookings) {
+  const handleFilterChange = (status: BookingStatus | 'all') => {
+    setStatusFilter(status);
+    // Fetch will happen automatically due to the dependency in useCallback
+  };
+
+  if (isLoading && !metrics.totalBookings && refreshAttempts === 0) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-900"></div>
@@ -161,20 +191,41 @@ export default function AdminDashboardPage() {
             <RefreshCcw className={`h-4 w-4 mr-1 ${autoRefresh ? "animate-spin" : ""}`} />
             {autoRefresh ? "Auto-refresh On" : "Auto-refresh Off"}
           </Button>
+          
+          <Button variant="outline" onClick={() => fetchDashboardData()}>
+            Refresh Now
+          </Button>
+          
           <Button variant="outline" onClick={() => navigate('/dashboard')}>User Dashboard</Button>
           <Button onClick={() => navigate('/')}>Book New Cab</Button>
         </div>
       </div>
 
+      {refreshError && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Error loading metrics</AlertTitle>
+          <AlertDescription>
+            {refreshError}
+            <br />
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="mt-2 bg-white" 
+              onClick={fetchDashboardData}
+            >
+              Try Again
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Dashboard Metrics with correct props */}
       <DashboardMetrics 
         metrics={metrics}
         isLoading={isLoading}
-        error={null}
-        onFilterChange={(status: BookingStatus | 'all') => {
-          console.log('Filtering by status:', status);
-          // You can add filtering logic here if needed
-        }}
+        error={refreshError ? new Error(refreshError) : null}
+        onFilterChange={handleFilterChange}
         selectedPeriod={selectedPeriod}
       />
 

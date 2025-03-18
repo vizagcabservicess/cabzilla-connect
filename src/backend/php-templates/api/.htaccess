@@ -46,8 +46,6 @@ Header set X-Query-String "%{QUERY_STRING}e"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
     Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, Accept"
     Header always set Access-Control-Max-Age "3600"
-    # Remove credentials since we're using * for origin
-    # Header always set Access-Control-Allow-Credentials "true"
     
     # Prevent browsers from incorrectly detecting non-scripts as scripts
     Header always set X-Content-Type-Options "nosniff"
