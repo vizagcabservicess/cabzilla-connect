@@ -46,35 +46,37 @@ export default function BookingEditPage() {
         setIsLoading(true);
         setError(null);
         
-        const response = await bookingAPI.getBookingById(bookingId);
-        const data = response.data;
+        // Convert bookingId from string to number
+        const bookingIdNumber = parseInt(bookingId, 10);
         
-        if (!data) {
+        const response = await bookingAPI.getBookingById(bookingIdNumber);
+        
+        if (!response) {
           throw new Error('Booking not found');
         }
         
-        setBooking(data);
+        setBooking(response);
         
-        if (data.pickupLocation) {
-          setPickupLocation({ address: data.pickupLocation });
+        if (response.pickupLocation) {
+          setPickupLocation({ address: response.pickupLocation });
         }
         
-        if (data.dropLocation) {
-          setDropLocation({ address: data.dropLocation });
+        if (response.dropLocation) {
+          setDropLocation({ address: response.dropLocation });
         }
         
-        if (data.pickupDate) {
+        if (response.pickupDate) {
           // Handle both ISO strings and SQL datetime format
           let dateObj: Date;
-          if (data.pickupDate.includes(' ')) {
+          if (response.pickupDate.includes(' ')) {
             // Handle SQL format (YYYY-MM-DD HH:MM:SS)
-            const [datePart, timePart] = data.pickupDate.split(' ');
+            const [datePart, timePart] = response.pickupDate.split(' ');
             const [year, month, day] = datePart.split('-').map(Number);
             const [hour, minute, second] = timePart.split(':').map(Number);
             dateObj = new Date(year, month - 1, day, hour, minute, second);
           } else {
             // Handle ISO format
-            dateObj = new Date(data.pickupDate);
+            dateObj = new Date(response.pickupDate);
           }
           
           if (!isNaN(dateObj.getTime())) {
@@ -101,12 +103,16 @@ export default function BookingEditPage() {
     if (!booking || !bookingId) return;
     
     try {
-      const response = await bookingAPI.updateBooking(bookingId, { status: newStatus });
-      if (response.data) {
+      // Convert bookingId from string to number
+      const bookingIdNumber = parseInt(bookingId, 10);
+      
+      const response = await bookingAPI.updateBookingStatus(bookingIdNumber, newStatus);
+      
+      if (response) {
         setBooking({
           ...booking,
           status: newStatus,
-          updatedAt: response.data.updatedAt || booking.updatedAt
+          updatedAt: response.updatedAt || booking.updatedAt
         });
         toast({
           title: "Status Updated",
@@ -127,7 +133,10 @@ export default function BookingEditPage() {
     if (!bookingId || !isAdmin) return;
     
     try {
-      await bookingAPI.deleteBooking(bookingId);
+      // Convert bookingId from string to number
+      const bookingIdNumber = parseInt(bookingId, 10);
+      
+      await bookingAPI.deleteBooking(bookingIdNumber);
       toast({
         title: "Booking Deleted",
         description: "The booking has been successfully deleted",
@@ -157,12 +166,15 @@ export default function BookingEditPage() {
         pickupDate: pickupDate ? pickupDate.toISOString() : undefined
       };
       
-      const result = await bookingAPI.updateBooking(bookingId, updatedData);
+      // Convert bookingId from string to number
+      const bookingIdNumber = parseInt(bookingId, 10);
       
-      if (result.data) {
+      const result = await bookingAPI.updateBooking(bookingIdNumber, updatedData);
+      
+      if (result) {
         setBooking({
           ...booking,
-          ...result.data
+          ...result
         });
         toast({
           title: "Booking Updated",

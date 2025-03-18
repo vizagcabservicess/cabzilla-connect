@@ -112,8 +112,20 @@ export function FareManagement() {
       setIsLoading(true);
       console.log("Adding new tour:", values);
       
+      // Create a valid TourFare object with required id property
+      const newTourData: TourFare = {
+        id: 0, // This will be assigned by the backend
+        tourId: values.tourId,
+        tourName: values.tourName,
+        sedan: values.sedan,
+        ertiga: values.ertiga,
+        innova: values.innova,
+        tempo: values.tempo,
+        luxury: values.luxury
+      };
+      
       // Call API to add new tour
-      const data = await fareAPI.addTourFare(values);
+      const data = await fareAPI.addTourFare(newTourData);
       console.log("New tour added:", data);
       
       toast.success("New tour added successfully");

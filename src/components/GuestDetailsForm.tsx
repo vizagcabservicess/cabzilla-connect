@@ -64,7 +64,10 @@ export function GuestDetailsForm({
         
         console.log("Sending contact details update:", updatedData);
         
-        const response = await bookingAPI.updateBooking(bookingId, updatedData);
+        // Convert bookingId from string to number
+        const bookingIdNumber = parseInt(bookingId, 10);
+        
+        const response = await bookingAPI.updateBooking(bookingIdNumber, updatedData);
         console.log("Update response:", response);
         
         toast({

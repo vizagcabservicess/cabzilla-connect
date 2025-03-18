@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
@@ -30,10 +29,12 @@ const ReceiptPage = () => {
 
       try {
         setLoading(true);
-        const response = await bookingAPI.getBookingById(bookingId);
+        const bookingIdNumber = parseInt(bookingId, 10);
+        
+        const response = await bookingAPI.getBookingById(bookingIdNumber);
         console.log("Booking details:", response);
-        if (response && response.data) {
-          setBooking(response.data);
+        if (response) {
+          setBooking(response);
         } else {
           throw new Error("Invalid booking data received");
         }
