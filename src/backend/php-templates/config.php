@@ -1,3 +1,4 @@
+
 <?php
 // Turn on error reporting for debugging - remove in production
 ini_set('display_errors', 0);
@@ -8,12 +9,12 @@ header('Content-Type: application/json');
 
 // Database configuration - use correct database credentials from the hosting account
 define('DB_HOST', 'localhost');
-define('DB_USERNAME', 'u644605165_bookinguser');  // Updated database username
-define('DB_PASSWORD', 'BookingPass123#');         // Updated database password
-define('DB_DATABASE', 'u644605165_db_booking');
+define('DB_USERNAME', 'u644605165_new_bookingusr');  // Updated database username
+define('DB_PASSWORD', 'Vizag@1213');                 // Updated database password
+define('DB_DATABASE', 'u644605165_new_bookingdb');
 
 // JWT Secret Key for authentication - should be a strong secure key
-define('JWT_SECRET', 'hJ8iP2qR5sT7vZ9xB4nM6cF3jL1oA0eD');  // Secure JWT secret
+define('JWT_SECRET', 'c3a9b25e9c8f5d7a3e456abcde12345ff6d7890b12c3d4e5f6789a0bc1d2e3f4');  // Secure JWT secret
 
 // Connect to database with improved error reporting
 function getDbConnection() {

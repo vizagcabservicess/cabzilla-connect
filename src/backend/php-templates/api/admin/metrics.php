@@ -229,29 +229,34 @@ try {
         $availableStatuses = ['pending', 'confirmed', 'assigned', 'completed', 'cancelled'];
     }
     
+    // Check if drivers table exists to avoid error
+    $checkDriversTable = $conn->query("SHOW TABLES LIKE 'drivers'");
+    $driversTableExists = $checkDriversTable && $checkDriversTable->num_rows > 0;
+    
     // Add placeholder values for available and busy drivers
-    $driverStmt = $conn->prepare("SELECT COUNT(*) as available FROM drivers WHERE status = 'available'");
     $availableDrivers = 0;
-    
-    if ($driverStmt && $driverStmt->execute()) {
-        $driverResult = $driverStmt->get_result();
-        $driverData = $driverResult->fetch_assoc();
-        $availableDrivers = $driverData['available'];
-    } else {
-        // Fallback to placeholder value if query fails
-        $availableDrivers = 5;
-    }
-    
-    $busyDriverStmt = $conn->prepare("SELECT COUNT(*) as busy FROM drivers WHERE status = 'busy'");
     $busyDrivers = 0;
     
-    if ($busyDriverStmt && $busyDriverStmt->execute()) {
-        $busyDriverResult = $busyDriverStmt->get_result();
-        $busyDriverData = $busyDriverResult->fetch_assoc();
-        $busyDrivers = $busyDriverData['busy'];
+    if ($driversTableExists) {
+        // Only query the drivers table if it exists
+        $driverStmt = $conn->prepare("SELECT COUNT(*) as available FROM drivers WHERE status = 'available'");
+        if ($driverStmt && $driverStmt->execute()) {
+            $driverResult = $driverStmt->get_result();
+            $driverData = $driverResult->fetch_assoc();
+            $availableDrivers = $driverData['available'];
+        }
+        
+        $busyDriverStmt = $conn->prepare("SELECT COUNT(*) as busy FROM drivers WHERE status = 'busy'");
+        if ($busyDriverStmt && $busyDriverStmt->execute()) {
+            $busyDriverResult = $busyDriverStmt->get_result();
+            $busyDriverData = $busyDriverResult->fetch_assoc();
+            $busyDrivers = $busyDriverData['busy'];
+        }
     } else {
-        // Fallback to placeholder value if query fails
+        // Use default placeholder values if drivers table doesn't exist
+        $availableDrivers = 5;
         $busyDrivers = 3;
+        logError("Drivers table doesn't exist, using placeholder values");
     }
     
     // Create metrics response

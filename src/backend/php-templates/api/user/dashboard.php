@@ -204,9 +204,16 @@ try {
             }
         }
         
+        // Check if drivers table exists to avoid error
+        $driversTableExists = false;
+        $checkDriversTable = $conn->query("SHOW TABLES LIKE 'drivers'");
+        if ($checkDriversTable) {
+            $driversTableExists = $checkDriversTable->num_rows > 0;
+        }
+        
         // Simulate driver metrics (in a real app, this would come from a drivers table)
-        $availableDrivers = 12;
-        $busyDrivers = 8;
+        $availableDrivers = $driversTableExists ? $conn->query("SELECT COUNT(*) as total FROM drivers WHERE status = 'available'")->fetch_assoc()['total'] ?? 12 : 12;
+        $busyDrivers = $driversTableExists ? $conn->query("SELECT COUNT(*) as total FROM drivers WHERE status = 'busy'")->fetch_assoc()['total'] ?? 8 : 8;
         
         // Get average rating (simulated - would come from a ratings table)
         $avgRating = 4.7;
