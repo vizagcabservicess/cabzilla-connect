@@ -120,7 +120,7 @@ export function LocationInput({
     
     try {
       // Clear any existing autocomplete
-      if (autocompleteRef.current) {
+      if (autocompleteRef.current && google && google.maps) {
         google.maps.event.clearInstanceListeners(autocompleteRef.current);
         autocompleteRef.current = null;
       }
@@ -155,7 +155,7 @@ export function LocationInput({
           return;
         }
         
-        // Get formatted address
+        // Get formatted address, with fallbacks
         const formattedAddress = place.formatted_address || place.name || '';
         
         // Update local state
@@ -164,7 +164,7 @@ export function LocationInput({
         // Calculate if the location is in Vizag
         const lat = place.geometry.location.lat();
         const lng = place.geometry.location.lng();
-        const isInVizag = checkIfLocationIsInVizag(lat, lng, formattedAddress);
+        const isInVizag = safeDetermineIfLocationIsInVizag(lat, lng, formattedAddress);
         
         // Create location object
         const newLocation: Location = {
@@ -192,23 +192,27 @@ export function LocationInput({
     
     // Cleanup when component unmounts
     return () => {
-      if (autocompleteRef.current && google) {
+      if (autocompleteRef.current && google && google.maps) {
         google.maps.event.clearInstanceListeners(autocompleteRef.current);
       }
     };
   }, [google, isLoaded, handleLocationChange, disabled, readOnly, isPickupLocation, isAirportTransfer]);
 
-  // Helper function to determine if a location is in Vizag - SAFELY!
-  function checkIfLocationIsInVizag(lat: number, lng: number, address: string | undefined): boolean {
-    if (!address || typeof address !== 'string') return false;
+  // A more robust version of checkIfLocationIsInVizag
+  function safeDetermineIfLocationIsInVizag(lat: number, lng: number, address: string | undefined | null): boolean {
+    // Check if address is null, undefined, or not a string
+    if (address === undefined || address === null || typeof address !== 'string') {
+      // If we don't have valid address, just use coordinates
+      return lat >= 17.6 && lat <= 17.9 && lng >= 83.1 && lng <= 83.4;
+    }
     
     // Check coordinates (Visakhapatnam bounds)
     const isInVizagBounds = 
       lat >= 17.6 && lat <= 17.9 && 
       lng >= 83.1 && lng <= 83.4;
     
-    // Check address text - SAFELY handle potentially undefined values
-    const addressLower = typeof address === 'string' ? address.toLowerCase() : '';
+    // Safe toLowerCase - only call if address is a valid string
+    const addressLower = address.toLowerCase();
     const vizagNames = ['visakhapatnam', 'vizag', 'waltair', 'vizianagaram'];
     
     for (const name of vizagNames) {

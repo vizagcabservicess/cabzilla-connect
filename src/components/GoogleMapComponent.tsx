@@ -28,7 +28,8 @@ const GoogleMapComponent = ({
   };
 
   // Ensure we have valid coordinates for the center
-  const center = pickupLocation && typeof pickupLocation.lat === 'number' && typeof pickupLocation.lng === 'number'
+  const center = pickupLocation && typeof pickupLocation.lat === 'number' && typeof pickupLocation.lng === 'number' && 
+                !isNaN(pickupLocation.lat) && !isNaN(pickupLocation.lng)
     ? { lat: pickupLocation.lat, lng: pickupLocation.lng } 
     : { lat: 17.6868, lng: 83.2185 }; // Default to Visakhapatnam
 
@@ -67,6 +68,17 @@ const GoogleMapComponent = ({
       if (onDistanceCalculated && pickupLocation && dropLocation) {
         // Calculate approximate distance using the Haversine formula
         const R = 6371; // Radius of the earth in km
+        
+        // Ensure we have valid coordinates
+        if (typeof pickupLocation.lat !== 'number' || typeof pickupLocation.lng !== 'number' ||
+            typeof dropLocation.lat !== 'number' || typeof dropLocation.lng !== 'number' ||
+            isNaN(pickupLocation.lat) || isNaN(pickupLocation.lng) ||
+            isNaN(dropLocation.lat) || isNaN(dropLocation.lng)) {
+          console.error("Invalid coordinates for distance calculation - using default values");
+          onDistanceCalculated(10, 20); // Default values
+          return;
+        }
+        
         const dLat = (dropLocation.lat - pickupLocation.lat) * Math.PI / 180;
         const dLon = (dropLocation.lng - pickupLocation.lng) * Math.PI / 180;
         const a = 
@@ -153,14 +165,16 @@ const GoogleMapComponent = ({
         />
       )}
 
-      {!directions && pickupLocation && typeof pickupLocation.lat === 'number' && typeof pickupLocation.lng === 'number' && (
+      {!directions && pickupLocation && typeof pickupLocation.lat === 'number' && typeof pickupLocation.lng === 'number' && 
+        !isNaN(pickupLocation.lat) && !isNaN(pickupLocation.lng) && (
         <Marker
           position={{ lat: pickupLocation.lat, lng: pickupLocation.lng }}
           label={{ text: "A", color: "white" }}
         />
       )}
 
-      {!directions && dropLocation && typeof dropLocation.lat === 'number' && typeof dropLocation.lng === 'number' && (
+      {!directions && dropLocation && typeof dropLocation.lat === 'number' && typeof dropLocation.lng === 'number' && 
+        !isNaN(dropLocation.lat) && !isNaN(dropLocation.lng) && (
         <Marker
           position={{ lat: dropLocation.lat, lng: dropLocation.lng }}
           label={{ text: "B", color: "white" }}

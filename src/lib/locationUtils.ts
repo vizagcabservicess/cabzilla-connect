@@ -73,7 +73,11 @@ export const isLocationInVizag = (location: AppLocation | ApiLocation | null | u
   if (!location) return false;
   
   // Check by coordinates (Visakhapatnam approximate bounds)
-  if (typeof location.lat === 'number' && typeof location.lng === 'number') {
+  const hasValidCoordinates = 
+    typeof location.lat === 'number' && !isNaN(location.lat) && 
+    typeof location.lng === 'number' && !isNaN(location.lng);
+    
+  if (hasValidCoordinates) {
     const isInVizagBounds = 
       location.lat >= 17.6 && location.lat <= 17.9 && 
       location.lng >= 83.1 && location.lng <= 83.4;
@@ -81,16 +85,22 @@ export const isLocationInVizag = (location: AppLocation | ApiLocation | null | u
     if (isInVizagBounds) return true;
   }
   
-  // SAFE handling of address - explicitly check if it's a string value first
-  const addressLower = typeof location.address === 'string' && location.address ? location.address.toLowerCase() : '';
+  // SAFE handling of address with double null check
+  let addressLower = '';
+  if (location.address !== undefined && location.address !== null) {
+    addressLower = typeof location.address === 'string' ? location.address.toLowerCase() : '';
+  }
   
-  // SAFE handling of name - explicitly check if it's a string value first
-  const nameLower = typeof location.name === 'string' && location.name ? location.name.toLowerCase() : '';
+  // SAFE handling of name with double null check  
+  let nameLower = '';
+  if (location.name !== undefined && location.name !== null) {
+    nameLower = typeof location.name === 'string' ? location.name.toLowerCase() : '';
+  }
   
   // Safely handle city which might not exist on ApiLocation
   let cityLower = '';
-  if ('city' in location && typeof location.city === 'string' && location.city) {
-    cityLower = location.city.toLowerCase();
+  if ('city' in location && location.city !== undefined && location.city !== null) {
+    cityLower = typeof location.city === 'string' ? location.city.toLowerCase() : '';
   }
   
   const vizagNames = ['visakhapatnam', 'vizag', 'waltair', 'vizianagaram'];
@@ -108,7 +118,9 @@ export const isLocationInVizag = (location: AppLocation | ApiLocation | null | u
  * Extract city from a formatted address with safe handling of undefined
  */
 function extractCityFromAddress(address: string | undefined | null): string {
-  if (!address || typeof address !== 'string') return 'Visakhapatnam';
+  if (address === undefined || address === null || typeof address !== 'string' || address.trim() === '') {
+    return 'Visakhapatnam';
+  }
   
   // Simple extraction - get the first part that might be a city
   const parts = address.split(',').map(part => part.trim());
@@ -128,7 +140,9 @@ function extractCityFromAddress(address: string | undefined | null): string {
  * Extract state from a formatted address with safe handling of undefined
  */
 function extractStateFromAddress(address: string | undefined | null): string {
-  if (!address || typeof address !== 'string') return 'Andhra Pradesh';
+  if (address === undefined || address === null || typeof address !== 'string' || address.trim() === '') {
+    return 'Andhra Pradesh';
+  }
   
   // Try to find Andhra Pradesh or other state names in the address
   if (address.includes('Andhra Pradesh')) {
