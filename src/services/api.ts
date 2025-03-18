@@ -50,7 +50,10 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
     
+    const fullUrl = `${config.baseURL}${config.url}`;
     console.log('🚀 API Request:', `${config.method?.toUpperCase()} ${config.url}`);
+    console.log('Full request URL:', fullUrl);
+    
     return config;
   },
   (error) => {
@@ -65,9 +68,28 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
-    console.error('API Error Response:', error.response || error.message);
+    const errorMessage = error.message || 'Unknown error';
+    const errorCode = error.code || 'NO_CODE';
+    const errorResponse = error.response || {};
+    const requestUrl = error.config?.url || 'unknown URL';
     
-    if (error.response && error.response.status === 401) {
+    console.error('❌ API Error:', {
+      message: errorMessage,
+      code: errorCode,
+      status: errorResponse.status,
+      url: requestUrl,
+      response: errorResponse.data
+    });
+    
+    if (errorMessage === 'Network Error' || errorCode === 'ERR_NETWORK') {
+      console.error('Network connection error. Check API server availability.');
+      error.apiServerInfo = {
+        baseUrl: import.meta.env.VITE_API_BASE_URL,
+        apiVersion: import.meta.env.VITE_API_VERSION
+      };
+    }
+    
+    if (errorResponse.status === 401) {
       console.log('Authentication error detected, clearing tokens');
       localStorage.removeItem('authToken');
       localStorage.removeItem('auth_token');
@@ -230,7 +252,12 @@ export const bookingAPI = {
       
       console.log('User bookings request URL:', apiBaseUrl + url);
       
-      const response = await api.get(url);
+      const response = await api.get(url, {
+        timeout: 15000,  // 15 second timeout
+        headers: {
+          'X-Request-Time': new Date().toISOString()
+        }
+      });
       
       if (!response.data) {
         throw new Error('Empty response received from server');
@@ -256,6 +283,10 @@ export const bookingAPI = {
       return bookingsData;
     } catch (error: any) {
       console.error('Get user bookings error:', error.response || error);
+      
+      if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
+        throw new Error('Network connection error: Unable to reach the booking server. Please check your internet connection and try again.');
+      }
       
       if (error.response?.status === 401 || 
           (error.message && (
@@ -331,7 +362,16 @@ export const bookingAPI = {
   
   async getAllBookings(): Promise<Booking[]> {
     try {
-      const response = await api.get('/admin/bookings');
+      console.log('Fetching all bookings with cache busting...');
+      const timestamp = Date.now();
+      
+      const response = await api.get('/admin/bookings', {
+        timeout: 15000,  // 15 second timeout
+        params: { _t: timestamp },
+        headers: {
+          'X-Request-Time': new Date().toISOString()
+        }
+      });
       
       if (Array.isArray(response.data)) {
         return response.data;
@@ -341,8 +381,13 @@ export const bookingAPI = {
         console.error('Invalid admin bookings data format:', response.data);
         throw new Error('Invalid data format received from server');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Get all bookings error:', error);
+      
+      if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
+        throw new Error('Network connection error: Unable to reach the booking server. Please check your internet connection and try again.');
+      }
+      
       throw new Error(error instanceof Error ? error.message : 'Failed to load all bookings');
     }
   },

@@ -50,7 +50,7 @@ function sendJsonResponse($data, $statusCode = 200) {
     // Add CORS headers to prevent browser restrictions
     header('Access-Control-Allow-Origin: *');
     header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Request-Time');
     
     // Make sure we're sending JSON
     if (!headers_sent()) {
@@ -65,6 +65,19 @@ function sendJsonResponse($data, $statusCode = 200) {
         // If status is not set, set it based on the status code
         $data['status'] = $statusCode < 400 ? 'success' : 'error';
     }
+    
+    // Add server timestamp
+    $data['serverTime'] = date('Y-m-d H:i:s');
+    
+    // Add API version for debugging
+    $data['apiVersion'] = '1.0.6';
+    
+    // Log the response for debugging
+    logError('Sending JSON response', [
+        'statusCode' => $statusCode,
+        'dataSize' => is_array($data) ? count($data) : 'not_array',
+        'status' => $data['status'] ?? 'none'
+    ]);
     
     echo json_encode($data);
     exit;

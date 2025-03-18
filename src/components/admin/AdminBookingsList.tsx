@@ -21,10 +21,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { bookingAPI } from '@/services/api';
 import { Booking } from '@/types/api';
-import { AlertCircle, MapPin, Phone, Mail, CheckCircle, XCircle, MoreHorizontal } from 'lucide-react';
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle, MapPin, Phone, Mail, CheckCircle, XCircle, MoreHorizontal, RefreshCw, Wifi, WifiOff } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,9 +34,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 
 export function AdminBookingsList() {
-  const { toast } = useToast();
+  const { toast: uiToast } = useToast();
   const navigate = useNavigate();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [filteredBookings, setFilteredBookings] = useState<Booking[]>([]);
@@ -43,48 +45,74 @@ export function AdminBookingsList() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [retryCount, setRetryCount] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const fetchBookings = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      setIsRefreshing(true);
+      console.log('Admin: Fetching all bookings...');
+      
+      // Add a timestamp for cache busting
+      const timestamp = new Date().getTime();
+      console.log(`Cache busting with timestamp: ${timestamp}`);
+      
+      // Temporary fallback to getUserBookings if getAllBookings fails
+      let data;
+      try {
+        data = await bookingAPI.getAllBookings();
+      } catch (error) {
+        console.warn('getAllBookings failed, falling back to getUserBookings');
+        data = await bookingAPI.getUserBookings();
+      }
+      
+      console.log('Admin: Bookings received:', data);
+      
+      if (Array.isArray(data)) {
+        setBookings(data);
+        setFilteredBookings(data);
+        toast.success(`${data.length} bookings loaded successfully`, {
+          id: 'bookings-loaded',
+        });
+      } else {
+        console.error('Admin: Invalid data format received:', data);
+        throw new Error('Invalid data format received from server');
+      }
+    } catch (error: any) {
+      console.error('Admin: Error fetching bookings:', error);
+      
+      let errorMessage = 'Failed to load bookings';
+      
+      if (error.message && error.message.includes('Network connection error')) {
+        errorMessage = 'Network connection error. Please check your internet connection and the API server status.';
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
+      
+      // Show as toast and UI alert
+      toast.error("Error Loading Bookings", {
+        description: errorMessage,
+        duration: 5000,
+      });
+      
+      uiToast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchBookings = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        console.log('Admin: Fetching all bookings...');
-        
-        // Temporary fallback to getUserBookings if getAllBookings fails
-        let data;
-        try {
-          data = await bookingAPI.getAllBookings();
-        } catch (error) {
-          console.warn('getAllBookings failed, falling back to getUserBookings');
-          data = await bookingAPI.getUserBookings();
-        }
-        
-        console.log('Admin: Bookings received:', data);
-        
-        if (Array.isArray(data)) {
-          setBookings(data);
-          setFilteredBookings(data);
-        } else {
-          console.error('Admin: Invalid data format received:', data);
-          throw new Error('Invalid data format received from server');
-        }
-      } catch (error) {
-        console.error('Admin: Error fetching bookings:', error);
-        setError(error instanceof Error ? error.message : 'Failed to load bookings');
-        
-        toast({
-          title: "Error",
-          description: "Failed to load bookings. Please try again.",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchBookings();
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     // Apply filters when search term or status filter changes
@@ -118,6 +146,11 @@ export function AdminBookingsList() {
     }
   };
 
+  const handleRetry = () => {
+    setRetryCount(prev => prev + 1);
+    fetchBookings();
+  };
+
   const handleAssignDriver = (bookingId: number) => {
     toast({
       title: "Feature Coming Soon",
@@ -132,7 +165,7 @@ export function AdminBookingsList() {
     });
   };
 
-  if (isLoading) {
+  if (isLoading && retryCount === 0) {
     return (
       <div className="flex justify-center p-10">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-900"></div>
@@ -142,20 +175,34 @@ export function AdminBookingsList() {
 
   if (error) {
     return (
-      <Alert variant="destructive" className="mb-6">
-        <AlertCircle className="h-4 w-4" />
-        <AlertDescription className="flex items-center justify-between">
-          <span>{error}</span>
+      <div className="space-y-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between mb-6">
+          <div className="grid gap-2 md:w-60">
+            <Label htmlFor="search">Search</Label>
+            <Input
+              id="search"
+              placeholder="Search by name, phone, email..."
+              value={searchTerm}
+              disabled
+            />
+          </div>
           <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => window.location.reload()}
-            className="ml-4"
+            variant="default" 
+            onClick={handleRetry} 
+            disabled={isRefreshing}
+            className="md:self-end"
           >
-            Retry
+            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {isRefreshing ? 'Retrying...' : 'Retry Connection'}
           </Button>
-        </AlertDescription>
-      </Alert>
+        </div>
+        
+        <ApiErrorFallback
+          error={error}
+          onRetry={handleRetry}
+          title="Unable to Load Bookings"
+        />
+      </div>
     );
   }
 
@@ -171,20 +218,31 @@ export function AdminBookingsList() {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <div className="grid gap-2 md:w-48">
-          <Label htmlFor="status">Status</Label>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger id="status">
-              <SelectValue placeholder="All statuses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="confirmed">Confirmed</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="flex gap-2 md:self-end">
+          <div className="grid gap-2 md:w-48">
+            <Label htmlFor="status">Status</Label>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger id="status">
+                <SelectValue placeholder="All statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="confirmed">Confirmed</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={handleRetry}
+            className="md:self-end h-10 mt-auto"
+            disabled={isRefreshing}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
         </div>
       </div>
 

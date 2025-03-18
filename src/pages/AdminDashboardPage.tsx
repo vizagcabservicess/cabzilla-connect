@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -25,6 +24,7 @@ import { ReportingAnalytics } from '@/components/admin/ReportingAnalytics';
 import { AdminNotifications } from '@/components/admin/AdminNotifications';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UserManagement } from '@/components/admin/UserManagement';
+import { NetworkStatusMonitor } from '@/components/NetworkStatusMonitor';
 
 export default function AdminDashboardPage() {
   const { toast } = useToast();
@@ -130,6 +130,8 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="container mx-auto py-10 px-4">
+      <NetworkStatusMonitor />
+      
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-bold">Admin Dashboard</h1>
