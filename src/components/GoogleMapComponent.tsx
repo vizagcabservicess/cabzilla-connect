@@ -27,9 +27,26 @@ const GoogleMapComponent = ({
     height: "400px",
   };
 
-  // Create safe location objects with default values
-  const safePickupLocation = pickupLocation || { lat: 17.6868, lng: 83.2185, id: '', name: '', address: '' };
-  const safeDropLocation = dropLocation || { lat: 17.7, lng: 83.3, id: '', name: '', address: '' };
+  // Validate location objects and provide safe defaults
+  const safePickupLocation = pickupLocation && typeof pickupLocation === 'object' 
+    ? {
+        id: pickupLocation.id || '',
+        name: pickupLocation.name || '',
+        address: pickupLocation.address || '',
+        lat: typeof pickupLocation.lat === 'number' ? pickupLocation.lat : 17.6868,
+        lng: typeof pickupLocation.lng === 'number' ? pickupLocation.lng : 83.2185
+      }
+    : { lat: 17.6868, lng: 83.2185, id: '', name: '', address: '' };
+    
+  const safeDropLocation = dropLocation && typeof dropLocation === 'object'
+    ? {
+        id: dropLocation.id || '',
+        name: dropLocation.name || '',
+        address: dropLocation.address || '', 
+        lat: typeof dropLocation.lat === 'number' ? dropLocation.lat : 17.7,
+        lng: typeof dropLocation.lng === 'number' ? dropLocation.lng : 83.3
+      }
+    : { lat: 17.7, lng: 83.3, id: '', name: '', address: '' };
 
   // Ensure we have valid coordinates for the center
   const center = safePickupLocation && 

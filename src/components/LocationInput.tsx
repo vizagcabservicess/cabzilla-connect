@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
 import { Location } from '@/types/api';
 import { debounce } from '@/lib/utils';
-import { isLocationInVizag } from '@/lib/locationUtils';
+import { isLocationInVizag, safeIncludes } from '@/lib/locationUtils';
 
 interface LocationInputProps {
   location?: Location;
@@ -83,6 +83,7 @@ export function LocationInput({
     
     // Create a basic location object with the typed address
     if (handleLocationChange && newAddress) {
+      // Always ensure we have a valid location object with proper properties initialized
       const updatedLocation: Location = {
         ...locationData,
         address: newAddress,
@@ -94,14 +95,17 @@ export function LocationInput({
       if (locationData.lat) updatedLocation.lat = locationData.lat;
       if (locationData.lng) updatedLocation.lng = locationData.lng;
       
-      // Default isInVizag to false if it's undefined and we don't have coordinates to check
-      if (updatedLocation.isInVizag === undefined) {
-        updatedLocation.isInVizag = false;
-      }
+      // Explicitly set isInVizag to false if it's undefined
+      updatedLocation.isInVizag = updatedLocation.isInVizag !== undefined ? 
+        updatedLocation.isInVizag : false;
       
       // Mark that we've manually changed the location
       locationChangedRef.current = true;
       
+      // Log the location to verify no undefined properties
+      console.log('Input changed location:', updatedLocation);
+      
+      // Send the fully populated location object to parent
       handleLocationChange(updatedLocation);
     }
   };
@@ -166,7 +170,7 @@ export function LocationInput({
         const lng = place.geometry.location.lng();
         const isInVizag = safeDetermineIfLocationIsInVizag(lat, lng, formattedAddress);
         
-        // Create location object
+        // Create location object - ensure all required properties are properly initialized
         const newLocation: Location = {
           address: formattedAddress,
           name: place.name || formattedAddress,
@@ -198,10 +202,10 @@ export function LocationInput({
     };
   }, [google, isLoaded, handleLocationChange, disabled, readOnly, isPickupLocation, isAirportTransfer]);
 
-  // A more robust version of checkIfLocationIsInVizag
+  // A more robust version of isLocationInVizag
   function safeDetermineIfLocationIsInVizag(lat: number, lng: number, address: string | undefined | null): boolean {
     // Check if address is null, undefined, or not a string
-    if (address === undefined || address === null || typeof address !== 'string') {
+    if (address === null || address === undefined || typeof address !== 'string') {
       // If we don't have valid address, just use coordinates
       return lat >= 17.6 && lat <= 17.9 && lng >= 83.1 && lng <= 83.4;
     }

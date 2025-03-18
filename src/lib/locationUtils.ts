@@ -29,7 +29,7 @@ export const safeIncludes = (str: any, target: string): boolean => {
   }
   
   // Check if the lowercase version of str includes target
-  return str.toLowerCase().includes(target);
+  return str.toLowerCase().includes(target.toLowerCase());
 };
 
 /**
@@ -99,7 +99,7 @@ export const isLocationInVizag = (location: AppLocation | ApiLocation | null | u
     if (isInVizagBounds) return true;
   }
   
-  // Using safeIncludes for all string checks
+  // Using safeIncludes for all string checks to avoid toLowerCase on undefined
   const vizagNames = ['visakhapatnam', 'vizag', 'waltair', 'vizianagaram'];
   
   // Get location address, name, city ensuring they are strings
