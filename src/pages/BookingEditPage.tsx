@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from "@/components/ui/use-toast";
@@ -161,7 +160,6 @@ export default function BookingEditPage() {
     }
   };
 
-  // Booking display helpers
   const formatTripType = (tripType?: string, tripMode?: string): string => {
     if (!tripType) return 'Standard';
     

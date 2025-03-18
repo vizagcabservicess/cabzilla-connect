@@ -182,6 +182,7 @@ export const bookingAPI = {
     return response.data;
   },
   updateBooking: async (bookingId: string, bookingData: Partial<BookingRequest>) => {
+    console.log('Updating booking:', bookingId, 'with data:', bookingData);
     const response = await axiosInstance.put(`/api/update-booking/${bookingId}`, bookingData);
     return response.data;
   },
