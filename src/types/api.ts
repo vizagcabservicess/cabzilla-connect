@@ -1,3 +1,4 @@
+
 // User related types
 export interface User {
   id: number;
@@ -216,7 +217,7 @@ export interface Location {
   popularityScore?: number;
   isPickupLocation?: boolean;
   isDropLocation?: boolean;
-  isInVizag?: boolean; // Added this property to fix type errors
+  isInVizag?: boolean; // This property is now properly defined
   address: string;
 }
 
