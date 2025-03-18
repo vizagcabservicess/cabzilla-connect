@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -100,9 +99,9 @@ export function AdminBookingsList() {
       });
       
       uiToast({
+        variant: "destructive",
         title: "Error",
         description: errorMessage,
-        variant: "destructive",
       });
     } finally {
       setIsLoading(false);
@@ -152,14 +151,14 @@ export function AdminBookingsList() {
   };
 
   const handleAssignDriver = (bookingId: number) => {
-    toast({
+    uiToast({
       title: "Feature Coming Soon",
       description: "Driver assignment functionality will be available soon.",
     });
   };
 
   const handleCancelBooking = (bookingId: number) => {
-    toast({
+    uiToast({
       title: "Feature Coming Soon",
       description: "Booking cancellation functionality will be available soon.",
     });
