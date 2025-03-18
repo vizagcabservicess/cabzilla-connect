@@ -33,13 +33,17 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
     availableDrivers: 0,
     busyDrivers: 0,
     avgRating: 0,
-    upcomingRides: 0
+    upcomingRides: 0,
+    availableStatuses: ['pending', 'confirmed', 'assigned', 'completed', 'cancelled'],
+    currentFilter: 'all'
   });
   const [isLoading, setIsLoading] = useState(!initialMetrics);
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>(initialPeriod);
   const [retryCount, setRetryCount] = useState(0);
-  const [statusFilter, setStatusFilter] = useState<BookingStatus | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<BookingStatus | 'all'>(
+    initialMetrics?.currentFilter || 'all'
+  );
 
   // Initial data fetch when component mounts or period changes
   useEffect(() => {
@@ -133,14 +137,11 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Bookings</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="confirmed">Confirmed</SelectItem>
-              <SelectItem value="assigned">Assigned</SelectItem>
-              <SelectItem value="payment_received">Payment Received</SelectItem>
-              <SelectItem value="payment_pending">Payment Pending</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="continued">Continued</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
+              {metrics.availableStatuses?.map(status => (
+                <SelectItem key={status} value={status}>
+                  {status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -201,14 +202,11 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Bookings</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="confirmed">Confirmed</SelectItem>
-              <SelectItem value="assigned">Assigned</SelectItem>
-              <SelectItem value="payment_received">Payment Received</SelectItem>
-              <SelectItem value="payment_pending">Payment Pending</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="continued">Continued</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
+              {metrics.availableStatuses?.map(status => (
+                <SelectItem key={status} value={status}>
+                  {status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -259,14 +257,11 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Bookings</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="confirmed">Confirmed</SelectItem>
-              <SelectItem value="assigned">Assigned</SelectItem>
-              <SelectItem value="payment_received">Payment Received</SelectItem>
-              <SelectItem value="payment_pending">Payment Pending</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="continued">Continued</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
+              {metrics.availableStatuses?.map(status => (
+                <SelectItem key={status} value={status}>
+                  {status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

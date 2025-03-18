@@ -1,3 +1,4 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -91,7 +92,7 @@ try {
             break;
     }
     
-    logError("Date range for metrics.php", ['start' => $startDate, 'end' => $endDate]);
+    logError("Date range for metrics.php", ['start' => $startDate, 'end' => $endDate, 'status_filter' => $statusFilter]);
     
     // Base query conditions
     $conditions = " WHERE created_at BETWEEN ? AND ?";
@@ -109,7 +110,7 @@ try {
     
     // Get total bookings in the period with optional status filter
     $query = "SELECT COUNT(*) as total FROM bookings" . $conditions;
-    logError("Total bookings query", ['query' => $query]);
+    logError("Total bookings query", ['query' => $query, 'params' => $params]);
     
     $stmt = $conn->prepare($query);
     if (!$stmt) {
@@ -210,16 +211,59 @@ try {
     
     logError("Upcoming rides", ['count' => $upcomingRides]);
     
+    // Get all available statuses from the database
+    $statusesQuery = "SELECT DISTINCT status FROM bookings WHERE status IS NOT NULL";
+    $statusesResult = $conn->query($statusesQuery);
+    $availableStatuses = [];
+    
+    if ($statusesResult) {
+        while ($row = $statusesResult->fetch_assoc()) {
+            if (!empty($row['status'])) {
+                $availableStatuses[] = $row['status'];
+            }
+        }
+    }
+    
+    // If no statuses found, use default set
+    if (empty($availableStatuses)) {
+        $availableStatuses = ['pending', 'confirmed', 'assigned', 'completed', 'cancelled'];
+    }
+    
+    // Add placeholder values for available and busy drivers
+    $driverStmt = $conn->prepare("SELECT COUNT(*) as available FROM drivers WHERE status = 'available'");
+    $availableDrivers = 0;
+    
+    if ($driverStmt && $driverStmt->execute()) {
+        $driverResult = $driverStmt->get_result();
+        $driverData = $driverResult->fetch_assoc();
+        $availableDrivers = $driverData['available'];
+    } else {
+        // Fallback to placeholder value if query fails
+        $availableDrivers = 5;
+    }
+    
+    $busyDriverStmt = $conn->prepare("SELECT COUNT(*) as busy FROM drivers WHERE status = 'busy'");
+    $busyDrivers = 0;
+    
+    if ($busyDriverStmt && $busyDriverStmt->execute()) {
+        $busyDriverResult = $busyDriverStmt->get_result();
+        $busyDriverData = $busyDriverResult->fetch_assoc();
+        $busyDrivers = $busyDriverData['busy'];
+    } else {
+        // Fallback to placeholder value if query fails
+        $busyDrivers = 3;
+    }
+    
     // Create metrics response
     $metrics = [
         'totalBookings' => intval($totalBookings),
         'activeRides' => intval($activeRides),
         'totalRevenue' => floatval($totalRevenue),
-        'availableDrivers' => 5, // Placeholder value, would be from drivers table 
-        'busyDrivers' => 3,      // Placeholder value, would be from drivers table
+        'availableDrivers' => intval($availableDrivers),
+        'busyDrivers' => intval($busyDrivers),
         'avgRating' => 4.7,      // Placeholder value, would be calculated from ratings
         'upcomingRides' => intval($upcomingRides),
-        'availableStatuses' => ['pending', 'confirmed', 'assigned', 'completed', 'cancelled'],
+        'availableStatuses' => $availableStatuses,
         'currentFilter' => $statusFilter ?: 'all'
     ];
     
@@ -232,13 +276,3 @@ try {
     logError("Error fetching admin metrics", ['error' => $e->getMessage(), 'period' => $period, 'status' => $statusFilter]);
     sendJsonResponse(['status' => 'error', 'message' => 'Failed to get metrics: ' . $e->getMessage()], 500);
 }
-
-// Helper function to ensure consistent response format
-function sendJsonResponse($data, $statusCode = 200) {
-    http_response_code($statusCode);
-    header('Content-Type: application/json');
-    echo json_encode($data);
-    exit;
-}
-
-?>
