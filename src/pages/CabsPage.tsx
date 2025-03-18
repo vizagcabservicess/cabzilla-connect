@@ -6,7 +6,6 @@ import { CabOptions } from "@/components/CabOptions";
 import { TabTripSelector } from "@/components/TabTripSelector";
 import GoogleMapComponent from "@/components/GoogleMapComponent";
 import { GuestDetailsForm } from "@/components/GuestDetailsForm";
-import { BookingSummary } from "@/components/BookingSummary";
 import { 
   Location, 
   vizagLocations, 
@@ -200,12 +199,16 @@ const CabsPage = () => {
   useEffect(() => {
     const fetchDistance = async () => {
       if (tripType === "local") {
+        // For local trips, use the hourly package distance
         const selectedPackage = hourlyPackages.find((pkg) => pkg.id === hourlyPackage);
         if (selectedPackage) {
+          // Reset to exactly the package kilometers
           setDistance(selectedPackage.kilometers);
           const estimatedTime = selectedPackage.hours * 60;
           setTravelTime(estimatedTime);
           setSelectedCab(null);
+          setShowMap(false);
+          console.log(`Local trip: setting distance to ${selectedPackage.kilometers}km (${selectedPackage.hours} hours)`);
         }
         return;
       }
@@ -250,6 +253,18 @@ const CabsPage = () => {
   
     fetchDistance();
   }, [pickup, dropoff, tripType, hourlyPackage, toast]);
+  
+  // When trip type changes to local, reset any cached distance from previous trip types
+  useEffect(() => {
+    if (tripType === "local") {
+      const selectedPackage = hourlyPackages.find((pkg) => pkg.id === hourlyPackage);
+      if (selectedPackage) {
+        // Reset to exactly the package kilometers
+        setDistance(selectedPackage.kilometers);
+        console.log(`Trip type changed to local: resetting distance to ${selectedPackage.kilometers}km`);
+      }
+    }
+  }, [tripType, hourlyPackage]);
 
   useEffect(() => {
     if (selectedCab && distance > 0) {
@@ -274,9 +289,11 @@ const CabsPage = () => {
     
     const selectedPackage = hourlyPackages.find((pkg) => pkg.id === packageId);
     if (selectedPackage) {
+      // Reset to exactly the package kilometers
       setDistance(selectedPackage.kilometers);
       const estimatedTime = selectedPackage.hours * 60;
       setTravelTime(estimatedTime);
+      console.log(`Hourly package changed to ${packageId}: setting distance to ${selectedPackage.kilometers}km`);
     }
   };
 

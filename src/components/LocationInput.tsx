@@ -39,7 +39,8 @@ export function LocationInput({
   const handleLocationChange = onLocationChange || onChange;
   
   // Ensure address is always a string to prevent type errors
-  const initialAddress = typeof locationData.address === 'string' ? locationData.address : '';
+  const initialAddress = typeof locationData.address === 'string' ? locationData.address : 
+                         typeof locationData.name === 'string' ? locationData.name : '';
   const [address, setAddress] = useState<string>(initialAddress);
   const [locationError, setLocationError] = useState<string | null>(null);
   const { google, isLoaded } = useGoogleMaps();
@@ -49,6 +50,7 @@ export function LocationInput({
   const inputRef = useRef<HTMLInputElement>(null);
   const locationChangedRef = useRef<boolean>(false);
   const prevLocationRef = useRef<Location | null>(null);
+  const wasLocationSelectedRef = useRef<boolean>(false);
   
   // Update the address whenever locationData changes
   useEffect(() => {
@@ -63,7 +65,7 @@ export function LocationInput({
     
     // Only update if we haven't manually changed the location
     if (!locationChangedRef.current) {
-      // Safely get address or name, ensuring they are strings
+      // Prioritize address over name, ensuring they are strings
       const newAddress = typeof locationData.address === 'string' && locationData.address.trim() !== '' 
         ? locationData.address 
         : typeof locationData.name === 'string' && locationData.name.trim() !== '' 
@@ -90,6 +92,7 @@ export function LocationInput({
     const newAddress = e.target.value;
     setAddress(newAddress);
     setLocationError(null);
+    wasLocationSelectedRef.current = false;
     
     // Only trigger location change if we have a handler and an address
     if (handleLocationChange && newAddress) {
@@ -138,11 +141,12 @@ export function LocationInput({
       const options: google.maps.places.AutocompleteOptions = {
         fields: ['address_components', 'geometry', 'name', 'formatted_address'],
         componentRestrictions: { country: 'in' }, // Restrict to India
+        types: ['geocode', 'establishment'] // Restrict to addresses and businesses
       };
       
       // Apply location restrictions for Visakhapatnam if needed
       if (isPickupLocation === true || isAirportTransfer === true) {
-        // Set bounds to Visakhapatnam region
+        // Set bounds to Visakhapatnam region for pickup locations
         const vizagBounds = new google.maps.LatLngBounds(
           new google.maps.LatLng(17.6, 83.1),  // SW corner
           new google.maps.LatLng(17.9, 83.4)   // NE corner
@@ -150,6 +154,14 @@ export function LocationInput({
         
         options.bounds = vizagBounds;
         options.strictBounds = isPickupLocation === true;
+      } else {
+        // Use India bounds for non-pickup locations
+        const indiaBounds = new google.maps.LatLngBounds(
+          new google.maps.LatLng(8.0, 68.0),   // SW corner of India
+          new google.maps.LatLng(37.0, 97.0)   // NE corner of India
+        );
+        
+        options.bounds = indiaBounds;
       }
       
       // Create new autocomplete instance
@@ -172,6 +184,7 @@ export function LocationInput({
         
         // Update local state
         setAddress(formattedAddress);
+        wasLocationSelectedRef.current = true;
         
         // Get coordinates
         const lat = place.geometry.location.lat();
@@ -187,7 +200,7 @@ export function LocationInput({
         // Create location object with all required properties
         const newLocation: Location = {
           id: locationData.id || `loc_${Date.now()}`,
-          name: place.name || formattedAddress,
+          name: place.name || formattedAddress.split(',')[0] || '',
           address: formattedAddress,
           lat: lat,
           lng: lng,
@@ -262,6 +275,12 @@ export function LocationInput({
             if (!e || !e.target) return;
             setAddress(e.target.value);
             debouncedHandleChange(e);
+          }}
+          onBlur={() => {
+            // If user didn't select from autocomplete and just typed
+            if (!wasLocationSelectedRef.current && address.trim() !== '') {
+              console.log("Manual address entry - not selected from dropdown:", address);
+            }
           }}
           disabled={disabled}
           readOnly={readOnly}

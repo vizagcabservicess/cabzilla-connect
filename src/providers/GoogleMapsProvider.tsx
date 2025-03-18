@@ -5,8 +5,8 @@ import { useLoadScript } from "@react-google-maps/api";
 // Environment variable for Google Maps API Key
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 
-// Libraries to load with correct typing
-const libraries: ["places"] = ["places"];
+// Define libraries array as a constant to prevent unnecessary re-renders
+const libraries = ["places"] as ["places"];
 
 // Create a more comprehensive context
 interface GoogleMapsContextType {
@@ -63,6 +63,12 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
           
           // Store default bounds in window object for later use
           (window as any).indiaBounds = defaultBounds;
+          
+          // Set default Autocomplete options globally
+          if (window.google.maps.places && window.google.maps.places.Autocomplete) {
+            // Customize autocomplete behavior with session tokens
+            window.google.maps.places.Autocomplete.prototype.defaultBounds = defaultBounds;
+          }
           
           console.log("Default India bounds set for Maps");
         } catch (error) {

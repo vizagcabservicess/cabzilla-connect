@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { LocationInput } from './LocationInput';
 import { DateTimePicker } from './DateTimePicker';
 import { CabOptions } from './CabOptions';
@@ -208,6 +208,19 @@ export function Hero() {
     }
   }, [pickupLocation, dropLocation, pickupDate, returnDate, tripMode, tripType]);
 
+  useEffect(() => {
+    if (tripType === 'local') {
+      // For local trips, reset the distance to match the selected package
+      const selectedPackage = hourlyPackage === '8hrs-80km' ? 80 : 100;
+      setDistance(selectedPackage);
+      
+      // Reset dropLocation for local trips
+      setDropLocation(null);
+      
+      console.log(`Resetting distance for local trip to ${selectedPackage}km`);
+    }
+  }, [tripType, hourlyPackage]);
+
   function handleContinue() {
     if (!isFormValid) {
       toast({
@@ -225,9 +238,13 @@ export function Hero() {
   };
 
   function handleDistanceCalculated(calculatedDistance: number, calculatedDuration: number) {
-    setDistance(calculatedDistance);
-    setDuration(calculatedDuration);
-    setIsCalculatingDistance(false);
+    // Only update distance for non-local trips
+    if (tripType !== 'local') {
+      setDistance(calculatedDistance);
+      setDuration(calculatedDuration);
+      setIsCalculatingDistance(false);
+      console.log(`Distance calculated for ${tripType}: ${calculatedDistance}km, ${calculatedDuration} minutes`);
+    }
   };
 
   function calculatePrice() {
@@ -238,14 +255,19 @@ export function Hero() {
     if (tripType === 'airport') {
       totalPrice = calculateAirportFare(selectedCab.name, distance);
     } else if (tripType === 'local') {
-      totalPrice = getLocalPackagePrice(hourlyPackage, selectedCab.name);
-      
+      // Get the local package kilometers
       const packageKm = hourlyPackage === '8hrs-80km' ? 80 : 100;
       
-      if (distance > packageKm && distance < 300) {
+      // For local trips, use the exact package km for price calculation
+      totalPrice = getLocalPackagePrice(hourlyPackage, selectedCab.name);
+      
+      // Only add extra distance if it's specifically calculated for local trips
+      // and is greater than the package limit
+      if (distance > packageKm && tripType === 'local') {
         const extraKm = distance - packageKm;
         const extraKmRate = selectedCab.pricePerKm;
         totalPrice += extraKm * extraKmRate;
+        console.log(`Local package ${hourlyPackage}: Base ${packageKm}km, Extra ${extraKm}km at rate ${extraKmRate}`);
       }
     } else if (tripType === 'outstation') {
       let basePrice = 0, perKmRate = 0, driverAllowance = 250, nightHaltCharge = 0;
@@ -304,8 +326,8 @@ export function Hero() {
   async function handleGuestDetailsSubmit(guestDetails: any) {
     try {
       const bookingData: BookingRequest = {
-        pickupLocation: pickupLocation?.name || '',
-        dropLocation: dropLocation?.name || '',
+        pickupLocation: pickupLocation?.address || pickupLocation?.name || '',
+        dropLocation: dropLocation?.address || dropLocation?.name || '',
         pickupDate: pickupDate?.toISOString() || '',
         returnDate: returnDate?.toISOString() || null,
         cabType: selectedCab?.name || '',

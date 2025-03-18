@@ -95,7 +95,7 @@ const GoogleMapComponent = ({
            inIndiaBounds(safeDropLocation.lat, safeDropLocation.lng);
   };
 
-  const directionsCallback = useCallback((result: google.maps.DirectionsResult | null, status: google.maps.DirectionsStatus) => {
+  const handleDirectionsCallback = useCallback((result: google.maps.DirectionsResult | null, status: google.maps.DirectionsStatus) => {
     console.log("Directions status:", status);
     
     if (status === google.maps.DirectionsStatus.OK && result) {
@@ -192,7 +192,7 @@ const GoogleMapComponent = ({
     }
   }, [safePickupLocation, safeDropLocation]);
 
-  const onMapLoad = useCallback(() => {
+  const handleMapLoad = useCallback(() => {
     console.log("Map loaded successfully");
     setMapLoaded(true);
   }, []);
@@ -255,7 +255,7 @@ const GoogleMapComponent = ({
         mapContainerStyle={mapContainerStyle}
         center={center}
         zoom={12}
-        onLoad={onMapLoad}
+        onLoad={handleMapLoad}
         options={{ 
           mapTypeControl: false,
           streetViewControl: false,
@@ -283,7 +283,7 @@ const GoogleMapComponent = ({
               avoidHighways: false,
               avoidTolls: false,
             }}
-            callback={directionsCallback}
+            callback={handleDirectionsCallback}
           />
         )}
 
