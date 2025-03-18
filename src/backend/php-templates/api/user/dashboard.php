@@ -141,6 +141,12 @@ try {
         // Get total bookings for the period
         $totalBookingsQuery = "SELECT COUNT(*) as total FROM bookings $dateCondition";
         $totalBookingsResult = $conn->query($totalBookingsQuery);
+        
+        if (!$totalBookingsResult) {
+            logError("SQL error in total bookings query", ['error' => $conn->error]);
+            throw new Exception("Database error: " . $conn->error);
+        }
+        
         $totalBookings = $totalBookingsResult->fetch_assoc()['total'] ?? 0;
         
         // Get active rides (confirmed status with today's date)
@@ -150,12 +156,26 @@ try {
         }
         $activeRidesQuery = "SELECT COUNT(*) as total FROM bookings $activeRidesCondition";
         $activeRidesResult = $conn->query($activeRidesQuery);
-        $activeRides = $activeRidesResult->fetch_assoc()['total'] ?? 0;
+        
+        if (!$activeRidesResult) {
+            logError("SQL error in active rides query", ['error' => $conn->error]);
+            // Don't throw exception, just log and continue with 0 value
+            $activeRides = 0;
+        } else {
+            $activeRides = $activeRidesResult->fetch_assoc()['total'] ?? 0;
+        }
         
         // Get total revenue for the period
         $totalRevenueQuery = "SELECT SUM(total_amount) as total FROM bookings $dateCondition";
         $totalRevenueResult = $conn->query($totalRevenueQuery);
-        $totalRevenue = $totalRevenueResult->fetch_assoc()['total'] ?? 0;
+        
+        if (!$totalRevenueResult) {
+            logError("SQL error in total revenue query", ['error' => $conn->error]);
+            // Don't throw exception, just log and continue with 0 value
+            $totalRevenue = 0;
+        } else {
+            $totalRevenue = $totalRevenueResult->fetch_assoc()['total'] ?? 0;
+        }
         
         // Get upcoming rides (pending/confirmed with future date)
         $upcomingRidesCondition = "WHERE (status = 'pending' OR status = 'confirmed') AND DATE(pickup_date) > CURDATE()";
@@ -164,7 +184,14 @@ try {
         }
         $upcomingRidesQuery = "SELECT COUNT(*) as total FROM bookings $upcomingRidesCondition";
         $upcomingRidesResult = $conn->query($upcomingRidesQuery);
-        $upcomingRides = $upcomingRidesResult->fetch_assoc()['total'] ?? 0;
+        
+        if (!$upcomingRidesResult) {
+            logError("SQL error in upcoming rides query", ['error' => $conn->error]);
+            // Don't throw exception, just log and continue with 0 value
+            $upcomingRides = 0;
+        } else {
+            $upcomingRides = $upcomingRidesResult->fetch_assoc()['total'] ?? 0;
+        }
         
         // Get all booking statuses for dropdown filtering
         $statusesQuery = "SELECT DISTINCT status FROM bookings WHERE status IS NOT NULL AND status != ''";
@@ -198,6 +225,8 @@ try {
         ];
         
         logError("Sending admin metrics response", ['metrics' => $metrics, 'period' => $period]);
+        
+        // Ensure we use the consistent format: status + data 
         sendJsonResponse(['status' => 'success', 'data' => $metrics]);
         exit;
     }

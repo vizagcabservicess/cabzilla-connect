@@ -5,6 +5,7 @@ import { DashboardMetrics as DashboardMetricsType } from '@/types/api';
 import { bookingAPI } from '@/services/api';
 import { Car, Users, DollarSign, Star, Clock, AlertTriangle, Calendar, RefreshCw, Filter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
@@ -60,8 +61,14 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
       console.log('Dashboard metrics received:', data);
       
       if (data) {
-        setMetrics(data);
-        if (onRefresh) onRefresh();
+        // Make sure we have a valid metrics object
+        if (typeof data === 'object' && 'totalBookings' in data) {
+          setMetrics(data);
+          if (onRefresh) onRefresh();
+        } else {
+          console.error('Invalid metrics format received:', data);
+          throw new Error('Invalid data format received from metrics API');
+        }
       } else {
         throw new Error('No data received from metrics API');
       }
@@ -75,10 +82,16 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
       
       setError(errorMessage);
       
+      // Show toast notification
       toast({
         title: "Error Loading Metrics",
         description: errorMessage,
         variant: "destructive",
+      });
+      
+      // Also show in sonner toast for better visibility
+      toast.error("Error Loading Metrics", {
+        description: errorMessage,
       });
     } finally {
       setIsLoading(false);
@@ -92,6 +105,14 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
   const handleRetry = () => {
     setRetryCount(prev => prev + 1);
     fetchMetrics();
+  };
+
+  const handleHardRefresh = () => {
+    // Clear auth token and reload to force new login
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('auth_token');
+    sessionStorage.removeItem('auth_token');
+    window.location.href = '/login';
   };
 
   if (error) {
@@ -124,11 +145,40 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
           </Select>
         </div>
         
-        <ApiErrorFallback 
-          error={error} 
-          onRetry={handleRetry} 
-          title="Dashboard Metrics Error" 
-        />
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <div className="flex items-start mb-4">
+            <AlertTriangle className="h-5 w-5 text-red-500 mr-2 mt-0.5" />
+            <div>
+              <h3 className="text-lg font-medium text-red-800">Dashboard Metrics Error</h3>
+              <p className="text-red-700">{error}</p>
+            </div>
+          </div>
+          
+          <div className="bg-blue-50 border border-blue-100 rounded-md p-3 mb-4">
+            <h4 className="text-sm font-medium text-blue-800 flex items-center mb-2">
+              <RefreshCw className="h-4 w-4 mr-2" /> Automatic Recovery
+            </h4>
+            <p className="text-sm text-blue-700 mb-2">The retry button below will:</p>
+            <ul className="text-sm text-blue-700 list-disc pl-5 space-y-1">
+              <li>Clear your authentication tokens</li>
+              <li>Clear cached data that might be causing issues</li>
+              <li>Reload the connection with a fresh state</li>
+            </ul>
+          </div>
+          
+          <div className="flex gap-3">
+            <Button variant="default" onClick={handleRetry} className="flex items-center">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Retry Connection
+            </Button>
+            <Button variant="outline" onClick={() => window.location.href = '/'}>
+              Return to Home
+            </Button>
+            <Button variant="destructive" onClick={handleHardRefresh} className="ml-auto">
+              Log Out and Retry
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }

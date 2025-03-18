@@ -35,19 +35,34 @@ $headers = getallheaders();
 $userId = null;
 $isAdmin = false;
 
+// Log the incoming headers for debugging
+logError("Metrics.php headers received", ['headers' => $headers]);
+
 if (isset($headers['Authorization']) || isset($headers['authorization'])) {
     $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
     $token = str_replace('Bearer ', '', $authHeader);
+    
+    logError("Token received in metrics.php", ['token_length' => strlen($token)]);
     
     $payload = verifyJwtToken($token);
     if ($payload && isset($payload['user_id'])) {
         $userId = $payload['user_id'];
         $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
+        
+        logError("User authenticated in metrics.php", [
+            'user_id' => $userId,
+            'is_admin' => $isAdmin ? 'true' : 'false'
+        ]);
+    } else {
+        logError("JWT verification failed in metrics.php", ['payload' => $payload]);
     }
+} else {
+    logError("No Authorization header found in metrics.php");
 }
 
 // Check if user is admin
 if (!$isAdmin) {
+    logError("Unauthorized access to metrics.php", ['user_id' => $userId]);
     sendJsonResponse(['status' => 'error', 'message' => 'Unauthorized access. Admin privileges required.'], 403);
     exit;
 }
@@ -55,6 +70,7 @@ if (!$isAdmin) {
 // Connect to database
 $conn = getDbConnection();
 if (!$conn) {
+    logError("Database connection failed in metrics.php");
     sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed'], 500);
     exit;
 }
@@ -76,6 +92,8 @@ try {
             break;
     }
     
+    logError("Date range for metrics.php", ['start' => $startDate, 'end' => $endDate]);
+    
     // Base query conditions
     $conditions = " WHERE created_at BETWEEN ? AND ?";
     $params = [$startDate, $endDate];
@@ -86,16 +104,33 @@ try {
         $conditions .= " AND status = ?";
         $params[] = $statusFilter;
         $types .= "s";
+        
+        logError("Status filter added", ['status' => $statusFilter]);
     }
     
     // Get total bookings in the period with optional status filter
     $query = "SELECT COUNT(*) as total FROM bookings" . $conditions;
+    logError("Total bookings query", ['query' => $query]);
+    
     $stmt = $conn->prepare($query);
+    if (!$stmt) {
+        logError("Prepare statement failed for total bookings", ['error' => $conn->error]);
+        throw new Exception("Database prepare error: " . $conn->error);
+    }
+    
     $stmt->bind_param($types, ...$params);
-    $stmt->execute();
+    $executed = $stmt->execute();
+    
+    if (!$executed) {
+        logError("Execute statement failed for total bookings", ['error' => $stmt->error]);
+        throw new Exception("Database execute error: " . $stmt->error);
+    }
+    
     $result = $stmt->get_result();
     $totalBookingsData = $result->fetch_assoc();
     $totalBookings = $totalBookingsData['total'];
+    
+    logError("Total bookings found", ['count' => $totalBookings]);
     
     // Get active rides (confirmed status, not completed/cancelled)
     $activeStatus = 'confirmed';
@@ -107,19 +142,46 @@ try {
         $stmt = $conn->prepare("SELECT COUNT(*) as active FROM bookings WHERE status = ? AND created_at BETWEEN ? AND ?");
         $stmt->bind_param("sss", $activeStatus, $startDate, $endDate);
     }
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $activeRidesData = $result->fetch_assoc();
-    $activeRides = $activeRidesData['active'];
+    
+    if (!$stmt) {
+        logError("Prepare statement failed for active rides", ['error' => $conn->error]);
+        $activeRides = 0; // Default value on error
+    } else {
+        $executed = $stmt->execute();
+        if (!$executed) {
+            logError("Execute statement failed for active rides", ['error' => $stmt->error]);
+            $activeRides = 0; // Default value on error
+        } else {
+            $result = $stmt->get_result();
+            $activeRidesData = $result->fetch_assoc();
+            $activeRides = $activeRidesData['active'];
+        }
+    }
+    
+    logError("Active rides found", ['count' => $activeRides]);
     
     // Get total revenue in the period with optional status filter
     $query = "SELECT SUM(total_amount) as revenue FROM bookings" . $conditions;
     $stmt = $conn->prepare($query);
-    $stmt->bind_param($types, ...$params);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $revenueData = $result->fetch_assoc();
-    $totalRevenue = $revenueData['revenue'] ? floatval($revenueData['revenue']) : 0;
+    
+    if (!$stmt) {
+        logError("Prepare statement failed for revenue", ['error' => $conn->error]);
+        $totalRevenue = 0; // Default value on error
+    } else {
+        $stmt->bind_param($types, ...$params);
+        $executed = $stmt->execute();
+        
+        if (!$executed) {
+            logError("Execute statement failed for revenue", ['error' => $stmt->error]);
+            $totalRevenue = 0; // Default value on error
+        } else {
+            $result = $stmt->get_result();
+            $revenueData = $result->fetch_assoc();
+            $totalRevenue = $revenueData['revenue'] ? floatval($revenueData['revenue']) : 0;
+        }
+    }
+    
+    logError("Total revenue", ['amount' => $totalRevenue]);
     
     // Get upcoming rides (with pickup_date in the future)
     $now = date('Y-m-d H:i:s');
@@ -130,26 +192,54 @@ try {
         $stmt = $conn->prepare("SELECT COUNT(*) as upcoming FROM bookings WHERE pickup_date > ? AND status != 'cancelled'");
         $stmt->bind_param("s", $now);
     }
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $upcomingRidesData = $result->fetch_assoc();
-    $upcomingRides = $upcomingRidesData['upcoming'];
+    
+    if (!$stmt) {
+        logError("Prepare statement failed for upcoming rides", ['error' => $conn->error]);
+        $upcomingRides = 0; // Default value on error
+    } else {
+        $executed = $stmt->execute();
+        
+        if (!$executed) {
+            logError("Execute statement failed for upcoming rides", ['error' => $stmt->error]);
+            $upcomingRides = 0; // Default value on error
+        } else {
+            $result = $stmt->get_result();
+            $upcomingRidesData = $result->fetch_assoc();
+            $upcomingRides = $upcomingRidesData['upcoming'];
+        }
+    }
+    
+    logError("Upcoming rides", ['count' => $upcomingRides]);
     
     // Create metrics response
     $metrics = [
         'totalBookings' => intval($totalBookings),
         'activeRides' => intval($activeRides),
-        'totalRevenue' => $totalRevenue,
+        'totalRevenue' => floatval($totalRevenue),
         'availableDrivers' => 5, // Placeholder value, would be from drivers table 
         'busyDrivers' => 3,      // Placeholder value, would be from drivers table
         'avgRating' => 4.7,      // Placeholder value, would be calculated from ratings
-        'upcomingRides' => intval($upcomingRides)
+        'upcomingRides' => intval($upcomingRides),
+        'availableStatuses' => ['pending', 'confirmed', 'assigned', 'completed', 'cancelled'],
+        'currentFilter' => $statusFilter ?: 'all'
     ];
     
-    // Send response
+    logError("Sending metrics response", ['metrics' => $metrics]);
+    
+    // Send response with the standard format: status + data
     sendJsonResponse(['status' => 'success', 'data' => $metrics]);
     
 } catch (Exception $e) {
     logError("Error fetching admin metrics", ['error' => $e->getMessage(), 'period' => $period, 'status' => $statusFilter]);
     sendJsonResponse(['status' => 'error', 'message' => 'Failed to get metrics: ' . $e->getMessage()], 500);
 }
+
+// Helper function to ensure consistent response format
+function sendJsonResponse($data, $statusCode = 200) {
+    http_response_code($statusCode);
+    header('Content-Type: application/json');
+    echo json_encode($data);
+    exit;
+}
+
+?>
