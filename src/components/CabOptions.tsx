@@ -1,9 +1,11 @@
+
 import { useState, useEffect } from 'react';
-import { CabType, formatPrice, TripType, TripMode, getLocalPackagePrice, oneWayRates } from '@/lib/cabData';
+import { CabType, formatPrice, TripType, TripMode, getLocalPackagePrice, oneWayRates, loadCabTypes } from '@/lib/cabData';
 import { Users, Briefcase, Tag, Info, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { differenceInDays } from 'date-fns';
 import { calculateAirportFare } from '@/lib/locationData';
+import { toast } from 'sonner';
 
 interface CabOptionsProps {
   cabTypes: CabType[];
@@ -18,7 +20,7 @@ interface CabOptionsProps {
 }
 
 export function CabOptions({
-  cabTypes,
+  cabTypes: initialCabTypes,
   selectedCab,
   onSelectCab,
   distance,
@@ -33,9 +35,30 @@ export function CabOptions({
   const [cabFares, setCabFares] = useState<Record<string, number>>({});
   const [lastTripIdentifier, setLastTripIdentifier] = useState<string>('');
   const [lastCalculationTimestamp, setLastCalculationTimestamp] = useState<number>(0);
+  const [cabTypes, setCabTypes] = useState<CabType[]>(initialCabTypes);
+  const [isLoadingCabs, setIsLoadingCabs] = useState(false);
 
   // Create a unique identifier for the current trip configuration
   const currentTripIdentifier = `${tripType}-${tripMode}-${hourlyPackage || 'none'}-${distance}`;
+  
+  // Load dynamic cab types on component mount
+  useEffect(() => {
+    async function fetchCabTypes() {
+      setIsLoadingCabs(true);
+      try {
+        const dynamicCabTypes = await loadCabTypes();
+        console.log('Loaded dynamic cab types:', dynamicCabTypes);
+        setCabTypes(dynamicCabTypes);
+      } catch (error) {
+        console.error('Error loading dynamic cab types:', error);
+        toast.error('Could not load vehicle data. Using default values.');
+      } finally {
+        setIsLoadingCabs(false);
+      }
+    }
+    
+    fetchCabTypes();
+  }, []);
 
   // Force recalculation when trip type changes
   useEffect(() => {
@@ -87,22 +110,31 @@ export function CabOptions({
       console.log(`Calculating fares for ${tripType} trip, ${distance}km, package: ${hourlyPackage || 'none'}`);
       
       const newFares: Record<string, number> = {};
-      cabTypes.forEach(cab => {
-        newFares[cab.id] = calculateCabFare(cab);
-      });
-      
-      // Store the trip type with the fares to verify later
-      const fareData = {
-        timestamp: Date.now(),
-        tripType,
-        tripMode,
-        hourlyPackage,
-        distance,
-        fares: newFares
+      const calculateFares = async () => {
+        for (const cab of cabTypes) {
+          try {
+            newFares[cab.id] = await calculateCabFare(cab);
+          } catch (error) {
+            console.error(`Error calculating fare for ${cab.name}:`, error);
+            newFares[cab.id] = 0;
+          }
+        }
+        
+        // Store the trip type with the fares to verify later
+        const fareData = {
+          timestamp: Date.now(),
+          tripType,
+          tripMode,
+          hourlyPackage,
+          distance,
+          fares: newFares
+        };
+        
+        sessionStorage.setItem('calculatedFares', JSON.stringify(fareData));
+        setCabFares(newFares);
       };
       
-      sessionStorage.setItem('calculatedFares', JSON.stringify(fareData));
-      setCabFares(newFares);
+      calculateFares();
     } else {
       setCabFares({});
     }
@@ -142,98 +174,126 @@ export function CabOptions({
     }
   };
 
-  const calculateCabFare = (cab: CabType): number => {
-    let totalFare = 0;
-    
-    if (tripType === 'airport') {
-      totalFare = calculateAirportFare(cab.name, distance);
-    }
-    else if (tripType === 'local' && hourlyPackage) {
-      // Get base package price for local rental
-      totalFare = getLocalPackagePrice(hourlyPackage, cab.name);
-      console.log(`Local fare calculation for ${cab.name}:`, { 
-        hourlyPackage, 
-        baseFare: totalFare 
-      });
-      
-      // For local packages, we shouldn't be calculating extra kilometers
-      // as the package already includes a set number of kilometers
-      const packageKm = hourlyPackage === '8hrs-80km' ? 80 : 100;
-      
-      // Only add extra km charges if the distance is manually set higher than package km
-      // AND it's not an unreasonably high value (to prevent calculation errors)
-      if (distance > packageKm && distance < 300) {
-        const extraKm = distance - packageKm;
-        totalFare += extraKm * cab.pricePerKm;
-        console.log(`Added ${extraKm}km extra at ${cab.pricePerKm}/km = ${extraKm * cab.pricePerKm}`);
+  const calculateCabFare = async (cab: CabType): Promise<number> => {
+    // This is a synchronous wrapper around the async calculateFare function
+    try {
+      if (tripType === 'airport') {
+        return calculateAirportFare(cab.name, distance);
       }
-    }
-    else if (tripType === 'outstation') {
-      let baseRate = 0, perKmRate = 0, nightHaltCharge = 0, driverAllowance = 250;
-      
-      switch (cab.name.toLowerCase()) {
-        case "sedan":
-          baseRate = 4200;
-          perKmRate = 14;
-          nightHaltCharge = 700;
-          break;
-        case "ertiga":
-          baseRate = 5400;
-          perKmRate = 18;
-          nightHaltCharge = 1000;
-          break;
-        case "innova crysta":
-          baseRate = 6000;
-          perKmRate = 20;
-          nightHaltCharge = 1000;
-          break;
-        default:
-          baseRate = cab.price;
-          perKmRate = cab.pricePerKm;
-          nightHaltCharge = 1000;
-      }
-      
-      if (tripMode === "one-way") {
-        // One-way calculation - double the distance to account for driver return
-        const effectiveDistance = distance * 2;
-        const allocatedKm = 300;
-        const totalBaseFare = baseRate;
-        let totalDistanceFare = 0;
+      else if (tripType === 'local' && hourlyPackage) {
+        // Get base package price for local rental
+        const baseFare = getLocalPackagePrice(hourlyPackage, cab.name);
+        console.log(`Local fare calculation for ${cab.name}:`, { 
+          hourlyPackage, 
+          baseFare 
+        });
         
-        // Calculate extra kilometers beyond the base 300km
-        if (effectiveDistance > allocatedKm) {
-          const extraKm = effectiveDistance - allocatedKm;
-          totalDistanceFare = extraKm * perKmRate;
+        // For local packages, we shouldn't be calculating extra kilometers
+        // as the package already includes a set number of kilometers
+        const packageKm = hourlyPackage === '8hrs-80km' ? 80 : 100;
+        
+        // Only add extra km charges if the distance is manually set higher than package km
+        // AND it's not an unreasonably high value (to prevent calculation errors)
+        if (distance > packageKm && distance < 300) {
+          const extraKm = distance - packageKm;
+          const totalFare = baseFare + (extraKm * cab.pricePerKm);
+          console.log(`Added ${extraKm}km extra at ${cab.pricePerKm}/km = ${extraKm * cab.pricePerKm}`);
+          return Math.ceil(totalFare / 10) * 10;
         }
         
-        // Add driver allowance
-        totalFare = totalBaseFare + totalDistanceFare + driverAllowance;
-      } else {
-        // Round trip calculation
-        let days = returnDate ? Math.max(1, differenceInDays(returnDate, pickupDate || new Date()) + 1) : 1;
-        const allocatedKm = 300; // per day
-        const totalAllocatedKm = days * allocatedKm;
+        return baseFare;
+      }
+      else if (tripType === 'outstation') {
+        let baseRate = cab.price || 0;
+        let perKmRate = cab.pricePerKm || 0;
+        let nightHaltCharge = cab.nightHaltCharge || 0;
+        let driverAllowance = cab.driverAllowance || 250;
         
-        let effectiveDistance = distance * 2;
-        
-        let totalBaseFare = days * baseRate;
-        let totalDistanceFare = 0;
-        
-        // Calculate extra kilometers beyond the allocated km for all days
-        if (effectiveDistance > totalAllocatedKm) {
-          const extraKm = effectiveDistance - totalAllocatedKm;
-          totalDistanceFare = extraKm * perKmRate;
+        // If no pricing info in cab object, use defaults based on name
+        if (!baseRate || !perKmRate) {
+          switch (cab.name.toLowerCase()) {
+            case "sedan":
+              baseRate = 4200;
+              perKmRate = 14;
+              nightHaltCharge = 700;
+              break;
+            case "ertiga":
+              baseRate = 5400;
+              perKmRate = 18;
+              nightHaltCharge = 1000;
+              break;
+            case "innova crysta":
+              baseRate = 6000;
+              perKmRate = 20;
+              nightHaltCharge = 1000;
+              break;
+            default:
+              baseRate = cab.price || 5000;
+              perKmRate = cab.pricePerKm || 18;
+              nightHaltCharge = cab.nightHaltCharge || 1000;
+          }
         }
         
-        let totalNightHalt = (days - 1) * nightHaltCharge;
-        
-        totalFare = totalBaseFare + totalDistanceFare + totalNightHalt + (days * driverAllowance);
+        if (tripMode === "one-way") {
+          // One-way calculation - double the distance to account for driver return
+          const effectiveDistance = distance * 2;
+          const allocatedKm = 300;
+          const totalBaseFare = baseRate;
+          let totalDistanceFare = 0;
+          
+          // Calculate extra kilometers beyond the base 300km
+          if (effectiveDistance > allocatedKm) {
+            const extraKm = effectiveDistance - allocatedKm;
+            totalDistanceFare = extraKm * perKmRate;
+          }
+          
+          // Add driver allowance
+          const totalFare = totalBaseFare + totalDistanceFare + driverAllowance;
+          return Math.ceil(totalFare / 10) * 10;
+        } else {
+          // Round trip calculation
+          let days = returnDate ? Math.max(1, differenceInDays(returnDate, pickupDate || new Date()) + 1) : 1;
+          const allocatedKm = 300; // per day
+          const totalAllocatedKm = days * allocatedKm;
+          
+          let effectiveDistance = distance * 2;
+          
+          let totalBaseFare = days * baseRate;
+          let totalDistanceFare = 0;
+          
+          // Calculate extra kilometers beyond the allocated km for all days
+          if (effectiveDistance > totalAllocatedKm) {
+            const extraKm = effectiveDistance - totalAllocatedKm;
+            totalDistanceFare = extraKm * perKmRate;
+          }
+          
+          let totalNightHalt = (days - 1) * nightHaltCharge;
+          
+          const totalFare = totalBaseFare + totalDistanceFare + totalNightHalt + (days * driverAllowance);
+          return Math.ceil(totalFare / 10) * 10;
+        }
       }
+      
+      // Default fallback
+      return Math.ceil((distance * (cab.pricePerKm || 20)) / 10) * 10;
+    } catch (error) {
+      console.error(`Error in calculateCabFare for ${cab.name}:`, error);
+      return 0;
     }
-    
-    console.log(`Final fare for ${cab.name} (${tripType}): ${totalFare}`);
-    return Math.ceil(totalFare / 10) * 10; // Round to nearest 10
   };
+
+  if (isLoadingCabs) {
+    return (
+      <div className="space-y-4 mt-6">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-lg font-semibold text-gray-800">Loading cab options...</h3>
+        </div>
+        <div className="flex justify-center py-8">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 mt-6">
@@ -243,8 +303,8 @@ export function CabOptions({
       </div>
       
       <div className="space-y-3">
-        {cabTypes.slice(0, 3).map((cab) => {
-          const fare = cabFares[cab.id] || calculateCabFare(cab);
+        {cabTypes.map((cab) => {
+          const fare = cabFares[cab.id] || 0;
           const isSelected = selectedCabId === cab.id;
           
           let fareDetails = "";

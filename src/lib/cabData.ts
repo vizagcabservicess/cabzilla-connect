@@ -1,5 +1,6 @@
 
 import { differenceInCalendarDays } from 'date-fns';
+import { fareAPI } from '@/services/api';
 
 export type TripType = 'outstation' | 'local' | 'airport' | 'tour';
 export type TripMode = 'one-way' | 'round-trip';
@@ -25,8 +26,11 @@ export interface CabType {
   amenities: string[];
   description: string;
   ac?: boolean;
+  nightHaltCharge?: number;
+  driverAllowance?: number;
 }
 
+// Default cab types (will be replaced with dynamic data)
 export const cabTypes: CabType[] = [
   {
     id: 'sedan',
@@ -65,6 +69,35 @@ export const cabTypes: CabType[] = [
     ac: true
   }
 ];
+
+// Function to load cab types dynamically
+export const loadCabTypes = async (): Promise<CabType[]> => {
+  try {
+    const vehicleData = await fareAPI.getAllVehicleData();
+    
+    // Map the API data to match the CabType interface
+    const dynamicCabTypes: CabType[] = vehicleData.map((vehicle) => ({
+      id: vehicle.id,
+      name: vehicle.name,
+      capacity: vehicle.capacity,
+      luggageCapacity: vehicle.luggageCapacity,
+      price: vehicle.price,
+      pricePerKm: vehicle.pricePerKm,
+      image: vehicle.image,
+      amenities: vehicle.amenities,
+      description: vehicle.description,
+      ac: vehicle.ac,
+      nightHaltCharge: vehicle.nightHaltCharge,
+      driverAllowance: vehicle.driverAllowance
+    }));
+    
+    return dynamicCabTypes.length > 0 ? dynamicCabTypes : cabTypes;
+  } catch (error) {
+    console.error('Error loading cab types:', error);
+    // Fall back to default cab types if API call fails
+    return cabTypes;
+  }
+};
 
 export const hourlyPackages: HourlyPackage[] = [
   {
@@ -136,6 +169,30 @@ export const tourFares = {
   }
 };
 
+// Function to load tour fares dynamically
+export const loadTourFares = async (): Promise<any> => {
+  try {
+    const tourFareData = await fareAPI.getTourFares();
+    
+    // Convert the API data to match the existing structure
+    const dynamicTourFares: any = {};
+    
+    tourFareData.forEach((tour) => {
+      dynamicTourFares[tour.tourId] = {
+        sedan: tour.sedan,
+        ertiga: tour.ertiga,
+        innova_crysta: tour.innova
+      };
+    });
+    
+    return Object.keys(dynamicTourFares).length > 0 ? dynamicTourFares : tourFares;
+  } catch (error) {
+    console.error('Error loading tour fares:', error);
+    // Fall back to default tour fares if API call fails
+    return tourFares;
+  }
+};
+
 // Helper function to format price
 export const formatPrice = (price: number): string => {
   return `₹${price.toLocaleString('en-IN')}`;
@@ -182,7 +239,7 @@ export function getLocalPackagePrice(packageId: string, cabType: string): number
 /**
  * Calculate fare based on cab type, distance, trip type, and other factors
  */
-export function calculateFare(
+export async function calculateFare(
   cabType: CabType,
   distance: number,
   tripType: TripType,
@@ -190,7 +247,7 @@ export function calculateFare(
   hourlyPackage?: string,
   pickupDate?: Date,
   returnDate?: Date,
-): number {
+): Promise<number> {
   if (tripType === 'local') {
     // For local trips, use the hourly package price without distance calculations
     return getLocalPackagePrice(hourlyPackage || '8hrs-80km', cabType.name);
@@ -203,10 +260,26 @@ export function calculateFare(
   
   // For outstation trips
   if (tripType === 'outstation') {
+    // Get latest pricing data from the API if available
     let basePrice = cabType.price;
     let perKmRate = cabType.pricePerKm;
-    let driverAllowance = 250;
-    let nightHaltCharge = cabType.name.toLowerCase() === 'sedan' ? 700 : 1000;
+    let driverAllowance = cabType.driverAllowance || 250;
+    let nightHaltCharge = cabType.nightHaltCharge || (cabType.name.toLowerCase() === 'sedan' ? 700 : 1000);
+    
+    // Try to get up-to-date pricing info
+    try {
+      const vehiclePricing = await fareAPI.getVehiclePricing();
+      const pricing = vehiclePricing.find(p => p.vehicle_type.toLowerCase() === cabType.id.toLowerCase());
+      
+      if (pricing) {
+        basePrice = pricing.base_price;
+        perKmRate = pricing.price_per_km;
+        driverAllowance = pricing.driver_allowance || driverAllowance;
+        nightHaltCharge = pricing.night_halt_charge || nightHaltCharge;
+      }
+    } catch (error) {
+      console.warn('Could not fetch latest pricing data, using default values:', error);
+    }
     
     if (tripMode === 'one-way') {
       const days = 1;

@@ -67,6 +67,23 @@ CREATE TABLE `vehicle_pricing` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Vehicle Types Table (New)
+CREATE TABLE `vehicle_types` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `vehicle_id` varchar(50) NOT NULL UNIQUE,
+  `name` varchar(100) NOT NULL,
+  `capacity` int(11) NOT NULL DEFAULT 4,
+  `luggage_capacity` int(11) NOT NULL DEFAULT 2,
+  `ac` tinyint(1) NOT NULL DEFAULT 1,
+  `image` varchar(255) DEFAULT '/cars/sedan.png',
+  `amenities` text DEFAULT NULL,
+  `description` text DEFAULT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Admin Settings Table
 CREATE TABLE `admin_settings` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -93,6 +110,14 @@ INSERT INTO `vehicle_pricing` (`vehicle_type`, `base_price`, `price_per_km`, `ni
 ('innova', 6000, 20, 1000, 250),
 ('tempo', 9000, 22, 1500, 300),
 ('luxury', 10500, 25, 1500, 300);
+
+-- Insert default vehicle types
+INSERT INTO `vehicle_types` (`vehicle_id`, `name`, `capacity`, `luggage_capacity`, `ac`, `image`, `amenities`, `description`) VALUES
+('sedan', 'Sedan', 4, 2, 1, '/cars/sedan.png', 'AC, Bottle Water, Music System', 'Comfortable sedan suitable for 4 passengers.'),
+('ertiga', 'Ertiga', 6, 3, 1, '/cars/ertiga.png', 'AC, Bottle Water, Music System, Extra Legroom', 'Spacious SUV suitable for 6 passengers.'),
+('innova_crysta', 'Innova Crysta', 7, 4, 1, '/cars/innova.png', 'AC, Bottle Water, Music System, Extra Legroom, Charging Point', 'Premium SUV with ample space for 7 passengers.'),
+('tempo', 'Tempo Traveller', 12, 8, 1, '/cars/tempo.png', 'AC, Bottle Water, Music System, Extra Legroom, Charging Point', 'Spacious van suitable for group travel of up to 12 passengers.'),
+('luxury', 'Luxury Sedan', 4, 3, 1, '/cars/luxury.png', 'AC, Bottle Water, Music System, Premium Leather Seats, WiFi, Charging Points', 'Premium luxury sedan with high-end amenities for a comfortable journey.');
 
 -- Insert default admin user
 INSERT INTO `users` (`name`, `email`, `phone`, `password`, `role`) VALUES

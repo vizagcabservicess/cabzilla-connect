@@ -1,641 +1,343 @@
+
 import axios from 'axios';
-import { jwtDecode } from 'jwt-decode';
+import { toast } from 'sonner';
 import { 
-  User, 
-  AuthResponse, 
-  LoginRequest, 
-  SignupRequest, 
-  Booking,
-  BookingRequest, 
-  BookingStatus, 
-  TourFare, 
-  FareUpdateRequest,
-  VehiclePricing,
-  VehiclePricingUpdateRequest,
-  DashboardMetrics
+  Booking, User, DashboardData, AuthResponse, LoginRequest, 
+  SignupRequest, BookingRequest, FareData, TourFare, FareUpdateRequest,
+  DashboardMetrics, AuthUser, VehiclePricing, VehiclePricingUpdateRequest
 } from '@/types/api';
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
-console.log('API Base URL:', apiBaseUrl);
+const API_BASE_URL = '/api';
 
+// Axios instance with base settings
 const api = axios.create({
-  baseURL: apiBaseUrl,
+  baseURL: API_BASE_URL,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
-    'Cache-Control': 'no-cache, no-store, must-revalidate',
-    'Pragma': 'no-cache',
-    'Expires': '0'
   },
-  params: {
-    '_t': Date.now()
-  }
 });
 
+// Intercept requests to add auth token
 api.interceptors.request.use(
   (config) => {
-    if (config.method?.toLowerCase() === 'get') {
-      config.params = {
-        ...config.params,
-        '_t': Date.now()
-      };
-    }
-    
-    const token = localStorage.getItem('authToken') || 
-                 localStorage.getItem('auth_token') || 
-                 sessionStorage.getItem('auth_token');
-    
-    console.log(`Adding auth token to request: ${token ? 'Token exists' : 'No token'}`);
-    
+    const token = localStorage.getItem('authToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    
-    const fullUrl = `${config.baseURL}${config.url}`;
-    console.log('🚀 API Request:', `${config.method?.toUpperCase()} ${config.url}`);
-    console.log('Full request URL:', fullUrl);
-    
     return config;
   },
-  (error) => {
-    console.error('Request interceptor error:', error);
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-api.interceptors.response.use(
-  (response) => {
-    console.log('✅ API Response:', `${response.status} ${response.config.url}`);
-    return response;
-  },
-  (error) => {
-    const errorMessage = error.message || 'Unknown error';
-    const errorCode = error.code || 'NO_CODE';
-    const errorResponse = error.response || {};
-    const requestUrl = error.config?.url || 'unknown URL';
+// Process API errors consistently
+const handleApiError = (error: any): never => {
+  console.error('API Error:', error);
+  
+  // Extract meaningful error message
+  let errorMessage = 'An unexpected error occurred';
+  
+  if (error.response) {
+    // The request was made and the server responded with an error status
+    const serverError = error.response.data?.message || error.response.data?.error || error.response.statusText;
+    errorMessage = serverError || `Server error: ${error.response.status}`;
     
-    console.error('❌ API Error:', {
-      message: errorMessage,
-      code: errorCode,
-      status: errorResponse.status,
-      url: requestUrl,
-      response: errorResponse.data
-    });
-    
-    if (errorMessage === 'Network Error' || errorCode === 'ERR_NETWORK') {
-      console.error('Network connection error. Check API server availability.');
-      error.apiServerInfo = {
-        baseUrl: import.meta.env.VITE_API_BASE_URL,
-        apiVersion: import.meta.env.VITE_API_VERSION
-      };
-    }
-    
-    if (errorResponse.status === 401) {
-      console.log('Authentication error detected, clearing tokens');
+    // Handle common status codes
+    if (error.response.status === 401) {
+      errorMessage = 'Authentication failed. Please log in again.';
+      // Clear auth token and redirect to login
       localStorage.removeItem('authToken');
-      localStorage.removeItem('auth_token');
-      sessionStorage.removeItem('auth_token');
-      localStorage.removeItem('user');
+      //window.location.href = '/login';
+    } else if (error.response.status === 403) {
+      errorMessage = 'You do not have permission to perform this action.';
+    } else if (error.response.status === 404) {
+      errorMessage = 'The requested resource was not found.';
+    } else if (error.response.status === 422) {
+      // Validation errors
+      const validationErrors = error.response.data?.errors;
+      if (validationErrors) {
+        const firstError = Object.values(validationErrors)[0];
+        errorMessage = Array.isArray(firstError) ? firstError[0] : String(firstError);
+      }
     }
-    
-    return Promise.reject(error);
+  } else if (error.request) {
+    // The request was made but no response was received
+    errorMessage = 'No response from server. Please check your internet connection.';
+  } else {
+    // Something happened in setting up the request that triggered an Error
+    errorMessage = error.message || errorMessage;
   }
-);
+  
+  // Show toast notification for errors
+  toast.error(errorMessage);
+  
+  throw new Error(errorMessage);
+};
 
+// Auth API functions
 export const authAPI = {
-  async login(credentials: LoginRequest): Promise<AuthResponse> {
+  login: async (credentials: LoginRequest): Promise<AuthResponse> => {
     try {
-      console.log('Login attempt with email:', credentials.email);
+      const response = await api.post('/login.php', credentials);
+      const data = response.data;
       
-      localStorage.removeItem('authToken');
-      localStorage.removeItem('auth_token');
-      sessionStorage.removeItem('auth_token');
-      
-      const response = await api.post<AuthResponse>('/api/login', credentials);
-      
-      if (!response.data || !response.data.token) {
-        console.error('Login response missing token:', response.data);
-        throw new Error('Authentication failed: No token received');
+      if (data.token) {
+        localStorage.setItem('authToken', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
       }
       
-      const token = response.data.token;
-      console.log('Login successful, token received:', { 
-        tokenLength: token.length,
-        tokenParts: token.split('.').length,
-        user: response.data.user?.id
-      });
-      
-      localStorage.setItem('authToken', token);
-      localStorage.setItem('auth_token', token);
-      sessionStorage.setItem('auth_token', token);
-      
-      if (response.data.user) {
-        localStorage.setItem('user', JSON.stringify(response.data.user));
-      }
-      
-      return response.data;
-    } catch (error: any) {
-      console.error('Login error details:', error.response || error);
-      
-      const errorMessage = error.response?.data?.message || 
-                          error.message || 
-                          'Authentication failed. Please check your credentials.';
-      
-      throw new Error(errorMessage);
-    }
-  },
-  
-  async signup(userData: SignupRequest): Promise<User> {
-    try {
-      const response = await api.post<AuthResponse>('/api/signup', userData);
-      
-      if (response.data.token) {
-        localStorage.setItem('authToken', response.data.token);
-        localStorage.setItem('auth_token', response.data.token);
-        sessionStorage.setItem('auth_token', response.data.token);
-        localStorage.setItem('user', JSON.stringify(response.data.user));
-      }
-      
-      return response.data.user;
+      return data;
     } catch (error) {
-      console.error('Signup error:', error);
-      throw new Error(error instanceof Error ? error.message : 'Signup failed');
+      return handleApiError(error);
     }
   },
   
-  isAuthenticated(): boolean {
-    const token = localStorage.getItem('authToken') || 
-                 localStorage.getItem('auth_token') || 
-                 sessionStorage.getItem('auth_token');
-    if (!token) return false;
-    
+  signup: async (userData: SignupRequest): Promise<AuthResponse> => {
     try {
-      const decodedToken: any = jwtDecode(token);
-      const currentTime = Date.now() / 1000;
+      const response = await api.post('/signup.php', userData);
+      const data = response.data;
       
-      if (decodedToken.exp && decodedToken.exp < currentTime) {
-        this.logout();
-        return false;
+      if (data.token) {
+        localStorage.setItem('authToken', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
       }
       
-      return true;
+      return data;
     } catch (error) {
-      console.error('Token verification error:', error);
-      this.logout();
-      return false;
+      return handleApiError(error);
     }
   },
   
-  getCurrentUser(): User | null {
-    if (!this.isAuthenticated()) return null;
-    
-    const userStr = localStorage.getItem('user');
-    if (!userStr) return null;
-    
-    try {
-      return JSON.parse(userStr) as User;
-    } catch (error) {
-      console.error('Error parsing user data:', error);
-      return null;
-    }
+  logout: (): void => {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('user');
+    toast.success('You have been logged out successfully');
   },
   
-  isAdmin(): boolean {
-    const user = this.getCurrentUser();
+  isAuthenticated: (): boolean => {
+    return !!localStorage.getItem('authToken');
+  },
+  
+  getCurrentUser: (): AuthUser | null => {
+    const userJson = localStorage.getItem('user');
+    return userJson ? JSON.parse(userJson) : null;
+  },
+  
+  isAdmin: (): boolean => {
+    const user = authAPI.getCurrentUser();
     return user?.role === 'admin';
   },
   
-  logout(): void {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('auth_token');
-    sessionStorage.removeItem('auth_token');
-    localStorage.removeItem('user');
-  },
-  
-  async getAllUsers(): Promise<User[]> {
+  // Get all users (admin only)
+  getAllUsers: async (): Promise<User[]> => {
     try {
-      console.log('Fetching all users with cache busting...');
-      
-      const timestamp = Date.now();
-      const url = `/admin/users?_t=${timestamp}`;
-      
-      const response = await api.get(url, {
-        timeout: 15000,  // 15 second timeout
-        headers: {
-          'X-Request-Time': new Date().toISOString()
-        }
-      });
-      
-      if (!response.data) {
-        throw new Error('Empty response received from server');
-      }
-      
-      let usersData: User[];
-      
-      if (Array.isArray(response.data)) {
-        console.log('Response is direct array format');
-        usersData = response.data;
-      } else if (response.data.data && Array.isArray(response.data.data)) {
-        console.log('Response is wrapped in data property');
-        usersData = response.data.data;
-      } else if (response.data.status === 'success' && Array.isArray(response.data.data)) {
-        console.log('Response is success object with data array');
-        usersData = response.data.data;
-      } else {
-        console.error('Invalid users data format:', response.data);
-        throw new Error('Invalid data format received from server');
-      }
-      
-      console.log('Users processed:', usersData.length, 'users found');
-      return usersData;
-    } catch (error: any) {
-      console.error('Get all users error:', error.response || error);
-      
-      if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
-        throw new Error('Network connection error: Unable to reach the server. Please check your internet connection and try again.');
-      }
-      
-      if (error.response?.status === 401 || 
-          (error.message && (
-            error.message.includes('Authentication failed') ||
-            error.message.includes('Invalid token') ||
-            error.message.includes('token')
-          ))) {
-        console.error('Authentication error in getAllUsers');
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('auth_token');
-        throw new Error('Authentication failed: Please log in again');
-      }
-      
-      throw new Error(error.response?.data?.message || error.message || 'Failed to load users');
+      const response = await api.get('/admin/users.php');
+      return response.data;
+    } catch (error) {
+      return handleApiError(error);
     }
   },
   
-  async updateUserRole(userId: number, role: string): Promise<User> {
+  // Update user role (admin only)
+  updateUserRole: async (userId: number, role: 'user' | 'admin'): Promise<any> => {
     try {
-      console.log(`Updating user ${userId} role to ${role}`);
-      const response = await api.put('/admin/users', { userId, role });
-      
-      if (!response.data) {
-        throw new Error('Empty response received from server');
-      }
-      
-      let updatedUser: User;
-      
-      if (response.data.data && response.data.data.id) {
-        console.log('Response is wrapped in data property');
-        updatedUser = response.data.data;
-      } else if (response.data.id) {
-        console.log('Response is direct user object');
-        updatedUser = response.data;
-      } else {
-        console.error('Invalid user update response format:', response.data);
-        throw new Error('Invalid data format received from server');
-      }
-      
-      console.log('User role updated successfully:', updatedUser);
-      return updatedUser;
-    } catch (error: any) {
-      console.error('Update user role error:', error.response || error);
-      
-      if (error.response?.status === 403 && 
-          error.response?.data?.message?.includes('own admin status')) {
-        throw new Error('You cannot change your own admin status');
-      }
-      
-      throw new Error(error.response?.data?.message || error.message || 'Failed to update user role');
+      const response = await api.post('/admin/users.php', { userId, role });
+      return response.data;
+    } catch (error) {
+      return handleApiError(error);
     }
   }
 };
 
+// Booking API functions
 export const bookingAPI = {
-  async createBooking(bookingData: BookingRequest): Promise<Booking> {
+  createBooking: async (bookingData: BookingRequest): Promise<Booking> => {
     try {
-      const response = await api.post('/api/book', bookingData);
-      return response.data.data;
+      const response = await api.post('/book.php', bookingData);
+      return response.data;
     } catch (error) {
-      console.error('Create booking error:', error);
-      throw new Error(error instanceof Error ? error.message : 'Booking creation failed');
+      return handleApiError(error);
     }
   },
   
-  async getUserBookings(): Promise<Booking[]> {
+  getUserDashboard: async (): Promise<DashboardData> => {
     try {
-      console.log('Fetching user bookings with auth token');
-      
-      const timestamp = Date.now();
-      const url = `/api/user/bookings?_t=${timestamp}`;
-      
-      console.log('User bookings request URL:', apiBaseUrl + url);
-      
-      const response = await api.get(url, {
-        timeout: 15000,  // 15 second timeout
-        headers: {
-          'X-Request-Time': new Date().toISOString()
-        }
-      });
-      
-      if (!response.data) {
-        throw new Error('Empty response received from server');
-      }
-      
-      let bookingsData: Booking[];
-      
-      if (Array.isArray(response.data)) {
-        console.log('Response is direct array format');
-        bookingsData = response.data;
-      } else if (response.data.data && Array.isArray(response.data.data)) {
-        console.log('Response is wrapped in data property');
-        bookingsData = response.data.data;
-      } else if (response.data.status === 'success' && Array.isArray(response.data.data)) {
-        console.log('Response is success object with data array');
-        bookingsData = response.data.data;
-      } else {
-        console.error('Invalid bookings data format:', response.data);
-        throw new Error('Invalid data format received from server');
-      }
-      
-      console.log('User bookings processed:', bookingsData.length, 'bookings found');
-      return bookingsData;
-    } catch (error: any) {
-      console.error('Get user bookings error:', error.response || error);
-      
-      if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
-        throw new Error('Network connection error: Unable to reach the booking server. Please check your internet connection and try again.');
-      }
-      
-      if (error.response?.status === 401 || 
-          (error.message && (
-            error.message.includes('Authentication failed') ||
-            error.message.includes('Invalid token') ||
-            error.message.includes('token')
-          ))) {
-        console.error('Authentication error in getUserBookings');
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('auth_token');
-        throw new Error('Authentication failed: Please log in again');
-      }
-      
-      throw new Error(error.response?.data?.message || error.message || 'Failed to load bookings');
-    }
-  },
-  
-  async getBookingById(id: number): Promise<Booking> {
-    try {
-      const response = await api.get(`/api/user/booking/${id}`);
-      
-      if (response.data && response.data.id) {
-        return response.data;
-      } else if (response.data && response.data.data && response.data.data.id) {
-        return response.data.data;
-      } else {
-        console.error('Invalid booking data format:', response.data);
-        throw new Error('Invalid data format received from server');
-      }
+      const response = await api.get('/user/dashboard.php');
+      return response.data;
     } catch (error) {
-      console.error(`Get booking ${id} error:`, error);
-      throw new Error(error instanceof Error ? error.message : 'Failed to load booking details');
+      return handleApiError(error);
     }
   },
   
-  async updateBooking(id: number, bookingData: Partial<BookingRequest>): Promise<Booking> {
+  getUserBookings: async (): Promise<Booking[]> => {
     try {
-      const response = await api.put(`/api/update-booking/${id}`, bookingData);
-      return response.data.data;
+      const response = await api.get('/user/bookings.php');
+      return response.data.bookings || [];
     } catch (error) {
-      console.error(`Update booking ${id} error:`, error);
-      throw new Error(error instanceof Error ? error.message : 'Failed to update booking');
+      return handleApiError(error);
     }
   },
   
-  async updateBookingStatus(id: number, status: BookingStatus): Promise<Booking> {
+  getBookingDetails: async (bookingId: string | number): Promise<Booking> => {
     try {
-      const response = await api.put(`/api/update-booking/${id}`, { status });
-      return response.data.data;
+      const response = await api.get(`/user/booking.php?id=${bookingId}`);
+      return response.data;
     } catch (error) {
-      console.error(`Update booking ${id} status error:`, error);
-      throw new Error(error instanceof Error ? error.message : 'Failed to update booking status');
+      return handleApiError(error);
     }
   },
   
-  async getBookingReceipt(id: number): Promise<Booking> {
+  cancelBooking: async (bookingId: string | number): Promise<any> => {
     try {
-      const response = await api.get(`/api/receipt/${id}`);
-      
-      if (response.data && response.data.id) {
-        return response.data;
-      } else if (response.data && response.data.data && response.data.data.id) {
-        return response.data.data;
-      } else {
-        console.error('Invalid receipt data format:', response.data);
-        throw new Error('Invalid data format received from server');
-      }
+      const response = await api.post(`/update-booking.php`, { id: bookingId, status: 'cancelled' });
+      return response.data;
     } catch (error) {
-      console.error(`Get receipt for booking ${id} error:`, error);
-      throw new Error(error instanceof Error ? error.message : 'Failed to load receipt');
+      return handleApiError(error);
     }
   },
   
-  async getAllBookings(): Promise<Booking[]> {
+  // Admin functions
+  getAdminBookings: async (status?: string): Promise<Booking[]> => {
     try {
-      console.log('Fetching all bookings with cache busting...');
-      const timestamp = Date.now();
+      const url = status && status !== 'all' 
+        ? `/admin/booking.php?status=${status}`
+        : '/admin/booking.php';
       
-      const response = await api.get('/admin/bookings', {
-        timeout: 15000,  // 15 second timeout
-        params: { _t: timestamp },
-        headers: {
-          'X-Request-Time': new Date().toISOString()
-        }
-      });
-      
-      if (Array.isArray(response.data)) {
-        return response.data;
-      } else if (response.data.data && Array.isArray(response.data.data)) {
-        return response.data.data;
-      } else {
-        console.error('Invalid admin bookings data format:', response.data);
-        throw new Error('Invalid data format received from server');
-      }
-    } catch (error: any) {
-      console.error('Get all bookings error:', error);
-      
-      if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
-        throw new Error('Network connection error: Unable to reach the booking server. Please check your internet connection and try again.');
-      }
-      
-      throw new Error(error instanceof Error ? error.message : 'Failed to load all bookings');
-    }
-  },
-  
-  async getAdminBookingDetails(id: number): Promise<Booking> {
-    try {
-      const response = await api.get(`/admin/booking/${id}`);
-      return response.data.data;
+      const response = await api.get(url);
+      return response.data.bookings || [];
     } catch (error) {
-      console.error(`Get admin booking ${id} error:`, error);
-      throw new Error(error instanceof Error ? error.message : 'Failed to load booking details');
+      return handleApiError(error);
     }
   },
   
-  async deleteBooking(id: number): Promise<void> {
+  updateBookingStatus: async (bookingId: string | number, status: string): Promise<any> => {
     try {
-      await api.delete(`/admin/booking/${id}`);
+      const response = await api.post(`/admin/booking.php`, { id: bookingId, status });
+      return response.data;
     } catch (error) {
-      console.error(`Delete booking ${id} error:`, error);
-      throw new Error(error instanceof Error ? error.message : 'Failed to delete booking');
+      return handleApiError(error);
     }
   },
   
-  async getAdminDashboardMetrics(period: 'today' | 'week' | 'month', status?: BookingStatus): Promise<DashboardMetrics> {
+  getAdminDashboardMetrics: async (period: 'today' | 'week' | 'month' = 'week'): Promise<DashboardMetrics> => {
     try {
-      const params: Record<string, string> = { 
-        period,
-        admin: 'true',
-        '_t': Date.now().toString()
-      };
-      
-      if (status) {
-        params.status = status;
-      }
-      
-      console.log('Requesting admin metrics with params:', params);
-      
-      const apiUrl = `${apiBaseUrl}/api/user/dashboard`;
-      console.log('Admin metrics API URL:', apiUrl);
-      console.log('Auth token present:', !!localStorage.getItem('authToken'));
-      
-      const response = await api.get('/api/user/dashboard', { 
-        params,
-        timeout: 10000
-      });
-      
-      console.log('Admin metrics raw response:', response.data);
-      
-      if (!response.data) {
-        console.error('Empty response received from metrics API');
-        throw new Error('Empty response received from metrics API');
-      }
-      
-      let metricsData: DashboardMetrics;
-      
-      if (response.data.data && typeof response.data.data === 'object') {
-        console.log('Using standard data property format');
-        metricsData = response.data.data;
-      } else if (response.data.status === 'success' && response.data.data) {
-        console.log('Using success.data format');
-        metricsData = response.data.data;
-      } else if (typeof response.data === 'object' && 'totalBookings' in response.data) {
-        console.log('Using direct metrics object format');
-        metricsData = response.data;
-      } else {
-        console.error('Invalid metrics data format:', response.data);
-        throw new Error('Invalid data format received from metrics API');
-      }
-      
-      console.log('Processed metrics data:', metricsData);
-      
-      if (typeof metricsData !== 'object' || !('totalBookings' in metricsData)) {
-        console.error('Metrics data missing required properties:', metricsData);
-        throw new Error('Invalid metrics data: missing required properties');
-      }
-      
-      const defaultMetrics: DashboardMetrics = {
-        totalBookings: 0,
-        activeRides: 0,
-        totalRevenue: 0,
-        availableDrivers: 0,
-        busyDrivers: 0,
-        avgRating: 0,
-        upcomingRides: 0
-      };
-      
-      return { ...defaultMetrics, ...metricsData };
-    } catch (error: any) {
-      console.error('Get admin metrics error:', error);
-      
-      if (error.response?.status === 401) {
-        console.error('Authentication error in getAdminDashboardMetrics');
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('auth_token');
-        throw new Error('Authentication failed: Please log in again');
-      }
-      
-      if (error.code === 'ECONNABORTED') {
-        throw new Error('Request timeout: The server took too long to respond');
-      }
-      
-      if (error.message === 'Network Error') {
-        throw new Error('Network error: Unable to connect to the server. Please check your connection.');
-      }
-      
-      throw new Error(error.response?.data?.message || error.message || 'Failed to load dashboard metrics');
+      const response = await api.get(`/admin/metrics.php?period=${period}`);
+      return response.data;
+    } catch (error) {
+      return handleApiError(error);
     }
   }
 };
 
+// Fare API functions
 export const fareAPI = {
-  async getTourFares(): Promise<TourFare[]> {
+  // Get tour fares
+  getTourFares: async (): Promise<TourFare[]> => {
     try {
-      const response = await api.get('/api/fares/tours');
-      return response.data.data;
+      const response = await api.get('/fares/tours.php');
+      return response.data;
     } catch (error) {
-      console.error('Get tour fares error:', error);
-      throw new Error(error instanceof Error ? error.message : 'Failed to load tour fares');
+      return handleApiError(error);
     }
   },
   
-  async getVehiclePricing(): Promise<VehiclePricing[]> {
+  // Get vehicle pricing
+  getVehiclePricing: async (): Promise<VehiclePricing[]> => {
     try {
-      const response = await api.get('/api/fares/vehicles');
-      return response.data.data;
+      const response = await api.get('/fares/vehicles.php');
+      return response.data;
     } catch (error) {
-      console.error('Get vehicle pricing error:', error);
-      throw new Error(error instanceof Error ? error.message : 'Failed to load vehicle pricing');
+      return handleApiError(error);
     }
   },
   
-  async updateTourFares(fareData: FareUpdateRequest): Promise<TourFare> {
+  // Get vehicle data (includes both types and pricing)
+  getVehicles: async (): Promise<any[]> => {
     try {
-      const response = await api.post('/api/admin/fares/update', fareData);
-      return response.data.data;
+      const response = await api.get('/admin/vehicles-update.php');
+      return response.data;
     } catch (error) {
-      console.error('Update tour fares error:', error);
-      throw new Error(error instanceof Error ? error.message : 'Failed to update tour fares');
+      return handleApiError(error);
     }
   },
   
-  async addTourFare(fareData: TourFare): Promise<TourFare> {
+  // Update tour fares (admin only)
+  updateTourFares: async (fareData: FareUpdateRequest): Promise<any> => {
     try {
-      const response = await api.put('/api/admin/fares/update', fareData);
-      return response.data.data;
+      const response = await api.post('/admin/fares-update.php', fareData);
+      return response.data;
     } catch (error) {
-      console.error('Add tour fare error:', error);
-      throw new Error(error instanceof Error ? error.message : 'Failed to add new tour');
+      return handleApiError(error);
     }
   },
   
-  async deleteTourFare(tourId: string): Promise<void> {
+  // Add new tour fare (admin only)
+  addTourFare: async (fareData: TourFare): Promise<any> => {
     try {
-      await api.delete('/api/admin/fares/update', { params: { tourId } });
+      const response = await api.put('/admin/fares-update.php', fareData);
+      return response.data;
     } catch (error) {
-      console.error('Delete tour fare error:', error);
-      throw new Error(error instanceof Error ? error.message : 'Failed to delete tour');
+      return handleApiError(error);
     }
   },
   
-  async updateVehiclePricing(pricingData: VehiclePricingUpdateRequest): Promise<VehiclePricing> {
+  // Delete tour fare (admin only)
+  deleteTourFare: async (tourId: string): Promise<any> => {
     try {
-      const response = await api.post('/api/admin/km-price/update', pricingData);
-      return response.data.data;
+      const response = await api.delete(`/admin/fares-update.php?tourId=${tourId}`);
+      return response.data;
     } catch (error) {
-      console.error('Update vehicle pricing error:', error);
-      throw new Error(error instanceof Error ? error.message : 'Failed to update vehicle pricing');
+      return handleApiError(error);
+    }
+  },
+  
+  // Update vehicle pricing (admin only)
+  updateVehiclePricing: async (pricingData: VehiclePricingUpdateRequest): Promise<any> => {
+    try {
+      const response = await api.post('/admin/vehicle-pricing.php', pricingData);
+      return response.data;
+    } catch (error) {
+      return handleApiError(error);
+    }
+  },
+  
+  // Update vehicle (admin only)
+  updateVehicle: async (vehicleData: any): Promise<any> => {
+    try {
+      const response = await api.post('/admin/vehicles-update.php', vehicleData);
+      return response.data;
+    } catch (error) {
+      return handleApiError(error);
+    }
+  },
+  
+  // Add new vehicle (admin only)
+  addVehicle: async (vehicleData: any): Promise<any> => {
+    try {
+      const response = await api.put('/admin/vehicles-update.php', vehicleData);
+      return response.data;
+    } catch (error) {
+      return handleApiError(error);
+    }
+  },
+  
+  // Delete vehicle (admin only)
+  deleteVehicle: async (vehicleId: string): Promise<any> => {
+    try {
+      const response = await api.delete(`/admin/vehicles-update.php?vehicleId=${vehicleId}`);
+      return response.data;
+    } catch (error) {
+      return handleApiError(error);
+    }
+  },
+  
+  // Get all vehicle data for booking
+  getAllVehicleData: async (): Promise<any[]> => {
+    try {
+      const response = await api.get('/fares/vehicles-data.php');
+      return response.data;
+    } catch (error) {
+      return handleApiError(error);
     }
   }
-};
-
-export default {
-  auth: authAPI,
-  booking: bookingAPI,
-  fare: fareAPI
 };

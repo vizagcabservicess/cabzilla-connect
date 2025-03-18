@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -17,6 +18,7 @@ import { authAPI, bookingAPI, fareAPI } from '@/services/api';
 import { AdminBookingsList } from '@/components/admin/AdminBookingsList';
 import { FareManagement } from '@/components/admin/FareManagement';
 import { VehiclePricingManagement } from '@/components/admin/VehiclePricingManagement';
+import { VehicleManagement } from '@/components/admin/VehicleManagement';
 import { DriverManagement } from '@/components/admin/DriverManagement';
 import { CustomerManagement } from '@/components/admin/CustomerManagement';
 import { DashboardMetrics } from '@/components/admin/DashboardMetrics';
@@ -315,14 +317,7 @@ export default function AdminDashboardPage() {
         </TabsContent>
         
         <TabsContent value="vehicles">
-          <Card>
-            <CardHeader>
-              <CardTitle>Vehicle Management</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">This feature is under development</p>
-            </CardContent>
-          </Card>
+          <VehicleManagement />
         </TabsContent>
         
         <TabsContent value="notifications">
