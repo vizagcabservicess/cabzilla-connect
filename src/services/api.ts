@@ -285,6 +285,11 @@ export const bookingAPI = {
       return response.data.data;
     }
     return response.data;
+  },
+  deleteBooking: async (bookingId: string): Promise<any> => {
+    console.log('Deleting booking:', bookingId);
+    const response = await axiosInstance.delete(`/api/admin/booking/${bookingId}`);
+    return response.data;
   }
 };
 
