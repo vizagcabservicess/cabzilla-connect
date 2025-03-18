@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -172,11 +171,9 @@ const ToursPage = () => {
     }
   };
   
-  // Handle pickup location change via LocationInput
   const handlePickupLocationChange = (location: Location) => {
     if (!location) return;
     
-    // Ensure we set isInVizag property properly
     if (location.isInVizag === undefined) {
       location.isInVizag = isLocationInVizag(location);
     }

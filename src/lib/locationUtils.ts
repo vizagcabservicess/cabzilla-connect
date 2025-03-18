@@ -73,7 +73,7 @@ export const isLocationInVizag = (location: AppLocation | ApiLocation | null | u
   if (!location) return false;
   
   // Check by coordinates (Visakhapatnam approximate bounds)
-  if (location.lat && location.lng) {
+  if (typeof location.lat === 'number' && typeof location.lng === 'number') {
     const isInVizagBounds = 
       location.lat >= 17.6 && location.lat <= 17.9 && 
       location.lng >= 83.1 && location.lng <= 83.4;
@@ -81,8 +81,10 @@ export const isLocationInVizag = (location: AppLocation | ApiLocation | null | u
     if (isInVizagBounds) return true;
   }
   
-  // SAFE handling of address/name - explicitly check if they're string values first
+  // SAFE handling of address - explicitly check if it's a string value first
   const addressLower = typeof location.address === 'string' && location.address ? location.address.toLowerCase() : '';
+  
+  // SAFE handling of name - explicitly check if it's a string value first
   const nameLower = typeof location.name === 'string' && location.name ? location.name.toLowerCase() : '';
   
   // Safely handle city which might not exist on ApiLocation
@@ -105,7 +107,7 @@ export const isLocationInVizag = (location: AppLocation | ApiLocation | null | u
 /**
  * Extract city from a formatted address with safe handling of undefined
  */
-function extractCityFromAddress(address: string): string {
+function extractCityFromAddress(address: string | undefined | null): string {
   if (!address || typeof address !== 'string') return 'Visakhapatnam';
   
   // Simple extraction - get the first part that might be a city
@@ -125,7 +127,7 @@ function extractCityFromAddress(address: string): string {
 /**
  * Extract state from a formatted address with safe handling of undefined
  */
-function extractStateFromAddress(address: string): string {
+function extractStateFromAddress(address: string | undefined | null): string {
   if (!address || typeof address !== 'string') return 'Andhra Pradesh';
   
   // Try to find Andhra Pradesh or other state names in the address

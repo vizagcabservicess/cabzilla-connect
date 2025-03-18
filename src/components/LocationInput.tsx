@@ -192,15 +192,15 @@ export function LocationInput({
     
     // Cleanup when component unmounts
     return () => {
-      if (autocompleteRef.current) {
+      if (autocompleteRef.current && google) {
         google.maps.event.clearInstanceListeners(autocompleteRef.current);
       }
     };
   }, [google, isLoaded, handleLocationChange, disabled, readOnly, isPickupLocation, isAirportTransfer]);
 
   // Helper function to determine if a location is in Vizag - SAFELY!
-  function checkIfLocationIsInVizag(lat: number, lng: number, address: string): boolean {
-    if (!address) return false;
+  function checkIfLocationIsInVizag(lat: number, lng: number, address: string | undefined): boolean {
+    if (!address || typeof address !== 'string') return false;
     
     // Check coordinates (Visakhapatnam bounds)
     const isInVizagBounds = 
@@ -208,7 +208,7 @@ export function LocationInput({
       lng >= 83.1 && lng <= 83.4;
     
     // Check address text - SAFELY handle potentially undefined values
-    const addressLower = address ? address.toLowerCase() : '';
+    const addressLower = typeof address === 'string' ? address.toLowerCase() : '';
     const vizagNames = ['visakhapatnam', 'vizag', 'waltair', 'vizianagaram'];
     
     for (const name of vizagNames) {
