@@ -19,6 +19,20 @@ export const convertToApiLocation = (location: AppLocation | null): ApiLocation 
 };
 
 /**
+ * Safely check if a string contains a target substring
+ * Handles null, undefined, and non-string inputs
+ */
+export const safeIncludes = (str: any, target: string): boolean => {
+  // If str is null, undefined, or not a string, return false
+  if (str === null || str === undefined || typeof str !== 'string') {
+    return false;
+  }
+  
+  // Check if the lowercase version of str includes target
+  return str.toLowerCase().includes(target);
+};
+
+/**
  * Creates a location change handler function for components
  */
 export const createLocationChangeHandler = (
@@ -85,31 +99,19 @@ export const isLocationInVizag = (location: AppLocation | ApiLocation | null | u
     if (isInVizagBounds) return true;
   }
   
-  // SAFE handling of address with null/undefined check and type check
-  let addressLower = '';
-  if (location.address !== undefined && location.address !== null) {
-    addressLower = typeof location.address === 'string' ? location.address.toLowerCase() : '';
-  }
-  
-  // SAFE handling of name with null/undefined check and type check
-  let nameLower = '';
-  if (location.name !== undefined && location.name !== null) {
-    nameLower = typeof location.name === 'string' ? location.name.toLowerCase() : '';
-  }
-  
-  // Safely handle city which might not exist on ApiLocation
-  let cityLower = '';
-  if ('city' in location && location.city !== undefined && location.city !== null) {
-    cityLower = typeof location.city === 'string' ? location.city.toLowerCase() : '';
-  }
-  
+  // Using safeIncludes for all string checks
   const vizagNames = ['visakhapatnam', 'vizag', 'waltair', 'vizianagaram'];
   
-  for (const name of vizagNames) {
+  // Get location address, name, city ensuring they are strings
+  const address = location.address || '';
+  const name = location.name || '';
+  const city = 'city' in location && location.city ? location.city : '';
+  
+  for (const vizagName of vizagNames) {
     if (
-      (addressLower && addressLower.includes(name)) || 
-      (nameLower && nameLower.includes(name)) || 
-      (cityLower && cityLower.includes(name))
+      safeIncludes(address, vizagName) ||
+      safeIncludes(name, vizagName) ||
+      safeIncludes(city, vizagName)
     ) {
       return true;
     }
@@ -122,7 +124,7 @@ export const isLocationInVizag = (location: AppLocation | ApiLocation | null | u
  * Extract city from a formatted address with safe handling of undefined
  */
 function extractCityFromAddress(address: string | undefined | null): string {
-  if (address === undefined || address === null || typeof address !== 'string' || address.trim() === '') {
+  if (!address || typeof address !== 'string' || address.trim() === '') {
     return 'Visakhapatnam';
   }
   
@@ -144,7 +146,7 @@ function extractCityFromAddress(address: string | undefined | null): string {
  * Extract state from a formatted address with safe handling of undefined
  */
 function extractStateFromAddress(address: string | undefined | null): string {
-  if (address === undefined || address === null || typeof address !== 'string' || address.trim() === '') {
+  if (!address || typeof address !== 'string' || address.trim() === '') {
     return 'Andhra Pradesh';
   }
   
