@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { LocationInput } from './LocationInput';
 import { DateTimePicker } from './DateTimePicker';
@@ -301,7 +302,7 @@ export function Hero() {
 
   let totalPrice = calculatePrice();
 
-  function handleGuestDetailsSubmit(guestDetails: any) {
+  async function handleGuestDetailsSubmit(guestDetails: any) {
     try {
       const bookingData: BookingRequest = {
         pickupLocation: pickupLocation?.name || '',
