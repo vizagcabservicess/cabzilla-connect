@@ -43,14 +43,17 @@ while ($row = $result->fetch_assoc()) {
         'name' => $row['name'],
         'capacity' => (int)$row['capacity'],
         'luggageCapacity' => (int)$row['luggage_capacity'],
-        'price' => (float)$row['base_price'],
+        'basePrice' => (float)$row['base_price'],
         'pricePerKm' => (float)$row['price_per_km'],
         'image' => $row['image'],
         'amenities' => $row['amenities'] ? explode(', ', $row['amenities']) : [],
         'description' => $row['description'],
         'ac' => (bool)$row['ac'],
         'nightHaltCharge' => (float)$row['night_halt_charge'],
-        'driverAllowance' => (float)$row['driver_allowance']
+        'driverAllowance' => (float)$row['driver_allowance'],
+        // Also include the original field names for backward compatibility
+        'price' => (float)$row['base_price'],
+        'vehicleType' => $row['vehicle_id']
     ];
     
     $vehicles[] = $vehicle;

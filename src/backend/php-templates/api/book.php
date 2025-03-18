@@ -112,10 +112,12 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
         logError("Authenticated booking", ['user_id' => $userId]);
     } else {
         logError("Invalid token for booking", ['token_prefix' => substr($token, 0, 20) . '...']);
+        // Continue with guest booking (user_id will be NULL)
     }
 } else {
     // For debugging - log the headers we received
     logError("No authorization header found", ['headers' => array_keys($headers)]);
+    // Continue with guest booking (user_id will be NULL)
 }
 
 // Connect to database
@@ -136,7 +138,7 @@ logError("User ID for booking", ['user_id' => $userId, 'booking_number' => $book
 $conn->begin_transaction();
 
 try {
-    // Prepare the SQL query
+    // Prepare the SQL query - Note that we're making user_id nullable
     $sql = "INSERT INTO bookings 
             (user_id, booking_number, pickup_location, drop_location, pickup_date, 
              return_date, cab_type, distance, trip_type, trip_mode, 
