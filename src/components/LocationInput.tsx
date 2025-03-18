@@ -5,6 +5,7 @@ import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
 import { Location } from '@/types/api';
 import { debounce } from '@/lib/utils';
 import { isLocationInVizag, safeIncludes } from '@/lib/locationUtils';
+import { AlertCircle } from 'lucide-react';
 
 interface LocationInputProps {
   location?: Location;
@@ -40,6 +41,7 @@ export function LocationInput({
   // Ensure address is always a string to prevent type errors
   const initialAddress = typeof locationData.address === 'string' ? locationData.address : '';
   const [address, setAddress] = useState<string>(initialAddress);
+  const [locationError, setLocationError] = useState<string | null>(null);
   const { google, isLoaded } = useGoogleMaps();
   
   // Reference to the autocomplete instance
@@ -75,12 +77,19 @@ export function LocationInput({
     }
   }, [locationData, address]);
 
+  // Check if location is in India
+  const isLocationInIndia = (lat: number, lng: number): boolean => {
+    // Approximate India bounds
+    return lat >= 8.0 && lat <= 37.0 && lng >= 68.0 && lng <= 97.0;
+  };
+
   // Handle direct input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e || !e.target) return;
     
     const newAddress = e.target.value;
     setAddress(newAddress);
+    setLocationError(null);
     
     // Only trigger location change if we have a handler and an address
     if (handleLocationChange && newAddress) {
@@ -128,9 +137,10 @@ export function LocationInput({
       
       const options: google.maps.places.AutocompleteOptions = {
         fields: ['address_components', 'geometry', 'name', 'formatted_address'],
+        componentRestrictions: { country: 'in' }, // Restrict to India
       };
       
-      // Apply location restrictions for Visakhapatnam
+      // Apply location restrictions for Visakhapatnam if needed
       if (isPickupLocation === true || isAirportTransfer === true) {
         // Set bounds to Visakhapatnam region
         const vizagBounds = new google.maps.LatLngBounds(
@@ -140,7 +150,6 @@ export function LocationInput({
         
         options.bounds = vizagBounds;
         options.strictBounds = isPickupLocation === true;
-        options.componentRestrictions = { country: 'in' };
       }
       
       // Create new autocomplete instance
@@ -150,9 +159,11 @@ export function LocationInput({
       // Add place_changed listener
       autocomplete.addListener('place_changed', () => {
         const place = autocomplete.getPlace();
+        setLocationError(null);
         
         if (!place || !place.geometry || !place.geometry.location) {
           console.error("No place details returned from autocomplete");
+          setLocationError("Please select a valid location from the dropdown");
           return;
         }
         
@@ -165,6 +176,13 @@ export function LocationInput({
         // Get coordinates
         const lat = place.geometry.location.lat();
         const lng = place.geometry.location.lng();
+        
+        // Check if location is in India
+        if (!isLocationInIndia(lat, lng)) {
+          console.error("Selected location is outside India");
+          setLocationError("Please select a location within India");
+          return;
+        }
         
         // Create location object with all required properties
         const newLocation: Location = {
@@ -233,21 +251,34 @@ export function LocationInput({
           {label}
         </label>
       )}
-      <Input
-        type="text"
-        ref={inputRef}
-        placeholder={placeholder}
-        className={className}
-        value={address}
-        onChange={(e) => {
-          if (!e || !e.target) return;
-          setAddress(e.target.value);
-          debouncedHandleChange(e);
-        }}
-        disabled={disabled}
-        readOnly={readOnly}
-        autoComplete="off" // Prevent browser's default autocomplete
-      />
+      <div className="relative">
+        <Input
+          type="text"
+          ref={inputRef}
+          placeholder={placeholder}
+          className={className + (locationError ? " border-red-500" : "")}
+          value={address}
+          onChange={(e) => {
+            if (!e || !e.target) return;
+            setAddress(e.target.value);
+            debouncedHandleChange(e);
+          }}
+          disabled={disabled}
+          readOnly={readOnly}
+          autoComplete="off" // Prevent browser's default autocomplete
+        />
+        {locationError && (
+          <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-red-500">
+            <AlertCircle size={16} />
+          </div>
+        )}
+      </div>
+      {locationError && (
+        <p className="text-xs text-red-500 mt-1">{locationError}</p>
+      )}
+      <p className="text-xs text-gray-500">
+        {isPickupLocation ? "Select a location in India" : "Select a destination in India"}
+      </p>
     </div>
   );
 }

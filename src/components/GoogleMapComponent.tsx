@@ -34,7 +34,9 @@ const GoogleMapComponent = ({
   const [directionsRequested, setDirectionsRequested] = useState(false);
   const [directionsRequestFailed, setDirectionsRequestFailed] = useState(false);
   const [mapError, setMapError] = useState<Error | null>(null);
+  const [routeNotFound, setRouteNotFound] = useState(false);
   const directionsRequestCount = useRef(0);
+  const maxRetries = useRef(3);
 
   const mapContainerStyle = {
     width: "100%",
@@ -74,10 +76,30 @@ const GoogleMapComponent = ({
     lng: safePickupLocation.lng
   };
 
+  // Check if locations are too far apart (more than 2000km)
+  const areLocationsTooFarApart = () => {
+    const distance = calculateHaversineDistance(
+      safePickupLocation.lat, safePickupLocation.lng,
+      safeDropLocation.lat, safeDropLocation.lng
+    );
+    return distance > 2000; // More than 2000km apart
+  };
+
+  // Check if both locations are in India (approximate bounds)
+  const areLocationsInIndia = () => {
+    const inIndiaBounds = (lat: number, lng: number) => {
+      return lat >= 8.0 && lat <= 37.0 && lng >= 68.0 && lng <= 97.0;
+    };
+    
+    return inIndiaBounds(safePickupLocation.lat, safePickupLocation.lng) && 
+           inIndiaBounds(safeDropLocation.lat, safeDropLocation.lng);
+  };
+
   const directionsCallback = useCallback((result: google.maps.DirectionsResult | null, status: google.maps.DirectionsStatus) => {
     console.log("Directions status:", status);
     
     if (status === google.maps.DirectionsStatus.OK && result) {
+      setRouteNotFound(false);
       setDirections(result);
       setDirectionsRequestFailed(false);
       
@@ -105,17 +127,29 @@ const GoogleMapComponent = ({
       console.error("Directions request failed with status:", status);
       setDirectionsRequestFailed(true);
       
-      // Fallback to default distance calculation if Google Maps fails
-      if (onDistanceCalculated) {
-        // Calculate approximate distance using the Haversine formula
-        const distance = calculateHaversineDistance(
-          safePickupLocation.lat, safePickupLocation.lng,
-          safeDropLocation.lat, safeDropLocation.lng
-        );
+      if (status === google.maps.DirectionsStatus.ZERO_RESULTS) {
+        setRouteNotFound(true);
         
-        const duration = Math.round(distance * 2); // Approximate duration in minutes
-        
-        onDistanceCalculated(distance, duration);
+        // If both locations have valid coordinates, use Haversine formula as fallback
+        if (typeof safePickupLocation.lat === 'number' && 
+            typeof safePickupLocation.lng === 'number' &&
+            typeof safeDropLocation.lat === 'number' && 
+            typeof safeDropLocation.lng === 'number') {
+          
+          // Calculate approximate distance using the Haversine formula
+          const distance = calculateHaversineDistance(
+            safePickupLocation.lat, safePickupLocation.lng,
+            safeDropLocation.lat, safeDropLocation.lng
+          );
+          
+          const duration = Math.round(distance * 2); // Approximate duration in minutes
+          
+          console.log("Using Haversine distance fallback:", distance, "km");
+          
+          if (onDistanceCalculated) {
+            onDistanceCalculated(distance, duration);
+          }
+        }
       }
     }
   }, [onDistanceCalculated, safePickupLocation, safeDropLocation, google]);
@@ -149,6 +183,7 @@ const GoogleMapComponent = ({
         setDirections(null);
         setDirectionsRequested(false);
         setDirectionsRequestFailed(false);
+        setRouteNotFound(false);
         directionsRequestCount.current = 0;
       }
     } catch (error) {
@@ -166,6 +201,29 @@ const GoogleMapComponent = ({
   useEffect(() => {
     try {
       if (mapLoaded && !directionsRequested && google) {
+        // Check if both locations are in India
+        if (!areLocationsInIndia()) {
+          console.error("One or both locations are outside India");
+          setRouteNotFound(true);
+          setDirectionsRequestFailed(true);
+          
+          if (onDistanceCalculated) {
+            // Provide a fallback distance for non-Indian locations
+            const distance = calculateHaversineDistance(
+              safePickupLocation.lat, safePickupLocation.lng,
+              safeDropLocation.lat, safeDropLocation.lng
+            );
+            const duration = Math.round(distance * 2);
+            onDistanceCalculated(distance, duration);
+          }
+          return;
+        }
+        
+        // Check if locations are too far apart
+        if (areLocationsTooFarApart()) {
+          console.warn("Locations are very far apart (>2000km), route might not be found");
+        }
+        
         setDirectionsRequested(true);
         directionsRequestCount.current += 1;
         console.log(`Making directions request #${directionsRequestCount.current}`);
@@ -174,7 +232,7 @@ const GoogleMapComponent = ({
       console.error("Error in directions request effect:", error);
       setMapError(error instanceof Error ? error : new Error(String(error)));
     }
-  }, [mapLoaded, directionsRequested, google]);
+  }, [mapLoaded, directionsRequested, google, safePickupLocation, safeDropLocation, onDistanceCalculated]);
 
   // Handle errors
   if (mapError) {
@@ -192,45 +250,73 @@ const GoogleMapComponent = ({
   }
 
   return (
-    <GoogleMap
-      mapContainerStyle={mapContainerStyle}
-      center={center}
-      zoom={12}
-      onLoad={onMapLoad}
-    >
-      {mapLoaded && !directions && directionsRequested && !directionsRequestFailed && (
-        <DirectionsService
-          options={{
-            origin: { lat: safePickupLocation.lat, lng: safePickupLocation.lng },
-            destination: { lat: safeDropLocation.lat, lng: safeDropLocation.lng },
-            travelMode: google?.maps.TravelMode.DRIVING,
-          }}
-          callback={directionsCallback}
-        />
-      )}
-
-      {directions && (
-        <DirectionsRenderer
-          options={{
-            directions: directions,
-            suppressMarkers: false,
-          }}
-        />
-      )}
-
-      {!directions && (
-        <>
-          <Marker
-            position={{ lat: safePickupLocation.lat, lng: safePickupLocation.lng }}
-            label={{ text: "A", color: "white" }}
+    <div className="relative">
+      <GoogleMap
+        mapContainerStyle={mapContainerStyle}
+        center={center}
+        zoom={12}
+        onLoad={onMapLoad}
+        options={{ 
+          mapTypeControl: false,
+          streetViewControl: false,
+          fullscreenControl: true,
+          // Restrict to India view
+          restriction: {
+            latLngBounds: {
+              north: 37.0,
+              south: 8.0,
+              west: 68.0,
+              east: 97.0
+            },
+            strictBounds: false
+          }
+        }}
+      >
+        {mapLoaded && !directions && directionsRequested && !directionsRequestFailed && (
+          <DirectionsService
+            options={{
+              origin: { lat: safePickupLocation.lat, lng: safePickupLocation.lng },
+              destination: { lat: safeDropLocation.lat, lng: safeDropLocation.lng },
+              travelMode: google?.maps.TravelMode.DRIVING,
+              region: 'in', // India region code
+              avoidFerries: true,
+              avoidHighways: false,
+              avoidTolls: false,
+            }}
+            callback={directionsCallback}
           />
-          <Marker
-            position={{ lat: safeDropLocation.lat, lng: safeDropLocation.lng }}
-            label={{ text: "B", color: "white" }}
+        )}
+
+        {directions && (
+          <DirectionsRenderer
+            options={{
+              directions: directions,
+              suppressMarkers: false,
+            }}
           />
-        </>
+        )}
+
+        {!directions && (
+          <>
+            <Marker
+              position={{ lat: safePickupLocation.lat, lng: safePickupLocation.lng }}
+              label={{ text: "A", color: "white" }}
+            />
+            <Marker
+              position={{ lat: safeDropLocation.lat, lng: safeDropLocation.lng }}
+              label={{ text: "B", color: "white" }}
+            />
+          </>
+        )}
+      </GoogleMap>
+      
+      {routeNotFound && (
+        <div className="absolute bottom-0 left-0 right-0 bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded">
+          <p className="font-medium">No route found between these locations</p>
+          <p className="text-sm">We've calculated an approximate straight-line distance instead.</p>
+        </div>
       )}
-    </GoogleMap>
+    </div>
   );
 };
 

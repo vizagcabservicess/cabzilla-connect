@@ -38,10 +38,12 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
   // Use provided apiKey or fallback to environment variable
   const googleMapsApiKey = apiKey || GOOGLE_MAPS_API_KEY;
   
-  // Load the Google Maps script
+  // Load the Google Maps script with India region bias
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey,
     libraries,
+    region: 'IN', // Set region to India
+    language: 'en',
   });
 
   // Store the google object once loaded
@@ -49,6 +51,24 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
     if (isLoaded && !loadError && window.google) {
       setGoogleInstance(window.google);
       console.log("✅ Google Maps API loaded successfully");
+      
+      // Set default bounds to India if Maps loaded successfully
+      if (window.google.maps) {
+        try {
+          // Set default map options for all instances
+          const defaultBounds = new window.google.maps.LatLngBounds(
+            new window.google.maps.LatLng(8.0, 68.0),  // SW corner of India
+            new window.google.maps.LatLng(37.0, 97.0)  // NE corner of India
+          );
+          
+          // Store default bounds in window object for later use
+          (window as any).indiaBounds = defaultBounds;
+          
+          console.log("Default India bounds set for Maps");
+        } catch (error) {
+          console.error("Error setting default bounds:", error);
+        }
+      }
     } else if (loadError) {
       console.error("❌ Error loading Google Maps API:", loadError);
     }
