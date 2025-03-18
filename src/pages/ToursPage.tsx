@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
 import { Location, vizagLocations } from "@/lib/locationData";
-import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag } from "@/lib/locationUtils";
+import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag, safeIncludes } from "@/lib/locationUtils";
 import { CabType, cabTypes, availableTours, tourFares } from "@/lib/cabData";
 import { MapPin, Calendar, Check } from "lucide-react";
 import { cn } from "@/lib/utils";

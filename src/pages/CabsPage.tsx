@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -15,7 +14,7 @@ import {
   formatTravelTime,
   isVizagLocation
 } from "@/lib/locationData";
-import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag } from "@/lib/locationUtils";
+import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag, safeIncludes } from "@/lib/locationUtils";
 import { 
   CabType, 
   cabTypes, 
@@ -39,7 +38,6 @@ const CabsPage = () => {
   const { toast } = useToast();
   const { isLoaded } = useGoogleMaps();
   
-  // Load initial state from session storage
   const getInitialFromSession = (key: string, defaultValue: any) => {
     try {
       const value = sessionStorage.getItem(key);
@@ -72,7 +70,6 @@ const CabsPage = () => {
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState<boolean>(false);
   const [bookingComplete, setBookingComplete] = useState<boolean>(false);
   
-  // Save state to session storage
   useEffect(() => {
     if (pickup) sessionStorage.setItem('pickupLocation', JSON.stringify(pickup));
     if (dropoff) sessionStorage.setItem('dropLocation', JSON.stringify(dropoff));
@@ -100,12 +97,10 @@ const CabsPage = () => {
     }
   }, [tripType, pickup, dropoff]);
 
-  // This effect handles location validation and trip type switching
   useEffect(() => {
     if (pickup && dropoff) {
       console.log("Validating locations:", { pickup, dropoff });
       
-      // Make sure both locations have isInVizag property defined
       const isPickupInVizag = pickup && pickup.isInVizag !== undefined ? pickup.isInVizag : isLocationInVizag(pickup);
       
       if (!isPickupInVizag) {
@@ -136,7 +131,6 @@ const CabsPage = () => {
     }
   }, [pickup, dropoff, tripType, toast, navigate]);
 
-  // Reset cab selection when location changes
   useEffect(() => {
     setSelectedCab(null);
     setTotalPrice(0);
@@ -156,22 +150,16 @@ const CabsPage = () => {
       const airport = vizagLocations.find(loc => loc.type === 'airport');
       if (airport) {
         setPickup(airport);
-        // Don't reset dropoff here to maintain user selection
       }
     } else if (type === "local") {
-      // For local we only need pickup
-      // Don't reset pickup here to maintain user selection
       setDropoff(null);
       setHourlyPackage(hourlyPackages[0].id);
     }
-    // For outstation, don't reset locations to maintain user selections
   };
   
-  // Handle pickup location change
   const handlePickupLocationChange = (location: Location) => {
     if (!location) return; // Safety check
     
-    // Explicitly ensure isInVizag is set
     if (location.isInVizag === undefined) {
       location.isInVizag = isLocationInVizag(location);
     }
@@ -180,11 +168,9 @@ const CabsPage = () => {
     setPickup(location);
   };
   
-  // Handle dropoff location change
   const handleDropoffLocationChange = (location: Location) => {
     if (!location) return; // Safety check
     
-    // Explicitly ensure isInVizag is set
     if (location.isInVizag === undefined) {
       location.isInVizag = isLocationInVizag(location);
     }
@@ -207,7 +193,6 @@ const CabsPage = () => {
     }
   };
 
-  // Calculate distance between locations
   useEffect(() => {
     const fetchDistance = async () => {
       if (tripType === "local") {
@@ -262,7 +247,6 @@ const CabsPage = () => {
     fetchDistance();
   }, [pickup, dropoff, tripType, hourlyPackage, toast]);
 
-  // Calculate price when cab is selected and distance is known
   useEffect(() => {
     if (selectedCab && distance > 0) {
       const fare = calculateFare(

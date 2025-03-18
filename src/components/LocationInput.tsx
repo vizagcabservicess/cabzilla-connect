@@ -1,10 +1,10 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Input } from "@/components/ui/input";
 import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
 import { Location } from '@/types/api';
 import { debounce } from '@/lib/utils';
-import { isLocationInVizag } from '@/lib/locationUtils';
-import { safeIncludes } from '@/lib/safeStringUtils';
+import { isLocationInVizag, safeIncludes } from '@/lib/locationUtils';
 
 interface LocationInputProps {
   location?: Location;
@@ -211,7 +211,6 @@ export function LocationInput({
     }
     
     // Check if address contains any Vizag-related names
-    const addressLower = address.toLowerCase();
     const vizagNames = ['visakhapatnam', 'vizag', 'waltair', 'vizianagaram'];
     
     for (const name of vizagNames) {

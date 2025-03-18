@@ -1,3 +1,4 @@
+
 import { Location as ApiLocation } from '@/types/api';
 import { Location as AppLocation } from '@/lib/locationData';
 import { safeIncludes, safeLowerCase, safeGetString } from '@/lib/safeStringUtils';
@@ -71,6 +72,7 @@ export const createLocationChangeHandler = (
 
 /**
  * Safely determine if a location is in Visakhapatnam based on its properties
+ * Uses safeIncludes to prevent errors with null/undefined values
  */
 function determineIfLocationIsInVizag(location: ApiLocation | null | undefined): boolean {
   if (!location) return false;
