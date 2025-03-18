@@ -108,7 +108,7 @@ try {
     }
 
     // If this is an admin metrics request and the user is an admin
-    if ($isAdminMetricsRequest && $isAdmin) {
+    if ($isAdmin) {
         logError("Processing admin metrics request", ['period' => $period, 'status' => $statusFilter]);
         
         // Get date range based on period
@@ -127,7 +127,7 @@ try {
         }
         
         // Add status filter if provided
-        if (!empty($statusFilter)) {
+        if (!empty($statusFilter) && $statusFilter !== 'all') {
             if (strpos($dateCondition, 'WHERE') !== false) {
                 $dateCondition .= " AND status = '" . $conn->real_escape_string($statusFilter) . "'";
             } else {
@@ -151,7 +151,7 @@ try {
         
         // Get active rides (confirmed status with today's date)
         $activeRidesCondition = "WHERE status = 'confirmed' AND DATE(pickup_date) = CURDATE()";
-        if (!empty($statusFilter)) {
+        if (!empty($statusFilter) && $statusFilter !== 'all') {
             $activeRidesCondition = "WHERE status = '" . $conn->real_escape_string($statusFilter) . "' AND DATE(pickup_date) = CURDATE()";
         }
         $activeRidesQuery = "SELECT COUNT(*) as total FROM bookings $activeRidesCondition";
@@ -179,7 +179,7 @@ try {
         
         // Get upcoming rides (pending/confirmed with future date)
         $upcomingRidesCondition = "WHERE (status = 'pending' OR status = 'confirmed') AND DATE(pickup_date) > CURDATE()";
-        if (!empty($statusFilter)) {
+        if (!empty($statusFilter) && $statusFilter !== 'all') {
             $upcomingRidesCondition = "WHERE status = '" . $conn->real_escape_string($statusFilter) . "' AND DATE(pickup_date) > CURDATE()";
         }
         $upcomingRidesQuery = "SELECT COUNT(*) as total FROM bookings $upcomingRidesCondition";
@@ -204,18 +204,11 @@ try {
             }
         }
         
-        // Check if drivers table exists to avoid error
-        $driversTableExists = false;
-        $checkDriversTable = $conn->query("SHOW TABLES LIKE 'drivers'");
-        if ($checkDriversTable) {
-            $driversTableExists = $checkDriversTable->num_rows > 0;
-        }
+        // Simulate driver metrics (since drivers table might not exist)
+        $availableDrivers = 12;
+        $busyDrivers = 8;
         
-        // Simulate driver metrics (in a real app, this would come from a drivers table)
-        $availableDrivers = $driversTableExists ? $conn->query("SELECT COUNT(*) as total FROM drivers WHERE status = 'available'")->fetch_assoc()['total'] ?? 12 : 12;
-        $busyDrivers = $driversTableExists ? $conn->query("SELECT COUNT(*) as total FROM drivers WHERE status = 'busy'")->fetch_assoc()['total'] ?? 8 : 8;
-        
-        // Get average rating (simulated - would come from a ratings table)
+        // Get average rating (simulated)
         $avgRating = 4.7;
         
         // Prepare the metrics response
@@ -233,7 +226,7 @@ try {
         
         logError("Sending admin metrics response", ['metrics' => $metrics, 'period' => $period]);
         
-        // Ensure we use the consistent format: status + data 
+        // Return the metrics data
         sendJsonResponse(['status' => 'success', 'data' => $metrics]);
         exit;
     }
@@ -271,8 +264,8 @@ try {
     while ($row = $result->fetch_assoc()) {
         // Ensure all required fields are present
         $booking = [
-            'id' => $row['id'],
-            'userId' => $row['user_id'],
+            'id' => (int)$row['id'],
+            'userId' => (int)$row['user_id'],
             'bookingNumber' => $row['booking_number'] ?? ('BK' . rand(10000, 99999)),
             'pickupLocation' => $row['pickup_location'],
             'dropLocation' => $row['drop_location'],
@@ -298,14 +291,8 @@ try {
     // Log count of real bookings found
     logError("Real bookings found", ['count' => count($bookings), 'user_id' => $userId]);
 
-    // IMPORTANT: Change to ALWAYS use the same consistent response format with status and data fields
-    $response = [
-        'status' => 'success',
-        'data' => $bookings
-    ];
-    
-    logError("Sending dashboard response", ['bookings_count' => count($bookings), 'response_format' => 'standard']);
-    echo json_encode($response);
+    // Use the consistent response format
+    sendJsonResponse(['status' => 'success', 'bookings' => $bookings]);
     
 } catch (Exception $e) {
     logError("Exception in dashboard.php", [

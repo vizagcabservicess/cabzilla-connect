@@ -22,114 +22,164 @@ logError("Admin booking endpoint request", [
     'headers' => getallheaders()
 ]);
 
-// Get booking ID from URL
-$bookingId = null;
-if (isset($_GET['id'])) {
-    $bookingId = $_GET['id'];
-} else {
-    sendJsonResponse(['status' => 'error', 'message' => 'Booking ID is required'], 400);
+// Authenticate as admin
+$headers = getallheaders();
+if (!isset($headers['Authorization']) && !isset($headers['authorization'])) {
+    logError("No auth header provided");
+    sendJsonResponse(['status' => 'error', 'message' => 'Authentication required'], 401);
+    exit;
+}
+
+$authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
+$token = str_replace('Bearer ', '', $authHeader);
+
+$payload = verifyJwtToken($token);
+if (!$payload) {
+    logError("Invalid token", ['token_length' => strlen($token)]);
+    sendJsonResponse(['status' => 'error', 'message' => 'Invalid or expired token'], 401);
+    exit;
+}
+
+// Check if user is admin
+if (!isset($payload['role']) || $payload['role'] !== 'admin') {
+    logError("Non-admin attempting admin action", ['user_id' => $payload['user_id'], 'role' => $payload['role'] ?? 'none']);
+    sendJsonResponse(['status' => 'error', 'message' => 'Admin privileges required'], 403);
+    exit;
+}
+
+// Connect to database
+$conn = getDbConnection();
+if (!$conn) {
+    sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed'], 500);
     exit;
 }
 
 try {
-    // Authenticate as admin
-    $headers = getallheaders();
-    if (!isset($headers['Authorization']) && !isset($headers['authorization'])) {
-        logError("No auth header provided");
-        sendJsonResponse(['status' => 'error', 'message' => 'Authentication required'], 401);
-        exit;
-    }
-    
-    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
-    $token = str_replace('Bearer ', '', $authHeader);
-    
-    $payload = verifyJwtToken($token);
-    if (!$payload) {
-        logError("Invalid token", ['token_length' => strlen($token)]);
-        sendJsonResponse(['status' => 'error', 'message' => 'Invalid or expired token'], 401);
-        exit;
-    }
-    
-    // Check if user is admin
-    if (!isset($payload['role']) || $payload['role'] !== 'admin') {
-        logError("Non-admin attempting admin action", ['user_id' => $payload['user_id'], 'role' => $payload['role'] ?? 'none']);
-        sendJsonResponse(['status' => 'error', 'message' => 'Admin privileges required'], 403);
-        exit;
-    }
-    
-    // Connect to database
-    $conn = getDbConnection();
-    if (!$conn) {
-        sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed'], 500);
-        exit;
-    }
-
-    // Handle DELETE request
-    if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
-        // First check if booking exists
-        $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
-        $stmt->bind_param("i", $bookingId);
-        $stmt->execute();
-        $result = $stmt->get_result();
+    // Check if this is a request for a specific booking or all bookings
+    if (isset($_GET['id'])) {
+        // Get booking by ID
+        $bookingId = $_GET['id'];
         
-        if ($result->num_rows === 0) {
-            logError("Booking not found for deletion", ['booking_id' => $bookingId]);
-            sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
-            exit;
-        }
-        
-        // Delete the booking
-        $deleteStmt = $conn->prepare("DELETE FROM bookings WHERE id = ?");
-        $deleteStmt->bind_param("i", $bookingId);
-        $success = $deleteStmt->execute();
-        
-        if ($success) {
-            logError("Booking deleted successfully", ['booking_id' => $bookingId, 'by_user_id' => $payload['user_id']]);
-            sendJsonResponse(['status' => 'success', 'message' => 'Booking deleted successfully']);
+        // Handle DELETE request for specific booking
+        if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
+            // First check if booking exists
+            $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
+            $stmt->bind_param("i", $bookingId);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            if ($result->num_rows === 0) {
+                logError("Booking not found for deletion", ['booking_id' => $bookingId]);
+                sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
+                exit;
+            }
+            
+            // Delete the booking
+            $deleteStmt = $conn->prepare("DELETE FROM bookings WHERE id = ?");
+            $deleteStmt->bind_param("i", $bookingId);
+            $success = $deleteStmt->execute();
+            
+            if ($success) {
+                logError("Booking deleted successfully", ['booking_id' => $bookingId, 'by_user_id' => $payload['user_id']]);
+                sendJsonResponse(['status' => 'success', 'message' => 'Booking deleted successfully']);
+            } else {
+                throw new Exception("Failed to delete booking: " . $conn->error);
+            }
+        } 
+        // Handle GET request for admin to view a specific booking
+        else if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+            $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
+            $stmt->bind_param("i", $bookingId);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            if ($result->num_rows === 0) {
+                logError("Booking not found", ['booking_id' => $bookingId]);
+                sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
+                exit;
+            }
+            
+            $booking = $result->fetch_assoc();
+            
+            // Format response data
+            $formattedBooking = [
+                'id' => (int)$booking['id'],
+                'userId' => $booking['user_id'] ? (int)$booking['user_id'] : null,
+                'bookingNumber' => $booking['booking_number'],
+                'pickupLocation' => $booking['pickup_location'],
+                'dropLocation' => $booking['drop_location'],
+                'pickupDate' => $booking['pickup_date'],
+                'returnDate' => $booking['return_date'],
+                'cabType' => $booking['cab_type'],
+                'distance' => (float)$booking['distance'],
+                'tripType' => $booking['trip_type'],
+                'tripMode' => $booking['trip_mode'],
+                'totalAmount' => (float)$booking['total_amount'],
+                'status' => $booking['status'],
+                'passengerName' => $booking['passenger_name'],
+                'passengerPhone' => $booking['passenger_phone'],
+                'passengerEmail' => $booking['passenger_email'],
+                'createdAt' => $booking['created_at'],
+                'updatedAt' => $booking['updated_at']
+            ];
+            
+            sendJsonResponse(['status' => 'success', 'data' => $formattedBooking]);
         } else {
-            throw new Exception("Failed to delete booking: " . $conn->error);
+            sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
         }
-    } 
-    // Handle GET request for admin to view a specific booking
-    else if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-        $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
-        $stmt->bind_param("i", $bookingId);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        
-        if ($result->num_rows === 0) {
-            logError("Booking not found", ['booking_id' => $bookingId]);
-            sendJsonResponse(['status' => 'error', 'message' => 'Booking not found'], 404);
-            exit;
-        }
-        
-        $booking = $result->fetch_assoc();
-        
-        // Format response data
-        $formattedBooking = [
-            'id' => (int)$booking['id'],
-            'userId' => $booking['user_id'] ? (int)$booking['user_id'] : null,
-            'bookingNumber' => $booking['booking_number'],
-            'pickupLocation' => $booking['pickup_location'],
-            'dropLocation' => $booking['drop_location'],
-            'pickupDate' => $booking['pickup_date'],
-            'returnDate' => $booking['return_date'],
-            'cabType' => $booking['cab_type'],
-            'distance' => (float)$booking['distance'],
-            'tripType' => $booking['trip_type'],
-            'tripMode' => $booking['trip_mode'],
-            'totalAmount' => (float)$booking['total_amount'],
-            'status' => $booking['status'],
-            'passengerName' => $booking['passenger_name'],
-            'passengerPhone' => $booking['passenger_phone'],
-            'passengerEmail' => $booking['passenger_email'],
-            'createdAt' => $booking['created_at'],
-            'updatedAt' => $booking['updated_at']
-        ];
-        
-        sendJsonResponse(['status' => 'success', 'data' => $formattedBooking]);
     } else {
-        sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
+        // This is a request for all bookings (no specific ID)
+        if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+            // Get status filter if provided
+            $statusFilter = isset($_GET['status']) && $_GET['status'] !== 'all' ? $_GET['status'] : '';
+            
+            // Prepare SQL query with optional status filter
+            $sql = "SELECT * FROM bookings";
+            if (!empty($statusFilter)) {
+                $sql .= " WHERE status = ?";
+            }
+            $sql .= " ORDER BY created_at DESC";
+            
+            $stmt = $conn->prepare($sql);
+            
+            // Bind status parameter if filter is applied
+            if (!empty($statusFilter)) {
+                $stmt->bind_param("s", $statusFilter);
+            }
+            
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            $bookings = [];
+            while ($row = $result->fetch_assoc()) {
+                $booking = [
+                    'id' => (int)$row['id'],
+                    'userId' => $row['user_id'] ? (int)$row['user_id'] : null,
+                    'bookingNumber' => $row['booking_number'],
+                    'pickupLocation' => $row['pickup_location'],
+                    'dropLocation' => $row['drop_location'],
+                    'pickupDate' => $row['pickup_date'],
+                    'returnDate' => $row['return_date'],
+                    'cabType' => $row['cab_type'],
+                    'distance' => (float)$row['distance'],
+                    'tripType' => $row['trip_type'],
+                    'tripMode' => $row['trip_mode'],
+                    'totalAmount' => (float)$row['total_amount'],
+                    'status' => $row['status'],
+                    'passengerName' => $row['passenger_name'],
+                    'passengerPhone' => $row['passenger_phone'],
+                    'passengerEmail' => $row['passenger_email'],
+                    'createdAt' => $row['created_at'],
+                    'updatedAt' => $row['updated_at']
+                ];
+                $bookings[] = $booking;
+            }
+            
+            logError("Fetched all bookings", ['count' => count($bookings), 'status_filter' => $statusFilter]);
+            sendJsonResponse(['status' => 'success', 'bookings' => $bookings]);
+        } else {
+            sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
+        }
     }
 } catch (Exception $e) {
     logError("Error in admin booking endpoint", ['message' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);

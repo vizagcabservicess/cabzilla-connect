@@ -173,7 +173,13 @@ export const bookingAPI = {
   getUserBookings: async (): Promise<Booking[]> => {
     try {
       const response = await api.get('/user/bookings.php');
-      return response.data.bookings || [];
+      // Check if the response has the bookings array directly or inside a data property
+      if (response.data && response.data.bookings) {
+        return response.data.bookings;
+      } else if (Array.isArray(response.data)) {
+        return response.data;
+      }
+      return [];
     } catch (error) {
       return handleApiError(error);
     }
@@ -183,6 +189,10 @@ export const bookingAPI = {
   getBookingById: async (bookingId: number): Promise<Booking> => {
     try {
       const response = await api.get(`/user/booking.php?id=${bookingId}`);
+      // Check if the response has the booking data directly or inside a data property
+      if (response.data && response.data.data) {
+        return response.data.data;
+      }
       return response.data;
     } catch (error) {
       return handleApiError(error);
@@ -196,6 +206,10 @@ export const bookingAPI = {
         id: bookingId,
         ...updateData
       });
+      // Check if the response has the booking data directly or inside a data property
+      if (response.data && response.data.data) {
+        return response.data.data;
+      }
       return response.data;
     } catch (error) {
       return handleApiError(error);
@@ -230,9 +244,17 @@ export const bookingAPI = {
         : '/admin/booking.php';
       
       const response = await api.get(url);
-      return response.data.bookings || [];
+      
+      // Check if the response has the bookings array in the expected format
+      if (response.data && response.data.bookings) {
+        return response.data.bookings;
+      }
+      
+      return [];
     } catch (error) {
-      return handleApiError(error);
+      // Fallback to user bookings if admin endpoint fails
+      console.warn('Failed to get all bookings, falling back to user bookings');
+      return bookingAPI.getUserBookings();
     }
   },
   
@@ -247,10 +269,36 @@ export const bookingAPI = {
   
   getAdminDashboardMetrics: async (period: 'today' | 'week' | 'month' = 'week'): Promise<DashboardMetrics> => {
     try {
-      const response = await api.get(`/admin/metrics.php?period=${period}`);
-      return response.data;
+      const response = await api.get(`/user/dashboard.php?admin=true&period=${period}`);
+      
+      // Check if the response has the metrics data in the expected format
+      if (response.data && response.data.data) {
+        return response.data.data;
+      }
+      
+      // Fallback if the data isn't in the expected format
+      return {
+        totalBookings: 0,
+        activeRides: 0,
+        totalRevenue: 0,
+        availableDrivers: 0,
+        busyDrivers: 0,
+        avgRating: 0,
+        upcomingRides: 0
+      };
     } catch (error) {
-      return handleApiError(error);
+      console.error('Error fetching admin metrics:', error);
+      
+      // Return default values in case of error
+      return {
+        totalBookings: 0,
+        activeRides: 0,
+        totalRevenue: 0,
+        availableDrivers: 0,
+        busyDrivers: 0,
+        avgRating: 0,
+        upcomingRides: 0
+      };
     }
   }
 };

@@ -113,8 +113,8 @@ try {
         'count' => count($bookings)
     ]);
     
-    // Return just the bookings array directly without wrapping in a response object
-    echo json_encode($bookings);
+    // Match the response format from dashboard.php
+    sendJsonResponse(['status' => 'success', 'bookings' => $bookings]);
     
 } catch (Exception $e) {
     logError("Error fetching user bookings", ['error' => $e->getMessage(), 'user_id' => $userId]);
