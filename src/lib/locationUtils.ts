@@ -26,6 +26,11 @@ export const createLocationChangeHandler = (
   additionalCallback?: (location: AppLocation | null) => void
 ) => {
   return (newLocation: ApiLocation) => {
+    if (!newLocation) {
+      console.warn('Received undefined or null location');
+      return null;
+    }
+    
     // Handle potentially incomplete location data
     const id = newLocation.id || `loc_${Date.now()}`;
     
@@ -62,6 +67,7 @@ export const createLocationChangeHandler = (
 
 /**
  * Check if a location is in Visakhapatnam based on coordinates and address
+ * Safe handling of potentially undefined values
  */
 export const isLocationInVizag = (location: AppLocation | ApiLocation | null | undefined): boolean => {
   if (!location) return false;
@@ -75,13 +81,13 @@ export const isLocationInVizag = (location: AppLocation | ApiLocation | null | u
     if (isInVizagBounds) return true;
   }
   
-  // Check by address text - safely handle potentially undefined values
-  const addressLower = typeof location.address === 'string' ? location.address.toLowerCase() : '';
-  const nameLower = typeof location.name === 'string' ? location.name.toLowerCase() : '';
+  // SAFE handling of address/name - explicitly check if they're string values first
+  const addressLower = typeof location.address === 'string' && location.address ? location.address.toLowerCase() : '';
+  const nameLower = typeof location.name === 'string' && location.name ? location.name.toLowerCase() : '';
   
   // Safely handle city which might not exist on ApiLocation
   let cityLower = '';
-  if ('city' in location && typeof location.city === 'string') {
+  if ('city' in location && typeof location.city === 'string' && location.city) {
     cityLower = location.city.toLowerCase();
   }
   
@@ -97,10 +103,10 @@ export const isLocationInVizag = (location: AppLocation | ApiLocation | null | u
 };
 
 /**
- * Extract city from a formatted address
+ * Extract city from a formatted address with safe handling of undefined
  */
 function extractCityFromAddress(address: string): string {
-  if (!address) return 'Visakhapatnam';
+  if (!address || typeof address !== 'string') return 'Visakhapatnam';
   
   // Simple extraction - get the first part that might be a city
   const parts = address.split(',').map(part => part.trim());
@@ -117,13 +123,13 @@ function extractCityFromAddress(address: string): string {
 }
 
 /**
- * Extract state from a formatted address
+ * Extract state from a formatted address with safe handling of undefined
  */
 function extractStateFromAddress(address: string): string {
-  if (!address) return 'Andhra Pradesh';
+  if (!address || typeof address !== 'string') return 'Andhra Pradesh';
   
   // Try to find Andhra Pradesh or other state names in the address
-  if (address && address.includes('Andhra Pradesh')) {
+  if (address.includes('Andhra Pradesh')) {
     return 'Andhra Pradesh';
   }
   
@@ -135,7 +141,7 @@ function extractStateFromAddress(address: string): string {
   ];
   
   for (const state of indianStates) {
-    if (address && address.includes(state)) {
+    if (address.includes(state)) {
       return state;
     }
   }

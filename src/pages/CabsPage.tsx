@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -169,12 +168,26 @@ const CabsPage = () => {
   
   // Handle pickup location change
   const handlePickupLocationChange = (location: Location) => {
+    if (!location) return; // Safety check
+    
+    // Explicitly ensure isInVizag is set
+    if (location.isInVizag === undefined) {
+      location.isInVizag = isLocationInVizag(location);
+    }
+    
     console.log("Pickup location changed:", location);
     setPickup(location);
   };
   
   // Handle dropoff location change
   const handleDropoffLocationChange = (location: Location) => {
+    if (!location) return; // Safety check
+    
+    // Explicitly ensure isInVizag is set
+    if (location.isInVizag === undefined) {
+      location.isInVizag = isLocationInVizag(location);
+    }
+    
     console.log("Dropoff location changed:", location);
     setDropoff(location);
   };

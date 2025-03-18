@@ -76,6 +76,8 @@ export function LocationInput({
 
   // Handle direct input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e || !e.target) return;
+    
     const newAddress = e.target.value;
     setAddress(newAddress);
     
@@ -196,7 +198,7 @@ export function LocationInput({
     };
   }, [google, isLoaded, handleLocationChange, disabled, readOnly, isPickupLocation, isAirportTransfer]);
 
-  // Helper function to determine if a location is in Vizag
+  // Helper function to determine if a location is in Vizag - SAFELY!
   function checkIfLocationIsInVizag(lat: number, lng: number, address: string): boolean {
     if (!address) return false;
     
@@ -205,7 +207,7 @@ export function LocationInput({
       lat >= 17.6 && lat <= 17.9 && 
       lng >= 83.1 && lng <= 83.4;
     
-    // Check address text - safely handle potentially undefined values
+    // Check address text - SAFELY handle potentially undefined values
     const addressLower = address ? address.toLowerCase() : '';
     const vizagNames = ['visakhapatnam', 'vizag', 'waltair', 'vizianagaram'];
     
@@ -232,6 +234,7 @@ export function LocationInput({
         className={className}
         value={address}
         onChange={(e) => {
+          if (!e || !e.target) return;
           setAddress(e.target.value);
           debouncedHandleChange(e);
         }}
