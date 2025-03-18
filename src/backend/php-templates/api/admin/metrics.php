@@ -241,15 +241,15 @@ try {
     $availableDrivers = 5; // Default value
     $busyDrivers = 3; // Default value
     
-    // Create metrics response
+    // Create metrics response with safe defaults
     $metrics = [
-        'totalBookings' => intval($totalBookings),
-        'activeRides' => intval($activeRides),
-        'totalRevenue' => floatval($totalRevenue),
-        'availableDrivers' => intval($availableDrivers),
-        'busyDrivers' => intval($busyDrivers),
+        'totalBookings' => intval($totalBookings ?? 0),
+        'activeRides' => intval($activeRides ?? 0),
+        'totalRevenue' => floatval($totalRevenue ?? 0),
+        'availableDrivers' => intval($availableDrivers ?? 0),
+        'busyDrivers' => intval($busyDrivers ?? 0),
         'avgRating' => 4.7,      // Placeholder value
-        'upcomingRides' => intval($upcomingRides),
+        'upcomingRides' => intval($upcomingRides ?? 0),
         'availableStatuses' => $availableStatuses,
         'currentFilter' => $statusFilter ?: 'all'
     ];
@@ -261,5 +261,23 @@ try {
     
 } catch (Exception $e) {
     logError("Error fetching admin metrics", ['error' => $e->getMessage(), 'period' => $period, 'status' => $statusFilter]);
-    sendJsonResponse(['status' => 'error', 'message' => 'Failed to get metrics: ' . $e->getMessage()], 500);
+    
+    // Send a valid response even in error case with default values
+    $defaultMetrics = [
+        'totalBookings' => 0,
+        'activeRides' => 0,
+        'totalRevenue' => 0,
+        'availableDrivers' => 0,
+        'busyDrivers' => 0,
+        'avgRating' => 0,
+        'upcomingRides' => 0,
+        'availableStatuses' => ['pending', 'confirmed', 'completed', 'cancelled'],
+        'currentFilter' => 'all'
+    ];
+    
+    sendJsonResponse([
+        'status' => 'error', 
+        'message' => 'Failed to get metrics: ' . $e->getMessage(),
+        'data' => $defaultMetrics
+    ], 500);
 }

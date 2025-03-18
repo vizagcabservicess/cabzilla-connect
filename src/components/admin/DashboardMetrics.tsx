@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -41,7 +42,7 @@ export function DashboardMetrics({
   const [availableStatuses, setAvailableStatuses] = useState<Array<BookingStatus | 'all'>>(['all']);
 
   useEffect(() => {
-    if (metricsData?.availableStatuses) {
+    if (metricsData?.availableStatuses && Array.isArray(metricsData.availableStatuses)) {
       // Ensure 'all' is always the first option
       const statuses: Array<BookingStatus | 'all'> = ['all'];
       

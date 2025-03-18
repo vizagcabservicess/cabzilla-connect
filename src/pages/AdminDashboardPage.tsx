@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell
 } from 'recharts';
 import { Button } from "@/components/ui/button";
@@ -10,11 +10,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
 import { 
-  Car, Users, DollarSign, Star, Clock, AlertTriangle, Bell, MapPin, 
-  BarChart2, PieChart as PieChartIcon, Calendar, RefreshCcw, Settings,
+  Car, Users, Star, Clock, AlertTriangle, Bell, MapPin, 
+  BarChart2, PieChart as PieChartIcon, Calendar, RefreshCw, Settings,
   CalendarClock, CircleDollarSign, TrendingUp, BadgeCheck, UserCog, ShieldAlert
 } from "lucide-react";
-import { authAPI, bookingAPI, fareAPI } from '@/services/api';
+import { authAPI, bookingAPI } from '@/services/api';
 import { AdminBookingsList } from '@/components/admin/AdminBookingsList';
 import { FareManagement } from '@/components/admin/FareManagement';
 import { VehiclePricingManagement } from '@/components/admin/VehiclePricingManagement';
@@ -34,11 +34,15 @@ export default function AdminDashboardPage() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
-  const [autoRefresh, setAutoRefresh] = useState(false); // Changed to false by default to prevent constant refreshing
+  const [autoRefresh, setAutoRefresh] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [refreshAttempts, setRefreshAttempts] = useState(0);
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month'>('week');
   const [statusFilter, setStatusFilter] = useState<BookingStatus | 'all'>('all');
+  const [activeTab, setActiveTab] = useState('bookings');
+  const [metricsLoaded, setMetricsLoaded] = useState(false);
+  
+  // Initialize with default values to prevent undefined errors
   const [metrics, setMetrics] = useState<DashboardMetricsType>({
     totalBookings: 0,
     activeRides: 0,
@@ -46,8 +50,12 @@ export default function AdminDashboardPage() {
     availableDrivers: 0,
     busyDrivers: 0,
     avgRating: 0,
-    upcomingRides: 0
+    upcomingRides: 0,
+    availableStatuses: ['pending', 'confirmed', 'completed', 'cancelled'],
+    currentFilter: 'all'
   });
+  
+  // Static data to prevent errors if API fails
   const [revenueData, setRevenueData] = useState([
     { name: 'Jan', revenue: 35000 },
     { name: 'Feb', revenue: 42000 },
@@ -56,6 +64,7 @@ export default function AdminDashboardPage() {
     { name: 'May', revenue: 55000 },
     { name: 'Jun', revenue: 48000 }
   ]);
+  
   const [vehicleDistribution, setVehicleDistribution] = useState([
     { name: 'Sedan', value: 35 },
     { name: 'SUV', value: 25 },
@@ -89,20 +98,43 @@ export default function AdminDashboardPage() {
       
       const metricsData = await bookingAPI.getAdminDashboardMetrics(selectedPeriod, statusFilter === 'all' ? undefined : statusFilter);
       console.log('Admin: Dashboard metrics received:', metricsData);
-      setMetrics(metricsData);
+      
+      // Only update metrics if we have valid data
+      if (metricsData && typeof metricsData === 'object') {
+        // Ensure all required properties exist
+        const validatedMetrics = {
+          totalBookings: metricsData.totalBookings || 0,
+          activeRides: metricsData.activeRides || 0,
+          totalRevenue: metricsData.totalRevenue || 0,
+          availableDrivers: metricsData.availableDrivers || 0,
+          busyDrivers: metricsData.busyDrivers || 0,
+          avgRating: metricsData.avgRating || 0,
+          upcomingRides: metricsData.upcomingRides || 0,
+          availableStatuses: Array.isArray(metricsData.availableStatuses) ? 
+            metricsData.availableStatuses : 
+            ['pending', 'confirmed', 'completed', 'cancelled'],
+          currentFilter: metricsData.currentFilter || 'all'
+        };
+        
+        setMetrics(validatedMetrics);
+        setMetricsLoaded(true);
+      }
+      
       setRefreshAttempts(0); // Reset refresh attempts on successful fetch
       
-      // Simulate revenue data updates (in a real app, this would be fetched from the API)
-      const updatedRevenueData = [...revenueData];
-      updatedRevenueData[5].revenue = metricsData.totalRevenue * (0.8 + Math.random() * 0.4);
-      setRevenueData(updatedRevenueData);
-      
-      // Simulate vehicle distribution updates
-      const newVehicleDistribution = vehicleDistribution.map(item => ({
-        ...item, 
-        value: item.value + (Math.random() > 0.5 ? 1 : -1) * Math.floor(Math.random() * 3)
-      }));
-      setVehicleDistribution(newVehicleDistribution);
+      // Simulate revenue data updates only if we have valid metrics
+      if (metricsData && typeof metricsData.totalRevenue === 'number') {
+        const updatedRevenueData = [...revenueData];
+        updatedRevenueData[5].revenue = metricsData.totalRevenue * (0.8 + Math.random() * 0.4);
+        setRevenueData(updatedRevenueData);
+        
+        // Simulate vehicle distribution updates
+        const newVehicleDistribution = vehicleDistribution.map(item => ({
+          ...item, 
+          value: item.value + (Math.random() > 0.5 ? 1 : -1) * Math.floor(Math.random() * 3)
+        }));
+        setVehicleDistribution(newVehicleDistribution);
+      }
       
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -133,27 +165,125 @@ export default function AdminDashboardPage() {
   }, [navigate, toast, revenueData, vehicleDistribution, selectedPeriod, statusFilter, refreshAttempts, autoRefresh]);
 
   useEffect(() => {
-    fetchDashboardData();
+    // Only fetch data if it hasn't been loaded yet or if we're refreshing
+    if (!metricsLoaded || autoRefresh) {
+      fetchDashboardData();
+    }
     
     // Set up automatic refreshing if enabled, with a more reasonable interval
     let intervalId: number | undefined;
     if (autoRefresh && refreshAttempts < 3) {
       intervalId = window.setInterval(() => {
         fetchDashboardData();
-      }, 60000); // Refresh every minute instead of constantly
+      }, 60000); // Refresh every minute
     }
     
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [fetchDashboardData, autoRefresh, refreshAttempts]);
+  }, [fetchDashboardData, autoRefresh, refreshAttempts, metricsLoaded]);
 
   const handleFilterChange = (status: BookingStatus | 'all') => {
     setStatusFilter(status);
     // Fetch will happen automatically due to the dependency in useCallback
   };
 
-  if (isLoading && !metrics.totalBookings && refreshAttempts === 0) {
+  // Error-safe render for tabs
+  const renderTabContent = (tabId: string) => {
+    try {
+      switch (tabId) {
+        case 'bookings':
+          return <AdminBookingsList />;
+        case 'users':
+          return <UserManagement />;
+        case 'drivers':
+          return <DriverManagement />;
+        case 'customers':
+          return <CustomerManagement />;
+        case 'reports':
+          return <ReportingAnalytics />;
+        case 'vehicles':
+          return <VehicleManagement />;
+        case 'notifications':
+          return <AdminNotifications />;
+        case 'settings':
+          return (
+            <Card>
+              <CardHeader>
+                <CardTitle>System Settings</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground">This feature is under development</p>
+              </CardContent>
+            </Card>
+          );
+        case 'financials':
+          return (
+            <Tabs defaultValue="revenue">
+              <TabsList className="mb-4">
+                <TabsTrigger value="revenue">Revenue</TabsTrigger>
+                <TabsTrigger value="payouts">Driver Payouts</TabsTrigger>
+                <TabsTrigger value="pricing">Pricing Management</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="revenue">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Revenue Management</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-muted-foreground">This feature is under development</p>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              
+              <TabsContent value="payouts">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Driver Payouts</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-muted-foreground">This feature is under development</p>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              
+              <TabsContent value="pricing">
+                <Tabs defaultValue="tour-fares">
+                  <TabsList className="mb-4">
+                    <TabsTrigger value="tour-fares">Tour Fares</TabsTrigger>
+                    <TabsTrigger value="vehicle-pricing">Vehicle Pricing</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="tour-fares">
+                    <FareManagement />
+                  </TabsContent>
+                  
+                  <TabsContent value="vehicle-pricing">
+                    <VehiclePricingManagement />
+                  </TabsContent>
+                </Tabs>
+              </TabsContent>
+            </Tabs>
+          );
+        default:
+          return <div>Select a tab</div>;
+      }
+    } catch (error) {
+      console.error(`Error rendering tab ${tabId}:`, error);
+      return (
+        <Alert variant="destructive" className="mt-4">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Error loading content</AlertTitle>
+          <AlertDescription>
+            There was an error loading this section. Please try again or contact support.
+          </AlertDescription>
+        </Alert>
+      );
+    }
+  };
+
+  if (isLoading && !metricsLoaded && refreshAttempts === 0) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-900"></div>
@@ -188,7 +318,7 @@ export default function AdminDashboardPage() {
             className={autoRefresh ? "text-green-600" : ""}
             onClick={() => setAutoRefresh(!autoRefresh)}
           >
-            <RefreshCcw className={`h-4 w-4 mr-1 ${autoRefresh ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-4 w-4 mr-1 ${autoRefresh ? "animate-spin" : ""}`} />
             {autoRefresh ? "Auto-refresh On" : "Auto-refresh Off"}
           </Button>
           
@@ -220,7 +350,7 @@ export default function AdminDashboardPage() {
         </Alert>
       )}
 
-      {/* Dashboard Metrics with correct props */}
+      {/* Dashboard Metrics with error handling */}
       <DashboardMetrics 
         metrics={metrics}
         isLoading={isLoading}
@@ -229,7 +359,7 @@ export default function AdminDashboardPage() {
         selectedPeriod={selectedPeriod}
       />
 
-      {/* Charts */}
+      {/* Charts with error handling */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <Card>
           <CardHeader>
@@ -284,8 +414,13 @@ export default function AdminDashboardPage() {
         </Card>
       </div>
 
-      {/* Admin Tabs */}
-      <Tabs defaultValue="bookings" className="w-full">
+      {/* Admin Tabs with error handling */}
+      <Tabs 
+        defaultValue="bookings" 
+        className="w-full"
+        value={activeTab}
+        onValueChange={(value) => setActiveTab(value)}
+      >
         <TabsList className="mb-6 flex flex-wrap">
           <TabsTrigger value="bookings" className="flex items-center gap-1"><Car className="h-4 w-4" /> Bookings</TabsTrigger>
           <TabsTrigger value="users" className="flex items-center gap-1"><UserCog className="h-4 w-4" /> Users</TabsTrigger>
@@ -298,93 +433,10 @@ export default function AdminDashboardPage() {
           <TabsTrigger value="settings" className="flex items-center gap-1"><Settings className="h-4 w-4" /> Settings</TabsTrigger>
         </TabsList>
         
-        <TabsContent value="bookings">
-          <AdminBookingsList />
-        </TabsContent>
-        
-        <TabsContent value="users">
-          <UserManagement />
-        </TabsContent>
-        
-        <TabsContent value="drivers">
-          <DriverManagement />
-        </TabsContent>
-        
-        <TabsContent value="customers">
-          <CustomerManagement />
-        </TabsContent>
-        
-        <TabsContent value="reports">
-          <ReportingAnalytics />
-        </TabsContent>
-        
-        <TabsContent value="financials">
-          <Tabs defaultValue="revenue">
-            <TabsList className="mb-4">
-              <TabsTrigger value="revenue">Revenue</TabsTrigger>
-              <TabsTrigger value="payouts">Driver Payouts</TabsTrigger>
-              <TabsTrigger value="pricing">Pricing Management</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="revenue">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Revenue Management</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground">This feature is under development</p>
-                </CardContent>
-              </Card>
-            </TabsContent>
-            
-            <TabsContent value="payouts">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Driver Payouts</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground">This feature is under development</p>
-                </CardContent>
-              </Card>
-            </TabsContent>
-            
-            <TabsContent value="pricing">
-              <Tabs defaultValue="tour-fares">
-                <TabsList className="mb-4">
-                  <TabsTrigger value="tour-fares">Tour Fares</TabsTrigger>
-                  <TabsTrigger value="vehicle-pricing">Vehicle Pricing</TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="tour-fares">
-                  <FareManagement />
-                </TabsContent>
-                
-                <TabsContent value="vehicle-pricing">
-                  <VehiclePricingManagement />
-                </TabsContent>
-              </Tabs>
-            </TabsContent>
-          </Tabs>
-        </TabsContent>
-        
-        <TabsContent value="vehicles">
-          <VehicleManagement />
-        </TabsContent>
-        
-        <TabsContent value="notifications">
-          <AdminNotifications />
-        </TabsContent>
-        
-        <TabsContent value="settings">
-          <Card>
-            <CardHeader>
-              <CardTitle>System Settings</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">This feature is under development</p>
-            </CardContent>
-          </Card>
-        </TabsContent>
+        {/* Error boundary wrapper around tab content */}
+        <div className="tab-content">
+          {renderTabContent(activeTab)}
+        </div>
       </Tabs>
     </div>
   );
