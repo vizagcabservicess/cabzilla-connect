@@ -1,21 +1,22 @@
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertTriangle, RefreshCw, WifiOff, Server, FileQuestion, ShieldAlert, Terminal } from "lucide-react";
 
-interface ApiErrorFallbackProps {
+export interface ApiErrorFallbackProps {
   error: Error | string;
   resetErrorBoundary?: () => void;
   onRetry?: () => void;
   title?: string;
+  description?: string;
 }
 
 export function ApiErrorFallback({
   error,
   resetErrorBoundary,
   onRetry,
-  title = "Connection Error"
+  title = "Connection Error",
+  description
 }: ApiErrorFallbackProps) {
   const errorMessage = typeof error === "string" ? error : error.message;
   
@@ -102,11 +103,11 @@ export function ApiErrorFallback({
                     : "Error")))}
           </AlertTitle>
           <AlertDescription>
-            {isCorsError 
+            {description || (isCorsError 
               ? "The browser blocked access to the server due to security policy (CORS). This usually requires changes on the server side."
               : (isNetworkError 
                 ? "Unable to connect to the server. Please check your internet connection or try again later."
-                : errorMessage)}
+                : errorMessage))}
           </AlertDescription>
         </Alert>
         
@@ -148,7 +149,6 @@ export function ApiErrorFallback({
           </div>
         )}
 
-        {/* Add a section for checking API status */}
         <div className="mt-4 bg-blue-50 p-3 rounded-md border border-blue-200">
           <div className="flex items-start">
             <Terminal className="h-4 w-4 mt-1 text-blue-500 mr-2" />
