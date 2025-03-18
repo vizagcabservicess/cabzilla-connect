@@ -1,7 +1,8 @@
-import axios from 'axios';
-import { AuthResponse, LoginRequest, SignupRequest, BookingRequest, Booking, TourFare, VehiclePricing, FareUpdateRequest, VehiclePricingUpdateRequest, DashboardMetrics } from '@/types/api';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+import axios from 'axios';
+import { AuthResponse, LoginRequest, SignupRequest, BookingRequest, Booking, TourFare, VehiclePricing, FareUpdateRequest, VehiclePricingUpdateRequest, DashboardMetrics, User } from '@/types/api';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -21,10 +22,17 @@ const setAuthToken = (token: string | null) => {
 };
 
 // Initialize auth token from localStorage
-const storedToken = localStorage.getItem('authToken');
-if (storedToken) {
-  setAuthToken(storedToken);
-}
+const initializeToken = () => {
+  if (typeof window !== 'undefined') {
+    const storedToken = localStorage.getItem('authToken');
+    if (storedToken) {
+      setAuthToken(storedToken);
+    }
+  }
+};
+
+// Call initialization function
+initializeToken();
 
 // Authentication API
 export const authAPI = {
@@ -56,6 +64,26 @@ export const authAPI = {
     const response = await axiosInstance.get('/api/user/dashboard');
     return response.data;
   },
+  // Added missing authentication helper methods
+  isAuthenticated: (): boolean => {
+    return !!localStorage.getItem('authToken');
+  },
+  getCurrentUser: (): User | null => {
+    const userJson = localStorage.getItem('user');
+    if (userJson) {
+      try {
+        return JSON.parse(userJson);
+      } catch (e) {
+        console.error('Error parsing user data', e);
+        return null;
+      }
+    }
+    return null;
+  },
+  isAdmin: (): boolean => {
+    const user = authAPI.getCurrentUser();
+    return user?.role === 'admin' || false;
+  }
 };
 
 // Booking API
@@ -74,6 +102,20 @@ export const bookingAPI = {
   },
   getReceipt: async (bookingId: string) => {
     const response = await axiosInstance.get(`/api/receipt/${bookingId}`);
+    return response.data;
+  },
+  // Added missing bookingAPI methods
+  getAllBookings: async () => {
+    const response = await axiosInstance.get('/api/admin/bookings');
+    return response.data;
+  },
+  getUserBookings: async () => {
+    const response = await axiosInstance.get('/api/user/bookings');
+    return response.data;
+  },
+  // Added admin dashboard metrics method
+  getAdminDashboardMetrics: async (period: 'today' | 'week' | 'month'): Promise<DashboardMetrics> => {
+    const response = await axiosInstance.get(`/api/admin/metrics?period=${period}`);
     return response.data;
   }
 };
