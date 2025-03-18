@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { AuthResponse, LoginRequest, SignupRequest, BookingRequest, Booking, TourFare, VehiclePricing, FareUpdateRequest, VehiclePricingUpdateRequest, DashboardMetrics, User } from '@/types/api';
 
@@ -13,6 +12,7 @@ const axiosInstance = axios.create({
     'Cache-Control': 'no-cache',
     'Pragma': 'no-cache',
   },
+  withCredentials: false // Set to false to prevent CORS issues with credentials
 });
 
 // Add request interceptor for debugging
@@ -204,23 +204,19 @@ export const bookingAPI = {
       }
       
       // Make sure token is in headers for this request
-      axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      };
       
-      // Add timestamp to bypass cache and additional headers for CORS
+      // Add timestamp to bypass cache
       const timestamp = new Date().getTime();
-      const url = `/api/user/bookings`;
+      const url = `/api/user/bookings?_t=${timestamp}`;
       console.log('User bookings request URL:', `${API_BASE_URL}${url}`);
       
-      const response = await axiosInstance.get(url, {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        },
-        params: {
-          _t: timestamp
-        }
-      });
+      const response = await axiosInstance.get(url, { headers });
       
       console.log('User bookings response:', response.data);
       
