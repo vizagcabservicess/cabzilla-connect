@@ -3,6 +3,7 @@ import { GoogleMap, Marker, DirectionsService, DirectionsRenderer } from "@react
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Location } from "@/lib/locationData";
 import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
+import { ApiErrorFallback } from "./ApiErrorFallback";
 
 interface GoogleMapComponentProps {
   pickupLocation: Location;
@@ -18,6 +19,10 @@ interface SafeLocation {
   lng: number;
 }
 
+// Vizag default coordinates as fallback
+const DEFAULT_LAT = 17.6868;
+const DEFAULT_LNG = 83.2185;
+
 const GoogleMapComponent = ({ 
   pickupLocation, 
   dropLocation,
@@ -28,6 +33,7 @@ const GoogleMapComponent = ({
   const [mapLoaded, setMapLoaded] = useState(false);
   const [directionsRequested, setDirectionsRequested] = useState(false);
   const [directionsRequestFailed, setDirectionsRequestFailed] = useState(false);
+  const [mapError, setMapError] = useState<Error | null>(null);
   const directionsRequestCount = useRef(0);
 
   const mapContainerStyle = {
@@ -36,27 +42,33 @@ const GoogleMapComponent = ({
   };
 
   // Create safe location objects with validated values
-  const safePickupLocation: SafeLocation = {
-    id: pickupLocation?.id || '',
-    name: pickupLocation?.name || '',
-    address: pickupLocation?.address || '',
-    lat: typeof pickupLocation?.lat === 'number' && !isNaN(pickupLocation.lat) 
-      ? pickupLocation.lat : 17.6868,
-    lng: typeof pickupLocation?.lng === 'number' && !isNaN(pickupLocation.lng) 
-      ? pickupLocation.lng : 83.2185
+  const createSafeLocation = (location: any): SafeLocation => {
+    if (!location) {
+      console.warn("Invalid location provided to GoogleMapComponent");
+      return {
+        id: `default_${Date.now()}`,
+        name: 'Default Location',
+        address: 'Visakhapatnam, Andhra Pradesh',
+        lat: DEFAULT_LAT,
+        lng: DEFAULT_LNG
+      };
+    }
+    
+    // Ensure all required properties exist with proper types
+    return {
+      id: typeof location.id === 'string' ? location.id : `loc_${Date.now()}`,
+      name: typeof location.name === 'string' ? location.name : 'Unknown Location',
+      address: typeof location.address === 'string' ? location.address : 
+               (typeof location.name === 'string' ? location.name : 'Unknown Location'),
+      lat: typeof location.lat === 'number' && !isNaN(location.lat) ? location.lat : DEFAULT_LAT,
+      lng: typeof location.lng === 'number' && !isNaN(location.lng) ? location.lng : DEFAULT_LNG
+    };
   };
   
-  const safeDropLocation: SafeLocation = {
-    id: dropLocation?.id || '',
-    name: dropLocation?.name || '',
-    address: dropLocation?.address || '',
-    lat: typeof dropLocation?.lat === 'number' && !isNaN(dropLocation.lat) 
-      ? dropLocation.lat : 17.7,
-    lng: typeof dropLocation?.lng === 'number' && !isNaN(dropLocation.lng) 
-      ? dropLocation.lng : 83.3
-  };
+  const safePickupLocation = createSafeLocation(pickupLocation);
+  const safeDropLocation = createSafeLocation(dropLocation);
 
-  // Set the center to Visakhapatnam by default
+  // Set the center to the pickup location
   const center = { 
     lat: safePickupLocation.lat,
     lng: safePickupLocation.lng
@@ -131,12 +143,17 @@ const GoogleMapComponent = ({
   }
 
   useEffect(() => {
-    // Reset directions when locations change
-    if (safePickupLocation && safeDropLocation) {
-      setDirections(null);
-      setDirectionsRequested(false);
-      setDirectionsRequestFailed(false);
-      directionsRequestCount.current = 0;
+    try {
+      // Reset directions when locations change
+      if (safePickupLocation && safeDropLocation) {
+        setDirections(null);
+        setDirectionsRequested(false);
+        setDirectionsRequestFailed(false);
+        directionsRequestCount.current = 0;
+      }
+    } catch (error) {
+      console.error("Error in location change effect:", error);
+      setMapError(error instanceof Error ? error : new Error(String(error)));
     }
   }, [safePickupLocation, safeDropLocation]);
 
@@ -145,19 +162,30 @@ const GoogleMapComponent = ({
     setMapLoaded(true);
   }, []);
 
-  // Check if locations have valid coordinates
-  const hasValidLocations = () => {
-    return true; // We've already validated and provided defaults
-  };
-
   // Handle directions request
   useEffect(() => {
-    if (mapLoaded && !directionsRequested && google && hasValidLocations()) {
-      setDirectionsRequested(true);
-      directionsRequestCount.current += 1;
-      console.log(`Making directions request #${directionsRequestCount.current}`);
+    try {
+      if (mapLoaded && !directionsRequested && google) {
+        setDirectionsRequested(true);
+        directionsRequestCount.current += 1;
+        console.log(`Making directions request #${directionsRequestCount.current}`);
+      }
+    } catch (error) {
+      console.error("Error in directions request effect:", error);
+      setMapError(error instanceof Error ? error : new Error(String(error)));
     }
   }, [mapLoaded, directionsRequested, google]);
+
+  // Handle errors
+  if (mapError) {
+    return (
+      <ApiErrorFallback 
+        error={mapError}
+        onRetry={() => window.location.reload()}
+        title="Map Error"
+      />
+    );
+  }
 
   if (!isLoaded) {
     return <div className="p-4 text-center bg-gray-100 rounded-lg">Loading map...</div>;
@@ -170,7 +198,7 @@ const GoogleMapComponent = ({
       zoom={12}
       onLoad={onMapLoad}
     >
-      {hasValidLocations() && mapLoaded && !directions && directionsRequested && !directionsRequestFailed && (
+      {mapLoaded && !directions && directionsRequested && !directionsRequestFailed && (
         <DirectionsService
           options={{
             origin: { lat: safePickupLocation.lat, lng: safePickupLocation.lng },

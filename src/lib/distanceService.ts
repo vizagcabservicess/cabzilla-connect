@@ -1,5 +1,6 @@
 
 import { Location } from "./locationData";
+import { safeGetString } from "./safeStringUtils";
 
 export interface DistanceResult {
   distance: number; // in kilometers
@@ -7,17 +8,25 @@ export interface DistanceResult {
   status: "OK" | "FAILED";
 }
 
+// Default Vizag coordinates for fallback
+const DEFAULT_LAT = 17.6868;
+const DEFAULT_LNG = 83.2185;
+
 // Function to fetch actual distance using Google Maps API directly
 export async function calculateDistanceMatrix(
   origin: Location,
   destination: Location
 ): Promise<DistanceResult> {
-  console.log(`🔍 Calculating distance between: ${origin.name} → ${destination.name}`);
+  // Validate locations before proceeding
+  const safeOrigin = validateLocation(origin);
+  const safeDestination = validateLocation(destination);
+  
+  console.log(`🔍 Calculating distance between: ${safeOrigin.name} → ${safeDestination.name}`);
   
   // Make sure Google Maps API is loaded
   if (typeof window.google === 'undefined' || !window.google.maps) {
     console.error("❌ Google Maps API not loaded yet");
-    return fallbackDistanceCalculation(origin, destination);
+    return fallbackDistanceCalculation(safeOrigin, safeDestination);
   }
   
   try {
@@ -28,8 +37,8 @@ export async function calculateDistanceMatrix(
     const response = await new Promise<google.maps.DistanceMatrixResponse>((resolve, reject) => {
       distanceService.getDistanceMatrix(
         {
-          origins: [{ lat: origin.lat, lng: origin.lng }],
-          destinations: [{ lat: destination.lat, lng: destination.lng }],
+          origins: [{ lat: safeOrigin.lat, lng: safeOrigin.lng }],
+          destinations: [{ lat: safeDestination.lat, lng: safeDestination.lng }],
           travelMode: window.google.maps.TravelMode.DRIVING,
           unitSystem: window.google.maps.UnitSystem.METRIC,
           avoidHighways: false,
@@ -72,16 +81,16 @@ export async function calculateDistanceMatrix(
     
     // If we couldn't get a proper response, try direct route calculation as backup
     console.warn("⚠️ Distance Matrix failed, trying DirectionsService...");
-    return await calculateDirectionsDistance(origin, destination);
+    return await calculateDirectionsDistance(safeOrigin, safeDestination);
     
   } catch (error) {
     console.error("❌ Error in Distance Matrix API:", error);
     try {
       // If Distance Matrix fails, try DirectionsService as a fallback
-      return await calculateDirectionsDistance(origin, destination);
+      return await calculateDirectionsDistance(safeOrigin, safeDestination);
     } catch (directionsError) {
       console.error("❌ Both distance calculation methods failed:", directionsError);
-      return fallbackDistanceCalculation(origin, destination);
+      return fallbackDistanceCalculation(safeOrigin, safeDestination);
     }
   }
 }
@@ -91,6 +100,10 @@ async function calculateDirectionsDistance(
   origin: Location,
   destination: Location
 ): Promise<DistanceResult> {
+  // Validate locations before proceeding
+  const safeOrigin = validateLocation(origin);
+  const safeDestination = validateLocation(destination);
+  
   console.log("🗺️ Trying DirectionsService for distance calculation");
   
   try {
@@ -99,8 +112,8 @@ async function calculateDirectionsDistance(
     const result = await new Promise<google.maps.DirectionsResult>((resolve, reject) => {
       directionsService.route(
         {
-          origin: { lat: origin.lat, lng: origin.lng },
-          destination: { lat: destination.lat, lng: destination.lng },
+          origin: { lat: safeOrigin.lat, lng: safeOrigin.lng },
+          destination: { lat: safeDestination.lat, lng: safeDestination.lng },
           travelMode: window.google.maps.TravelMode.DRIVING,
         },
         (response, status) => {
@@ -130,8 +143,38 @@ async function calculateDirectionsDistance(
     throw new Error("Invalid response from DirectionsService");
   } catch (error) {
     console.error("❌ Error in DirectionsService:", error);
-    return fallbackDistanceCalculation(origin, destination);
+    return fallbackDistanceCalculation(safeOrigin, safeDestination);
   }
+}
+
+// Function to validate and normalize location objects
+function validateLocation(location: any): Location {
+  if (!location) {
+    console.warn("Invalid location provided for distance calculation, using default");
+    return {
+      id: `default_${Date.now()}`,
+      name: 'Default Location',
+      address: 'Visakhapatnam, Andhra Pradesh',
+      city: 'Visakhapatnam',
+      state: 'Andhra Pradesh',
+      lat: DEFAULT_LAT,
+      lng: DEFAULT_LNG,
+      type: 'other',
+      popularityScore: 50
+    };
+  }
+  
+  return {
+    id: typeof location.id === 'string' ? location.id : `loc_${Date.now()}`,
+    name: safeGetString(location, 'name') || 'Unknown Location',
+    address: safeGetString(location, 'address') || safeGetString(location, 'name') || 'Unknown Address',
+    city: safeGetString(location, 'city') || 'Visakhapatnam',
+    state: safeGetString(location, 'state') || 'Andhra Pradesh',
+    lat: typeof location.lat === 'number' && !isNaN(location.lat) ? location.lat : DEFAULT_LAT,
+    lng: typeof location.lng === 'number' && !isNaN(location.lng) ? location.lng : DEFAULT_LNG,
+    type: typeof location.type === 'string' ? location.type as any : 'other',
+    popularityScore: typeof location.popularityScore === 'number' ? location.popularityScore : 50
+  };
 }
 
 // Fallback calculation function that uses the Haversine formula

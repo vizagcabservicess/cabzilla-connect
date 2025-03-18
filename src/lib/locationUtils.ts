@@ -1,6 +1,7 @@
 
 import { Location as ApiLocation } from '@/types/api';
 import { Location as AppLocation } from '@/lib/locationData';
+import { safeIncludes, safeLowerCase, safeGetString } from '@/lib/safeStringUtils';
 
 /**
  * Converts a location from the application format to the API format
@@ -16,20 +17,6 @@ export const convertToApiLocation = (location: AppLocation | null): ApiLocation 
     lng: typeof location.lng === 'number' ? location.lng : 0,
     isInVizag: typeof location.isInVizag === 'boolean' ? location.isInVizag : false
   };
-};
-
-/**
- * Safely check if a string contains a target substring
- * Handles null, undefined, and non-string inputs
- */
-export const safeIncludes = (str: any, target: string): boolean => {
-  // If str is null, undefined, or not a string, return false
-  if (str === null || str === undefined || typeof str !== 'string') {
-    return false;
-  }
-  
-  // Both strings should be converted to lowercase for case-insensitive comparison
-  return str.toLowerCase().includes(target.toLowerCase());
 };
 
 /**
@@ -144,7 +131,7 @@ export const isLocationInVizag = (location: AppLocation | ApiLocation | null | u
   return vizagNames.some(vizagName => 
     safeIncludes(location.address, vizagName) ||
     safeIncludes(location.name, vizagName) ||
-    (location as AppLocation).city ? safeIncludes((location as AppLocation).city, vizagName) : false
+    safeIncludes((location as AppLocation).city, vizagName)
   );
 };
 
