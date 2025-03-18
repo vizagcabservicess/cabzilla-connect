@@ -28,7 +28,7 @@ export function BookingStatusManager({
       case 'payment_received':
         return <CheckCheck className="h-4 w-4" />;
       case 'payment_pending':
-        return <Loader2 className="h-4 w-4 animate-spin" />;
+        return <Loader2 className="h-4 w-4" />;
       case 'completed':
         return <CheckCircle className="h-4 w-4" />;
       case 'continued':
@@ -36,7 +36,7 @@ export function BookingStatusManager({
       case 'cancelled':
         return <XCircle className="h-4 w-4" />;
       default:
-        return null;
+        return <Check className="h-4 w-4" />;
     }
   };
 
@@ -77,7 +77,7 @@ export function BookingStatusManager({
             value={currentStatus}
             onValueChange={handleStatusChange}
           >
-            <SelectTrigger className="w-[200px]">
+            <SelectTrigger className="w-[200px] bg-white">
               <SelectValue>
                 <span className="flex items-center gap-2">
                   <span className={cn("flex items-center gap-2", getStatusColor(currentStatus))}>
@@ -88,6 +88,12 @@ export function BookingStatusManager({
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="pending">
+                <span className="flex items-center gap-2 text-gray-600">
+                  <Check className="h-4 w-4" />
+                  PENDING
+                </span>
+              </SelectItem>
               <SelectItem value="assigned">
                 <span className="flex items-center gap-2 text-blue-600">
                   <Check className="h-4 w-4" />

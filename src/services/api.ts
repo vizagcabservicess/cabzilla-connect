@@ -183,8 +183,14 @@ export const bookingAPI = {
   },
   updateBooking: async (bookingId: string, bookingData: Partial<BookingRequest>) => {
     console.log('Updating booking:', bookingId, 'with data:', bookingData);
-    const response = await axiosInstance.put(`/api/update-booking/${bookingId}`, bookingData);
-    return response.data;
+    try {
+      const response = await axiosInstance.put(`/api/update-booking/${bookingId}`, bookingData);
+      console.log('Update response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating booking:', error);
+      throw error;
+    }
   },
   getReceipt: async (bookingId: string) => {
     const response = await axiosInstance.get(`/api/receipt/${bookingId}`);
@@ -287,10 +293,16 @@ export const bookingAPI = {
     }
     return response.data;
   },
-  deleteBooking: async (bookingId: string): Promise<any> => {
+  deleteBooking: async (bookingId: string) => {
     console.log('Deleting booking:', bookingId);
-    const response = await axiosInstance.delete(`/api/admin/booking/${bookingId}`);
-    return response.data;
+    try {
+      const response = await axiosInstance.delete(`/api/admin/booking/${bookingId}`);
+      console.log('Delete response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting booking:', error);
+      throw error;
+    }
   }
 };
 
