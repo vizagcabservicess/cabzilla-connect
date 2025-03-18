@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { toast } from 'sonner';
 import { 
@@ -365,7 +364,9 @@ export const fareAPI = {
   // Get tour fares
   getTourFares: async (): Promise<TourFare[]> => {
     try {
+      console.log("Getting tour fares...");
       const response = await api.get('/fares/tours.php');
+      console.log("Tour fares raw response:", response.data);
       
       // Handle different response formats
       if (response.data && Array.isArray(response.data)) {
@@ -374,6 +375,23 @@ export const fareAPI = {
         return response.data.data;
       } else if (response.data && response.data.fares && Array.isArray(response.data.fares)) {
         return response.data.fares;
+      }
+      
+      // If the data is an object with numbered keys, convert it to an array
+      if (response.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
+        // Filter out status, serverTime, apiVersion or other non-tour data
+        const nonTourKeys = ['status', 'serverTime', 'apiVersion', 'message', 'error'];
+        const toursArray = Object.entries(response.data)
+          .filter(([key, value]) => 
+            !nonTourKeys.includes(key) && 
+            value && 
+            typeof value === 'object'
+          )
+          .map(([_, value]) => value);
+          
+        if (toursArray.length > 0) {
+          return toursArray;
+        }
       }
       
       console.warn('Unexpected tour fares response format:', response.data);
@@ -386,7 +404,9 @@ export const fareAPI = {
   // Get vehicle pricing
   getVehiclePricing: async (): Promise<VehiclePricing[]> => {
     try {
-      const response = await api.get('/fares/vehicles.php');
+      console.log("Fetching vehicle pricing with cache busting...");
+      const response = await api.get(`/fares/vehicles.php?_t=${Date.now()}`);
+      console.log("Vehicle pricing raw response:", response.data);
       
       // Handle different response formats
       if (response.data && Array.isArray(response.data)) {
@@ -395,6 +415,23 @@ export const fareAPI = {
         return response.data.data;
       } else if (response.data && response.data.vehicles && Array.isArray(response.data.vehicles)) {
         return response.data.vehicles;
+      }
+      
+      // If the data is an object with numbered keys, convert it to an array
+      if (response.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
+        // Filter out status, serverTime, apiVersion or other non-pricing data
+        const nonPricingKeys = ['status', 'serverTime', 'apiVersion', 'message', 'error'];
+        const pricingArray = Object.entries(response.data)
+          .filter(([key, value]) => 
+            !nonPricingKeys.includes(key) && 
+            value && 
+            typeof value === 'object'
+          )
+          .map(([_, value]) => value);
+          
+        if (pricingArray.length > 0) {
+          return pricingArray;
+        }
       }
       
       console.warn('Unexpected vehicle pricing response format:', response.data);
@@ -469,6 +506,24 @@ export const fareAPI = {
   updateVehiclePricing: async (pricingData: VehiclePricingUpdateRequest): Promise<any> => {
     try {
       const response = await api.post('/admin/vehicle-pricing.php', pricingData);
+      console.log("Vehicle pricing update response:", response.data);
+      
+      // Check for success in various response formats
+      if (response.data && response.data.status === 'success') {
+        return response.data;
+      } else if (response.data && response.data.message && !response.data.error) {
+        return response.data;
+      } else if (response.data && response.data.data) {
+        return response.data;
+      }
+      
+      // If response doesn't indicate success, throw an error
+      if (response.data && response.data.error) {
+        throw new Error(response.data.error);
+      } else if (response.data && response.data.message && response.data.status === 'error') {
+        throw new Error(response.data.message);
+      }
+      
       return response.data;
     } catch (error) {
       return handleApiError(error);
@@ -508,7 +563,10 @@ export const fareAPI = {
   // Get all vehicle data for booking
   getAllVehicleData: async (): Promise<any[]> => {
     try {
-      const response = await api.get('/fares/vehicles-data.php');
+      const response = await api.get(`/fares/vehicles-data.php?_t=${Date.now()}`);
+      
+      // Log response to debug
+      console.log("Vehicle data raw response:", response.data);
       
       // Handle different response formats
       if (response.data && Array.isArray(response.data)) {

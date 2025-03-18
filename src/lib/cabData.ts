@@ -172,18 +172,24 @@ export const tourFares = {
 // Function to load tour fares dynamically
 export const loadTourFares = async (): Promise<any> => {
   try {
+    console.log("Loading tour fares from API");
     const tourFareData = await fareAPI.getTourFares();
+    console.log("Tour fare data:", tourFareData);
     
     // Convert the API data to match the existing structure
     const dynamicTourFares: any = {};
     
-    tourFareData.forEach((tour) => {
-      dynamicTourFares[tour.tourId] = {
-        sedan: tour.sedan,
-        ertiga: tour.ertiga,
-        innova_crysta: tour.innova
-      };
-    });
+    if (Array.isArray(tourFareData) && tourFareData.length > 0) {
+      tourFareData.forEach((tour) => {
+        if (tour && tour.tourId) {
+          dynamicTourFares[tour.tourId] = {
+            sedan: parseFloat(tour.sedan) || 0,
+            ertiga: parseFloat(tour.ertiga) || 0,
+            innova_crysta: parseFloat(tour.innova) || 0
+          };
+        }
+      });
+    }
     
     return Object.keys(dynamicTourFares).length > 0 ? dynamicTourFares : tourFares;
   } catch (error) {
@@ -198,6 +204,26 @@ export const formatPrice = (price: number): string => {
   return `₹${price.toLocaleString('en-IN')}`;
 };
 
+// Local package price matrix to store pricing data for different cab types
+const localPackagePriceMatrix: Record<string, Record<string, number>> = {
+  '8hrs-80km': {
+    'sedan': 2500,
+    'ertiga': 3000,
+    'innova crysta': 3800,
+    'innova': 3800,
+    'tempo': 4500,
+    'luxury': 5500
+  },
+  '10hrs-100km': {
+    'sedan': 3000,
+    'ertiga': 3600,
+    'innova crysta': 4500,
+    'innova': 4500,
+    'tempo': 5500,
+    'luxury': 6500
+  }
+};
+
 /**
  * Get local package price based on package ID and cab type
  */
@@ -206,23 +232,14 @@ export function getLocalPackagePrice(packageId: string, cabType: string): number
   
   const lowerCabType = cabType.toLowerCase();
   
-  // Base prices for each cab type by package
-  const priceMatrix: Record<string, Record<string, number>> = {
-    '8hrs-80km': {
-      'sedan': 2500,
-      'ertiga': 3000,
-      'innova crysta': 3800
-    },
-    '10hrs-100km': {
-      'sedan': 3000,
-      'ertiga': 3600,
-      'innova crysta': 4500
-    }
-  };
+  // Check if we have a price in the matrix
+  if (localPackagePriceMatrix[packageId] && localPackagePriceMatrix[packageId][lowerCabType]) {
+    return localPackagePriceMatrix[packageId][lowerCabType];
+  }
   
-  // Return the price from the matrix or a fallback
-  if (priceMatrix[packageId] && priceMatrix[packageId][lowerCabType]) {
-    return priceMatrix[packageId][lowerCabType];
+  // If the exact cab type is not found, try to match with similar cab types
+  if (lowerCabType.includes('innova') && localPackagePriceMatrix[packageId]['innova']) {
+    return localPackagePriceMatrix[packageId]['innova'];
   }
   
   // Fallback - calculate based on base package and apply multiplier for cab types
@@ -232,8 +249,29 @@ export function getLocalPackagePrice(packageId: string, cabType: string): number
   let multiplier = 1;
   if (lowerCabType.includes('ertiga')) multiplier = 1.2;
   if (lowerCabType.includes('innova')) multiplier = 1.5;
+  if (lowerCabType.includes('tempo')) multiplier = 1.8;
+  if (lowerCabType.includes('luxury')) multiplier = 2.2;
   
   return Math.ceil(basePackage.basePrice * multiplier);
+}
+
+// Function to update local package prices
+export function updateLocalPackagePrice(packageId: string, cabType: string, price: number): void {
+  const lowerCabType = cabType.toLowerCase();
+  
+  // Ensure the package exists in the matrix
+  if (!localPackagePriceMatrix[packageId]) {
+    localPackagePriceMatrix[packageId] = {};
+  }
+  
+  // Update the price for the specified cab type
+  localPackagePriceMatrix[packageId][lowerCabType] = price;
+  console.log(`Updated local package price: package=${packageId}, cab=${cabType}, price=${price}`);
+}
+
+// Function to get all local package prices
+export function getAllLocalPackagePrices(): Record<string, Record<string, number>> {
+  return localPackagePriceMatrix;
 }
 
 /**

@@ -63,6 +63,7 @@ export function FareManagement() {
   const [addTourDialogOpen, setAddTourDialogOpen] = useState(false);
   const { toast: uiToast } = useToast();
   
+  // Initialize forms with their schemas
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -88,7 +89,7 @@ export function FareManagement() {
     },
   });
   
-  // Handle form submission
+  // Handle form submission for updating existing tour
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       setIsLoading(true);
@@ -107,6 +108,7 @@ export function FareManagement() {
     }
   };
   
+  // Handle form submission for adding new tour
   const onAddTourSubmit = async (values: z.infer<typeof newTourFormSchema>) => {
     try {
       setIsLoading(true);
@@ -169,11 +171,17 @@ export function FareManagement() {
     try {
       setIsRefreshing(true);
       setError(null);
-      // Cache busting log
       console.log("Manually refreshing tour fares...");
       const data = await fareAPI.getTourFares();
-      setTourFares(data);
-      toast.success("Tour fares refreshed");
+      
+      if (Array.isArray(data) && data.length > 0) {
+        console.log("Fetched tour fares:", data);
+        setTourFares(data);
+        toast.success("Tour fares refreshed");
+      } else {
+        console.warn("Empty or invalid tour fares data:", data);
+        setError("No tour fares data available. The API may be down or returned an empty result.");
+      }
     } catch (error) {
       console.error("Error refreshing tour fares:", error);
       setError("Failed to refresh tour fares. Please try again.");
@@ -190,8 +198,8 @@ export function FareManagement() {
       form.setValue("sedan", selectedTour.sedan);
       form.setValue("ertiga", selectedTour.ertiga);
       form.setValue("innova", selectedTour.innova);
-      form.setValue("tempo", selectedTour.tempo);
-      form.setValue("luxury", selectedTour.luxury);
+      form.setValue("tempo", selectedTour.tempo || 0);
+      form.setValue("luxury", selectedTour.luxury || 0);
     }
   };
 

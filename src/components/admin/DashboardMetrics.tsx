@@ -44,23 +44,33 @@ export function DashboardMetrics({
   useEffect(() => {
     if (metricsData?.availableStatuses) {
       // Ensure availableStatuses is an array
-      const statusesArray = Array.isArray(metricsData.availableStatuses) 
-        ? metricsData.availableStatuses 
-        : Object.values(metricsData.availableStatuses || {});
+      let statusesArray: string[] = [];
+      
+      if (Array.isArray(metricsData.availableStatuses)) {
+        statusesArray = metricsData.availableStatuses as string[];
+      } else if (typeof metricsData.availableStatuses === 'object' && metricsData.availableStatuses !== null) {
+        statusesArray = Object.values(metricsData.availableStatuses) as string[];
+      } else if (typeof metricsData.availableStatuses === 'string') {
+        // If it's a comma-separated string, split it
+        statusesArray = (metricsData.availableStatuses as string).split(',').map(s => s.trim());
+      }
       
       // Ensure 'all' is always the first option
       const statuses: Array<BookingStatus | 'all'> = ['all'];
       
       // Add all statuses from metrics that are valid BookingStatus types or can be cast as such
       statusesArray.forEach(status => {
-        // Check if the status is a valid BookingStatus
-        const isValidStatus = [
-          'pending', 'confirmed', 'assigned', 'payment_received', 
-          'payment_pending', 'completed', 'continued', 'cancelled'
-        ].includes(status);
-        
-        if (isValidStatus) {
-          statuses.push(status as BookingStatus);
+        // Make sure status is a string before comparing
+        if (typeof status === 'string') {
+          // Check if the status is a valid BookingStatus
+          const isValidStatus = [
+            'pending', 'confirmed', 'assigned', 'payment_received', 
+            'payment_pending', 'completed', 'continued', 'cancelled'
+          ].includes(status);
+          
+          if (isValidStatus) {
+            statuses.push(status as BookingStatus);
+          }
         }
       });
       
@@ -68,7 +78,7 @@ export function DashboardMetrics({
     }
   }, [metricsData]);
 
-  // Handle status change (fix the type issue)
+  // Handle status change
   const handleStatusChange = (value: string) => {
     // Cast the string value to the appropriate type
     const newStatus = value as BookingStatus | 'all';

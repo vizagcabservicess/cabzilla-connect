@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -44,19 +43,6 @@ export function VehiclePricingManagement() {
   });
   
   useEffect(() => {
-    const fetchVehiclePricing = async () => {
-      try {
-        // Cache busting (without passing to API)
-        console.log("Fetching vehicle pricing with cache busting...");
-        const data = await fareAPI.getVehiclePricing();
-        console.log("Fetched vehicle pricing:", data);
-        setVehiclePricing(data);
-      } catch (error) {
-        console.error("Error fetching vehicle pricing:", error);
-        setError("Failed to load vehicle pricing. Please try again.");
-      }
-    };
-    
     fetchVehiclePricing();
   }, []);
   
@@ -66,8 +52,15 @@ export function VehiclePricingManagement() {
       setError(null);
       console.log("Manually refreshing vehicle pricing...");
       const data = await fareAPI.getVehiclePricing();
-      setVehiclePricing(data);
-      toast.success("Vehicle pricing refreshed");
+      
+      if (Array.isArray(data) && data.length > 0) {
+        console.log("Fetched vehicle pricing:", data);
+        setVehiclePricing(data);
+        toast.success("Vehicle pricing refreshed");
+      } else {
+        console.warn("Empty or invalid vehicle pricing data:", data);
+        setError("No vehicle pricing data available. The API may be down or returned an empty result.");
+      }
     } catch (error) {
       console.error("Error refreshing vehicle pricing:", error);
       setError("Failed to refresh vehicle pricing. Please try again.");
@@ -77,7 +70,6 @@ export function VehiclePricingManagement() {
     }
   };
   
-  // Handle form submission
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       setIsLoading(true);
