@@ -148,7 +148,6 @@ export const authAPI = {
     const response = await axiosInstance.get('/api/user/dashboard');
     return response.data;
   },
-  // Authentication helper methods
   isAuthenticated: (): boolean => {
     const token = localStorage.getItem('authToken') || localStorage.getItem('auth_token');
     return !!token;
@@ -216,39 +215,40 @@ export const bookingAPI = {
       const url = `/api/user/bookings?_t=${timestamp}`;
       console.log('User bookings request URL:', `${API_BASE_URL}${url}`);
       
-      const response = await axiosInstance.get(url, { headers });
+      const response = await axiosInstance.get(url, { 
+        headers,
+        withCredentials: false
+      });
       
       console.log('User bookings response:', response.data);
       
       // Process the response to consistently return a Booking array
+      if (Array.isArray(response.data)) {
+        return response.data;
+      }
+      
+      // Handle object response with data property
       if (response.data && typeof response.data === 'object') {
-        // Case 1: The response is already an array of bookings
-        if (Array.isArray(response.data)) {
-          return response.data;
-        }
-        // Case 2: The response has a 'data' property that is an array
-        else if (response.data.data && Array.isArray(response.data.data)) {
+        // Case 1: The response has a 'data' property that is an array
+        if (response.data.data && Array.isArray(response.data.data)) {
           return response.data.data;
         }
-        // Case 3: The response has a 'status' property and a 'data' array
+        // Case 2: The response has a 'status' property and a 'data' array
         else if (response.data.status === 'success' && Array.isArray(response.data.data)) {
           return response.data.data;
         }
-        // Case 4: The response has a non-array 'data' property (should not happen, but handle it)
-        else if (response.data.data && !Array.isArray(response.data.data)) {
-          console.warn('Unexpected data format - data is not an array:', response.data);
-          return [];
-        }
       }
       
-      // If we reach here, the response format was unexpected
+      // If we reach here with a non-array response, log and return an empty array
       console.error('Unexpected response format:', response.data);
       return [];
     } catch (error) {
       console.error('Error in getUserBookings:', error);
-      // Check specific error types and provide better handling
+      
+      // Better handling of specific error types
       if (axios.isAxiosError(error) && error.response) {
         console.error('Axios error response:', error.response.status, error.response.data);
+        
         // If authentication issue, clear token
         if (error.response.status === 401) {
           localStorage.removeItem('authToken');
@@ -264,11 +264,17 @@ export const bookingAPI = {
       }
       
       // For network errors, provide a clearer message
-      if (error instanceof Error && error.message && error.message.includes('Network Error')) {
-        throw new Error('Unable to connect to the server. Please check your internet connection.');
+      if (error instanceof Error) {
+        if (error.message.includes('Network Error')) {
+          throw new Error('Unable to connect to the server. Please check your internet connection.');
+        }
+        
+        // Pass through the error message
+        throw error;
       }
       
-      throw error;
+      // Fallback for any other errors
+      throw new Error('Failed to fetch bookings. Please try again later.');
     }
   },
   getAdminDashboardMetrics: async (period: 'today' | 'week' | 'month'): Promise<DashboardMetrics> => {

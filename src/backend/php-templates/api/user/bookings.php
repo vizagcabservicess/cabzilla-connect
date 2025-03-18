@@ -3,7 +3,7 @@
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
 
-// CORS Headers - Updated to be more permissive
+// CORS Headers - Simplified and permissive
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: *');
@@ -113,8 +113,7 @@ try {
         'count' => count($bookings)
     ]);
     
-    // Return the bookings data consistently
-    // IMPORTANT: This sends just the array directly without wrapping it in status/data
+    // Return just the bookings array directly without wrapping in a response object
     echo json_encode($bookings);
     
 } catch (Exception $e) {

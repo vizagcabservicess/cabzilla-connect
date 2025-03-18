@@ -37,19 +37,20 @@ Header set X-Query-String "%{QUERY_STRING}e"
     Header set Content-Type "application/json"
 </FilesMatch>
 
-# Enable CORS with broader settings for troubleshooting
+# Enable CORS with maximum permissive settings
 <IfModule mod_headers.c>
-    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Origin "*" 
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "*" 
+    Header always set Access-Control-Allow-Headers "*"
     Header always set Access-Control-Max-Age "3600"
-    Header always set Access-Control-Allow-Credentials "true"
+    # Remove credentials since we're using * for origin
+    # Header always set Access-Control-Allow-Credentials "true"
     
     # Prevent browsers from incorrectly detecting non-scripts as scripts
     Header always set X-Content-Type-Options "nosniff"
 </IfModule>
 
-# Handle OPTIONS method for CORS preflight
+# Handle OPTIONS method for CORS preflight - immediately return 200
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
 

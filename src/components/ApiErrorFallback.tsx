@@ -2,7 +2,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, RefreshCw, WifiOff, Server, FileQuestion, ShieldAlert } from "lucide-react";
+import { AlertTriangle, RefreshCw, WifiOff, Server, FileQuestion, ShieldAlert, Terminal } from "lucide-react";
 
 interface ApiErrorFallbackProps {
   error: Error | string;
@@ -41,9 +41,24 @@ export function ApiErrorFallback({
       'pickupLocation', 'pickupDate', 'returnDate'
     ];
     
-    cacheKeys.forEach(key => sessionStorage.removeItem(key));
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('auth_token');
+    cacheKeys.forEach(key => {
+      try {
+        sessionStorage.removeItem(key);
+      } catch (e) {
+        console.warn(`Failed to remove ${key} from sessionStorage:`, e);
+      }
+    });
+    
+    // Always clear authentication tokens on retry for CORS/network errors
+    if (isNetworkError || isCorsError) {
+      try {
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('auth_token');
+        console.log('Authentication tokens cleared for clean retry');
+      } catch (e) {
+        console.warn('Failed to clear authentication tokens:', e);
+      }
+    }
     
     // Wait a moment before retrying to allow any pending operations to clear
     setTimeout(() => {
@@ -97,12 +112,12 @@ export function ApiErrorFallback({
         
         {isCorsError && (
           <div className="text-sm text-gray-700 mt-4">
-            <p className="font-medium">Possible reasons:</p>
+            <p className="font-medium">What you can try:</p>
             <ul className="list-disc pl-5 mt-2 space-y-1">
-              <li>Server configuration doesn't allow requests from this origin</li>
-              <li>Missing CORS headers on the server response</li>
-              <li>The API server may be temporarily down</li>
-              <li>There might be a network issue blocking the connection</li>
+              <li>Clear your browser cache and cookies</li>
+              <li>Log out and log back in to refresh your authentication tokens</li>
+              <li>Try from a different browser or internet connection</li>
+              <li>Contact support if the problem persists</li>
             </ul>
             <p className="mt-3 text-xs text-gray-500">Error details: {errorMessage}</p>
           </div>
@@ -132,12 +147,30 @@ export function ApiErrorFallback({
             <p className="mt-3 text-xs text-gray-500">Error details: {errorMessage}</p>
           </div>
         )}
+
+        {/* Add a section for checking API status */}
+        <div className="mt-4 bg-blue-50 p-3 rounded-md border border-blue-200">
+          <div className="flex items-start">
+            <Terminal className="h-4 w-4 mt-1 text-blue-500 mr-2" />
+            <div>
+              <p className="text-sm font-medium text-blue-800">Automatic Recovery</p>
+              <p className="text-xs text-blue-600 mt-1">
+                The retry button below will:
+              </p>
+              <ul className="list-disc pl-5 mt-1 text-xs text-blue-600 space-y-0.5">
+                <li>Clear your authentication tokens</li>
+                <li>Clear cached data that might be causing issues</li>
+                <li>Reload the connection with a fresh state</li>
+              </ul>
+            </div>
+          </div>
+        </div>
       </CardContent>
       <CardFooter className="flex flex-wrap gap-3">
         <Button 
           onClick={handleRetry} 
           variant="outline" 
-          className="gap-2"
+          className="gap-2 bg-white hover:bg-blue-50 border-blue-200"
         >
           <RefreshCw className="h-4 w-4" />
           {isCorsError ? "Clear Tokens & Retry" : "Retry Connection"}
