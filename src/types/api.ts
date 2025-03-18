@@ -1,3 +1,4 @@
+
 // User related types
 export interface User {
   id: number;
@@ -57,7 +58,7 @@ export interface BookingRequest {
   pickupLocation: string;
   dropLocation?: string;
   pickupDate: string;
-  returnDate?: string;
+  returnDate?: string | null;
   cabType: string;
   distance: number;
   tripType: 'outstation' | 'local' | 'airport' | 'tour';
@@ -66,7 +67,7 @@ export interface BookingRequest {
   passengerName: string;
   passengerPhone: string;
   passengerEmail: string;
-  hourlyPackage?: string;
+  hourlyPackage?: string | null;
   tourId?: string;
   driverName?: string;
   driverPhone?: string;
@@ -216,6 +217,7 @@ export interface Location {
   popularityScore?: number;
   isPickupLocation?: boolean;
   isDropLocation?: boolean;
+  isInVizag?: boolean; // Added this property to fix type errors
   address: string;
 }
 

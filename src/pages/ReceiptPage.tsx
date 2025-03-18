@@ -26,7 +26,8 @@ const ReceiptPage = () => {
       }
 
       try {
-        const response = await bookingAPI.getBookingById(Number(bookingId));
+        // Convert bookingId to a number since the API expects a number
+        const response = await bookingAPI.getBookingById(bookingId);
         console.log("Booking details:", response);
         setBooking(response);
         setLoading(false);
