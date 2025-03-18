@@ -211,8 +211,8 @@ try {
         // Get average rating (simulated)
         $avgRating = 4.7;
         
-        // Prepare the metrics response
-        $metrics = [
+        // Prepare the metrics response - ensure it's an array for proper JSON encoding
+        $metricsData = [
             'totalBookings' => (int)$totalBookings,
             'activeRides' => (int)$activeRides,
             'totalRevenue' => (float)$totalRevenue,
@@ -224,10 +224,10 @@ try {
             'currentFilter' => $statusFilter
         ];
         
-        logError("Sending admin metrics response", ['metrics' => $metrics, 'period' => $period]);
+        logError("Sending admin metrics response", ['metrics' => $metricsData, 'period' => $period]);
         
-        // Return the metrics data
-        sendJsonResponse(['status' => 'success', 'data' => $metrics]);
+        // Return the metrics data - ensure we return as data property
+        sendJsonResponse(['status' => 'success', 'data' => $metricsData]);
         exit;
     }
 
@@ -291,7 +291,7 @@ try {
     // Log count of real bookings found
     logError("Real bookings found", ['count' => count($bookings), 'user_id' => $userId]);
 
-    // Use the consistent response format
+    // Use the consistent response format - always send as an array property
     sendJsonResponse(['status' => 'success', 'bookings' => $bookings]);
     
 } catch (Exception $e) {

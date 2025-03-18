@@ -42,12 +42,17 @@ export function DashboardMetrics({
   const [availableStatuses, setAvailableStatuses] = useState<Array<BookingStatus | 'all'>>(['all']);
 
   useEffect(() => {
-    if (metricsData?.availableStatuses && Array.isArray(metricsData.availableStatuses)) {
+    if (metricsData?.availableStatuses) {
+      // Ensure availableStatuses is an array
+      const statusesArray = Array.isArray(metricsData.availableStatuses) 
+        ? metricsData.availableStatuses 
+        : Object.values(metricsData.availableStatuses || {});
+      
       // Ensure 'all' is always the first option
       const statuses: Array<BookingStatus | 'all'> = ['all'];
       
       // Add all statuses from metrics that are valid BookingStatus types or can be cast as such
-      metricsData.availableStatuses.forEach(status => {
+      statusesArray.forEach(status => {
         // Check if the status is a valid BookingStatus
         const isValidStatus = [
           'pending', 'confirmed', 'assigned', 'payment_received', 

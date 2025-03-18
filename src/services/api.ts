@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { toast } from 'sonner';
 import { 
@@ -132,7 +133,19 @@ export const authAPI = {
   getAllUsers: async (): Promise<User[]> => {
     try {
       const response = await api.get('/admin/users.php');
-      return response.data;
+      
+      // Ensure we have an array of users, handling various response formats
+      if (response.data && Array.isArray(response.data)) {
+        return response.data;
+      } else if (response.data && response.data.users && Array.isArray(response.data.users)) {
+        return response.data.users;
+      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        return response.data.data;
+      }
+      
+      // If the response doesn't contain an array we can use, return an empty array
+      console.warn('Unexpected users response format:', response.data);
+      return [];
     } catch (error) {
       return handleApiError(error);
     }
@@ -244,16 +257,25 @@ export const bookingAPI = {
       
       const response = await api.get(url);
       
-      // Check if the response has the bookings array in the expected format
-      if (response.data && response.data.bookings) {
+      // Handle different response formats
+      if (response.data && Array.isArray(response.data)) {
+        return response.data;
+      } else if (response.data && response.data.bookings && Array.isArray(response.data.bookings)) {
         return response.data.bookings;
+      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        return response.data.data;
       }
       
+      console.warn('Unexpected bookings response format:', response.data);
       return [];
     } catch (error) {
-      // Fallback to user bookings if admin endpoint fails
       console.warn('Failed to get all bookings, falling back to user bookings');
-      return bookingAPI.getUserBookings();
+      try {
+        return await bookingAPI.getUserBookings();
+      } catch (fallbackError) {
+        console.error('Fallback also failed:', fallbackError);
+        return [];
+      }
     }
   },
   
@@ -268,6 +290,7 @@ export const bookingAPI = {
   
   getAdminDashboardMetrics: async (period: 'today' | 'week' | 'month' = 'week', status?: string): Promise<DashboardMetrics> => {
     try {
+      // Use the admin/metrics.php endpoint
       let url = `/admin/metrics.php?period=${period}`;
       if (status && status !== 'all') {
         url += `&status=${status}`;
@@ -279,16 +302,39 @@ export const bookingAPI = {
       console.log(`Admin: Fetching metrics from ${url}`);
       const response = await api.get(url);
       
-      // Check if the response has the metrics data in the expected format
+      // Handle different response formats
       if (response.data && response.data.data) {
-        console.log('Admin: Metrics data received successfully');
+        console.log('Admin: Metrics data received successfully', response.data.data);
         return response.data.data;
+      } else if (response.data && typeof response.data === 'object' && response.data.totalBookings !== undefined) {
+        console.log('Admin: Metrics data in root of response', response.data);
+        return response.data;
       }
       
       console.warn('Admin: Metrics response format unexpected', response.data);
       
-      // Fallback if the data isn't in the expected format
-      return {
+      // Try to extract data from the response
+      let extractedData: DashboardMetrics | null = null;
+      
+      if (response.data && typeof response.data === 'object') {
+        // Look for metrics data in the response
+        const possibleMetrics = {
+          totalBookings: response.data.totalBookings || 0,
+          activeRides: response.data.activeRides || 0,
+          totalRevenue: response.data.totalRevenue || 0,
+          availableDrivers: response.data.availableDrivers || 0,
+          busyDrivers: response.data.busyDrivers || 0,
+          avgRating: response.data.avgRating || 0,
+          upcomingRides: response.data.upcomingRides || 0
+        };
+        
+        if (possibleMetrics.totalBookings !== undefined || possibleMetrics.activeRides !== undefined) {
+          extractedData = possibleMetrics;
+        }
+      }
+      
+      // Return the extracted data or a default object
+      return extractedData || {
         totalBookings: 0,
         activeRides: 0,
         totalRevenue: 0,
@@ -320,7 +366,18 @@ export const fareAPI = {
   getTourFares: async (): Promise<TourFare[]> => {
     try {
       const response = await api.get('/fares/tours.php');
-      return response.data;
+      
+      // Handle different response formats
+      if (response.data && Array.isArray(response.data)) {
+        return response.data;
+      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        return response.data.data;
+      } else if (response.data && response.data.fares && Array.isArray(response.data.fares)) {
+        return response.data.fares;
+      }
+      
+      console.warn('Unexpected tour fares response format:', response.data);
+      return [];
     } catch (error) {
       return handleApiError(error);
     }
@@ -330,7 +387,18 @@ export const fareAPI = {
   getVehiclePricing: async (): Promise<VehiclePricing[]> => {
     try {
       const response = await api.get('/fares/vehicles.php');
-      return response.data;
+      
+      // Handle different response formats
+      if (response.data && Array.isArray(response.data)) {
+        return response.data;
+      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        return response.data.data;
+      } else if (response.data && response.data.vehicles && Array.isArray(response.data.vehicles)) {
+        return response.data.vehicles;
+      }
+      
+      console.warn('Unexpected vehicle pricing response format:', response.data);
+      return [];
     } catch (error) {
       return handleApiError(error);
     }
@@ -340,7 +408,28 @@ export const fareAPI = {
   getVehicles: async (): Promise<any[]> => {
     try {
       const response = await api.get('/admin/vehicles-update.php');
-      return response.data;
+      
+      // Handle different response formats
+      if (response.data && Array.isArray(response.data)) {
+        return response.data;
+      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        return response.data.data;
+      } else if (response.data && response.data.vehicles && Array.isArray(response.data.vehicles)) {
+        return response.data.vehicles;
+      }
+      
+      // If the data is an object with numbered keys, convert it to an array
+      if (response.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
+        const vehiclesArray = Object.values(response.data).filter(item => 
+          item && typeof item === 'object' && !Array.isArray(item)
+        );
+        if (vehiclesArray.length > 0) {
+          return vehiclesArray;
+        }
+      }
+      
+      console.warn('Unexpected vehicles response format:', response.data);
+      return [];
     } catch (error) {
       return handleApiError(error);
     }
@@ -420,7 +509,33 @@ export const fareAPI = {
   getAllVehicleData: async (): Promise<any[]> => {
     try {
       const response = await api.get('/fares/vehicles-data.php');
-      return response.data;
+      
+      // Handle different response formats
+      if (response.data && Array.isArray(response.data)) {
+        return response.data;
+      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        return response.data.data;
+      }
+      
+      // If the data is an object with numbered keys, convert it to an array
+      if (response.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
+        // Filter out status, serverTime, apiVersion or other non-vehicle data
+        const nonVehicleKeys = ['status', 'serverTime', 'apiVersion', 'message', 'error'];
+        const vehiclesArray = Object.entries(response.data)
+          .filter(([key, value]) => 
+            !nonVehicleKeys.includes(key) && 
+            value && 
+            typeof value === 'object'
+          )
+          .map(([_, value]) => value);
+          
+        if (vehiclesArray.length > 0) {
+          return vehiclesArray;
+        }
+      }
+      
+      console.warn('Unexpected vehicle data response format:', response.data);
+      return [];
     } catch (error) {
       return handleApiError(error);
     }
