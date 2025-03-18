@@ -7,7 +7,7 @@ RewriteRule ^signup$ signup.php [L]
 RewriteRule ^login$ login.php [L]
 RewriteRule ^user/dashboard$ user/dashboard.php [L]
 RewriteRule ^user/booking/([0-9]+)$ user/booking.php?id=$1 [QSA,L]
-RewriteRule ^user/bookings$ user/bookings.php [L]
+RewriteRule ^user/bookings$ user/bookings.php [L,QSA]
 RewriteRule ^book$ book.php [L]
 RewriteRule ^update-booking/([0-9]+)$ update-booking.php?id=$1 [QSA,L]
 RewriteRule ^admin/bookings$ admin/bookings.php [L]
@@ -37,7 +37,7 @@ Header set X-Query-String "%{QUERY_STRING}e"
     Header set Content-Type "application/json"
 </FilesMatch>
 
-# Enable CORS - expanded for better browser compatibility
+# Enable CORS with broader settings for troubleshooting
 <IfModule mod_headers.c>
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
@@ -52,6 +52,11 @@ Header set X-Query-String "%{QUERY_STRING}e"
 # Handle OPTIONS method for CORS preflight
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
+
+# Send 200 OK for OPTIONS requests
+<If "%{REQUEST_METHOD} == 'OPTIONS'">
+    Header set Status "200 OK"
+</If>
 
 # Prevent directory listing
 Options -Indexes

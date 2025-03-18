@@ -41,17 +41,23 @@ AddDefaultCharset UTF-8
     </FilesMatch>
 </IfModule>
 
-# Enable CORS
+# Enable CORS with broader settings for troubleshooting
 <IfModule mod_headers.c>
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, Cache-Control"
     Header always set Access-Control-Max-Age "3600"
+    Header always set Access-Control-Allow-Credentials "true"
 </IfModule>
 
 # Handle OPTIONS requests for CORS preflight
 RewriteCond %{REQUEST_METHOD} OPTIONS
-RewriteRule .* - [R=200,L]
+RewriteRule ^(.*)$ $1 [R=200,L]
+
+# Send 200 OK for OPTIONS requests
+<If "%{REQUEST_METHOD} == 'OPTIONS'">
+    Header set Status "200 OK"
+</If>
 
 # Redirect all non-file/directory/API requests to index.html for React Router
 RewriteCond %{REQUEST_FILENAME} !-f

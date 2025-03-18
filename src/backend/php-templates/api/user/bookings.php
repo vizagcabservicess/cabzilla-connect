@@ -3,13 +3,13 @@
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
 
-// Updated CORS Headers to be more permissive
+// Expanded CORS Headers to ensure client can access
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Cache-Control');
 header('Content-Type: application/json');
 
-// Handle preflight OPTIONS request
+// Handle preflight OPTIONS request explicitly
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
@@ -68,10 +68,13 @@ if (!$conn) {
 }
 
 try {
-    // Get user's bookings
+    // Get user's bookings - add explicit query logging
     logError("Preparing to fetch bookings for user", ['user_id' => $userId]);
+    
+    $sql = "SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC";
+    logError("SQL Query", ['sql' => $sql, 'user_id' => $userId]);
 
-    $stmt = $conn->prepare("SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC");
+    $stmt = $conn->prepare($sql);
     if (!$stmt) {
         logError("Prepare statement failed", ['error' => $conn->error]);
         throw new Exception('Database prepare error: ' . $conn->error);
@@ -99,10 +102,10 @@ try {
 
     $bookings = [];
     while ($row = $result->fetch_assoc()) {
-        // Ensure all required fields are present
+        // Format each booking record consistently
         $booking = [
-            'id' => $row['id'],
-            'userId' => $row['user_id'],
+            'id' => (int)$row['id'],
+            'userId' => (int)$row['user_id'],
             'bookingNumber' => $row['booking_number'] ?? ('BK' . rand(10000, 99999)),
             'pickupLocation' => $row['pickup_location'],
             'dropLocation' => $row['drop_location'],
@@ -125,16 +128,16 @@ try {
         $bookings[] = $booking;
     }
 
-    // Log count of real bookings found
+    // Log data found for debugging
     logError("Bookings found", ['count' => count($bookings), 'user_id' => $userId]);
 
-    // Ensure the response format is consistent
+    // Send response with consistent format
     $response = [
         'status' => 'success',
         'data' => $bookings
     ];
     
-    logError("Sending bookings response", ['response_size' => strlen(json_encode($response))]);
+    logError("Sending bookings response", ['booking_count' => count($bookings)]);
     echo json_encode($response);
     exit;
     

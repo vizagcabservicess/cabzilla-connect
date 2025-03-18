@@ -1,15 +1,16 @@
-
 import axios from 'axios';
 import { AuthResponse, LoginRequest, SignupRequest, BookingRequest, Booking, TourFare, VehiclePricing, FareUpdateRequest, VehiclePricingUpdateRequest, DashboardMetrics, User } from '@/types/api';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
-// Create axios instance with improved timeout and error handling
+// Create axios instance with improved configuration
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000, // Increased timeout to 15 seconds
+  timeout: 30000, // Increased timeout to 30 seconds
   headers: {
     'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache',
   },
 });
 
@@ -17,6 +18,15 @@ const axiosInstance = axios.create({
 axiosInstance.interceptors.request.use(
   config => {
     console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`);
+    
+    // Add cache busting parameter to GET requests
+    if (config.method?.toLowerCase() === 'get') {
+      config.params = {
+        ...config.params,
+        _t: new Date().getTime()
+      };
+    }
+    
     return config;
   },
   error => {
@@ -38,6 +48,11 @@ axiosInstance.interceptors.response.use(
     } else if (error.request) {
       // Request was made but no response received (network error)
       console.error('❌ Network Error: No response received', error.request);
+      
+      // Add custom message for network errors
+      const customError = new Error('Network Error: Unable to connect to the server');
+      customError.name = 'NetworkError';
+      return Promise.reject(customError);
     } else {
       // Something else happened in setting up the request
       console.error('❌ Request configuration error:', error.message);
@@ -178,15 +193,34 @@ export const bookingAPI = {
     const response = await axiosInstance.get('/api/admin/bookings');
     return response.data;
   },
-  getUserBookings: async () => {
+  getUserBookings: async (): Promise<Booking[]> => {
     console.log('Fetching user bookings with auth token');
     try {
-      // Add timestamp to bypass cache
-      const timestamp = new Date().getTime();
-      const url = `/api/user/bookings?_t=${timestamp}`;
-      console.log('User bookings request URL:', url);
+      // Ensure we have a token set
+      const token = localStorage.getItem('authToken') || localStorage.getItem('auth_token');
+      if (!token) {
+        throw new Error('Authentication required to fetch bookings');
+      }
       
-      const response = await axiosInstance.get(url);
+      // Make sure token is in headers for this request
+      axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      
+      // Add timestamp to bypass cache and additional headers for CORS
+      const timestamp = new Date().getTime();
+      const url = `/api/user/bookings`;
+      console.log('User bookings request URL:', `${API_BASE_URL}${url}`);
+      
+      const response = await axiosInstance.get(url, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        },
+        params: {
+          _t: timestamp
+        }
+      });
+      
       console.log('User bookings response:', response.data);
       
       // Handle response data structure properly
@@ -200,8 +234,8 @@ export const bookingAPI = {
         }
       }
       
-      // If we can't determine the structure, return the raw response data
-      return response.data;
+      console.error('Unexpected response format:', response.data);
+      throw new Error('Unexpected API response format');
     } catch (error) {
       console.error('Error in getUserBookings:', error);
       // Check specific error types and provide better handling
@@ -212,8 +246,20 @@ export const bookingAPI = {
           localStorage.removeItem('authToken');
           localStorage.removeItem('auth_token');
           console.warn('Auth token cleared due to 401 response');
+          throw new Error('Authentication failed. Please login again.');
+        }
+        
+        // Throw error with server message if available
+        if (error.response.data && error.response.data.message) {
+          throw new Error(error.response.data.message);
         }
       }
+      
+      // For network errors, provide a clearer message
+      if (error.message && error.message.includes('Network Error')) {
+        throw new Error('Unable to connect to the server. Please check your internet connection.');
+      }
+      
       throw error;
     }
   },
