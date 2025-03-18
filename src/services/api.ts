@@ -4,13 +4,47 @@ import { AuthResponse, LoginRequest, SignupRequest, BookingRequest, Booking, Tou
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
+// Create axios instance with improved timeout and error handling
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 15000, // Increased timeout to 15 seconds
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+// Add request interceptor for debugging
+axiosInstance.interceptors.request.use(
+  config => {
+    console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`);
+    return config;
+  },
+  error => {
+    console.error('❌ Request error:', error);
+    return Promise.reject(error);
+  }
+);
+
+// Add response interceptor for debugging
+axiosInstance.interceptors.response.use(
+  response => {
+    console.log(`✅ API Response: ${response.status} ${response.config.url}`);
+    return response;
+  },
+  error => {
+    if (error.response) {
+      // Server responded with an error status code
+      console.error(`❌ API Error: ${error.response.status}`, error.response.data);
+    } else if (error.request) {
+      // Request was made but no response received (network error)
+      console.error('❌ Network Error: No response received', error.request);
+    } else {
+      // Something else happened in setting up the request
+      console.error('❌ Request configuration error:', error.message);
+    }
+    return Promise.reject(error);
+  }
+);
 
 // Function to set the auth token in the headers
 const setAuthToken = (token: string | null) => {
@@ -154,6 +188,19 @@ export const bookingAPI = {
       
       const response = await axiosInstance.get(url);
       console.log('User bookings response:', response.data);
+      
+      // Handle response data structure properly
+      if (response.data && typeof response.data === 'object') {
+        if (Array.isArray(response.data)) {
+          return response.data;
+        } else if (response.data.data && Array.isArray(response.data.data)) {
+          return response.data.data;
+        } else if (response.data.status === 'success' && response.data.data) {
+          return response.data.data;
+        }
+      }
+      
+      // If we can't determine the structure, return the raw response data
       return response.data;
     } catch (error) {
       console.error('Error in getUserBookings:', error);

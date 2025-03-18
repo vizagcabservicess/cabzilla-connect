@@ -3,10 +3,10 @@
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
 
-// CORS Headers
+// CORS Headers - Updated to be more permissive
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
 header('Content-Type: application/json');
 
 // Handle preflight OPTIONS request
