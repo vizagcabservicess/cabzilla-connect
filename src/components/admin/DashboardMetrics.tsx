@@ -3,11 +3,19 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DashboardMetrics as DashboardMetricsType } from '@/types/api';
 import { bookingAPI } from '@/services/api';
-import { Car, Users, DollarSign, Star, Clock, AlertTriangle, Calendar, RefreshCw } from "lucide-react";
+import { Car, Users, DollarSign, Star, Clock, AlertTriangle, Calendar, RefreshCw, Filter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
+import { BookingStatus } from '@/types/api';
 
 interface DashboardMetricsProps {
   initialMetrics?: DashboardMetricsType;
@@ -30,24 +38,25 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>(initialPeriod);
   const [retryCount, setRetryCount] = useState(0);
+  const [statusFilter, setStatusFilter] = useState<BookingStatus | 'all'>('all');
 
   // Initial data fetch when component mounts or period changes
   useEffect(() => {
     fetchMetrics();
-  }, [period]);
+  }, [period, statusFilter]);
 
   const fetchMetrics = async () => {
     try {
       setIsLoading(true);
       setError(null);
-      console.log(`Fetching dashboard metrics for period: ${period}...`);
+      console.log(`Fetching dashboard metrics for period: ${period} and status: ${statusFilter}...`);
       
       // Add a timestamp for cache busting - not passed to API but just logged
       const timestamp = new Date().getTime();
       console.log(`Cache busting with timestamp: ${timestamp}`);
       
-      // Call the API with the period
-      const data = await bookingAPI.getAdminDashboardMetrics(period);
+      // Call the API with the period and status filter
+      const data = await bookingAPI.getAdminDashboardMetrics(period, statusFilter !== 'all' ? statusFilter : undefined);
       console.log('Dashboard metrics received:', data);
       
       if (data) {
@@ -82,13 +91,32 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
   if (error) {
     return (
       <div>
-        <Tabs value={period} className="w-full mb-4">
-          <TabsList>
-            <TabsTrigger value="today" onClick={() => handlePeriodChange('today')}>Today</TabsTrigger>
-            <TabsTrigger value="week" onClick={() => handlePeriodChange('week')}>This Week</TabsTrigger>
-            <TabsTrigger value="month" onClick={() => handlePeriodChange('month')}>This Month</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <div className="flex flex-col md:flex-row gap-4 mb-4">
+          <Tabs value={period} className="w-full">
+            <TabsList>
+              <TabsTrigger value="today" onClick={() => handlePeriodChange('today')}>Today</TabsTrigger>
+              <TabsTrigger value="week" onClick={() => handlePeriodChange('week')}>This Week</TabsTrigger>
+              <TabsTrigger value="month" onClick={() => handlePeriodChange('month')}>This Month</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          
+          <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as BookingStatus | 'all')}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Bookings</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="confirmed">Confirmed</SelectItem>
+              <SelectItem value="assigned">Assigned</SelectItem>
+              <SelectItem value="payment_received">Payment Received</SelectItem>
+              <SelectItem value="payment_pending">Payment Pending</SelectItem>
+              <SelectItem value="completed">Completed</SelectItem>
+              <SelectItem value="continued">Continued</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         
         <ApiErrorFallback 
           error={error} 
@@ -102,13 +130,32 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
   if (isLoading) {
     return (
       <div>
-        <Tabs value={period} className="w-full mb-4">
-          <TabsList>
-            <TabsTrigger value="today" onClick={() => handlePeriodChange('today')}>Today</TabsTrigger>
-            <TabsTrigger value="week" onClick={() => handlePeriodChange('week')}>This Week</TabsTrigger>
-            <TabsTrigger value="month" onClick={() => handlePeriodChange('month')}>This Month</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <div className="flex flex-col md:flex-row gap-4 mb-4">
+          <Tabs value={period} className="w-full">
+            <TabsList>
+              <TabsTrigger value="today" onClick={() => handlePeriodChange('today')}>Today</TabsTrigger>
+              <TabsTrigger value="week" onClick={() => handlePeriodChange('week')}>This Week</TabsTrigger>
+              <TabsTrigger value="month" onClick={() => handlePeriodChange('month')}>This Month</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          
+          <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as BookingStatus | 'all')}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Bookings</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="confirmed">Confirmed</SelectItem>
+              <SelectItem value="assigned">Assigned</SelectItem>
+              <SelectItem value="payment_received">Payment Received</SelectItem>
+              <SelectItem value="payment_pending">Payment Pending</SelectItem>
+              <SelectItem value="completed">Completed</SelectItem>
+              <SelectItem value="continued">Continued</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-8">
           {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
@@ -135,16 +182,40 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-4">
-        <Tabs value={period} className="w-full">
-          <TabsList>
-            <TabsTrigger value="today" onClick={() => handlePeriodChange('today')}>Today</TabsTrigger>
-            <TabsTrigger value="week" onClick={() => handlePeriodChange('week')}>This Week</TabsTrigger>
-            <TabsTrigger value="month" onClick={() => handlePeriodChange('month')}>This Month</TabsTrigger>
-          </TabsList>
-        </Tabs>
+      <div className="flex flex-col md:flex-row gap-4 justify-between items-center mb-4">
+        <div className="flex flex-wrap gap-4 items-center">
+          <Tabs value={period} className="w-full md:w-auto">
+            <TabsList>
+              <TabsTrigger value="today" onClick={() => handlePeriodChange('today')}>Today</TabsTrigger>
+              <TabsTrigger value="week" onClick={() => handlePeriodChange('week')}>This Week</TabsTrigger>
+              <TabsTrigger value="month" onClick={() => handlePeriodChange('month')}>This Month</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          
+          <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as BookingStatus | 'all')}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue>
+                <div className="flex items-center gap-2">
+                  <Filter className="h-4 w-4" />
+                  {statusFilter === 'all' ? 'All Bookings' : statusFilter.replace('_', ' ')}
+                </div>
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Bookings</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="confirmed">Confirmed</SelectItem>
+              <SelectItem value="assigned">Assigned</SelectItem>
+              <SelectItem value="payment_received">Payment Received</SelectItem>
+              <SelectItem value="payment_pending">Payment Pending</SelectItem>
+              <SelectItem value="completed">Completed</SelectItem>
+              <SelectItem value="continued">Continued</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         
-        <Button variant="outline" size="sm" onClick={handleRetry} className="ml-2">
+        <Button variant="outline" size="sm" onClick={handleRetry}>
           <RefreshCw className="h-4 w-4 mr-2" />
           Refresh
         </Button>
@@ -159,7 +230,9 @@ export function DashboardMetrics({ initialMetrics, period: initialPeriod = 'week
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{metrics.totalBookings}</div>
-            <p className="text-xs text-gray-500">+12% from last {period}</p>
+            <p className="text-xs text-gray-500">
+              {statusFilter !== 'all' ? `Filtered by status: ${statusFilter.replace('_', ' ')}` : '+12% from last period'}
+            </p>
           </CardContent>
         </Card>
         <Card>

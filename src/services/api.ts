@@ -1,385 +1,340 @@
-
 import axios from 'axios';
-import { AuthResponse, LoginRequest, SignupRequest, BookingRequest, Booking, TourFare, VehiclePricing, FareUpdateRequest, VehiclePricingUpdateRequest, DashboardMetrics, User, BookingStatus } from '@/types/api';
+import { jwtDecode } from 'jwt-decode';
+import { 
+  User, 
+  AuthResponse, 
+  LoginRequest, 
+  SignupRequest, 
+  Booking,
+  BookingRequest, 
+  BookingStatus, 
+  TourFare, 
+  FareUpdateRequest,
+  VehiclePricing,
+  VehiclePricingUpdateRequest,
+  DashboardMetrics
+} from '@/types/api';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-
-// Create axios instance with improved configuration
-const axiosInstance = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 30000, // Increased timeout to 30 seconds
+// Create axios instance
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || '/api',
   headers: {
-    'Content-Type': 'application/json',
-    'Cache-Control': 'no-cache',
-    'Pragma': 'no-cache',
-  },
-  withCredentials: false // Set to false to prevent CORS issues with credentials
+    'Content-Type': 'application/json'
+  }
 });
 
-// Add request interceptor for debugging
-axiosInstance.interceptors.request.use(
-  config => {
-    console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`);
-    
-    // Add cache busting parameter to GET requests
-    if (config.method?.toLowerCase() === 'get') {
-      config.params = {
-        ...config.params,
-        _t: new Date().getTime()
-      };
+// Add request interceptor to include auth token in requests
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
-    
     return config;
   },
-  error => {
-    console.error('❌ Request error:', error);
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Add response interceptor for debugging
-axiosInstance.interceptors.response.use(
-  response => {
-    console.log(`✅ API Response: ${response.status} ${response.config.url}`);
-    return response;
-  },
-  error => {
-    if (error.response) {
-      // Server responded with an error status code
-      console.error(`❌ API Error: ${error.response.status}`, error.response.data);
-      
-      // Create a more descriptive error message
-      let errorMessage = 'An error occurred';
-      if (error.response.data && error.response.data.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.response.status === 404) {
-        errorMessage = 'Resource not found';
-      } else if (error.response.status === 500) {
-        errorMessage = 'Server error. Please try again later.';
-      } else if (error.response.status === 401) {
-        errorMessage = 'Authentication required';
-      } else if (error.response.status === 403) {
-        errorMessage = 'You do not have permission to perform this action';
-      }
-      
-      const enhancedError = new Error(errorMessage);
-      enhancedError.name = 'ApiError';
-      return Promise.reject(enhancedError);
-    } else if (error.request) {
-      // Request was made but no response received (network error)
-      console.error('❌ Network Error: No response received', error.request);
-      
-      // Add custom message for network errors
-      const customError = new Error('Network Error: Unable to connect to the server');
-      customError.name = 'NetworkError';
-      return Promise.reject(customError);
-    } else {
-      // Something else happened in setting up the request
-      console.error('❌ Request configuration error:', error.message);
-    }
-    return Promise.reject(error);
-  }
-);
-
-// Function to set the auth token in the headers
-const setAuthToken = (token: string | null) => {
-  if (token) {
-    axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    console.log('Auth token set in headers', { tokenLength: token.length });
-  } else {
-    delete axiosInstance.defaults.headers.common['Authorization'];
-    console.log('Auth token removed from headers');
-  }
-};
-
-// Initialize auth token from localStorage with more robust checking
-const initializeToken = () => {
-  try {
-    if (typeof window !== 'undefined') {
-      // Check both possible storage locations
-      const storedToken = localStorage.getItem('authToken') || localStorage.getItem('auth_token');
-      
-      if (storedToken) {
-        console.log('Found stored token, initializing API client', { tokenLength: storedToken.length });
-        setAuthToken(storedToken);
-      } else {
-        console.log('No stored token found during initialization');
-      }
-    }
-  } catch (error) {
-    console.error('Error initializing auth token:', error);
-  }
-};
-
-// Call initialization function
-initializeToken();
-
-// Authentication API
+// Auth API Service
 export const authAPI = {
-  login: async (credentials: LoginRequest): Promise<AuthResponse> => {
-    console.log('Login request to:', `${API_BASE_URL}/api/login`);
-    const response = await axiosInstance.post<AuthResponse>('/api/login', credentials);
-    
-    if (response.data.success && response.data.token) {
-      // Store token in both keys for backward compatibility
-      localStorage.setItem('authToken', response.data.token);
-      localStorage.setItem('auth_token', response.data.token);
+  // Login user
+  async login(credentials: LoginRequest): Promise<User> {
+    try {
+      const response = await api.post<AuthResponse>('/login', credentials);
       
-      // Store user data
-      if (response.data.user) {
+      if (response.data.token) {
+        localStorage.setItem('token', response.data.token);
         localStorage.setItem('user', JSON.stringify(response.data.user));
       }
       
-      setAuthToken(response.data.token);
-      console.log('Login successful, token saved');
+      return response.data.user;
+    } catch (error) {
+      console.error('Login error:', error);
+      throw new Error(error instanceof Error ? error.message : 'Login failed');
     }
-    
-    return response.data;
   },
-  signup: async (userData: SignupRequest): Promise<AuthResponse> => {
-    console.log('Signup request to:', `${API_BASE_URL}/api/signup`);
-    const response = await axiosInstance.post<AuthResponse>('/api/signup', userData);
-    
-    if (response.data.success && response.data.token) {
-      // Store token in both keys for backward compatibility
-      localStorage.setItem('authToken', response.data.token);
-      localStorage.setItem('auth_token', response.data.token);
+  
+  // Signup user
+  async signup(userData: SignupRequest): Promise<User> {
+    try {
+      const response = await api.post<AuthResponse>('/signup', userData);
       
-      // Store user data
-      if (response.data.user) {
+      if (response.data.token) {
+        localStorage.setItem('token', response.data.token);
         localStorage.setItem('user', JSON.stringify(response.data.user));
       }
       
-      setAuthToken(response.data.token);
-      console.log('Signup successful, token saved');
+      return response.data.user;
+    } catch (error) {
+      console.error('Signup error:', error);
+      throw new Error(error instanceof Error ? error.message : 'Signup failed');
     }
-    
-    return response.data;
   },
-  logout: () => {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('auth_token');
+  
+  // Check if user is authenticated
+  isAuthenticated(): boolean {
+    const token = localStorage.getItem('token');
+    if (!token) return false;
+    
+    try {
+      const decodedToken: any = jwtDecode(token);
+      const currentTime = Date.now() / 1000;
+      
+      // Check if token is expired
+      if (decodedToken.exp && decodedToken.exp < currentTime) {
+        this.logout();
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Token verification error:', error);
+      this.logout();
+      return false;
+    }
+  },
+  
+  // Get current user
+  getCurrentUser(): User | null {
+    if (!this.isAuthenticated()) return null;
+    
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return null;
+    
+    try {
+      return JSON.parse(userStr) as User;
+    } catch (error) {
+      console.error('Error parsing user data:', error);
+      return null;
+    }
+  },
+  
+  // Check if current user is admin
+  isAdmin(): boolean {
+    const user = this.getCurrentUser();
+    return user?.role === 'admin';
+  },
+  
+  // Logout user
+  logout(): void {
+    localStorage.removeItem('token');
     localStorage.removeItem('user');
-    setAuthToken(null);
-    console.log('User logged out, tokens cleared');
   },
-  getUserDashboard: async () => {
-    const response = await axiosInstance.get('/api/user/dashboard');
-    return response.data;
-  },
-  isAuthenticated: (): boolean => {
-    const token = localStorage.getItem('authToken') || localStorage.getItem('auth_token');
-    return !!token;
-  },
-  getCurrentUser: (): User | null => {
-    try {
-      const userJson = localStorage.getItem('user');
-      if (userJson) {
-        return JSON.parse(userJson);
-      }
-    } catch (e) {
-      console.error('Error parsing user data', e);
-    }
-    return null;
-  },
-  isAdmin: (): boolean => {
-    const user = authAPI.getCurrentUser();
-    return user?.role === 'admin' || false;
-  }
-};
 
-// Booking API
-export const bookingAPI = {
-  createBooking: async (bookingData: BookingRequest) => {
-    console.log('Creating booking with data:', bookingData);
-    const response = await axiosInstance.post('/api/book', bookingData);
-    console.log('Booking API response:', response.data);
-    return response.data;
-  },
-  getBookingById: async (bookingId: string) => {
-    const response = await axiosInstance.get(`/api/user/booking/${bookingId}`);
-    return response.data;
-  },
-  updateBooking: async (bookingId: string, bookingData: Partial<BookingRequest & { status?: BookingStatus }>) => {
-    console.log('Updating booking:', bookingId, 'with data:', bookingData);
+  // Get all users (admin only)
+  async getAllUsers(): Promise<User[]> {
     try {
-      const response = await axiosInstance.put(`/api/update-booking/${bookingId}`, bookingData);
-      console.log('Update response:', response.data);
-      return response.data;
-    } catch (error) {
-      console.error('Error updating booking:', error);
-      throw error;
-    }
-  },
-  getReceipt: async (bookingId: string) => {
-    const response = await axiosInstance.get(`/api/receipt/${bookingId}`);
-    return response.data;
-  },
-  getAllBookings: async () => {
-    const response = await axiosInstance.get('/api/admin/bookings');
-    return response.data;
-  },
-  getUserBookings: async (): Promise<Booking[]> => {
-    console.log('Fetching user bookings with auth token');
-    try {
-      // Ensure we have a token set
-      const token = localStorage.getItem('authToken') || localStorage.getItem('auth_token');
-      if (!token) {
-        throw new Error('Authentication required to fetch bookings');
-      }
-      
-      // Make sure token is in headers for this request
-      const headers = {
-        'Authorization': `Bearer ${token}`,
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0'
-      };
-      
-      // Add timestamp to bypass cache
-      const timestamp = new Date().getTime();
-      const url = `/api/user/bookings?_t=${timestamp}`;
-      console.log('User bookings request URL:', `${API_BASE_URL}${url}`);
-      
-      const response = await axiosInstance.get(url, { 
-        headers,
-        withCredentials: false
-      });
-      
-      console.log('User bookings response:', response.data);
-      
-      // Process the response to consistently return a Booking array
-      if (Array.isArray(response.data)) {
-        return response.data;
-      }
-      
-      // Handle object response with data property
-      if (response.data && typeof response.data === 'object') {
-        // Case 1: The response has a 'data' property that is an array
-        if (response.data.data && Array.isArray(response.data.data)) {
-          return response.data.data;
-        }
-        // Case 2: The response has a 'status' property and a 'data' array
-        else if (response.data.status === 'success' && Array.isArray(response.data.data)) {
-          return response.data.data;
-        }
-      }
-      
-      // If we reach here with a non-array response, log and return an empty array
-      console.error('Unexpected response format:', response.data);
-      return [];
-    } catch (error) {
-      console.error('Error in getUserBookings:', error);
-      
-      // Better handling of specific error types
-      if (axios.isAxiosError(error) && error.response) {
-        console.error('Axios error response:', error.response.status, error.response.data);
-        
-        // If authentication issue, clear token
-        if (error.response.status === 401) {
-          localStorage.removeItem('authToken');
-          localStorage.removeItem('auth_token');
-          console.warn('Auth token cleared due to 401 response');
-          throw new Error('Authentication failed. Please login again.');
-        }
-        
-        // Throw error with server message if available
-        if (error.response.data && error.response.data.message) {
-          throw new Error(error.response.data.message);
-        }
-      }
-      
-      // For network errors, provide a clearer message
-      if (error instanceof Error) {
-        if (error.message.includes('Network Error')) {
-          throw new Error('Unable to connect to the server. Please check your internet connection.');
-        }
-        
-        // Pass through the error message
-        throw error;
-      }
-      
-      // Fallback for any other errors
-      throw new Error('Failed to fetch bookings. Please try again later.');
-    }
-  },
-  getAdminDashboardMetrics: async (period: 'today' | 'week' | 'month'): Promise<DashboardMetrics> => {
-    const response = await axiosInstance.get(`/api/admin/metrics?period=${period}`);
-    
-    // Make sure we return the proper data format
-    if (response.data && response.data.data) {
+      const response = await api.get('/admin/users');
       return response.data.data;
-    }
-    return response.data;
-  },
-  deleteBooking: async (bookingId: string) => {
-    console.log('Deleting booking:', bookingId);
-    try {
-      // Ensure we have a token set
-      const token = localStorage.getItem('authToken') || localStorage.getItem('auth_token');
-      if (!token) {
-        throw new Error('Authentication required to delete booking');
-      }
-      
-      // Set the token in headers explicitly for this request
-      const headers = {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      };
-      
-      // Add a timestamp to prevent caching
-      const timestamp = new Date().getTime();
-      const response = await axiosInstance.delete(`/api/admin/booking/${bookingId}?_t=${timestamp}`, { headers });
-      
-      console.log('Delete response:', response.data);
-      return response.data;
     } catch (error) {
-      console.error('Error deleting booking:', error);
-      
-      // Rethrow with better error message
-      if (axios.isAxiosError(error)) {
-        if (error.response?.status === 404) {
-          throw new Error('Booking not found or already deleted');
-        } else if (error.response?.status === 403) {
-          throw new Error('You do not have permission to delete this booking');
-        } else if (error.response?.status === 500) {
-          throw new Error('Server error: Unable to delete booking. Please try again later.');
-        }
-      }
-      
-      throw error;
+      console.error('Get users error:', error);
+      throw new Error(error instanceof Error ? error.message : 'Failed to get users');
+    }
+  },
+
+  // Update user role (admin only)
+  async updateUserRole(userId: number, role: string): Promise<User> {
+    try {
+      const response = await api.put('/admin/users', { userId, role });
+      return response.data.data;
+    } catch (error) {
+      console.error('Update user role error:', error);
+      throw new Error(error instanceof Error ? error.message : 'Failed to update user role');
     }
   }
 };
 
-// Admin API
-export const adminAPI = {
-  getBookings: async () => {
-    const response = await axiosInstance.get('/api/admin/bookings');
-    return response.data;
+// Booking API Service
+export const bookingAPI = {
+  // Create new booking
+  async createBooking(bookingData: BookingRequest): Promise<Booking> {
+    try {
+      const response = await api.post('/book', bookingData);
+      return response.data.data;
+    } catch (error) {
+      console.error('Create booking error:', error);
+      throw new Error(error instanceof Error ? error.message : 'Booking creation failed');
+    }
   },
-  getAdminDashboardMetrics: async (period: 'today' | 'week' | 'month'): Promise<DashboardMetrics> => {
-    const response = await axiosInstance.get(`/api/admin/metrics?period=${period}`);
-    return response.data;
+  
+  // Get user's bookings
+  async getUserBookings(): Promise<Booking[]> {
+    try {
+      const response = await api.get('/user/bookings');
+      return response.data.data;
+    } catch (error) {
+      console.error('Get user bookings error:', error);
+      throw new Error(error instanceof Error ? error.message : 'Failed to load bookings');
+    }
   },
+  
+  // Get specific booking by ID
+  async getBookingById(id: number): Promise<Booking> {
+    try {
+      const response = await api.get(`/user/booking/${id}`);
+      return response.data.data;
+    } catch (error) {
+      console.error(`Get booking ${id} error:`, error);
+      throw new Error(error instanceof Error ? error.message : 'Failed to load booking details');
+    }
+  },
+  
+  // Update booking
+  async updateBooking(id: number, bookingData: Partial<BookingRequest>): Promise<Booking> {
+    try {
+      const response = await api.put(`/update-booking/${id}`, bookingData);
+      return response.data.data;
+    } catch (error) {
+      console.error(`Update booking ${id} error:`, error);
+      throw new Error(error instanceof Error ? error.message : 'Failed to update booking');
+    }
+  },
+  
+  // Update booking status
+  async updateBookingStatus(id: number, status: BookingStatus): Promise<Booking> {
+    try {
+      const response = await api.put(`/update-booking/${id}`, { status });
+      return response.data.data;
+    } catch (error) {
+      console.error(`Update booking ${id} status error:`, error);
+      throw new Error(error instanceof Error ? error.message : 'Failed to update booking status');
+    }
+  },
+  
+  // Get booking receipt
+  async getBookingReceipt(id: number): Promise<Booking> {
+    try {
+      const response = await api.get(`/receipt/${id}`);
+      return response.data.data;
+    } catch (error) {
+      console.error(`Get receipt for booking ${id} error:`, error);
+      throw new Error(error instanceof Error ? error.message : 'Failed to load receipt');
+    }
+  },
+  
+  // Admin-specific methods
+  
+  // Get all bookings (admin only)
+  async getAllBookings(): Promise<Booking[]> {
+    try {
+      const response = await api.get('/admin/bookings');
+      return response.data.data;
+    } catch (error) {
+      console.error('Get all bookings error:', error);
+      throw new Error(error instanceof Error ? error.message : 'Failed to load all bookings');
+    }
+  },
+  
+  // Get admin booking details
+  async getAdminBookingDetails(id: number): Promise<Booking> {
+    try {
+      const response = await api.get(`/admin/booking/${id}`);
+      return response.data.data;
+    } catch (error) {
+      console.error(`Get admin booking ${id} error:`, error);
+      throw new Error(error instanceof Error ? error.message : 'Failed to load booking details');
+    }
+  },
+  
+  // Delete booking (admin only)
+  async deleteBooking(id: number): Promise<void> {
+    try {
+      await api.delete(`/admin/booking/${id}`);
+    } catch (error) {
+      console.error(`Delete booking ${id} error:`, error);
+      throw new Error(error instanceof Error ? error.message : 'Failed to delete booking');
+    }
+  },
+  
+  // Get admin dashboard metrics
+  async getAdminDashboardMetrics(period: 'today' | 'week' | 'month', status?: BookingStatus): Promise<DashboardMetrics> {
+    try {
+      const params: Record<string, string> = { period };
+      if (status) {
+        params.status = status;
+      }
+      
+      const response = await api.get('/admin/metrics', { params });
+      return response.data.data;
+    } catch (error) {
+      console.error('Get admin metrics error:', error);
+      throw new Error(error instanceof Error ? error.message : 'Failed to load dashboard metrics');
+    }
+  }
 };
 
-// Fare Management API
+// Fare API Service
 export const fareAPI = {
-  getTourFares: async (): Promise<TourFare[]> => {
-    const response = await axiosInstance.get('/api/admin/fares/tours');
-    return response.data;
+  // Get tour fares
+  async getTourFares(): Promise<TourFare[]> {
+    try {
+      const response = await api.get('/fares/tours');
+      return response.data.data;
+    } catch (error) {
+      console.error('Get tour fares error:', error);
+      throw new Error(error instanceof Error ? error.message : 'Failed to load tour fares');
+    }
   },
-  updateTourFares: async (fareData: FareUpdateRequest): Promise<TourFare> => {
-    const response = await axiosInstance.post('/api/admin/fares/update', fareData);
-    return response.data;
+  
+  // Get vehicle pricing
+  async getVehiclePricing(): Promise<VehiclePricing[]> {
+    try {
+      const response = await api.get('/fares/vehicles');
+      return response.data.data;
+    } catch (error) {
+      console.error('Get vehicle pricing error:', error);
+      throw new Error(error instanceof Error ? error.message : 'Failed to load vehicle pricing');
+    }
   },
-  getVehiclePricing: async (): Promise<VehiclePricing[]> => {
-    const response = await axiosInstance.get('/api/admin/fares/vehicles');
-    return response.data;
+  
+  // Admin-specific methods
+  
+  // Update tour fares (admin only)
+  async updateTourFares(fareData: FareUpdateRequest): Promise<TourFare> {
+    try {
+      const response = await api.post('/admin/fares/update', fareData);
+      return response.data.data;
+    } catch (error) {
+      console.error('Update tour fares error:', error);
+      throw new Error(error instanceof Error ? error.message : 'Failed to update tour fares');
+    }
   },
-  updateVehiclePricing: async (pricingData: VehiclePricingUpdateRequest): Promise<VehiclePricing> => {
-    const response = await axiosInstance.post('/api/admin/km-price/update', pricingData);
-    return response.data;
+  
+  // Add new tour fare (admin only)
+  async addTourFare(fareData: TourFare): Promise<TourFare> {
+    try {
+      const response = await api.put('/admin/fares/update', fareData);
+      return response.data.data;
+    } catch (error) {
+      console.error('Add tour fare error:', error);
+      throw new Error(error instanceof Error ? error.message : 'Failed to add new tour');
+    }
   },
+  
+  // Delete tour fare (admin only)
+  async deleteTourFare(tourId: string): Promise<void> {
+    try {
+      await api.delete('/admin/fares/update', { params: { tourId } });
+    } catch (error) {
+      console.error('Delete tour fare error:', error);
+      throw new Error(error instanceof Error ? error.message : 'Failed to delete tour');
+    }
+  },
+  
+  // Update vehicle pricing (admin only)
+  async updateVehiclePricing(pricingData: VehiclePricingUpdateRequest): Promise<VehiclePricing> {
+    try {
+      const response = await api.post('/admin/km-price/update', pricingData);
+      return response.data.data;
+    } catch (error) {
+      console.error('Update vehicle pricing error:', error);
+      throw new Error(error instanceof Error ? error.message : 'Failed to update vehicle pricing');
+    }
+  }
+};
+
+export default {
+  auth: authAPI,
+  booking: bookingAPI,
+  fare: fareAPI
 };

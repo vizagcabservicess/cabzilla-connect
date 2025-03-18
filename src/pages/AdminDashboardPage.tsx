@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -11,7 +12,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { 
   Car, Users, DollarSign, Star, Clock, AlertTriangle, Bell, MapPin, 
   BarChart2, PieChart as PieChartIcon, Calendar, RefreshCcw, Settings,
-  CalendarClock, CircleDollarSign, TrendingUp, BadgeCheck
+  CalendarClock, CircleDollarSign, TrendingUp, BadgeCheck, UserCog, ShieldAlert
 } from "lucide-react";
 import { authAPI, bookingAPI, fareAPI } from '@/services/api';
 import { AdminBookingsList } from '@/components/admin/AdminBookingsList';
@@ -23,6 +24,7 @@ import { DashboardMetrics } from '@/components/admin/DashboardMetrics';
 import { ReportingAnalytics } from '@/components/admin/ReportingAnalytics';
 import { AdminNotifications } from '@/components/admin/AdminNotifications';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { UserManagement } from '@/components/admin/UserManagement';
 
 export default function AdminDashboardPage() {
   const { toast } = useToast();
@@ -225,6 +227,7 @@ export default function AdminDashboardPage() {
       <Tabs defaultValue="bookings" className="w-full">
         <TabsList className="mb-6 flex flex-wrap">
           <TabsTrigger value="bookings" className="flex items-center gap-1"><Car className="h-4 w-4" /> Bookings</TabsTrigger>
+          <TabsTrigger value="users" className="flex items-center gap-1"><UserCog className="h-4 w-4" /> Users</TabsTrigger>
           <TabsTrigger value="drivers" className="flex items-center gap-1"><Users className="h-4 w-4" /> Drivers</TabsTrigger>
           <TabsTrigger value="customers" className="flex items-center gap-1"><Users className="h-4 w-4" /> Customers</TabsTrigger>
           <TabsTrigger value="reports" className="flex items-center gap-1"><BarChart2 className="h-4 w-4" /> Reports</TabsTrigger>
@@ -236,6 +239,10 @@ export default function AdminDashboardPage() {
         
         <TabsContent value="bookings">
           <AdminBookingsList />
+        </TabsContent>
+        
+        <TabsContent value="users">
+          <UserManagement />
         </TabsContent>
         
         <TabsContent value="drivers">

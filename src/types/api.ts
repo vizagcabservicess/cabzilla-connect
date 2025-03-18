@@ -1,3 +1,4 @@
+
 // User related types
 export interface User {
   id: number;
@@ -6,6 +7,7 @@ export interface User {
   phone: string;
   role?: string; // Adding role property for admin checks
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface AuthResponse {
@@ -91,6 +93,7 @@ export interface TourFare {
   innova: number;
   tempo: number;
   luxury: number;
+  updatedAt?: string;
 }
 
 export interface VehiclePricing {
@@ -100,6 +103,7 @@ export interface VehiclePricing {
   pricePerKm: number;
   nightHaltCharge: number;
   driverAllowance: number;
+  updatedAt?: string;
 }
 
 export interface FareUpdateRequest {
@@ -233,10 +237,14 @@ export interface Location {
 export interface FareAPI {
   getTourFares(): Promise<TourFare[]>;
   updateTourFares(fareData: FareUpdateRequest): Promise<TourFare>;
+  addTourFare(fareData: TourFare): Promise<TourFare>;
+  deleteTourFare(tourId: string): Promise<void>;
   getVehiclePricing(): Promise<VehiclePricing[]>;
   updateVehiclePricing(pricingData: VehiclePricingUpdateRequest): Promise<VehiclePricing>;
 }
 
 export interface AdminAPI {
-  getAdminDashboardMetrics(period: 'today' | 'week' | 'month'): Promise<DashboardMetrics>;
+  getAdminDashboardMetrics(period: 'today' | 'week' | 'month', status?: BookingStatus): Promise<DashboardMetrics>;
+  getAllUsers(): Promise<User[]>;
+  updateUserRole(userId: number, role: string): Promise<User>;
 }
