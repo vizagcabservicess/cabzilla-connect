@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { EditableContactDetailsForm } from "@/components/EditableContactDetailsForm";
 import { ArrowLeft, Edit2, Loader2 } from 'lucide-react';
-import { bookingAPI } from '@/services/api';
+import { bookingAPI, authAPI } from '@/services/api';
 import { BookingRequest } from '@/types/api';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface GuestDetailsFormProps {
   onSubmit: (details: any) => void;
@@ -30,13 +31,27 @@ export function GuestDetailsForm({
   const { toast } = useToast();
   const [isEditMode, setIsEditMode] = useState(isEditing);
   const [isSaving, setIsSaving] = useState(false);
+  const [authStatus, setAuthStatus] = useState<'checking' | 'authenticated' | 'unauthenticated'>('checking');
+
+  // Check authentication status on component mount
+  useState(() => {
+    const isAuthenticated = authAPI.isAuthenticated();
+    setAuthStatus(isAuthenticated ? 'authenticated' : 'unauthenticated');
+    console.log('Authentication status:', isAuthenticated ? 'authenticated' : 'unauthenticated');
+  });
 
   const handleSubmit = async (details: any) => {
-    if (isSubmitting) return; // Prevent double submission
+    if (isSubmitting || isSaving) return; // Prevent double submission
     
     setIsSaving(true);
     
     try {
+      console.log('Starting booking submission with details:', details);
+      
+      // Check authentication
+      const isAuthenticated = authAPI.isAuthenticated();
+      console.log('Authentication check result:', isAuthenticated);
+      
       if (bookingId && isEditMode) {
         // If editing an existing booking
         console.log("Updating booking with ID:", bookingId);
@@ -45,8 +60,6 @@ export function GuestDetailsForm({
           passengerName: details.name,
           passengerPhone: details.phone,
           passengerEmail: details.email
-          // Note: Other data like pickupLocation, dropLocation, pickupDate 
-          // will be handled by the parent component
         };
         
         console.log("Sending contact details update:", updatedData);
@@ -63,12 +76,13 @@ export function GuestDetailsForm({
         setIsEditMode(false);
       } else {
         // For new bookings or when parent handles the update
+        console.log('Passing details to parent onSubmit handler');
         onSubmit(details);
       }
     } catch (error) {
-      console.error("Error updating booking:", error);
+      console.error("Error in booking operation:", error);
       toast({
-        title: "Update Failed",
+        title: "Operation Failed",
         description: error instanceof Error ? error.message : "Something went wrong",
         variant: "destructive",
         duration: 5000,
@@ -80,6 +94,21 @@ export function GuestDetailsForm({
 
   return (
     <div ref={formRef} className="transition-all duration-300 rounded-lg">
+      {authStatus === 'unauthenticated' && !bookingId && (
+        <Alert className="mb-4 bg-yellow-50 border-yellow-200 text-yellow-800">
+          <AlertDescription>
+            You are not logged in. Your booking will be created as a guest. 
+            <Button 
+              variant="link" 
+              className="p-0 text-blue-600 h-auto font-medium"
+              onClick={() => window.location.href = '/login'}
+            >
+              Login for a better experience
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="flex items-center justify-between mb-4">
         {onBack && (
           <Button 

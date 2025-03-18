@@ -10,7 +10,6 @@ RewriteRule ^api/signup$ api/signup.php [L]
 RewriteRule ^api/login$ api/login.php [L]
 RewriteRule ^api/user/dashboard$ api/user/dashboard.php [L]
 RewriteRule ^api/user/booking/([0-9]+)$ api/user/booking.php?id=$1 [QSA,L]
-RewriteRule ^api/booking/create$ api/book.php [L]
 RewriteRule ^api/book$ api/book.php [L]
 RewriteRule ^api/update-booking/([0-9]+)$ api/update-booking.php?id=$1 [QSA,L]
 RewriteRule ^api/admin/bookings$ api/admin/bookings.php [L]
@@ -20,6 +19,7 @@ RewriteRule ^api/admin/fares/vehicles$ api/fares/vehicles.php [L]
 RewriteRule ^api/admin/fares/update$ api/admin/fares-update.php [L]
 RewriteRule ^api/admin/km-price/update$ api/admin/km-price-update.php [L]
 RewriteRule ^api/receipt/([0-9]+)$ api/receipt.php?id=$1 [QSA,L]
+RewriteRule ^api/user/bookings$ api/user/bookings.php [L]
 
 # Add debug header for API paths
 <IfModule mod_headers.c>
@@ -44,7 +44,7 @@ AddDefaultCharset UTF-8
 <IfModule mod_headers.c>
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "Content-Type, Authorization"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
     Header always set Access-Control-Max-Age "3600"
 </IfModule>
 

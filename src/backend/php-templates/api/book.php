@@ -27,7 +27,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 // Log request data for debugging
 logError("Book.php request initiated", [
     'method' => $_SERVER['REQUEST_METHOD'],
-    'headers' => getallheaders()
+    'headers' => getallheaders(),
+    'request_uri' => $_SERVER['REQUEST_URI']
 ]);
 
 // Get the request body
@@ -89,6 +90,7 @@ if (isset($data['tripType']) && $data['tripType'] === 'local') {
 // Validate required fields
 foreach ($requiredFields as $field) {
     if (!isset($data[$field]) || (is_string($data[$field]) && trim($data[$field]) === '')) {
+        logError("Missing required field", ['field' => $field]);
         sendJsonResponse(['status' => 'error', 'message' => "Field $field is required"], 400);
         exit;
     }
@@ -101,16 +103,19 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
     $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
     $token = str_replace('Bearer ', '', $authHeader);
     
+    // Log token for debugging
+    logError("Auth token received", ['token_length' => strlen($token)]);
+    
     $payload = verifyJwtToken($token);
     if ($payload && isset($payload['user_id'])) {
         $userId = $payload['user_id'];
         logError("Authenticated booking", ['user_id' => $userId]);
     } else {
-        logError("Invalid token for booking", ['token' => substr($token, 0, 20) . '...']);
+        logError("Invalid token for booking", ['token_prefix' => substr($token, 0, 20) . '...']);
     }
 } else {
     // For debugging - log the headers we received
-    logError("No authorization header found", ['headers' => $headers]);
+    logError("No authorization header found", ['headers' => array_keys($headers)]);
 }
 
 // Connect to database
@@ -125,7 +130,7 @@ if (!$conn) {
 $bookingNumber = generateBookingNumber();
 
 // Debug log the user ID
-logError("User ID for booking", ['user_id' => $userId]);
+logError("User ID for booking", ['user_id' => $userId, 'booking_number' => $bookingNumber]);
 
 // Begin transaction for data consistency
 $conn->begin_transaction();
@@ -160,6 +165,27 @@ try {
     $hourlyPackage = isset($data['hourlyPackage']) ? $data['hourlyPackage'] : null;
     $tourId = isset($data['tourId']) ? $data['tourId'] : null;
     $status = 'pending'; // Default status for new bookings
+
+    // Log the values being bound to the statement
+    logError("Binding values to SQL statement", [
+        'user_id' => $userId,
+        'booking_number' => $bookingNumber,
+        'pickup_location' => $pickupLocation,
+        'drop_location' => $dropLocation,
+        'pickup_date' => $pickupDate,
+        'return_date' => $returnDate,
+        'cab_type' => $cabType,
+        'distance' => $distance,
+        'trip_type' => $tripType,
+        'trip_mode' => $tripMode,
+        'total_amount' => $totalAmount,
+        'passenger_name' => $passengerName,
+        'passenger_phone' => $passengerPhone,
+        'passenger_email' => $passengerEmail,
+        'hourly_package' => $hourlyPackage,
+        'tour_id' => $tourId,
+        'status' => $status
+    ]);
 
     $stmt->bind_param(
         "issssssdssdsssiss",
@@ -232,6 +258,7 @@ try {
     
     logError("Booking creation failed", [
         'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
         'data' => $data
     ]);
     

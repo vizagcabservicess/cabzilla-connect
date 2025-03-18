@@ -16,18 +16,29 @@ const axiosInstance = axios.create({
 const setAuthToken = (token: string | null) => {
   if (token) {
     axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    console.log('Auth token set in headers', { tokenLength: token.length });
   } else {
     delete axiosInstance.defaults.headers.common['Authorization'];
+    console.log('Auth token removed from headers');
   }
 };
 
-// Initialize auth token from localStorage
+// Initialize auth token from localStorage with more robust checking
 const initializeToken = () => {
-  if (typeof window !== 'undefined') {
-    const storedToken = localStorage.getItem('authToken');
-    if (storedToken) {
-      setAuthToken(storedToken);
+  try {
+    if (typeof window !== 'undefined') {
+      // Check both possible storage locations
+      const storedToken = localStorage.getItem('authToken') || localStorage.getItem('auth_token');
+      
+      if (storedToken) {
+        console.log('Found stored token, initializing API client', { tokenLength: storedToken.length });
+        setAuthToken(storedToken);
+      } else {
+        console.log('No stored token found during initialization');
+      }
     }
+  } catch (error) {
+    console.error('Error initializing auth token:', error);
   }
 };
 
@@ -37,46 +48,69 @@ initializeToken();
 // Authentication API
 export const authAPI = {
   login: async (credentials: LoginRequest): Promise<AuthResponse> => {
+    console.log('Login request to:', `${API_BASE_URL}/api/login`);
     const response = await axiosInstance.post<AuthResponse>('/api/login', credentials);
     
     if (response.data.success && response.data.token) {
+      // Store token in both keys for backward compatibility
       localStorage.setItem('authToken', response.data.token);
+      localStorage.setItem('auth_token', response.data.token);
+      
+      // Store user data
+      if (response.data.user) {
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+      }
+      
       setAuthToken(response.data.token);
+      console.log('Login successful, token saved');
     }
     
     return response.data;
   },
   signup: async (userData: SignupRequest): Promise<AuthResponse> => {
+    console.log('Signup request to:', `${API_BASE_URL}/api/signup`);
     const response = await axiosInstance.post<AuthResponse>('/api/signup', userData);
     
     if (response.data.success && response.data.token) {
+      // Store token in both keys for backward compatibility
       localStorage.setItem('authToken', response.data.token);
+      localStorage.setItem('auth_token', response.data.token);
+      
+      // Store user data
+      if (response.data.user) {
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+      }
+      
       setAuthToken(response.data.token);
+      console.log('Signup successful, token saved');
     }
     
     return response.data;
   },
   logout: () => {
     localStorage.removeItem('authToken');
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('user');
     setAuthToken(null);
+    console.log('User logged out, tokens cleared');
   },
   getUserDashboard: async () => {
     const response = await axiosInstance.get('/api/user/dashboard');
     return response.data;
   },
-  // Added missing authentication helper methods
+  // Authentication helper methods
   isAuthenticated: (): boolean => {
-    return !!localStorage.getItem('authToken');
+    const token = localStorage.getItem('authToken') || localStorage.getItem('auth_token');
+    return !!token;
   },
   getCurrentUser: (): User | null => {
-    const userJson = localStorage.getItem('user');
-    if (userJson) {
-      try {
+    try {
+      const userJson = localStorage.getItem('user');
+      if (userJson) {
         return JSON.parse(userJson);
-      } catch (e) {
-        console.error('Error parsing user data', e);
-        return null;
       }
+    } catch (e) {
+      console.error('Error parsing user data', e);
     }
     return null;
   },
@@ -89,7 +123,10 @@ export const authAPI = {
 // Booking API
 export const bookingAPI = {
   createBooking: async (bookingData: BookingRequest) => {
+    console.log('Creating booking with data:', bookingData);
+    // Fix: Ensure we're using the correct endpoint path
     const response = await axiosInstance.post('/api/book', bookingData);
+    console.log('Booking API response:', response.data);
     return response.data;
   },
   getBookingById: async (bookingId: string) => {
@@ -104,16 +141,17 @@ export const bookingAPI = {
     const response = await axiosInstance.get(`/api/receipt/${bookingId}`);
     return response.data;
   },
-  // Added missing bookingAPI methods
   getAllBookings: async () => {
     const response = await axiosInstance.get('/api/admin/bookings');
     return response.data;
   },
   getUserBookings: async () => {
-    const response = await axiosInstance.get('/api/user/bookings');
+    console.log('Fetching user bookings with auth token');
+    // Add timestamp to bypass cache
+    const timestamp = new Date().getTime();
+    const response = await axiosInstance.get(`/api/user/bookings?_t=${timestamp}`);
     return response.data;
   },
-  // Added admin dashboard metrics method
   getAdminDashboardMetrics: async (period: 'today' | 'week' | 'month'): Promise<DashboardMetrics> => {
     const response = await axiosInstance.get(`/api/admin/metrics?period=${period}`);
     return response.data;
