@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -71,7 +72,7 @@ export function AdminBookingsList() {
       
       if (Array.isArray(data)) {
         setBookings(data);
-        setFilteredBookings(data);
+        applyFilters(data, searchTerm, statusFilter);
         toast.success(`${data.length} bookings loaded successfully`, {
           id: 'bookings-loaded',
         });
@@ -114,26 +115,34 @@ export function AdminBookingsList() {
   }, []);
 
   useEffect(() => {
-    // Apply filters when search term or status filter changes
-    let filtered = bookings;
+    applyFilters(bookings, searchTerm, statusFilter);
+  }, [searchTerm, statusFilter, bookings]);
+
+  const applyFilters = (bookingsArray: Booking[], search: string, status: string) => {
+    console.log('Applying filters:', { search, status });
+    console.log('Bookings to filter:', bookingsArray.length);
     
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
+    let filtered = [...bookingsArray];
+    
+    if (search) {
+      const term = search.toLowerCase();
       filtered = filtered.filter(booking => 
-        booking.bookingNumber.toLowerCase().includes(term) ||
-        booking.passengerName.toLowerCase().includes(term) ||
-        booking.passengerPhone.includes(term) ||
-        booking.passengerEmail.toLowerCase().includes(term) ||
-        booking.pickupLocation.toLowerCase().includes(term)
+        (booking.bookingNumber && booking.bookingNumber.toLowerCase().includes(term)) ||
+        (booking.passengerName && booking.passengerName.toLowerCase().includes(term)) ||
+        (booking.passengerPhone && booking.passengerPhone.includes(term)) ||
+        (booking.passengerEmail && booking.passengerEmail.toLowerCase().includes(term)) ||
+        (booking.pickupLocation && booking.pickupLocation.toLowerCase().includes(term))
       );
+      console.log('After search filter:', filtered.length);
     }
     
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(booking => booking.status === statusFilter);
+    if (status !== 'all') {
+      filtered = filtered.filter(booking => booking.status === status);
+      console.log('After status filter:', filtered.length);
     }
     
     setFilteredBookings(filtered);
-  }, [searchTerm, statusFilter, bookings]);
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
