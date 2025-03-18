@@ -156,7 +156,6 @@ const ToursPage = () => {
         variant: "default",
       });
       
-      // Navigate to the confirmation page with state indicating we should redirect to dashboard after viewing
       navigate("/booking-confirmation", { state: { newBooking: true } });
     } catch (error) {
       console.error('Error creating tour booking:', error);

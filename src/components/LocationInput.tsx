@@ -61,6 +61,7 @@ export function LocationInput({
     
     // Only update if we haven't manually changed the location
     if (!locationChangedRef.current) {
+      // Safely get address or name, ensuring they are strings
       const newAddress = typeof locationData.address === 'string' && locationData.address.trim() !== '' 
         ? locationData.address 
         : typeof locationData.name === 'string' && locationData.name.trim() !== '' 
@@ -210,7 +211,7 @@ export function LocationInput({
       return isInVizagBounds;
     }
     
-    // Check if address contains any Vizag-related names
+    // Check if address contains any Vizag-related names using safeIncludes
     const vizagNames = ['visakhapatnam', 'vizag', 'waltair', 'vizianagaram'];
     
     for (const name of vizagNames) {

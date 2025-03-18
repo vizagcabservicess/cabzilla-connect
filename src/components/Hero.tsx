@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { LocationInput } from './LocationInput';
 import { DateTimePicker } from './DateTimePicker';
@@ -92,19 +91,30 @@ export function Hero() {
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState<boolean>(false);
   const [isCalculatingDistance, setIsCalculatingDistance] = useState<boolean>(false);
 
-  // Handle pickup location change
   const handlePickupLocationChange = (location: Location) => {
+    if (!location) return; // Safety check
+    
+    // Make sure isInVizag is determined if not already set
+    if (location.isInVizag === undefined) {
+      location.isInVizag = isLocationInVizag(location);
+    }
+    
     console.log("Pickup location changed:", location);
     setPickupLocation(location);
   };
   
-  // Handle drop location change
   const handleDropLocationChange = (location: Location) => {
+    if (!location) return; // Safety check
+    
+    // Make sure isInVizag is determined if not already set
+    if (location.isInVizag === undefined) {
+      location.isInVizag = isLocationInVizag(location);
+    }
+    
     console.log("Drop location changed:", location);
     setDropLocation(location);
   };
 
-  // Validate locations and update trip type as needed
   useEffect(() => {
     if (pickupLocation && dropLocation && tripType === 'outstation') {
       if (areBothLocationsInVizag(pickupLocation, dropLocation)) {
@@ -132,7 +142,6 @@ export function Hero() {
     }
   }, [pickupLocation, dropLocation, tripType, toast]);
 
-  // Save trip type and mode to sessionStorage
   useEffect(() => {
     sessionStorage.setItem('tripType', tripType);
     sessionStorage.setItem('tripMode', tripMode);
@@ -156,7 +165,6 @@ export function Hero() {
     }
   }, [tripType, tripMode]);
 
-  // Save locations to sessionStorage
   useEffect(() => {
     if (pickupLocation) {
       sessionStorage.setItem('pickupLocation', JSON.stringify(pickupLocation));
@@ -166,7 +174,6 @@ export function Hero() {
     }
   }, [pickupLocation, dropLocation]);
 
-  // Save dates to sessionStorage
   useEffect(() => {
     if (pickupDate) {
       sessionStorage.setItem('pickupDate', JSON.stringify(pickupDate));
@@ -178,12 +185,10 @@ export function Hero() {
     }
   }, [pickupDate, returnDate]);
 
-  // Save hourly package to sessionStorage
   useEffect(() => {
     sessionStorage.setItem('hourlyPackage', hourlyPackage);
   }, [hourlyPackage]);
 
-  // Validate form based on trip type
   useEffect(() => {
     if (tripType === 'local' && pickupLocation && pickupDate) {
       setIsFormValid(true);
@@ -607,3 +612,5 @@ export function Hero() {
     </section>
   );
 }
+
+

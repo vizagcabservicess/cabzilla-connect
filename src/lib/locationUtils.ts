@@ -3,7 +3,7 @@ import { Location as ApiLocation } from '@/types/api';
 import { Location as AppLocation } from '@/lib/locationData';
 import { safeIncludes, safeLowerCase, safeGetString } from '@/lib/safeStringUtils';
 
-// Re-export the safeIncludes function so it can be imported from locationUtils
+// Re-export the safe string utility functions from safeStringUtils
 export { safeIncludes, safeLowerCase, safeGetString };
 
 /**
