@@ -49,10 +49,14 @@ try {
             vehicle_types vt
         LEFT JOIN 
             vehicle_pricing vp ON vt.vehicle_id = vp.vehicle_type
-        " . ($includeInactive ? "" : "WHERE vt.is_active = 1") . "
-        ORDER BY 
-            vt.name
     ";
+    
+    // Only add the WHERE clause if we're not including inactive vehicles
+    if (!$includeInactive) {
+        $query .= " WHERE vt.is_active = 1";
+    }
+    
+    $query .= " ORDER BY vt.name";
 
     logError("vehicles-data.php query", ['query' => $query]);
     
@@ -78,7 +82,7 @@ try {
         // Ensure name is always a string, use vehicle_id as fallback
         $name = $row['name'] ?? '';
         if (empty($name) || $name === '0') {
-            $name = $row['vehicle_id'];
+            $name = "Vehicle ID: " . $row['vehicle_id'];
         }
         
         // Format data with camelCase keys for frontend consistency
@@ -101,7 +105,10 @@ try {
             'vehicleType' => (string)$row['vehicle_id'] // Ensure string type
         ];
         
-        $vehicles[] = $vehicle;
+        // Only add active vehicles for non-admin requests
+        if ($includeInactive || $vehicle['isActive']) {
+            $vehicles[] = $vehicle;
+        }
     }
 
     // Log success with safe data to avoid memory issues

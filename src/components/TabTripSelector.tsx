@@ -30,13 +30,12 @@ export function TabTripSelector({
     sessionStorage.removeItem('cabFares');
     sessionStorage.removeItem('dropLocation');
     sessionStorage.removeItem('calculatedFares');
+    sessionStorage.removeItem('distance');
     
     // Force clear trip specific data
     const oldTripType = sessionStorage.getItem('tripType');
     if (oldTripType && oldTripType !== selectedTab) {
       console.log(`Trip type changed from ${oldTripType} to ${selectedTab}`);
-      sessionStorage.removeItem('distance');
-      sessionStorage.removeItem('pickupLocation');
       
       // Only keep the airport location when switching to airport mode
       if (selectedTab !== 'airport') {
@@ -100,7 +99,7 @@ export function TabTripSelector({
     toast({
       title: `Switched to ${tabNames[selectedTab]}`,
       description: "All previous selections have been reset.",
-      duration: 2000,
+      duration: 3000,
     });
     
   }, [selectedTab, toast]);

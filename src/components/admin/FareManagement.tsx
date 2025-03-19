@@ -95,6 +95,12 @@ export function FareManagement() {
       setIsLoading(true);
       console.log("Submitting fare update:", values);
       
+      // Clear any cached fare data
+      localStorage.removeItem('cabFares');
+      localStorage.removeItem('tourFares');
+      sessionStorage.removeItem('cabFares');
+      sessionStorage.removeItem('tourFares');
+      
       const data = await fareAPI.updateTourFares(values as FareUpdateRequest);
       console.log("Fare update response:", data);
       
@@ -126,6 +132,12 @@ export function FareManagement() {
         luxury: values.luxury
       };
       
+      // Clear any cached fare data
+      localStorage.removeItem('cabFares');
+      localStorage.removeItem('tourFares');
+      sessionStorage.removeItem('cabFares');
+      sessionStorage.removeItem('tourFares');
+      
       // Call API to add new tour
       const data = await fareAPI.addTourFare(newTourData);
       console.log("New tour added:", data);
@@ -150,6 +162,13 @@ export function FareManagement() {
     
     try {
       setIsRefreshing(true);
+      
+      // Clear any cached fare data
+      localStorage.removeItem('cabFares');
+      localStorage.removeItem('tourFares');
+      sessionStorage.removeItem('cabFares');
+      sessionStorage.removeItem('tourFares');
+      
       const data = await fareAPI.deleteTourFare(tourId);
       console.log("Tour deleted:", data);
       
@@ -172,6 +191,13 @@ export function FareManagement() {
       setIsRefreshing(true);
       setError(null);
       console.log("Manually refreshing tour fares...");
+      
+      // Clear any cached fare data
+      localStorage.removeItem('cabFares');
+      localStorage.removeItem('tourFares');
+      sessionStorage.removeItem('cabFares');
+      sessionStorage.removeItem('tourFares');
+      
       const data = await fareAPI.getTourFares();
       
       if (Array.isArray(data) && data.length > 0) {
