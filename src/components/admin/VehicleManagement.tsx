@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -138,6 +139,7 @@ export function VehicleManagement() {
             fetchSuccessful = true;
             console.log("Successfully fetched vehicles from getVehicles:", vehicleData.length);
           } else if (response && typeof response === 'object') {
+            // Check for nested data structures
             if (response.vehicles && Array.isArray(response.vehicles)) {
               vehicleData = response.vehicles;
               fetchSuccessful = true;
@@ -165,7 +167,7 @@ export function VehicleManagement() {
               amenities: v.amenities,
               description: v.description,
               isActive: v.isActive,
-              basePrice: v.price,
+              basePrice: v.price || v.basePrice,
               pricePerKm: v.pricePerKm,
               nightHaltCharge: v.nightHaltCharge,
               driverAllowance: v.driverAllowance,
@@ -814,4 +816,3 @@ export function VehicleManagement() {
     </Tabs>
   );
 }
-

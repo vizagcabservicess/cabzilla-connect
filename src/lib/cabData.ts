@@ -137,13 +137,13 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
       if (Array.isArray(vehicleData) && vehicleData.length > 0) {
         // Filter out any invalid entries and ensure they have unique IDs
         const validVehicles = vehicleData
-          .filter(v => v && (v.id || v.vehicleId) && (v.isActive !== false))
+          .filter(v => v && (v.id || v?.vehicleId) && (v.isActive !== false))
           .map(vehicle => ({
             ...vehicle,
             // Ensure ID is always set
-            id: vehicle.id || vehicle.vehicleId || String(Math.random()).substring(2, 10),
+            id: vehicle.id || vehicle?.vehicleId || String(Math.random()).substring(2, 10),
             // Ensure all required properties exist
-            price: vehicle.price || vehicle.basePrice || 0,
+            price: vehicle.price || vehicle?.basePrice || 0,
             pricePerKm: vehicle.pricePerKm || 0,
             nightHaltCharge: vehicle.nightHaltCharge || 0,
             driverAllowance: vehicle.driverAllowance || 0,
@@ -197,7 +197,8 @@ const mapVehicleData = (data: any[]): CabType[] => {
     driverAllowance: Number(v.driverAllowance || v.driver_allowance) || 0,
     isActive: v.isActive !== undefined ? Boolean(v.isActive) : 
               (v.is_active !== undefined ? Boolean(v.is_active) : true),
-    vehicleId: v.id || v.vehicleId || v.vehicle_id || ''
+    vehicleId: v.id || v.vehicleId || v.vehicle_id || '',
+    basePrice: Number(v.basePrice || v.price || v.base_price) || 0
   }));
 };
 

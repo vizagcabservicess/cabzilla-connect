@@ -1,4 +1,3 @@
-
 import { TripType, TripMode } from '@/lib/tripTypes';
 
 export interface CabType {
@@ -15,6 +14,8 @@ export interface CabType {
   nightHaltCharge: number;
   driverAllowance: number;
   isActive: boolean;
+  vehicleId?: string; // Added for compatibility with API responses
+  basePrice?: number; // Added for compatibility with API responses
 }
 
 export interface HourlyPackage {
