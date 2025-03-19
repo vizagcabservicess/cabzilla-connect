@@ -148,8 +148,8 @@ try {
                 // Insert new pricing
                 $pricingStmt = $conn->prepare("
                     INSERT INTO vehicle_pricing 
-                    (vehicle_type, base_price, price_per_km, night_halt_charge, driver_allowance)
-                    VALUES (?, ?, ?, ?, ?)
+                    (vehicle_type, base_price, price_per_km, night_halt_charge, driver_allowance, is_active)
+                    VALUES (?, ?, ?, ?, ?, 1)
                 ");
                 $pricingStmt->bind_param("sdddd", $vehicleId, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
             }
@@ -254,8 +254,8 @@ try {
             
             $pricingStmt = $conn->prepare("
                 INSERT INTO vehicle_pricing 
-                (vehicle_type, base_price, price_per_km, night_halt_charge, driver_allowance)
-                VALUES (?, ?, ?, ?, ?)
+                (vehicle_type, base_price, price_per_km, night_halt_charge, driver_allowance, is_active)
+                VALUES (?, ?, ?, ?, ?, 1)
             ");
             $pricingStmt->bind_param("sdddd", $vehicleId, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
             $pricingSuccess = $pricingStmt->execute();

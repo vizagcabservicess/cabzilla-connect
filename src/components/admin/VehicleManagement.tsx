@@ -612,7 +612,8 @@ export function VehicleManagement() {
                             <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center overflow-hidden">
                               <Car className="h-4 w-4 text-gray-500" />
                             </div>
-                            {vehicle.name}
+                            {/* Use name as a string, default to vehicle_id if missing */}
+                            {vehicle.name || vehicle.vehicle_id}
                           </div>
                         </td>
                         <td className="text-center py-2 px-2">{vehicle.capacity} persons</td>

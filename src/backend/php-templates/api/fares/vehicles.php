@@ -125,6 +125,7 @@ try {
                 vt.image, 
                 vt.amenities, 
                 vt.description, 
+                vt.is_active,
                 vp.base_price, 
                 vp.price_per_km, 
                 vp.night_halt_charge, 
@@ -173,6 +174,7 @@ try {
                 'amenities' => $amenities,
                 'description' => $row['description'] ?? '',
                 'ac' => (bool)($row['ac'] ?? 0),
+                'isActive' => (bool)($row['is_active'] ?? 0),
                 'vehicleType' => (string)$row['vehicle_id']
             ];
             

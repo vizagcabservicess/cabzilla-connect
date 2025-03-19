@@ -6,6 +6,7 @@ require_once '../../config.php';
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Content-Type: application/json');
 
 // Respond to preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -42,8 +43,6 @@ try {
             vehicle_types vt
         LEFT JOIN 
             vehicle_pricing vp ON vt.vehicle_id = vp.vehicle_type
-        WHERE
-            vt.is_active = 1
         ORDER BY 
             vt.name
     ";
@@ -79,6 +78,7 @@ try {
             'amenities' => $amenities,
             'description' => $row['description'] ?? '',
             'ac' => (bool)($row['ac'] ?? 0),
+            'isActive' => (bool)($row['is_active'] ?? 0),
             'nightHaltCharge' => floatval($row['night_halt_charge'] ?? 0),
             'driverAllowance' => floatval($row['driver_allowance'] ?? 0),
             // Also include the original field names for backward compatibility
