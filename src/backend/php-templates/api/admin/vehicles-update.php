@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -72,8 +71,9 @@ try {
                 $row['name'] = $row['vehicle_id'];
             }
             
-            // Convert ac to boolean
+            // Convert ac and is_active to boolean
             $row['ac'] = (bool)$row['ac'];
+            $row['isActive'] = (bool)$row['is_active'];
             
             // Get pricing information
             $pricingStmt = $conn->prepare("SELECT * FROM vehicle_pricing WHERE vehicle_type = ?");
@@ -114,13 +114,26 @@ try {
         }
         
         $vehicleId = $requestData['vehicleId'];
-        // Ensure name is not empty
-        $name = isset($requestData['name']) && !empty($requestData['name']) ? $requestData['name'] : $vehicleId;
+        // Ensure name is not empty, use vehicleId as fallback
+        $name = isset($requestData['name']) && !empty($requestData['name']) && $requestData['name'] !== '0' 
+            ? $requestData['name'] 
+            : $vehicleId;
+        
         $capacity = isset($requestData['capacity']) ? intval($requestData['capacity']) : 4;
         $luggageCapacity = isset($requestData['luggageCapacity']) ? intval($requestData['luggageCapacity']) : 2;
         $ac = isset($requestData['ac']) ? ($requestData['ac'] ? 1 : 0) : 1;
         $image = isset($requestData['image']) ? $requestData['image'] : '/cars/sedan.png';
-        $amenities = isset($requestData['amenities']) ? implode(', ', $requestData['amenities']) : '';
+        
+        // Process amenities - if it's an array, convert to comma-separated string
+        $amenities = '';
+        if (isset($requestData['amenities'])) {
+            if (is_array($requestData['amenities'])) {
+                $amenities = implode(', ', $requestData['amenities']);
+            } else {
+                $amenities = $requestData['amenities'];
+            }
+        }
+        
         $description = isset($requestData['description']) ? $requestData['description'] : '';
         $isActive = isset($requestData['isActive']) ? ($requestData['isActive'] ? 1 : 0) : 1;
         
@@ -132,11 +145,16 @@ try {
                 updated_at = NOW()
             WHERE vehicle_id = ?
         ");
+        
+        if (!$stmt) {
+            throw new Exception("Database prepare error: " . $conn->error);
+        }
+        
         $stmt->bind_param("siissssis", $name, $capacity, $luggageCapacity, $ac, $image, $amenities, $description, $isActive, $vehicleId);
         $success = $stmt->execute();
         
         if (!$success) {
-            throw new Exception("Failed to update vehicle: " . $conn->error);
+            throw new Exception("Failed to update vehicle: " . $conn->error . " with query: UPDATE vehicle_types SET name = " . $name);
         }
         
         if ($stmt->affected_rows === 0) {
@@ -177,9 +195,13 @@ try {
                 $pricingStmt->bind_param("sdddd", $vehicleId, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
             }
             
+            if (!$pricingStmt) {
+                throw new Exception("Database prepare error for pricing: " . $conn->error);
+            }
+            
             $pricingSuccess = $pricingStmt->execute();
             if (!$pricingSuccess) {
-                throw new Exception("Failed to update vehicle pricing: " . $conn->error);
+                throw new Exception("Failed to update vehicle pricing: " . $pricingStmt->error);
             }
             
             logError("Vehicle pricing updated", [
@@ -220,7 +242,7 @@ try {
             $updatedVehicle['driverAllowance'] = 0;
         }
         
-        if ($updatedVehicle['amenities']) {
+        if (!empty($updatedVehicle['amenities'])) {
             // Try to decode JSON first
             $decodedAmenities = json_decode($updatedVehicle['amenities'], true);
             if (json_last_error() === JSON_ERROR_NONE) {

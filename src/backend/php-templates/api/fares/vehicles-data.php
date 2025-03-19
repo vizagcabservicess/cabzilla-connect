@@ -34,6 +34,9 @@ try {
     // Check if we should include inactive vehicles (admin only)
     $includeInactive = isset($_GET['includeInactive']) && $_GET['includeInactive'] === 'true';
     
+    // Debug log for includeInactive parameter
+    logError("vehicles-data.php includeInactive", ['includeInactive' => $includeInactive]);
+    
     // Get all vehicle data (including types and pricing)
     $query = "
         SELECT 
@@ -51,6 +54,8 @@ try {
             vt.name
     ";
 
+    logError("vehicles-data.php query", ['query' => $query]);
+    
     $result = $conn->query($query);
 
     if (!$result) {
@@ -100,7 +105,7 @@ try {
     }
 
     // Log success with safe data to avoid memory issues
-    logError("Vehicles data response success", ['count' => count($vehicles)]);
+    logError("Vehicles data response success", ['count' => count($vehicles), 'activeFilter' => !$includeInactive]);
     
     // Send response with explicit content type
     header('Content-Type: application/json');

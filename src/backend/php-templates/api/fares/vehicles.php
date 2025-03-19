@@ -117,6 +117,8 @@ try {
         // Check if we should include inactive vehicles (admin only)
         $includeInactive = isset($_GET['includeInactive']) && $_GET['includeInactive'] === 'true';
         
+        logError("vehicles.php GET request", ['includeInactive' => $includeInactive]);
+        
         // Get all vehicle types with their pricing data with a simpler query
         $query = "
             SELECT 
@@ -141,6 +143,8 @@ try {
             ORDER BY 
                 vt.name
         ";
+        
+        logError("vehicles.php query", ['query' => $query]);
         
         $result = $conn->query($query);
         
@@ -190,7 +194,7 @@ try {
         }
 
         // Log success
-        logError("Vehicles GET response success", ['count' => count($vehicles)]);
+        logError("Vehicles GET response success", ['count' => count($vehicles), 'activeFilter' => !$includeInactive]);
         
         // Send response
         echo json_encode($vehicles);
