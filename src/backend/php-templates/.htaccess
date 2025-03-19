@@ -22,6 +22,7 @@ RewriteRule ^api/admin/metrics$ api/admin/metrics.php [QSA,L]
 RewriteRule ^api/admin/users$ api/admin/users.php [QSA,L]
 RewriteRule ^api/fares/tours$ api/fares/tours.php [L,QSA]
 RewriteRule ^api/fares/vehicles$ api/fares/vehicles.php [L,QSA]
+RewriteRule ^api/fares/vehicles-data$ api/fares/vehicles-data.php [L,QSA]
 RewriteRule ^api/admin/fares/update$ api/admin/fares-update.php [QSA,L]
 RewriteRule ^api/admin/km-price/update$ api/admin/km-price-update.php [L,QSA]
 RewriteRule ^api/admin/vehicle-pricing$ api/admin/vehicle-pricing.php [L,QSA]
@@ -52,7 +53,7 @@ AddDefaultCharset UTF-8
     <FilesMatch "^api/">
         Header always set Access-Control-Allow-Origin "*"
         Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-        Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+        Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh"
         Header always set Access-Control-Max-Age "3600"
     </FilesMatch>
 </IfModule>
