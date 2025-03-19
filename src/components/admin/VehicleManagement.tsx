@@ -161,20 +161,20 @@ export function VehicleManagement() {
           const cachedVehicles = await fareService.refreshCabTypes();
           if (cachedVehicles && cachedVehicles.length > 0) {
             vehicleData = cachedVehicles.map(v => ({
-              id: v.id,
-              name: v.name,
-              capacity: v.capacity,
-              luggageCapacity: v.luggageCapacity,
-              ac: v.ac,
-              image: v.image,
-              amenities: v.amenities,
-              description: v.description,
-              isActive: v.isActive,
-              basePrice: v.price || v.basePrice,
-              pricePerKm: v.pricePerKm,
-              nightHaltCharge: v.nightHaltCharge,
-              driverAllowance: v.driverAllowance,
-              vehicleId: v.id
+              id: v.id || `cab-${Math.random().toString(36).substring(2, 9)}`,
+              name: v.name || "Unnamed Vehicle",
+              capacity: v.capacity || 4,
+              luggageCapacity: v.luggageCapacity || 2,
+              ac: v.ac !== undefined ? v.ac : true,
+              image: v.image || "/cars/sedan.png",
+              amenities: v.amenities || [],
+              description: v.description || "",
+              isActive: v.isActive !== undefined ? v.isActive : true,
+              basePrice: v.price || v.basePrice || 0,
+              pricePerKm: v.pricePerKm || 0,
+              nightHaltCharge: v.nightHaltCharge || 0,
+              driverAllowance: v.driverAllowance || 0,
+              vehicleId: v.id || `cab-${Math.random().toString(36).substring(2, 9)}`
             }));
             fetchSuccessful = true;
             console.log("Using cached vehicles from fareService:", vehicleData.length);
@@ -186,8 +186,8 @@ export function VehicleManagement() {
       
       if (Array.isArray(vehicleData) && vehicleData.length > 0) {
         const normalizedVehicles = vehicleData.map(vehicle => ({
-          id: String(vehicle.id || vehicle.vehicleId || ""),
-          name: String(vehicle.name || ""),
+          id: String(vehicle.id || vehicle.vehicleId || `vehicle-${Math.random().toString(36).substring(2, 9)}`),
+          name: String(vehicle.name || "Unnamed Vehicle"),
           capacity: Number(vehicle.capacity) || 4,
           luggageCapacity: Number(vehicle.luggageCapacity || vehicle.luggage_capacity) || 2,
           ac: vehicle.ac !== undefined ? Boolean(vehicle.ac) : true,
@@ -200,7 +200,7 @@ export function VehicleManagement() {
           pricePerKm: Number(vehicle.pricePerKm || 0),
           nightHaltCharge: Number(vehicle.nightHaltCharge || 0),
           driverAllowance: Number(vehicle.driverAllowance || 0),
-          vehicleId: String(vehicle.id || vehicle.vehicleId || "")
+          vehicleId: String(vehicle.id || vehicle.vehicleId || `vehicle-${Math.random().toString(36).substring(2, 9)}`)
         }));
         
         console.log("Normalized vehicles:", normalizedVehicles);
@@ -445,7 +445,7 @@ export function VehicleManagement() {
                         <FormLabel>Select Vehicle to Update</FormLabel>
                         <Select 
                           onValueChange={(value) => {
-                            if (!value || value === "") return; // Prevent empty selection
+                            if (!value || value === "" || value === "placeholder") return; // Prevent empty selection
                             field.onChange(value);
                             handleVehicleSelect(value);
                           }}
@@ -461,8 +461,8 @@ export function VehicleManagement() {
                             <SelectItem value="placeholder" disabled>Select a vehicle</SelectItem>
                             {vehicles.map((vehicle) => (
                               <SelectItem 
-                                key={vehicle.id || vehicle.vehicleId || Math.random().toString()} 
-                                value={String(vehicle.id || vehicle.vehicleId || "")}
+                                key={vehicle.id || vehicle.vehicleId || Math.random().toString(36).substring(2, 9)} 
+                                value={String(vehicle.id || vehicle.vehicleId || `vehicle-${Math.random().toString(36).substring(2, 9)}`)}
                               >
                                 {vehicle.name || "Unnamed vehicle"}
                               </SelectItem>
@@ -765,7 +765,7 @@ export function VehicleManagement() {
                   </thead>
                   <tbody>
                     {vehicles.map((vehicle) => (
-                      <tr key={vehicle.id || vehicle.vehicleId || Math.random().toString()} className="border-b hover:bg-gray-50">
+                      <tr key={vehicle.id || vehicle.vehicleId || Math.random().toString(36).substring(2, 9)} className="border-b hover:bg-gray-50">
                         <td className="py-2 px-2">
                           <div className="flex items-center gap-2">
                             <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center overflow-hidden">
@@ -821,4 +821,3 @@ export function VehicleManagement() {
     </Tabs>
   );
 }
-

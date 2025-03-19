@@ -41,12 +41,23 @@ export function TabTripSelector({
     sessionStorage.removeItem('dropLocationObj');
     sessionStorage.removeItem('pickupLocationObj');
     
-    // Important: Add HTML element cleanup to ensure UI state is reset too
-    const pickupInput = document.querySelector('input[placeholder*="pickup"]') as HTMLInputElement;
-    const dropInput = document.querySelector('input[placeholder*="drop"]') as HTMLInputElement;
+    // Force clear all input fields in the DOM
+    const pickupInput = document.querySelector('input[placeholder*="pickup"], input[placeholder*="Pickup"]') as HTMLInputElement;
+    const dropInput = document.querySelector('input[placeholder*="drop"], input[placeholder*="Drop"]') as HTMLInputElement;
     
-    if (pickupInput) pickupInput.value = '';
-    if (dropInput) dropInput.value = '';
+    if (pickupInput) {
+      pickupInput.value = '';
+      // Dispatch input event to ensure React state updates
+      const event = new Event('input', { bubbles: true });
+      pickupInput.dispatchEvent(event);
+    }
+    
+    if (dropInput) {
+      dropInput.value = '';
+      // Dispatch input event to ensure React state updates
+      const event = new Event('input', { bubbles: true });
+      dropInput.dispatchEvent(event);
+    }
     
     // Clear booking-related data regardless of tab change
     sessionStorage.removeItem('selectedCab');
@@ -153,12 +164,26 @@ export function TabTripSelector({
     sessionStorage.removeItem('dropLocationObj');
     sessionStorage.removeItem('pickupLocationObj');
     
-    // Important: Clear input fields in the DOM directly to ensure UI is reset
-    const pickupInput = document.querySelector('input[placeholder*="pickup"]') as HTMLInputElement;
-    const dropInput = document.querySelector('input[placeholder*="drop"]') as HTMLInputElement;
+    // Important: Physically clear input fields in the DOM to ensure UI is reset
+    const pickupInput = document.querySelector('input[placeholder*="pickup"], input[placeholder*="Pickup"]') as HTMLInputElement;
+    const dropInput = document.querySelector('input[placeholder*="drop"], input[placeholder*="Drop"]') as HTMLInputElement;
     
-    if (pickupInput) pickupInput.value = '';
-    if (dropInput) dropInput.value = '';
+    if (pickupInput) {
+      pickupInput.value = '';
+      // Dispatch input event to ensure React state updates
+      const event = new Event('input', { bubbles: true });
+      pickupInput.dispatchEvent(event);
+    }
+    
+    if (dropInput) {
+      dropInput.value = '';
+      // Dispatch input event to ensure React state updates
+      const event = new Event('input', { bubbles: true });
+      dropInput.dispatchEvent(event);
+    }
+    
+    // Dispatch a manual location cleared event
+    window.dispatchEvent(new CustomEvent('locationCleared', { detail: { type: 'all' } }));
     
     // Force a cache clear regardless of whether it's the same tab or not
     fareService.clearCache();
