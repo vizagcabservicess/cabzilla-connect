@@ -14,6 +14,47 @@ export const clearFareCache = () => {
   console.log('Fare calculation cache cleared');
 };
 
+// Calculate airport transfer fares
+export const calculateAirportFare = (cabName: string, distance: number): number => {
+  // Default pricing for airport transfers if specific cab not found
+  const defaultFare = {
+    basePrice: 1000,
+    pricePerKm: 14,
+    airportFee: 150
+  };
+  
+  // Determine base price and per km rates based on cab type
+  let basePrice = defaultFare.basePrice;
+  let pricePerKm = defaultFare.pricePerKm;
+  
+  // Adjust pricing based on cab type
+  if (cabName.toLowerCase().includes('sedan')) {
+    basePrice = 1200;
+    pricePerKm = 14;
+  } else if (cabName.toLowerCase().includes('ertiga') || cabName.toLowerCase().includes('suv')) {
+    basePrice = 1500;
+    pricePerKm = 16;
+  } else if (cabName.toLowerCase().includes('innova')) {
+    basePrice = 1800;
+    pricePerKm = 18;
+  } else if (cabName.toLowerCase().includes('tempo') || cabName.toLowerCase().includes('traveller')) {
+    basePrice = 2500;
+    pricePerKm = 22;
+  }
+  
+  // Calculate fare
+  let fare = Math.round(basePrice * 0.7); // 70% of base fare
+  fare += Math.round(distance * pricePerKm);
+  
+  // Add airport fee
+  fare += defaultFare.airportFee;
+  
+  // Add GST (5%)
+  fare = Math.round(fare * 1.05);
+  
+  return fare;
+};
+
 // Calculate fare based on cab type, distance, and trip details
 export const calculateFare = async (params: FareCalculationParams): Promise<number> => {
   const { cabType, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate } = params;
