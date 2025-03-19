@@ -1,5 +1,4 @@
-
-import { hourlyPackages } from "@/lib/cabData";
+import { hourlyPackages } from "@/lib/packageData";
 import { 
   Select,
   SelectContent,
@@ -9,9 +8,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { useEffect } from "react";
-
-// Define LocalTripPurpose type locally since it was missing
-export type LocalTripPurpose = 'business' | 'personal' | 'city-tour';
+import { LocalTripPurpose } from "@/lib/tripTypes";
 
 interface LocalTripSelectorProps {
   tripPurpose: LocalTripPurpose;
@@ -27,7 +24,6 @@ export function LocalTripSelector({
   onHourlyPackageChange 
 }: LocalTripSelectorProps) {
   
-  // Reset package selection if needed to ensure proper pricing
   useEffect(() => {
     console.log("LocalTripSelector mounted with package:", hourlyPackage);
     if (!hourlyPackage) {

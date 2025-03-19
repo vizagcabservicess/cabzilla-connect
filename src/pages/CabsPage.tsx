@@ -1,4 +1,5 @@
 
+// Only fixing line 277 with parameter count mismatch
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -272,15 +273,15 @@ const CabsPage = () => {
     if (selectedCab && distance > 0) {
       const fetchFare = async () => {
         try {
-          const fare = await calculateFare(
-            selectedCab, 
+          const fare = await calculateFare({
+            cabType: selectedCab, 
             distance, 
             tripType, 
             tripMode, 
-            tripType === "local" ? hourlyPackage : undefined,
+            hourlyPackage: tripType === "local" ? hourlyPackage : undefined,
             pickupDate,
             returnDate
-          );
+          });
           setTotalPrice(fare);
         } catch (error) {
           console.error("Error calculating fare:", error);

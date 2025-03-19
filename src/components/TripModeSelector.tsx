@@ -1,5 +1,5 @@
 
-import { TripMode } from "@/lib/cabData";
+import { TripMode } from "@/lib/tripTypes";
 import { ArrowRight, RotateCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 

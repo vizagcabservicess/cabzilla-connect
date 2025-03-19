@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -12,8 +11,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertCircle, RefreshCw, Save, Clock } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { getAllLocalPackagePrices, updateLocalPackagePrice, hourlyPackages } from '@/lib/cabData';
-import { loadCabTypes, CabType } from '@/lib/cabData';
+import { getAllLocalPackagePrices, updateLocalPackagePrice, hourlyPackages } from '@/lib/packageData';
+import { loadCabTypes } from '@/lib/cabData';
+import { CabType } from '@/types/cab';
 
 const formSchema = z.object({
   packageId: z.string().min(1, { message: "Package is required" }),
@@ -45,11 +45,9 @@ export function LocalFareManagement() {
       setIsLoading(true);
       setError(null);
       
-      // Load local package prices
       const prices = getAllLocalPackagePrices();
       setLocalFares(prices);
       
-      // Load cab types
       const types = await loadCabTypes();
       setCabTypes(types);
     } catch (error) {
@@ -60,15 +58,12 @@ export function LocalFareManagement() {
     }
   };
   
-  // Handle form submission
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       setIsLoading(true);
       
-      // Update local package price
       updateLocalPackagePrice(values.packageId, values.cabType, values.price);
       
-      // Refresh local fares
       const updatedPrices = getAllLocalPackagePrices();
       setLocalFares(updatedPrices);
       
@@ -84,7 +79,6 @@ export function LocalFareManagement() {
   const handlePackageSelect = (packageId: string) => {
     form.setValue("packageId", packageId);
     
-    // If cab type is already selected, load the price
     const cabType = form.getValues().cabType;
     if (cabType && localFares[packageId] && localFares[packageId][cabType.toLowerCase()]) {
       form.setValue("price", localFares[packageId][cabType.toLowerCase()]);
@@ -94,7 +88,6 @@ export function LocalFareManagement() {
   const handleCabTypeSelect = (cabType: string) => {
     form.setValue("cabType", cabType);
     
-    // If package is already selected, load the price
     const packageId = form.getValues().packageId;
     if (packageId && localFares[packageId] && localFares[packageId][cabType.toLowerCase()]) {
       form.setValue("price", localFares[packageId][cabType.toLowerCase()]);

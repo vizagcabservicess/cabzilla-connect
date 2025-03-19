@@ -1,7 +1,7 @@
 
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { TripMode } from "@/lib/cabData";
+import { TripMode } from "@/lib/tripTypes";
 import { ArrowRight, RotateCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 

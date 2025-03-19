@@ -1,10 +1,11 @@
+
 import { useEffect, useState } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle, Calendar, MapPin, Clock, Car, CreditCard } from 'lucide-react';
 import { format } from 'date-fns';
-import { CabType } from '@/lib/cabData';
+import { CabType } from '@/types/cab';
 import { Location } from '@/lib/locationData';
 
 interface BookingDetails {

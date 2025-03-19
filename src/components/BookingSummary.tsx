@@ -5,7 +5,7 @@ import { CabType } from '@/types/cab';
 import { TripType } from '@/lib/tripTypes';
 import { formatPrice } from '@/lib/cabData';
 import { format } from 'date-fns';
-import { Car, MapPin, Calendar } from 'lucide-react';
+import { Car, MapPin, Calendar, User, Info } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
 interface BookingSummaryProps {
