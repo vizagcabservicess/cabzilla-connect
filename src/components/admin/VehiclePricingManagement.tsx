@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -924,3 +925,160 @@ export function VehiclePricingManagement() {
                     </FormItem>
                   )}
                 />
+                
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h3 className="text-sm font-medium flex items-center mb-3">
+                    <PlaneTakeoff className="h-4 w-4 mr-1" /> Airport Transfer Rates
+                  </h3>
+                  <div className="grid gap-4 grid-cols-2">
+                    <FormField
+                      control={airportForm.control}
+                      name="tier1"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Tier 1 (0-10 KM)</FormLabel>
+                          <FormControl>
+                            <Input type="number" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={airportForm.control}
+                      name="tier2"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Tier 2 (11-20 KM)</FormLabel>
+                          <FormControl>
+                            <Input type="number" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={airportForm.control}
+                      name="tier3"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Tier 3 (21-30 KM)</FormLabel>
+                          <FormControl>
+                            <Input type="number" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={airportForm.control}
+                      name="tier4"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Tier 4 (31+ KM)</FormLabel>
+                          <FormControl>
+                            <Input type="number" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={airportForm.control}
+                      name="extraKmCharge"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Extra KM Charge</FormLabel>
+                          <FormControl>
+                            <Input type="number" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+                
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading ? (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-4 w-4" />
+                      Update Airport Pricing
+                    </>
+                  )}
+                </Button>
+              </form>
+            </Form>
+          </CardContent>
+        </Card>
+      </TabsContent>
+      
+      <TabsContent value="all">
+        <Card>
+          <CardHeader>
+            <div className="flex justify-between items-center">
+              <CardTitle className="flex items-center gap-2">
+                <Warehouse className="h-5 w-5" /> All Vehicle Pricing
+              </CardTitle>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={fetchVehiclePricing} 
+                disabled={isRefreshing}
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="bg-gray-100 text-left">
+                    <th className="p-2 border">Vehicle Type</th>
+                    <th className="p-2 border">Base Price</th>
+                    <th className="p-2 border">Price/KM</th>
+                    <th className="p-2 border">Night Halt</th>
+                    <th className="p-2 border">Driver Allowance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {vehiclePricing.map((pricing) => (
+                    <tr key={pricing.vehicleType} className="border-b hover:bg-gray-50">
+                      <td className="p-2 border font-medium">{pricing.vehicleType}</td>
+                      <td className="p-2 border">₹{pricing.basePrice}</td>
+                      <td className="p-2 border">₹{pricing.pricePerKm}</td>
+                      <td className="p-2 border">₹{pricing.nightHaltCharge || 0}</td>
+                      <td className="p-2 border">₹{pricing.driverAllowance || 0}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            
+            <div className="mt-4">
+              <Button 
+                variant="outline" 
+                className="w-full" 
+                onClick={clearAllCaches}
+              >
+                <RepeatIcon className="mr-2 h-4 w-4" />
+                Clear All Fare Caches
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </TabsContent>
+    </Tabs>
+  );
+}
