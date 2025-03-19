@@ -14,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // Log the request for debugging
-logError("vehicles-data.php request", ['method' => $_SERVER['REQUEST_METHOD'], 'request' => $_SERVER]);
+logError("vehicles-data.php request", ['method' => $_SERVER['REQUEST_METHOD']]);
 
 // Allow only GET requests for this endpoint
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
@@ -23,15 +23,13 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 }
 
 // Connect to database
-$conn = getDbConnection();
-
-if (!$conn) {
-    logError("Database connection failed", ['error' => mysqli_connect_error()]);
-    sendJsonResponse(['error' => 'Database connection failed: ' . mysqli_connect_error()], 500);
-    exit;
-}
-
 try {
+    $conn = getDbConnection();
+
+    if (!$conn) {
+        throw new Exception("Database connection failed: " . mysqli_connect_error());
+    }
+
     // Get all vehicle data (including types and pricing)
     $query = "
         SELECT 
@@ -53,7 +51,6 @@ try {
     $result = $conn->query($query);
 
     if (!$result) {
-        logError("Database query failed", ['error' => $conn->error]);
         throw new Exception("Database query failed: " . $conn->error);
     }
 
@@ -72,40 +69,45 @@ try {
         
         // Format data with camelCase keys for frontend consistency
         $vehicle = [
-            'id' => $row['vehicle_id'],
-            'name' => $row['name'],
-            'capacity' => intval($row['capacity']),
-            'luggageCapacity' => intval($row['luggage_capacity']),
+            'id' => (string)$row['vehicle_id'], // Ensure string type
+            'name' => $row['name'] ?? '',
+            'capacity' => intval($row['capacity'] ?? 0),
+            'luggageCapacity' => intval($row['luggage_capacity'] ?? 0),
             'basePrice' => floatval($row['base_price'] ?? 0),
             'pricePerKm' => floatval($row['price_per_km'] ?? 0),
-            'image' => $row['image'],
+            'image' => $row['image'] ?? '',
             'amenities' => $amenities,
-            'description' => $row['description'],
-            'ac' => (bool)$row['ac'],
+            'description' => $row['description'] ?? '',
+            'ac' => (bool)($row['ac'] ?? 0),
             'nightHaltCharge' => floatval($row['night_halt_charge'] ?? 0),
             'driverAllowance' => floatval($row['driver_allowance'] ?? 0),
             // Also include the original field names for backward compatibility
             'price' => floatval($row['base_price'] ?? 0),
-            'vehicleType' => $row['vehicle_id']
+            'vehicleType' => (string)$row['vehicle_id'] // Ensure string type
         ];
         
         $vehicles[] = $vehicle;
     }
 
-    // Log success
+    // Log success with safe data to avoid memory issues
     logError("Vehicles data response success", ['count' => count($vehicles)]);
     
-    // Send response
-    sendJsonResponse($vehicles);
+    // Send response with explicit content type
+    header('Content-Type: application/json');
+    echo json_encode($vehicles);
+    exit;
+    
 } catch (Exception $e) {
     logError("Error fetching vehicle data", ['error' => $e->getMessage()]);
     sendJsonResponse(['error' => 'Failed to fetch vehicle data: ' . $e->getMessage()], 500);
 }
 
-// Helper function to send JSON responses
-function sendJsonResponse($data, $statusCode = 200) {
-    http_response_code($statusCode);
-    header('Content-Type: application/json');
-    echo json_encode($data);
-    exit;
+// Helper function to send JSON responses (in case it's not defined in config.php)
+if (!function_exists('sendJsonResponse')) {
+    function sendJsonResponse($data, $statusCode = 200) {
+        http_response_code($statusCode);
+        header('Content-Type: application/json');
+        echo json_encode($data);
+        exit;
+    }
 }
