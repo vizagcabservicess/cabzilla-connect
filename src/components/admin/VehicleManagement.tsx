@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -109,26 +108,30 @@ export function VehicleManagement() {
       setIsRefreshing(true);
       setError(null);
       
-      // Add cache busting to ensure fresh data
-      const timestamp = Date.now();
-      console.log("Fetching vehicles data with timestamp:", timestamp);
-      const response = await fareAPI.getVehicles({ includeInactive: true, _t: timestamp });
+      console.log("Fetching vehicles data");
+      const response = await fareAPI.getVehicles();
       
       let vehicleData: VehicleData[] = [];
       
-      // Handle different response formats (array or object with vehicles property)
       if (Array.isArray(response)) {
         vehicleData = response;
-      } else if (response && Array.isArray(response.vehicles)) {
-        vehicleData = response.vehicles;
-      } else {
-        console.warn("Unexpected vehicles response format:", response);
-        throw new Error("Invalid response format from API");
+      } else if (response && typeof response === 'object') {
+        if (Array.isArray(response.vehicles)) {
+          vehicleData = response.vehicles;
+        } else if (Array.isArray(response.data)) {
+          vehicleData = response.data;
+        } else {
+          const potentialVehicles = Object.values(response).filter(val => 
+            val && typeof val === 'object' && !Array.isArray(val)
+          );
+          if (potentialVehicles.length > 0) {
+            vehicleData = potentialVehicles as VehicleData[];
+          }
+        }
       }
       
       console.log("Fetched vehicles:", vehicleData);
       
-      // Normalize the data format
       const normalizedVehicles = vehicleData.map(vehicle => ({
         id: vehicle.id || vehicle.vehicleId || "",
         name: vehicle.name || "",
@@ -212,14 +215,12 @@ export function VehicleManagement() {
     try {
       setIsLoading(true);
       
-      // Clear caches to ensure fresh data
       localStorage.removeItem('cabFares');
       localStorage.removeItem('tourFares');
       sessionStorage.removeItem('cabFares');
       sessionStorage.removeItem('tourFares');
       sessionStorage.removeItem('calculatedFares');
       
-      // Clear fare service cache
       fareService.clearCache();
       
       await reloadCabTypes();
@@ -237,17 +238,14 @@ export function VehicleManagement() {
     }
   };
   
-  // Handle form submission for updating or adding a vehicle
   const onSubmit = async (values: z.infer<typeof vehicleFormSchema>) => {
     try {
       setIsLoading(true);
       
-      // Process the amenities string into an array
       const amenitiesArray = values.amenities 
         ? values.amenities.split(',').map(item => item.trim()).filter(item => item) 
         : [];
       
-      // Construct proper vehicle data structure
       const vehicleData = {
         vehicleId: values.vehicleId,
         name: values.name,
@@ -262,22 +260,19 @@ export function VehicleManagement() {
         pricePerKm: values.pricePerKm,
         nightHaltCharge: values.nightHaltCharge,
         driverAllowance: values.driverAllowance,
-        id: values.vehicleId // Ensure id is set for consistent mapping
+        id: values.vehicleId
       };
       
       console.log(`${isAddingNew ? 'Adding' : 'Updating'} vehicle:`, vehicleData);
       
-      // Clear caches to ensure fresh data
       localStorage.removeItem('cabFares');
       localStorage.removeItem('tourFares');
       sessionStorage.removeItem('cabFares');
       sessionStorage.removeItem('tourFares');
       sessionStorage.removeItem('calculatedFares');
       
-      // Clear the fare service cache
       fareService.clearCache();
       
-      // Update cab pricing using the fare service
       await fareService.updateVehiclePricing(vehicleData);
       
       if (isAddingNew) {
@@ -286,10 +281,8 @@ export function VehicleManagement() {
         toast.success("Vehicle updated successfully");
       }
       
-      // Force reload cab types
       await reloadCabTypes();
       
-      // Fetch fresh vehicle data
       await fetchVehicles();
       
       if (isAddingNew) {
@@ -697,7 +690,6 @@ export function VehicleManagement() {
                             <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center overflow-hidden">
                               <Car className="h-4 w-4 text-gray-500" />
                             </div>
-                            {/* Use name as a string, default to id if missing */}
                             {vehicle.name || vehicle.id || vehicle.vehicleId}
                           </div>
                         </td>
@@ -748,3 +740,4 @@ export function VehicleManagement() {
     </Tabs>
   );
 }
+

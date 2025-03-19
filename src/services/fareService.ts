@@ -1,4 +1,3 @@
-
 import { CabType, FareCalculationParams } from '@/types/cab';
 import { calculateFare } from '@/lib/fareCalculationService';
 import { differenceInDays } from 'date-fns';
@@ -36,7 +35,7 @@ class FareService {
     try {
       // Add cache busting parameter
       const timestamp = Date.now();
-      const vehicles = await fareAPI.getVehicles({ includeInactive: false, _t: timestamp });
+      const vehicles = await fareAPI.getVehicles();
       
       if (!Array.isArray(vehicles) || vehicles.length === 0) {
         console.warn('No vehicles returned from API or invalid response');
