@@ -73,6 +73,13 @@ let lastCacheTime = 0;
 const CACHE_DURATION = 60 * 1000; 
 let isCurrentlyFetchingCabs = false; // Flag to prevent concurrent fetch requests
 
+// Define an interface for API responses to ensure proper typing
+interface VehicleApiResponse {
+  vehicles?: any[];
+  data?: any[];
+  [key: string]: any;
+}
+
 // Function to load cab types dynamically
 export const loadCabTypes = async (): Promise<CabType[]> => {
   try {
@@ -129,13 +136,16 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
             fetchSuccessful = true;
             console.log('Successfully fetched vehicles from backup endpoint 1:', vehicleData.length);
           } else if (backupData && typeof backupData === 'object' && !Array.isArray(backupData)) {
+            // Explicitly cast to the interface to help TypeScript
+            const typedBackupData = backupData as VehicleApiResponse;
+            
             // Try to extract vehicles from nested structure
-            if (backupData.vehicles && Array.isArray(backupData.vehicles)) {
-              vehicleData = mapVehicleData(backupData.vehicles);
+            if (typedBackupData.vehicles && Array.isArray(typedBackupData.vehicles)) {
+              vehicleData = mapVehicleData(typedBackupData.vehicles);
               fetchSuccessful = true;
               console.log('Successfully extracted vehicles from nested data structure:', vehicleData.length);
-            } else if (backupData.data && Array.isArray(backupData.data)) {
-              vehicleData = mapVehicleData(backupData.data);
+            } else if (typedBackupData.data && Array.isArray(typedBackupData.data)) {
+              vehicleData = mapVehicleData(typedBackupData.data);
               fetchSuccessful = true;
               console.log('Successfully extracted vehicles from data property:', vehicleData.length);
             }
@@ -156,13 +166,16 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
             fetchSuccessful = true;
             console.log('Successfully fetched vehicles from backup endpoint 2:', vehicleData.length);
           } else if (backupData && typeof backupData === 'object' && !Array.isArray(backupData)) {
+            // Explicitly cast to the interface to help TypeScript
+            const typedBackupData = backupData as VehicleApiResponse;
+            
             // Try to extract vehicles from nested structure
-            if (backupData.vehicles && Array.isArray(backupData.vehicles)) {
-              vehicleData = mapVehicleData(backupData.vehicles);
+            if (typedBackupData.vehicles && Array.isArray(typedBackupData.vehicles)) {
+              vehicleData = mapVehicleData(typedBackupData.vehicles);
               fetchSuccessful = true;
               console.log('Successfully extracted vehicles from nested data structure:', vehicleData.length);
-            } else if (backupData.data && Array.isArray(backupData.data)) {
-              vehicleData = mapVehicleData(backupData.data);
+            } else if (typedBackupData.data && Array.isArray(typedBackupData.data)) {
+              vehicleData = mapVehicleData(typedBackupData.data);
               fetchSuccessful = true;
               console.log('Successfully extracted vehicles from data property:', vehicleData.length);
             }
