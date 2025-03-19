@@ -280,9 +280,12 @@ export const bookingAPI = {
   
   updateBookingStatus: async (bookingId: number, status: string): Promise<any> => {
     try {
-      const response = await api.post(`/admin/booking.php`, { id: bookingId, status });
+      // Use POST method instead of PUT to ensure compatibility
+      const response = await api.post(`/admin/booking.php?id=${bookingId}`, { status });
+      console.log("Status update response:", response.data);
       return response.data;
     } catch (error) {
+      console.error("Error updating booking status:", error);
       return handleApiError(error);
     }
   },

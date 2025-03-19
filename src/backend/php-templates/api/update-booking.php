@@ -15,19 +15,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Only allow PUT requests for this endpoint
-if ($_SERVER['REQUEST_METHOD'] !== 'PUT') {
+// Allow both POST and PUT requests for this endpoint
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' && $_SERVER['REQUEST_METHOD'] !== 'PUT') {
     sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
     exit;
 }
 
-// Get booking ID from URL
+// Get booking ID from URL or request body
 $bookingId = null;
 if (isset($_GET['id'])) {
     $bookingId = $_GET['id'];
 } else {
-    sendJsonResponse(['status' => 'error', 'message' => 'Booking ID is required'], 400);
-    exit;
+    // Get data from request body
+    $data = json_decode(file_get_contents('php://input'), true);
+    if (isset($data['id'])) {
+        $bookingId = $data['id'];
+    } else {
+        sendJsonResponse(['status' => 'error', 'message' => 'Booking ID is required'], 400);
+        exit;
+    }
 }
 
 // Get user ID from JWT token

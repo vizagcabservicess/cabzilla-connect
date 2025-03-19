@@ -26,11 +26,14 @@ try {
             'pricePerKm' => floatval($row['price_per_km']),
             'nightHaltCharge' => floatval($row['night_halt_charge']),
             'driverAllowance' => floatval($row['driver_allowance']),
-            'isActive' => true // Default value to prevent type errors
+            'isActive' => (bool)$row['is_active'] // Convert to boolean
         ];
         
         $vehiclePricing[] = $pricing;
     }
+
+    // Log the response for debugging
+    logError("Vehicle pricing response", ['count' => count($vehiclePricing)]);
 
     // Send response as a simple array, not an object with numbered keys
     sendJsonResponse($vehiclePricing);
