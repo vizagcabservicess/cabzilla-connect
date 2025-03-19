@@ -119,13 +119,12 @@ export function VehicleManagement() {
           id: String(vehicle.id || vehicle.vehicleId || `vehicle-${Math.random().toString(36).substring(2, 9)}`),
           name: String(vehicle.name || "Unnamed Vehicle"),
           capacity: Number(vehicle.capacity) || 4,
-          luggageCapacity: Number(vehicle.luggageCapacity || vehicle.luggage_capacity) || 2,
+          luggageCapacity: Number(vehicle.luggageCapacity) || 2,
           ac: vehicle.ac !== undefined ? Boolean(vehicle.ac) : true,
           image: String(vehicle.image || "/cars/sedan.png"),
           amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : [],
           description: String(vehicle.description || ""),
-          isActive: vehicle.isActive !== undefined ? Boolean(vehicle.isActive) : 
-                   (vehicle.is_active !== undefined ? Boolean(vehicle.is_active) : true),
+          isActive: vehicle.isActive !== undefined ? Boolean(vehicle.isActive) : true,
           basePrice: Number(vehicle.basePrice || vehicle.price || 0),
           pricePerKm: Number(vehicle.pricePerKm || 0),
           nightHaltCharge: Number(vehicle.nightHaltCharge || 0),
@@ -163,7 +162,7 @@ export function VehicleManagement() {
       form.setValue("vehicleId", String(selectedVehicle.id || selectedVehicle.vehicleId || ""));
       form.setValue("name", String(selectedVehicle.name || ""));
       form.setValue("capacity", Number(selectedVehicle.capacity) || 4);
-      form.setValue("luggageCapacity", Number(selectedVehicle.luggageCapacity || selectedVehicle.luggage_capacity || 2));
+      form.setValue("luggageCapacity", Number(selectedVehicle.luggageCapacity) || 2);
       form.setValue("ac", Boolean(selectedVehicle.ac));
       form.setValue("image", String(selectedVehicle.image || "/cars/sedan.png"));
       
@@ -173,8 +172,7 @@ export function VehicleManagement() {
       form.setValue("amenities", amenitiesString);
       
       form.setValue("description", String(selectedVehicle.description || ''));
-      form.setValue("isActive", Boolean(selectedVehicle.isActive !== undefined ? selectedVehicle.isActive : 
-                              (selectedVehicle.is_active !== undefined ? selectedVehicle.is_active : true)));
+      form.setValue("isActive", Boolean(selectedVehicle.isActive !== undefined ? selectedVehicle.isActive : true));
       form.setValue("basePrice", Number(selectedVehicle.basePrice || selectedVehicle.price || 0));
       form.setValue("pricePerKm", Number(selectedVehicle.pricePerKm || 0));
       form.setValue("nightHaltCharge", Number(selectedVehicle.nightHaltCharge || 0));
@@ -723,16 +721,16 @@ export function VehicleManagement() {
                           </div>
                         </td>
                         <td className="text-center py-2 px-2">{vehicle.capacity || 0} persons</td>
-                        <td className="text-center py-2 px-2">{vehicle.luggageCapacity || vehicle.luggage_capacity || 0} bags</td>
+                        <td className="text-center py-2 px-2">{vehicle.luggageCapacity || 0} bags</td>
                         <td className="text-right py-2 px-2">₹{(vehicle.basePrice || vehicle.price || 0).toLocaleString('en-IN')}</td>
                         <td className="text-right py-2 px-2">₹{(vehicle.pricePerKm || 0).toLocaleString('en-IN')}</td>
                         <td className="text-center py-2 px-2">
                           <span className={`px-2 py-1 text-xs rounded-full ${
-                            vehicle.isActive || vehicle.is_active 
+                            vehicle.isActive 
                               ? 'bg-green-100 text-green-800' 
                               : 'bg-gray-100 text-gray-800'
                           }`}>
-                            {vehicle.isActive || vehicle.is_active ? 'Active' : 'Inactive'}
+                            {vehicle.isActive ? 'Active' : 'Inactive'}
                           </span>
                         </td>
                         <td className="text-right py-2 px-2">
