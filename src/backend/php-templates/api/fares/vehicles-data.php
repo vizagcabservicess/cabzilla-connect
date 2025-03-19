@@ -31,7 +31,10 @@ try {
         throw new Exception("Database connection failed: " . mysqli_connect_error());
     }
 
-    // Get all vehicle data (including types and pricing), showing only active vehicles
+    // Check if we should include inactive vehicles (admin only)
+    $includeInactive = isset($_GET['includeInactive']) && $_GET['includeInactive'] === 'true';
+    
+    // Get all vehicle data (including types and pricing)
     $query = "
         SELECT 
             vt.*, 
@@ -43,8 +46,7 @@ try {
             vehicle_types vt
         LEFT JOIN 
             vehicle_pricing vp ON vt.vehicle_id = vp.vehicle_type
-        WHERE 
-            vt.is_active = 1
+        " . ($includeInactive ? "" : "WHERE vt.is_active = 1") . "
         ORDER BY 
             vt.name
     ";

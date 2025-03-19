@@ -114,7 +114,8 @@ try {
         }
         
         $vehicleId = $requestData['vehicleId'];
-        $name = isset($requestData['name']) ? $requestData['name'] : '';
+        // Ensure name is not empty
+        $name = isset($requestData['name']) && !empty($requestData['name']) ? $requestData['name'] : $vehicleId;
         $capacity = isset($requestData['capacity']) ? intval($requestData['capacity']) : 4;
         $luggageCapacity = isset($requestData['luggageCapacity']) ? intval($requestData['luggageCapacity']) : 2;
         $ac = isset($requestData['ac']) ? ($requestData['ac'] ? 1 : 0) : 1;
@@ -260,7 +261,8 @@ try {
         }
         
         $vehicleId = $requestData['vehicleId'];
-        $name = $requestData['name'];
+        // Ensure name is not empty
+        $name = isset($requestData['name']) && !empty($requestData['name']) ? $requestData['name'] : $vehicleId;
         $capacity = isset($requestData['capacity']) ? intval($requestData['capacity']) : 4;
         $luggageCapacity = isset($requestData['luggageCapacity']) ? intval($requestData['luggageCapacity']) : 2;
         $ac = isset($requestData['ac']) ? ($requestData['ac'] ? 1 : 0) : 1;

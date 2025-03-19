@@ -114,8 +114,10 @@ try {
 
     // Handle GET requests
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+        // Check if we should include inactive vehicles (admin only)
+        $includeInactive = isset($_GET['includeInactive']) && $_GET['includeInactive'] === 'true';
+        
         // Get all vehicle types with their pricing data with a simpler query
-        // Only show active vehicles in the frontend
         $query = "
             SELECT 
                 vt.vehicle_id, 
@@ -135,8 +137,7 @@ try {
                 vehicle_types vt
             LEFT JOIN 
                 vehicle_pricing vp ON vt.vehicle_id = vp.vehicle_type
-            WHERE 
-                vt.is_active = 1
+            " . ($includeInactive ? "" : "WHERE vt.is_active = 1") . "
             ORDER BY 
                 vt.name
         ";
