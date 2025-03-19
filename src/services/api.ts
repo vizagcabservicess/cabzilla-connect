@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { toast } from 'sonner';
 import { 
@@ -451,25 +452,36 @@ export const fareAPI = {
     try {
       const response = await api.get('/admin/vehicles-update.php');
       
-      // Handle different response formats
-      if (response.data && Array.isArray(response.data)) {
-        return response.data;
-      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
-        return response.data.data;
-      } else if (response.data && response.data.vehicles && Array.isArray(response.data.vehicles)) {
-        return response.data.vehicles;
-      }
-      
-      // If the data is an object with numbered keys, convert it to an array
-      if (response.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
-        const vehiclesArray = Object.values(response.data).filter(item => 
-          item && typeof item === 'object' && !Array.isArray(item)
-        );
-        if (vehiclesArray.length > 0) {
-          return vehiclesArray;
+      // Handle different response formats and ensure we return an array
+      if (response.data) {
+        // If it's already an array, return it
+        if (Array.isArray(response.data)) {
+          return response.data;
+        }
+        
+        // Check various nested properties that might contain the vehicle array
+        if (response.data.data && Array.isArray(response.data.data)) {
+          return response.data.data;
+        }
+        
+        if (response.data.vehicles && Array.isArray(response.data.vehicles)) {
+          return response.data.vehicles;
+        }
+        
+        // If response.data is an object but not an array, try to extract vehicle objects
+        if (typeof response.data === 'object') {
+          // Filter out any potential non-object values or arrays
+          const vehiclesArray = Object.values(response.data).filter(item => 
+            item && typeof item === 'object' && !Array.isArray(item)
+          );
+          
+          if (vehiclesArray.length > 0) {
+            return vehiclesArray;
+          }
         }
       }
       
+      // If we couldn't find an array or extract objects, log a warning and return empty array
       console.warn('Unexpected vehicles response format:', response.data);
       return [];
     } catch (error) {
