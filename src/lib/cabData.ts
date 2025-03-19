@@ -4,6 +4,7 @@ import { fareAPI } from '@/services/api';
 import { toast } from 'sonner';
 import { CabType, HourlyPackage, LocalPackagePriceMatrix, FareCache } from '@/types/cab';
 import { TripType, TripMode } from './tripTypes';
+import { fareService } from '@/services/fareService';
 
 // Track ongoing vehicle pricing fetch operations
 let isFetchingVehiclePricing = false;
@@ -84,41 +85,47 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
     isCurrentlyFetchingCabs = true;
     console.log('Fetching new cab types from API');
     
-    // Remove the timestamp parameter as it's not accepted by the API
-    const vehicleData = await fareAPI.getAllVehicleData();
-    
-    console.log('Retrieved vehicle data:', vehicleData);
-    isCurrentlyFetchingCabs = false;
-    
-    if (Array.isArray(vehicleData) && vehicleData.length > 0) {
-      // Convert API data to CabType format if needed
-      const dynamicCabTypes: CabType[] = vehicleData
-        .filter(vehicle => vehicle.isActive !== false) // Filter out inactive vehicles
-        .map((vehicle) => ({
-          id: vehicle.id || '',
-          name: vehicle.name || '',
-          capacity: vehicle.capacity || 4,
-          luggageCapacity: vehicle.luggageCapacity || 2,
-          price: vehicle.price || 0,
-          pricePerKm: vehicle.pricePerKm || 0,
-          image: vehicle.image || '/cars/sedan.png',
-          amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC'],
-          description: vehicle.description || '',
-          ac: vehicle.ac !== undefined ? vehicle.ac : true,
-          nightHaltCharge: vehicle.nightHaltCharge || 0,
-          driverAllowance: vehicle.driverAllowance || 0,
-          isActive: vehicle.isActive !== undefined ? vehicle.isActive : true
-        }));
+    try {
+      // Use fareService to refresh cab types with cache busting
+      const vehicleData = await fareService.refreshCabTypes();
       
-      // Log active vehicle count
-      console.log(`Retrieved ${dynamicCabTypes.length} active vehicle types`);
+      console.log('Retrieved vehicle data:', vehicleData);
       
-      // Update cache
-      cachedCabTypes = dynamicCabTypes;
-      lastCacheTime = now;
-      
-      return dynamicCabTypes;
+      if (Array.isArray(vehicleData) && vehicleData.length > 0) {
+        // Convert API data to CabType format if needed
+        const dynamicCabTypes: CabType[] = vehicleData
+          .filter(vehicle => vehicle.isActive !== false) // Filter out inactive vehicles
+          .map((vehicle) => ({
+            id: vehicle.id || '',
+            name: vehicle.name || '',
+            capacity: vehicle.capacity || 4,
+            luggageCapacity: vehicle.luggageCapacity || 2,
+            price: vehicle.price || 0,
+            pricePerKm: vehicle.pricePerKm || 0,
+            image: vehicle.image || '/cars/sedan.png',
+            amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC'],
+            description: vehicle.description || '',
+            ac: vehicle.ac !== undefined ? vehicle.ac : true,
+            nightHaltCharge: vehicle.nightHaltCharge || 0,
+            driverAllowance: vehicle.driverAllowance || 0,
+            isActive: vehicle.isActive !== undefined ? vehicle.isActive : true
+          }));
+        
+        // Log active vehicle count
+        console.log(`Retrieved ${dynamicCabTypes.length} active vehicle types`);
+        
+        // Update cache
+        cachedCabTypes = dynamicCabTypes;
+        lastCacheTime = now;
+        
+        isCurrentlyFetchingCabs = false;
+        return dynamicCabTypes;
+      }
+    } catch (error) {
+      console.error('Error fetching vehicle data:', error);
     }
+    
+    isCurrentlyFetchingCabs = false;
     
     // If API returns empty data, use default and log warning
     console.warn('API returned empty vehicle data, using defaults');
@@ -166,6 +173,7 @@ export const reloadCabTypes = async (): Promise<CabType[]> => {
       duration: 2000
     });
     
+    // Use fareService to refresh cab types
     const reloadedTypes = await loadCabTypes();
     
     // Show success message when fares are reloaded
@@ -192,8 +200,8 @@ export const reloadCabTypes = async (): Promise<CabType[]> => {
 
 // Function to clear fare cache
 export const clearFareCache = () => {
-  // This will be implemented in fareCalculationService.ts
-  console.log('Fare cache cleared');
+  // Use the fareService to clear the cache
+  fareService.clearCache();
 };
 
 // Helper function to format price

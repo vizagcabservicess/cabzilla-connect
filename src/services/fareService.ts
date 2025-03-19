@@ -3,6 +3,8 @@ import { CabType, FareCalculationParams } from '@/types/cab';
 import { calculateFare } from '@/lib/fareCalculationService';
 import { differenceInDays } from 'date-fns';
 import { TripType, TripMode } from '@/lib/tripTypes';
+import { fareAPI } from '@/services/api';
+import { toast } from 'sonner';
 
 // In-memory cache for fare calculations
 type FareCache = Map<string, { expire: number, fare: number }>;
@@ -27,6 +29,32 @@ class FareService {
   private generateCacheKey(params: FareCalculationParams): string {
     const { cabType, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate } = params;
     return `${cabType.id}_${distance}_${tripType}_${tripMode}_${hourlyPackage || ''}_${pickupDate?.getTime() || 0}_${returnDate?.getTime() || 0}`;
+  }
+  
+  // Refresh cab types from the backend
+  public async refreshCabTypes(): Promise<CabType[]> {
+    try {
+      // Add cache busting parameter
+      const timestamp = Date.now();
+      const vehicles = await fareAPI.getVehicles({ includeInactive: false, _t: timestamp });
+      
+      if (!Array.isArray(vehicles) || vehicles.length === 0) {
+        console.warn('No vehicles returned from API or invalid response');
+        throw new Error('Failed to load vehicles from server');
+      }
+      
+      console.log(`Successfully loaded ${vehicles.length} vehicles from API`);
+      
+      // Clear fare cache when vehicles are refreshed
+      this.clearCache();
+      
+      // Return the updated cab types
+      return vehicles;
+    } catch (error) {
+      console.error('Error refreshing cab types:', error);
+      toast.error('Failed to refresh vehicle data');
+      throw error;
+    }
   }
   
   // Get fare from cache or calculate new fare
@@ -64,6 +92,12 @@ class FareService {
     returnDate?: Date
   ): Promise<Record<string, number>> {
     const fares: Record<string, number> = {};
+    
+    // First check if we have any cab types
+    if (!cabTypes || cabTypes.length === 0) {
+      console.warn('No cab types provided for fare calculation');
+      return fares;
+    }
     
     const farePromises = cabTypes.map(async (cab) => {
       try {
@@ -126,6 +160,23 @@ class FareService {
   public clearCache(): void {
     this.fareCache.clear();
     console.log('Fare cache cleared');
+  }
+  
+  // Update vehicle pricing in the backend
+  public async updateVehiclePricing(vehicleData: any): Promise<boolean> {
+    try {
+      // Send updated pricing to backend
+      await fareAPI.updateVehicle(vehicleData);
+      
+      // Clear cache to ensure fresh data on next fetch
+      this.clearCache();
+      
+      // Return success
+      return true;
+    } catch (error) {
+      console.error('Error updating vehicle pricing:', error);
+      return false;
+    }
   }
 }
 

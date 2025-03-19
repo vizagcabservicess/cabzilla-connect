@@ -32,6 +32,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { fareAPI } from '@/services/api';
 import { reloadCabTypes } from '@/lib/cabData';
+import { fareService } from '@/services/fareService';
 
 const vehicleFormSchema = z.object({
   vehicleId: z.string().min(1, { message: "Vehicle ID is required" }),
@@ -50,22 +51,26 @@ const vehicleFormSchema = z.object({
 });
 
 export type VehicleData = {
-  id: number;
-  vehicle_id: string;
+  id: string;
+  vehicle_id?: string;
   name: string;
   capacity: number;
-  luggage_capacity: number;
+  luggage_capacity?: number;
+  luggageCapacity?: number;
   ac: boolean;
   image: string;
   amenities: string[] | null;
   description: string | null;
-  is_active: boolean;
+  is_active?: boolean;
+  isActive?: boolean;
   basePrice?: number;
+  price?: number;
   pricePerKm?: number;
   nightHaltCharge?: number;
   driverAllowance?: number;
   created_at?: string;
   updated_at?: string;
+  vehicleId?: string;
 };
 
 export function VehicleManagement() {
@@ -104,11 +109,45 @@ export function VehicleManagement() {
       setIsRefreshing(true);
       setError(null);
       
-      console.log("Fetching vehicles data...");
-      const data = await fareAPI.getVehicles();
-      console.log("Fetched vehicles:", data);
+      // Add cache busting to ensure fresh data
+      const timestamp = Date.now();
+      console.log("Fetching vehicles data with timestamp:", timestamp);
+      const response = await fareAPI.getVehicles({ includeInactive: true, _t: timestamp });
       
-      setVehicles(data);
+      let vehicleData: VehicleData[] = [];
+      
+      // Handle different response formats (array or object with vehicles property)
+      if (Array.isArray(response)) {
+        vehicleData = response;
+      } else if (response && Array.isArray(response.vehicles)) {
+        vehicleData = response.vehicles;
+      } else {
+        console.warn("Unexpected vehicles response format:", response);
+        throw new Error("Invalid response format from API");
+      }
+      
+      console.log("Fetched vehicles:", vehicleData);
+      
+      // Normalize the data format
+      const normalizedVehicles = vehicleData.map(vehicle => ({
+        id: vehicle.id || vehicle.vehicleId || "",
+        name: vehicle.name || "",
+        capacity: vehicle.capacity || 4,
+        luggageCapacity: vehicle.luggageCapacity || vehicle.luggage_capacity || 2,
+        ac: vehicle.ac !== undefined ? vehicle.ac : true,
+        image: vehicle.image || "/cars/sedan.png",
+        amenities: vehicle.amenities || [],
+        description: vehicle.description || "",
+        isActive: vehicle.isActive !== undefined ? vehicle.isActive : 
+                (vehicle.is_active !== undefined ? vehicle.is_active : true),
+        basePrice: vehicle.basePrice || vehicle.price || 0,
+        pricePerKm: vehicle.pricePerKm || 0,
+        nightHaltCharge: vehicle.nightHaltCharge || 0,
+        driverAllowance: vehicle.driverAllowance || 0,
+        vehicleId: vehicle.id || vehicle.vehicleId || ""
+      }));
+      
+      setVehicles(normalizedVehicles);
       toast.success("Vehicles data refreshed");
     } catch (error) {
       console.error("Error fetching vehicles:", error);
@@ -120,19 +159,20 @@ export function VehicleManagement() {
   };
   
   const handleVehicleSelect = (vehicleId: string) => {
-    const selectedVehicle = vehicles.find(v => v.vehicle_id === vehicleId);
+    const selectedVehicle = vehicles.find(v => v.id === vehicleId || v.vehicleId === vehicleId);
     
     if (selectedVehicle) {
-      form.setValue("vehicleId", selectedVehicle.vehicle_id);
+      form.setValue("vehicleId", selectedVehicle.id || selectedVehicle.vehicleId || "");
       form.setValue("name", selectedVehicle.name);
       form.setValue("capacity", selectedVehicle.capacity);
-      form.setValue("luggageCapacity", selectedVehicle.luggage_capacity);
+      form.setValue("luggageCapacity", selectedVehicle.luggageCapacity || selectedVehicle.luggage_capacity || 2);
       form.setValue("ac", selectedVehicle.ac);
       form.setValue("image", selectedVehicle.image);
-      form.setValue("amenities", selectedVehicle.amenities ? selectedVehicle.amenities.join(', ') : '');
+      form.setValue("amenities", Array.isArray(selectedVehicle.amenities) ? selectedVehicle.amenities.join(', ') : '');
       form.setValue("description", selectedVehicle.description || '');
-      form.setValue("isActive", selectedVehicle.is_active);
-      form.setValue("basePrice", selectedVehicle.basePrice || 0);
+      form.setValue("isActive", selectedVehicle.isActive !== undefined ? selectedVehicle.isActive : 
+                              (selectedVehicle.is_active !== undefined ? selectedVehicle.is_active : true));
+      form.setValue("basePrice", selectedVehicle.basePrice || selectedVehicle.price || 0);
       form.setValue("pricePerKm", selectedVehicle.pricePerKm || 0);
       form.setValue("nightHaltCharge", selectedVehicle.nightHaltCharge || 0);
       form.setValue("driverAllowance", selectedVehicle.driverAllowance || 0);
@@ -179,6 +219,9 @@ export function VehicleManagement() {
       sessionStorage.removeItem('tourFares');
       sessionStorage.removeItem('calculatedFares');
       
+      // Clear fare service cache
+      fareService.clearCache();
+      
       await reloadCabTypes();
       
       await fareAPI.deleteVehicle(vehicleId);
@@ -218,7 +261,8 @@ export function VehicleManagement() {
         basePrice: values.basePrice,
         pricePerKm: values.pricePerKm,
         nightHaltCharge: values.nightHaltCharge,
-        driverAllowance: values.driverAllowance
+        driverAllowance: values.driverAllowance,
+        id: values.vehicleId // Ensure id is set for consistent mapping
       };
       
       console.log(`${isAddingNew ? 'Adding' : 'Updating'} vehicle:`, vehicleData);
@@ -230,16 +274,22 @@ export function VehicleManagement() {
       sessionStorage.removeItem('tourFares');
       sessionStorage.removeItem('calculatedFares');
       
-      await reloadCabTypes();
+      // Clear the fare service cache
+      fareService.clearCache();
+      
+      // Update cab pricing using the fare service
+      await fareService.updateVehiclePricing(vehicleData);
       
       if (isAddingNew) {
-        await fareAPI.addVehicle(vehicleData);
         toast.success("New vehicle added successfully");
       } else {
-        await fareAPI.updateVehicle(vehicleData);
         toast.success("Vehicle updated successfully");
       }
       
+      // Force reload cab types
+      await reloadCabTypes();
+      
+      // Fetch fresh vehicle data
       await fetchVehicles();
       
       if (isAddingNew) {
@@ -336,7 +386,10 @@ export function VehicleManagement() {
                           </FormControl>
                           <SelectContent>
                             {vehicles.map((vehicle) => (
-                              <SelectItem key={vehicle.vehicle_id} value={vehicle.vehicle_id}>
+                              <SelectItem 
+                                key={vehicle.id || vehicle.vehicleId} 
+                                value={vehicle.id || vehicle.vehicleId || ""}
+                              >
                                 {vehicle.name}
                               </SelectItem>
                             ))}
@@ -638,30 +691,34 @@ export function VehicleManagement() {
                   </thead>
                   <tbody>
                     {vehicles.map((vehicle) => (
-                      <tr key={vehicle.vehicle_id} className="border-b hover:bg-gray-50">
+                      <tr key={vehicle.id || vehicle.vehicleId} className="border-b hover:bg-gray-50">
                         <td className="py-2 px-2">
                           <div className="flex items-center gap-2">
                             <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center overflow-hidden">
                               <Car className="h-4 w-4 text-gray-500" />
                             </div>
-                            {/* Use name as a string, default to vehicle_id if missing */}
-                            {vehicle.name || vehicle.vehicle_id}
+                            {/* Use name as a string, default to id if missing */}
+                            {vehicle.name || vehicle.id || vehicle.vehicleId}
                           </div>
                         </td>
                         <td className="text-center py-2 px-2">{vehicle.capacity} persons</td>
-                        <td className="text-center py-2 px-2">{vehicle.luggage_capacity} bags</td>
-                        <td className="text-right py-2 px-2">₹{(vehicle.basePrice || 0).toLocaleString('en-IN')}</td>
+                        <td className="text-center py-2 px-2">{vehicle.luggageCapacity || vehicle.luggage_capacity || 0} bags</td>
+                        <td className="text-right py-2 px-2">₹{(vehicle.basePrice || vehicle.price || 0).toLocaleString('en-IN')}</td>
                         <td className="text-right py-2 px-2">₹{(vehicle.pricePerKm || 0).toLocaleString('en-IN')}</td>
                         <td className="text-center py-2 px-2">
-                          <span className={`px-2 py-1 text-xs rounded-full ${vehicle.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-                            {vehicle.is_active ? 'Active' : 'Inactive'}
+                          <span className={`px-2 py-1 text-xs rounded-full ${
+                            vehicle.isActive || vehicle.is_active 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {vehicle.isActive || vehicle.is_active ? 'Active' : 'Inactive'}
                           </span>
                         </td>
                         <td className="text-right py-2 px-2">
                           <Button 
                             variant="ghost" 
                             size="sm"
-                            onClick={() => handleVehicleSelect(vehicle.vehicle_id)}
+                            onClick={() => handleVehicleSelect(vehicle.id || vehicle.vehicleId || "")}
                             className="text-blue-600 hover:text-blue-800"
                           >
                             <Edit className="h-4 w-4" />
@@ -669,7 +726,7 @@ export function VehicleManagement() {
                           <Button 
                             variant="ghost" 
                             size="sm"
-                            onClick={() => handleDeleteVehicle(vehicle.vehicle_id)}
+                            onClick={() => handleDeleteVehicle(vehicle.id || vehicle.vehicleId || "")}
                             className="text-red-600 hover:text-red-800"
                           >
                             <Trash2 className="h-4 w-4" />

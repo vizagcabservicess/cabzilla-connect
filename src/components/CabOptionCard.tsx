@@ -29,6 +29,11 @@ export function CabOptionCard({
     setExpandedDetails(!expandedDetails);
   };
 
+  const handleCardClick = () => {
+    console.log('Card clicked, selecting cab:', cab.name);
+    onSelect(cab);
+  };
+
   return (
     <div 
       className={cn(
@@ -37,11 +42,12 @@ export function CabOptionCard({
           ? "border-blue-500 shadow-md bg-blue-50 transform scale-[1.02]" 
           : "border-gray-200 hover:border-gray-300 bg-white"
       )}
+      onClick={handleCardClick}
+      role="button"
+      tabIndex={0}
+      aria-pressed={isSelected}
     >
-      <div 
-        className="p-4 cursor-pointer relative"
-        onClick={() => onSelect(cab)}
-      >
+      <div className="p-4 cursor-pointer relative">
         {isSelected && (
           <div className="absolute top-2 right-2 bg-blue-500 text-white rounded-full p-1">
             <Check size={16} />
@@ -104,8 +110,13 @@ export function CabOptionCard({
             </div>
           )}
           {cab.amenities && cab.amenities.length > 0 && (
-            <div className="flex items-center text-xs bg-gray-100 px-2 py-1 rounded" 
-                 onClick={toggleExpand}>
+            <div 
+              className="flex items-center text-xs bg-gray-100 px-2 py-1 rounded" 
+              onClick={(e) => {
+                e.stopPropagation();  // Prevent card selection when clicking this button
+                toggleExpand(e);
+              }}
+            >
               <Info size={12} className="mr-1" />
               {expandedDetails ? 'Hide details' : 'More details'}
             </div>
