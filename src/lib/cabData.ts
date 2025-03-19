@@ -1,4 +1,3 @@
-
 import { differenceInCalendarDays } from 'date-fns';
 import { fareAPI } from '@/services/api';
 import { toast } from 'sonner';
@@ -110,7 +109,7 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
           name: vehicle.name || '',
           capacity: vehicle.capacity || 4,
           luggageCapacity: vehicle.luggageCapacity || 2,
-          price: vehicle.basePrice || 0, // Use basePrice as price for consistency
+          price: vehicle.price || 0,
           pricePerKm: vehicle.pricePerKm || 0,
           image: vehicle.image || '/cars/sedan.png',
           amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC'],

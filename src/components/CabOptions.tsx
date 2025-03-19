@@ -1,7 +1,6 @@
-
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { CabType, formatPrice, TripType, TripMode, getLocalPackagePrice, loadCabTypes, reloadCabTypes } from '@/lib/cabData';
-import { Users, Briefcase, Tag, Info, Check, RefreshCw } from 'lucide-react';
+import { Users, Briefcase, Info, Check, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { differenceInDays } from 'date-fns';
 import { calculateAirportFare } from '@/lib/locationData';
@@ -42,13 +41,10 @@ export function CabOptions({
   const [isCalculatingFares, setIsCalculatingFares] = useState(false);
   const [refreshSuccessful, setRefreshSuccessful] = useState<boolean | null>(null);
 
-  // Create a unique identifier for the current trip configuration
   const currentTripIdentifier = `${tripType}-${tripMode}-${hourlyPackage || 'none'}-${distance}`;
   
-  // Cache calculation results for longer distances
   const calculationCache = useMemo(() => new Map<string, number>(), []);
   
-  // Load dynamic cab types on component mount
   useEffect(() => {
     async function fetchCabTypes() {
       setIsLoadingCabs(true);
@@ -74,15 +70,12 @@ export function CabOptions({
     fetchCabTypes();
   }, [initialCabTypes]);
 
-  // Function to manually refresh cab types
   const refreshCabTypes = useCallback(async () => {
     setIsRefreshingCabs(true);
     try {
-      // Force cache busting by adding a timestamp
       const timestamp = Date.now();
       console.log(`Refreshing cab types with timestamp: ${timestamp}`);
       
-      // Clear any cached data in session/local storage
       sessionStorage.removeItem('cabFares');
       sessionStorage.removeItem('calculatedFares');
       localStorage.removeItem('cabTypes');
@@ -95,7 +88,6 @@ export function CabOptions({
         toast.success('Vehicle data refreshed successfully');
         setRefreshSuccessful(true);
         
-        // Force recalculation of fares
         setLastCalculationTimestamp(Date.now());
       } else {
         console.warn('API returned empty vehicle data on refresh');
@@ -111,28 +103,22 @@ export function CabOptions({
     }
   }, []);
 
-  // Force recalculation when trip type changes
   useEffect(() => {
-    // Clear the fares when trip type or mode changes
     setCabFares({});
     setSelectedCabId(null);
     
     if (selectedCab) {
-      onSelectCab(null as any); // Reset the selected cab
+      onSelectCab(null as any);
     }
     
-    // Clear all cached fare data
     sessionStorage.removeItem('cabFares');
     sessionStorage.removeItem('selectedCab');
     sessionStorage.removeItem('calculatedFares');
     
-    // Set a new timestamp to force recalculation
     setLastCalculationTimestamp(Date.now());
   }, [tripType, tripMode, hourlyPackage, onSelectCab, selectedCab]);
 
-  // Reset cab selection when key parameters change
   useEffect(() => {
-    // Check if trip type, mode or package has changed by comparing trip identifiers
     if (lastTripIdentifier && lastTripIdentifier !== currentTripIdentifier) {
       console.log('Trip parameters changed, resetting selections and fares');
       console.log('Previous:', lastTripIdentifier);
@@ -142,47 +128,33 @@ export function CabOptions({
       setCabFares({});
       
       if (selectedCab) {
-        onSelectCab(null as any); // Reset the selected cab
+        onSelectCab(null as any);
       }
       
-      // Clear any fare-related session data
       sessionStorage.removeItem('cabFares');
       sessionStorage.removeItem('selectedCab');
       sessionStorage.removeItem('calculatedFares');
     }
     
-    // Update the last trip identifier
     setLastTripIdentifier(currentTripIdentifier);
   }, [tripType, tripMode, hourlyPackage, distance, currentTripIdentifier, lastTripIdentifier, onSelectCab, selectedCab]);
 
-  // Optimize fare calculation for large distances
   const calculateCabFare = useCallback(async (cab: CabType): Promise<number> => {
-    // This is a memoized wrapper around the async calculateFare function
     try {
-      // Create a cache key based on the cab type and trip parameters
       const cacheKey = `${cab.id}-${tripType}-${tripMode}-${hourlyPackage || 'none'}-${distance}-${pickupDate?.toISOString() || 'nodate'}-${returnDate?.toISOString() || 'nodate'}`;
       
-      // Check if result is already in cache
       if (calculationCache.has(cacheKey)) {
         return calculationCache.get(cacheKey) || 0;
       }
       
-      // Calculate appropriate fare based on trip type
       let fare = 0;
       
       if (tripType === 'airport') {
         fare = calculateAirportFare(cab.name, distance);
-      }
-      else if (tripType === 'local' && hourlyPackage) {
-        // Get base package price for local rental
+      } else if (tripType === 'local' && hourlyPackage) {
         const baseFare = getLocalPackagePrice(hourlyPackage, cab.name);
-        
-        // For local packages, we shouldn't be calculating extra kilometers
-        // as the package already includes a set number of kilometers
         const packageKm = hourlyPackage === '8hrs-80km' ? 80 : 100;
         
-        // Only add extra km charges if the distance is manually set higher than package km
-        // AND it's not an unreasonably high value (to prevent calculation errors)
         if (distance > packageKm && distance < 300) {
           const extraKm = distance - packageKm;
           const totalFare = baseFare + (extraKm * cab.pricePerKm);
@@ -191,9 +163,8 @@ export function CabOptions({
         } else {
           fare = baseFare;
         }
-      }
-      else if (tripType === 'outstation') {
-        let baseRate = cab.basePrice || 0;
+      } else if (tripType === 'outstation') {
+        let baseRate = cab.price || 0;
         let perKmRate = cab.pricePerKm || 0;
         let nightHaltCharge = cab.nightHaltCharge || 0;
         let driverAllowance = cab.driverAllowance || 250;
@@ -205,22 +176,18 @@ export function CabOptions({
           driverAllowance
         });
         
-        // If all pricing info is already in cab object, use it directly
         if (baseRate > 0 && perKmRate > 0) {
           if (tripMode === "one-way") {
-            // One-way calculation - double the distance to account for driver return
             const effectiveDistance = distance * 2;
             const allocatedKm = 300;
             const totalBaseFare = baseRate;
             let totalDistanceFare = 0;
             
-            // Calculate extra kilometers beyond the base 300km
             if (effectiveDistance > allocatedKm) {
               const extraKm = effectiveDistance - allocatedKm;
               totalDistanceFare = extraKm * perKmRate;
             }
             
-            // Add driver allowance
             const totalFare = totalBaseFare + totalDistanceFare + driverAllowance;
             fare = Math.ceil(totalFare / 10) * 10;
             
@@ -232,9 +199,8 @@ export function CabOptions({
               calculatedFare: fare
             });
           } else {
-            // Round trip calculation
             let days = returnDate ? Math.max(1, differenceInDays(returnDate, pickupDate || new Date()) + 1) : 1;
-            const allocatedKm = 300; // per day
+            const allocatedKm = 300;
             const totalAllocatedKm = days * allocatedKm;
             
             let effectiveDistance = distance * 2;
@@ -242,7 +208,6 @@ export function CabOptions({
             let totalBaseFare = days * baseRate;
             let totalDistanceFare = 0;
             
-            // Calculate extra kilometers beyond the allocated km for all days
             if (effectiveDistance > totalAllocatedKm) {
               const extraKm = effectiveDistance - totalAllocatedKm;
               totalDistanceFare = extraKm * perKmRate;
@@ -264,7 +229,6 @@ export function CabOptions({
             });
           }
         } else {
-          // If pricing info is missing, use defaults by name
           console.warn(`Missing pricing info for ${cab.name}, using defaults`);
           
           switch (cab.name.toLowerCase()) {
@@ -297,7 +261,6 @@ export function CabOptions({
             driverAllowance
           });
           
-          // Recalculate with default values
           if (tripMode === "one-way") {
             const effectiveDistance = distance * 2;
             const allocatedKm = 300;
@@ -332,11 +295,9 @@ export function CabOptions({
           }
         }
       } else {
-        // Default fallback
         fare = Math.ceil((distance * (cab.pricePerKm || 20)) / 10) * 10;
       }
       
-      // Store result in cache
       calculationCache.set(cacheKey, fare);
       console.log(`Calculated fare for ${cab.name}: ₹${fare}`);
       
@@ -347,7 +308,6 @@ export function CabOptions({
     }
   }, [tripType, tripMode, hourlyPackage, distance, pickupDate, returnDate, calculationCache]);
 
-  // Calculate fares for all cab types whenever relevant parameters change
   useEffect(() => {
     if (distance > 0 && !isCalculatingFares && cabTypes.length > 0) {
       console.log(`Calculating fares for ${tripType} trip, ${distance}km, package: ${hourlyPackage || 'none'}`);
@@ -358,7 +318,6 @@ export function CabOptions({
         setIsCalculatingFares(true);
         
         try {
-          // If distance is very large, show a toast notification
           if (distance > 500) {
             toast.info('Calculating fares for long distance...', {
               duration: 3000
@@ -367,13 +326,10 @@ export function CabOptions({
           
           console.log(`Starting fare calculation for ${cabTypes.length} cab types`);
           
-          // Process cabs in batches for large distances
           if (distance > 500) {
-            // For large distances, calculate one by one
             for (const cab of cabTypes) {
               try {
                 newFares[cab.id] = await calculateCabFare(cab);
-                // Update fares as they're calculated
                 setCabFares(prev => ({...prev, [cab.id]: newFares[cab.id]}));
               } catch (error) {
                 console.error(`Error calculating fare for ${cab.name}:`, error);
@@ -381,7 +337,6 @@ export function CabOptions({
               }
             }
           } else {
-            // For normal distances, calculate all in parallel
             await Promise.all(cabTypes.map(async (cab) => {
               try {
                 newFares[cab.id] = await calculateCabFare(cab);
@@ -391,13 +346,11 @@ export function CabOptions({
               }
             }));
             
-            // Set all fares at once
             setCabFares(newFares);
           }
           
           console.log('All fares calculated:', newFares);
           
-          // Store the trip type with the fares to verify later
           const fareData = {
             timestamp: Date.now(),
             tripType,
@@ -422,7 +375,6 @@ export function CabOptions({
     }
   }, [distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate, cabTypes, lastCalculationTimestamp, calculateCabFare, isCalculatingFares]);
 
-  // Update selectedCabId when selectedCab changes from parent
   useEffect(() => {
     if (selectedCab) {
       setSelectedCabId(selectedCab.id);
@@ -437,7 +389,6 @@ export function CabOptions({
     setSelectedCabId(cab.id);
     onSelectCab(cab);
     
-    // Store with trip type information to validate later
     const cabData = {
       cab: cab,
       tripType: tripType,
@@ -528,7 +479,7 @@ export function CabOptions({
               fareDetails = packageInfo;
             } else if (tripType === 'outstation') {
               const totalDistance = distance;
-              const effectiveDistance = distance * 2; // Driver return distance
+              const effectiveDistance = distance * 2;
               const allocatedKm = 300;
               const extraKm = tripMode === 'one-way' 
                 ? Math.max(0, effectiveDistance - allocatedKm)
