@@ -20,6 +20,8 @@ RewriteRule ^fares/vehicles$ fares/vehicles.php [L,QSA]
 RewriteRule ^admin/fares/update$ admin/fares-update.php [QSA,L]
 RewriteRule ^admin/vehicle-pricing$ admin/vehicle-pricing.php [QSA,L]
 RewriteRule ^admin/vehicles-update$ admin/vehicles-update.php [QSA,L]
+RewriteRule ^admin/drivers$ admin/drivers.php [QSA,L]
+RewriteRule ^admin/drivers/([0-9]+)$ admin/drivers.php?id=$1 [QSA,L]
 RewriteRule ^receipt/([0-9]+)$ receipt.php?id=$1 [QSA,L]
 
 # Debug header to help troubleshoot routing

@@ -18,7 +18,7 @@ try {
 
     $vehiclePricing = [];
     while ($row = $result->fetch_assoc()) {
-        // Convert numeric strings to actual numbers
+        // Convert numeric strings to actual numbers and ensure all fields are typed correctly
         $pricing = [
             'id' => intval($row['id']),
             'vehicleType' => $row['vehicle_type'],
