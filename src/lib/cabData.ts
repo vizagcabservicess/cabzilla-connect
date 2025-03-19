@@ -58,11 +58,11 @@ export const cabTypes: CabType[] = [
   }
 ];
 
-// Cache to store loaded cab types with longer expiration time for better performance
+// Cache to store loaded cab types
 let cachedCabTypes: CabType[] | null = null;
 let lastCacheTime = 0;
-// Increased cache duration to 5 minutes to reduce API calls
-const CACHE_DURATION = 5 * 60 * 1000; 
+// Set to 2 minutes for better reliability
+const CACHE_DURATION = 2 * 60 * 1000; 
 let isCurrentlyFetchingCabs = false; // Flag to prevent concurrent fetch requests
 
 // Function to load cab types dynamically
@@ -71,7 +71,7 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
     const now = Date.now();
     
     // Use cache if available and not expired
-    if (cachedCabTypes && now - lastCacheTime < CACHE_DURATION) {
+    if (cachedCabTypes && cachedCabTypes.length > 0 && now - lastCacheTime < CACHE_DURATION) {
       console.log('Using cached cab types, cache age:', (now - lastCacheTime) / 1000, 'seconds');
       return cachedCabTypes;
     }
@@ -86,40 +86,57 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
     console.log('Fetching new cab types from API');
     
     try {
-      // Use fareService to refresh cab types with cache busting
-      const vehicleData = await fareService.refreshCabTypes();
+      // Try both endpoints for more reliable data fetching
+      let vehicleData: CabType[] = [];
       
-      console.log('Retrieved vehicle data:', vehicleData);
+      try {
+        // Try primary endpoint first
+        vehicleData = await fareService.refreshCabTypes();
+      } catch (primaryError) {
+        console.error('Primary vehicle API call failed:', primaryError);
+        
+        // Try backup endpoint
+        try {
+          const backupData = await fareAPI.getVehiclesData();
+          if (Array.isArray(backupData) && backupData.length > 0) {
+            vehicleData = backupData.map(v => ({
+              id: v.id || v.vehicleId || '',
+              name: v.name || '',
+              capacity: v.capacity || 4,
+              luggageCapacity: v.luggageCapacity || v.luggage_capacity || 2,
+              price: v.basePrice || v.price || v.base_price || 0,
+              pricePerKm: v.pricePerKm || v.price_per_km || 0,
+              image: v.image || '/cars/sedan.png',
+              amenities: Array.isArray(v.amenities) ? v.amenities : ['AC'],
+              description: v.description || '',
+              ac: v.ac !== undefined ? v.ac : true,
+              nightHaltCharge: v.nightHaltCharge || v.night_halt_charge || 0,
+              driverAllowance: v.driverAllowance || v.driver_allowance || 0,
+              isActive: v.isActive !== undefined ? v.isActive : 
+                         (v.is_active !== undefined ? v.is_active : true)
+            }));
+          }
+        } catch (backupError) {
+          console.error('Backup vehicle API call failed too:', backupError);
+          throw primaryError; // Re-throw primary error
+        }
+      }
       
       if (Array.isArray(vehicleData) && vehicleData.length > 0) {
-        // Convert API data to CabType format if needed
-        const dynamicCabTypes: CabType[] = vehicleData
-          .filter(vehicle => vehicle.isActive !== false) // Filter out inactive vehicles
-          .map((vehicle) => ({
-            id: vehicle.id || '',
-            name: vehicle.name || '',
-            capacity: vehicle.capacity || 4,
-            luggageCapacity: vehicle.luggageCapacity || 2,
-            price: vehicle.price || 0,
-            pricePerKm: vehicle.pricePerKm || 0,
-            image: vehicle.image || '/cars/sedan.png',
-            amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC'],
-            description: vehicle.description || '',
-            ac: vehicle.ac !== undefined ? vehicle.ac : true,
-            nightHaltCharge: vehicle.nightHaltCharge || 0,
-            driverAllowance: vehicle.driverAllowance || 0,
-            isActive: vehicle.isActive !== undefined ? vehicle.isActive : true
-          }));
+        // Filter out any invalid entries
+        const validVehicles = vehicleData.filter(v => v && v.id && (v.isActive !== false));
         
         // Log active vehicle count
-        console.log(`Retrieved ${dynamicCabTypes.length} active vehicle types`);
+        console.log(`Retrieved ${validVehicles.length} active vehicle types`);
         
-        // Update cache
-        cachedCabTypes = dynamicCabTypes;
-        lastCacheTime = now;
-        
-        isCurrentlyFetchingCabs = false;
-        return dynamicCabTypes;
+        if (validVehicles.length > 0) {
+          // Update cache
+          cachedCabTypes = validVehicles;
+          lastCacheTime = now;
+          
+          isCurrentlyFetchingCabs = false;
+          return validVehicles;
+        }
       }
     } catch (error) {
       console.error('Error fetching vehicle data:', error);

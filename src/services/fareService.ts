@@ -42,10 +42,20 @@ class FareService {
   public async refreshCabTypes(): Promise<CabType[]> {
     try {
       console.log("Refreshing cab types from the API");
-      const vehicles = await fareAPI.getVehicles() as ApiResponse | any[];
+      
+      // First try to get data from vehicles.php endpoint
+      let vehiclesResponse;
+      try {
+        vehiclesResponse = await fareAPI.getVehicles() as ApiResponse | any[];
+        console.log("Raw vehicles API response:", typeof vehiclesResponse === 'string' ? vehiclesResponse.substring(0, 200) + '...' : vehiclesResponse);
+      } catch (error) {
+        console.error("Error fetching from vehicles.php, trying vehicles-data.php:", error);
+        // If first endpoint fails, try the vehicles-data endpoint as backup
+        vehiclesResponse = await fareAPI.getVehiclesData() as any[] | ApiResponse;
+      }
       
       // Add extra type safety to prevent errors
-      if (!vehicles) {
+      if (!vehiclesResponse) {
         console.warn('No vehicles returned from API');
         throw new Error('Failed to load vehicles from server');
       }
@@ -53,17 +63,17 @@ class FareService {
       // Ensure we have an array of vehicles
       let vehicleArray: any[] = [];
       
-      if (Array.isArray(vehicles)) {
-        vehicleArray = vehicles;
-      } else if (typeof vehicles === 'object') {
+      if (Array.isArray(vehiclesResponse)) {
+        vehicleArray = vehiclesResponse;
+      } else if (typeof vehiclesResponse === 'object') {
         // Try to extract vehicles from various properties
-        if (vehicles.vehicles && Array.isArray(vehicles.vehicles)) {
-          vehicleArray = vehicles.vehicles;
-        } else if (vehicles.data && Array.isArray(vehicles.data)) {
-          vehicleArray = vehicles.data;
+        if (vehiclesResponse.vehicles && Array.isArray(vehiclesResponse.vehicles)) {
+          vehicleArray = vehiclesResponse.vehicles;
+        } else if (vehiclesResponse.data && Array.isArray(vehiclesResponse.data)) {
+          vehicleArray = vehiclesResponse.data;
         } else {
           // Try to extract vehicle objects from the response
-          const extractedVehicles = Object.values(vehicles).filter(
+          const extractedVehicles = Object.values(vehiclesResponse).filter(
             val => val && typeof val === 'object' && !Array.isArray(val)
           );
           
@@ -86,21 +96,22 @@ class FareService {
       // Map the vehicles to CabType format
       const cabTypes: CabType[] = vehicleArray
         .map(vehicle => ({
-          id: vehicle.id || vehicle.vehicleId || '',
+          id: vehicle.id || vehicle.vehicleId || vehicle.vehicle_id || '',
           name: vehicle.name || '',
           capacity: vehicle.capacity || 4,
           luggageCapacity: vehicle.luggageCapacity || vehicle.luggage_capacity || 2,
-          price: vehicle.basePrice || vehicle.price || 0,
-          pricePerKm: vehicle.pricePerKm || 0,
+          price: vehicle.basePrice || vehicle.price || vehicle.base_price || 0,
+          pricePerKm: vehicle.pricePerKm || vehicle.price_per_km || 0,
           image: vehicle.image || '/cars/sedan.png',
           amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC'],
           description: vehicle.description || '',
           ac: vehicle.ac !== undefined ? vehicle.ac : true,
-          nightHaltCharge: vehicle.nightHaltCharge || 0,
-          driverAllowance: vehicle.driverAllowance || 0,
-          isActive: vehicle.isActive !== undefined ? vehicle.isActive : true
+          nightHaltCharge: vehicle.nightHaltCharge || vehicle.night_halt_charge || 0,
+          driverAllowance: vehicle.driverAllowance || vehicle.driver_allowance || 0,
+          isActive: vehicle.isActive !== undefined ? vehicle.isActive : 
+                    (vehicle.is_active !== undefined ? vehicle.is_active : true)
         }))
-        .filter(cab => cab.isActive); // Only return active cabs
+        .filter(cab => cab.isActive && cab.id); // Only return active cabs with valid IDs
       
       return cabTypes;
     } catch (error) {
@@ -219,11 +230,49 @@ class FareService {
   public async updateVehiclePricing(vehicleData: any): Promise<boolean> {
     try {
       console.log("Updating vehicle pricing:", vehicleData);
-      // Send updated pricing to backend
-      await fareAPI.updateVehicle(vehicleData);
+      
+      // Ensure all required fields are present
+      const requiredFields = ['vehicleId', 'name', 'basePrice', 'pricePerKm'];
+      const missingFields = requiredFields.filter(field => !vehicleData[field]);
+      
+      if (missingFields.length > 0) {
+        console.error(`Missing required fields: ${missingFields.join(', ')}`);
+        toast.error(`Cannot update: Missing ${missingFields.join(', ')}`);
+        return false;
+      }
+      
+      // Create a sanitized copy of the vehicle data
+      const sanitizedData = {
+        vehicleId: vehicleData.vehicleId || vehicleData.id,
+        name: vehicleData.name,
+        capacity: parseInt(vehicleData.capacity) || 4,
+        luggageCapacity: parseInt(vehicleData.luggageCapacity) || 2,
+        ac: vehicleData.ac !== undefined ? vehicleData.ac : true,
+        image: vehicleData.image || '/cars/sedan.png',
+        amenities: Array.isArray(vehicleData.amenities) ? vehicleData.amenities : [],
+        description: vehicleData.description || '',
+        isActive: vehicleData.isActive !== undefined ? vehicleData.isActive : true,
+        basePrice: parseFloat(vehicleData.basePrice) || 0,
+        pricePerKm: parseFloat(vehicleData.pricePerKm) || 0,
+        nightHaltCharge: parseFloat(vehicleData.nightHaltCharge) || 0,
+        driverAllowance: parseFloat(vehicleData.driverAllowance) || 0,
+      };
+      
+      // Try using both endpoints for better compatibility
+      try {
+        await fareAPI.updateVehicle(sanitizedData);
+      } catch (error) {
+        console.error("Error with primary endpoint, trying admin endpoint:", error);
+        await fareAPI.adminUpdateVehicle(sanitizedData);
+      }
       
       // Clear cache to ensure fresh data on next fetch
       this.clearCache();
+      
+      // Also clear cached data in localStorage/sessionStorage
+      localStorage.removeItem('cabFares');
+      sessionStorage.removeItem('cabFares');
+      sessionStorage.removeItem('calculatedFares');
       
       // Return success
       return true;
