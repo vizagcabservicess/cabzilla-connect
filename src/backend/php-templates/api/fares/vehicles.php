@@ -1,3 +1,4 @@
+
 <?php
 require_once '../../config.php';
 
@@ -20,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // Log the request for debugging
-logError("vehicles.php request", ['method' => $_SERVER['REQUEST_METHOD'], 'timestamp' => time()]);
+error_log("vehicles.php request. Method: " . $_SERVER['REQUEST_METHOD'] . ", Time: " . time());
 
 // Global fallback vehicles to return in case of database issues
 $fallbackVehicles = [
@@ -83,8 +84,13 @@ try {
     $conn = getDbConnection();
 
     if (!$conn) {
-        logError("Database connection failed, using fallback vehicles", []);
-        echo json_encode($fallbackVehicles);
+        error_log("Database connection failed in vehicles.php, using fallback vehicles");
+        echo json_encode([
+            'vehicles' => $fallbackVehicles,
+            'timestamp' => time(),
+            'cached' => false,
+            'fallback' => true
+        ]);
         exit;
     }
 
@@ -95,7 +101,7 @@ try {
         $input = json_decode($inputJSON, true);
         
         // Log the input data
-        logError("Vehicle pricing update request", ['input' => $input]);
+        error_log("Vehicle pricing update request: " . json_encode($input));
         
         // Validate input
         if (!$input || !isset($input['vehicleId']) || !isset($input['basePrice']) || !isset($input['pricePerKm'])) {
@@ -161,7 +167,7 @@ try {
                 throw new Exception("Failed to insert vehicle type: " . $insertVehicleStmt->error);
             }
             
-            logError("Created new vehicle type", ['vehicleId' => $vehicleId]);
+            error_log("Created new vehicle type: " . $vehicleId);
         } else {
             // UPDATE operation (updating existing vehicle)
             $updateVehicleStmt = $conn->prepare("
@@ -180,7 +186,7 @@ try {
                 throw new Exception("Failed to update vehicle type: " . $updateVehicleStmt->error);
             }
             
-            logError("Updated vehicle type", ['vehicleId' => $vehicleId]);
+            error_log("Updated vehicle type: " . $vehicleId);
         }
         
         // Now check if pricing record exists
@@ -215,7 +221,7 @@ try {
                 throw new Exception("Failed to update vehicle pricing: " . $updateStmt->error);
             }
             
-            logError("Vehicle pricing updated", ['vehicleId' => $vehicleId, 'basePrice' => $basePrice, 'pricePerKm' => $pricePerKm]);
+            error_log("Vehicle pricing updated for: " . $vehicleId);
             echo json_encode([
                 'status' => 'success', 
                 'message' => 'Vehicle pricing updated successfully', 
@@ -241,7 +247,7 @@ try {
                 throw new Exception("Failed to insert vehicle pricing: " . $insertStmt->error);
             }
             
-            logError("Vehicle pricing created", ['vehicleId' => $vehicleId, 'basePrice' => $basePrice, 'pricePerKm' => $pricePerKm]);
+            error_log("Vehicle pricing created for: " . $vehicleId);
             echo json_encode([
                 'status' => 'success', 
                 'message' => 'Vehicle pricing created successfully', 
@@ -263,12 +269,11 @@ try {
         $cacheBuster = isset($_GET['_t']) ? $_GET['_t'] : time();
         $forceRefresh = isset($_GET['force']) && $_GET['force'] === 'true';
         
-        logError("vehicles.php GET request", [
+        error_log("vehicles.php GET request params: " . json_encode([
             'includeInactive' => $includeInactive, 
             'cacheBuster' => $cacheBuster,
-            'forceRefresh' => $forceRefresh,
-            'headers' => getallheaders()
-        ]);
+            'forceRefresh' => $forceRefresh
+        ]));
         
         // Build query to get all vehicle types with pricing info
         $query = "
@@ -299,7 +304,7 @@ try {
         
         $query .= " ORDER BY vt.name";
         
-        logError("vehicles.php query", ['query' => $query]);
+        error_log("vehicles.php query: " . $query);
         
         $result = $conn->query($query);
         
@@ -353,16 +358,12 @@ try {
 
         // If no vehicles found in database, use fallback
         if (empty($vehicles)) {
-            logError("No vehicles found in database, using fallback vehicles", []);
+            error_log("No vehicles found in database, using fallback vehicles");
             $vehicles = $fallbackVehicles;
         }
 
         // Log success
-        logError("Vehicles GET response success", [
-            'count' => count($vehicles), 
-            'activeFilter' => !$includeInactive, 
-            'timestamp' => time()
-        ]);
+        error_log("Vehicles GET response: found " . count($vehicles) . " vehicles");
         
         // Send response with cache busting timestamp
         echo json_encode([
@@ -377,11 +378,11 @@ try {
     throw new Exception("Method not allowed: " . $_SERVER['REQUEST_METHOD']);
     
 } catch (Exception $e) {
-    logError("Error in vehicles.php", ['error' => $e->getMessage()]);
+    error_log("Error in vehicles.php: " . $e->getMessage());
     
     // For GET requests, return fallback vehicles instead of an error
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-        logError("Returning fallback vehicles due to error", []);
+        error_log("Returning fallback vehicles due to error");
         echo json_encode([
             'vehicles' => $fallbackVehicles,
             'timestamp' => time(),
@@ -393,6 +394,6 @@ try {
     
     // For other methods, return error
     http_response_code(500);
-    echo json_encode(['error' => $e->getMessage()]);
+    echo json_encode(['error' => $e->getMessage(), 'timestamp' => time()]);
     exit;
 }

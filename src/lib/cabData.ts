@@ -7,15 +7,27 @@ let cabTypesCache: CabType[] = [];
 // Function to load cab types from API or cache
 export const loadCabTypes = async (): Promise<CabType[]> => {
   try {
+    console.log('Attempting to load cab types...');
+    
     // Try to get from sessionStorage first (for faster subsequent loads)
     const cachedData = sessionStorage.getItem('cabTypes');
     if (cachedData) {
-      const parsed = JSON.parse(cachedData);
-      // Validate cache has required fields
-      if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].id) {
-        console.log('Retrieved', parsed.length, 'active vehicle types from cache');
-        cabTypesCache = parsed;
-        return parsed;
+      try {
+        const parsed = JSON.parse(cachedData);
+        // Validate cache has required fields
+        if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].id) {
+          console.log('Retrieved', parsed.length, 'active vehicle types from cache');
+          cabTypesCache = parsed;
+          
+          // Update the cabTypes array in-place to keep the same reference
+          cabTypes.length = 0;
+          cabTypes.push(...parsed);
+          
+          return parsed;
+        }
+      } catch (e) {
+        console.error('Error parsing cached cab data:', e);
+        sessionStorage.removeItem('cabTypes');
       }
     }
 
@@ -52,6 +64,10 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
       sessionStorage.setItem('cabTypes', JSON.stringify(validVehicles));
       console.log('Cached', validVehicles.length, 'valid vehicle types');
       cabTypesCache = validVehicles;
+      
+      // Update the cabTypes array in-place to keep the same reference
+      cabTypes.length = 0;
+      cabTypes.push(...validVehicles);
     } else {
       console.warn('No valid vehicles found, not caching');
     }
@@ -112,6 +128,10 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
     // Store default cabs in cache
     cabTypesCache = defaultCabs;
     
+    // Update the cabTypes array in-place to keep the same reference
+    cabTypes.length = 0; 
+    cabTypes.push(...defaultCabs);
+    
     return defaultCabs;
   }
 };
@@ -169,11 +189,13 @@ export const cabTypes: CabType[] = [
 // Initialize cabTypes with data from the API on app startup
 (async () => {
   try {
+    console.log('Initializing cabTypes on app startup...');
     const loadedCabs = await loadCabTypes();
     if (loadedCabs && loadedCabs.length > 0) {
       // Update the cabTypes array in-place to keep the same reference
       cabTypes.length = 0; // Clear the array
       cabTypes.push(...loadedCabs); // Add all loaded cabs
+      console.log('Initialized cabTypes with', loadedCabs.length, 'vehicles');
     }
   } catch (error) {
     console.error('Failed to initialize cabTypes:', error);
@@ -215,6 +237,7 @@ export const reloadCabTypes = async (): Promise<CabType[]> => {
       
       // Store in sessionStorage for later use
       sessionStorage.setItem('cabTypes', JSON.stringify(processedVehicles));
+      console.log('Refreshed and cached', processedVehicles.length, 'vehicles');
       
       // Update the cabTypes array in-place
       cabTypes.length = 0;
@@ -263,6 +286,7 @@ export const reloadCabTypes = async (): Promise<CabType[]> => {
         }));
         
         sessionStorage.setItem('cabTypes', JSON.stringify(processedVehicles));
+        console.log('Used backup endpoint, cached', processedVehicles.length, 'vehicles');
         
         // Update the cabTypes array in-place
         cabTypes.length = 0;
@@ -327,6 +351,7 @@ export const reloadCabTypes = async (): Promise<CabType[]> => {
     
     // Store default cabs in sessionStorage
     sessionStorage.setItem('cabTypes', JSON.stringify(defaultCabs));
+    console.log('Using default vehicles as fallback');
     
     // Update the cabTypes array in-place
     cabTypes.length = 0;
