@@ -11,7 +11,7 @@ export {
 } from './fareCalculationService';
 // Explicitly re-export clearFareCache from fareCalculationService to avoid ambiguity with the one from cabData
 export { clearFareCache as clearFareServiceCache } from './fareCalculationService';
-export { TripType, TripMode } from './tripTypes';
+export type { TripType, TripMode } from './tripTypes';
 
 // Re-export CabType from the types directly
 export type { CabType, HourlyPackage, FareCache, TourInfo, TourFares, ExtraCharges, LocalPackagePriceMatrix, FareCalculationParams } from '@/types/cab';
