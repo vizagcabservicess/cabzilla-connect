@@ -1,4 +1,3 @@
-
 import { differenceInCalendarDays } from 'date-fns';
 import { fareAPI } from '@/services/api';
 import { toast } from 'sonner';
