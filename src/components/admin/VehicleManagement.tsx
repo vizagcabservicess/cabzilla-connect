@@ -114,7 +114,7 @@ export function VehicleManagement() {
       let vehicleData: VehicleData[] = [];
       
       if (Array.isArray(response)) {
-        vehicleData = response;
+        vehicleData = response as VehicleData[];
       } else if (response && typeof response === 'object') {
         if (Array.isArray(response.vehicles)) {
           vehicleData = response.vehicles;
@@ -740,4 +740,3 @@ export function VehicleManagement() {
     </Tabs>
   );
 }
-

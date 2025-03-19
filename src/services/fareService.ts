@@ -1,3 +1,4 @@
+
 import { CabType, FareCalculationParams } from '@/types/cab';
 import { calculateFare } from '@/lib/fareCalculationService';
 import { differenceInDays } from 'date-fns';
@@ -34,7 +35,6 @@ class FareService {
   public async refreshCabTypes(): Promise<CabType[]> {
     try {
       // Add cache busting parameter
-      const timestamp = Date.now();
       const vehicles = await fareAPI.getVehicles();
       
       if (!Array.isArray(vehicles) || vehicles.length === 0) {
