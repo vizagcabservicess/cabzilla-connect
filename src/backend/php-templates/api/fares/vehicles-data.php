@@ -7,6 +7,8 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Content-Type: application/json');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
 
 // Respond to preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -15,7 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // Log the request for debugging
-logError("vehicles-data.php request", ['method' => $_SERVER['REQUEST_METHOD']]);
+logError("vehicles-data.php request", ['method' => $_SERVER['REQUEST_METHOD'], 'timestamp' => time()]);
 
 // Allow only GET requests for this endpoint
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
@@ -35,7 +37,7 @@ try {
     $includeInactive = isset($_GET['includeInactive']) && $_GET['includeInactive'] === 'true';
     
     // Debug log for includeInactive parameter
-    logError("vehicles-data.php includeInactive", ['includeInactive' => $includeInactive]);
+    logError("vehicles-data.php includeInactive", ['includeInactive' => $includeInactive, 'timestamp' => time()]);
     
     // Get all vehicle data (including types and pricing)
     $query = "
@@ -58,7 +60,7 @@ try {
     
     $query .= " ORDER BY vt.name";
 
-    logError("vehicles-data.php query", ['query' => $query]);
+    logError("vehicles-data.php query", ['query' => $query, 'timestamp' => time()]);
     
     $result = $conn->query($query);
 
@@ -112,15 +114,21 @@ try {
     }
 
     // Log success with safe data to avoid memory issues
-    logError("Vehicles data response success", ['count' => count($vehicles), 'activeFilter' => !$includeInactive]);
+    logError("Vehicles data response success", [
+        'count' => count($vehicles), 
+        'activeFilter' => !$includeInactive, 
+        'timestamp' => time()
+    ]);
     
-    // Send response with explicit content type
+    // Send response with explicit content type and cache headers
     header('Content-Type: application/json');
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
     echo json_encode($vehicles);
     exit;
     
 } catch (Exception $e) {
-    logError("Error fetching vehicle data", ['error' => $e->getMessage()]);
+    logError("Error fetching vehicle data", ['error' => $e->getMessage(), 'timestamp' => time()]);
     sendJsonResponse(['error' => 'Failed to fetch vehicle data: ' . $e->getMessage()], 500);
 }
 
@@ -129,6 +137,8 @@ if (!function_exists('sendJsonResponse')) {
     function sendJsonResponse($data, $statusCode = 200) {
         http_response_code($statusCode);
         header('Content-Type: application/json');
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        header('Pragma: no-cache');
         echo json_encode($data);
         exit;
     }

@@ -5,7 +5,8 @@ import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
 import { Location } from '@/types/api';
 import { debounce } from '@/lib/utils';
 import { isLocationInVizag, safeIncludes } from '@/lib/locationUtils';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface LocationInputProps {
   location?: Location;
@@ -145,6 +146,30 @@ export function LocationInput({
     }, 500),
     [handleLocationChange, locationData, updateParentLocation]
   );
+
+  // Clear location 
+  const handleClearLocation = () => {
+    setAddress('');
+    locationChangedRef.current = true;
+    wasLocationSelectedRef.current = false;
+    
+    // Create an empty location object
+    const emptyLocation: Location = {
+      id: `loc_${Date.now()}`,
+      name: '',
+      address: '',
+      isInVizag: false
+    };
+    
+    if (handleLocationChange) {
+      handleLocationChange(emptyLocation);
+    }
+    
+    // Focus the input after clearing
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  };
 
   // Setup Google Maps autocomplete - using a ref to prevent multiple listeners
   useEffect(() => {
@@ -307,7 +332,19 @@ export function LocationInput({
           readOnly={readOnly}
           autoComplete="off" // Prevent browser's default autocomplete
         />
-        {locationError && (
+        {address && (
+          <Button
+            type="button"
+            variant="ghost" 
+            size="icon"
+            className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 text-gray-400 hover:text-gray-700"
+            onClick={handleClearLocation}
+            aria-label="Clear location"
+          >
+            <X size={16} />
+          </Button>
+        )}
+        {locationError && !address && (
           <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-red-500">
             <AlertCircle size={16} />
           </div>

@@ -40,6 +40,7 @@ export function CabOptions({
   const [isLoadingCabs, setIsLoadingCabs] = useState(false);
   const [isRefreshingCabs, setIsRefreshingCabs] = useState(false);
   const [isCalculatingFares, setIsCalculatingFares] = useState(false);
+  const [refreshSuccessful, setRefreshSuccessful] = useState<boolean | null>(null);
 
   // Create a unique identifier for the current trip configuration
   const currentTripIdentifier = `${tripType}-${tripMode}-${hourlyPackage || 'none'}-${distance}`;
@@ -54,31 +55,57 @@ export function CabOptions({
       try {
         const dynamicCabTypes = await loadCabTypes();
         console.log('Loaded dynamic cab types:', dynamicCabTypes);
-        setCabTypes(dynamicCabTypes);
+        if (Array.isArray(dynamicCabTypes) && dynamicCabTypes.length > 0) {
+          setCabTypes(dynamicCabTypes);
+          setRefreshSuccessful(true);
+        } else {
+          console.warn('API returned empty vehicle data, using initial cab types');
+          setRefreshSuccessful(false);
+        }
       } catch (error) {
         console.error('Error loading dynamic cab types:', error);
         toast.error('Could not load vehicle data. Using default values.');
+        setRefreshSuccessful(false);
       } finally {
         setIsLoadingCabs(false);
       }
     }
     
     fetchCabTypes();
-  }, []);
+  }, [initialCabTypes]);
 
   // Function to manually refresh cab types
   const refreshCabTypes = useCallback(async () => {
     setIsRefreshingCabs(true);
     try {
-      const freshCabTypes = await reloadCabTypes();
-      setCabTypes(freshCabTypes);
-      toast.success('Vehicle data refreshed successfully');
+      // Force cache busting by adding a timestamp
+      const timestamp = Date.now();
+      console.log(`Refreshing cab types with timestamp: ${timestamp}`);
       
-      // Force recalculation of fares
-      setLastCalculationTimestamp(Date.now());
+      // Clear any cached data in session/local storage
+      sessionStorage.removeItem('cabFares');
+      sessionStorage.removeItem('calculatedFares');
+      localStorage.removeItem('cabTypes');
+      
+      const freshCabTypes = await reloadCabTypes();
+      console.log('Refreshed cab types:', freshCabTypes);
+      
+      if (Array.isArray(freshCabTypes) && freshCabTypes.length > 0) {
+        setCabTypes(freshCabTypes);
+        toast.success('Vehicle data refreshed successfully');
+        setRefreshSuccessful(true);
+        
+        // Force recalculation of fares
+        setLastCalculationTimestamp(Date.now());
+      } else {
+        console.warn('API returned empty vehicle data on refresh');
+        toast.error('No vehicle data available. Using default values.');
+        setRefreshSuccessful(false);
+      }
     } catch (error) {
       console.error('Error refreshing cab types:', error);
       toast.error('Failed to refresh vehicle data');
+      setRefreshSuccessful(false);
     } finally {
       setIsRefreshingCabs(false);
     }
@@ -101,7 +128,7 @@ export function CabOptions({
     
     // Set a new timestamp to force recalculation
     setLastCalculationTimestamp(Date.now());
-  }, [tripType, tripMode, hourlyPackage]);
+  }, [tripType, tripMode, hourlyPackage, onSelectCab, selectedCab]);
 
   // Reset cab selection when key parameters change
   useEffect(() => {
@@ -166,10 +193,17 @@ export function CabOptions({
         }
       }
       else if (tripType === 'outstation') {
-        let baseRate = cab.price || 0;
+        let baseRate = cab.basePrice || 0;
         let perKmRate = cab.pricePerKm || 0;
         let nightHaltCharge = cab.nightHaltCharge || 0;
         let driverAllowance = cab.driverAllowance || 250;
+        
+        console.log(`Calculating outstation fare for ${cab.name}:`, {
+          baseRate,
+          perKmRate,
+          nightHaltCharge,
+          driverAllowance
+        });
         
         // If all pricing info is already in cab object, use it directly
         if (baseRate > 0 && perKmRate > 0) {
@@ -189,6 +223,14 @@ export function CabOptions({
             // Add driver allowance
             const totalFare = totalBaseFare + totalDistanceFare + driverAllowance;
             fare = Math.ceil(totalFare / 10) * 10;
+            
+            console.log(`One-way fare for ${cab.name} (${distance}km):`, {
+              effectiveDistance,
+              totalBaseFare,
+              totalDistanceFare,
+              driverAllowance,
+              calculatedFare: fare
+            });
           } else {
             // Round trip calculation
             let days = returnDate ? Math.max(1, differenceInDays(returnDate, pickupDate || new Date()) + 1) : 1;
@@ -210,6 +252,16 @@ export function CabOptions({
             
             const totalFare = totalBaseFare + totalDistanceFare + totalNightHalt + (days * driverAllowance);
             fare = Math.ceil(totalFare / 10) * 10;
+            
+            console.log(`Round-trip fare for ${cab.name} (${distance}km):`, {
+              days,
+              effectiveDistance,
+              totalBaseFare,
+              totalDistanceFare,
+              totalNightHalt,
+              driverAllowance: days * driverAllowance,
+              calculatedFare: fare
+            });
           }
         } else {
           // If pricing info is missing, use defaults by name
@@ -237,6 +289,13 @@ export function CabOptions({
               perKmRate = 18;
               nightHaltCharge = 1000;
           }
+          
+          console.log(`Using default rates for ${cab.name}:`, {
+            baseRate,
+            perKmRate,
+            nightHaltCharge,
+            driverAllowance
+          });
           
           // Recalculate with default values
           if (tripMode === "one-way") {
@@ -279,6 +338,7 @@ export function CabOptions({
       
       // Store result in cache
       calculationCache.set(cacheKey, fare);
+      console.log(`Calculated fare for ${cab.name}: ₹${fare}`);
       
       return fare;
     } catch (error) {
@@ -289,7 +349,7 @@ export function CabOptions({
 
   // Calculate fares for all cab types whenever relevant parameters change
   useEffect(() => {
-    if (distance > 0 && !isCalculatingFares) {
+    if (distance > 0 && !isCalculatingFares && cabTypes.length > 0) {
       console.log(`Calculating fares for ${tripType} trip, ${distance}km, package: ${hourlyPackage || 'none'}`);
       
       const newFares: Record<string, number> = {};
@@ -304,6 +364,8 @@ export function CabOptions({
               duration: 3000
             });
           }
+          
+          console.log(`Starting fare calculation for ${cabTypes.length} cab types`);
           
           // Process cabs in batches for large distances
           if (distance > 500) {
@@ -332,6 +394,8 @@ export function CabOptions({
             // Set all fares at once
             setCabFares(newFares);
           }
+          
+          console.log('All fares calculated:', newFares);
           
           // Store the trip type with the fares to verify later
           const fareData = {
@@ -416,13 +480,19 @@ export function CabOptions({
             size="sm"
             onClick={refreshCabTypes}
             disabled={isRefreshingCabs}
-            className="h-8 px-2"
+            className={`h-8 px-2 ${refreshSuccessful === false ? 'border-red-300' : ''}`}
           >
             <RefreshCw className={`h-3 w-3 mr-1 ${isRefreshingCabs ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
         </div>
       </div>
+      
+      {refreshSuccessful === false && (
+        <div className="bg-yellow-50 p-2 rounded-md text-yellow-700 text-sm mb-4">
+          Unable to load updated vehicle data. Using cached data.
+        </div>
+      )}
       
       {cabTypes.length === 0 ? (
         <div className="p-8 text-center border rounded-lg bg-gray-50">
