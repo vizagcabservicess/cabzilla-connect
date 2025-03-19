@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertCircle, RefreshCw, Save, Car, Plane, Bus, MapPin } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
-import { VehiclePricing, TourFare } from '@/types/api';
+import { VehiclePricing, TourFare, VehiclePricingUpdateRequest, FareUpdateRequest } from '@/types/api';
 import { fareAPI } from '@/services/api';
 
 // Vehicle pricing form schema
@@ -157,7 +157,16 @@ export function VehicleFareManagement() {
       setIsLoading(true);
       console.log("Submitting vehicle pricing update:", values);
       
-      const data = await fareAPI.updateVehiclePricing(values);
+      // Ensure values match the required interface
+      const updateData: VehiclePricingUpdateRequest = {
+        vehicleType: values.vehicleType,
+        basePrice: values.basePrice,
+        pricePerKm: values.pricePerKm,
+        nightHaltCharge: values.nightHaltCharge,
+        driverAllowance: values.driverAllowance
+      };
+      
+      const data = await fareAPI.updateVehiclePricing(updateData);
       console.log("Vehicle pricing update response:", data);
       
       toast.success("Vehicle pricing updated successfully");
@@ -175,7 +184,17 @@ export function VehicleFareManagement() {
       setIsLoading(true);
       console.log("Submitting tour fare update:", values);
       
-      const data = await fareAPI.updateTourFares(values);
+      // Ensure values match the required interface
+      const fareUpdateData: FareUpdateRequest = {
+        tourId: values.tourId,
+        sedan: values.sedan,
+        ertiga: values.ertiga,
+        innova: values.innova,
+        tempo: values.tempo,
+        luxury: values.luxury
+      };
+      
+      const data = await fareAPI.updateTourFares(fareUpdateData);
       console.log("Tour fare update response:", data);
       
       toast.success("Tour fare updated successfully");
