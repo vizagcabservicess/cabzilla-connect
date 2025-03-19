@@ -83,10 +83,10 @@ try {
             $row = $result->fetch_assoc();
             
             if ($row['count'] === 0) {
-                // Vehicle type doesn't exist, create it
+                // Vehicle type doesn't exist, create it - Note: Removed is_active from INSERT
                 $insertStmt = $conn->prepare("
-                    INSERT INTO vehicle_pricing (vehicle_type, base_price, price_per_km, night_halt_charge, driver_allowance, is_active)
-                    VALUES (?, ?, ?, ?, ?, 1)
+                    INSERT INTO vehicle_pricing (vehicle_type, base_price, price_per_km, night_halt_charge, driver_allowance)
+                    VALUES (?, ?, ?, ?, ?)
                 ");
                 
                 if (!$insertStmt) {
@@ -159,10 +159,16 @@ try {
                 }
             }
             
+            // Ensure name is always a string, use vehicle_id as fallback
+            $name = $row['name'] ?? '';
+            if (empty($name) || $name === '0') {
+                $name = $row['vehicle_id'];
+            }
+            
             // Format vehicle data with consistent property names for frontend
             $vehicle = [
                 'id' => (string)$row['vehicle_id'],
-                'name' => $row['name'] ?? '',
+                'name' => $name,
                 'capacity' => intval($row['capacity'] ?? 0),
                 'luggageCapacity' => intval($row['luggage_capacity'] ?? 0),
                 'price' => floatval($row['base_price'] ?? 0),

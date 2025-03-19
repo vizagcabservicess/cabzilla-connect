@@ -133,10 +133,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             sendJsonResponse(['status' => 'success', 'message' => 'Vehicle pricing updated successfully', 'data' => $response]);
         } else {
-            // Insert new record
+            // Insert new record - Note: Removed is_active column from INSERT as it's causing the error
             $stmt = $conn->prepare("
-                INSERT INTO vehicle_pricing (vehicle_type, base_price, price_per_km, night_halt_charge, driver_allowance, is_active)
-                VALUES (?, ?, ?, ?, ?, 1)
+                INSERT INTO vehicle_pricing (vehicle_type, base_price, price_per_km, night_halt_charge, driver_allowance)
+                VALUES (?, ?, ?, ?, ?)
             ");
             $stmt->bind_param("sdddd", $vehicleType, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
             

@@ -66,10 +66,16 @@ try {
             }
         }
         
+        // Ensure name is always a string, use vehicle_id as fallback
+        $name = $row['name'] ?? '';
+        if (empty($name) || $name === '0') {
+            $name = $row['vehicle_id'];
+        }
+        
         // Format data with camelCase keys for frontend consistency
         $vehicle = [
             'id' => (string)$row['vehicle_id'], // Ensure string type
-            'name' => $row['name'] ?? '',
+            'name' => $name,
             'capacity' => intval($row['capacity'] ?? 0),
             'luggageCapacity' => intval($row['luggage_capacity'] ?? 0),
             'basePrice' => floatval($row['base_price'] ?? 0),

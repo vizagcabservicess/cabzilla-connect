@@ -57,6 +57,11 @@ try {
                 $row['amenities'] = [];
             }
             
+            // Ensure name is always a string, use vehicle_id as fallback
+            if (empty($row['name']) || $row['name'] === '0') {
+                $row['name'] = $row['vehicle_id'];
+            }
+            
             // Convert ac to boolean
             $row['ac'] = (bool)$row['ac'];
             
@@ -145,11 +150,11 @@ try {
                 ");
                 $pricingStmt->bind_param("dddds", $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, $vehicleId);
             } else {
-                // Insert new pricing
+                // Insert new pricing - removed is_active column from INSERT
                 $pricingStmt = $conn->prepare("
                     INSERT INTO vehicle_pricing 
-                    (vehicle_type, base_price, price_per_km, night_halt_charge, driver_allowance, is_active)
-                    VALUES (?, ?, ?, ?, ?, 1)
+                    (vehicle_type, base_price, price_per_km, night_halt_charge, driver_allowance)
+                    VALUES (?, ?, ?, ?, ?)
                 ");
                 $pricingStmt->bind_param("sdddd", $vehicleId, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
             }
@@ -186,6 +191,11 @@ try {
             $updatedVehicle['amenities'] = explode(', ', $updatedVehicle['amenities']);
         } else {
             $updatedVehicle['amenities'] = [];
+        }
+        
+        // Ensure name is always a string, use vehicle_id as fallback
+        if (empty($updatedVehicle['name']) || $updatedVehicle['name'] === '0') {
+            $updatedVehicle['name'] = $updatedVehicle['vehicle_id'];
         }
         
         $updatedVehicle['ac'] = (bool)$updatedVehicle['ac'];
@@ -252,10 +262,11 @@ try {
             $nightHaltCharge = isset($requestData['nightHaltCharge']) ? floatval($requestData['nightHaltCharge']) : 0;
             $driverAllowance = isset($requestData['driverAllowance']) ? floatval($requestData['driverAllowance']) : 0;
             
+            // Insert new pricing - removed is_active from INSERT
             $pricingStmt = $conn->prepare("
                 INSERT INTO vehicle_pricing 
-                (vehicle_type, base_price, price_per_km, night_halt_charge, driver_allowance, is_active)
-                VALUES (?, ?, ?, ?, ?, 1)
+                (vehicle_type, base_price, price_per_km, night_halt_charge, driver_allowance)
+                VALUES (?, ?, ?, ?, ?)
             ");
             $pricingStmt->bind_param("sdddd", $vehicleId, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
             $pricingSuccess = $pricingStmt->execute();
@@ -291,6 +302,11 @@ try {
             $newVehicle['amenities'] = explode(', ', $newVehicle['amenities']);
         } else {
             $newVehicle['amenities'] = [];
+        }
+        
+        // Ensure name is always a string, use vehicle_id as fallback
+        if (empty($newVehicle['name']) || $newVehicle['name'] === '0') {
+            $newVehicle['name'] = $newVehicle['vehicle_id'];
         }
         
         $newVehicle['ac'] = (bool)$newVehicle['ac'];
