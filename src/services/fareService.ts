@@ -9,6 +9,13 @@ import { toast } from 'sonner';
 // In-memory cache for fare calculations
 type FareCache = Map<string, { expire: number, fare: number }>;
 
+// Define a type for API responses to handle different response formats
+type ApiResponse = {
+  vehicles?: any[];
+  data?: any[];
+  [key: string]: any;
+};
+
 class FareService {
   private static instance: FareService;
   private fareCache: FareCache = new Map();
@@ -35,7 +42,7 @@ class FareService {
   public async refreshCabTypes(): Promise<CabType[]> {
     try {
       console.log("Refreshing cab types from the API");
-      const vehicles = await fareAPI.getVehicles();
+      const vehicles = await fareAPI.getVehicles() as ApiResponse | any[];
       
       // Add extra type safety to prevent errors
       if (!vehicles) {

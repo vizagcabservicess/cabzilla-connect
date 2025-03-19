@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -73,6 +72,12 @@ export type VehicleData = {
   vehicleId?: string;
 };
 
+type ApiResponse = {
+  vehicles?: VehicleData[];
+  data?: VehicleData[];
+  [key: string]: any;
+};
+
 export function VehicleManagement() {
   const [vehicles, setVehicles] = useState<VehicleData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -110,24 +115,20 @@ export function VehicleManagement() {
       setError(null);
       
       console.log("Fetching vehicles data");
-      const response = await fareAPI.getVehicles();
+      const response = await fareAPI.getVehicles() as ApiResponse | VehicleData[];
       
       let vehicleData: VehicleData[] = [];
       
-      // Type guard to ensure response is an array
       if (Array.isArray(response)) {
         vehicleData = response as VehicleData[];
       } 
-      // Handle response object with potential nested arrays
       else if (response && typeof response === 'object') {
-        // Check various property paths that might contain vehicles array
         if (response.vehicles && Array.isArray(response.vehicles)) {
           vehicleData = response.vehicles as VehicleData[];
         } 
         else if (response.data && Array.isArray(response.data)) {
           vehicleData = response.data as VehicleData[];
         }
-        // Try to extract vehicle objects from response
         else {
           const potentialVehicles = Object.values(response).filter(val => 
             val && typeof val === 'object' && !Array.isArray(val)
@@ -281,11 +282,9 @@ export function VehicleManagement() {
       
       fareService.clearCache();
       
-      // For debugging
       console.log(`Sending vehicle update request for ${vehicleData.name} (${vehicleData.vehicleId})`);
       console.log("Vehicle data being sent:", JSON.stringify(vehicleData));
       
-      // Direct API call with try-catch for better error handling
       try {
         await fareAPI.updateVehicle(vehicleData);
         console.log("API request completed successfully");
