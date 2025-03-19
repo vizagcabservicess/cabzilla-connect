@@ -36,6 +36,11 @@ export function TabTripSelector({
     if (oldTripType !== selectedTab) {
       sessionStorage.removeItem('dropLocation');
       sessionStorage.removeItem('pickupLocation');
+      // Also remove any dropoff coordinates
+      sessionStorage.removeItem('dropCoordinates');
+      sessionStorage.removeItem('pickupCoordinates');
+      sessionStorage.removeItem('dropLocationObj');
+      sessionStorage.removeItem('pickupLocationObj');
     }
     
     // Clear all booking and fare related data
@@ -50,6 +55,10 @@ export function TabTripSelector({
     // Force clear trip specific data
     if (oldTripType && oldTripType !== selectedTab) {
       console.log(`Trip type changed from ${oldTripType} to ${selectedTab}`);
+      // Force clear type-specific items
+      if (oldTripType === 'airport') {
+        sessionStorage.removeItem('airportDirection');
+      }
     }
     
     // Clear localStorage items that might cache fare data
@@ -129,6 +138,14 @@ export function TabTripSelector({
   const handleTabChange = (value: string) => {
     // Don't proceed if it's the same tab (prevents unnecessary reloads)
     if (value === selectedTab) return;
+    
+    // Force all location data to be cleared
+    sessionStorage.removeItem('dropLocation');
+    sessionStorage.removeItem('pickupLocation');
+    sessionStorage.removeItem('dropCoordinates');
+    sessionStorage.removeItem('pickupCoordinates');
+    sessionStorage.removeItem('dropLocationObj');
+    sessionStorage.removeItem('pickupLocationObj');
     
     // Update the tab
     onTabChange(value as 'outstation' | 'local' | 'airport' | 'tour');

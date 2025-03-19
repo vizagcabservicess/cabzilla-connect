@@ -5,10 +5,14 @@ require_once '../../config.php';
 // Allow CORS for all domains
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Force-Refresh');
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
+header('Expires: 0');
+
+// Add timestamp for cache-busting
+header('X-Response-Time: ' . time());
 
 // Respond to preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -17,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // Log the request for debugging
-logError("vehicles-data.php request", ['method' => $_SERVER['REQUEST_METHOD'], 'timestamp' => time()]);
+logError("vehicles-data.php request", ['method' => $_SERVER['REQUEST_METHOD'], 'timestamp' => time(), 'headers' => getallheaders()]);
 
 // Allow only GET requests for this endpoint
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
@@ -104,7 +108,8 @@ try {
             'driverAllowance' => floatval($row['driver_allowance'] ?? 0),
             // Also include the original field names for backward compatibility
             'price' => floatval($row['base_price'] ?? 0),
-            'vehicleType' => (string)$row['vehicle_id'] // Ensure string type
+            'vehicleType' => (string)$row['vehicle_id'], // Ensure string type
+            'vehicleId' => (string)$row['vehicle_id'] // Add for form consistency
         ];
         
         // Only add active vehicles for non-admin requests

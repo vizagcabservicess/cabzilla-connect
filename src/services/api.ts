@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { toast } from 'sonner';
 import { 
@@ -26,6 +25,12 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    
+    // Add cache-busting timestamp to all GET requests
+    if (config.method?.toLowerCase() === 'get') {
+      config.params = { ...config.params, _t: Date.now() };
+    }
+    
     return config;
   },
   (error) => Promise.reject(error)
@@ -60,6 +65,8 @@ const handleApiError = (error: any): never => {
         const firstError = Object.values(validationErrors)[0];
         errorMessage = Array.isArray(firstError) ? firstError[0] : String(firstError);
       }
+    } else if (error.response.status === 500) {
+      errorMessage = 'Server error: The operation could not be completed due to an internal server error.';
     }
   } else if (error.request) {
     // The request was made but no response was received
@@ -450,7 +457,12 @@ export const fareAPI = {
   // Get vehicle data (includes both types and pricing)
   getVehicles: async (): Promise<any[]> => {
     try {
-      const response = await api.get('/admin/vehicles-update.php');
+      console.log("Fetching vehicle data with cache busting...");
+      const timestamp = Date.now();
+      // Use a direct URL to bypass any caching issues
+      const response = await api.get(`/admin/vehicles-update.php?_t=${timestamp}`);
+      
+      console.log("Raw vehicles API response:", response.data);
       
       // Handle different response formats and ensure we return an array
       if (response.data) {
@@ -530,7 +542,11 @@ export const fareAPI = {
   updateVehiclePricing: async (pricingData: VehiclePricingUpdateRequest): Promise<any> => {
     try {
       console.log("Vehicle pricing update request:", pricingData);
-      const response = await api.post('/admin/vehicle-pricing.php', pricingData);
+      
+      // Add cache busting parameter
+      const timestamp = Date.now();
+      const response = await api.post(`/admin/vehicle-pricing.php?_t=${timestamp}`, pricingData);
+      
       console.log("Vehicle pricing update response:", response.data);
       
       // Force a refresh of the vehicle data
@@ -573,9 +589,43 @@ export const fareAPI = {
   // Update vehicle (admin only)
   updateVehicle: async (vehicleData: any): Promise<any> => {
     try {
-      const response = await api.post('/admin/vehicles-update.php', vehicleData);
+      console.log(`Updating vehicle ${vehicleData.name} (${vehicleData.vehicleId})...`);
+      
+      // Add cache busting parameter and additional debug info
+      const timestamp = Date.now();
+      const debugData = {
+        ...vehicleData,
+        _timestamp: timestamp,
+        _requestTime: new Date().toISOString()
+      };
+      
+      // Use direct endpoint with cache busting
+      const response = await api.post(`/admin/vehicles-update.php?_t=${timestamp}`, debugData);
+      
+      console.log("Vehicle update response:", response.data);
+      
+      // Force a refresh cache after update
+      setTimeout(async () => {
+        try {
+          // Clear any browser caches with force flag
+          await fetch('/api/fares/vehicles.php?force=true&_t=' + Date.now(), { 
+            method: 'GET',
+            headers: { 
+              'Cache-Control': 'no-cache, no-store, must-revalidate', 
+              'Pragma': 'no-cache',
+              'X-Force-Refresh': 'true'
+            }
+          });
+          
+          console.log("Forced refresh of vehicle data after update");
+        } catch (error) {
+          console.error("Error forcing refresh:", error);
+        }
+      }, 300);
+      
       return response.data;
     } catch (error) {
+      console.error("Error in updateVehicle API call:", error);
       return handleApiError(error);
     }
   },

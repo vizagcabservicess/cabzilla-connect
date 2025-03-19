@@ -5,10 +5,14 @@ require_once '../../config.php';
 // Allow CORS for all domains
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Force-Refresh');
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
+header('Expires: 0');
+
+// Add extra cache busting headers
+header('X-Cache-Timestamp: ' . time());
 
 // Respond to preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -17,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // Log the request for debugging
-logError("vehicles.php request", ['method' => $_SERVER['REQUEST_METHOD']]);
+logError("vehicles.php request", ['method' => $_SERVER['REQUEST_METHOD'], 'timestamp' => time()]);
 
 // Handle requests
 try {
@@ -73,6 +77,7 @@ try {
         
         // If vehicle type doesn't exist, create it
         if ($row['count'] == 0) {
+            // INSERT operation (completely new vehicle)
             $insertVehicleStmt = $conn->prepare("
                 INSERT INTO vehicle_types (vehicle_id, name, capacity, luggage_capacity, ac, image, description, amenities, is_active) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -82,7 +87,7 @@ try {
                 throw new Exception("Database prepare error on insert vehicle: " . $conn->error);
             }
             
-            $insertVehicleStmt->bind_param("ssiisssi", $vehicleId, $name, $capacity, $luggageCapacity, $ac, $image, $description, $amenities, $isActive);
+            $insertVehicleStmt->bind_param("ssiisssis", $vehicleId, $name, $capacity, $luggageCapacity, $ac, $image, $description, $amenities, $isActive);
             
             if (!$insertVehicleStmt->execute()) {
                 throw new Exception("Failed to insert vehicle type: " . $insertVehicleStmt->error);
@@ -90,7 +95,7 @@ try {
             
             logError("Created new vehicle type", ['vehicleId' => $vehicleId]);
         } else {
-            // Update existing vehicle type
+            // UPDATE operation (updating existing vehicle)
             $updateVehicleStmt = $conn->prepare("
                 UPDATE vehicle_types 
                 SET name = ?, capacity = ?, luggage_capacity = ?, ac = ?, image = ?, description = ?, amenities = ?, is_active = ?
@@ -188,8 +193,14 @@ try {
         
         // Add cache busting parameter
         $cacheBuster = isset($_GET['_t']) ? $_GET['_t'] : time();
+        $forceRefresh = isset($_GET['force']) && $_GET['force'] === 'true';
         
-        logError("vehicles.php GET request", ['includeInactive' => $includeInactive, 'cacheBuster' => $cacheBuster]);
+        logError("vehicles.php GET request", [
+            'includeInactive' => $includeInactive, 
+            'cacheBuster' => $cacheBuster,
+            'forceRefresh' => $forceRefresh,
+            'headers' => getallheaders()
+        ]);
         
         // Build query to get all vehicle types with pricing info
         $query = "
@@ -273,7 +284,11 @@ try {
         }
 
         // Log success
-        logError("Vehicles GET response success", ['count' => count($vehicles), 'activeFilter' => !$includeInactive, 'timestamp' => time()]);
+        logError("Vehicles GET response success", [
+            'count' => count($vehicles), 
+            'activeFilter' => !$includeInactive, 
+            'timestamp' => time()
+        ]);
         
         // Send response with cache busting timestamp
         echo json_encode([

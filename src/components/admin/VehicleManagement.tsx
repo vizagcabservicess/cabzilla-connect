@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { toast } from "sonner";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -117,10 +117,10 @@ export function VehicleManagement() {
       if (Array.isArray(response)) {
         vehicleData = response as VehicleData[];
       } else if (response && typeof response === 'object') {
-        if (Array.isArray((response as any).vehicles)) {
-          vehicleData = (response as any).vehicles as VehicleData[];
-        } else if (Array.isArray((response as any).data)) {
-          vehicleData = (response as any).data as VehicleData[];
+        if (response.vehicles && Array.isArray(response.vehicles)) {
+          vehicleData = response.vehicles as VehicleData[];
+        } else if (response.data && Array.isArray(response.data)) {
+          vehicleData = response.data as VehicleData[];
         } else {
           const potentialVehicles = Object.values(response).filter(val => 
             val && typeof val === 'object' && !Array.isArray(val)
@@ -274,7 +274,19 @@ export function VehicleManagement() {
       
       fareService.clearCache();
       
-      await fareService.updateVehiclePricing(vehicleData);
+      // For debugging
+      console.log(`Sending vehicle update request for ${vehicleData.name} (${vehicleData.vehicleId})`);
+      console.log("Vehicle data being sent:", JSON.stringify(vehicleData));
+      
+      // Direct API call with try-catch for better error handling
+      try {
+        await fareAPI.updateVehicle(vehicleData);
+        console.log("API request completed successfully");
+      } catch (apiError) {
+        console.error("Direct API error:", apiError);
+        toast.error(`API Error: ${apiError}`);
+        throw apiError;
+      }
       
       if (isAddingNew) {
         toast.success("New vehicle added successfully");

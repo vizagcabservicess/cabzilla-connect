@@ -10,6 +10,7 @@ import { differenceInDays } from 'date-fns';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { CabOptionCard } from './CabOptionCard';
+import { fareService } from '@/services/fareService';
 
 interface CabOptionsProps {
   cabTypes: CabType[];
@@ -55,6 +56,9 @@ export function CabOptions({
       
       setIsLoadingCabs(true);
       try {
+        console.log('Loading dynamic cab types...');
+        fareService.clearCache(); // Clear the fare cache to force fresh data
+        
         const dynamicCabTypes = await loadCabTypes();
         console.log('Loaded dynamic cab types:', dynamicCabTypes);
         if (Array.isArray(dynamicCabTypes) && dynamicCabTypes.length > 0) {
@@ -89,6 +93,10 @@ export function CabOptions({
       sessionStorage.removeItem('calculatedFares');
       localStorage.removeItem('cabTypes');
       
+      // Force clear local cache
+      fareService.clearCache();
+      
+      console.log('Forcing cab types refresh...');
       const freshCabTypes = await reloadCabTypes();
       console.log('Refreshed cab types:', freshCabTypes);
       
@@ -126,10 +134,15 @@ export function CabOptions({
       if (selectedCab) {
         onSelectCab(null as any);
       }
+      
+      // Also force refresh cab types when switching trip types
+      refreshCabTypes().catch(err => {
+        console.error('Failed to refresh cab types on trip parameter change:', err);
+      });
     }
     
     setLastCalculationParams(currentCalculationParams);
-  }, [currentCalculationParams, lastCalculationParams, onSelectCab, selectedCab]);
+  }, [currentCalculationParams, lastCalculationParams, onSelectCab, selectedCab, refreshCabTypes]);
 
   // Calculate fares for all cab types when distance or trip parameters change
   useEffect(() => {
@@ -148,36 +161,19 @@ export function CabOptions({
           
           console.log(`Starting fare calculation for ${cabTypes.length} cab types`);
           
-          // Calculate fares in parallel for better performance
-          const farePromises = cabTypes.map(async (cab) => {
-            try {
-              return { 
-                id: cab.id, 
-                fare: await calculateFare({
-                  cabType: cab,
-                  distance,
-                  tripType,
-                  tripMode,
-                  hourlyPackage,
-                  pickupDate,
-                  returnDate
-                })
-              };
-            } catch (error) {
-              console.error(`Error calculating fare for ${cab.name}:`, error);
-              return { id: cab.id, fare: 0 };
-            }
-          });
+          // Use the fareService to calculate fares
+          const fares = await fareService.calculateFaresForCabs(
+            cabTypes,
+            distance,
+            tripType,
+            tripMode,
+            hourlyPackage,
+            pickupDate,
+            returnDate
+          );
           
-          const results = await Promise.all(farePromises);
-          const newFares: Record<string, number> = {};
-          
-          results.forEach(result => {
-            newFares[result.id] = result.fare;
-          });
-          
-          setCabFares(newFares);
-          console.log('All fares calculated:', newFares);
+          setCabFares(fares);
+          console.log('All fares calculated:', fares);
         } catch (error) {
           console.error('Error calculating fares:', error);
           toast.error('Error calculating fares');
@@ -225,26 +221,16 @@ export function CabOptions({
   };
 
   // Generate fare details for display
-  const getFareDetails = (cab: CabType): string => {
-    if (tripType === 'airport') {
-      return "Airport transfer";
-    } else if (tripType === 'local' && hourlyPackage) {
-      const packageInfo = hourlyPackage === '8hrs-80km' ? '8 hrs / 80 km' : '10 hrs / 100 km';
-      return packageInfo;
-    } else if (tripType === 'outstation') {
-      const totalDistance = distance;
-      const effectiveDistance = distance;
-      const allocatedKm = 300;
-      const extraKm = tripMode === 'one-way' 
-        ? Math.max(0, effectiveDistance - allocatedKm)
-        : Math.max(0, effectiveDistance - (allocatedKm * (returnDate ? Math.max(1, differenceInDays(returnDate, pickupDate || new Date()) + 1) : 1)));
-            
-      return tripMode === 'one-way' 
-        ? `One way - ${totalDistance}km (${extraKm > 0 ? extraKm + 'km extra' : 'within base km'})` 
-        : `Round trip - ${totalDistance}km total`;
-    }
-    return "";
-  };
+  const getFareDetails = useCallback((cab: CabType): string => {
+    return fareService.getFareExplanation(
+      distance,
+      tripType,
+      tripMode,
+      hourlyPackage,
+      pickupDate,
+      returnDate
+    );
+  }, [distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate]);
 
   if (isLoadingCabs) {
     return (

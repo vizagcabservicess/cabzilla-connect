@@ -1,3 +1,4 @@
+
 import { CabType, FareCalculationParams } from '@/types/cab';
 import { calculateFare } from '@/lib/fareCalculationService';
 import { differenceInDays } from 'date-fns';
@@ -33,6 +34,7 @@ class FareService {
   // Refresh cab types from the backend
   public async refreshCabTypes(): Promise<CabType[]> {
     try {
+      console.log("Refreshing cab types from the API");
       const vehicles = await fareAPI.getVehicles();
       
       if (!Array.isArray(vehicles) || vehicles.length === 0) {
@@ -162,6 +164,7 @@ class FareService {
   // Update vehicle pricing in the backend
   public async updateVehiclePricing(vehicleData: any): Promise<boolean> {
     try {
+      console.log("Updating vehicle pricing:", vehicleData);
       // Send updated pricing to backend
       await fareAPI.updateVehicle(vehicleData);
       
