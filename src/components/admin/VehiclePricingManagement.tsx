@@ -166,7 +166,7 @@ export function VehiclePricingManagement() {
       console.log("Refreshing vehicle pricing with timestamp:", Date.now());
       
       const timestamp = Date.now();
-      const data = await fareAPI.getVehiclePricing(`?_t=${timestamp}`);
+      const data = await fareAPI.getVehiclePricing();
       
       if (Array.isArray(data) && data.length > 0) {
         console.log("✅ Fetched vehicle pricing:", data);
