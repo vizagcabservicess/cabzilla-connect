@@ -31,6 +31,9 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
     }
 }
 
+// Log authentication attempt for debugging
+logError("vehicle-pricing.php auth check", ['isAdmin' => $isAdmin, 'userId' => $userId]);
+
 if (!$isAdmin) {
     sendJsonResponse(['status' => 'error', 'message' => 'Administrator access required'], 403);
     exit;
@@ -96,7 +99,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $vehicleType = $input['vehicleType'];
     
     try {
-        // Check if the vehicle type exists
+        // First check if the vehicle type exists in vehicle_types table
+        $vehicleCheckStmt = $conn->prepare("SELECT vehicle_id FROM vehicle_types WHERE vehicle_id = ?");
+        $vehicleCheckStmt->bind_param("s", $vehicleType);
+        $vehicleCheckStmt->execute();
+        $vehicleCheckResult = $vehicleCheckStmt->get_result();
+        
+        if ($vehicleCheckResult->num_rows === 0) {
+            sendJsonResponse(['status' => 'error', 'message' => 'Vehicle type does not exist'], 404);
+            exit;
+        }
+        
+        // Check if the vehicle type exists in pricing table
         $checkStmt = $conn->prepare("SELECT id FROM vehicle_pricing WHERE vehicle_type = ?");
         $checkStmt->bind_param("s", $vehicleType);
         $checkStmt->execute();
@@ -106,7 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Update existing record
             $stmt = $conn->prepare("
                 UPDATE vehicle_pricing 
-                SET base_price = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?
+                SET base_price = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?, updated_at = NOW()
                 WHERE vehicle_type = ?
             ");
             $stmt->bind_param("dddds", $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, $vehicleType);
@@ -114,6 +128,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$stmt->execute()) {
                 throw new Exception("Failed to update vehicle pricing: " . $stmt->error);
             }
+            
+            logError("Vehicle pricing updated successfully", [
+                'vehicleType' => $vehicleType,
+                'basePrice' => $basePrice, 
+                'pricePerKm' => $pricePerKm
+            ]);
             
             // Get the updated record
             $getStmt = $conn->prepare("SELECT * FROM vehicle_pricing WHERE vehicle_type = ?");
@@ -133,10 +153,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             sendJsonResponse(['status' => 'success', 'message' => 'Vehicle pricing updated successfully', 'data' => $response]);
         } else {
-            // Insert new record - Note: Removed is_active column from INSERT as it's causing the error
+            // Insert new record
             $stmt = $conn->prepare("
-                INSERT INTO vehicle_pricing (vehicle_type, base_price, price_per_km, night_halt_charge, driver_allowance)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO vehicle_pricing (vehicle_type, base_price, price_per_km, night_halt_charge, driver_allowance, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, NOW(), NOW())
             ");
             $stmt->bind_param("sdddd", $vehicleType, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
             
@@ -145,6 +165,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             
             $newId = $conn->insert_id;
+            logError("New vehicle pricing created", [
+                'id' => $newId,
+                'vehicleType' => $vehicleType,
+                'basePrice' => $basePrice, 
+                'pricePerKm' => $pricePerKm
+            ]);
             
             $response = [
                 'id' => $newId,

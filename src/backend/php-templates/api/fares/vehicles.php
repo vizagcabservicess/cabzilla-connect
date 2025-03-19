@@ -43,7 +43,7 @@ try {
         // Prepare statement to update vehicle pricing
         $stmt = $conn->prepare("
             UPDATE vehicle_pricing 
-            SET base_price = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?
+            SET base_price = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?, updated_at = NOW()
             WHERE vehicle_type = ?
         ");
         
@@ -85,8 +85,8 @@ try {
             if ($row['count'] === 0) {
                 // Vehicle type doesn't exist, create it
                 $insertStmt = $conn->prepare("
-                    INSERT INTO vehicle_pricing (vehicle_type, base_price, price_per_km, night_halt_charge, driver_allowance)
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO vehicle_pricing (vehicle_type, base_price, price_per_km, night_halt_charge, driver_allowance, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, NOW(), NOW())
                 ");
                 
                 if (!$insertStmt) {
@@ -99,15 +99,18 @@ try {
                     throw new Exception("Failed to insert vehicle pricing: " . $insertStmt->error);
                 }
                 
+                logError("Vehicle pricing created", ['vehicleType' => $vehicleType, 'basePrice' => $basePrice, 'pricePerKm' => $pricePerKm]);
                 echo json_encode(['message' => 'Vehicle pricing created successfully', 'vehicleType' => $vehicleType]);
                 exit;
             } else {
                 // Vehicle type exists but no change in values
+                logError("No changes needed for vehicle pricing", ['vehicleType' => $vehicleType]);
                 echo json_encode(['message' => 'No changes made to vehicle pricing', 'vehicleType' => $vehicleType]);
                 exit;
             }
         }
         
+        logError("Vehicle pricing updated", ['vehicleType' => $vehicleType, 'basePrice' => $basePrice, 'pricePerKm' => $pricePerKm]);
         echo json_encode(['message' => 'Vehicle pricing updated successfully', 'vehicleType' => $vehicleType]);
         exit;
     }
@@ -119,7 +122,7 @@ try {
         
         logError("vehicles.php GET request", ['includeInactive' => $includeInactive]);
         
-        // Get all vehicle types with their pricing data with a simpler query
+        // Build query to get all vehicle types with pricing info
         $query = "
             SELECT 
                 vt.vehicle_id, 
@@ -139,10 +142,14 @@ try {
                 vehicle_types vt
             LEFT JOIN 
                 vehicle_pricing vp ON vt.vehicle_id = vp.vehicle_type
-            " . ($includeInactive ? "" : "WHERE vt.is_active = 1") . "
-            ORDER BY 
-                vt.name
         ";
+        
+        // Only add the WHERE clause if we're not including inactive vehicles
+        if (!$includeInactive) {
+            $query .= " WHERE vt.is_active = 1";
+        }
+        
+        $query .= " ORDER BY vt.name";
         
         logError("vehicles.php query", ['query' => $query]);
         
@@ -168,7 +175,7 @@ try {
             // Ensure name is always a string, use vehicle_id as fallback
             $name = $row['name'] ?? '';
             if (empty($name) || $name === '0') {
-                $name = $row['vehicle_id'];
+                $name = "Vehicle ID: " . $row['vehicle_id'];
             }
             
             // Format vehicle data with consistent property names for frontend
@@ -190,7 +197,10 @@ try {
                 'vehicleType' => (string)$row['vehicle_id']
             ];
             
-            $vehicles[] = $vehicle;
+            // Only add active vehicles for non-admin requests or if specifically including inactive
+            if ($includeInactive || $vehicle['isActive']) {
+                $vehicles[] = $vehicle;
+            }
         }
 
         // Log success

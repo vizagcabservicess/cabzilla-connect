@@ -80,10 +80,10 @@ export const cabTypes: CabType[] = [
   }
 ];
 
-// Cache to store loaded cab types
+// Cache to store loaded cab types with shorter expiration time
 let cachedCabTypes: CabType[] | null = null;
 let lastCacheTime = 0;
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
+const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes in milliseconds (reduced from 5 minutes)
 
 // Function to load cab types dynamically
 export const loadCabTypes = async (): Promise<CabType[]> => {
@@ -357,7 +357,10 @@ export async function calculateFare(
   
   // For large distances, show toast notification that calculation is in progress
   if (distance > 300 && tripType === 'outstation') {
-    toast.info("Calculating fare for long distance trip...");
+    toast.info("Calculating fare for long distance trip...", {
+      id: "fare-calculation",
+      duration: 3000
+    });
   }
   
   try {
@@ -395,26 +398,26 @@ export async function calculateFare(
       let driverAllowance = cabType.driverAllowance || 250;
       let nightHaltCharge = cabType.nightHaltCharge || (cabType.name.toLowerCase().includes('sedan') ? 700 : 1000);
       
-      // Try to get up-to-date pricing info only if needed
-      if (basePrice === 0 || perKmRate === 0) {
-        try {
-          console.log("Fetching latest vehicle pricing from API");
-          const vehiclePricing = await fareAPI.getVehiclePricing();
-          const pricing = vehiclePricing.find(p => 
-            p.vehicleType.toLowerCase() === cabType.id.toLowerCase() || 
-            p.vehicleType.toLowerCase() === cabType.name.toLowerCase()
-          );
-          
-          if (pricing) {
-            console.log("Found pricing for", cabType.name, pricing);
-            basePrice = pricing.basePrice;
-            perKmRate = pricing.pricePerKm;
-            driverAllowance = pricing.driverAllowance || driverAllowance;
-            nightHaltCharge = pricing.nightHaltCharge || nightHaltCharge;
-          }
-        } catch (error) {
-          console.warn('Could not fetch latest pricing data, using default values:', error);
+      // Try to get up-to-date pricing info
+      try {
+        console.log("Fetching latest vehicle pricing from API for", cabType.id);
+        const vehiclePricing = await fareAPI.getVehiclePricing();
+        const pricing = vehiclePricing.find(p => 
+          p.vehicleType?.toLowerCase() === cabType.id?.toLowerCase() || 
+          p.vehicleType?.toLowerCase() === cabType.name?.toLowerCase()
+        );
+        
+        if (pricing) {
+          console.log("Found pricing for", cabType.name, pricing);
+          basePrice = pricing.basePrice || basePrice;
+          perKmRate = pricing.pricePerKm || perKmRate;
+          driverAllowance = pricing.driverAllowance || driverAllowance;
+          nightHaltCharge = pricing.nightHaltCharge || nightHaltCharge;
+        } else {
+          console.warn("No pricing found for", cabType.name, "in vehicle pricing data");
         }
+      } catch (error) {
+        console.warn('Could not fetch latest pricing data, using default values:', error);
       }
       
       console.log("Calculating outstation fare with:", {
@@ -476,6 +479,7 @@ export async function calculateFare(
           price: finalPrice
         };
         
+        toast.dismiss("fare-calculation");
         return finalPrice;
       }
     }
@@ -492,6 +496,7 @@ export async function calculateFare(
     return defaultPrice;
   } catch (error) {
     console.error("Error calculating fare:", error);
+    toast.dismiss("fare-calculation");
     // If calculation fails, use a simple fallback calculation
     return Math.ceil(distance * (cabType.pricePerKm || 15));
   }
@@ -536,7 +541,7 @@ export function calculateAirportFare(cabType: string, distance: number): number 
   return distance * 20;
 }
 
-// Cache for outstation pricing calculations
+// Cache for outstation pricing calculations with shorter expiration
 const outstationPricingCache: Record<string, {
   expire: number;
   price: number;
