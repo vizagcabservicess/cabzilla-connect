@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -923,3 +924,148 @@ export function VehiclePricingManagement() {
                 <div className="bg-gray-50 p-4 rounded-lg mb-4">
                   <h3 className="text-sm font-medium flex items-center mb-3">
                     <PlaneTakeoff className="h-4 w-4 mr-1" /> Distance Tiers
+                  </h3>
+                  <div className="grid gap-4 grid-cols-2">
+                    <FormField
+                      control={airportForm.control}
+                      name="tier1"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Tier 1 (0-15km)</FormLabel>
+                          <FormControl>
+                            <Input type="number" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={airportForm.control}
+                      name="tier2"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Tier 2 (16-25km)</FormLabel>
+                          <FormControl>
+                            <Input type="number" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={airportForm.control}
+                      name="tier3"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Tier 3 (26-35km)</FormLabel>
+                          <FormControl>
+                            <Input type="number" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={airportForm.control}
+                      name="tier4"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Tier 4 (36km+)</FormLabel>
+                          <FormControl>
+                            <Input type="number" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+                
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h3 className="text-sm font-medium flex items-center mb-3">
+                    <DollarSign className="h-4 w-4 mr-1" /> Additional Charges
+                  </h3>
+                  <div className="grid gap-4 grid-cols-1">
+                    <FormField
+                      control={airportForm.control}
+                      name="extraKmCharge"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Extra KM Charge</FormLabel>
+                          <FormControl>
+                            <Input type="number" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+                
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading ? (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-4 w-4" />
+                      Update Airport Pricing
+                    </>
+                  )}
+                </Button>
+              </form>
+            </Form>
+          </CardContent>
+        </Card>
+      </TabsContent>
+      
+      <TabsContent value="all">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Warehouse className="h-5 w-5" /> All Vehicle Pricing
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="text-sm font-medium mb-2">All Pricing Data</h3>
+                {vehiclePricing.length > 0 ? (
+                  <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto max-h-96">
+                    {JSON.stringify(vehiclePricing, null, 2)}
+                  </pre>
+                ) : (
+                  <p className="text-sm text-gray-500">No pricing data available</p>
+                )}
+              </div>
+              
+              <Button 
+                variant="outline" 
+                onClick={fetchVehiclePricing} 
+                disabled={isRefreshing}
+                className="w-full"
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                Refresh All Pricing Data
+              </Button>
+              
+              <Button 
+                variant="destructive" 
+                onClick={clearAllCaches} 
+                className="w-full"
+              >
+                <RotateCw className="mr-2 h-4 w-4" />
+                Clear All Fare Caches
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </TabsContent>
+    </Tabs>
+  );
+}
