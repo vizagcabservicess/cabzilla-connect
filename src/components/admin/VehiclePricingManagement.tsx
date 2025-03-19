@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -28,6 +28,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { VehiclePricing, VehiclePricingUpdateRequest } from '@/types/api';
 import { fareAPI } from '@/services/api';
+import { reloadCabTypes } from '@/lib/cabData';
 
 const basePricingSchema = z.object({
   vehicleType: z.string().min(1, { message: "Vehicle type is required" }),
@@ -118,23 +119,80 @@ export function VehiclePricingManagement() {
     },
   });
   
-  useEffect(() => {
-    fetchVehiclePricing();
+  // Clear all cached data across application
+  const clearAllCaches = useCallback(() => {
+    console.log("Clearing all vehicle pricing caches");
+    
+    // Clear all local and session storage caches
+    localStorage.removeItem('cabFares');
+    localStorage.removeItem('tourFares');
+    localStorage.removeItem('lastFareUpdate');
+    localStorage.removeItem('vehiclePricing');
+    
+    sessionStorage.removeItem('cabFares');
+    sessionStorage.removeItem('tourFares');
+    sessionStorage.removeItem('calculatedFares');
+    sessionStorage.removeItem('vehiclePricing');
+    
+    // Force clear cache variables
+    const cachePrefixes = ['fare-', 'price-', 'cab-', 'vehicle-'];
+    
+    // Remove matching session storage items
+    Object.keys(sessionStorage).forEach(key => {
+      for (const prefix of cachePrefixes) {
+        if (key.startsWith(prefix)) {
+          console.log(`Removing session cache item: ${key}`);
+          sessionStorage.removeItem(key);
+          break;
+        }
+      }
+    });
+    
+    // Remove matching local storage items
+    Object.keys(localStorage).forEach(key => {
+      for (const prefix of cachePrefixes) {
+        if (key.startsWith(prefix)) {
+          console.log(`Removing local cache item: ${key}`);
+          localStorage.removeItem(key);
+          break;
+        }
+      }
+    });
+    
+    // Add a cache-busting timestamp
+    sessionStorage.setItem('lastCacheClear', Date.now().toString());
   }, []);
   
-  const fetchVehiclePricing = async () => {
+  const fetchVehiclePricing = useCallback(async () => {
     try {
       setIsRefreshing(true);
       setError(null);
-      console.log("Manually refreshing vehicle pricing...");
-      const data = await fareAPI.getVehiclePricing();
+      
+      // Clear caches before fetching
+      clearAllCaches();
+      
+      console.log("Refreshing vehicle pricing with timestamp:", Date.now());
+      
+      // Add a cache-busting timestamp to the request
+      const timestamp = Date.now();
+      const data = await fareAPI.getVehiclePricing(`?_t=${timestamp}`);
       
       if (Array.isArray(data) && data.length > 0) {
-        console.log("Fetched vehicle pricing:", data);
+        console.log("✅ Fetched vehicle pricing:", data);
         setVehiclePricing(data);
+        
+        // Save to session storage with timestamp
+        sessionStorage.setItem('vehiclePricing', JSON.stringify({
+          data,
+          timestamp: Date.now()
+        }));
+        
         toast.success("Vehicle pricing refreshed");
+        
+        // Force reload vehicle info across app
+        await reloadCabTypes();
       } else {
-        console.warn("Empty or invalid vehicle pricing data:", data);
+        console.warn("❌ Empty or invalid vehicle pricing data:", data);
         setError("No vehicle pricing data available. The API may be down or returned an empty result.");
       }
     } catch (error) {
@@ -144,18 +202,32 @@ export function VehiclePricingManagement() {
     } finally {
       setIsRefreshing(false);
     }
-  };
+  }, [clearAllCaches]);
+  
+  // Load pricing data when component mounts
+  useEffect(() => {
+    fetchVehiclePricing();
+  }, [fetchVehiclePricing]);
   
   // Handle standard pricing update
   const onBasePricingSubmit = async (values: z.infer<typeof basePricingSchema>) => {
     try {
       setIsLoading(true);
+      
+      // Clear caches before update
+      clearAllCaches();
+      
       console.log("Submitting vehicle pricing update:", values);
       
       const data = await fareAPI.updateVehiclePricing(values as VehiclePricingUpdateRequest);
       console.log("Vehicle pricing update response:", data);
       
       toast.success("Vehicle pricing updated successfully");
+      
+      // Force reload vehicle info across app
+      await reloadCabTypes();
+      
+      // Refresh pricing data after update
       await fetchVehiclePricing();
     } catch (error) {
       console.error("Error updating vehicle pricing:", error);
@@ -171,6 +243,9 @@ export function VehiclePricingManagement() {
       setIsLoading(true);
       console.log("Submitting local fare update:", values);
       
+      // Clear caches before update
+      clearAllCaches();
+      
       // Update local package prices in the database
       const requestData = {
         vehicleType: values.vehicleType,
@@ -182,8 +257,12 @@ export function VehiclePricingManagement() {
       
       // This is a placeholder - would need to create a new API endpoint for this
       // For now, just simulate success
-      setTimeout(() => {
+      setTimeout(async () => {
         toast.success("Local fare settings updated successfully");
+        
+        // Force reload vehicle info across app
+        await reloadCabTypes();
+        
         setIsLoading(false);
       }, 500);
       
@@ -200,6 +279,9 @@ export function VehiclePricingManagement() {
       setIsLoading(true);
       console.log("Submitting airport fare update:", values);
       
+      // Clear caches before update
+      clearAllCaches();
+      
       // Update airport fare tiers in the database
       const requestData = {
         vehicleType: values.vehicleType,
@@ -212,8 +294,12 @@ export function VehiclePricingManagement() {
       
       // This is a placeholder - would need to create a new API endpoint for this
       // For now, just simulate success
-      setTimeout(() => {
+      setTimeout(async () => {
         toast.success("Airport fare settings updated successfully");
+        
+        // Force reload vehicle info across app
+        await reloadCabTypes();
+        
         setIsLoading(false);
       }, 500);
       
@@ -230,6 +316,9 @@ export function VehiclePricingManagement() {
       setIsLoading(true);
       console.log("Submitting outstation fare update:", values);
       
+      // Clear caches before update
+      clearAllCaches();
+      
       // Update outstation fares in the database
       const oneWayRequest = {
         vehicleType: values.vehicleType,
@@ -240,8 +329,12 @@ export function VehiclePricingManagement() {
       };
       
       // For now, just simulate success
-      setTimeout(() => {
+      setTimeout(async () => {
         toast.success("Outstation fare settings updated successfully");
+        
+        // Force reload vehicle info across app
+        await reloadCabTypes();
+        
         setIsLoading(false);
       }, 500);
       

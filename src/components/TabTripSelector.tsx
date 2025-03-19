@@ -1,7 +1,10 @@
+
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useEffect } from "react";
+import { useEffect, useCallback } from "react";
 import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
+import { reloadCabTypes } from "@/lib/cabData";
 
 interface TabTripSelectorProps {
   selectedTab: 'outstation' | 'local' | 'airport' | 'tour';
@@ -19,7 +22,7 @@ export function TabTripSelector({
   const { toast } = useToast();
 
   // Function to thoroughly clear all cache data
-  const clearAllCacheData = () => {
+  const clearAllCacheData = useCallback(() => {
     console.log("Clearing all cached data for trip type change");
     
     // Clear all booking and fare related data
@@ -77,7 +80,12 @@ export function TabTripSelector({
     sessionStorage.setItem('tripType', selectedTab);
     sessionStorage.setItem('tripMode', tripMode);
     sessionStorage.setItem('lastCacheClear', Date.now().toString());
-  };
+    
+    // Also reload cab types to ensure fresh data
+    reloadCabTypes().catch(err => {
+      console.error("Failed to reload cab types:", err);
+    });
+  }, [selectedTab, tripMode]);
   
   // Clear any cached fare data when tab changes
   useEffect(() => {
@@ -102,7 +110,7 @@ export function TabTripSelector({
       duration: 3000,
     });
     
-  }, [selectedTab, toast]);
+  }, [selectedTab, toast, clearAllCacheData]);
   
   // Function to handle tab change with complete data reset
   const handleTabChange = (value: string) => {
