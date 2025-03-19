@@ -1,6 +1,9 @@
 import { CabType } from '@/types/cab';
 import { getVehicleData } from '@/services/vehicleDataService';
 
+// Store the loaded cab types for reuse
+let cabTypesCache: CabType[] = [];
+
 // Function to load cab types from API or cache
 export const loadCabTypes = async (): Promise<CabType[]> => {
   try {
@@ -11,6 +14,7 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
       // Validate cache has required fields
       if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].id) {
         console.log('Retrieved', parsed.length, 'active vehicle types from cache');
+        cabTypesCache = parsed;
         return parsed;
       }
     }
@@ -47,6 +51,7 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
     if (validVehicles.length > 0) {
       sessionStorage.setItem('cabTypes', JSON.stringify(validVehicles));
       console.log('Cached', validVehicles.length, 'valid vehicle types');
+      cabTypesCache = validVehicles;
     } else {
       console.warn('No valid vehicles found, not caching');
     }
@@ -56,7 +61,7 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
     console.error('Error loading cab types:', error);
     
     // Return default cabs as fallback
-    return [
+    const defaultCabs = [
       {
         id: 'sedan',
         name: 'Sedan',
@@ -103,8 +108,78 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
         isActive: true
       }
     ];
+    
+    // Store default cabs in cache
+    cabTypesCache = defaultCabs;
+    
+    return defaultCabs;
   }
 };
+
+// Export a synchronously accessible cabTypes array that can be used directly by components
+// Initially starts with default cabs and will be updated when loadCabTypes() is called
+export const cabTypes: CabType[] = [
+  {
+    id: 'sedan',
+    name: 'Sedan',
+    capacity: 4,
+    luggageCapacity: 2,
+    price: 4200,
+    pricePerKm: 14,
+    image: '/cars/sedan.png',
+    amenities: ['AC', 'Bottle Water', 'Music System'],
+    description: 'Comfortable sedan suitable for 4 passengers.',
+    ac: true,
+    nightHaltCharge: 700,
+    driverAllowance: 250,
+    isActive: true
+  },
+  {
+    id: 'ertiga',
+    name: 'Ertiga',
+    capacity: 6,
+    luggageCapacity: 3,
+    price: 5400,
+    pricePerKm: 18,
+    image: '/cars/ertiga.png',
+    amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
+    description: 'Spacious SUV suitable for 6 passengers.',
+    ac: true,
+    nightHaltCharge: 1000,
+    driverAllowance: 250,
+    isActive: true
+  },
+  {
+    id: 'innova_crysta',
+    name: 'Innova Crysta',
+    capacity: 7,
+    luggageCapacity: 4,
+    price: 6000,
+    pricePerKm: 20,
+    image: '/cars/innova.png',
+    amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
+    description: 'Premium SUV with ample space for 7 passengers.',
+    ac: true,
+    nightHaltCharge: 1000,
+    driverAllowance: 250,
+    isActive: true
+  }
+];
+
+// Initialize cabTypes with data from the API on app startup
+(async () => {
+  try {
+    const loadedCabs = await loadCabTypes();
+    if (loadedCabs && loadedCabs.length > 0) {
+      // Update the cabTypes array in-place to keep the same reference
+      cabTypes.length = 0; // Clear the array
+      cabTypes.push(...loadedCabs); // Add all loaded cabs
+    }
+  } catch (error) {
+    console.error('Failed to initialize cabTypes:', error);
+    // We already have default vehicles in the array, so no need to do anything here
+  }
+})();
 
 // Force refresh cab types (ignore cache)
 export const reloadCabTypes = async (): Promise<CabType[]> => {
@@ -140,6 +215,10 @@ export const reloadCabTypes = async (): Promise<CabType[]> => {
       
       // Store in sessionStorage for later use
       sessionStorage.setItem('cabTypes', JSON.stringify(processedVehicles));
+      
+      // Update the cabTypes array in-place
+      cabTypes.length = 0;
+      cabTypes.push(...processedVehicles);
       
       return processedVehicles;
     } else {
@@ -184,6 +263,11 @@ export const reloadCabTypes = async (): Promise<CabType[]> => {
         }));
         
         sessionStorage.setItem('cabTypes', JSON.stringify(processedVehicles));
+        
+        // Update the cabTypes array in-place
+        cabTypes.length = 0;
+        cabTypes.push(...processedVehicles);
+        
         return processedVehicles;
       }
     } catch (dbError) {
@@ -244,6 +328,10 @@ export const reloadCabTypes = async (): Promise<CabType[]> => {
     // Store default cabs in sessionStorage
     sessionStorage.setItem('cabTypes', JSON.stringify(defaultCabs));
     
+    // Update the cabTypes array in-place
+    cabTypes.length = 0;
+    cabTypes.push(...defaultCabs);
+    
     return defaultCabs;
   }
 };
@@ -251,4 +339,11 @@ export const reloadCabTypes = async (): Promise<CabType[]> => {
 // Function to format price with Indian Rupees symbol
 export const formatPrice = (price: number): string => {
   return `₹${price.toLocaleString('en-IN')}`;
+};
+
+// Function to clear fare cache (placeholder for compatibility)
+export const clearFareCache = (): void => {
+  console.log('Clearing fare cache');
+  sessionStorage.removeItem('cabTypes');
+  localStorage.removeItem('cabTypes');
 };
