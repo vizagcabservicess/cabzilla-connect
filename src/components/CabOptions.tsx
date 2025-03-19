@@ -1,11 +1,12 @@
 
-import { useState, useEffect } from 'react';
-import { CabType, formatPrice, TripType, TripMode, getLocalPackagePrice, oneWayRates, loadCabTypes } from '@/lib/cabData';
-import { Users, Briefcase, Tag, Info, Check } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { CabType, formatPrice, TripType, TripMode, getLocalPackagePrice, loadCabTypes, reloadCabTypes } from '@/lib/cabData';
+import { Users, Briefcase, Tag, Info, Check, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { differenceInDays } from 'date-fns';
 import { calculateAirportFare } from '@/lib/locationData';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
 
 interface CabOptionsProps {
   cabTypes: CabType[];
@@ -37,6 +38,7 @@ export function CabOptions({
   const [lastCalculationTimestamp, setLastCalculationTimestamp] = useState<number>(0);
   const [cabTypes, setCabTypes] = useState<CabType[]>(initialCabTypes);
   const [isLoadingCabs, setIsLoadingCabs] = useState(false);
+  const [isRefreshingCabs, setIsRefreshingCabs] = useState(false);
 
   // Create a unique identifier for the current trip configuration
   const currentTripIdentifier = `${tripType}-${tripMode}-${hourlyPackage || 'none'}-${distance}`;
@@ -58,6 +60,24 @@ export function CabOptions({
     }
     
     fetchCabTypes();
+  }, []);
+
+  // Function to manually refresh cab types
+  const refreshCabTypes = useCallback(async () => {
+    setIsRefreshingCabs(true);
+    try {
+      const freshCabTypes = await reloadCabTypes();
+      setCabTypes(freshCabTypes);
+      toast.success('Vehicle data refreshed successfully');
+      
+      // Force recalculation of fares
+      setLastCalculationTimestamp(Date.now());
+    } catch (error) {
+      console.error('Error refreshing cab types:', error);
+      toast.error('Failed to refresh vehicle data');
+    } finally {
+      setIsRefreshingCabs(false);
+    }
   }, []);
 
   // Force recalculation when trip type changes
@@ -209,8 +229,50 @@ export function CabOptions({
         let nightHaltCharge = cab.nightHaltCharge || 0;
         let driverAllowance = cab.driverAllowance || 250;
         
-        // If no pricing info in cab object, use defaults based on name
-        if (!baseRate || !perKmRate) {
+        // If all pricing info is already in cab object, use it directly
+        if (baseRate > 0 && perKmRate > 0) {
+          if (tripMode === "one-way") {
+            // One-way calculation - double the distance to account for driver return
+            const effectiveDistance = distance * 2;
+            const allocatedKm = 300;
+            const totalBaseFare = baseRate;
+            let totalDistanceFare = 0;
+            
+            // Calculate extra kilometers beyond the base 300km
+            if (effectiveDistance > allocatedKm) {
+              const extraKm = effectiveDistance - allocatedKm;
+              totalDistanceFare = extraKm * perKmRate;
+            }
+            
+            // Add driver allowance
+            const totalFare = totalBaseFare + totalDistanceFare + driverAllowance;
+            return Math.ceil(totalFare / 10) * 10;
+          } else {
+            // Round trip calculation
+            let days = returnDate ? Math.max(1, differenceInDays(returnDate, pickupDate || new Date()) + 1) : 1;
+            const allocatedKm = 300; // per day
+            const totalAllocatedKm = days * allocatedKm;
+            
+            let effectiveDistance = distance * 2;
+            
+            let totalBaseFare = days * baseRate;
+            let totalDistanceFare = 0;
+            
+            // Calculate extra kilometers beyond the allocated km for all days
+            if (effectiveDistance > totalAllocatedKm) {
+              const extraKm = effectiveDistance - totalAllocatedKm;
+              totalDistanceFare = extraKm * perKmRate;
+            }
+            
+            let totalNightHalt = (days - 1) * nightHaltCharge;
+            
+            const totalFare = totalBaseFare + totalDistanceFare + totalNightHalt + (days * driverAllowance);
+            return Math.ceil(totalFare / 10) * 10;
+          }
+        } else {
+          // If pricing info is missing, use defaults by name
+          console.warn(`Missing pricing info for ${cab.name}, using defaults`);
+          
           switch (cab.name.toLowerCase()) {
             case "sedan":
               baseRate = 4200;
@@ -223,54 +285,50 @@ export function CabOptions({
               nightHaltCharge = 1000;
               break;
             case "innova crysta":
+            case "innova":
               baseRate = 6000;
               perKmRate = 20;
               nightHaltCharge = 1000;
               break;
             default:
-              baseRate = cab.price || 5000;
-              perKmRate = cab.pricePerKm || 18;
-              nightHaltCharge = cab.nightHaltCharge || 1000;
-          }
-        }
-        
-        if (tripMode === "one-way") {
-          // One-way calculation - double the distance to account for driver return
-          const effectiveDistance = distance * 2;
-          const allocatedKm = 300;
-          const totalBaseFare = baseRate;
-          let totalDistanceFare = 0;
-          
-          // Calculate extra kilometers beyond the base 300km
-          if (effectiveDistance > allocatedKm) {
-            const extraKm = effectiveDistance - allocatedKm;
-            totalDistanceFare = extraKm * perKmRate;
+              baseRate = 5000;
+              perKmRate = 18;
+              nightHaltCharge = 1000;
           }
           
-          // Add driver allowance
-          const totalFare = totalBaseFare + totalDistanceFare + driverAllowance;
-          return Math.ceil(totalFare / 10) * 10;
-        } else {
-          // Round trip calculation
-          let days = returnDate ? Math.max(1, differenceInDays(returnDate, pickupDate || new Date()) + 1) : 1;
-          const allocatedKm = 300; // per day
-          const totalAllocatedKm = days * allocatedKm;
-          
-          let effectiveDistance = distance * 2;
-          
-          let totalBaseFare = days * baseRate;
-          let totalDistanceFare = 0;
-          
-          // Calculate extra kilometers beyond the allocated km for all days
-          if (effectiveDistance > totalAllocatedKm) {
-            const extraKm = effectiveDistance - totalAllocatedKm;
-            totalDistanceFare = extraKm * perKmRate;
+          // Recalculate with default values
+          if (tripMode === "one-way") {
+            const effectiveDistance = distance * 2;
+            const allocatedKm = 300;
+            const totalBaseFare = baseRate;
+            let totalDistanceFare = 0;
+            
+            if (effectiveDistance > allocatedKm) {
+              const extraKm = effectiveDistance - allocatedKm;
+              totalDistanceFare = extraKm * perKmRate;
+            }
+            
+            const totalFare = totalBaseFare + totalDistanceFare + driverAllowance;
+            return Math.ceil(totalFare / 10) * 10;
+          } else {
+            let days = returnDate ? Math.max(1, differenceInDays(returnDate, pickupDate || new Date()) + 1) : 1;
+            const allocatedKm = 300;
+            const totalAllocatedKm = days * allocatedKm;
+            let effectiveDistance = distance * 2;
+            
+            let totalBaseFare = days * baseRate;
+            let totalDistanceFare = 0;
+            
+            if (effectiveDistance > totalAllocatedKm) {
+              const extraKm = effectiveDistance - totalAllocatedKm;
+              totalDistanceFare = extraKm * perKmRate;
+            }
+            
+            let totalNightHalt = (days - 1) * nightHaltCharge;
+            
+            const totalFare = totalBaseFare + totalDistanceFare + totalNightHalt + (days * driverAllowance);
+            return Math.ceil(totalFare / 10) * 10;
           }
-          
-          let totalNightHalt = (days - 1) * nightHaltCharge;
-          
-          const totalFare = totalBaseFare + totalDistanceFare + totalNightHalt + (days * driverAllowance);
-          return Math.ceil(totalFare / 10) * 10;
         }
       }
       
@@ -299,106 +357,155 @@ export function CabOptions({
     <div className="space-y-4 mt-6">
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-lg font-semibold text-gray-800">Select a cab type</h3>
-        <div className="text-xs text-gray-500">{cabTypes.length} cab types available</div>
+        <div className="flex items-center gap-2">
+          <div className="text-xs text-gray-500">{cabTypes.length} cab types available</div>
+          <Button 
+            variant="outline"
+            size="sm"
+            onClick={refreshCabTypes}
+            disabled={isRefreshingCabs}
+            className="h-8 px-2"
+          >
+            <RefreshCw className={`h-3 w-3 mr-1 ${isRefreshingCabs ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
       
-      <div className="space-y-3">
-        {cabTypes.map((cab) => {
-          const fare = cabFares[cab.id] || 0;
-          const isSelected = selectedCabId === cab.id;
-          
-          let fareDetails = "";
-          if (tripType === 'airport') {
-            fareDetails = "Airport transfer";
-          } else if (tripType === 'local' && hourlyPackage) {
-            const packageInfo = hourlyPackage === '8hrs-80km' ? '8 hrs / 80 km' : '10 hrs / 100 km';
-            fareDetails = packageInfo;
-          } else if (tripType === 'outstation') {
-            const totalDistance = distance;
-            const effectiveDistance = distance * 2; // Driver return distance
-            const allocatedKm = 300;
-            const extraKm = tripMode === 'one-way' 
-              ? Math.max(0, effectiveDistance - allocatedKm)
-              : Math.max(0, effectiveDistance - (allocatedKm * (returnDate ? Math.max(1, differenceInDays(returnDate, pickupDate || new Date()) + 1) : 1)));
-              
-            fareDetails = tripMode === 'one-way' 
-              ? `One way - ${totalDistance}km (${extraKm > 0 ? extraKm + 'km extra' : 'within base km'})` 
-              : `Round trip - ${totalDistance * 2}km total`;
-          }
+      {cabTypes.length === 0 ? (
+        <div className="p-8 text-center border rounded-lg bg-gray-50">
+          <p className="text-gray-500">No vehicles available. Please try refreshing.</p>
+          <Button 
+            variant="default"
+            onClick={refreshCabTypes}
+            disabled={isRefreshingCabs}
+            className="mt-4"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshingCabs ? 'animate-spin' : ''}`} />
+            Refresh Vehicles
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {cabTypes.map((cab) => {
+            const fare = cabFares[cab.id] || 0;
+            const isSelected = selectedCabId === cab.id;
+            
+            let fareDetails = "";
+            if (tripType === 'airport') {
+              fareDetails = "Airport transfer";
+            } else if (tripType === 'local' && hourlyPackage) {
+              const packageInfo = hourlyPackage === '8hrs-80km' ? '8 hrs / 80 km' : '10 hrs / 100 km';
+              fareDetails = packageInfo;
+            } else if (tripType === 'outstation') {
+              const totalDistance = distance;
+              const effectiveDistance = distance * 2; // Driver return distance
+              const allocatedKm = 300;
+              const extraKm = tripMode === 'one-way' 
+                ? Math.max(0, effectiveDistance - allocatedKm)
+                : Math.max(0, effectiveDistance - (allocatedKm * (returnDate ? Math.max(1, differenceInDays(returnDate, pickupDate || new Date()) + 1) : 1)));
+                
+              fareDetails = tripMode === 'one-way' 
+                ? `One way - ${totalDistance}km (${extraKm > 0 ? extraKm + 'km extra' : 'within base km'})` 
+                : `Round trip - ${totalDistance * 2}km total`;
+            }
 
-          return (
-            <div 
-              key={cab.id}
-              className={cn(
-                "border rounded-lg overflow-hidden transition-all duration-300",
-                isSelected 
-                  ? "border-blue-500 shadow-md bg-blue-50 transform scale-[1.02]" 
-                  : "border-gray-200 hover:border-gray-300 bg-white"
-              )}
-            >
+            return (
               <div 
-                className="p-4 cursor-pointer relative"
-                onClick={() => handleSelectCab(cab)}
-              >
-                {isSelected && (
-                  <div className="absolute top-2 right-2 bg-blue-500 text-white rounded-full p-1">
-                    <Check size={16} />
-                  </div>
+                key={cab.id}
+                className={cn(
+                  "border rounded-lg overflow-hidden transition-all duration-300",
+                  isSelected 
+                    ? "border-blue-500 shadow-md bg-blue-50 transform scale-[1.02]" 
+                    : "border-gray-200 hover:border-gray-300 bg-white"
                 )}
-                
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center space-x-3">
-                    <div className={cn(
-                      "w-12 h-12 rounded-md flex items-center justify-center",
-                      isSelected ? "bg-blue-100" : "bg-gray-100"
-                    )}>
-                      <span className={isSelected ? "text-blue-500 text-xs" : "text-gray-500 text-xs"}>
-                        {cab.name.charAt(0)}
-                      </span>
+              >
+                <div 
+                  className="p-4 cursor-pointer relative"
+                  onClick={() => handleSelectCab(cab)}
+                >
+                  {isSelected && (
+                    <div className="absolute top-2 right-2 bg-blue-500 text-white rounded-full p-1">
+                      <Check size={16} />
                     </div>
-                    <div>
-                      <h4 className="font-semibold text-base text-gray-800">{cab.name}</h4>
-                      <p className="text-xs text-gray-500">{cab.description}</p>
+                  )}
+                  
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center space-x-3">
+                      <div className={cn(
+                        "w-12 h-12 rounded-md flex items-center justify-center bg-cover bg-center",
+                        isSelected ? "bg-blue-100" : "bg-gray-100"
+                      )} style={{backgroundImage: cab.image && !cab.image.includes('undefined') ? `url(${cab.image})` : 'none'}}>
+                        {(!cab.image || cab.image.includes('undefined')) && (
+                          <span className={isSelected ? "text-blue-500 text-xs" : "text-gray-500 text-xs"}>
+                            {cab.name.charAt(0)}
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-base text-gray-800">{cab.name}</h4>
+                        <p className="text-xs text-gray-500">{cab.description}</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end">
+                      <div className={cn(
+                        "text-lg font-bold",
+                        isSelected ? "text-blue-600" : "text-gray-800"
+                      )}>
+                        {formatPrice(fare)}
+                      </div>
+                      <div className="text-xs text-blue-600">
+                        {fareDetails}
+                      </div>
+                      <div className="flex items-center text-xs text-gray-400">
+                        <span className="text-green-600 mr-1 text-[10px]">✓</span>
+                        Includes taxes & fees (Tolls & Permits Extra)
+                      </div>
                     </div>
                   </div>
-                  <div className="flex flex-col items-end">
-                    <div className={cn(
-                      "text-lg font-bold",
-                      isSelected ? "text-blue-600" : "text-gray-800"
-                    )}>
-                      {formatPrice(fare)}
-                    </div>
-                    <div className="text-xs text-blue-600">
-                      {fareDetails}
-                    </div>
-                    <div className="flex items-center text-xs text-gray-400">
-                      <span className="text-green-600 mr-1 text-[10px]">✓</span>
-                      Includes taxes & fees (Tolls & Permits Extra)
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="flex flex-wrap gap-2 mt-2">
-                  <div className="flex items-center text-xs bg-gray-100 px-2 py-1 rounded">
-                    <Users size={12} className="mr-1" />
-                    {cab.capacity} persons
-                  </div>
-                  <div className="flex items-center text-xs bg-gray-100 px-2 py-1 rounded">
-                    <Briefcase size={12} className="mr-1" />
-                    {cab.luggageCapacity} bags
-                  </div>
-                  {cab.ac && (
+                  
+                  <div className="flex flex-wrap gap-2 mt-2">
                     <div className="flex items-center text-xs bg-gray-100 px-2 py-1 rounded">
-                      <Check size={12} className="mr-1" />
-                      AC
+                      <Users size={12} className="mr-1" />
+                      {cab.capacity} persons
+                    </div>
+                    <div className="flex items-center text-xs bg-gray-100 px-2 py-1 rounded">
+                      <Briefcase size={12} className="mr-1" />
+                      {cab.luggageCapacity} bags
+                    </div>
+                    {cab.ac && (
+                      <div className="flex items-center text-xs bg-gray-100 px-2 py-1 rounded">
+                        <Check size={12} className="mr-1" />
+                        AC
+                      </div>
+                    )}
+                    {cab.amenities && cab.amenities.length > 0 && (
+                      <div className="flex items-center text-xs bg-gray-100 px-2 py-1 rounded" 
+                           onClick={(e) => { e.stopPropagation(); toggleExpand(cab.id); }}>
+                        <Info size={12} className="mr-1" />
+                        {expandedCab === cab.id ? 'Hide details' : 'More details'}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {expandedCab === cab.id && cab.amenities && cab.amenities.length > 0 && (
+                    <div className="mt-3 pt-3 border-t text-sm text-gray-600">
+                      <div className="font-medium mb-1">Amenities:</div>
+                      <div className="flex flex-wrap gap-1">
+                        {cab.amenities.map((amenity, index) => (
+                          <span key={index} className="bg-gray-50 text-xs px-2 py-1 rounded">
+                            {amenity}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

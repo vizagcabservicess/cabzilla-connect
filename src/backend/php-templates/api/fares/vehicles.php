@@ -107,35 +107,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Handle GET requests
 try {
-    // Get all vehicle pricing
-    $stmt = $conn->prepare("SELECT * FROM vehicle_pricing WHERE is_active = 1 ORDER BY id");
+    // Get all vehicle types and pricing data by joining both tables
+    $stmt = $conn->prepare("
+        SELECT v.id, v.vehicle_id, v.name, v.capacity, v.luggage_capacity,
+               v.ac, v.image, v.amenities, v.description, v.is_active,
+               p.base_price, p.price_per_km, p.night_halt_charge, p.driver_allowance
+        FROM vehicle_types v
+        LEFT JOIN vehicle_pricing p ON v.vehicle_id = p.vehicle_type
+        WHERE v.is_active = 1
+        ORDER BY v.id
+    ");
+    
+    if (!$stmt) {
+        logError("SQL prepare error", ['error' => $conn->error]);
+        sendJsonResponse(['error' => 'Database error: ' . $conn->error], 500);
+        exit;
+    }
+    
     $stmt->execute();
     $result = $stmt->get_result();
 
-    $vehiclePricing = [];
+    $vehicles = [];
     while ($row = $result->fetch_assoc()) {
-        // Convert numeric strings to actual numbers and ensure all fields are typed correctly
-        $pricing = [
-            'id' => intval($row['id']),
-            'vehicleType' => $row['vehicle_type'],
-            'basePrice' => floatval($row['base_price']),
-            'pricePerKm' => floatval($row['price_per_km']),
-            'nightHaltCharge' => floatval($row['night_halt_charge']),
-            'driverAllowance' => floatval($row['driver_allowance']),
-            'isActive' => (bool)$row['is_active'] // Convert to boolean
+        // Parse amenities from JSON or comma-separated string
+        $amenities = null;
+        if (!empty($row['amenities'])) {
+            // Try to decode as JSON first
+            $decoded = json_decode($row['amenities'], true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $amenities = $decoded;
+            } else {
+                // If not JSON, treat as comma-separated
+                $amenities = explode(',', $row['amenities']);
+                // Trim each item
+                $amenities = array_map('trim', $amenities);
+            }
+        }
+        
+        // Convert to camelCase properties for frontend
+        $vehicle = [
+            'id' => $row['vehicle_id'], // Use vehicle_id as the main identifier
+            'name' => $row['name'],
+            'capacity' => intval($row['capacity']),
+            'luggageCapacity' => intval($row['luggage_capacity']),
+            'price' => floatval($row['base_price'] ?? 0),
+            'pricePerKm' => floatval($row['price_per_km'] ?? 0),
+            'image' => $row['image'],
+            'amenities' => $amenities ?: [],
+            'description' => $row['description'],
+            'ac' => (bool)$row['ac'],
+            'nightHaltCharge' => floatval($row['night_halt_charge'] ?? 0),
+            'driverAllowance' => floatval($row['driver_allowance'] ?? 0)
         ];
         
-        $vehiclePricing[] = $pricing;
+        $vehicles[] = $vehicle;
     }
 
     // Log the response for debugging
-    logError("Vehicle pricing GET response", ['count' => count($vehiclePricing)]);
+    logError("Vehicles GET response", ['count' => count($vehicles)]);
 
-    // Send response as a simple array, not an object with numbered keys
-    sendJsonResponse($vehiclePricing);
+    // Send response
+    sendJsonResponse($vehicles);
 } catch (Exception $e) {
-    logError("Error fetching vehicle pricing", ['error' => $e->getMessage()]);
-    sendJsonResponse(['error' => 'Failed to fetch vehicle pricing: ' . $e->getMessage()], 500);
+    logError("Error fetching vehicles", ['error' => $e->getMessage()]);
+    sendJsonResponse(['error' => 'Failed to fetch vehicles: ' . $e->getMessage()], 500);
 }
 
 // Helper function to send JSON responses

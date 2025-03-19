@@ -29,7 +29,7 @@ export interface CabType {
   driverAllowance?: number;
 }
 
-// Default cab types (will be replaced with dynamic data)
+// Default cab types (used as fallback if API fails)
 export const cabTypes: CabType[] = [
   {
     id: 'sedan',
@@ -41,7 +41,9 @@ export const cabTypes: CabType[] = [
     image: '/cars/sedan.png',
     amenities: ['AC', 'Bottle Water', 'Music System'],
     description: 'Comfortable sedan suitable for 4 passengers.',
-    ac: true
+    ac: true,
+    nightHaltCharge: 700,
+    driverAllowance: 250
   },
   {
     id: 'ertiga',
@@ -53,7 +55,9 @@ export const cabTypes: CabType[] = [
     image: '/cars/ertiga.png',
     amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
     description: 'Spacious SUV suitable for 6 passengers.',
-    ac: true
+    ac: true,
+    nightHaltCharge: 1000,
+    driverAllowance: 250
   },
   {
     id: 'innova_crysta',
@@ -65,37 +69,71 @@ export const cabTypes: CabType[] = [
     image: '/cars/innova.png',
     amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
     description: 'Premium SUV with ample space for 7 passengers.',
-    ac: true
+    ac: true,
+    nightHaltCharge: 1000,
+    driverAllowance: 250
   }
 ];
+
+// Cache to store loaded cab types
+let cachedCabTypes: CabType[] | null = null;
+let lastCacheTime = 0;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
 
 // Function to load cab types dynamically
 export const loadCabTypes = async (): Promise<CabType[]> => {
   try {
+    const now = Date.now();
+    
+    // Use cache if available and not expired
+    if (cachedCabTypes && now - lastCacheTime < CACHE_DURATION) {
+      console.log('Using cached cab types, cache age:', (now - lastCacheTime) / 1000, 'seconds');
+      return cachedCabTypes;
+    }
+    
+    console.log('Fetching new cab types from API');
     const vehicleData = await fareAPI.getAllVehicleData();
     
-    // Map the API data to match the CabType interface
-    const dynamicCabTypes: CabType[] = vehicleData.map((vehicle) => ({
-      id: vehicle.id,
-      name: vehicle.name,
-      capacity: vehicle.capacity,
-      luggageCapacity: vehicle.luggageCapacity,
-      price: vehicle.price,
-      pricePerKm: vehicle.pricePerKm,
-      image: vehicle.image,
-      amenities: vehicle.amenities,
-      description: vehicle.description,
-      ac: vehicle.ac,
-      nightHaltCharge: vehicle.nightHaltCharge,
-      driverAllowance: vehicle.driverAllowance
-    }));
+    if (Array.isArray(vehicleData) && vehicleData.length > 0) {
+      // Convert API data to CabType format if needed
+      const dynamicCabTypes: CabType[] = vehicleData.map((vehicle) => ({
+        id: vehicle.id || '',
+        name: vehicle.name || '',
+        capacity: vehicle.capacity || 4,
+        luggageCapacity: vehicle.luggageCapacity || 2,
+        price: vehicle.price || 0,
+        pricePerKm: vehicle.pricePerKm || 0,
+        image: vehicle.image || '/cars/sedan.png',
+        amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC'],
+        description: vehicle.description || '',
+        ac: vehicle.ac !== undefined ? vehicle.ac : true,
+        nightHaltCharge: vehicle.nightHaltCharge || 0,
+        driverAllowance: vehicle.driverAllowance || 0
+      }));
+      
+      // Update cache
+      cachedCabTypes = dynamicCabTypes;
+      lastCacheTime = now;
+      
+      console.log('Loaded', dynamicCabTypes.length, 'dynamic cab types');
+      return dynamicCabTypes;
+    }
     
-    return dynamicCabTypes.length > 0 ? dynamicCabTypes : cabTypes;
+    // If API returns empty data, use default and log warning
+    console.warn('API returned empty vehicle data, using defaults');
+    return cabTypes;
   } catch (error) {
     console.error('Error loading cab types:', error);
-    // Fall back to default cab types if API call fails
+    // Fallback to default cab types if API call fails
     return cabTypes;
   }
+};
+
+// Function to reload cab types and clear cache
+export const reloadCabTypes = async (): Promise<CabType[]> => {
+  cachedCabTypes = null;
+  lastCacheTime = 0;
+  return loadCabTypes();
 };
 
 export const hourlyPackages: HourlyPackage[] = [
@@ -184,7 +222,7 @@ export const loadTourFares = async (): Promise<any> => {
           dynamicTourFares[tour.tourId] = {
             sedan: tour.sedan || 0,
             ertiga: tour.ertiga || 0,
-            innova_crysta: tour.innova || 0
+            innova: tour.innova || 0
           };
         }
       });
@@ -297,25 +335,27 @@ export async function calculateFare(
   
   // For outstation trips
   if (tripType === 'outstation') {
-    // Get latest pricing data from the API if available
+    // Use the cab's pricing info directly
     let basePrice = cabType.price;
     let perKmRate = cabType.pricePerKm;
     let driverAllowance = cabType.driverAllowance || 250;
     let nightHaltCharge = cabType.nightHaltCharge || (cabType.name.toLowerCase() === 'sedan' ? 700 : 1000);
     
-    // Try to get up-to-date pricing info
-    try {
-      const vehiclePricing = await fareAPI.getVehiclePricing();
-      const pricing = vehiclePricing.find(p => p.vehicleType.toLowerCase() === cabType.id.toLowerCase());
-      
-      if (pricing) {
-        basePrice = pricing.basePrice;
-        perKmRate = pricing.pricePerKm;
-        driverAllowance = pricing.driverAllowance || driverAllowance;
-        nightHaltCharge = pricing.nightHaltCharge || nightHaltCharge;
+    // Try to get up-to-date pricing info only if we need to (values are 0)
+    if (basePrice === 0 || perKmRate === 0) {
+      try {
+        const vehiclePricing = await fareAPI.getVehiclePricing();
+        const pricing = vehiclePricing.find(p => p.vehicleType.toLowerCase() === cabType.id.toLowerCase());
+        
+        if (pricing) {
+          basePrice = pricing.basePrice;
+          perKmRate = pricing.pricePerKm;
+          driverAllowance = pricing.driverAllowance || driverAllowance;
+          nightHaltCharge = pricing.nightHaltCharge || nightHaltCharge;
+        }
+      } catch (error) {
+        console.warn('Could not fetch latest pricing data, using default values:', error);
       }
-    } catch (error) {
-      console.warn('Could not fetch latest pricing data, using default values:', error);
     }
     
     if (tripMode === 'one-way') {
