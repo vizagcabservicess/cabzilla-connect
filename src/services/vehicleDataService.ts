@@ -99,7 +99,8 @@ const normalizeVehiclesData = (data: any): CabType[] => {
     driverAllowance: Number(vehicle.driverAllowance || vehicle.driver_allowance) || 0,
     isActive: vehicle.isActive !== undefined ? Boolean(vehicle.isActive) : 
               (vehicle.is_active !== undefined ? Boolean(vehicle.is_active) : true),
-    basePrice: Number(vehicle.basePrice || vehicle.price || vehicle.base_price) || 0
+    basePrice: Number(vehicle.basePrice || vehicle.price || vehicle.base_price) || 0,
+    vehicleId: String(vehicle.id || vehicle.vehicleId || vehicle.vehicle_id || vehicle.vehicleType || '')
   }));
 };
 
@@ -116,17 +117,17 @@ export const getVehicleData = async (includeInactive: boolean = false): Promise<
   // Try multiple API endpoints in sequence
   const endpoints = [
     // Primary endpoint
-    `${apiBaseUrl}/api/fares/vehicles-data.php?${cacheParam}`,
+    `${apiBaseUrl}/api/fares/vehicles-data.php?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`,
     // Alternate path
-    `${apiBaseUrl}/api/fares/vehicles-data?${cacheParam}`,
+    `${apiBaseUrl}/api/fares/vehicles-data?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`,
     // Local fallback
-    `/api/fares/vehicles-data.php?${cacheParam}`,
+    `/api/fares/vehicles-data.php?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`,
     // Alternate local
-    `/api/fares/vehicles-data?${cacheParam}`,
+    `/api/fares/vehicles-data?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`,
     // Direct vehicles endpoint
-    `${apiBaseUrl}/api/fares/vehicles.php?${cacheParam}`,
+    `${apiBaseUrl}/api/fares/vehicles.php?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`,
     // Local vehicles endpoint
-    `/api/fares/vehicles.php?${cacheParam}`,
+    `/api/fares/vehicles.php?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`,
     // Admin endpoint with debug bypass for development
     `${apiBaseUrl}/api/admin/vehicles-update.php?action=getAll&debug=true&${cacheParam}`,
     // Local admin endpoint with debug bypass for development

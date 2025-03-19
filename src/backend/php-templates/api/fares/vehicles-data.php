@@ -154,9 +154,17 @@ try {
             $name = "Vehicle ID: " . $row['vehicle_id'];
         }
         
+        // Use vehicle_id as the primary identifier for consistency
+        $vehicleId = $row['vehicle_id'] ?? null;
+        if (empty($vehicleId)) {
+            // Skip vehicles with no proper ID
+            continue;
+        }
+        
         // Format vehicle data with consistent property names for frontend
         $vehicle = [
-            'id' => (string)$row['vehicle_id'],
+            'id' => (string)$vehicleId,
+            'vehicleId' => (string)$vehicleId,
             'name' => $name,
             'capacity' => intval($row['capacity'] ?? 0),
             'luggageCapacity' => intval($row['luggage_capacity'] ?? 0),
@@ -170,7 +178,6 @@ try {
             'description' => $row['description'] ?? '',
             'ac' => (bool)($row['ac'] ?? 0),
             'isActive' => (bool)($row['is_active'] ?? 0),
-            'vehicleId' => (string)$row['vehicle_id'],
             'db_id' => $row['db_id'] ?? null,
         ];
         

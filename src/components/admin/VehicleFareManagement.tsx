@@ -15,6 +15,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { VehiclePricing, TourFare, VehiclePricingUpdateRequest, FareUpdateRequest } from '@/types/api';
 import { fareAPI } from '@/services/api';
+import { getVehicleData } from '@/services/vehicleDataService';
 
 // Vehicle pricing form schema
 const vehiclePricingSchema = z.object({
@@ -39,6 +40,7 @@ export function VehicleFareManagement() {
   // State for different fare types
   const [vehiclePricing, setVehiclePricing] = useState<VehiclePricing[]>([]);
   const [tourFares, setTourFares] = useState<TourFare[]>([]);
+  const [availableVehicles, setAvailableVehicles] = useState<{id: string, name: string}[]>([]);
   
   // Loading and error states
   const [isLoading, setIsLoading] = useState(false);
@@ -71,7 +73,28 @@ export function VehicleFareManagement() {
   
   useEffect(() => {
     fetchAllFareData();
+    loadAvailableVehicles();
   }, []);
+  
+  const loadAvailableVehicles = async () => {
+    try {
+      console.log("Loading available vehicles for dropdown...");
+      const vehicles = await getVehicleData(true);
+      
+      if (vehicles && Array.isArray(vehicles)) {
+        const vehicleOptions = vehicles.map(v => ({
+          id: v.id || v.vehicleId || '',
+          name: v.name || v.id || ''
+        }));
+        
+        console.log("Available vehicles loaded:", vehicleOptions);
+        setAvailableVehicles(vehicleOptions);
+      }
+    } catch (error) {
+      console.error("Error loading available vehicles:", error);
+      toast.error("Failed to load vehicle options");
+    }
+  };
   
   const fetchAllFareData = async () => {
     setIsRefreshing(true);
@@ -283,9 +306,18 @@ export function VehicleFareManagement() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {vehiclePricing.map((pricing) => (
-                            <SelectItem key={pricing.vehicleType} value={pricing.vehicleType}>
-                              {pricing.vehicleType}
+                          {/* Use the combined vehicle list from both sources */}
+                          {[...vehiclePricing.map(p => ({
+                            id: p.vehicleType,
+                            name: p.vehicleType
+                          })), ...availableVehicles.filter(v => 
+                            !vehiclePricing.some(p => p.vehicleType === v.id)
+                          )].map((vehicle) => (
+                            <SelectItem 
+                              key={vehicle.id} 
+                              value={vehicle.id}
+                            >
+                              {vehicle.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -389,7 +421,7 @@ export function VehicleFareManagement() {
                     </thead>
                     <tbody>
                       {vehiclePricing.map((pricing) => (
-                        <tr key={pricing.id} className="border-b hover:bg-gray-50">
+                        <tr key={pricing.id || pricing.vehicleType} className="border-b hover:bg-gray-50">
                           <td className="py-2 px-2">{pricing.vehicleType}</td>
                           <td className="text-right py-2 px-2">₹{pricing.basePrice.toLocaleString('en-IN')}</td>
                           <td className="text-right py-2 px-2">₹{pricing.pricePerKm.toLocaleString('en-IN')}</td>
