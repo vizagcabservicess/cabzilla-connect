@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -26,6 +25,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { TourFare, FareUpdateRequest } from '@/types/api';
 import { fareAPI } from '@/services/api';
+import { reloadCabTypes } from '@/lib/cabData';
 import { 
   Dialog,
   DialogContent,
@@ -63,7 +63,6 @@ export function FareManagement() {
   const [addTourDialogOpen, setAddTourDialogOpen] = useState(false);
   const { toast: uiToast } = useToast();
   
-  // Initialize forms with their schemas
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -89,20 +88,17 @@ export function FareManagement() {
     },
   });
   
-  // Handle form submission for updating existing tour
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       setIsLoading(true);
       console.log("Submitting fare update:", values);
       
-      // Clear any cached fare data
       localStorage.removeItem('cabFares');
       localStorage.removeItem('tourFares');
       sessionStorage.removeItem('cabFares');
       sessionStorage.removeItem('tourFares');
       sessionStorage.removeItem('calculatedFares');
       
-      // Force reload of cab types
       await reloadCabTypes();
       
       const data = await fareAPI.updateTourFares(values as FareUpdateRequest);
@@ -118,15 +114,13 @@ export function FareManagement() {
     }
   };
   
-  // Handle form submission for adding new tour
   const onAddTourSubmit = async (values: z.infer<typeof newTourFormSchema>) => {
     try {
       setIsLoading(true);
       console.log("Adding new tour:", values);
       
-      // Create a valid TourFare object with required id property
       const newTourData: TourFare = {
-        id: 0, // This will be assigned by the backend
+        id: 0,
         tourId: values.tourId,
         tourName: values.tourName,
         sedan: values.sedan,
@@ -136,17 +130,14 @@ export function FareManagement() {
         luxury: values.luxury
       };
       
-      // Clear any cached fare data
       localStorage.removeItem('cabFares');
       localStorage.removeItem('tourFares');
       sessionStorage.removeItem('cabFares');
       sessionStorage.removeItem('tourFares');
       sessionStorage.removeItem('calculatedFares');
       
-      // Force reload of cab types
       await reloadCabTypes();
       
-      // Call API to add new tour
       const data = await fareAPI.addTourFare(newTourData);
       console.log("New tour added:", data);
       
@@ -163,7 +154,6 @@ export function FareManagement() {
   };
   
   const handleDeleteTour = async (tourId: string) => {
-    // Confirm deletion
     if (!confirm("Are you sure you want to delete this tour? This action cannot be undone.")) {
       return;
     }
@@ -171,14 +161,12 @@ export function FareManagement() {
     try {
       setIsRefreshing(true);
       
-      // Clear any cached fare data
       localStorage.removeItem('cabFares');
       localStorage.removeItem('tourFares');
       sessionStorage.removeItem('cabFares');
       sessionStorage.removeItem('tourFares');
       sessionStorage.removeItem('calculatedFares');
       
-      // Force reload of cab types
       await reloadCabTypes();
       
       const data = await fareAPI.deleteTourFare(tourId);
@@ -204,14 +192,12 @@ export function FareManagement() {
       setError(null);
       console.log("Manually refreshing tour fares...");
       
-      // Clear any cached fare data
       localStorage.removeItem('cabFares');
       localStorage.removeItem('tourFares');
       sessionStorage.removeItem('cabFares');
       sessionStorage.removeItem('tourFares');
       sessionStorage.removeItem('calculatedFares');
       
-      // Force reload of cab types
       await reloadCabTypes();
       
       const data = await fareAPI.getTourFares();
