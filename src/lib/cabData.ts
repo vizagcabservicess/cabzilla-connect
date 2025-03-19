@@ -1,3 +1,4 @@
+
 import { differenceInCalendarDays } from 'date-fns';
 import { fareAPI } from '@/services/api';
 
@@ -267,6 +268,12 @@ const localPackagePriceMatrix: Record<string, Record<string, number>> = {
 export function getLocalPackagePrice(packageId: string, cabType: string): number {
   console.log(`Getting local package price for: package=${packageId}, cab=${cabType}`);
   
+  // Handle undefined or null cabType
+  if (!cabType) {
+    console.warn('cabType is undefined or null, using default sedan');
+    cabType = 'sedan';
+  }
+  
   const lowerCabType = cabType.toLowerCase();
   
   // Check if we have a price in the matrix
@@ -294,6 +301,12 @@ export function getLocalPackagePrice(packageId: string, cabType: string): number
 
 // Function to update local package prices
 export function updateLocalPackagePrice(packageId: string, cabType: string, price: number): void {
+  // Handle undefined or null cabType
+  if (!cabType) {
+    console.warn('cabType is undefined or null for updateLocalPackagePrice, using default sedan');
+    cabType = 'sedan';
+  }
+  
   const lowerCabType = cabType.toLowerCase();
   
   // Ensure the package exists in the matrix
@@ -393,6 +406,12 @@ export async function calculateFare(
  * Calculate airport transfer fare based on distance and cab type
  */
 export function calculateAirportFare(cabType: string, distance: number): number {
+  // Handle undefined or null cabType
+  if (!cabType) {
+    console.warn('cabType is undefined or null for calculateAirportFare, using default sedan');
+    cabType = 'sedan';
+  }
+  
   const lowerCabType = cabType.toLowerCase();
   
   // Pricing tiers based on distance to/from airport

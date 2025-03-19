@@ -44,6 +44,9 @@ if (!$conn) {
 try {
     // Handle GET request for fetching vehicles
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+        // Log the GET request
+        logError("vehicles-update.php GET request", []);
+        
         $stmt = $conn->prepare("SELECT * FROM vehicle_types ORDER BY name");
         $stmt->execute();
         $result = $stmt->get_result();
@@ -52,7 +55,14 @@ try {
         while ($row = $result->fetch_assoc()) {
             // Convert amenities from text to array if it exists
             if ($row['amenities']) {
-                $row['amenities'] = explode(', ', $row['amenities']);
+                // Try to decode JSON first
+                $decodedAmenities = json_decode($row['amenities'], true);
+                if (json_last_error() === JSON_ERROR_NONE) {
+                    $row['amenities'] = $decodedAmenities;
+                } else {
+                    // If not JSON, treat as comma-separated list
+                    $row['amenities'] = array_map('trim', explode(',', $row['amenities']));
+                }
             } else {
                 $row['amenities'] = [];
             }
@@ -78,6 +88,11 @@ try {
                 $row['pricePerKm'] = floatval($pricing['price_per_km']);
                 $row['nightHaltCharge'] = floatval($pricing['night_halt_charge']);
                 $row['driverAllowance'] = floatval($pricing['driver_allowance']);
+            } else {
+                $row['basePrice'] = 0;
+                $row['pricePerKm'] = 0;
+                $row['nightHaltCharge'] = 0;
+                $row['driverAllowance'] = 0;
             }
             
             $vehicles[] = $row;
@@ -89,6 +104,9 @@ try {
     else if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Get request body
         $requestData = json_decode(file_get_contents('php://input'), true);
+        
+        // Log the POST request
+        logError("vehicles-update.php POST request", ['data' => $requestData]);
         
         if (!isset($requestData['vehicleId'])) {
             sendJsonResponse(['status' => 'error', 'message' => 'Vehicle ID is required'], 400);
@@ -121,8 +139,7 @@ try {
         }
         
         if ($stmt->affected_rows === 0) {
-            sendJsonResponse(['status' => 'error', 'message' => 'Vehicle not found'], 404);
-            exit;
+            logError("Vehicle not found or no changes made", ['vehicleId' => $vehicleId]);
         }
         
         // Update pricing if provided
@@ -150,7 +167,7 @@ try {
                 ");
                 $pricingStmt->bind_param("dddds", $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, $vehicleId);
             } else {
-                // Insert new pricing - removed is_active column from INSERT
+                // Insert new pricing
                 $pricingStmt = $conn->prepare("
                     INSERT INTO vehicle_pricing 
                     (vehicle_type, base_price, price_per_km, night_halt_charge, driver_allowance)
@@ -163,6 +180,12 @@ try {
             if (!$pricingSuccess) {
                 throw new Exception("Failed to update vehicle pricing: " . $conn->error);
             }
+            
+            logError("Vehicle pricing updated", [
+                'vehicleId' => $vehicleId,
+                'basePrice' => $basePrice,
+                'pricePerKm' => $pricePerKm
+            ]);
         }
         
         // Get the updated vehicle
@@ -171,6 +194,10 @@ try {
         $stmt->execute();
         $result = $stmt->get_result();
         $updatedVehicle = $result->fetch_assoc();
+        
+        if (!$updatedVehicle) {
+            throw new Exception("Failed to retrieve updated vehicle");
+        }
         
         // Get pricing information
         $pricingStmt = $conn->prepare("SELECT * FROM vehicle_pricing WHERE vehicle_type = ?");
@@ -185,10 +212,22 @@ try {
             $updatedVehicle['pricePerKm'] = floatval($pricing['price_per_km']);
             $updatedVehicle['nightHaltCharge'] = floatval($pricing['night_halt_charge']);
             $updatedVehicle['driverAllowance'] = floatval($pricing['driver_allowance']);
+        } else {
+            $updatedVehicle['basePrice'] = 0;
+            $updatedVehicle['pricePerKm'] = 0;
+            $updatedVehicle['nightHaltCharge'] = 0;
+            $updatedVehicle['driverAllowance'] = 0;
         }
         
         if ($updatedVehicle['amenities']) {
-            $updatedVehicle['amenities'] = explode(', ', $updatedVehicle['amenities']);
+            // Try to decode JSON first
+            $decodedAmenities = json_decode($updatedVehicle['amenities'], true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $updatedVehicle['amenities'] = $decodedAmenities;
+            } else {
+                // If not JSON, treat as comma-separated list
+                $updatedVehicle['amenities'] = array_map('trim', explode(', ', $updatedVehicle['amenities']));
+            }
         } else {
             $updatedVehicle['amenities'] = [];
         }
@@ -211,6 +250,9 @@ try {
     else if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
         // Get request body
         $requestData = json_decode(file_get_contents('php://input'), true);
+        
+        // Log the PUT request
+        logError("vehicles-update.php PUT request", ['data' => $requestData]);
         
         if (!isset($requestData['vehicleId']) || !isset($requestData['name'])) {
             sendJsonResponse(['status' => 'error', 'message' => 'Vehicle ID and name are required'], 400);
@@ -262,7 +304,7 @@ try {
             $nightHaltCharge = isset($requestData['nightHaltCharge']) ? floatval($requestData['nightHaltCharge']) : 0;
             $driverAllowance = isset($requestData['driverAllowance']) ? floatval($requestData['driverAllowance']) : 0;
             
-            // Insert new pricing - removed is_active from INSERT
+            // Insert new pricing
             $pricingStmt = $conn->prepare("
                 INSERT INTO vehicle_pricing 
                 (vehicle_type, base_price, price_per_km, night_halt_charge, driver_allowance)
@@ -296,10 +338,22 @@ try {
             $newVehicle['pricePerKm'] = floatval($pricing['price_per_km']);
             $newVehicle['nightHaltCharge'] = floatval($pricing['night_halt_charge']);
             $newVehicle['driverAllowance'] = floatval($pricing['driver_allowance']);
+        } else {
+            $newVehicle['basePrice'] = 0;
+            $newVehicle['pricePerKm'] = 0;
+            $newVehicle['nightHaltCharge'] = 0;
+            $newVehicle['driverAllowance'] = 0;
         }
         
         if ($newVehicle['amenities']) {
-            $newVehicle['amenities'] = explode(', ', $newVehicle['amenities']);
+            // Try to decode JSON first
+            $decodedAmenities = json_decode($newVehicle['amenities'], true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $newVehicle['amenities'] = $decodedAmenities;
+            } else {
+                // If not JSON, treat as comma-separated list
+                $newVehicle['amenities'] = array_map('trim', explode(', ', $newVehicle['amenities']));
+            }
         } else {
             $newVehicle['amenities'] = [];
         }
@@ -322,6 +376,9 @@ try {
     else if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
         // Get vehicle ID from query string
         $vehicleId = isset($_GET['vehicleId']) ? $_GET['vehicleId'] : null;
+        
+        // Log the DELETE request
+        logError("vehicles-update.php DELETE request", ['vehicleId' => $vehicleId]);
         
         if (!$vehicleId) {
             sendJsonResponse(['status' => 'error', 'message' => 'Vehicle ID is required'], 400);

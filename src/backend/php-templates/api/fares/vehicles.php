@@ -83,7 +83,7 @@ try {
             $row = $result->fetch_assoc();
             
             if ($row['count'] === 0) {
-                // Vehicle type doesn't exist, create it - Note: Removed is_active from INSERT
+                // Vehicle type doesn't exist, create it
                 $insertStmt = $conn->prepare("
                     INSERT INTO vehicle_pricing (vehicle_type, base_price, price_per_km, night_halt_charge, driver_allowance)
                     VALUES (?, ?, ?, ?, ?)
@@ -115,6 +115,7 @@ try {
     // Handle GET requests
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         // Get all vehicle types with their pricing data with a simpler query
+        // Only show active vehicles in the frontend
         $query = "
             SELECT 
                 vt.vehicle_id, 
