@@ -57,6 +57,20 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
 const apiVersion = import.meta.env.VITE_API_VERSION || '1.0.0';
 
 /**
+ * Clean vehicle ID by removing prefixes if present
+ */
+const cleanVehicleId = (id: string | undefined): string => {
+  if (!id) return '';
+  
+  // Remove 'item-' prefix if it exists
+  if (id.startsWith('item-')) {
+    return id.substring(5);
+  }
+  
+  return id;
+};
+
+/**
  * Normalize API response to handle different formats
  */
 const normalizeVehiclesData = (data: any): CabType[] => {
@@ -83,25 +97,30 @@ const normalizeVehiclesData = (data: any): CabType[] => {
   }
   
   // Map and normalize the vehicle data
-  return vehicles.map((vehicle: any) => ({
-    id: String(vehicle.id || vehicle.vehicleId || vehicle.vehicle_id || vehicle.vehicleType || ''),
-    name: String(vehicle.name || ''),
-    capacity: Number(vehicle.capacity) || 4,
-    luggageCapacity: Number(vehicle.luggageCapacity || vehicle.luggage_capacity) || 2,
-    price: Number(vehicle.basePrice || vehicle.price || vehicle.base_price) || 0,
-    pricePerKm: Number(vehicle.pricePerKm || vehicle.price_per_km) || 0,
-    image: String(vehicle.image || '/cars/sedan.png'),
-    amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : 
+  return vehicles.map((vehicle: any) => {
+    // Extract and clean ID from various possible sources
+    const vehicleId = cleanVehicleId(String(vehicle.id || vehicle.vehicleId || vehicle.vehicle_id || vehicle.vehicleType || ''));
+    
+    return {
+      id: vehicleId,
+      name: String(vehicle.name || vehicleId || ''),
+      capacity: Number(vehicle.capacity) || 4,
+      luggageCapacity: Number(vehicle.luggageCapacity || vehicle.luggage_capacity) || 2,
+      price: Number(vehicle.basePrice || vehicle.price || vehicle.base_price) || 0,
+      pricePerKm: Number(vehicle.pricePerKm || vehicle.price_per_km) || 0,
+      image: String(vehicle.image || '/cars/sedan.png'),
+      amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : 
                (typeof vehicle.amenities === 'string' ? vehicle.amenities.split(',').map((a: string) => a.trim()) : ['AC']),
-    description: String(vehicle.description || ''),
-    ac: vehicle.ac !== undefined ? Boolean(vehicle.ac) : true,
-    nightHaltCharge: Number(vehicle.nightHaltCharge || vehicle.night_halt_charge) || 0,
-    driverAllowance: Number(vehicle.driverAllowance || vehicle.driver_allowance) || 0,
-    isActive: vehicle.isActive !== undefined ? Boolean(vehicle.isActive) : 
+      description: String(vehicle.description || ''),
+      ac: vehicle.ac !== undefined ? Boolean(vehicle.ac) : true,
+      nightHaltCharge: Number(vehicle.nightHaltCharge || vehicle.night_halt_charge) || 0,
+      driverAllowance: Number(vehicle.driverAllowance || vehicle.driver_allowance) || 0,
+      isActive: vehicle.isActive !== undefined ? Boolean(vehicle.isActive) : 
               (vehicle.is_active !== undefined ? Boolean(vehicle.is_active) : true),
-    basePrice: Number(vehicle.basePrice || vehicle.price || vehicle.base_price) || 0,
-    vehicleId: String(vehicle.id || vehicle.vehicleId || vehicle.vehicle_id || vehicle.vehicleType || '')
-  }));
+      basePrice: Number(vehicle.basePrice || vehicle.price || vehicle.base_price) || 0,
+      vehicleId: vehicleId
+    };
+  });
 };
 
 /**
@@ -161,6 +180,14 @@ export const getVehicleData = async (includeInactive: boolean = false): Promise<
         
         if (filteredVehicles.length > 0) {
           console.log(`Successfully fetched ${filteredVehicles.length} vehicles from primary endpoint`);
+          
+          // Do additional logging to debug vehicle IDs
+          console.log('Vehicle IDs fetched:', filteredVehicles.map(v => ({
+            id: v.id,
+            name: v.name,
+            vehicleId: v.vehicleId
+          })));
+          
           return filteredVehicles;
         }
       }
@@ -377,10 +404,14 @@ export const getVehicleTypes = async (): Promise<{id: string, name: string}[]> =
   try {
     const vehicles = await getVehicleData(true); // Get all vehicles including inactive
     
-    return vehicles.map(vehicle => ({
-      id: vehicle.id,
+    const vehiclesList = vehicles.map(vehicle => ({
+      id: cleanVehicleId(vehicle.id), // Clean ID to remove any prefixes
       name: vehicle.name || vehicle.id
     }));
+    
+    console.log('Available vehicle types for selection:', vehiclesList);
+    
+    return vehiclesList;
   } catch (error) {
     console.error('Error getting vehicle types:', error);
     return defaultVehicles.map(vehicle => ({

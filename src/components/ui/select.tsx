@@ -114,12 +114,29 @@ const SelectItem = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item> & { value: string }
 >(({ className, children, ...props }, ref) => {
-  // Make sure we have a valid value and prevent item-* prefix
+  // Clean up the value by removing item- prefix if present
+  const cleanValue = (inputValue: string): string => {
+    if (!inputValue) return '';
+    
+    // Remove 'item-' prefix if it exists
+    if (inputValue.startsWith('item-')) {
+      return inputValue.substring(5);
+    }
+    
+    // Special case for placeholder
+    if (inputValue === 'placeholder') {
+      return 'placeholder';
+    }
+    
+    return inputValue;
+  };
+  
+  // Make sure we have a valid value
   const safeValue = props.value && typeof props.value === 'string' && props.value.trim() !== '' 
-    ? (props.value.startsWith('item-') ? props.value.substring(5) : props.value)
+    ? cleanValue(props.value)
     : props.value === 'placeholder' 
       ? 'placeholder' 
-      : `item-${Math.random().toString(36).substring(2, 9)}`;
+      : `${Math.random().toString(36).substring(2, 9)}`;
   
   const safeProps = {
     ...props,
@@ -130,6 +147,9 @@ const SelectItem = React.forwardRef<
   if (!safeProps.key && safeValue) {
     safeProps.key = safeValue;
   }
+  
+  // If no children provided, use the value for display (without item- prefix)
+  const displayText = children || safeValue;
   
   return (
     <SelectPrimitive.Item
@@ -146,7 +166,7 @@ const SelectItem = React.forwardRef<
         </SelectPrimitive.ItemIndicator>
       </span>
 
-      <SelectPrimitive.ItemText>{children || safeValue}</SelectPrimitive.ItemText>
+      <SelectPrimitive.ItemText>{displayText}</SelectPrimitive.ItemText>
     </SelectPrimitive.Item>
   );
 })

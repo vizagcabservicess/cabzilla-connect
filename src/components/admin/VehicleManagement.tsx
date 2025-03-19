@@ -115,22 +115,29 @@ export function VehicleManagement() {
       const vehicleData = await getVehicleData(true); // Include inactive vehicles for admin
       
       if (Array.isArray(vehicleData) && vehicleData.length > 0) {
-        const normalizedVehicles = vehicleData.map(vehicle => ({
-          id: String(vehicle.id || vehicle.vehicleId || `vehicle-${Math.random().toString(36).substring(2, 9)}`),
-          name: String(vehicle.name || "Unnamed Vehicle"),
-          capacity: Number(vehicle.capacity) || 4,
-          luggageCapacity: Number(vehicle.luggageCapacity) || 2,
-          ac: vehicle.ac !== undefined ? Boolean(vehicle.ac) : true,
-          image: String(vehicle.image || "/cars/sedan.png"),
-          amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : [],
-          description: String(vehicle.description || ""),
-          isActive: vehicle.isActive !== undefined ? Boolean(vehicle.isActive) : true,
-          basePrice: Number(vehicle.basePrice || vehicle.price || 0),
-          pricePerKm: Number(vehicle.pricePerKm || 0),
-          nightHaltCharge: Number(vehicle.nightHaltCharge || 0),
-          driverAllowance: Number(vehicle.driverAllowance || 0),
-          vehicleId: String(vehicle.id || vehicle.vehicleId || `vehicle-${Math.random().toString(36).substring(2, 9)}`)
-        }));
+        const normalizedVehicles = vehicleData.map(vehicle => {
+          // Make sure vehicle IDs don't have item- prefixes
+          const cleanId = vehicle.id && vehicle.id.startsWith('item-') 
+            ? vehicle.id.substring(5) 
+            : vehicle.id;
+            
+          return {
+            id: cleanId || `vehicle-${Math.random().toString(36).substring(2, 9)}`,
+            name: String(vehicle.name || "Unnamed Vehicle"),
+            capacity: Number(vehicle.capacity) || 4,
+            luggageCapacity: Number(vehicle.luggageCapacity) || 2,
+            ac: vehicle.ac !== undefined ? Boolean(vehicle.ac) : true,
+            image: String(vehicle.image || "/cars/sedan.png"),
+            amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : [],
+            description: String(vehicle.description || ""),
+            isActive: vehicle.isActive !== undefined ? Boolean(vehicle.isActive) : true,
+            basePrice: Number(vehicle.basePrice || vehicle.price || 0),
+            pricePerKm: Number(vehicle.pricePerKm || 0),
+            nightHaltCharge: Number(vehicle.nightHaltCharge || 0),
+            driverAllowance: Number(vehicle.driverAllowance || 0),
+            vehicleId: cleanId || `vehicle-${Math.random().toString(36).substring(2, 9)}`
+          };
+        });
         
         console.log("Normalized vehicles:", normalizedVehicles);
         setVehicles(normalizedVehicles);
@@ -153,8 +160,11 @@ export function VehicleManagement() {
     console.log("Selected vehicle ID:", vehicleId);
     console.log("Available vehicles:", vehicles);
     
+    // Clean vehicleId in case it has an item- prefix
+    const cleanId = vehicleId.startsWith('item-') ? vehicleId.substring(5) : vehicleId;
+    
     const selectedVehicle = vehicles.find(v => 
-      v.id === vehicleId || v.vehicleId === vehicleId);
+      v.id === cleanId || v.vehicleId === cleanId);
     
     if (selectedVehicle) {
       console.log("Found selected vehicle:", selectedVehicle);
@@ -408,7 +418,7 @@ export function VehicleManagement() {
                             {vehicles.map((vehicle) => (
                               <SelectItem 
                                 key={vehicle.id || vehicle.vehicleId || Math.random().toString(36).substring(2, 9)} 
-                                value={String(vehicle.id || vehicle.vehicleId || `vehicle-${Math.random().toString(36).substring(2, 9)}`)}
+                                value={String(vehicle.id || vehicle.vehicleId || '')}
                               >
                                 {vehicle.name || "Unnamed vehicle"}
                               </SelectItem>
