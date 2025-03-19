@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -134,18 +133,22 @@ export function VehicleManagement() {
       if (!fetchSuccessful) {
         try {
           const response = await fareAPI.getVehicles();
+          
           if (Array.isArray(response) && response.length > 0) {
             vehicleData = response;
             fetchSuccessful = true;
             console.log("Successfully fetched vehicles from getVehicles:", vehicleData.length);
           } else if (response && typeof response === 'object') {
-            // Check for nested data structures
-            if (response.vehicles && Array.isArray(response.vehicles)) {
-              vehicleData = response.vehicles;
+            const responseObj = response as ApiResponse;
+            
+            if (responseObj.vehicles && Array.isArray(responseObj.vehicles)) {
+              vehicleData = responseObj.vehicles;
               fetchSuccessful = true;
-            } else if (response.data && Array.isArray(response.data)) {
-              vehicleData = response.data;
+              console.log("Found vehicles in response.vehicles:", vehicleData.length);
+            } else if (responseObj.data && Array.isArray(responseObj.data)) {
+              vehicleData = responseObj.data;
               fetchSuccessful = true;
+              console.log("Found vehicles in response.data:", vehicleData.length);
             }
           }
         } catch (error) {
