@@ -99,8 +99,8 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
     console.log('Fetching new cab types from API');
     
     // Add a cache busting timestamp to the request to avoid stale data
-    const timestamp = Date.now();
-    const vehicleData = await fareAPI.getAllVehicleData(timestamp);
+    // Remove the timestamp parameter as the API doesn't accept it
+    const vehicleData = await fareAPI.getAllVehicleData();
     
     console.log('Retrieved vehicle data:', vehicleData);
     
@@ -264,9 +264,8 @@ export const tourFares = {
 export const loadTourFares = async (): Promise<any> => {
   try {
     console.log("Loading tour fares from API");
-    // Add cache busting to prevent stale data
-    const timestamp = Date.now();
-    const tourFareData = await fareAPI.getTourFares(timestamp);
+    // Remove timestamp parameter as the API doesn't accept it
+    const tourFareData = await fareAPI.getTourFares();
     console.log("Tour fare data:", tourFareData);
     
     // Convert the API data to match the existing structure
@@ -447,9 +446,8 @@ export async function calculateFare(
       // Try to get up-to-date pricing info
       try {
         console.log("Fetching latest vehicle pricing from API for", cabType.id);
-        // Add cache busting by adding timestamp to request
-        const timestamp = Date.now();
-        const vehiclePricing = await fareAPI.getVehiclePricing(timestamp);
+        // Remove timestamp parameter as the API doesn't accept it
+        const vehiclePricing = await fareAPI.getVehiclePricing();
         console.log("Vehicle pricing data:", vehiclePricing);
         
         const pricing = vehiclePricing.find(p => 
