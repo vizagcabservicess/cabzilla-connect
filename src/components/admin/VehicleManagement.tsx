@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -629,8 +630,8 @@ export function VehicleManagement() {
                           <FormMessage />
                         </FormItem>
                       )}
-                    )}
-                  />
+                    />
+                  </div>
                 </div>
                 
                 <div className="flex gap-4">
