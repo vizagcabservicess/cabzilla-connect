@@ -1,3 +1,4 @@
+
 import { differenceInCalendarDays } from 'date-fns';
 import { fareAPI } from '@/services/api';
 import { toast } from 'sonner';
@@ -16,6 +17,23 @@ export interface HourlyPackage {
   kilometers: number;
   basePrice: number;
   multiplier: number;
+}
+
+// Define the CabType interface that was missing but used throughout the codebase
+export interface CabType {
+  id: string;
+  name: string;
+  capacity: number;
+  luggageCapacity: number;
+  price: number;
+  pricePerKm: number;
+  image: string;
+  amenities: string[];
+  description: string;
+  ac: boolean;
+  nightHaltCharge: number;
+  driverAllowance: number;
+  isActive: boolean;
 }
 
 // Default cab types (used as fallback if API fails)
