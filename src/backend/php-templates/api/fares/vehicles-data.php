@@ -25,7 +25,8 @@ logError("vehicles-data.php request", ['method' => $_SERVER['REQUEST_METHOD'], '
 
 // Allow only GET requests for this endpoint
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
-    sendJsonResponse(['error' => 'Method not allowed'], 405);
+    echo json_encode(['error' => 'Method not allowed']);
+    http_response_code(405);
     exit;
 }
 
@@ -196,17 +197,10 @@ try {
     
 } catch (Exception $e) {
     logError("Error fetching vehicle data", ['error' => $e->getMessage(), 'timestamp' => time()]);
-    sendJsonResponse(['error' => 'Failed to fetch vehicle data: ' . $e->getMessage()], 500);
-}
-
-// Helper function to send JSON responses (in case it's not defined in config.php)
-if (!function_exists('sendJsonResponse')) {
-    function sendJsonResponse($data, $statusCode = 200) {
-        http_response_code($statusCode);
-        header('Content-Type: application/json');
-        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-        header('Pragma: no-cache');
-        echo json_encode($data);
-        exit;
-    }
+    
+    // Return error response
+    header('Content-Type: application/json');
+    echo json_encode(['error' => 'Failed to fetch vehicle data: ' . $e->getMessage()]);
+    http_response_code(500);
+    exit;
 }
