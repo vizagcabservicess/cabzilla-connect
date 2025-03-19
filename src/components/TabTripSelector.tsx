@@ -31,7 +31,10 @@ export function TabTripSelector({
     sessionStorage.removeItem('tourPackage');
     sessionStorage.removeItem('bookingDetails');
     sessionStorage.removeItem('cabFares');
+    
+    // Always clear drop location when changing tabs to prevent issues with airport transfers
     sessionStorage.removeItem('dropLocation');
+    
     sessionStorage.removeItem('calculatedFares');
     sessionStorage.removeItem('distance');
     
@@ -39,11 +42,6 @@ export function TabTripSelector({
     const oldTripType = sessionStorage.getItem('tripType');
     if (oldTripType && oldTripType !== selectedTab) {
       console.log(`Trip type changed from ${oldTripType} to ${selectedTab}`);
-      
-      // Only keep the airport location when switching to airport mode
-      if (selectedTab !== 'airport') {
-        sessionStorage.removeItem('dropLocation');
-      }
     }
     
     // Clear localStorage items that might cache fare data
@@ -91,11 +89,6 @@ export function TabTripSelector({
   useEffect(() => {
     clearAllCacheData();
     
-    // Reset drop location when switching to local
-    if (selectedTab === 'local') {
-      sessionStorage.removeItem('dropLocation');
-    }
-    
     // Notify user of tab change with toast
     const tabNames = {
       'outstation': 'Outstation Trip',
@@ -109,6 +102,10 @@ export function TabTripSelector({
       description: "All previous selections have been reset.",
       duration: 3000,
     });
+    
+    if (selectedTab === 'airport') {
+      console.log('Trip type changed to airport');
+    }
     
   }, [selectedTab, toast, clearAllCacheData]);
   

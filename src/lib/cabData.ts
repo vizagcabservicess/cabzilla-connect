@@ -83,7 +83,7 @@ export const cabTypes: CabType[] = [
 // Cache to store loaded cab types with shorter expiration time
 let cachedCabTypes: CabType[] | null = null;
 let lastCacheTime = 0;
-const CACHE_DURATION = 30 * 1000; // 30 seconds in milliseconds (significantly reduced from 2 minutes)
+const CACHE_DURATION = 10 * 1000; // 10 seconds in milliseconds (significantly reduced for testing)
 
 // Function to load cab types dynamically
 export const loadCabTypes = async (): Promise<CabType[]> => {
@@ -97,8 +97,12 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
     }
     
     console.log('Fetching new cab types from API');
-    // Add a cache busting timestamp to the request
-    const vehicleData = await fareAPI.getAllVehicleData();
+    
+    // Add a cache busting timestamp to the request to avoid stale data
+    const timestamp = Date.now();
+    const vehicleData = await fareAPI.getAllVehicleData(timestamp);
+    
+    console.log('Retrieved vehicle data:', vehicleData);
     
     if (Array.isArray(vehicleData) && vehicleData.length > 0) {
       // Convert API data to CabType format if needed
@@ -157,7 +161,33 @@ export const reloadCabTypes = async (): Promise<CabType[]> => {
   sessionStorage.removeItem('calculatedFares');
   localStorage.removeItem('cabFares');
   
-  return loadCabTypes();
+  try {
+    // Add a toast notification to show the user that fares are being refreshed
+    toast.info("Refreshing cab fare data...", {
+      id: "fare-refresh",
+      duration: 2000
+    });
+    
+    const reloadedTypes = await loadCabTypes();
+    
+    // Show success message when fares are reloaded
+    toast.success("Cab fare data refreshed", {
+      id: "fare-refresh",
+      duration: 2000
+    });
+    
+    return reloadedTypes;
+  } catch (error) {
+    console.error('Error reloading cab types:', error);
+    
+    // Show error message if refresh failed
+    toast.error("Failed to refresh fare data. Using cached values.", {
+      id: "fare-refresh",
+      duration: 3000
+    });
+    
+    return cabTypes;
+  }
 };
 
 export const hourlyPackages: HourlyPackage[] = [
@@ -216,17 +246,17 @@ export const tourFares = {
   araku_valley: {
     sedan: 6000,
     ertiga: 7500,
-    innova_crysta: 9000
+    innova: 9000
   },
   yarada_beach: {
     sedan: 2500,
     ertiga: 3500,
-    innova_crysta: 4500
+    innova: 4500
   },
   rushikonda: {
     sedan: 2000,
     ertiga: 3000,
-    innova_crysta: 4000
+    innova: 4000
   }
 };
 
@@ -235,7 +265,8 @@ export const loadTourFares = async (): Promise<any> => {
   try {
     console.log("Loading tour fares from API");
     // Add cache busting to prevent stale data
-    const tourFareData = await fareAPI.getTourFares();
+    const timestamp = Date.now();
+    const tourFareData = await fareAPI.getTourFares(timestamp);
     console.log("Tour fare data:", tourFareData);
     
     // Convert the API data to match the existing structure
@@ -364,7 +395,7 @@ export async function calculateFare(
   const cacheKey = `${cabType.id}_${distance}_${tripType}_${tripMode}_${hourlyPackage || ''}_${pickupDate?.getTime() || ''}_${returnDate?.getTime() || ''}`;
   const now = Date.now();
   
-  // Check cache first (valid for 30 seconds - reduced from 5 minutes)
+  // Check cache first (10 seconds expiration - reduced for testing)
   if (outstationPricingCache[cacheKey] && outstationPricingCache[cacheKey].expire > now) {
     console.log(`Using cached fare calculation for ${cacheKey}`);
     return outstationPricingCache[cacheKey].price;
@@ -417,7 +448,10 @@ export async function calculateFare(
       try {
         console.log("Fetching latest vehicle pricing from API for", cabType.id);
         // Add cache busting by adding timestamp to request
-        const vehiclePricing = await fareAPI.getVehiclePricing();
+        const timestamp = Date.now();
+        const vehiclePricing = await fareAPI.getVehiclePricing(timestamp);
+        console.log("Vehicle pricing data:", vehiclePricing);
+        
         const pricing = vehiclePricing.find(p => 
           p.vehicleType?.toLowerCase() === cabType.id?.toLowerCase() || 
           p.vehicleType?.toLowerCase() === cabType.name?.toLowerCase()
@@ -463,6 +497,7 @@ export async function calculateFare(
           price: finalPrice
         };
         
+        toast.dismiss("fare-calculation");
         return finalPrice;
       } else {
         // For round-trip, calculate based on number of days

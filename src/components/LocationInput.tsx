@@ -98,6 +98,20 @@ export function LocationInput({
     setLocationError(null);
     wasLocationSelectedRef.current = false;
     isManualInputRef.current = true; // Mark that this is manual input
+    
+    // If the input is cleared completely, immediately update the parent
+    if (newAddress === '') {
+      const emptyLocation: Location = {
+        id: `loc_${Date.now()}`,
+        name: '',
+        address: '',
+        isInVizag: false
+      };
+      locationChangedRef.current = true;
+      if (handleLocationChange) {
+        handleLocationChange(emptyLocation);
+      }
+    }
   };
 
   // Send location update to parent component
@@ -162,6 +176,7 @@ export function LocationInput({
     };
     
     if (handleLocationChange) {
+      console.log('Location cleared by user. Sending empty location to parent.');
       handleLocationChange(emptyLocation);
     }
     
