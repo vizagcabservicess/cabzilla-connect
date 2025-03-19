@@ -25,21 +25,27 @@ export function TabTripSelector({
   const clearAllCacheData = useCallback(() => {
     console.log("Clearing all cached data for trip type change");
     
+    const oldTripType = sessionStorage.getItem('tripType');
+    
+    // Force clear drop location for ALL tab changes
+    sessionStorage.removeItem('dropLocation');
+    
+    // Clear specific data for airport tab
+    if (selectedTab === 'airport') {
+      // For airport tab, also clear pickup location to ensure fresh selection
+      sessionStorage.removeItem('pickupLocation');
+    }
+    
     // Clear all booking and fare related data
     sessionStorage.removeItem('selectedCab');
     sessionStorage.removeItem('hourlyPackage');
     sessionStorage.removeItem('tourPackage');
     sessionStorage.removeItem('bookingDetails');
     sessionStorage.removeItem('cabFares');
-    
-    // Always clear drop location when changing tabs to prevent issues with airport transfers
-    sessionStorage.removeItem('dropLocation');
-    
     sessionStorage.removeItem('calculatedFares');
     sessionStorage.removeItem('distance');
     
     // Force clear trip specific data
-    const oldTripType = sessionStorage.getItem('tripType');
     if (oldTripType && oldTripType !== selectedTab) {
       console.log(`Trip type changed from ${oldTripType} to ${selectedTab}`);
     }
@@ -105,6 +111,11 @@ export function TabTripSelector({
     
     if (selectedTab === 'airport') {
       console.log('Trip type changed to airport');
+      
+      // Force a reload of the page when switching to airport tab to ensure clean state
+      setTimeout(() => {
+        window.location.reload();
+      }, 100);
     }
     
   }, [selectedTab, toast, clearAllCacheData]);

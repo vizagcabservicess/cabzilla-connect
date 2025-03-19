@@ -83,7 +83,8 @@ export const cabTypes: CabType[] = [
 // Cache to store loaded cab types with shorter expiration time
 let cachedCabTypes: CabType[] | null = null;
 let lastCacheTime = 0;
-const CACHE_DURATION = 10 * 1000; // 10 seconds in milliseconds (significantly reduced for testing)
+const CACHE_DURATION = 60 * 1000; // 60 seconds in milliseconds (increased for better performance)
+let isCurrentlyFetchingCabs = false; // Flag to prevent concurrent fetch requests
 
 // Function to load cab types dynamically
 export const loadCabTypes = async (): Promise<CabType[]> => {
@@ -96,13 +97,19 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
       return cachedCabTypes;
     }
     
+    // If already fetching, don't start another fetch
+    if (isCurrentlyFetchingCabs) {
+      console.log('Another fetch operation is in progress, using default cab types');
+      return cabTypes;
+    }
+    
+    isCurrentlyFetchingCabs = true;
     console.log('Fetching new cab types from API');
     
-    // Add a cache busting timestamp to the request to avoid stale data
-    // Remove the timestamp parameter as the API doesn't accept it
     const vehicleData = await fareAPI.getAllVehicleData();
     
     console.log('Retrieved vehicle data:', vehicleData);
+    isCurrentlyFetchingCabs = false;
     
     if (Array.isArray(vehicleData) && vehicleData.length > 0) {
       // Convert API data to CabType format if needed
@@ -139,14 +146,28 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
     return cabTypes;
   } catch (error) {
     console.error('Error loading cab types:', error);
+    isCurrentlyFetchingCabs = false;
     // Fallback to default cab types if API call fails
     return cabTypes;
   }
 };
 
+// Track ongoing reload operations
+let isReloadingCabTypes = false;
+
 // Function to reload cab types and clear cache
 export const reloadCabTypes = async (): Promise<CabType[]> => {
+  if (isReloadingCabTypes) {
+    console.log('Reload operation already in progress, skipping redundant request');
+    toast.info("Vehicle data refresh already in progress", {
+      id: "fare-refresh-in-progress"
+    });
+    return cabTypes;
+  }
+  
+  isReloadingCabTypes = true;
   console.log('Forcing reload of cab types by clearing cache');
+  
   // Clear all caches that might contain vehicle data
   cachedCabTypes = null;
   lastCacheTime = 0;
@@ -176,6 +197,7 @@ export const reloadCabTypes = async (): Promise<CabType[]> => {
       duration: 2000
     });
     
+    isReloadingCabTypes = false;
     return reloadedTypes;
   } catch (error) {
     console.error('Error reloading cab types:', error);
@@ -186,6 +208,7 @@ export const reloadCabTypes = async (): Promise<CabType[]> => {
       duration: 3000
     });
     
+    isReloadingCabTypes = false;
     return cabTypes;
   }
 };
@@ -260,11 +283,19 @@ export const tourFares = {
   }
 };
 
+// Track ongoing tour fare fetch operations
+let isFetchingTourFares = false;
+
 // Function to load tour fares dynamically
 export const loadTourFares = async (): Promise<any> => {
+  if (isFetchingTourFares) {
+    console.log('Tour fare fetch already in progress, returning cached data');
+    return tourFares;
+  }
+  
   try {
+    isFetchingTourFares = true;
     console.log("Loading tour fares from API");
-    // Remove timestamp parameter as the API doesn't accept it
     const tourFareData = await fareAPI.getTourFares();
     console.log("Tour fare data:", tourFareData);
     
@@ -283,9 +314,11 @@ export const loadTourFares = async (): Promise<any> => {
       });
     }
     
+    isFetchingTourFares = false;
     return Object.keys(dynamicTourFares).length > 0 ? dynamicTourFares : tourFares;
   } catch (error) {
     console.error('Error loading tour fares:', error);
+    isFetchingTourFares = false;
     // Fall back to default tour fares if API call fails
     return tourFares;
   }
@@ -394,7 +427,7 @@ export async function calculateFare(
   const cacheKey = `${cabType.id}_${distance}_${tripType}_${tripMode}_${hourlyPackage || ''}_${pickupDate?.getTime() || ''}_${returnDate?.getTime() || ''}`;
   const now = Date.now();
   
-  // Check cache first (10 seconds expiration - reduced for testing)
+  // Check cache first (60 seconds expiration - increased for better performance)
   if (outstationPricingCache[cacheKey] && outstationPricingCache[cacheKey].expire > now) {
     console.log(`Using cached fare calculation for ${cacheKey}`);
     return outstationPricingCache[cacheKey].price;
@@ -445,27 +478,35 @@ export async function calculateFare(
       
       // Try to get up-to-date pricing info
       try {
-        console.log("Fetching latest vehicle pricing from API for", cabType.id);
-        // Remove timestamp parameter as the API doesn't accept it
-        const vehiclePricing = await fareAPI.getVehiclePricing();
-        console.log("Vehicle pricing data:", vehiclePricing);
-        
-        const pricing = vehiclePricing.find(p => 
-          p.vehicleType?.toLowerCase() === cabType.id?.toLowerCase() || 
-          p.vehicleType?.toLowerCase() === cabType.name?.toLowerCase()
-        );
-        
-        if (pricing) {
-          console.log("Found pricing for", cabType.name, pricing);
-          basePrice = pricing.basePrice || basePrice;
-          perKmRate = pricing.pricePerKm || perKmRate;
-          driverAllowance = pricing.driverAllowance || driverAllowance;
-          nightHaltCharge = pricing.nightHaltCharge || nightHaltCharge;
+        if (!isFetchingVehiclePricing) {
+          isFetchingVehiclePricing = true;
+          console.log("Fetching latest vehicle pricing from API for", cabType.id);
+          const vehiclePricing = await fareAPI.getVehiclePricing();
+          console.log("Vehicle pricing data:", vehiclePricing);
+          isFetchingVehiclePricing = false;
+          
+          if (Array.isArray(vehiclePricing) && vehiclePricing.length > 0) {
+            const pricing = vehiclePricing.find(p => 
+              p.vehicleType?.toLowerCase() === cabType.id?.toLowerCase() || 
+              p.vehicleType?.toLowerCase() === cabType.name?.toLowerCase()
+            );
+            
+            if (pricing) {
+              console.log("Found pricing for", cabType.name, pricing);
+              basePrice = pricing.basePrice || basePrice;
+              perKmRate = pricing.pricePerKm || perKmRate;
+              driverAllowance = pricing.driverAllowance || driverAllowance;
+              nightHaltCharge = pricing.nightHaltCharge || nightHaltCharge;
+            } else {
+              console.warn("No pricing found for", cabType.name, "in vehicle pricing data");
+            }
+          }
         } else {
-          console.warn("No pricing found for", cabType.name, "in vehicle pricing data");
+          console.log("Vehicle pricing fetch already in progress, using current values");
         }
       } catch (error) {
         console.warn('Could not fetch latest pricing data, using default values:', error);
+        isFetchingVehiclePricing = false;
       }
       
       console.log("Calculating outstation fare with:", {
@@ -590,7 +631,7 @@ export function calculateAirportFare(cabType: string, distance: number): number 
   return distance * 20;
 }
 
-// Cache for outstation pricing calculations with shorter expiration
+// Cache for outstation pricing calculations with longer expiration
 const outstationPricingCache: Record<string, {
   expire: number;
   price: number;
