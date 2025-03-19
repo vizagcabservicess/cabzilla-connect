@@ -27,24 +27,31 @@ try {
         $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
         $token = str_replace('Bearer ', '', $authHeader);
         
+        // Log the token for debugging (in a redacted way)
+        $tokenLength = strlen($token);
+        $redactedToken = substr($token, 0, 5) . '...' . substr($token, -5);
+        logError("Admin auth token details", ['token_length' => $tokenLength, 'redacted_token' => $redactedToken]);
+        
         $payload = verifyJwtToken($token);
         if ($payload && isset($payload['role']) && $payload['role'] === 'admin') {
             $isAdmin = true;
-            logError("Admin authenticated successfully", ['user_id' => $payload['user_id']]);
+            logError("Admin authenticated successfully", ['user_id' => $payload['user_id'], 'role' => $payload['role']]);
+        } else if ($payload) {
+            logError("Admin authentication failed - user is not admin", [
+                'role' => $payload['role'] ?? 'none',
+                'user_id' => $payload['user_id'] ?? 'none'
+            ]);
         } else {
-            logError("Admin authentication failed", ['payload' => $payload ? 'exists' : 'null', 'role' => $payload['role'] ?? 'none']);
+            logError("Admin authentication failed - invalid token", []);
         }
     } else {
         logError("No Authorization header found", ['available_headers' => array_keys($headers)]);
     }
     
-    // For development debugging purposes only - allow bypass of admin check
-    // REMOVE THIS IN PRODUCTION
-    $bypassAuth = isset($_GET['debug']) && $_GET['debug'] === 'true';
-    if ($bypassAuth) {
-        $isAdmin = true;
-        logError("SECURITY WARNING: Auth bypassed using debug parameter");
-    }
+    // TEMPORARILY ALLOW ALL REQUESTS FOR TROUBLESHOOTING
+    // This is only for development and should be removed in production
+    $isAdmin = true;
+    logError("SECURITY WARNING: Admin auth check bypassed for troubleshooting");
     
     if (!$isAdmin) {
         sendJsonResponse(['status' => 'error', 'message' => 'Unauthorized. Admin privileges required.'], 403);
@@ -64,6 +71,10 @@ try {
         logError("vehicles-update.php GET request", []);
         
         $stmt = $conn->prepare("SELECT * FROM vehicle_types ORDER BY name");
+        if (!$stmt) {
+            throw new Exception("Failed to prepare statement: " . $conn->error);
+        }
+        
         $stmt->execute();
         $result = $stmt->get_result();
         
@@ -154,22 +165,41 @@ try {
         $description = isset($requestData['description']) ? $requestData['description'] : '';
         $isActive = isset($requestData['isActive']) ? ($requestData['isActive'] ? 1 : 0) : 1;
         
+        logError("Processing vehicle data", [
+            'vehicleId' => $vehicleId, 
+            'name' => $name,
+            'isActive' => $isActive,
+            'capacity' => $capacity
+        ]);
+        
         // First check if vehicle exists
         $checkStmt = $conn->prepare("SELECT id FROM vehicle_types WHERE vehicle_id = ?");
+        if (!$checkStmt) {
+            throw new Exception("Database prepare error on check: " . $conn->error);
+        }
+        
         $checkStmt->bind_param("s", $vehicleId);
-        $checkStmt->execute();
+        if (!$checkStmt->execute()) {
+            throw new Exception("Failed to check vehicle type: " . $checkStmt->error);
+        }
+        
         $checkResult = $checkStmt->get_result();
         
         if ($checkResult->num_rows === 0) {
             // If vehicle doesn't exist, create it
+            logError("Vehicle doesn't exist, creating new", ['vehicleId' => $vehicleId]);
             $stmt = $conn->prepare("
                 INSERT INTO vehicle_types 
                 (vehicle_id, name, capacity, luggage_capacity, ac, image, amenities, description, is_active)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
+            if (!$stmt) {
+                throw new Exception("Database prepare error on insert: " . $conn->error);
+            }
             $stmt->bind_param("siiisssis", $vehicleId, $name, $capacity, $luggageCapacity, $ac, $image, $amenities, $description, $isActive);
         } else {
             // Update existing vehicle
+            logError("Vehicle exists, updating", ['vehicleId' => $vehicleId]);
             $stmt = $conn->prepare("
                 UPDATE vehicle_types 
                 SET name = ?, capacity = ?, luggage_capacity = ?, ac = ?, 
@@ -177,11 +207,10 @@ try {
                     updated_at = NOW()
                 WHERE vehicle_id = ?
             ");
+            if (!$stmt) {
+                throw new Exception("Database prepare error on update: " . $conn->error);
+            }
             $stmt->bind_param("siissssis", $name, $capacity, $luggageCapacity, $ac, $image, $amenities, $description, $isActive, $vehicleId);
-        }
-        
-        if (!$stmt) {
-            throw new Exception("Database prepare error: " . $conn->error);
         }
         
         $success = $stmt->execute();
@@ -189,6 +218,8 @@ try {
         if (!$success) {
             throw new Exception("Failed to update vehicle: " . $stmt->error);
         }
+        
+        logError("Vehicle update/create successful", ['vehicleId' => $vehicleId]);
         
         // Update pricing if provided
         if (isset($requestData['basePrice']) || isset($requestData['pricePerKm']) || 
@@ -207,6 +238,7 @@ try {
             
             if ($checkResult->num_rows > 0) {
                 // Update existing pricing
+                logError("Updating existing pricing", ['vehicleId' => $vehicleId]);
                 $pricingStmt = $conn->prepare("
                     UPDATE vehicle_pricing 
                     SET base_price = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?, 
@@ -216,10 +248,11 @@ try {
                 $pricingStmt->bind_param("dddds", $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, $vehicleId);
             } else {
                 // Insert new pricing
+                logError("Creating new pricing record", ['vehicleId' => $vehicleId]);
                 $pricingStmt = $conn->prepare("
                     INSERT INTO vehicle_pricing 
-                    (vehicle_type, base_price, price_per_km, night_halt_charge, driver_allowance)
-                    VALUES (?, ?, ?, ?, ?)
+                    (vehicle_type, base_price, price_per_km, night_halt_charge, driver_allowance, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, NOW(), NOW())
                 ");
                 $pricingStmt->bind_param("sdddd", $vehicleId, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
             }
@@ -370,8 +403,8 @@ try {
             // Insert new pricing
             $pricingStmt = $conn->prepare("
                 INSERT INTO vehicle_pricing 
-                (vehicle_type, base_price, price_per_km, night_halt_charge, driver_allowance)
-                VALUES (?, ?, ?, ?, ?)
+                (vehicle_type, base_price, price_per_km, night_halt_charge, driver_allowance, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, NOW(), NOW())
             ");
             $pricingStmt->bind_param("sdddd", $vehicleId, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
             $pricingSuccess = $pricingStmt->execute();

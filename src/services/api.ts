@@ -433,7 +433,7 @@ export const fareAPI = {
       // If the data is an object with numbered keys, convert it to an array
       if (response.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
         // Filter out status, serverTime, apiVersion or other non-pricing data
-        const nonPricingKeys = ['status', 'serverTime', 'apiVersion', 'message', 'error'];
+        const nonPricingKeys = ['status', 'serverTime', 'apiVersion', 'message', 'error', 'timestamp', 'cached', 'fallback'];
         const pricingArray = Object.entries(response.data)
           .filter(([key, value]) => 
             !nonPricingKeys.includes(key) && 
@@ -460,7 +460,13 @@ export const fareAPI = {
       console.log("Fetching vehicle data with cache busting...");
       const timestamp = Date.now();
       // Use a direct URL to bypass any caching issues
-      const response = await api.get(`/admin/vehicles-update.php?_t=${timestamp}`);
+      const response = await api.get(`/api/admin/vehicles-update.php?_t=${timestamp}`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'X-Force-Refresh': 'true'
+        }
+      });
       
       console.log("Raw vehicles API response:", response.data);
       
@@ -497,7 +503,30 @@ export const fareAPI = {
       console.warn('Unexpected vehicles response format:', response.data);
       return [];
     } catch (error) {
-      return handleApiError(error);
+      console.error("Error fetching vehicles:", error);
+      // Try the alternative endpoint
+      try {
+        console.log("Trying alternative vehicles endpoint...");
+        const timestamp = Date.now();
+        const response = await api.get(`/api/fares/vehicles-data.php?_t=${timestamp}&includeInactive=true`, {
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'X-Force-Refresh': 'true'
+          }
+        });
+        
+        console.log("Alternative endpoint response:", response.data);
+        
+        if (response.data && response.data.vehicles && Array.isArray(response.data.vehicles)) {
+          return response.data.vehicles;
+        }
+        
+        return [];
+      } catch (fallbackError) {
+        console.error("Fallback endpoint also failed:", fallbackError);
+        return [];
+      }
     }
   },
   
@@ -543,44 +572,36 @@ export const fareAPI = {
     try {
       console.log("Vehicle pricing update request:", pricingData);
       
-      // Add cache busting parameter
-      const timestamp = Date.now();
-      const response = await api.post(`/admin/vehicle-pricing.php?_t=${timestamp}`, pricingData);
-      
-      console.log("Vehicle pricing update response:", response.data);
-      
-      // Force a refresh of the vehicle data
-      setTimeout(async () => {
-        try {
-          // Clear any browser caches
-          await fetch('/api/fares/vehicles.php', { 
-            method: 'GET',
-            headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
-          });
-          
-          console.log("Forced refresh of vehicle data after pricing update");
-        } catch (error) {
-          console.error("Error refreshing vehicle data:", error);
-        }
-      }, 500);
-      
-      // Check for success in various response formats
-      if (response.data && response.data.status === 'success') {
+      // Try both endpoints one after another for redundancy
+      try {
+        // First try the dedicated vehicle pricing endpoint
+        const timestamp = Date.now();
+        const response = await api.post(`/admin/vehicle-pricing.php?_t=${timestamp}`, pricingData, {
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+            'X-Force-Refresh': 'true'
+          }
+        });
+        
+        console.log("Vehicle pricing update response:", response.data);
         return response.data;
-      } else if (response.data && response.data.message && !response.data.error) {
-        return response.data;
-      } else if (response.data && response.data.data) {
+      } catch (firstError) {
+        console.error("First endpoint failed, trying fallback:", firstError);
+        
+        // If that fails, try the vehicles-update endpoint
+        const timestamp = Date.now();
+        const response = await api.post(`/admin/vehicles-update.php?_t=${timestamp}`, pricingData, {
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+            'X-Force-Refresh': 'true'
+          }
+        });
+        
+        console.log("Fallback vehicle pricing update response:", response.data);
         return response.data;
       }
-      
-      // If response doesn't indicate success, throw an error
-      if (response.data && response.data.error) {
-        throw new Error(response.data.error);
-      } else if (response.data && response.data.message && response.data.status === 'error') {
-        throw new Error(response.data.message);
-      }
-      
-      return response.data;
     } catch (error) {
       return handleApiError(error);
     }
@@ -600,7 +621,13 @@ export const fareAPI = {
       };
       
       // Use direct endpoint with cache busting
-      const response = await api.post(`/admin/vehicles-update.php?_t=${timestamp}`, debugData);
+      const response = await api.post(`/admin/vehicles-update.php?_t=${timestamp}`, debugData, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'X-Force-Refresh': 'true'
+        }
+      });
       
       console.log("Vehicle update response:", response.data);
       
@@ -633,7 +660,14 @@ export const fareAPI = {
   // Add new vehicle (admin only)
   addVehicle: async (vehicleData: any): Promise<any> => {
     try {
-      const response = await api.put('/admin/vehicles-update.php', vehicleData);
+      const timestamp = Date.now();
+      const response = await api.put(`/admin/vehicles-update.php?_t=${timestamp}`, vehicleData, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'X-Force-Refresh': 'true'
+        }
+      });
       return response.data;
     } catch (error) {
       return handleApiError(error);
@@ -643,7 +677,14 @@ export const fareAPI = {
   // Delete vehicle (admin only)
   deleteVehicle: async (vehicleId: string): Promise<any> => {
     try {
-      const response = await api.delete(`/admin/vehicles-update.php?vehicleId=${vehicleId}`);
+      const timestamp = Date.now();
+      const response = await api.delete(`/admin/vehicles-update.php?vehicleId=${vehicleId}&_t=${timestamp}`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'X-Force-Refresh': 'true'
+        }
+      });
       return response.data;
     } catch (error) {
       return handleApiError(error);
@@ -655,7 +696,13 @@ export const fareAPI = {
     try {
       const cacheBuster = new Date().getTime();
       console.log(`Fetching all vehicle data with cache busting...${cacheBuster}`);
-      const response = await api.get(`/fares/vehicles.php?_t=${cacheBuster}`);
+      const response = await api.get(`/fares/vehicles-data.php?_t=${cacheBuster}`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'X-Force-Refresh': 'true'
+        }
+      });
       
       // Log response to debug
       console.log("Vehicle data raw response:", response.data);
@@ -665,12 +712,14 @@ export const fareAPI = {
         return response.data;
       } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
         return response.data.data;
+      } else if (response.data && response.data.vehicles && Array.isArray(response.data.vehicles)) {
+        return response.data.vehicles;
       }
       
       // If the data is an object with numbered keys, convert it to an array
       if (response.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
         // Filter out status, serverTime, apiVersion or other non-vehicle data
-        const nonVehicleKeys = ['status', 'serverTime', 'apiVersion', 'message', 'error'];
+        const nonVehicleKeys = ['status', 'serverTime', 'apiVersion', 'message', 'error', 'timestamp', 'cached', 'fallback'];
         const vehiclesArray = Object.entries(response.data)
           .filter(([key, value]) => 
             !nonVehicleKeys.includes(key) && 

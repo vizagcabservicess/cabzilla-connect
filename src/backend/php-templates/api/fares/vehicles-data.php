@@ -100,6 +100,7 @@ try {
     // Build query to get all vehicle types with pricing info
     $query = "
         SELECT 
+            vt.id as db_id,
             vt.vehicle_id, 
             vt.name, 
             vt.capacity, 
@@ -169,7 +170,8 @@ try {
             'description' => $row['description'] ?? '',
             'ac' => (bool)($row['ac'] ?? 0),
             'isActive' => (bool)($row['is_active'] ?? 0),
-            'vehicleId' => (string)$row['vehicle_id']
+            'vehicleId' => (string)$row['vehicle_id'],
+            'db_id' => $row['db_id'] ?? null,
         ];
         
         // Only add active vehicles for non-admin requests or if specifically including inactive
