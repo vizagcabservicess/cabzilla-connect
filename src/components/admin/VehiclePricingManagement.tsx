@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -119,11 +118,9 @@ export function VehiclePricingManagement() {
     },
   });
   
-  // Clear all cached data across application
   const clearAllCaches = useCallback(() => {
     console.log("Clearing all vehicle pricing caches");
     
-    // Clear all local and session storage caches
     localStorage.removeItem('cabFares');
     localStorage.removeItem('tourFares');
     localStorage.removeItem('lastFareUpdate');
@@ -134,10 +131,8 @@ export function VehiclePricingManagement() {
     sessionStorage.removeItem('calculatedFares');
     sessionStorage.removeItem('vehiclePricing');
     
-    // Force clear cache variables
     const cachePrefixes = ['fare-', 'price-', 'cab-', 'vehicle-'];
     
-    // Remove matching session storage items
     Object.keys(sessionStorage).forEach(key => {
       for (const prefix of cachePrefixes) {
         if (key.startsWith(prefix)) {
@@ -148,7 +143,6 @@ export function VehiclePricingManagement() {
       }
     });
     
-    // Remove matching local storage items
     Object.keys(localStorage).forEach(key => {
       for (const prefix of cachePrefixes) {
         if (key.startsWith(prefix)) {
@@ -159,7 +153,6 @@ export function VehiclePricingManagement() {
       }
     });
     
-    // Add a cache-busting timestamp
     sessionStorage.setItem('lastCacheClear', Date.now().toString());
   }, []);
   
@@ -168,12 +161,10 @@ export function VehiclePricingManagement() {
       setIsRefreshing(true);
       setError(null);
       
-      // Clear caches before fetching
       clearAllCaches();
       
       console.log("Refreshing vehicle pricing with timestamp:", Date.now());
       
-      // Add a cache-busting timestamp to the request
       const timestamp = Date.now();
       const data = await fareAPI.getVehiclePricing(`?_t=${timestamp}`);
       
@@ -181,7 +172,6 @@ export function VehiclePricingManagement() {
         console.log("✅ Fetched vehicle pricing:", data);
         setVehiclePricing(data);
         
-        // Save to session storage with timestamp
         sessionStorage.setItem('vehiclePricing', JSON.stringify({
           data,
           timestamp: Date.now()
@@ -189,7 +179,6 @@ export function VehiclePricingManagement() {
         
         toast.success("Vehicle pricing refreshed");
         
-        // Force reload vehicle info across app
         await reloadCabTypes();
       } else {
         console.warn("❌ Empty or invalid vehicle pricing data:", data);
@@ -204,17 +193,14 @@ export function VehiclePricingManagement() {
     }
   }, [clearAllCaches]);
   
-  // Load pricing data when component mounts
   useEffect(() => {
     fetchVehiclePricing();
   }, [fetchVehiclePricing]);
   
-  // Handle standard pricing update
   const onBasePricingSubmit = async (values: z.infer<typeof basePricingSchema>) => {
     try {
       setIsLoading(true);
       
-      // Clear caches before update
       clearAllCaches();
       
       console.log("Submitting vehicle pricing update:", values);
@@ -224,10 +210,8 @@ export function VehiclePricingManagement() {
       
       toast.success("Vehicle pricing updated successfully");
       
-      // Force reload vehicle info across app
       await reloadCabTypes();
       
-      // Refresh pricing data after update
       await fetchVehiclePricing();
     } catch (error) {
       console.error("Error updating vehicle pricing:", error);
@@ -237,16 +221,13 @@ export function VehiclePricingManagement() {
     }
   };
   
-  // Handle local fare update
   const onLocalFareSubmit = async (values: z.infer<typeof localFareSchema>) => {
     try {
       setIsLoading(true);
       console.log("Submitting local fare update:", values);
       
-      // Clear caches before update
       clearAllCaches();
       
-      // Update local package prices in the database
       const requestData = {
         vehicleType: values.vehicleType,
         package8hrs: values.package8hrs,
@@ -255,17 +236,13 @@ export function VehiclePricingManagement() {
         extraKmCharge: values.extraKmCharge,
       };
       
-      // This is a placeholder - would need to create a new API endpoint for this
-      // For now, just simulate success
       setTimeout(async () => {
         toast.success("Local fare settings updated successfully");
         
-        // Force reload vehicle info across app
         await reloadCabTypes();
         
         setIsLoading(false);
       }, 500);
-      
     } catch (error) {
       console.error("Error updating local fares:", error);
       toast.error("Failed to update local fares");
@@ -273,16 +250,13 @@ export function VehiclePricingManagement() {
     }
   };
   
-  // Handle airport fare update
   const onAirportFareSubmit = async (values: z.infer<typeof airportFareSchema>) => {
     try {
       setIsLoading(true);
       console.log("Submitting airport fare update:", values);
       
-      // Clear caches before update
       clearAllCaches();
       
-      // Update airport fare tiers in the database
       const requestData = {
         vehicleType: values.vehicleType,
         tier1: values.tier1,
@@ -292,17 +266,13 @@ export function VehiclePricingManagement() {
         extraKmCharge: values.extraKmCharge,
       };
       
-      // This is a placeholder - would need to create a new API endpoint for this
-      // For now, just simulate success
       setTimeout(async () => {
         toast.success("Airport fare settings updated successfully");
         
-        // Force reload vehicle info across app
         await reloadCabTypes();
         
         setIsLoading(false);
       }, 500);
-      
     } catch (error) {
       console.error("Error updating airport fares:", error);
       toast.error("Failed to update airport fares");
@@ -310,16 +280,13 @@ export function VehiclePricingManagement() {
     }
   };
   
-  // Handle outstation fare update
   const onOutstationFareSubmit = async (values: z.infer<typeof outstationFormSchema>) => {
     try {
       setIsLoading(true);
       console.log("Submitting outstation fare update:", values);
       
-      // Clear caches before update
       clearAllCaches();
       
-      // Update outstation fares in the database
       const oneWayRequest = {
         vehicleType: values.vehicleType,
         basePrice: values.oneWayBasePrice,
@@ -328,16 +295,13 @@ export function VehiclePricingManagement() {
         driverAllowance: values.driverAllowance,
       };
       
-      // For now, just simulate success
       setTimeout(async () => {
         toast.success("Outstation fare settings updated successfully");
         
-        // Force reload vehicle info across app
         await reloadCabTypes();
         
         setIsLoading(false);
       }, 500);
-      
     } catch (error) {
       console.error("Error updating outstation fares:", error);
       toast.error("Failed to update outstation fares");
@@ -361,7 +325,6 @@ export function VehiclePricingManagement() {
     if (selectedVehicle) {
       localForm.setValue("vehicleType", selectedVehicle.vehicleType);
       
-      // Set default values based on vehicle type
       if (vehicleType.toLowerCase().includes('sedan')) {
         localForm.setValue("package8hrs", 2500);
         localForm.setValue("package10hrs", 3000);
@@ -386,12 +349,11 @@ export function VehiclePricingManagement() {
     if (selectedVehicle) {
       airportForm.setValue("vehicleType", selectedVehicle.vehicleType);
       
-      // Set default values based on vehicle type
       if (vehicleType.toLowerCase().includes('sedan')) {
-        airportForm.setValue("tier1", 840);  // <= 15km
-        airportForm.setValue("tier2", 1000); // <= 20km
-        airportForm.setValue("tier3", 1200); // <= 30km
-        airportForm.setValue("tier4", 1500); // <= 35km
+        airportForm.setValue("tier1", 840);
+        airportForm.setValue("tier2", 1000);
+        airportForm.setValue("tier3", 1200);
+        airportForm.setValue("tier4", 1500);
         airportForm.setValue("extraKmCharge", 14);
       } else if (vehicleType.toLowerCase().includes('ertiga')) {
         airportForm.setValue("tier1", 1200);
@@ -415,7 +377,7 @@ export function VehiclePricingManagement() {
       outstationForm.setValue("vehicleType", selectedVehicle.vehicleType);
       outstationForm.setValue("oneWayBasePrice", selectedVehicle.basePrice);
       outstationForm.setValue("oneWayPerKm", selectedVehicle.pricePerKm);
-      outstationForm.setValue("roundTripBasePrice", selectedVehicle.basePrice * 0.9); // 10% discount for round trips
+      outstationForm.setValue("roundTripBasePrice", selectedVehicle.basePrice * 0.9);
       outstationForm.setValue("roundTripPerKm", selectedVehicle.pricePerKm * 0.9);
       outstationForm.setValue("nightHaltCharge", selectedVehicle.nightHaltCharge || 0);
       outstationForm.setValue("driverAllowance", selectedVehicle.driverAllowance || 0);
@@ -453,7 +415,6 @@ export function VehiclePricingManagement() {
         </TabsTrigger>
       </TabsList>
       
-      {/* Base Pricing Tab */}
       <TabsContent value="base">
         <Card>
           <CardHeader>
@@ -590,7 +551,6 @@ export function VehiclePricingManagement() {
         </Card>
       </TabsContent>
       
-      {/* Outstation Pricing Tab */}
       <TabsContent value="outstation">
         <Card>
           <CardHeader>
@@ -767,7 +727,6 @@ export function VehiclePricingManagement() {
         </Card>
       </TabsContent>
       
-      {/* Local Package Pricing Tab */}
       <TabsContent value="local">
         <Card>
           <CardHeader>
@@ -909,7 +868,6 @@ export function VehiclePricingManagement() {
         </Card>
       </TabsContent>
       
-      {/* Airport Transfer Pricing Tab */}
       <TabsContent value="airport">
         <Card>
           <CardHeader>
@@ -1129,3 +1087,4 @@ export function VehiclePricingManagement() {
     </Tabs>
   );
 }
+
