@@ -1,4 +1,6 @@
 
+// Only updating the useEffect for calculating fares where the issue is happening
+
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { CabType } from '@/types/cab';
 import { formatPrice } from '@/lib/cabData';
@@ -161,9 +163,28 @@ export function CabOptions({
           
           console.log(`Starting fare calculation for ${cabTypes.length} cab types`);
           
+          // Validate each cab object before calculation
+          const validCabs = cabTypes.filter(cab => {
+            // Check if cab has all required properties
+            if (!cab || !cab.id) {
+              console.warn('Skipping invalid cab object:', cab);
+              return false;
+            }
+            
+            // Convert any missing numeric properties to defaults
+            if (typeof cab.price !== 'number') cab.price = 0;
+            if (typeof cab.pricePerKm !== 'number') cab.pricePerKm = 0;
+            if (typeof cab.nightHaltCharge !== 'number') cab.nightHaltCharge = 0;
+            if (typeof cab.driverAllowance !== 'number') cab.driverAllowance = 0;
+            
+            return true;
+          });
+          
+          console.log(`Proceeding with ${validCabs.length} valid cabs for fare calculation`);
+          
           // Use the fareService to calculate fares
           const fares = await fareService.calculateFaresForCabs(
-            cabTypes,
+            validCabs,
             distance,
             tripType,
             tripMode,

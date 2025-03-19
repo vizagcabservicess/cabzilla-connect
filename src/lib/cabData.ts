@@ -1,3 +1,4 @@
+
 import { differenceInCalendarDays } from 'date-fns';
 import { fareAPI } from '@/services/api';
 import { toast } from 'sonner';
@@ -60,8 +61,8 @@ export const cabTypes: CabType[] = [
 // Cache to store loaded cab types
 let cachedCabTypes: CabType[] | null = null;
 let lastCacheTime = 0;
-// Set to 2 minutes for better reliability
-const CACHE_DURATION = 2 * 60 * 1000; 
+// Set to 1 minute for better reliability
+const CACHE_DURATION = 60 * 1000; 
 let isCurrentlyFetchingCabs = false; // Flag to prevent concurrent fetch requests
 
 // Function to load cab types dynamically
@@ -85,46 +86,70 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
     console.log('Fetching new cab types from API');
     
     try {
-      // Try both endpoints for more reliable data fetching
+      // Try multiple endpoints for more reliable data fetching
       let vehicleData: CabType[] = [];
+      let fetchSuccessful = false;
       
+      // First try the primary endpoint
       try {
-        // Try primary endpoint first
         vehicleData = await fareService.refreshCabTypes();
+        if (Array.isArray(vehicleData) && vehicleData.length > 0) {
+          fetchSuccessful = true;
+          console.log('Successfully fetched vehicles from primary endpoint:', vehicleData.length);
+        }
       } catch (primaryError) {
         console.error('Primary vehicle API call failed:', primaryError);
-        
-        // Try backup endpoint
+        fetchSuccessful = false;
+      }
+      
+      // If primary endpoint failed, try first backup endpoint
+      if (!fetchSuccessful) {
         try {
-          // Use getAllVehicleData instead of getVehiclesData
-          const backupData = await fareAPI.getAllVehicleData();
+          console.log('Trying vehicles API endpoint directly...');
+          const backupData = await fareAPI.getVehicles();
+          
           if (Array.isArray(backupData) && backupData.length > 0) {
-            vehicleData = backupData.map(v => ({
-              id: v.id || v.vehicleId || '',
-              name: v.name || '',
-              capacity: v.capacity || 4,
-              luggageCapacity: v.luggageCapacity || v.luggage_capacity || 2,
-              price: v.basePrice || v.price || v.base_price || 0,
-              pricePerKm: v.pricePerKm || v.price_per_km || 0,
-              image: v.image || '/cars/sedan.png',
-              amenities: Array.isArray(v.amenities) ? v.amenities : ['AC'],
-              description: v.description || '',
-              ac: v.ac !== undefined ? v.ac : true,
-              nightHaltCharge: v.nightHaltCharge || v.night_halt_charge || 0,
-              driverAllowance: v.driverAllowance || v.driver_allowance || 0,
-              isActive: v.isActive !== undefined ? v.isActive : 
-                         (v.is_active !== undefined ? v.is_active : true)
-            }));
+            vehicleData = mapVehicleData(backupData);
+            fetchSuccessful = true;
+            console.log('Successfully fetched vehicles from backup endpoint 1:', vehicleData.length);
           }
-        } catch (backupError) {
-          console.error('Backup vehicle API call failed too:', backupError);
-          throw primaryError; // Re-throw primary error
+        } catch (backup1Error) {
+          console.error('First backup vehicle API call failed:', backup1Error);
+        }
+      }
+      
+      // If both previous attempts failed, try second backup endpoint
+      if (!fetchSuccessful) {
+        try {
+          console.log('Trying getAllVehicleData endpoint...');
+          const backupData = await fareAPI.getAllVehicleData();
+          
+          if (Array.isArray(backupData) && backupData.length > 0) {
+            vehicleData = mapVehicleData(backupData);
+            fetchSuccessful = true;
+            console.log('Successfully fetched vehicles from backup endpoint 2:', vehicleData.length);
+          }
+        } catch (backup2Error) {
+          console.error('Second backup vehicle API call failed:', backup2Error);
         }
       }
       
       if (Array.isArray(vehicleData) && vehicleData.length > 0) {
-        // Filter out any invalid entries
-        const validVehicles = vehicleData.filter(v => v && v.id && (v.isActive !== false));
+        // Filter out any invalid entries and ensure they have unique IDs
+        const validVehicles = vehicleData
+          .filter(v => v && (v.id || v.vehicleId) && (v.isActive !== false))
+          .map(vehicle => ({
+            ...vehicle,
+            // Ensure ID is always set
+            id: vehicle.id || vehicle.vehicleId || String(Math.random()).substring(2, 10),
+            // Ensure all required properties exist
+            price: vehicle.price || vehicle.basePrice || 0,
+            pricePerKm: vehicle.pricePerKm || 0,
+            nightHaltCharge: vehicle.nightHaltCharge || 0,
+            driverAllowance: vehicle.driverAllowance || 0,
+            amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC'],
+            isActive: vehicle.isActive !== false
+          }));
         
         // Log active vehicle count
         console.log(`Retrieved ${validVehicles.length} active vehicle types`);
@@ -153,6 +178,27 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
     // Fallback to default cab types if API call fails
     return cabTypes;
   }
+};
+
+// Helper function to map vehicle data from different API response formats
+const mapVehicleData = (data: any[]): CabType[] => {
+  return data.map(v => ({
+    id: v.id || v.vehicleId || v.vehicle_id || '',
+    name: v.name || '',
+    capacity: Number(v.capacity) || 4,
+    luggageCapacity: Number(v.luggageCapacity || v.luggage_capacity) || 2,
+    price: Number(v.basePrice || v.price || v.base_price) || 0,
+    pricePerKm: Number(v.pricePerKm || v.price_per_km) || 0,
+    image: v.image || '/cars/sedan.png',
+    amenities: Array.isArray(v.amenities) ? v.amenities : ['AC'],
+    description: v.description || '',
+    ac: v.ac !== undefined ? Boolean(v.ac) : true,
+    nightHaltCharge: Number(v.nightHaltCharge || v.night_halt_charge) || 0,
+    driverAllowance: Number(v.driverAllowance || v.driver_allowance) || 0,
+    isActive: v.isActive !== undefined ? Boolean(v.isActive) : 
+              (v.is_active !== undefined ? Boolean(v.is_active) : true),
+    vehicleId: v.id || v.vehicleId || v.vehicle_id || ''
+  }));
 };
 
 // Track ongoing reload operations
@@ -190,7 +236,7 @@ export const reloadCabTypes = async (): Promise<CabType[]> => {
       duration: 2000
     });
     
-    // Use fareService to refresh cab types
+    // Use standard load function but with fresh cache
     const reloadedTypes = await loadCabTypes();
     
     // Show success message when fares are reloaded

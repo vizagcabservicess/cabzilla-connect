@@ -1,3 +1,4 @@
+
 import { CabType, FareCalculationParams } from '@/types/cab';
 import { calculateFare } from '@/lib/fareCalculationService';
 import { differenceInDays } from 'date-fns';
@@ -95,20 +96,20 @@ class FareService {
       // Map the vehicles to CabType format
       const cabTypes: CabType[] = vehicleArray
         .map(vehicle => ({
-          id: vehicle.id || vehicle.vehicleId || vehicle.vehicle_id || '',
-          name: vehicle.name || '',
-          capacity: vehicle.capacity || 4,
-          luggageCapacity: vehicle.luggageCapacity || vehicle.luggage_capacity || 2,
-          price: vehicle.basePrice || vehicle.price || vehicle.base_price || 0,
-          pricePerKm: vehicle.pricePerKm || vehicle.price_per_km || 0,
-          image: vehicle.image || '/cars/sedan.png',
+          id: String(vehicle.id || vehicle.vehicleId || vehicle.vehicle_id || ''),
+          name: String(vehicle.name || ''),
+          capacity: Number(vehicle.capacity) || 4,
+          luggageCapacity: Number(vehicle.luggageCapacity || vehicle.luggage_capacity) || 2,
+          price: Number(vehicle.basePrice || vehicle.price || vehicle.base_price) || 0,
+          pricePerKm: Number(vehicle.pricePerKm || vehicle.price_per_km) || 0,
+          image: String(vehicle.image || '/cars/sedan.png'),
           amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC'],
-          description: vehicle.description || '',
-          ac: vehicle.ac !== undefined ? vehicle.ac : true,
-          nightHaltCharge: vehicle.nightHaltCharge || vehicle.night_halt_charge || 0,
-          driverAllowance: vehicle.driverAllowance || vehicle.driver_allowance || 0,
-          isActive: vehicle.isActive !== undefined ? vehicle.isActive : 
-                    (vehicle.is_active !== undefined ? vehicle.is_active : true)
+          description: String(vehicle.description || ''),
+          ac: vehicle.ac !== undefined ? Boolean(vehicle.ac) : true,
+          nightHaltCharge: Number(vehicle.nightHaltCharge || vehicle.night_halt_charge) || 0,
+          driverAllowance: Number(vehicle.driverAllowance || vehicle.driver_allowance) || 0,
+          isActive: vehicle.isActive !== undefined ? Boolean(vehicle.isActive) : 
+                   (vehicle.is_active !== undefined ? Boolean(vehicle.is_active) : true)
         }))
         .filter(cab => cab.isActive && cab.id); // Only return active cabs with valid IDs
       
@@ -240,30 +241,61 @@ class FareService {
         return false;
       }
       
-      // Create a sanitized copy of the vehicle data
+      // Create a sanitized copy of the vehicle data with proper type conversions
       const sanitizedData = {
-        vehicleId: vehicleData.vehicleId || vehicleData.id,
-        name: vehicleData.name,
-        capacity: parseInt(vehicleData.capacity) || 4,
-        luggageCapacity: parseInt(vehicleData.luggageCapacity) || 2,
-        ac: vehicleData.ac !== undefined ? vehicleData.ac : true,
-        image: vehicleData.image || '/cars/sedan.png',
+        vehicleId: String(vehicleData.vehicleId || vehicleData.id || ''),
+        name: String(vehicleData.name || ''),
+        capacity: Number(vehicleData.capacity) || 4,
+        luggageCapacity: Number(vehicleData.luggageCapacity) || 2,
+        ac: Boolean(vehicleData.ac !== undefined ? vehicleData.ac : true),
+        image: String(vehicleData.image || '/cars/sedan.png'),
         amenities: Array.isArray(vehicleData.amenities) ? vehicleData.amenities : [],
-        description: vehicleData.description || '',
-        isActive: vehicleData.isActive !== undefined ? vehicleData.isActive : true,
-        basePrice: parseFloat(vehicleData.basePrice) || 0,
-        pricePerKm: parseFloat(vehicleData.pricePerKm) || 0,
-        nightHaltCharge: parseFloat(vehicleData.nightHaltCharge) || 0,
-        driverAllowance: parseFloat(vehicleData.driverAllowance) || 0,
+        description: String(vehicleData.description || ''),
+        isActive: Boolean(vehicleData.isActive !== undefined ? vehicleData.isActive : true),
+        basePrice: Number(vehicleData.basePrice) || 0,
+        pricePerKm: Number(vehicleData.pricePerKm) || 0,
+        nightHaltCharge: Number(vehicleData.nightHaltCharge) || 0,
+        driverAllowance: Number(vehicleData.driverAllowance) || 0,
+        id: String(vehicleData.vehicleId || vehicleData.id || '') // Include id for compatibility
       };
       
-      // Try using both endpoints for better compatibility
+      console.log("Sending sanitized data to API:", sanitizedData);
+      
+      // Try with updateVehicle endpoint
+      let success = false;
+      let error = null;
+      
       try {
         await fareAPI.updateVehicle(sanitizedData);
-      } catch (error) {
-        console.error("Error with primary endpoint, trying alternative endpoint:", error);
-        // Use updateVehicle again instead of adminUpdateVehicle which doesn't exist
-        await fareAPI.updateVehicle(sanitizedData);
+        success = true;
+      } catch (err) {
+        error = err;
+        console.error("Error with vehicle update endpoint:", err);
+        success = false;
+      }
+      
+      // If first attempt failed, try again with a slight delay
+      if (!success) {
+        // Wait a brief moment before retrying
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        try {
+          console.log("Retrying vehicle update with the same endpoint");
+          await fareAPI.updateVehicle(sanitizedData);
+          success = true;
+        } catch (retryErr) {
+          error = retryErr;
+          console.error("Error with retry attempt:", retryErr);
+          
+          // Show the specific error to help with debugging
+          if (retryErr instanceof Error) {
+            toast.error(`API Error: ${retryErr.message}`, { duration: 5000 });
+          } else {
+            toast.error("Failed to update vehicle: Server error", { duration: 5000 });
+          }
+          
+          return false;
+        }
       }
       
       // Clear cache to ensure fresh data on next fetch
@@ -274,10 +306,15 @@ class FareService {
       sessionStorage.removeItem('cabFares');
       sessionStorage.removeItem('calculatedFares');
       
+      if (success) {
+        toast.success("Vehicle updated successfully");
+      }
+      
       // Return success
-      return true;
+      return success;
     } catch (error) {
       console.error('Error updating vehicle pricing:', error);
+      toast.error("Failed to update vehicle data");
       return false;
     }
   }

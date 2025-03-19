@@ -20,6 +20,14 @@ const generateCacheKey = (params: FareCalculationParams): string => {
   return `${cabType.id}_${distance}_${tripType}_${tripMode}_${hourlyPackage || ''}_${pickupDate?.getTime() || 0}_${returnDate?.getTime() || 0}`;
 };
 
+// Helper function to safely convert values to lowercase
+const safeToLowerCase = (value: any): string => {
+  if (typeof value === 'string') {
+    return value.toLowerCase();
+  }
+  return String(value).toLowerCase();
+};
+
 // Calculate airport transfer fares
 export const calculateAirportFare = (cabName: string, distance: number): number => {
   // Create a cache key for airport fares
@@ -43,7 +51,8 @@ export const calculateAirportFare = (cabName: string, distance: number): number 
   let basePrice = defaultFare.basePrice;
   let pricePerKm = defaultFare.pricePerKm;
   
-  const cabNameLower = cabName.toLowerCase();
+  // Safely convert cabName to lowercase string to avoid TypeError
+  const cabNameLower = safeToLowerCase(cabName);
   
   // Adjust pricing based on cab type
   if (cabNameLower.includes('sedan')) {
@@ -107,7 +116,9 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
     if (tripType === 'local') {
       // For local trips, use the hourly package pricing
       if (hourlyPackage) {
-        fare = getLocalPackagePrice(hourlyPackage, cabType.id);
+        // Safely handle string or non-string cab IDs 
+        const cabId = cabType.id ? safeToLowerCase(cabType.id) : '';
+        fare = getLocalPackagePrice(hourlyPackage, cabId);
         
         // For distance beyond package limit, add per km charge
         const packageKm = hourlyPackage === '8hrs-80km' ? 80 : 100;
@@ -127,8 +138,15 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
       // For tours, use the predefined tour fares
       const tourId = hourlyPackage; // In this case, hourlyPackage is used to store the tourId
       
-      if (tourId && tourFares[tourId] && tourFares[tourId][cabType.id.toLowerCase()]) {
-        fare = tourFares[tourId][cabType.id.toLowerCase()];
+      if (tourId && tourFares[tourId]) {
+        // Safely handle cab ID conversion
+        const cabId = cabType.id ? safeToLowerCase(cabType.id) : '';
+        if (tourFares[tourId][cabId]) {
+          fare = tourFares[tourId][cabId];
+        } else {
+          // Fallback calculation if the specific tour fare is not found
+          fare = Math.round(distance * cabType.pricePerKm * 1.2); // 20% premium for tour packages
+        }
       } else {
         // Fallback calculation if the specific tour fare is not found
         fare = Math.round(distance * cabType.pricePerKm * 1.2); // 20% premium for tour packages

@@ -115,52 +115,97 @@ export function VehicleManagement() {
       setError(null);
       
       console.log("Fetching vehicles data");
-      const response = await fareAPI.getVehicles() as ApiResponse | VehicleData[];
       
       let vehicleData: VehicleData[] = [];
+      let fetchSuccessful = false;
       
-      if (Array.isArray(response)) {
-        vehicleData = response as VehicleData[];
-      } 
-      else if (response && typeof response === 'object') {
-        if (response.vehicles && Array.isArray(response.vehicles)) {
-          vehicleData = response.vehicles as VehicleData[];
-        } 
-        else if (response.data && Array.isArray(response.data)) {
-          vehicleData = response.data as VehicleData[];
+      try {
+        const response = await fareAPI.getAllVehicleData();
+        if (Array.isArray(response) && response.length > 0) {
+          vehicleData = response;
+          fetchSuccessful = true;
+          console.log("Successfully fetched vehicles from getAllVehicleData:", vehicleData.length);
         }
-        else {
-          const potentialVehicles = Object.values(response).filter(val => 
-            val && typeof val === 'object' && !Array.isArray(val)
-          );
-          if (potentialVehicles.length > 0) {
-            vehicleData = potentialVehicles as VehicleData[];
+      } catch (error) {
+        console.error("Error fetching from getAllVehicleData:", error);
+      }
+      
+      if (!fetchSuccessful) {
+        try {
+          const response = await fareAPI.getVehicles();
+          if (Array.isArray(response) && response.length > 0) {
+            vehicleData = response;
+            fetchSuccessful = true;
+            console.log("Successfully fetched vehicles from getVehicles:", vehicleData.length);
+          } else if (response && typeof response === 'object') {
+            if (response.vehicles && Array.isArray(response.vehicles)) {
+              vehicleData = response.vehicles;
+              fetchSuccessful = true;
+            } else if (response.data && Array.isArray(response.data)) {
+              vehicleData = response.data;
+              fetchSuccessful = true;
+            }
           }
+        } catch (error) {
+          console.error("Error fetching from getVehicles:", error);
         }
       }
       
-      console.log("Fetched vehicles:", vehicleData);
+      if (!fetchSuccessful) {
+        try {
+          const cachedVehicles = await fareService.refreshCabTypes();
+          if (cachedVehicles && cachedVehicles.length > 0) {
+            vehicleData = cachedVehicles.map(v => ({
+              id: v.id,
+              name: v.name,
+              capacity: v.capacity,
+              luggageCapacity: v.luggageCapacity,
+              ac: v.ac,
+              image: v.image,
+              amenities: v.amenities,
+              description: v.description,
+              isActive: v.isActive,
+              basePrice: v.price,
+              pricePerKm: v.pricePerKm,
+              nightHaltCharge: v.nightHaltCharge,
+              driverAllowance: v.driverAllowance,
+              vehicleId: v.id
+            }));
+            fetchSuccessful = true;
+            console.log("Using cached vehicles from fareService:", vehicleData.length);
+          }
+        } catch (error) {
+          console.error("Error using cached vehicles:", error);
+        }
+      }
       
-      const normalizedVehicles = vehicleData.map(vehicle => ({
-        id: vehicle.id || vehicle.vehicleId || "",
-        name: vehicle.name || "",
-        capacity: vehicle.capacity || 4,
-        luggageCapacity: vehicle.luggageCapacity || vehicle.luggage_capacity || 2,
-        ac: vehicle.ac !== undefined ? vehicle.ac : true,
-        image: vehicle.image || "/cars/sedan.png",
-        amenities: vehicle.amenities || [],
-        description: vehicle.description || "",
-        isActive: vehicle.isActive !== undefined ? vehicle.isActive : 
-                (vehicle.is_active !== undefined ? vehicle.is_active : true),
-        basePrice: vehicle.basePrice || vehicle.price || 0,
-        pricePerKm: vehicle.pricePerKm || 0,
-        nightHaltCharge: vehicle.nightHaltCharge || 0,
-        driverAllowance: vehicle.driverAllowance || 0,
-        vehicleId: vehicle.id || vehicle.vehicleId || ""
-      }));
-      
-      setVehicles(normalizedVehicles);
-      toast.success("Vehicles data refreshed");
+      if (Array.isArray(vehicleData) && vehicleData.length > 0) {
+        const normalizedVehicles = vehicleData.map(vehicle => ({
+          id: String(vehicle.id || vehicle.vehicleId || ""),
+          name: String(vehicle.name || ""),
+          capacity: Number(vehicle.capacity) || 4,
+          luggageCapacity: Number(vehicle.luggageCapacity || vehicle.luggage_capacity) || 2,
+          ac: vehicle.ac !== undefined ? Boolean(vehicle.ac) : true,
+          image: String(vehicle.image || "/cars/sedan.png"),
+          amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : [],
+          description: String(vehicle.description || ""),
+          isActive: vehicle.isActive !== undefined ? Boolean(vehicle.isActive) : 
+                   (vehicle.is_active !== undefined ? Boolean(vehicle.is_active) : true),
+          basePrice: Number(vehicle.basePrice || vehicle.price || 0),
+          pricePerKm: Number(vehicle.pricePerKm || 0),
+          nightHaltCharge: Number(vehicle.nightHaltCharge || 0),
+          driverAllowance: Number(vehicle.driverAllowance || 0),
+          vehicleId: String(vehicle.id || vehicle.vehicleId || "")
+        }));
+        
+        console.log("Normalized vehicles:", normalizedVehicles);
+        setVehicles(normalizedVehicles);
+        toast.success("Vehicles data refreshed");
+      } else {
+        console.error("Failed to get any vehicle data from all sources");
+        setError("No vehicle data available. You may need to create vehicles.");
+        toast.error("No vehicles data found");
+      }
     } catch (error) {
       console.error("Error fetching vehicles:", error);
       setError("Failed to load vehicles data. Please try again.");
@@ -171,25 +216,39 @@ export function VehicleManagement() {
   };
   
   const handleVehicleSelect = (vehicleId: string) => {
-    const selectedVehicle = vehicles.find(v => v.id === vehicleId || v.vehicleId === vehicleId);
+    console.log("Selected vehicle ID:", vehicleId);
+    console.log("Available vehicles:", vehicles);
+    
+    const selectedVehicle = vehicles.find(v => 
+      v.id === vehicleId || v.vehicleId === vehicleId);
     
     if (selectedVehicle) {
-      form.setValue("vehicleId", selectedVehicle.id || selectedVehicle.vehicleId || "");
-      form.setValue("name", selectedVehicle.name);
-      form.setValue("capacity", selectedVehicle.capacity);
-      form.setValue("luggageCapacity", selectedVehicle.luggageCapacity || selectedVehicle.luggage_capacity || 2);
-      form.setValue("ac", selectedVehicle.ac);
-      form.setValue("image", selectedVehicle.image);
-      form.setValue("amenities", Array.isArray(selectedVehicle.amenities) ? selectedVehicle.amenities.join(', ') : '');
-      form.setValue("description", selectedVehicle.description || '');
-      form.setValue("isActive", selectedVehicle.isActive !== undefined ? selectedVehicle.isActive : 
-                              (selectedVehicle.is_active !== undefined ? selectedVehicle.is_active : true));
-      form.setValue("basePrice", selectedVehicle.basePrice || selectedVehicle.price || 0);
-      form.setValue("pricePerKm", selectedVehicle.pricePerKm || 0);
-      form.setValue("nightHaltCharge", selectedVehicle.nightHaltCharge || 0);
-      form.setValue("driverAllowance", selectedVehicle.driverAllowance || 0);
+      console.log("Found selected vehicle:", selectedVehicle);
+      
+      form.setValue("vehicleId", String(selectedVehicle.id || selectedVehicle.vehicleId || ""));
+      form.setValue("name", String(selectedVehicle.name || ""));
+      form.setValue("capacity", Number(selectedVehicle.capacity) || 4);
+      form.setValue("luggageCapacity", Number(selectedVehicle.luggageCapacity || selectedVehicle.luggage_capacity || 2));
+      form.setValue("ac", Boolean(selectedVehicle.ac));
+      form.setValue("image", String(selectedVehicle.image || "/cars/sedan.png"));
+      
+      const amenitiesString = Array.isArray(selectedVehicle.amenities) 
+        ? selectedVehicle.amenities.join(', ') 
+        : '';
+      form.setValue("amenities", amenitiesString);
+      
+      form.setValue("description", String(selectedVehicle.description || ''));
+      form.setValue("isActive", Boolean(selectedVehicle.isActive !== undefined ? selectedVehicle.isActive : 
+                              (selectedVehicle.is_active !== undefined ? selectedVehicle.is_active : true)));
+      form.setValue("basePrice", Number(selectedVehicle.basePrice || selectedVehicle.price || 0));
+      form.setValue("pricePerKm", Number(selectedVehicle.pricePerKm || 0));
+      form.setValue("nightHaltCharge", Number(selectedVehicle.nightHaltCharge || 0));
+      form.setValue("driverAllowance", Number(selectedVehicle.driverAllowance || 0));
       
       setIsAddingNew(false);
+    } else {
+      console.error("Vehicle not found with ID:", vehicleId);
+      toast.error("Vehicle not found. Try refreshing the data.");
     }
   };
   
@@ -256,20 +315,20 @@ export function VehicleManagement() {
         : [];
       
       const vehicleData = {
-        vehicleId: values.vehicleId,
-        name: values.name,
-        capacity: values.capacity,
-        luggageCapacity: values.luggageCapacity,
-        ac: values.ac,
-        image: values.image,
+        vehicleId: String(values.vehicleId),
+        name: String(values.name),
+        capacity: Number(values.capacity),
+        luggageCapacity: Number(values.luggageCapacity),
+        ac: Boolean(values.ac),
+        image: String(values.image),
         amenities: amenitiesArray,
-        description: values.description || '',
-        isActive: values.isActive,
-        basePrice: values.basePrice,
-        pricePerKm: values.pricePerKm,
-        nightHaltCharge: values.nightHaltCharge,
-        driverAllowance: values.driverAllowance,
-        id: values.vehicleId
+        description: String(values.description || ''),
+        isActive: Boolean(values.isActive),
+        basePrice: Number(values.basePrice),
+        pricePerKm: Number(values.pricePerKm),
+        nightHaltCharge: Number(values.nightHaltCharge),
+        driverAllowance: Number(values.driverAllowance),
+        id: String(values.vehicleId)
       };
       
       console.log(`${isAddingNew ? 'Adding' : 'Updating'} vehicle:`, vehicleData);
@@ -283,34 +342,30 @@ export function VehicleManagement() {
       fareService.clearCache();
       
       console.log(`Sending vehicle update request for ${vehicleData.name} (${vehicleData.vehicleId})`);
-      console.log("Vehicle data being sent:", JSON.stringify(vehicleData));
       
-      try {
-        await fareAPI.updateVehicle(vehicleData);
-        console.log("API request completed successfully");
-      } catch (apiError) {
-        console.error("Direct API error:", apiError);
-        toast.error(`API Error: ${apiError}`);
-        throw apiError;
-      }
+      const success = await fareService.updateVehiclePricing(vehicleData);
       
-      if (isAddingNew) {
-        toast.success("New vehicle added successfully");
+      if (success) {
+        if (isAddingNew) {
+          toast.success("New vehicle added successfully");
+        } else {
+          toast.success("Vehicle updated successfully");
+        }
+        
+        await reloadCabTypes();
+        
+        await fetchVehicles();
+        
+        if (isAddingNew) {
+          resetForm();
+          setIsAddingNew(false);
+        }
       } else {
-        toast.success("Vehicle updated successfully");
-      }
-      
-      await reloadCabTypes();
-      
-      await fetchVehicles();
-      
-      if (isAddingNew) {
-        resetForm();
-        setIsAddingNew(false);
+        toast.error(`Failed to ${isAddingNew ? 'add' : 'update'} vehicle. Server error.`);
       }
     } catch (error) {
       console.error("Error saving vehicle:", error);
-      toast.error(`Failed to ${isAddingNew ? 'add' : 'update'} vehicle`);
+      toast.error(`Failed to ${isAddingNew ? 'add' : 'update'} vehicle. Try again later.`);
     } finally {
       setIsLoading(false);
     }
@@ -759,3 +814,4 @@ export function VehicleManagement() {
     </Tabs>
   );
 }
+

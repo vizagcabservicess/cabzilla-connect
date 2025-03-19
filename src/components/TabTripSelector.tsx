@@ -34,15 +34,12 @@ export function TabTripSelector({
     const oldTripType = sessionStorage.getItem('tripType');
     
     // Force clear all location data to properly reset the form state
-    if (oldTripType !== selectedTab) {
-      // Clear location data
-      sessionStorage.removeItem('dropLocation');
-      sessionStorage.removeItem('pickupLocation');
-      sessionStorage.removeItem('dropCoordinates');
-      sessionStorage.removeItem('pickupCoordinates');
-      sessionStorage.removeItem('dropLocationObj');
-      sessionStorage.removeItem('pickupLocationObj');
-    }
+    sessionStorage.removeItem('dropLocation');
+    sessionStorage.removeItem('pickupLocation');
+    sessionStorage.removeItem('dropCoordinates');
+    sessionStorage.removeItem('pickupCoordinates');
+    sessionStorage.removeItem('dropLocationObj');
+    sessionStorage.removeItem('pickupLocationObj');
     
     // Clear booking-related data regardless of tab change
     sessionStorage.removeItem('selectedCab');
@@ -51,17 +48,13 @@ export function TabTripSelector({
     sessionStorage.removeItem('bookingDetails');
     sessionStorage.removeItem('calculatedFares');
     sessionStorage.removeItem('distance');
+    sessionStorage.removeItem('airportDirection');
     
     // Force clear trip-specific data when changing trip types
     if (oldTripType && oldTripType !== selectedTab) {
       console.log(`Trip type changed from ${oldTripType} to ${selectedTab}`);
       
-      // Clear type-specific items
-      if (oldTripType === 'airport') {
-        sessionStorage.removeItem('airportDirection');
-      }
-      
-      // When changing tab types, we should clear any fare cache
+      // Always clear the fare cache when changing trip types
       fareService.clearCache();
       sessionStorage.removeItem('cabFares');
       localStorage.removeItem('cabFares');
@@ -123,7 +116,7 @@ export function TabTripSelector({
         reloadCabTypes().catch(err => {
           console.error("Failed to reload cab types:", err);
         });
-      }, 100);
+      }, 300); // Increased timeout to ensure other cleanups complete first
       
       setRefreshTimer(reloadTimer);
       
@@ -135,8 +128,18 @@ export function TabTripSelector({
   
   // Function to handle tab change with complete data reset
   const handleTabChange = (value: string) => {
-    // Always proceed with tab changes regardless of whether it's the same tab
-    // This ensures users can switch back to a tab even if they were already on it
+    // Always completely reset state when changing tabs, even if selecting the same tab again
+    // This forces a full refresh of data and UI state
+    console.log(`Tab change requested: ${value} (current: ${selectedTab})`);
+    
+    // Cancel any existing timers
+    if (refreshTimer) {
+      clearTimeout(refreshTimer);
+      setRefreshTimer(null);
+    }
+    
+    // Force a cache clear regardless of whether it's the same tab or not
+    fareService.clearCache();
     
     // Force all location data to be cleared for a clean state
     sessionStorage.removeItem('dropLocation');
@@ -145,9 +148,6 @@ export function TabTripSelector({
     sessionStorage.removeItem('pickupCoordinates');
     sessionStorage.removeItem('dropLocationObj');
     sessionStorage.removeItem('pickupLocationObj');
-    
-    // Clear additional cache data for a fresh start
-    fareService.clearCache();
     
     // Update the tab
     onTabChange(value as 'outstation' | 'local' | 'airport' | 'tour');
