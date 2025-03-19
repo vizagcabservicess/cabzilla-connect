@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -180,7 +179,6 @@ export function VehiclePricingManagement() {
         
         toast.success("Vehicle pricing refreshed");
         
-        // Fix: Remove the argument from reloadCabTypes call
         await reloadCabTypes();
       } else {
         console.warn("❌ Empty or invalid vehicle pricing data:", data);
@@ -212,7 +210,6 @@ export function VehiclePricingManagement() {
       
       toast.success("Vehicle pricing updated successfully");
       
-      // Fix: Remove the argument from reloadCabTypes call
       await reloadCabTypes();
       
       await fetchVehiclePricing();
@@ -242,7 +239,6 @@ export function VehiclePricingManagement() {
       setTimeout(async () => {
         toast.success("Local fare settings updated successfully");
         
-        // Fix: Remove the argument from reloadCabTypes call
         await reloadCabTypes();
         
         setIsLoading(false);
@@ -273,7 +269,6 @@ export function VehiclePricingManagement() {
       setTimeout(async () => {
         toast.success("Airport fare settings updated successfully");
         
-        // Fix: Remove the argument from reloadCabTypes call
         await reloadCabTypes();
         
         setIsLoading(false);
@@ -303,7 +298,6 @@ export function VehiclePricingManagement() {
       setTimeout(async () => {
         toast.success("Outstation fare settings updated successfully");
         
-        // Fix: Remove the argument from reloadCabTypes call
         await reloadCabTypes();
         
         setIsLoading(false);
