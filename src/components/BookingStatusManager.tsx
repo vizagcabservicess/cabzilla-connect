@@ -137,6 +137,12 @@ export function BookingStatusManager({
                   PENDING
                 </span>
               </SelectItem>
+              <SelectItem value="confirmed">
+                <span className="flex items-center gap-2 text-blue-600">
+                  <Check className="h-4 w-4" />
+                  CONFIRMED
+                </span>
+              </SelectItem>
               <SelectItem value="assigned">
                 <span className="flex items-center gap-2 text-blue-600">
                   <Check className="h-4 w-4" />

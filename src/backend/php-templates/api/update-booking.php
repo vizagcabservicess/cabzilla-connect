@@ -107,7 +107,11 @@ try {
         'passenger_name' => 'passengerName',
         'passenger_phone' => 'passengerPhone',
         'passenger_email' => 'passengerEmail',
-        'status' => 'status'
+        'status' => 'status',
+        'driver_name' => 'driverName',
+        'driver_phone' => 'driverPhone',
+        'vehicle_number' => 'vehicleNumber',
+        'admin_notes' => 'adminNotes'
     ];
     
     // Map API field names to database field names
@@ -180,6 +184,8 @@ try {
         'passengerEmail' => $updatedBooking['passenger_email'],
         'driverName' => $updatedBooking['driver_name'],
         'driverPhone' => $updatedBooking['driver_phone'],
+        'vehicleNumber' => $updatedBooking['vehicle_number'],
+        'adminNotes' => $updatedBooking['admin_notes'],
         'createdAt' => $updatedBooking['created_at'],
         'updatedAt' => $updatedBooking['updated_at']
     ];
