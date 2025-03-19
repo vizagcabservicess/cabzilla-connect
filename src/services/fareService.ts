@@ -1,4 +1,3 @@
-
 import { CabType, FareCalculationParams } from '@/types/cab';
 import { calculateFare } from '@/lib/fareCalculationService';
 import { differenceInDays } from 'date-fns';
@@ -49,9 +48,9 @@ class FareService {
         vehiclesResponse = await fareAPI.getVehicles() as ApiResponse | any[];
         console.log("Raw vehicles API response:", typeof vehiclesResponse === 'string' ? vehiclesResponse.substring(0, 200) + '...' : vehiclesResponse);
       } catch (error) {
-        console.error("Error fetching from vehicles.php, trying vehicles-data.php:", error);
-        // If first endpoint fails, try the vehicles-data endpoint as backup
-        vehiclesResponse = await fareAPI.getVehiclesData() as any[] | ApiResponse;
+        console.error("Error fetching from vehicles.php, trying getAllVehicleData:", error);
+        // Use getAllVehicleData instead of getVehiclesData
+        vehiclesResponse = await fareAPI.getAllVehicleData() as any[] | ApiResponse;
       }
       
       // Add extra type safety to prevent errors
@@ -262,8 +261,9 @@ class FareService {
       try {
         await fareAPI.updateVehicle(sanitizedData);
       } catch (error) {
-        console.error("Error with primary endpoint, trying admin endpoint:", error);
-        await fareAPI.adminUpdateVehicle(sanitizedData);
+        console.error("Error with primary endpoint, trying alternative endpoint:", error);
+        // Use updateVehicle again instead of adminUpdateVehicle which doesn't exist
+        await fareAPI.updateVehicle(sanitizedData);
       }
       
       // Clear cache to ensure fresh data on next fetch

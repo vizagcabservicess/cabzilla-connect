@@ -1,4 +1,3 @@
-
 import { differenceInCalendarDays } from 'date-fns';
 import { fareAPI } from '@/services/api';
 import { toast } from 'sonner';
@@ -97,7 +96,8 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
         
         // Try backup endpoint
         try {
-          const backupData = await fareAPI.getVehiclesData();
+          // Use getAllVehicleData instead of getVehiclesData
+          const backupData = await fareAPI.getAllVehicleData();
           if (Array.isArray(backupData) && backupData.length > 0) {
             vehicleData = backupData.map(v => ({
               id: v.id || v.vehicleId || '',
