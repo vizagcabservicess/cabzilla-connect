@@ -1,12 +1,18 @@
 
 // Re-export all cab-related types and functions for easier imports
 export * from './cabData';
+// Export everything from packageData and tourData
 export * from './packageData';
 export * from './tourData';
-export * from './fareCalculationService';
-export * from './tripTypes';
+// Export everything from fareCalculationService except clearFareCache (to avoid collision)
+export { 
+  calculateFare, 
+  calculateAirportFare
+} from './fareCalculationService';
+// Explicitly re-export clearFareCache from fareCalculationService to avoid ambiguity with the one from cabData
+export { clearFareCache as clearFareServiceCache } from './fareCalculationService';
+export { TripType, TripMode } from './tripTypes';
 
 // Re-export CabType from the types directly
 export type { CabType, HourlyPackage, FareCache, TourInfo, TourFares, ExtraCharges, LocalPackagePriceMatrix, FareCalculationParams } from '@/types/cab';
 
-// Note: clearFareCache is explicitly re-exported from fareCalculationService to avoid ambiguity
