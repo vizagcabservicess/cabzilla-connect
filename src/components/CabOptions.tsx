@@ -1,9 +1,14 @@
+
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { CabType, formatPrice, TripType, TripMode, getLocalPackagePrice, loadCabTypes, reloadCabTypes } from '@/lib/cabData';
+import { CabType } from '@/types/cab';
+import { formatPrice } from '@/lib/cabData';
+import { TripType, TripMode } from '@/lib/tripTypes';
+import { getLocalPackagePrice } from '@/lib/packageData';
+import { calculateAirportFare, calculateFare } from '@/lib/fareCalculationService';
+import { loadCabTypes, reloadCabTypes } from '@/lib/cabData';
 import { Users, Briefcase, Info, Check, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { differenceInDays } from 'date-fns';
-import { calculateAirportFare } from '@/lib/locationData';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 
@@ -88,6 +93,13 @@ export function CabOptions({
         toast.success('Vehicle data refreshed successfully');
         setRefreshSuccessful(true);
         
+        // Reset selection and fares after refresh
+        setSelectedCabId(null);
+        setCabFares({});
+        if (selectedCab) {
+          onSelectCab(null as any);
+        }
+        
         setLastCalculationTimestamp(Date.now());
       } else {
         console.warn('API returned empty vehicle data on refresh');
@@ -101,7 +113,7 @@ export function CabOptions({
     } finally {
       setIsRefreshingCabs(false);
     }
-  }, []);
+  }, [onSelectCab, selectedCab]);
 
   useEffect(() => {
     setCabFares({});
@@ -163,139 +175,17 @@ export function CabOptions({
         } else {
           fare = baseFare;
         }
-      } else if (tripType === 'outstation') {
-        let baseRate = cab.price || 0;
-        let perKmRate = cab.pricePerKm || 0;
-        let nightHaltCharge = cab.nightHaltCharge || 0;
-        let driverAllowance = cab.driverAllowance || 250;
-        
-        console.log(`Calculating outstation fare for ${cab.name}:`, {
-          baseRate,
-          perKmRate,
-          nightHaltCharge,
-          driverAllowance
-        });
-        
-        if (baseRate > 0 && perKmRate > 0) {
-          if (tripMode === "one-way") {
-            const effectiveDistance = distance * 2;
-            const allocatedKm = 300;
-            const totalBaseFare = baseRate;
-            let totalDistanceFare = 0;
-            
-            if (effectiveDistance > allocatedKm) {
-              const extraKm = effectiveDistance - allocatedKm;
-              totalDistanceFare = extraKm * perKmRate;
-            }
-            
-            const totalFare = totalBaseFare + totalDistanceFare + driverAllowance;
-            fare = Math.ceil(totalFare / 10) * 10;
-            
-            console.log(`One-way fare for ${cab.name} (${distance}km):`, {
-              effectiveDistance,
-              totalBaseFare,
-              totalDistanceFare,
-              driverAllowance,
-              calculatedFare: fare
-            });
-          } else {
-            let days = returnDate ? Math.max(1, differenceInDays(returnDate, pickupDate || new Date()) + 1) : 1;
-            const allocatedKm = 300;
-            const totalAllocatedKm = days * allocatedKm;
-            
-            let effectiveDistance = distance * 2;
-            
-            let totalBaseFare = days * baseRate;
-            let totalDistanceFare = 0;
-            
-            if (effectiveDistance > totalAllocatedKm) {
-              const extraKm = effectiveDistance - totalAllocatedKm;
-              totalDistanceFare = extraKm * perKmRate;
-            }
-            
-            let totalNightHalt = (days - 1) * nightHaltCharge;
-            
-            const totalFare = totalBaseFare + totalDistanceFare + totalNightHalt + (days * driverAllowance);
-            fare = Math.ceil(totalFare / 10) * 10;
-            
-            console.log(`Round-trip fare for ${cab.name} (${distance}km):`, {
-              days,
-              effectiveDistance,
-              totalBaseFare,
-              totalDistanceFare,
-              totalNightHalt,
-              driverAllowance: days * driverAllowance,
-              calculatedFare: fare
-            });
-          }
-        } else {
-          console.warn(`Missing pricing info for ${cab.name}, using defaults`);
-          
-          switch (cab.name.toLowerCase()) {
-            case "sedan":
-              baseRate = 4200;
-              perKmRate = 14;
-              nightHaltCharge = 700;
-              break;
-            case "ertiga":
-              baseRate = 5400;
-              perKmRate = 18;
-              nightHaltCharge = 1000;
-              break;
-            case "innova crysta":
-            case "innova":
-              baseRate = 6000;
-              perKmRate = 20;
-              nightHaltCharge = 1000;
-              break;
-            default:
-              baseRate = 5000;
-              perKmRate = 18;
-              nightHaltCharge = 1000;
-          }
-          
-          console.log(`Using default rates for ${cab.name}:`, {
-            baseRate,
-            perKmRate,
-            nightHaltCharge,
-            driverAllowance
-          });
-          
-          if (tripMode === "one-way") {
-            const effectiveDistance = distance * 2;
-            const allocatedKm = 300;
-            const totalBaseFare = baseRate;
-            let totalDistanceFare = 0;
-            
-            if (effectiveDistance > allocatedKm) {
-              const extraKm = effectiveDistance - allocatedKm;
-              totalDistanceFare = extraKm * perKmRate;
-            }
-            
-            const totalFare = totalBaseFare + totalDistanceFare + driverAllowance;
-            fare = Math.ceil(totalFare / 10) * 10;
-          } else {
-            let days = returnDate ? Math.max(1, differenceInDays(returnDate, pickupDate || new Date()) + 1) : 1;
-            const allocatedKm = 300;
-            const totalAllocatedKm = days * allocatedKm;
-            let effectiveDistance = distance * 2;
-            
-            let totalBaseFare = days * baseRate;
-            let totalDistanceFare = 0;
-            
-            if (effectiveDistance > totalAllocatedKm) {
-              const extraKm = effectiveDistance - totalAllocatedKm;
-              totalDistanceFare = extraKm * perKmRate;
-            }
-            
-            let totalNightHalt = (days - 1) * nightHaltCharge;
-            
-            const totalFare = totalBaseFare + totalDistanceFare + totalNightHalt + (days * driverAllowance);
-            fare = Math.ceil(totalFare / 10) * 10;
-          }
-        }
       } else {
-        fare = Math.ceil((distance * (cab.pricePerKm || 20)) / 10) * 10;
+        // Use the new calculation service for outstation trips
+        fare = await calculateFare({
+          cabType: cab,
+          distance,
+          tripType,
+          tripMode,
+          hourlyPackage,
+          pickupDate,
+          returnDate
+        });
       }
       
       calculationCache.set(cacheKey, fare);
@@ -337,14 +227,20 @@ export function CabOptions({
               }
             }
           } else {
-            await Promise.all(cabTypes.map(async (cab) => {
+            // Use Promise.all for parallel calculation of fares to improve performance
+            const farePromises = cabTypes.map(async (cab) => {
               try {
-                newFares[cab.id] = await calculateCabFare(cab);
+                return { id: cab.id, fare: await calculateCabFare(cab) };
               } catch (error) {
                 console.error(`Error calculating fare for ${cab.name}:`, error);
-                newFares[cab.id] = 0;
+                return { id: cab.id, fare: 0 };
               }
-            }));
+            });
+            
+            const results = await Promise.all(farePromises);
+            results.forEach(result => {
+              newFares[result.id] = result.fare;
+            });
             
             setCabFares(newFares);
           }

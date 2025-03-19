@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -10,7 +11,10 @@ import { useToast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
 import { Location, vizagLocations } from "@/lib/locationData";
 import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag, safeIncludes } from "@/lib/locationUtils";
-import { CabType, cabTypes, availableTours, tourFares } from "@/lib/cabData";
+import { cabTypes, formatPrice } from "@/lib/cabData";
+import { availableTours, tourFares } from "@/lib/tourData";
+import { TripType } from "@/lib/tripTypes";
+import { CabType } from "@/types/cab";
 import { MapPin, Calendar, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { bookingAPI } from "@/services/api";

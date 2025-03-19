@@ -1,20 +1,23 @@
 
-import React from 'react';
-import { CabType } from '@/lib/cabData';
+import { useState, useEffect } from 'react';
 import { Location } from '@/lib/locationData';
+import { CabType } from '@/types/cab';
+import { TripType } from '@/lib/tripTypes';
+import { formatPrice } from '@/lib/cabData';
 import { format } from 'date-fns';
-import { MapPin, Calendar, Clock, Car, IndianRupee, Info, User } from 'lucide-react';
+import { Car, MapPin, Calendar } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
 
 interface BookingSummaryProps {
   pickupLocation: Location | null;
   dropLocation: Location | null;
   pickupDate: Date | undefined;
-  returnDate?: Date | undefined;
+  returnDate?: Date | null;
   selectedCab: CabType | null;
   distance: number;
   totalPrice: number;
-  tripType: string;
-  tripMode?: string;
+  tripType: TripType;
+  tripMode?: 'one-way' | 'round-trip';
 }
 
 export const BookingSummary = ({

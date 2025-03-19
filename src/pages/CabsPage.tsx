@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -16,13 +17,13 @@ import {
 } from "@/lib/locationData";
 import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag, safeIncludes } from "@/lib/locationUtils";
 import { 
-  CabType, 
   cabTypes, 
-  calculateFare, 
-  TripType, 
-  TripMode, 
-  hourlyPackages 
+  formatPrice
 } from "@/lib/cabData";
+import { calculateFare } from "@/lib/fareCalculationService";
+import { TripType, TripMode } from "@/lib/tripTypes";
+import { hourlyPackages } from "@/lib/packageData";
+import { CabType } from "@/types/cab";
 import { calculateDistanceMatrix } from "@/lib/distanceService";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";

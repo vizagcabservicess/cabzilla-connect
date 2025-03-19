@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { LocationInput } from './LocationInput';
 import { DateTimePicker } from './DateTimePicker';
@@ -9,7 +10,10 @@ import {
   Location
 } from '@/lib/locationData';
 import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag } from '@/lib/locationUtils';
-import { CabType, cabTypes, TripMode, TripType, hourlyPackages, getLocalPackagePrice } from '@/lib/cabData';
+import { cabTypes, formatPrice } from '@/lib/cabData';
+import { hourlyPackages, getLocalPackagePrice } from '@/lib/packageData';
+import { TripType, TripMode } from '@/lib/tripTypes';
+import { CabType } from '@/types/cab';
 import { ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { addDays, differenceInCalendarDays } from 'date-fns';
