@@ -21,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // Log the request for debugging
-logError("vehicles-data.php request", ['method' => $_SERVER['REQUEST_METHOD'], 'timestamp' => time(), 'headers' => getallheaders()]);
+logError("vehicles-data.php request received", ['method' => $_SERVER['REQUEST_METHOD'], 'timestamp' => time(), 'headers' => getallheaders()]);
 
 // Allow only GET requests for this endpoint
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
@@ -188,10 +188,8 @@ try {
         'timestamp' => time()
     ]);
     
-    // Send response with explicit content type and cache headers
+    // Ensure proper JSON response
     header('Content-Type: application/json');
-    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-    header('Pragma: no-cache');
     echo json_encode($vehicles);
     exit;
     
