@@ -11,8 +11,8 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
-// Add timestamp for cache-busting
-header('X-Response-Time: ' . time());
+// Add extra cache busting headers
+header('X-Cache-Timestamp: ' . time());
 
 // Respond to preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -21,33 +21,94 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // Log the request for debugging
-logError("vehicles-data.php request received", ['method' => $_SERVER['REQUEST_METHOD'], 'timestamp' => time(), 'headers' => getallheaders()]);
+error_log("vehicles-data.php request. Method: " . $_SERVER['REQUEST_METHOD'] . ", Time: " . time());
 
-// Allow only GET requests for this endpoint
-if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
-    echo json_encode(['error' => 'Method not allowed']);
-    http_response_code(405);
-    exit;
-}
+// Global fallback vehicles to return in case of database issues
+$fallbackVehicles = [
+    [
+        'id' => 'sedan',
+        'name' => 'Sedan',
+        'capacity' => 4,
+        'luggageCapacity' => 2,
+        'price' => 4200,
+        'basePrice' => 4200,
+        'pricePerKm' => 14,
+        'image' => '/cars/sedan.png',
+        'amenities' => ['AC', 'Bottle Water', 'Music System'],
+        'description' => 'Comfortable sedan suitable for 4 passengers.',
+        'ac' => true,
+        'nightHaltCharge' => 700,
+        'driverAllowance' => 250,
+        'isActive' => true,
+        'vehicleId' => 'sedan'
+    ],
+    [
+        'id' => 'ertiga',
+        'name' => 'Ertiga',
+        'capacity' => 6,
+        'luggageCapacity' => 3,
+        'price' => 5400,
+        'basePrice' => 5400,
+        'pricePerKm' => 18,
+        'image' => '/cars/ertiga.png',
+        'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
+        'description' => 'Spacious SUV suitable for 6 passengers.',
+        'ac' => true,
+        'nightHaltCharge' => 1000,
+        'driverAllowance' => 250,
+        'isActive' => true,
+        'vehicleId' => 'ertiga'
+    ],
+    [
+        'id' => 'innova_crysta',
+        'name' => 'Innova Crysta',
+        'capacity' => 7,
+        'luggageCapacity' => 4,
+        'price' => 6000,
+        'basePrice' => 6000,
+        'pricePerKm' => 20,
+        'image' => '/cars/innova.png',
+        'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
+        'description' => 'Premium SUV with ample space for 7 passengers.',
+        'ac' => true,
+        'nightHaltCharge' => 1000,
+        'driverAllowance' => 250,
+        'isActive' => true,
+        'vehicleId' => 'innova_crysta'
+    ]
+];
 
-// Connect to database
+// Handle requests
 try {
+    // Connect to database
     $conn = getDbConnection();
 
     if (!$conn) {
-        throw new Exception("Database connection failed: " . mysqli_connect_error());
+        error_log("Database connection failed in vehicles-data.php, using fallback vehicles");
+        echo json_encode([
+            'vehicles' => $fallbackVehicles,
+            'timestamp' => time(),
+            'cached' => false,
+            'fallback' => true
+        ]);
+        exit;
     }
 
-    // Check if we should include inactive vehicles (admin only)
+    // Get information about whether to include inactive vehicles
     $includeInactive = isset($_GET['includeInactive']) && $_GET['includeInactive'] === 'true';
     
-    // Debug log for includeInactive parameter
-    logError("vehicles-data.php includeInactive", ['includeInactive' => $includeInactive, 'timestamp' => time()]);
-    
-    // Get all vehicle data (including types and pricing)
+    // Build query to get all vehicle types with pricing info
     $query = "
         SELECT 
-            vt.*, 
+            vt.vehicle_id, 
+            vt.name, 
+            vt.capacity, 
+            vt.luggage_capacity,
+            vt.ac, 
+            vt.image, 
+            vt.amenities, 
+            vt.description, 
+            vt.is_active,
             vp.base_price, 
             vp.price_per_km, 
             vp.night_halt_charge, 
@@ -64,18 +125,18 @@ try {
     }
     
     $query .= " ORDER BY vt.name";
-
-    logError("vehicles-data.php query", ['query' => $query, 'timestamp' => time()]);
+    
+    error_log("vehicles-data.php query: " . $query);
     
     $result = $conn->query($query);
-
+    
     if (!$result) {
         throw new Exception("Database query failed: " . $conn->error);
     }
 
     $vehicles = [];
     while ($row = $result->fetch_assoc()) {
-        // Parse amenities
+        // Parse amenities from JSON string or comma-separated list
         $amenities = [];
         if (!empty($row['amenities'])) {
             $decoded = json_decode($row['amenities'], true);
@@ -92,113 +153,58 @@ try {
             $name = "Vehicle ID: " . $row['vehicle_id'];
         }
         
-        // Format data with camelCase keys for frontend consistency
+        // Format vehicle data with consistent property names for frontend
         $vehicle = [
-            'id' => (string)$row['vehicle_id'], // Ensure string type
+            'id' => (string)$row['vehicle_id'],
             'name' => $name,
             'capacity' => intval($row['capacity'] ?? 0),
             'luggageCapacity' => intval($row['luggage_capacity'] ?? 0),
+            'price' => floatval($row['base_price'] ?? 0),
             'basePrice' => floatval($row['base_price'] ?? 0),
             'pricePerKm' => floatval($row['price_per_km'] ?? 0),
-            'image' => $row['image'] ?? '',
+            'nightHaltCharge' => floatval($row['night_halt_charge'] ?? 0),
+            'driverAllowance' => floatval($row['driver_allowance'] ?? 0),
+            'image' => $row['image'] ?? '/cars/sedan.png',
             'amenities' => $amenities,
             'description' => $row['description'] ?? '',
             'ac' => (bool)($row['ac'] ?? 0),
             'isActive' => (bool)($row['is_active'] ?? 0),
-            'nightHaltCharge' => floatval($row['night_halt_charge'] ?? 0),
-            'driverAllowance' => floatval($row['driver_allowance'] ?? 0),
-            // Also include the original field names for backward compatibility
-            'price' => floatval($row['base_price'] ?? 0),
-            'vehicleType' => (string)$row['vehicle_id'], // Ensure string type
-            'vehicleId' => (string)$row['vehicle_id'] // Add for form consistency
+            'vehicleId' => (string)$row['vehicle_id']
         ];
         
-        // Only add active vehicles for non-admin requests
+        // Only add active vehicles for non-admin requests or if specifically including inactive
         if ($includeInactive || $vehicle['isActive']) {
             $vehicles[] = $vehicle;
         }
     }
 
-    // If no vehicles found in database, return hardcoded defaults
+    // If no vehicles found in database, use fallback
     if (empty($vehicles)) {
-        $vehicles = [
-            [
-                'id' => 'sedan',
-                'name' => 'Sedan',
-                'capacity' => 4,
-                'luggageCapacity' => 2,
-                'price' => 4200,
-                'basePrice' => 4200,
-                'pricePerKm' => 14,
-                'image' => '/cars/sedan.png',
-                'amenities' => ['AC', 'Bottle Water', 'Music System'],
-                'description' => 'Comfortable sedan suitable for 4 passengers.',
-                'ac' => true,
-                'nightHaltCharge' => 700,
-                'driverAllowance' => 250,
-                'isActive' => true,
-                'vehicleId' => 'sedan',
-                'vehicleType' => 'sedan'
-            ],
-            [
-                'id' => 'ertiga',
-                'name' => 'Ertiga',
-                'capacity' => 6,
-                'luggageCapacity' => 3,
-                'price' => 5400,
-                'basePrice' => 5400,
-                'pricePerKm' => 18,
-                'image' => '/cars/ertiga.png',
-                'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
-                'description' => 'Spacious SUV suitable for 6 passengers.',
-                'ac' => true,
-                'nightHaltCharge' => 1000,
-                'driverAllowance' => 250,
-                'isActive' => true,
-                'vehicleId' => 'ertiga',
-                'vehicleType' => 'ertiga'
-            ],
-            [
-                'id' => 'innova_crysta',
-                'name' => 'Innova Crysta',
-                'capacity' => 7,
-                'luggageCapacity' => 4,
-                'price' => 6000,
-                'basePrice' => 6000,
-                'pricePerKm' => 20,
-                'image' => '/cars/innova.png',
-                'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
-                'description' => 'Premium SUV with ample space for 7 passengers.',
-                'ac' => true,
-                'nightHaltCharge' => 1000,
-                'driverAllowance' => 250,
-                'isActive' => true,
-                'vehicleId' => 'innova_crysta',
-                'vehicleType' => 'innova_crysta'
-            ]
-        ];
-        
-        logError("No vehicles found in database, using default vehicles", ['count' => count($vehicles)]);
+        error_log("No vehicles found in database, using fallback vehicles");
+        $vehicles = $fallbackVehicles;
     }
 
-    // Log success with safe data to avoid memory issues
-    logError("Vehicles data response success", [
-        'count' => count($vehicles), 
-        'activeFilter' => !$includeInactive, 
-        'timestamp' => time()
-    ]);
+    // Log success
+    error_log("Vehicles-data GET response: found " . count($vehicles) . " vehicles");
     
-    // Ensure proper JSON response
-    header('Content-Type: application/json');
-    echo json_encode($vehicles);
+    // Send response with cache busting timestamp
+    echo json_encode([
+        'vehicles' => $vehicles,
+        'timestamp' => time(),
+        'cached' => false
+    ]);
     exit;
     
 } catch (Exception $e) {
-    logError("Error fetching vehicle data", ['error' => $e->getMessage(), 'timestamp' => time()]);
+    error_log("Error in vehicles-data.php: " . $e->getMessage());
     
-    // Return error response
-    header('Content-Type: application/json');
-    echo json_encode(['error' => 'Failed to fetch vehicle data: ' . $e->getMessage()]);
-    http_response_code(500);
+    // Return fallback vehicles instead of an error
+    echo json_encode([
+        'vehicles' => $fallbackVehicles,
+        'timestamp' => time(),
+        'cached' => false,
+        'fallback' => true,
+        'error' => $e->getMessage()
+    ]);
     exit;
 }
