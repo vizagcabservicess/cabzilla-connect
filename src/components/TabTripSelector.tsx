@@ -1,7 +1,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { toast } from "sonner";
 import { reloadCabTypes } from "@/lib/cabData";
@@ -20,6 +20,10 @@ export function TabTripSelector({
   onTripModeChange 
 }: TabTripSelectorProps) {
   const { toast } = useToast();
+  // Add state to track if airport tab was previously selected to prevent excessive refreshes
+  const [prevTab, setPrevTab] = useState<string | null>(null);
+  // Add a debounce timer reference
+  const [refreshTimer, setRefreshTimer] = useState<NodeJS.Timeout | null>(null);
 
   // Function to thoroughly clear all cache data
   const clearAllCacheData = useCallback(() => {
@@ -27,14 +31,12 @@ export function TabTripSelector({
     
     const oldTripType = sessionStorage.getItem('tripType');
     
-    // Force clear drop location for ALL tab changes
+    // Force clear all location data for proper resets
     sessionStorage.removeItem('dropLocation');
+    sessionStorage.removeItem('pickupLocation');
     
-    // Clear specific data for airport tab
-    if (selectedTab === 'airport') {
-      // For airport tab, also clear pickup location to ensure fresh selection
-      sessionStorage.removeItem('pickupLocation');
-    }
+    // Clear specific data for airport tab - we'll handle this differently
+    // to prevent excessive refreshes
     
     // Clear all booking and fare related data
     sessionStorage.removeItem('selectedCab');
@@ -85,7 +87,7 @@ export function TabTripSelector({
     sessionStorage.setItem('tripMode', tripMode);
     sessionStorage.setItem('lastCacheClear', Date.now().toString());
     
-    // Also reload cab types to ensure fresh data
+    // Also reload cab types to ensure fresh data, but don't wait for it
     reloadCabTypes().catch(err => {
       console.error("Failed to reload cab types:", err);
     });
@@ -93,37 +95,60 @@ export function TabTripSelector({
   
   // Clear any cached fare data when tab changes
   useEffect(() => {
-    clearAllCacheData();
-    
-    // Notify user of tab change with toast
-    const tabNames = {
-      'outstation': 'Outstation Trip',
-      'local': 'Local Hourly Rental',
-      'airport': 'Airport Transfer',
-      'tour': 'Tour Package'
-    };
-    
-    toast({
-      title: `Switched to ${tabNames[selectedTab]}`,
-      description: "All previous selections have been reset.",
-      duration: 3000,
-    });
-    
-    if (selectedTab === 'airport') {
-      console.log('Trip type changed to airport');
+    // Only clear cache and reload if the tab actually changed
+    if (prevTab !== selectedTab) {
+      clearAllCacheData();
+      setPrevTab(selectedTab);
       
-      // Force a reload of the page when switching to airport tab to ensure clean state
-      setTimeout(() => {
-        window.location.reload();
-      }, 100);
+      // Notify user of tab change with toast
+      const tabNames = {
+        'outstation': 'Outstation Trip',
+        'local': 'Local Hourly Rental',
+        'airport': 'Airport Transfer',
+        'tour': 'Tour Package'
+      };
+      
+      toast({
+        title: `Switched to ${tabNames[selectedTab]}`,
+        description: "All previous selections have been reset.",
+        duration: 3000,
+      });
+      
+      // Only for airport tab, handle special case
+      if (selectedTab === 'airport') {
+        console.log('Trip type changed to airport');
+        
+        // Cancel any previous refresh timer
+        if (refreshTimer) {
+          clearTimeout(refreshTimer);
+        }
+        
+        // Only reload the page if coming from a different tab (not on first load)
+        if (prevTab && prevTab !== 'airport') {
+          // Set a short timer to allow state changes to complete before reload
+          // Using a shorter delay and only once when switching TO airport tab
+          const timer = setTimeout(() => {
+            window.location.reload();
+          }, 100);
+          
+          setRefreshTimer(timer);
+          
+          // Clean up timer if component unmounts
+          return () => {
+            clearTimeout(timer);
+          };
+        }
+      }
     }
-    
-  }, [selectedTab, toast, clearAllCacheData]);
+  }, [selectedTab, toast, clearAllCacheData, prevTab, refreshTimer]);
   
   // Function to handle tab change with complete data reset
   const handleTabChange = (value: string) => {
+    // Don't proceed if it's the same tab (prevents unnecessary reloads)
+    if (value === selectedTab) return;
+    
     // Force clear all cached data
-    clearAllCacheData();
+    // The actual data clearing will happen in the useEffect
     
     // Then update the tab
     onTabChange(value as 'outstation' | 'local' | 'airport' | 'tour');

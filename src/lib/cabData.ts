@@ -6,6 +6,9 @@ export type TripType = 'outstation' | 'local' | 'airport' | 'tour';
 export type TripMode = 'one-way' | 'round-trip';
 export type LocalTripPurpose = 'business' | 'personal' | 'city-tour';
 
+// Track ongoing vehicle pricing fetch operations
+let isFetchingVehiclePricing = false;
+
 export interface HourlyPackage {
   id: string;
   name: string;
@@ -13,22 +16,6 @@ export interface HourlyPackage {
   kilometers: number;
   basePrice: number;
   multiplier: number;
-}
-
-export interface CabType {
-  id: string;
-  name: string;
-  capacity: number;
-  luggageCapacity: number;
-  price: number;
-  pricePerKm: number;
-  image: string;
-  amenities: string[];
-  description: string;
-  ac?: boolean;
-  nightHaltCharge?: number;
-  driverAllowance?: number;
-  isActive?: boolean;
 }
 
 // Default cab types (used as fallback if API fails)
@@ -80,10 +67,11 @@ export const cabTypes: CabType[] = [
   }
 ];
 
-// Cache to store loaded cab types with shorter expiration time
+// Cache to store loaded cab types with longer expiration time for better performance
 let cachedCabTypes: CabType[] | null = null;
 let lastCacheTime = 0;
-const CACHE_DURATION = 60 * 1000; // 60 seconds in milliseconds (increased for better performance)
+// Increased cache duration to 5 minutes to reduce API calls
+const CACHE_DURATION = 5 * 60 * 1000; 
 let isCurrentlyFetchingCabs = false; // Flag to prevent concurrent fetch requests
 
 // Function to load cab types dynamically
@@ -106,6 +94,7 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
     isCurrentlyFetchingCabs = true;
     console.log('Fetching new cab types from API');
     
+    // Remove the timestamp parameter as it's not accepted by the API
     const vehicleData = await fareAPI.getAllVehicleData();
     
     console.log('Retrieved vehicle data:', vehicleData);
@@ -296,6 +285,7 @@ export const loadTourFares = async (): Promise<any> => {
   try {
     isFetchingTourFares = true;
     console.log("Loading tour fares from API");
+    // Remove the timestamp parameter as it's not accepted by the API
     const tourFareData = await fareAPI.getTourFares();
     console.log("Tour fare data:", tourFareData);
     
@@ -427,7 +417,7 @@ export async function calculateFare(
   const cacheKey = `${cabType.id}_${distance}_${tripType}_${tripMode}_${hourlyPackage || ''}_${pickupDate?.getTime() || ''}_${returnDate?.getTime() || ''}`;
   const now = Date.now();
   
-  // Check cache first (60 seconds expiration - increased for better performance)
+  // Check cache first (5 minutes expiration for better performance)
   if (outstationPricingCache[cacheKey] && outstationPricingCache[cacheKey].expire > now) {
     console.log(`Using cached fare calculation for ${cacheKey}`);
     return outstationPricingCache[cacheKey].price;
@@ -481,6 +471,7 @@ export async function calculateFare(
         if (!isFetchingVehiclePricing) {
           isFetchingVehiclePricing = true;
           console.log("Fetching latest vehicle pricing from API for", cabType.id);
+          // Remove the timestamp parameter as it's not accepted by the API
           const vehiclePricing = await fareAPI.getVehiclePricing();
           console.log("Vehicle pricing data:", vehiclePricing);
           isFetchingVehiclePricing = false;
