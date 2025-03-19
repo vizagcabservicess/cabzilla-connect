@@ -445,10 +445,11 @@ export function VehicleManagement() {
                         <FormLabel>Select Vehicle to Update</FormLabel>
                         <Select 
                           onValueChange={(value) => {
+                            if (!value || value === "") return; // Prevent empty selection
                             field.onChange(value);
                             handleVehicleSelect(value);
                           }}
-                          value={field.value}
+                          value={field.value || "placeholder"}
                           disabled={isAddingNew}
                         >
                           <FormControl>
@@ -457,12 +458,13 @@ export function VehicleManagement() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
+                            <SelectItem value="placeholder" disabled>Select a vehicle</SelectItem>
                             {vehicles.map((vehicle) => (
                               <SelectItem 
-                                key={vehicle.id || vehicle.vehicleId} 
-                                value={vehicle.id || vehicle.vehicleId || ""}
+                                key={vehicle.id || vehicle.vehicleId || Math.random().toString()} 
+                                value={String(vehicle.id || vehicle.vehicleId || "")}
                               >
-                                {vehicle.name}
+                                {vehicle.name || "Unnamed vehicle"}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -763,16 +765,16 @@ export function VehicleManagement() {
                   </thead>
                   <tbody>
                     {vehicles.map((vehicle) => (
-                      <tr key={vehicle.id || vehicle.vehicleId} className="border-b hover:bg-gray-50">
+                      <tr key={vehicle.id || vehicle.vehicleId || Math.random().toString()} className="border-b hover:bg-gray-50">
                         <td className="py-2 px-2">
                           <div className="flex items-center gap-2">
                             <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center overflow-hidden">
                               <Car className="h-4 w-4 text-gray-500" />
                             </div>
-                            {vehicle.name || vehicle.id || vehicle.vehicleId}
+                            {vehicle.name || "Unnamed vehicle"}
                           </div>
                         </td>
-                        <td className="text-center py-2 px-2">{vehicle.capacity} persons</td>
+                        <td className="text-center py-2 px-2">{vehicle.capacity || 0} persons</td>
                         <td className="text-center py-2 px-2">{vehicle.luggageCapacity || vehicle.luggage_capacity || 0} bags</td>
                         <td className="text-right py-2 px-2">₹{(vehicle.basePrice || vehicle.price || 0).toLocaleString('en-IN')}</td>
                         <td className="text-right py-2 px-2">₹{(vehicle.pricePerKm || 0).toLocaleString('en-IN')}</td>
@@ -789,7 +791,7 @@ export function VehicleManagement() {
                           <Button 
                             variant="ghost" 
                             size="sm"
-                            onClick={() => handleVehicleSelect(vehicle.id || vehicle.vehicleId || "")}
+                            onClick={() => handleVehicleSelect(String(vehicle.id || vehicle.vehicleId || ""))}
                             className="text-blue-600 hover:text-blue-800"
                           >
                             <Edit className="h-4 w-4" />
@@ -797,7 +799,7 @@ export function VehicleManagement() {
                           <Button 
                             variant="ghost" 
                             size="sm"
-                            onClick={() => handleDeleteVehicle(vehicle.id || vehicle.vehicleId || "")}
+                            onClick={() => handleDeleteVehicle(String(vehicle.id || vehicle.vehicleId || ""))}
                             className="text-red-600 hover:text-red-800"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -819,3 +821,4 @@ export function VehicleManagement() {
     </Tabs>
   );
 }
+

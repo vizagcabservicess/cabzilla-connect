@@ -41,6 +41,13 @@ export function TabTripSelector({
     sessionStorage.removeItem('dropLocationObj');
     sessionStorage.removeItem('pickupLocationObj');
     
+    // Important: Add HTML element cleanup to ensure UI state is reset too
+    const pickupInput = document.querySelector('input[placeholder*="pickup"]') as HTMLInputElement;
+    const dropInput = document.querySelector('input[placeholder*="drop"]') as HTMLInputElement;
+    
+    if (pickupInput) pickupInput.value = '';
+    if (dropInput) dropInput.value = '';
+    
     // Clear booking-related data regardless of tab change
     sessionStorage.removeItem('selectedCab');
     sessionStorage.removeItem('hourlyPackage');
@@ -137,10 +144,7 @@ export function TabTripSelector({
       clearTimeout(refreshTimer);
       setRefreshTimer(null);
     }
-    
-    // Force a cache clear regardless of whether it's the same tab or not
-    fareService.clearCache();
-    
+
     // Force all location data to be cleared for a clean state
     sessionStorage.removeItem('dropLocation');
     sessionStorage.removeItem('pickupLocation');
@@ -148,6 +152,16 @@ export function TabTripSelector({
     sessionStorage.removeItem('pickupCoordinates');
     sessionStorage.removeItem('dropLocationObj');
     sessionStorage.removeItem('pickupLocationObj');
+    
+    // Important: Clear input fields in the DOM directly to ensure UI is reset
+    const pickupInput = document.querySelector('input[placeholder*="pickup"]') as HTMLInputElement;
+    const dropInput = document.querySelector('input[placeholder*="drop"]') as HTMLInputElement;
+    
+    if (pickupInput) pickupInput.value = '';
+    if (dropInput) dropInput.value = '';
+    
+    // Force a cache clear regardless of whether it's the same tab or not
+    fareService.clearCache();
     
     // Update the tab
     onTabChange(value as 'outstation' | 'local' | 'airport' | 'tour');

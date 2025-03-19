@@ -8,6 +8,8 @@ import { fareService } from '@/services/fareService';
 
 // Track ongoing vehicle pricing fetch operations
 let isFetchingVehiclePricing = false;
+let lastLoadAttempt = 0;
+const THROTTLE_TIME = 5000; // 5 seconds minimum between load attempts
 
 // Default cab types (used as fallback if API fails)
 export const cabTypes: CabType[] = [
@@ -24,7 +26,9 @@ export const cabTypes: CabType[] = [
     ac: true,
     nightHaltCharge: 700,
     driverAllowance: 250,
-    isActive: true
+    isActive: true,
+    vehicleId: 'sedan',
+    basePrice: 4200
   },
   {
     id: 'ertiga',
@@ -39,7 +43,9 @@ export const cabTypes: CabType[] = [
     ac: true,
     nightHaltCharge: 1000,
     driverAllowance: 250,
-    isActive: true
+    isActive: true,
+    vehicleId: 'ertiga',
+    basePrice: 5400
   },
   {
     id: 'innova_crysta',
@@ -54,7 +60,9 @@ export const cabTypes: CabType[] = [
     ac: true,
     nightHaltCharge: 1000,
     driverAllowance: 250,
-    isActive: true
+    isActive: true,
+    vehicleId: 'innova_crysta',
+    basePrice: 6000
   }
 ];
 
@@ -69,6 +77,14 @@ let isCurrentlyFetchingCabs = false; // Flag to prevent concurrent fetch request
 export const loadCabTypes = async (): Promise<CabType[]> => {
   try {
     const now = Date.now();
+    
+    // Prevent too many requests in quick succession
+    if (now - lastLoadAttempt < THROTTLE_TIME) {
+      console.log('Throttling loadCabTypes call, using cached or default data');
+      return cachedCabTypes || cabTypes;
+    }
+    
+    lastLoadAttempt = now;
     
     // Use cache if available and not expired
     if (cachedCabTypes && cachedCabTypes.length > 0 && now - lastCacheTime < CACHE_DURATION) {
@@ -141,14 +157,24 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
           .map(vehicle => ({
             ...vehicle,
             // Ensure ID is always set
-            id: vehicle.id || vehicle?.vehicleId || String(Math.random()).substring(2, 10),
-            // Ensure all required properties exist
-            price: vehicle.price || vehicle?.basePrice || 0,
-            pricePerKm: vehicle.pricePerKm || 0,
-            nightHaltCharge: vehicle.nightHaltCharge || 0,
-            driverAllowance: vehicle.driverAllowance || 0,
+            id: vehicle.id || vehicle.vehicleId || String(Math.random()).substring(2, 10),
+            // Ensure all required properties exist with defaults if missing
+            name: vehicle.name || 'Unnamed Vehicle',
+            capacity: typeof vehicle.capacity === 'number' ? vehicle.capacity : 4,
+            luggageCapacity: typeof vehicle.luggageCapacity === 'number' ? vehicle.luggageCapacity : 2,
+            price: typeof vehicle.price === 'number' ? vehicle.price : 
+                   (typeof vehicle.basePrice === 'number' ? vehicle.basePrice : 4200),
+            basePrice: typeof vehicle.basePrice === 'number' ? vehicle.basePrice : 
+                      (typeof vehicle.price === 'number' ? vehicle.price : 4200),
+            pricePerKm: typeof vehicle.pricePerKm === 'number' ? vehicle.pricePerKm : 14,
+            nightHaltCharge: typeof vehicle.nightHaltCharge === 'number' ? vehicle.nightHaltCharge : 700,
+            driverAllowance: typeof vehicle.driverAllowance === 'number' ? vehicle.driverAllowance : 250,
+            image: vehicle.image || '/cars/sedan.png',
             amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC'],
-            isActive: vehicle.isActive !== false
+            description: vehicle.description || '',
+            ac: vehicle.ac !== false,
+            isActive: vehicle.isActive !== false,
+            vehicleId: vehicle.vehicleId || vehicle.id || String(Math.random()).substring(2, 10)
           }));
         
         // Log active vehicle count
@@ -183,22 +209,22 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
 // Helper function to map vehicle data from different API response formats
 const mapVehicleData = (data: any[]): CabType[] => {
   return data.map(v => ({
-    id: v.id || v.vehicleId || v.vehicle_id || '',
-    name: v.name || '',
+    id: String(v.id || v.vehicleId || v.vehicle_id || ''),
+    name: String(v.name || 'Unnamed Vehicle'),
     capacity: Number(v.capacity) || 4,
     luggageCapacity: Number(v.luggageCapacity || v.luggage_capacity) || 2,
-    price: Number(v.basePrice || v.price || v.base_price) || 0,
-    pricePerKm: Number(v.pricePerKm || v.price_per_km) || 0,
+    price: Number(v.basePrice || v.price || v.base_price) || 4200,
+    pricePerKm: Number(v.pricePerKm || v.price_per_km) || 14,
     image: v.image || '/cars/sedan.png',
     amenities: Array.isArray(v.amenities) ? v.amenities : ['AC'],
     description: v.description || '',
     ac: v.ac !== undefined ? Boolean(v.ac) : true,
-    nightHaltCharge: Number(v.nightHaltCharge || v.night_halt_charge) || 0,
-    driverAllowance: Number(v.driverAllowance || v.driver_allowance) || 0,
+    nightHaltCharge: Number(v.nightHaltCharge || v.night_halt_charge) || 700,
+    driverAllowance: Number(v.driverAllowance || v.driver_allowance) || 250,
     isActive: v.isActive !== undefined ? Boolean(v.isActive) : 
               (v.is_active !== undefined ? Boolean(v.is_active) : true),
-    vehicleId: v.id || v.vehicleId || v.vehicle_id || '',
-    basePrice: Number(v.basePrice || v.price || v.base_price) || 0
+    vehicleId: String(v.id || v.vehicleId || v.vehicle_id || ''),
+    basePrice: Number(v.basePrice || v.price || v.base_price) || 4200
   }));
 };
 
@@ -270,5 +296,8 @@ export const clearFareCache = () => {
 
 // Helper function to format price
 export const formatPrice = (price: number): string => {
+  if (!price || isNaN(price)) {
+    return "Price unavailable";
+  }
   return `₹${price.toLocaleString('en-IN')}`;
 };

@@ -148,40 +148,52 @@ export function CabOptions({
 
   // Calculate fares for all cab types when distance or trip parameters change
   useEffect(() => {
-    if (distance > 0 && cabTypes.length > 0 && !isCalculatingFares) {
-      console.log(`Calculating fares for ${tripType} trip, ${distance}km, package: ${hourlyPackage || 'none'}`);
+    // Ensure we have valid cab types and a distance before calculating fares
+    if (distance <= 0 || !Array.isArray(cabTypes) || cabTypes.length === 0 || isCalculatingFares) {
+      console.log(`Skipping fare calculation: distance=${distance}, cabTypes=${cabTypes?.length}, isCalculating=${isCalculatingFares}`);
+      return;
+    }
+    
+    console.log(`Calculating fares for ${tripType} trip, ${distance}km, package: ${hourlyPackage || 'none'}`);
+    
+    const calculateFares = async () => {
+      setIsCalculatingFares(true);
       
-      const calculateFares = async () => {
-        setIsCalculatingFares(true);
+      try {
+        if (distance > 500) {
+          toast.info('Calculating fares for long distance...', {
+            duration: 3000
+          });
+        }
         
-        try {
-          if (distance > 500) {
-            toast.info('Calculating fares for long distance...', {
-              duration: 3000
-            });
+        console.log(`Starting fare calculation for ${cabTypes.length} cab types`);
+        
+        // Validate and filter each cab object before calculation
+        const validCabs = cabTypes.filter(cab => {
+          // Check if cab has basic required properties and is not null/undefined
+          if (!cab || typeof cab !== 'object' || !cab.id) {
+            console.warn('Skipping invalid cab object:', cab);
+            return false;
           }
           
-          console.log(`Starting fare calculation for ${cabTypes.length} cab types`);
+          // Ensure all required properties have default values if missing
+          if (typeof cab.price !== 'number') cab.price = 0;
+          if (typeof cab.pricePerKm !== 'number') cab.pricePerKm = 0;
+          if (typeof cab.nightHaltCharge !== 'number') cab.nightHaltCharge = 0;
+          if (typeof cab.driverAllowance !== 'number') cab.driverAllowance = 0;
           
-          // Validate each cab object before calculation
-          const validCabs = cabTypes.filter(cab => {
-            // Check if cab has all required properties
-            if (!cab || !cab.id) {
-              console.warn('Skipping invalid cab object:', cab);
-              return false;
-            }
-            
-            // Convert any missing numeric properties to defaults
-            if (typeof cab.price !== 'number') cab.price = 0;
-            if (typeof cab.pricePerKm !== 'number') cab.pricePerKm = 0;
-            if (typeof cab.nightHaltCharge !== 'number') cab.nightHaltCharge = 0;
-            if (typeof cab.driverAllowance !== 'number') cab.driverAllowance = 0;
-            
-            return true;
-          });
-          
-          console.log(`Proceeding with ${validCabs.length} valid cabs for fare calculation`);
-          
+          return true;
+        });
+        
+        console.log(`Proceeding with ${validCabs.length} valid cabs for fare calculation`);
+        
+        if (validCabs.length === 0) {
+          console.error('No valid cab types to calculate fares for');
+          toast.error('No valid vehicle types available. Try refreshing.');
+          return;
+        }
+        
+        try {
           // Use the fareService to calculate fares
           const fares = await fareService.calculateFaresForCabs(
             validCabs,
@@ -193,20 +205,42 @@ export function CabOptions({
             returnDate
           );
           
-          setCabFares(fares);
           console.log('All fares calculated:', fares);
-        } catch (error) {
-          console.error('Error calculating fares:', error);
-          toast.error('Error calculating fares');
-        } finally {
-          setIsCalculatingFares(false);
+          setCabFares(fares);
+        } catch (fareError) {
+          console.error('Error in fare calculation service:', fareError);
+          // Fallback to direct calculation if service fails
+          const manualFares: Record<string, number> = {};
+          
+          for (const cab of validCabs) {
+            try {
+              const fare = await calculateFare({
+                cabType: cab,
+                distance,
+                tripType,
+                tripMode,
+                hourlyPackage,
+                pickupDate,
+                returnDate
+              });
+              manualFares[cab.id] = fare;
+            } catch (err) {
+              console.error(`Error calculating fare for ${cab.name}:`, err);
+              manualFares[cab.id] = 0;
+            }
+          }
+          
+          setCabFares(manualFares);
         }
-      };
-      
-      calculateFares();
-    } else if (distance === 0) {
-      setCabFares({});
-    }
+      } catch (error) {
+        console.error('Error in fare calculation loop:', error);
+        toast.error('Error calculating fares. Please try refreshing.');
+      } finally {
+        setIsCalculatingFares(false);
+      }
+    };
+    
+    calculateFares();
   }, [cabTypes, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate]);
 
   // Update selectedCabId when selectedCab changes (from parent)
@@ -315,7 +349,7 @@ export function CabOptions({
           
           {cabTypes.map((cab) => (
             <CabOptionCard 
-              key={cab.id}
+              key={cab.id || `cab-${Math.random()}`}
               cab={cab}
               fare={cabFares[cab.id] || 0}
               isSelected={selectedCabId === cab.id}
