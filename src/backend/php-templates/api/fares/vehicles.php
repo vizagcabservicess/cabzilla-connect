@@ -52,14 +52,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
     
-    // Convert values to appropriate types
+    // Convert values to appropriate types - ensure we're using proper numeric types
     $basePrice = floatval($input['basePrice']);
     $pricePerKm = floatval($input['pricePerKm']);
     $nightHaltCharge = isset($input['nightHaltCharge']) ? floatval($input['nightHaltCharge']) : 0;
     $driverAllowance = isset($input['driverAllowance']) ? floatval($input['driverAllowance']) : 0;
     
-    // Bind parameters
-    $stmt->bind_param("dddss", $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, $input['vehicleType']);
+    // Bind parameters - note the parameter types (dddds) - d for double (float), s for string
+    $stmt->bind_param("dddds", $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, $input['vehicleType']);
     
     // Execute statement
     if (!$stmt->execute()) {
@@ -108,7 +108,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Handle GET requests
 try {
     // Get all vehicle pricing
-    $stmt = $conn->prepare("SELECT * FROM vehicle_pricing ORDER BY id");
+    $stmt = $conn->prepare("SELECT * FROM vehicle_pricing WHERE is_active = 1 ORDER BY id");
     $stmt->execute();
     $result = $stmt->get_result();
 
