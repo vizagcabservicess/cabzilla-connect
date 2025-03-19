@@ -118,6 +118,68 @@ try {
         }
     }
 
+    // If no vehicles found in database, return hardcoded defaults
+    if (empty($vehicles)) {
+        $vehicles = [
+            [
+                'id' => 'sedan',
+                'name' => 'Sedan',
+                'capacity' => 4,
+                'luggageCapacity' => 2,
+                'price' => 4200,
+                'basePrice' => 4200,
+                'pricePerKm' => 14,
+                'image' => '/cars/sedan.png',
+                'amenities' => ['AC', 'Bottle Water', 'Music System'],
+                'description' => 'Comfortable sedan suitable for 4 passengers.',
+                'ac' => true,
+                'nightHaltCharge' => 700,
+                'driverAllowance' => 250,
+                'isActive' => true,
+                'vehicleId' => 'sedan',
+                'vehicleType' => 'sedan'
+            ],
+            [
+                'id' => 'ertiga',
+                'name' => 'Ertiga',
+                'capacity' => 6,
+                'luggageCapacity' => 3,
+                'price' => 5400,
+                'basePrice' => 5400,
+                'pricePerKm' => 18,
+                'image' => '/cars/ertiga.png',
+                'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
+                'description' => 'Spacious SUV suitable for 6 passengers.',
+                'ac' => true,
+                'nightHaltCharge' => 1000,
+                'driverAllowance' => 250,
+                'isActive' => true,
+                'vehicleId' => 'ertiga',
+                'vehicleType' => 'ertiga'
+            ],
+            [
+                'id' => 'innova_crysta',
+                'name' => 'Innova Crysta',
+                'capacity' => 7,
+                'luggageCapacity' => 4,
+                'price' => 6000,
+                'basePrice' => 6000,
+                'pricePerKm' => 20,
+                'image' => '/cars/innova.png',
+                'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
+                'description' => 'Premium SUV with ample space for 7 passengers.',
+                'ac' => true,
+                'nightHaltCharge' => 1000,
+                'driverAllowance' => 250,
+                'isActive' => true,
+                'vehicleId' => 'innova_crysta',
+                'vehicleType' => 'innova_crysta'
+            ]
+        ];
+        
+        logError("No vehicles found in database, using default vehicles", ['count' => count($vehicles)]);
+    }
+
     // Log success with safe data to avoid memory issues
     logError("Vehicles data response success", [
         'count' => count($vehicles), 

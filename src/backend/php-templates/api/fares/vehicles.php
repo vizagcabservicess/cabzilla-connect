@@ -1,4 +1,3 @@
-
 <?php
 require_once '../../config.php';
 
@@ -23,13 +22,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // Log the request for debugging
 logError("vehicles.php request", ['method' => $_SERVER['REQUEST_METHOD'], 'timestamp' => time()]);
 
+// Global fallback vehicles to return in case of database issues
+$fallbackVehicles = [
+    [
+        'id' => 'sedan',
+        'name' => 'Sedan',
+        'capacity' => 4,
+        'luggageCapacity' => 2,
+        'price' => 4200,
+        'basePrice' => 4200,
+        'pricePerKm' => 14,
+        'image' => '/cars/sedan.png',
+        'amenities' => ['AC', 'Bottle Water', 'Music System'],
+        'description' => 'Comfortable sedan suitable for 4 passengers.',
+        'ac' => true,
+        'nightHaltCharge' => 700,
+        'driverAllowance' => 250,
+        'isActive' => true,
+        'vehicleId' => 'sedan'
+    ],
+    [
+        'id' => 'ertiga',
+        'name' => 'Ertiga',
+        'capacity' => 6,
+        'luggageCapacity' => 3,
+        'price' => 5400,
+        'basePrice' => 5400,
+        'pricePerKm' => 18,
+        'image' => '/cars/ertiga.png',
+        'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
+        'description' => 'Spacious SUV suitable for 6 passengers.',
+        'ac' => true,
+        'nightHaltCharge' => 1000,
+        'driverAllowance' => 250,
+        'isActive' => true,
+        'vehicleId' => 'ertiga'
+    ],
+    [
+        'id' => 'innova_crysta',
+        'name' => 'Innova Crysta',
+        'capacity' => 7,
+        'luggageCapacity' => 4,
+        'price' => 6000,
+        'basePrice' => 6000,
+        'pricePerKm' => 20,
+        'image' => '/cars/innova.png',
+        'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
+        'description' => 'Premium SUV with ample space for 7 passengers.',
+        'ac' => true,
+        'nightHaltCharge' => 1000,
+        'driverAllowance' => 250,
+        'isActive' => true,
+        'vehicleId' => 'innova_crysta'
+    ]
+];
+
 // Handle requests
 try {
     // Connect to database
     $conn = getDbConnection();
 
     if (!$conn) {
-        throw new Exception("Database connection failed: " . mysqli_connect_error());
+        logError("Database connection failed, using fallback vehicles", []);
+        echo json_encode($fallbackVehicles);
+        exit;
     }
 
     // Handle POST requests for updating vehicle pricing
@@ -58,7 +114,19 @@ try {
         $ac = isset($input['ac']) ? ($input['ac'] ? 1 : 0) : 1;
         $image = isset($input['image']) ? $input['image'] : '';
         $description = isset($input['description']) ? $input['description'] : '';
-        $amenities = isset($input['amenities']) ? json_encode($input['amenities']) : '[]';
+        
+        // Process amenities - convert array to JSON or keep string
+        $amenities = '';
+        if (isset($input['amenities'])) {
+            if (is_array($input['amenities'])) {
+                $amenities = json_encode($input['amenities']);
+            } else {
+                $amenities = $input['amenities'];
+            }
+        } else {
+            $amenities = json_encode(['AC']);
+        }
+        
         $isActive = isset($input['isActive']) ? ($input['isActive'] ? 1 : 0) : 1;
         
         // First check if vehicle type exists
@@ -283,6 +351,12 @@ try {
             }
         }
 
+        // If no vehicles found in database, use fallback
+        if (empty($vehicles)) {
+            logError("No vehicles found in database, using fallback vehicles", []);
+            $vehicles = $fallbackVehicles;
+        }
+
         // Log success
         logError("Vehicles GET response success", [
             'count' => count($vehicles), 
@@ -304,6 +378,20 @@ try {
     
 } catch (Exception $e) {
     logError("Error in vehicles.php", ['error' => $e->getMessage()]);
+    
+    // For GET requests, return fallback vehicles instead of an error
+    if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+        logError("Returning fallback vehicles due to error", []);
+        echo json_encode([
+            'vehicles' => $fallbackVehicles,
+            'timestamp' => time(),
+            'cached' => false,
+            'fallback' => true
+        ]);
+        exit;
+    }
+    
+    // For other methods, return error
     http_response_code(500);
     echo json_encode(['error' => $e->getMessage()]);
     exit;

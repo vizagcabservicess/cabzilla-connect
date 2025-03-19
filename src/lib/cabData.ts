@@ -102,7 +102,7 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
     // If already fetching, don't start another fetch
     if (isCurrentlyFetchingCabs) {
       console.log('Another fetch operation is in progress, using default cab types');
-      return cabTypes;
+      return cachedCabTypes || cabTypes;
     }
     
     isCurrentlyFetchingCabs = true;
@@ -125,7 +125,7 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
         fetchSuccessful = false;
       }
       
-      // If primary endpoint failed, try first backup endpoint
+      // If primary endpoint failed, try direct API call
       if (!fetchSuccessful) {
         try {
           console.log('Trying vehicles API endpoint directly...');
@@ -155,7 +155,33 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
         }
       }
       
-      // If both previous attempts failed, try second backup endpoint
+      // If both previous attempts failed, try direct endpoint with specific format
+      if (!fetchSuccessful) {
+        try {
+          console.log('Trying direct API endpoint as fallback...');
+          const response = await fetch('/api/fares/vehicles-data.php?_t=' + Date.now(), {
+            method: 'GET',
+            headers: {
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache'
+            }
+          });
+          
+          if (response.ok) {
+            const responseData = await response.json();
+            
+            if (Array.isArray(responseData) && responseData.length > 0) {
+              vehicleData = mapVehicleData(responseData);
+              fetchSuccessful = true;
+              console.log('Successfully fetched vehicles from direct API endpoint:', vehicleData.length);
+            }
+          }
+        } catch (directError) {
+          console.error('Direct API call failed:', directError);
+        }
+      }
+      
+      // If all API calls failed, try a last alternative
       if (!fetchSuccessful) {
         try {
           console.log('Trying getAllVehicleData endpoint...');
@@ -252,13 +278,14 @@ const mapVehicleData = (data: any[]): CabType[] => {
     .filter(v => v && typeof v === 'object') // Filter out null or non-object items
     .map(v => ({
       id: String(v.id || v.vehicleId || v.vehicle_id || ''),
-      name: String(v.name || 'Unnamed Vehicle'),
-      capacity: Number(v.capacity) || 4,
+      name: String(v.name || v.vehicle_name || 'Unnamed Vehicle'),
+      capacity: Number(v.capacity || v.passenger_capacity) || 4,
       luggageCapacity: Number(v.luggageCapacity || v.luggage_capacity) || 2,
       price: Number(v.basePrice || v.price || v.base_price) || 4200,
       pricePerKm: Number(v.pricePerKm || v.price_per_km) || 14,
       image: v.image || '/cars/sedan.png',
-      amenities: Array.isArray(v.amenities) ? v.amenities : ['AC'],
+      amenities: Array.isArray(v.amenities) ? v.amenities : 
+                (typeof v.amenities === 'string' ? v.amenities.split(',').map((a: string) => a.trim()) : ['AC']),
       description: v.description || '',
       ac: v.ac !== undefined ? Boolean(v.ac) : true,
       nightHaltCharge: Number(v.nightHaltCharge || v.night_halt_charge) || 700,
