@@ -37,18 +37,65 @@ class FareService {
       console.log("Refreshing cab types from the API");
       const vehicles = await fareAPI.getVehicles();
       
-      if (!Array.isArray(vehicles) || vehicles.length === 0) {
-        console.warn('No vehicles returned from API or invalid response');
+      // Add extra type safety to prevent errors
+      if (!vehicles) {
+        console.warn('No vehicles returned from API');
         throw new Error('Failed to load vehicles from server');
       }
       
-      console.log(`Successfully loaded ${vehicles.length} vehicles from API`);
+      // Ensure we have an array of vehicles
+      let vehicleArray: any[] = [];
+      
+      if (Array.isArray(vehicles)) {
+        vehicleArray = vehicles;
+      } else if (typeof vehicles === 'object') {
+        // Try to extract vehicles from various properties
+        if (vehicles.vehicles && Array.isArray(vehicles.vehicles)) {
+          vehicleArray = vehicles.vehicles;
+        } else if (vehicles.data && Array.isArray(vehicles.data)) {
+          vehicleArray = vehicles.data;
+        } else {
+          // Try to extract vehicle objects from the response
+          const extractedVehicles = Object.values(vehicles).filter(
+            val => val && typeof val === 'object' && !Array.isArray(val)
+          );
+          
+          if (extractedVehicles.length > 0) {
+            vehicleArray = extractedVehicles;
+          }
+        }
+      }
+      
+      if (vehicleArray.length === 0) {
+        console.warn('No vehicles found in API response');
+        throw new Error('No vehicles found in server response');
+      }
+      
+      console.log(`Successfully loaded ${vehicleArray.length} vehicles from API`);
       
       // Clear fare cache when vehicles are refreshed
       this.clearCache();
       
-      // Return the updated cab types
-      return vehicles;
+      // Map the vehicles to CabType format
+      const cabTypes: CabType[] = vehicleArray
+        .map(vehicle => ({
+          id: vehicle.id || vehicle.vehicleId || '',
+          name: vehicle.name || '',
+          capacity: vehicle.capacity || 4,
+          luggageCapacity: vehicle.luggageCapacity || vehicle.luggage_capacity || 2,
+          price: vehicle.basePrice || vehicle.price || 0,
+          pricePerKm: vehicle.pricePerKm || 0,
+          image: vehicle.image || '/cars/sedan.png',
+          amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC'],
+          description: vehicle.description || '',
+          ac: vehicle.ac !== undefined ? vehicle.ac : true,
+          nightHaltCharge: vehicle.nightHaltCharge || 0,
+          driverAllowance: vehicle.driverAllowance || 0,
+          isActive: vehicle.isActive !== undefined ? vehicle.isActive : true
+        }))
+        .filter(cab => cab.isActive); // Only return active cabs
+      
+      return cabTypes;
     } catch (error) {
       console.error('Error refreshing cab types:', error);
       toast.error('Failed to refresh vehicle data');

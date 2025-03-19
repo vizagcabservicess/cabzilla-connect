@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -114,14 +113,21 @@ export function VehicleManagement() {
       
       let vehicleData: VehicleData[] = [];
       
+      // Type guard to ensure response is an array
       if (Array.isArray(response)) {
         vehicleData = response as VehicleData[];
-      } else if (response && typeof response === 'object') {
+      } 
+      // Handle response object with potential nested arrays
+      else if (response && typeof response === 'object') {
+        // Check various property paths that might contain vehicles array
         if (response.vehicles && Array.isArray(response.vehicles)) {
           vehicleData = response.vehicles as VehicleData[];
-        } else if (response.data && Array.isArray(response.data)) {
+        } 
+        else if (response.data && Array.isArray(response.data)) {
           vehicleData = response.data as VehicleData[];
-        } else {
+        }
+        // Try to extract vehicle objects from response
+        else {
           const potentialVehicles = Object.values(response).filter(val => 
             val && typeof val === 'object' && !Array.isArray(val)
           );
@@ -586,7 +592,7 @@ export function VehicleManagement() {
                           <FormMessage />
                         </FormItem>
                       )}
-                    />
+                    )}
                     
                     <FormField
                       control={form.control}
