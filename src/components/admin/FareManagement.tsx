@@ -100,6 +100,10 @@ export function FareManagement() {
       localStorage.removeItem('tourFares');
       sessionStorage.removeItem('cabFares');
       sessionStorage.removeItem('tourFares');
+      sessionStorage.removeItem('calculatedFares');
+      
+      // Force reload of cab types
+      await reloadCabTypes();
       
       const data = await fareAPI.updateTourFares(values as FareUpdateRequest);
       console.log("Fare update response:", data);
@@ -137,6 +141,10 @@ export function FareManagement() {
       localStorage.removeItem('tourFares');
       sessionStorage.removeItem('cabFares');
       sessionStorage.removeItem('tourFares');
+      sessionStorage.removeItem('calculatedFares');
+      
+      // Force reload of cab types
+      await reloadCabTypes();
       
       // Call API to add new tour
       const data = await fareAPI.addTourFare(newTourData);
@@ -168,6 +176,10 @@ export function FareManagement() {
       localStorage.removeItem('tourFares');
       sessionStorage.removeItem('cabFares');
       sessionStorage.removeItem('tourFares');
+      sessionStorage.removeItem('calculatedFares');
+      
+      // Force reload of cab types
+      await reloadCabTypes();
       
       const data = await fareAPI.deleteTourFare(tourId);
       console.log("Tour deleted:", data);
@@ -197,6 +209,10 @@ export function FareManagement() {
       localStorage.removeItem('tourFares');
       sessionStorage.removeItem('cabFares');
       sessionStorage.removeItem('tourFares');
+      sessionStorage.removeItem('calculatedFares');
+      
+      // Force reload of cab types
+      await reloadCabTypes();
       
       const data = await fareAPI.getTourFares();
       

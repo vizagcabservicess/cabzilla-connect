@@ -368,7 +368,8 @@ export const fareAPI = {
   getTourFares: async (): Promise<TourFare[]> => {
     try {
       console.log("Getting tour fares...");
-      const response = await api.get('/fares/tours.php');
+      const cacheBuster = new Date().getTime();
+      const response = await api.get(`/fares/tours.php?_t=${cacheBuster}`);
       console.log("Tour fares raw response:", response.data);
       
       // Handle different response formats
@@ -407,8 +408,9 @@ export const fareAPI = {
   // Get vehicle pricing
   getVehiclePricing: async (): Promise<VehiclePricing[]> => {
     try {
-      console.log("Fetching vehicle pricing with cache busting...");
-      const response = await api.get(`/fares/vehicles.php?_t=${Date.now()}`);
+      const cacheBuster = new Date().getTime();
+      console.log(`Fetching vehicle pricing with cache busting...${cacheBuster}`);
+      const response = await api.get(`/fares/vehicles.php?_t=${cacheBuster}`);
       console.log("Vehicle pricing raw response:", response.data);
       
       // Handle different response formats
@@ -479,6 +481,13 @@ export const fareAPI = {
   updateTourFares: async (fareData: FareUpdateRequest): Promise<any> => {
     try {
       const response = await api.post('/admin/fares-update.php', fareData);
+      
+      // Clear any browser caches for the vehicles
+      await fetch('/api/fares/vehicles.php', { 
+        method: 'GET',
+        headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+      });
+      
       return response.data;
     } catch (error) {
       return handleApiError(error);
@@ -508,8 +517,24 @@ export const fareAPI = {
   // Update vehicle pricing (admin only)
   updateVehiclePricing: async (pricingData: VehiclePricingUpdateRequest): Promise<any> => {
     try {
+      console.log("Vehicle pricing update request:", pricingData);
       const response = await api.post('/admin/vehicle-pricing.php', pricingData);
       console.log("Vehicle pricing update response:", response.data);
+      
+      // Force a refresh of the vehicle data
+      setTimeout(async () => {
+        try {
+          // Clear any browser caches
+          await fetch('/api/fares/vehicles.php', { 
+            method: 'GET',
+            headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+          });
+          
+          console.log("Forced refresh of vehicle data after pricing update");
+        } catch (error) {
+          console.error("Error refreshing vehicle data:", error);
+        }
+      }, 500);
       
       // Check for success in various response formats
       if (response.data && response.data.status === 'success') {
@@ -566,7 +591,9 @@ export const fareAPI = {
   // Get all vehicle data for booking
   getAllVehicleData: async (): Promise<any[]> => {
     try {
-      const response = await api.get(`/fares/vehicles-data.php?_t=${Date.now()}`);
+      const cacheBuster = new Date().getTime();
+      console.log(`Fetching all vehicle data with cache busting...${cacheBuster}`);
+      const response = await api.get(`/fares/vehicles.php?_t=${cacheBuster}`);
       
       // Log response to debug
       console.log("Vehicle data raw response:", response.data);

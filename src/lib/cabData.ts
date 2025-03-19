@@ -1,3 +1,4 @@
+
 import { differenceInCalendarDays } from 'date-fns';
 import { fareAPI } from '@/services/api';
 import { toast } from 'sonner';
@@ -83,7 +84,7 @@ export const cabTypes: CabType[] = [
 // Cache to store loaded cab types with shorter expiration time
 let cachedCabTypes: CabType[] | null = null;
 let lastCacheTime = 0;
-const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes in milliseconds (reduced from 5 minutes)
+const CACHE_DURATION = 30 * 1000; // 30 seconds in milliseconds (significantly reduced from 2 minutes)
 
 // Function to load cab types dynamically
 export const loadCabTypes = async (): Promise<CabType[]> => {
@@ -97,6 +98,7 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
     }
     
     console.log('Fetching new cab types from API');
+    // Add a cache busting timestamp to the request
     const vehicleData = await fareAPI.getAllVehicleData();
     
     if (Array.isArray(vehicleData) && vehicleData.length > 0) {
@@ -141,8 +143,21 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
 
 // Function to reload cab types and clear cache
 export const reloadCabTypes = async (): Promise<CabType[]> => {
+  console.log('Forcing reload of cab types by clearing cache');
+  // Clear all caches that might contain vehicle data
   cachedCabTypes = null;
   lastCacheTime = 0;
+  
+  // Clear any fare calculation caches
+  Object.keys(outstationPricingCache).forEach(key => {
+    delete outstationPricingCache[key];
+  });
+  
+  // Clear any cached fare data in session/local storage
+  sessionStorage.removeItem('cabFares');
+  sessionStorage.removeItem('calculatedFares');
+  localStorage.removeItem('cabFares');
+  
   return loadCabTypes();
 };
 
@@ -220,6 +235,7 @@ export const tourFares = {
 export const loadTourFares = async (): Promise<any> => {
   try {
     console.log("Loading tour fares from API");
+    // Add cache busting to prevent stale data
     const tourFareData = await fareAPI.getTourFares();
     console.log("Tour fare data:", tourFareData);
     
@@ -349,7 +365,7 @@ export async function calculateFare(
   const cacheKey = `${cabType.id}_${distance}_${tripType}_${tripMode}_${hourlyPackage || ''}_${pickupDate?.getTime() || ''}_${returnDate?.getTime() || ''}`;
   const now = Date.now();
   
-  // Check cache first (valid for 5 minutes)
+  // Check cache first (valid for 30 seconds - reduced from 5 minutes)
   if (outstationPricingCache[cacheKey] && outstationPricingCache[cacheKey].expire > now) {
     console.log(`Using cached fare calculation for ${cacheKey}`);
     return outstationPricingCache[cacheKey].price;
@@ -401,6 +417,7 @@ export async function calculateFare(
       // Try to get up-to-date pricing info
       try {
         console.log("Fetching latest vehicle pricing from API for", cabType.id);
+        // Add cache busting by adding timestamp to request
         const vehiclePricing = await fareAPI.getVehiclePricing();
         const pricing = vehiclePricing.find(p => 
           p.vehicleType?.toLowerCase() === cabType.id?.toLowerCase() || 

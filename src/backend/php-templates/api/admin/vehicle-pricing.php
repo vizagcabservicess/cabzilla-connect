@@ -106,8 +106,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $vehicleCheckResult = $vehicleCheckStmt->get_result();
         
         if ($vehicleCheckResult->num_rows === 0) {
-            sendJsonResponse(['status' => 'error', 'message' => 'Vehicle type does not exist'], 404);
-            exit;
+            // Try to insert the vehicle if it doesn't exist
+            try {
+                $vehicleInsertStmt = $conn->prepare("INSERT INTO vehicle_types (vehicle_id, name, is_active) VALUES (?, ?, 1)");
+                $vehicleInsertStmt->bind_param("ss", $vehicleType, $vehicleType);
+                $vehicleInsertStmt->execute();
+                logError("Created missing vehicle type", ['vehicleType' => $vehicleType]);
+            } catch (Exception $e) {
+                logError("Could not create vehicle type", ['error' => $e->getMessage()]);
+                sendJsonResponse(['status' => 'error', 'message' => 'Vehicle type does not exist and could not be created'], 404);
+                exit;
+            }
         }
         
         // Check if the vehicle type exists in pricing table

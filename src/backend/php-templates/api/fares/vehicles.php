@@ -7,6 +7,8 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Content-Type: application/json');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
 
 // Respond to preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -40,17 +42,6 @@ try {
             throw new Exception("Invalid input data. Required fields: vehicleType, basePrice, pricePerKm");
         }
         
-        // Prepare statement to update vehicle pricing
-        $stmt = $conn->prepare("
-            UPDATE vehicle_pricing 
-            SET base_price = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?, updated_at = NOW()
-            WHERE vehicle_type = ?
-        ");
-        
-        if (!$stmt) {
-            throw new Exception("Database prepare error: " . $conn->error);
-        }
-        
         // Convert values to appropriate types
         $basePrice = floatval($input['basePrice']);
         $pricePerKm = floatval($input['pricePerKm']);
@@ -58,60 +49,94 @@ try {
         $driverAllowance = isset($input['driverAllowance']) ? floatval($input['driverAllowance']) : 0;
         $vehicleType = $input['vehicleType'];
         
-        // Bind parameters
-        $stmt->bind_param("dddds", $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, $vehicleType);
-        
-        // Execute statement
-        if (!$stmt->execute()) {
-            throw new Exception("Failed to update vehicle pricing: " . $stmt->error);
+        // First check if vehicle type exists
+        $checkStmt = $conn->prepare("SELECT COUNT(*) as count FROM vehicle_types WHERE vehicle_id = ?");
+        if (!$checkStmt) {
+            throw new Exception("Database prepare error on check: " . $conn->error);
         }
         
-        // Check if any rows were affected
-        if ($stmt->affected_rows === 0) {
-            // No rows updated, check if the vehicle type exists
-            $checkStmt = $conn->prepare("SELECT COUNT(*) as count FROM vehicle_pricing WHERE vehicle_type = ?");
-            if (!$checkStmt) {
-                throw new Exception("Database prepare error on check: " . $conn->error);
-            }
-            
-            $checkStmt->bind_param("s", $vehicleType);
-            if (!$checkStmt->execute()) {
-                throw new Exception("Failed to check vehicle pricing: " . $checkStmt->error);
-            }
-            
-            $result = $checkStmt->get_result();
-            $row = $result->fetch_assoc();
-            
-            if ($row['count'] === 0) {
-                // Vehicle type doesn't exist, create it
-                $insertStmt = $conn->prepare("
-                    INSERT INTO vehicle_pricing (vehicle_type, base_price, price_per_km, night_halt_charge, driver_allowance, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, NOW(), NOW())
-                ");
-                
-                if (!$insertStmt) {
-                    throw new Exception("Database prepare error on insert: " . $conn->error);
-                }
-                
-                $insertStmt->bind_param("sdddd", $vehicleType, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
-                
-                if (!$insertStmt->execute()) {
-                    throw new Exception("Failed to insert vehicle pricing: " . $insertStmt->error);
-                }
-                
-                logError("Vehicle pricing created", ['vehicleType' => $vehicleType, 'basePrice' => $basePrice, 'pricePerKm' => $pricePerKm]);
-                echo json_encode(['message' => 'Vehicle pricing created successfully', 'vehicleType' => $vehicleType]);
-                exit;
-            } else {
-                // Vehicle type exists but no change in values
-                logError("No changes needed for vehicle pricing", ['vehicleType' => $vehicleType]);
-                echo json_encode(['message' => 'No changes made to vehicle pricing', 'vehicleType' => $vehicleType]);
-                exit;
-            }
+        $checkStmt->bind_param("s", $vehicleType);
+        if (!$checkStmt->execute()) {
+            throw new Exception("Failed to check vehicle type: " . $checkStmt->error);
         }
         
-        logError("Vehicle pricing updated", ['vehicleType' => $vehicleType, 'basePrice' => $basePrice, 'pricePerKm' => $pricePerKm]);
-        echo json_encode(['message' => 'Vehicle pricing updated successfully', 'vehicleType' => $vehicleType]);
+        $result = $checkStmt->get_result();
+        $row = $result->fetch_assoc();
+        
+        // If vehicle type doesn't exist, create it
+        if ($row['count'] == 0) {
+            $insertVehicleStmt = $conn->prepare("
+                INSERT INTO vehicle_types (vehicle_id, name, capacity, luggage_capacity, is_active) 
+                VALUES (?, ?, 4, 2, 1)
+            ");
+            
+            if (!$insertVehicleStmt) {
+                throw new Exception("Database prepare error on insert vehicle: " . $conn->error);
+            }
+            
+            $insertVehicleStmt->bind_param("ss", $vehicleType, $vehicleType);
+            
+            if (!$insertVehicleStmt->execute()) {
+                throw new Exception("Failed to insert vehicle type: " . $insertVehicleStmt->error);
+            }
+            
+            logError("Created new vehicle type", ['vehicleType' => $vehicleType]);
+        }
+        
+        // Now check if pricing record exists
+        $checkPricingStmt = $conn->prepare("SELECT COUNT(*) as count FROM vehicle_pricing WHERE vehicle_type = ?");
+        if (!$checkPricingStmt) {
+            throw new Exception("Database prepare error on pricing check: " . $conn->error);
+        }
+        
+        $checkPricingStmt->bind_param("s", $vehicleType);
+        if (!$checkPricingStmt->execute()) {
+            throw new Exception("Failed to check vehicle pricing: " . $checkPricingStmt->error);
+        }
+        
+        $pricingResult = $checkPricingStmt->get_result();
+        $pricingRow = $pricingResult->fetch_assoc();
+        
+        if ($pricingRow['count'] > 0) {
+            // Update existing record
+            $updateStmt = $conn->prepare("
+                UPDATE vehicle_pricing 
+                SET base_price = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?, updated_at = NOW()
+                WHERE vehicle_type = ?
+            ");
+            
+            if (!$updateStmt) {
+                throw new Exception("Database prepare error on update: " . $conn->error);
+            }
+            
+            $updateStmt->bind_param("dddds", $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, $vehicleType);
+            
+            if (!$updateStmt->execute()) {
+                throw new Exception("Failed to update vehicle pricing: " . $updateStmt->error);
+            }
+            
+            logError("Vehicle pricing updated", ['vehicleType' => $vehicleType, 'basePrice' => $basePrice, 'pricePerKm' => $pricePerKm]);
+            echo json_encode(['status' => 'success', 'message' => 'Vehicle pricing updated successfully', 'vehicleType' => $vehicleType, 'timestamp' => time()]);
+        } else {
+            // Insert new record
+            $insertStmt = $conn->prepare("
+                INSERT INTO vehicle_pricing (vehicle_type, base_price, price_per_km, night_halt_charge, driver_allowance, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, NOW(), NOW())
+            ");
+            
+            if (!$insertStmt) {
+                throw new Exception("Database prepare error on insert: " . $conn->error);
+            }
+            
+            $insertStmt->bind_param("sdddd", $vehicleType, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
+            
+            if (!$insertStmt->execute()) {
+                throw new Exception("Failed to insert vehicle pricing: " . $insertStmt->error);
+            }
+            
+            logError("Vehicle pricing created", ['vehicleType' => $vehicleType, 'basePrice' => $basePrice, 'pricePerKm' => $pricePerKm]);
+            echo json_encode(['status' => 'success', 'message' => 'Vehicle pricing created successfully', 'vehicleType' => $vehicleType, 'timestamp' => time()]);
+        }
         exit;
     }
 
@@ -204,7 +229,14 @@ try {
         }
 
         // Log success
-        logError("Vehicles GET response success", ['count' => count($vehicles), 'activeFilter' => !$includeInactive]);
+        logError("Vehicles GET response success", ['count' => count($vehicles), 'activeFilter' => !$includeInactive, 'timestamp' => time()]);
+        
+        // Add cache busting timestamp to response
+        $response = [
+            'vehicles' => $vehicles,
+            'timestamp' => time(),
+            'cached' => false
+        ];
         
         // Send response
         echo json_encode($vehicles);
