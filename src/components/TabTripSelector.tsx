@@ -21,11 +21,77 @@ export function TabTripSelector({
   onTripModeChange 
 }: TabTripSelectorProps) {
   const { toast } = useToast();
-  // Add state to track if airport tab was previously selected to prevent excessive refreshes
   const [prevTab, setPrevTab] = useState<string | null>(null);
-  // Add a debounce timer reference
   const [refreshTimer, setRefreshTimer] = useState<NodeJS.Timeout | null>(null);
 
+  // Function to aggressively clear all form inputs, DOM elements, and stored state
+  const clearAllFormState = useCallback(() => {
+    console.log("✨ Aggressively clearing ALL form state and DOM elements");
+    
+    // Clear all location-related data from sessionStorage
+    sessionStorage.removeItem('dropLocation');
+    sessionStorage.removeItem('pickupLocation');
+    sessionStorage.removeItem('dropCoordinates');
+    sessionStorage.removeItem('pickupCoordinates');
+    sessionStorage.removeItem('dropLocationObj');
+    sessionStorage.removeItem('pickupLocationObj');
+    
+    // Clear all cab and pricing related data
+    sessionStorage.removeItem('selectedCab');
+    sessionStorage.removeItem('hourlyPackage');
+    sessionStorage.removeItem('tourPackage');
+    sessionStorage.removeItem('bookingDetails');
+    sessionStorage.removeItem('calculatedFares');
+    sessionStorage.removeItem('distance');
+    sessionStorage.removeItem('airportDirection');
+    sessionStorage.removeItem('cabFares');
+    
+    // Find and clear all relevant input elements in the DOM
+    const inputFields = document.querySelectorAll('input[type="text"]');
+    inputFields.forEach(input => {
+      const inputElement = input as HTMLInputElement;
+      if (inputElement.placeholder && 
+          (inputElement.placeholder.toLowerCase().includes('pickup') || 
+           inputElement.placeholder.toLowerCase().includes('drop') ||
+           inputElement.placeholder.toLowerCase().includes('location'))) {
+        
+        // Clear the input value
+        inputElement.value = '';
+        
+        // Dispatch both input and change events to ensure React state is updated
+        inputElement.dispatchEvent(new Event('input', { bubbles: true }));
+        inputElement.dispatchEvent(new Event('change', { bubbles: true }));
+        
+        // Try to access and clear any associated React state through the element's __reactProps
+        try {
+          if ((inputElement as any)._valueTracker) {
+            (inputElement as any)._valueTracker.setValue('');
+          }
+        } catch (e) {
+          console.error("Error clearing React internal state:", e);
+        }
+      }
+    });
+    
+    // Create and dispatch a custom event to notify other components that locations are cleared
+    const clearEvent = new CustomEvent('locationCleared', { 
+      bubbles: true, 
+      detail: { source: 'TabTripSelector', timestamp: Date.now() } 
+    });
+    document.dispatchEvent(clearEvent);
+    
+    // Store the current time of last clear operation
+    sessionStorage.setItem('lastFormClear', Date.now().toString());
+    
+    // Force a timeout to allow React state updates to propagate
+    setTimeout(() => {
+      // Fetch fresh cab data after clearing
+      reloadCabTypes().catch(err => {
+        console.error("Failed to reload cab types after clearing state:", err);
+      });
+    }, 100);
+  }, []);
+  
   // Function to thoroughly clear all cache data
   const clearAllCacheData = useCallback(() => {
     console.log("Clearing all cached data for trip type change");
@@ -41,22 +107,26 @@ export function TabTripSelector({
     sessionStorage.removeItem('dropLocationObj');
     sessionStorage.removeItem('pickupLocationObj');
     
-    // Force clear all input fields in the DOM
+    // Aggressively clear all input fields in the DOM
     const pickupInput = document.querySelector('input[placeholder*="pickup"], input[placeholder*="Pickup"]') as HTMLInputElement;
     const dropInput = document.querySelector('input[placeholder*="drop"], input[placeholder*="Drop"]') as HTMLInputElement;
     
     if (pickupInput) {
       pickupInput.value = '';
-      // Dispatch input event to ensure React state updates
-      const event = new Event('input', { bubbles: true });
-      pickupInput.dispatchEvent(event);
+      // Dispatch multiple events to ensure React state updates
+      ['input', 'change', 'blur'].forEach(eventType => {
+        const event = new Event(eventType, { bubbles: true });
+        pickupInput.dispatchEvent(event);
+      });
     }
     
     if (dropInput) {
       dropInput.value = '';
-      // Dispatch input event to ensure React state updates
-      const event = new Event('input', { bubbles: true });
-      dropInput.dispatchEvent(event);
+      // Dispatch multiple events to ensure React state updates
+      ['input', 'change', 'blur'].forEach(eventType => {
+        const event = new Event(eventType, { bubbles: true });
+        dropInput.dispatchEvent(event);
+      });
     }
     
     // Clear booking-related data regardless of tab change
@@ -100,6 +170,11 @@ export function TabTripSelector({
     sessionStorage.setItem('tripType', selectedTab);
     sessionStorage.setItem('tripMode', tripMode);
     sessionStorage.setItem('lastCacheClear', Date.now().toString());
+    
+    // Dispatch a custom event to notify other components of the cleared state
+    document.dispatchEvent(new CustomEvent('cacheCleared', { 
+      detail: { tripType: selectedTab } 
+    }));
   }, [selectedTab, tripMode]);
   
   // Clear cache data when tab changes
@@ -107,6 +182,7 @@ export function TabTripSelector({
     // Only clear cache and reload if the tab actually changed
     if (prevTab !== selectedTab) {
       clearAllCacheData();
+      clearAllFormState();
       setPrevTab(selectedTab);
       
       // Notify user of tab change with toast
@@ -142,7 +218,7 @@ export function TabTripSelector({
         if (reloadTimer) clearTimeout(reloadTimer);
       };
     }
-  }, [selectedTab, toast, clearAllCacheData, prevTab, refreshTimer]);
+  }, [selectedTab, toast, clearAllCacheData, prevTab, refreshTimer, clearAllFormState]);
   
   // Function to handle tab change with complete data reset
   const handleTabChange = (value: string) => {
@@ -156,40 +232,22 @@ export function TabTripSelector({
       setRefreshTimer(null);
     }
 
-    // Force all location data to be cleared for a clean state
-    sessionStorage.removeItem('dropLocation');
-    sessionStorage.removeItem('pickupLocation');
-    sessionStorage.removeItem('dropCoordinates');
-    sessionStorage.removeItem('pickupCoordinates');
-    sessionStorage.removeItem('dropLocationObj');
-    sessionStorage.removeItem('pickupLocationObj');
+    // Force intensive clearing of all state and DOM elements
+    clearAllFormState();
+    clearAllCacheData();
     
-    // Important: Physically clear input fields in the DOM to ensure UI is reset
-    const pickupInput = document.querySelector('input[placeholder*="pickup"], input[placeholder*="Pickup"]') as HTMLInputElement;
-    const dropInput = document.querySelector('input[placeholder*="drop"], input[placeholder*="Drop"]') as HTMLInputElement;
-    
-    if (pickupInput) {
-      pickupInput.value = '';
-      // Dispatch input event to ensure React state updates
-      const event = new Event('input', { bubbles: true });
-      pickupInput.dispatchEvent(event);
-    }
-    
-    if (dropInput) {
-      dropInput.value = '';
-      // Dispatch input event to ensure React state updates
-      const event = new Event('input', { bubbles: true });
-      dropInput.dispatchEvent(event);
-    }
-    
-    // Dispatch a manual location cleared event
+    // Dispatch a manual location cleared event to multiple targets
     window.dispatchEvent(new CustomEvent('locationCleared', { detail: { type: 'all' } }));
+    document.dispatchEvent(new CustomEvent('locationCleared', { detail: { type: 'all' } }));
     
     // Force a cache clear regardless of whether it's the same tab or not
     fareService.clearCache();
     
-    // Update the tab
-    onTabChange(value as 'outstation' | 'local' | 'airport' | 'tour');
+    // Update the tab - this needs to happen AFTER all the clearing operations
+    // to ensure React state is updated with clean data
+    setTimeout(() => {
+      onTabChange(value as 'outstation' | 'local' | 'airport' | 'tour');
+    }, 50);
   };
   
   return (

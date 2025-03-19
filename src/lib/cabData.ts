@@ -128,6 +128,17 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
             vehicleData = mapVehicleData(backupData);
             fetchSuccessful = true;
             console.log('Successfully fetched vehicles from backup endpoint 1:', vehicleData.length);
+          } else if (backupData && typeof backupData === 'object') {
+            // Try to extract vehicles from nested structure
+            if (backupData.vehicles && Array.isArray(backupData.vehicles)) {
+              vehicleData = mapVehicleData(backupData.vehicles);
+              fetchSuccessful = true;
+              console.log('Successfully extracted vehicles from nested data structure:', vehicleData.length);
+            } else if (backupData.data && Array.isArray(backupData.data)) {
+              vehicleData = mapVehicleData(backupData.data);
+              fetchSuccessful = true;
+              console.log('Successfully extracted vehicles from data property:', vehicleData.length);
+            }
           }
         } catch (backup1Error) {
           console.error('First backup vehicle API call failed:', backup1Error);
@@ -144,6 +155,17 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
             vehicleData = mapVehicleData(backupData);
             fetchSuccessful = true;
             console.log('Successfully fetched vehicles from backup endpoint 2:', vehicleData.length);
+          } else if (backupData && typeof backupData === 'object') {
+            // Try to extract vehicles from nested structure
+            if (backupData.vehicles && Array.isArray(backupData.vehicles)) {
+              vehicleData = mapVehicleData(backupData.vehicles);
+              fetchSuccessful = true;
+              console.log('Successfully extracted vehicles from nested data structure:', vehicleData.length);
+            } else if (backupData.data && Array.isArray(backupData.data)) {
+              vehicleData = mapVehicleData(backupData.data);
+              fetchSuccessful = true;
+              console.log('Successfully extracted vehicles from data property:', vehicleData.length);
+            }
           }
         } catch (backup2Error) {
           console.error('Second backup vehicle API call failed:', backup2Error);
@@ -208,24 +230,31 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
 
 // Helper function to map vehicle data from different API response formats
 const mapVehicleData = (data: any[]): CabType[] => {
-  return data.map(v => ({
-    id: String(v.id || v.vehicleId || v.vehicle_id || ''),
-    name: String(v.name || 'Unnamed Vehicle'),
-    capacity: Number(v.capacity) || 4,
-    luggageCapacity: Number(v.luggageCapacity || v.luggage_capacity) || 2,
-    price: Number(v.basePrice || v.price || v.base_price) || 4200,
-    pricePerKm: Number(v.pricePerKm || v.price_per_km) || 14,
-    image: v.image || '/cars/sedan.png',
-    amenities: Array.isArray(v.amenities) ? v.amenities : ['AC'],
-    description: v.description || '',
-    ac: v.ac !== undefined ? Boolean(v.ac) : true,
-    nightHaltCharge: Number(v.nightHaltCharge || v.night_halt_charge) || 700,
-    driverAllowance: Number(v.driverAllowance || v.driver_allowance) || 250,
-    isActive: v.isActive !== undefined ? Boolean(v.isActive) : 
+  if (!Array.isArray(data)) {
+    console.warn('Invalid data passed to mapVehicleData, expected array but got:', typeof data);
+    return [];
+  }
+  
+  return data
+    .filter(v => v && typeof v === 'object') // Filter out null or non-object items
+    .map(v => ({
+      id: String(v.id || v.vehicleId || v.vehicle_id || ''),
+      name: String(v.name || 'Unnamed Vehicle'),
+      capacity: Number(v.capacity) || 4,
+      luggageCapacity: Number(v.luggageCapacity || v.luggage_capacity) || 2,
+      price: Number(v.basePrice || v.price || v.base_price) || 4200,
+      pricePerKm: Number(v.pricePerKm || v.price_per_km) || 14,
+      image: v.image || '/cars/sedan.png',
+      amenities: Array.isArray(v.amenities) ? v.amenities : ['AC'],
+      description: v.description || '',
+      ac: v.ac !== undefined ? Boolean(v.ac) : true,
+      nightHaltCharge: Number(v.nightHaltCharge || v.night_halt_charge) || 700,
+      driverAllowance: Number(v.driverAllowance || v.driver_allowance) || 250,
+      isActive: v.isActive !== undefined ? Boolean(v.isActive) : 
               (v.is_active !== undefined ? Boolean(v.is_active) : true),
-    vehicleId: String(v.id || v.vehicleId || v.vehicle_id || ''),
-    basePrice: Number(v.basePrice || v.price || v.base_price) || 4200
-  }));
+      vehicleId: String(v.id || v.vehicleId || v.vehicle_id || ''),
+      basePrice: Number(v.basePrice || v.price || v.base_price) || 4200
+    }));
 };
 
 // Track ongoing reload operations
@@ -238,7 +267,7 @@ export const reloadCabTypes = async (): Promise<CabType[]> => {
     toast.info("Vehicle data refresh already in progress", {
       id: "fare-refresh-in-progress"
     });
-    return cabTypes;
+    return cachedCabTypes || cabTypes;
   }
   
   isReloadingCabTypes = true;
@@ -297,7 +326,7 @@ export const clearFareCache = () => {
 // Helper function to format price
 export const formatPrice = (price: number): string => {
   if (!price || isNaN(price)) {
-    return "Price unavailable";
+    return "₹0"; // Return ₹0 instead of "Price unavailable" for better UI
   }
   return `₹${price.toLocaleString('en-IN')}`;
 };

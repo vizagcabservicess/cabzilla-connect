@@ -126,6 +126,11 @@ const SelectItem = React.forwardRef<
     value: safeValue
   };
   
+  // Add a default key if none is provided to prevent React warnings
+  if (!safeProps.key && safeValue) {
+    safeProps.key = safeValue;
+  }
+  
   return (
     <SelectPrimitive.Item
       ref={ref}
@@ -141,7 +146,7 @@ const SelectItem = React.forwardRef<
         </SelectPrimitive.ItemIndicator>
       </span>
 
-      <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+      <SelectPrimitive.ItemText>{children || safeValue}</SelectPrimitive.ItemText>
     </SelectPrimitive.Item>
   );
 })
