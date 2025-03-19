@@ -128,7 +128,7 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
             vehicleData = mapVehicleData(backupData);
             fetchSuccessful = true;
             console.log('Successfully fetched vehicles from backup endpoint 1:', vehicleData.length);
-          } else if (backupData && typeof backupData === 'object') {
+          } else if (backupData && typeof backupData === 'object' && !Array.isArray(backupData)) {
             // Try to extract vehicles from nested structure
             if (backupData.vehicles && Array.isArray(backupData.vehicles)) {
               vehicleData = mapVehicleData(backupData.vehicles);
@@ -155,7 +155,7 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
             vehicleData = mapVehicleData(backupData);
             fetchSuccessful = true;
             console.log('Successfully fetched vehicles from backup endpoint 2:', vehicleData.length);
-          } else if (backupData && typeof backupData === 'object') {
+          } else if (backupData && typeof backupData === 'object' && !Array.isArray(backupData)) {
             // Try to extract vehicles from nested structure
             if (backupData.vehicles && Array.isArray(backupData.vehicles)) {
               vehicleData = mapVehicleData(backupData.vehicles);
