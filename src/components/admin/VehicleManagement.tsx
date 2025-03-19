@@ -31,6 +31,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { fareAPI } from '@/services/api';
+import { reloadCabTypes } from '@/lib/cabData';
 
 const vehicleFormSchema = z.object({
   vehicleId: z.string().min(1, { message: "Vehicle ID is required" }),
@@ -170,6 +171,16 @@ export function VehicleManagement() {
     
     try {
       setIsLoading(true);
+      
+      // Clear caches to ensure fresh data
+      localStorage.removeItem('cabFares');
+      localStorage.removeItem('tourFares');
+      sessionStorage.removeItem('cabFares');
+      sessionStorage.removeItem('tourFares');
+      sessionStorage.removeItem('calculatedFares');
+      
+      await reloadCabTypes();
+      
       await fareAPI.deleteVehicle(vehicleId);
       
       toast.success("Vehicle deleted successfully");
@@ -183,7 +194,7 @@ export function VehicleManagement() {
     }
   };
   
-  // Handle form submission for updating a vehicle
+  // Handle form submission for updating or adding a vehicle
   const onSubmit = async (values: z.infer<typeof vehicleFormSchema>) => {
     try {
       setIsLoading(true);
@@ -193,12 +204,33 @@ export function VehicleManagement() {
         ? values.amenities.split(',').map(item => item.trim()).filter(item => item) 
         : [];
       
+      // Construct proper vehicle data structure
       const vehicleData = {
-        ...values,
+        vehicleId: values.vehicleId,
+        name: values.name,
+        capacity: values.capacity,
+        luggageCapacity: values.luggageCapacity,
+        ac: values.ac,
+        image: values.image,
         amenities: amenitiesArray,
+        description: values.description || '',
+        isActive: values.isActive,
+        basePrice: values.basePrice,
+        pricePerKm: values.pricePerKm,
+        nightHaltCharge: values.nightHaltCharge,
+        driverAllowance: values.driverAllowance
       };
       
       console.log(`${isAddingNew ? 'Adding' : 'Updating'} vehicle:`, vehicleData);
+      
+      // Clear caches to ensure fresh data
+      localStorage.removeItem('cabFares');
+      localStorage.removeItem('tourFares');
+      sessionStorage.removeItem('cabFares');
+      sessionStorage.removeItem('tourFares');
+      sessionStorage.removeItem('calculatedFares');
+      
+      await reloadCabTypes();
       
       if (isAddingNew) {
         await fareAPI.addVehicle(vehicleData);
