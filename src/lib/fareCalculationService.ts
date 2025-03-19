@@ -5,7 +5,7 @@ import { TripType, TripMode } from './tripTypes';
 import { getLocalPackagePrice } from './packageData';
 import { tourFares } from './tourData';
 
-// Cache for storing fare calculations to reduce recalculations
+// Global cache for storing fare calculations to reduce recalculations
 const fareCache = new Map<string, { expire: number, price: number }>();
 
 // Clear the fare cache (used when refreshing data)
@@ -14,8 +14,24 @@ export const clearFareCache = () => {
   console.log('Fare calculation cache cleared');
 };
 
+// Generate a cache key based on fare calculation parameters
+const generateCacheKey = (params: FareCalculationParams): string => {
+  const { cabType, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate } = params;
+  return `${cabType.id}_${distance}_${tripType}_${tripMode}_${hourlyPackage || ''}_${pickupDate?.getTime() || 0}_${returnDate?.getTime() || 0}`;
+};
+
 // Calculate airport transfer fares
 export const calculateAirportFare = (cabName: string, distance: number): number => {
+  // Create a cache key for airport fares
+  const cacheKey = `airport_${cabName}_${distance}`;
+  
+  // Check if we have a valid cached result
+  const cachedFare = fareCache.get(cacheKey);
+  if (cachedFare && cachedFare.expire > Date.now()) {
+    console.log(`Using cached airport fare for ${cabName}: ₹${cachedFare.price}`);
+    return cachedFare.price;
+  }
+  
   // Default pricing for airport transfers if specific cab not found
   const defaultFare = {
     basePrice: 1000,
@@ -27,17 +43,19 @@ export const calculateAirportFare = (cabName: string, distance: number): number 
   let basePrice = defaultFare.basePrice;
   let pricePerKm = defaultFare.pricePerKm;
   
+  const cabNameLower = cabName.toLowerCase();
+  
   // Adjust pricing based on cab type
-  if (cabName.toLowerCase().includes('sedan')) {
+  if (cabNameLower.includes('sedan')) {
     basePrice = 1200;
     pricePerKm = 14;
-  } else if (cabName.toLowerCase().includes('ertiga') || cabName.toLowerCase().includes('suv')) {
+  } else if (cabNameLower.includes('ertiga') || cabNameLower.includes('suv')) {
     basePrice = 1500;
     pricePerKm = 16;
-  } else if (cabName.toLowerCase().includes('innova')) {
+  } else if (cabNameLower.includes('innova')) {
     basePrice = 1800;
     pricePerKm = 18;
-  } else if (cabName.toLowerCase().includes('tempo') || cabName.toLowerCase().includes('traveller')) {
+  } else if (cabNameLower.includes('tempo') || cabNameLower.includes('traveller')) {
     basePrice = 2500;
     pricePerKm = 22;
   }
@@ -52,6 +70,13 @@ export const calculateAirportFare = (cabName: string, distance: number): number 
   // Add GST (5%)
   fare = Math.round(fare * 1.05);
   
+  // Store in cache (valid for 15 minutes)
+  fareCache.set(cacheKey, {
+    expire: Date.now() + 15 * 60 * 1000,
+    price: fare
+  });
+  
+  console.log(`Calculated airport fare for ${cabName}: ₹${fare}`);
   return fare;
 };
 
@@ -65,12 +90,12 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
   }
 
   // Generate a cache key based on the parameters
-  const cacheKey = `${cabType.id}_${distance}_${tripType}_${tripMode}_${hourlyPackage || ''}_${pickupDate?.getTime() || 0}_${returnDate?.getTime() || 0}`;
+  const cacheKey = generateCacheKey(params);
   
   // Check if we have a valid cached result
   const cachedFare = fareCache.get(cacheKey);
   if (cachedFare && cachedFare.expire > Date.now()) {
-    console.log('Using cached fare calculation:', cachedFare.price);
+    console.log(`Using cached fare calculation for ${cabType.name}: ₹${cachedFare.price}`);
     return cachedFare.price;
   }
   
@@ -83,6 +108,14 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
       // For local trips, use the hourly package pricing
       if (hourlyPackage) {
         fare = getLocalPackagePrice(hourlyPackage, cabType.id);
+        
+        // For distance beyond package limit, add per km charge
+        const packageKm = hourlyPackage === '8hrs-80km' ? 80 : 100;
+        if (distance > packageKm) {
+          const extraKm = distance - packageKm;
+          fare += extraKm * cabType.pricePerKm;
+          console.log(`Added ${extraKm}km extra at ${cabType.pricePerKm}/km = ${extraKm * cabType.pricePerKm}`);
+        }
         
         // Add GST (5%)
         fare = Math.round(fare * 1.05);
@@ -149,21 +182,13 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
       // Add GST (5%)
       fare = Math.round(fare * 1.05);
     } else if (tripType === 'airport') {
-      // Airport transfer calculation (simplified)
-      fare = Math.round(cabType.price * 0.7); // 70% of base fare
-      fare += Math.round(distance * cabType.pricePerKm);
-      
-      // Airport fee (fixed amount)
-      const airportFee = 150;
-      fare += airportFee;
-      
-      // Add GST (5%)
-      fare = Math.round(fare * 1.05);
+      // Use the dedicated airport fare calculation function
+      return calculateAirportFare(cabType.name, distance);
     }
     
-    // Store in cache (valid for 5 minutes)
+    // Store in cache (valid for 15 minutes)
     fareCache.set(cacheKey, {
-      expire: Date.now() + 5 * 60 * 1000,
+      expire: Date.now() + 15 * 60 * 1000,
       price: fare
     });
     

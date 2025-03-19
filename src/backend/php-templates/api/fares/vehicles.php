@@ -116,7 +116,14 @@ try {
             }
             
             logError("Vehicle pricing updated", ['vehicleType' => $vehicleType, 'basePrice' => $basePrice, 'pricePerKm' => $pricePerKm]);
-            echo json_encode(['status' => 'success', 'message' => 'Vehicle pricing updated successfully', 'vehicleType' => $vehicleType, 'timestamp' => time()]);
+            echo json_encode([
+                'status' => 'success', 
+                'message' => 'Vehicle pricing updated successfully', 
+                'vehicleType' => $vehicleType, 
+                'basePrice' => $basePrice,
+                'pricePerKm' => $pricePerKm,
+                'timestamp' => time()
+            ]);
         } else {
             // Insert new record
             $insertStmt = $conn->prepare("
@@ -135,7 +142,14 @@ try {
             }
             
             logError("Vehicle pricing created", ['vehicleType' => $vehicleType, 'basePrice' => $basePrice, 'pricePerKm' => $pricePerKm]);
-            echo json_encode(['status' => 'success', 'message' => 'Vehicle pricing created successfully', 'vehicleType' => $vehicleType, 'timestamp' => time()]);
+            echo json_encode([
+                'status' => 'success', 
+                'message' => 'Vehicle pricing created successfully', 
+                'vehicleType' => $vehicleType, 
+                'basePrice' => $basePrice,
+                'pricePerKm' => $pricePerKm,
+                'timestamp' => time()
+            ]);
         }
         exit;
     }
@@ -145,7 +159,10 @@ try {
         // Check if we should include inactive vehicles (admin only)
         $includeInactive = isset($_GET['includeInactive']) && $_GET['includeInactive'] === 'true';
         
-        logError("vehicles.php GET request", ['includeInactive' => $includeInactive]);
+        // Add cache busting parameter
+        $cacheBuster = isset($_GET['_t']) ? $_GET['_t'] : time();
+        
+        logError("vehicles.php GET request", ['includeInactive' => $includeInactive, 'cacheBuster' => $cacheBuster]);
         
         // Build query to get all vehicle types with pricing info
         $query = "
