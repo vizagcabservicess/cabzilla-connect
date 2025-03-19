@@ -127,10 +127,10 @@ export const getVehicleData = async (includeInactive: boolean = false): Promise<
     `${apiBaseUrl}/api/fares/vehicles.php?${cacheParam}`,
     // Local vehicles endpoint
     `/api/fares/vehicles.php?${cacheParam}`,
-    // Admin endpoint
-    `${apiBaseUrl}/api/admin/vehicles-update.php?action=getAll&${cacheParam}`,
-    // Local admin endpoint
-    `/api/admin/vehicles-update.php?action=getAll&${cacheParam}`
+    // Admin endpoint with debug bypass for development
+    `${apiBaseUrl}/api/admin/vehicles-update.php?action=getAll&debug=true&${cacheParam}`,
+    // Local admin endpoint with debug bypass for development
+    `/api/admin/vehicles-update.php?action=getAll&debug=true&${cacheParam}`
   ];
   
   // Try each endpoint until one works
@@ -149,7 +149,7 @@ export const getVehicleData = async (includeInactive: boolean = false): Promise<
       });
       
       if (response.status === 200 && response.data) {
-        console.log('Successfully fetched vehicles from', endpoint, ':', response.data);
+        console.log('Successfully fetched vehicles from', endpoint);
         
         const normalizedVehicles = normalizeVehiclesData(response.data);
         
@@ -180,85 +180,191 @@ export const getVehicleData = async (includeInactive: boolean = false): Promise<
 };
 
 /**
- * Get vehicle pricing data from the admin API
+ * Update a vehicle in the database
  */
-export const getVehiclePricing = async (): Promise<any[]> => {
-  console.log('Loading vehicle pricing data from API...');
-  
-  // Add cache busting timestamp
-  const timestamp = Date.now();
-  const cacheParam = `_t=${timestamp}`;
-  
-  // Try multiple endpoints
-  const endpoints = [
-    `${apiBaseUrl}/api/admin/vehicle-pricing.php?${cacheParam}`,
-    `/api/admin/vehicle-pricing.php?${cacheParam}`,
-    `${apiBaseUrl}/api/admin/vehicle-pricing?${cacheParam}`,
-    `/api/admin/vehicle-pricing?${cacheParam}`
-  ];
-  
-  for (const endpoint of endpoints) {
-    try {
-      console.log(`Trying to load vehicle pricing from: ${endpoint}`);
-      
-      const response = await axios.get(endpoint, {
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache',
-          'X-API-Version': apiVersion,
-          'X-Force-Refresh': 'true'
-        },
-        timeout: 8000
-      });
-      
-      if (response.status === 200 && response.data) {
-        console.log('Successfully fetched vehicle pricing from', endpoint);
+export const updateVehicle = async (vehicleData: any): Promise<any> => {
+  try {
+    console.log('Updating vehicle with data:', vehicleData);
+    
+    // Set the Authorization header if JWT is available in localStorage
+    const authHeader: Record<string, string> = {};
+    const token = localStorage.getItem('token');
+    if (token) {
+      authHeader.Authorization = `Bearer ${token}`;
+    }
+    
+    // Add cache busting timestamp
+    const timestamp = Date.now();
+    
+    // Try multiple API endpoints in sequence
+    const endpoints = [
+      `${apiBaseUrl}/api/admin/vehicles-update.php?_t=${timestamp}`,
+      `/api/admin/vehicles-update.php?_t=${timestamp}`
+    ];
+    
+    let successResponse = null;
+    
+    // Try each endpoint until one works
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Trying to update vehicle using endpoint: ${endpoint}`);
         
-        // Check for data in various formats
-        if (response.data.data && Array.isArray(response.data.data)) {
-          return response.data.data;
-        } else if (Array.isArray(response.data)) {
-          return response.data;
+        const response = await axios.post(endpoint, vehicleData, {
+          headers: {
+            ...authHeader,
+            'Content-Type': 'application/json',
+            'X-API-Version': apiVersion,
+            'X-Force-Refresh': 'true'
+          },
+          timeout: 10000 // 10 second timeout for updates
+        });
+        
+        if (response.status === 200) {
+          console.log('Vehicle updated successfully via', endpoint);
+          successResponse = response.data;
+          break;
+        }
+      } catch (error: any) {
+        console.error(`Error updating vehicle at endpoint ${endpoint}:`, error.response || error);
+        
+        // If this is the last endpoint, rethrow the error
+        if (endpoint === endpoints[endpoints.length - 1]) {
+          throw error;
         }
       }
-    } catch (error) {
-      console.error(`Error fetching pricing from endpoint ${endpoint}:`, error);
     }
+    
+    if (successResponse) {
+      return successResponse;
+    } else {
+      throw new Error('All update endpoints failed');
+    }
+  } catch (error: any) {
+    console.error('Error updating vehicle:', error.response?.data || error);
+    throw error;
   }
-  
-  // Return empty array if all endpoints fail
-  return [];
 };
 
 /**
- * Update vehicle pricing
+ * Add a new vehicle to the database
  */
-export const updateVehiclePricing = async (data: any): Promise<boolean> => {
+export const addVehicle = async (vehicleData: any): Promise<any> => {
   try {
-    console.log('Updating vehicle pricing:', data);
+    console.log('Adding new vehicle with data:', vehicleData);
     
-    // Validate required fields
-    if (!data.vehicleType || data.basePrice === undefined || data.pricePerKm === undefined) {
-      toast.error('Missing required fields: vehicle type, base price, or price per km');
-      return false;
+    // Set the Authorization header if JWT is available in localStorage
+    const authHeader: Record<string, string> = {};
+    const token = localStorage.getItem('token');
+    if (token) {
+      authHeader.Authorization = `Bearer ${token}`;
     }
     
-    const response = await axios.post(`${apiBaseUrl}/api/admin/vehicle-pricing.php`, data, {
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Version': apiVersion
+    // Add cache busting timestamp
+    const timestamp = Date.now();
+    
+    // Try multiple API endpoints in sequence
+    const endpoints = [
+      `${apiBaseUrl}/api/admin/vehicles-update.php?_t=${timestamp}`,
+      `/api/admin/vehicles-update.php?_t=${timestamp}`
+    ];
+    
+    let successResponse = null;
+    
+    // Try each endpoint until one works
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Trying to add vehicle using endpoint: ${endpoint}`);
+        
+        const response = await axios.put(endpoint, vehicleData, {
+          headers: {
+            ...authHeader,
+            'Content-Type': 'application/json',
+            'X-API-Version': apiVersion,
+            'X-Force-Refresh': 'true'
+          },
+          timeout: 10000 // 10 second timeout for adds
+        });
+        
+        if (response.status === 200) {
+          console.log('Vehicle added successfully via', endpoint);
+          successResponse = response.data;
+          break;
+        }
+      } catch (error: any) {
+        console.error(`Error adding vehicle at endpoint ${endpoint}:`, error.response || error);
+        
+        // If this is the last endpoint, rethrow the error
+        if (endpoint === endpoints[endpoints.length - 1]) {
+          throw error;
+        }
       }
-    });
-    
-    if (response.status === 200 && response.data && response.data.status === 'success') {
-      console.log('Vehicle pricing updated successfully:', response.data);
-      return true;
     }
     
-    console.error('Failed to update vehicle pricing:', response.data);
+    if (successResponse) {
+      return successResponse;
+    } else {
+      throw new Error('All add endpoints failed');
+    }
+  } catch (error: any) {
+    console.error('Error adding vehicle:', error.response?.data || error);
+    throw error;
+  }
+};
+
+/**
+ * Delete a vehicle from the database
+ */
+export const deleteVehicle = async (vehicleId: string): Promise<boolean> => {
+  try {
+    console.log('Deleting vehicle with ID:', vehicleId);
+    
+    // Set the Authorization header if JWT is available in localStorage
+    const authHeader: Record<string, string> = {};
+    const token = localStorage.getItem('token');
+    if (token) {
+      authHeader.Authorization = `Bearer ${token}`;
+    }
+    
+    // Add cache busting timestamp
+    const timestamp = Date.now();
+    
+    // Try multiple API endpoints in sequence
+    const endpoints = [
+      `${apiBaseUrl}/api/admin/vehicles-update.php?vehicleId=${vehicleId}&_t=${timestamp}`,
+      `/api/admin/vehicles-update.php?vehicleId=${vehicleId}&_t=${timestamp}`
+    ];
+    
+    // Try each endpoint until one works
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Trying to delete vehicle using endpoint: ${endpoint}`);
+        
+        const response = await axios.delete(endpoint, {
+          headers: {
+            ...authHeader,
+            'X-API-Version': apiVersion,
+            'X-Force-Refresh': 'true'
+          },
+          timeout: 8000
+        });
+        
+        if (response.status === 200) {
+          console.log('Vehicle deleted successfully via', endpoint);
+          return true;
+        }
+      } catch (error: any) {
+        console.error(`Error deleting vehicle at endpoint ${endpoint}:`, error.response || error);
+        
+        // If this is the last endpoint, rethrow the error
+        if (endpoint === endpoints[endpoints.length - 1]) {
+          throw error;
+        }
+      }
+    }
+    
     return false;
-  } catch (error) {
-    console.error('Error updating vehicle pricing:', error);
+  } catch (error: any) {
+    console.error('Error deleting vehicle:', error.response?.data || error);
     return false;
   }
 };

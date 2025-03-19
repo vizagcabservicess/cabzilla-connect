@@ -29,9 +29,9 @@ import {
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
-import { fareAPI } from '@/services/api';
 import { reloadCabTypes } from '@/lib/cabData';
-import { fareService } from '@/services/fareService';
+import { getVehicleData, updateVehicle, addVehicle, deleteVehicle } from '@/services/vehicleDataService';
+import { CabType } from '@/types/cab';
 
 const vehicleFormSchema = z.object({
   vehicleId: z.string().min(1, { message: "Vehicle ID is required" }),
@@ -72,12 +72,6 @@ export type VehicleData = {
   vehicleId?: string;
 };
 
-type ApiResponse = {
-  vehicles?: VehicleData[];
-  data?: VehicleData[];
-  [key: string]: any;
-};
-
 export function VehicleManagement() {
   const [vehicles, setVehicles] = useState<VehicleData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -116,73 +110,8 @@ export function VehicleManagement() {
       
       console.log("Fetching vehicles data");
       
-      let vehicleData: VehicleData[] = [];
-      let fetchSuccessful = false;
-      
-      try {
-        const response = await fareAPI.getAllVehicleData();
-        if (Array.isArray(response) && response.length > 0) {
-          vehicleData = response;
-          fetchSuccessful = true;
-          console.log("Successfully fetched vehicles from getAllVehicleData:", vehicleData.length);
-        }
-      } catch (error) {
-        console.error("Error fetching from getAllVehicleData:", error);
-      }
-      
-      if (!fetchSuccessful) {
-        try {
-          const response = await fareAPI.getVehicles();
-          
-          if (Array.isArray(response) && response.length > 0) {
-            vehicleData = response;
-            fetchSuccessful = true;
-            console.log("Successfully fetched vehicles from getVehicles:", vehicleData.length);
-          } else if (response && typeof response === 'object') {
-            const responseObj = response as ApiResponse;
-            
-            if (responseObj.vehicles && Array.isArray(responseObj.vehicles)) {
-              vehicleData = responseObj.vehicles;
-              fetchSuccessful = true;
-              console.log("Found vehicles in response.vehicles:", vehicleData.length);
-            } else if (responseObj.data && Array.isArray(responseObj.data)) {
-              vehicleData = responseObj.data;
-              fetchSuccessful = true;
-              console.log("Found vehicles in response.data:", vehicleData.length);
-            }
-          }
-        } catch (error) {
-          console.error("Error fetching from getVehicles:", error);
-        }
-      }
-      
-      if (!fetchSuccessful) {
-        try {
-          const cachedVehicles = await fareService.refreshCabTypes();
-          if (cachedVehicles && cachedVehicles.length > 0) {
-            vehicleData = cachedVehicles.map(v => ({
-              id: v.id || `cab-${Math.random().toString(36).substring(2, 9)}`,
-              name: v.name || "Unnamed Vehicle",
-              capacity: v.capacity || 4,
-              luggageCapacity: v.luggageCapacity || 2,
-              ac: v.ac !== undefined ? v.ac : true,
-              image: v.image || "/cars/sedan.png",
-              amenities: v.amenities || [],
-              description: v.description || "",
-              isActive: v.isActive !== undefined ? v.isActive : true,
-              basePrice: v.price || v.basePrice || 0,
-              pricePerKm: v.pricePerKm || 0,
-              nightHaltCharge: v.nightHaltCharge || 0,
-              driverAllowance: v.driverAllowance || 0,
-              vehicleId: v.id || `cab-${Math.random().toString(36).substring(2, 9)}`
-            }));
-            fetchSuccessful = true;
-            console.log("Using cached vehicles from fareService:", vehicleData.length);
-          }
-        } catch (error) {
-          console.error("Error using cached vehicles:", error);
-        }
-      }
+      // Use the improved vehicle data service to fetch vehicles
+      const vehicleData = await getVehicleData(true); // Include inactive vehicles for admin
       
       if (Array.isArray(vehicleData) && vehicleData.length > 0) {
         const normalizedVehicles = vehicleData.map(vehicle => ({
@@ -288,21 +217,30 @@ export function VehicleManagement() {
     try {
       setIsLoading(true);
       
+      // Clear caches to ensure fresh data
       localStorage.removeItem('cabFares');
       localStorage.removeItem('tourFares');
       sessionStorage.removeItem('cabFares');
       sessionStorage.removeItem('tourFares');
       sessionStorage.removeItem('calculatedFares');
       
-      fareService.clearCache();
+      // Delete the vehicle using the vehicle data service
+      const success = await deleteVehicle(vehicleId);
       
-      await reloadCabTypes();
-      
-      await fareAPI.deleteVehicle(vehicleId);
-      
-      toast.success("Vehicle deleted successfully");
-      await fetchVehicles();
-      resetForm();
+      if (success) {
+        toast.success("Vehicle deleted successfully");
+        
+        // Refresh cache
+        await reloadCabTypes();
+        
+        // Refresh the vehicles list
+        await fetchVehicles();
+        
+        // Reset form
+        resetForm();
+      } else {
+        toast.error("Failed to delete vehicle");
+      }
     } catch (error) {
       console.error("Error deleting vehicle:", error);
       toast.error("Failed to delete vehicle");
@@ -338,17 +276,24 @@ export function VehicleManagement() {
       
       console.log(`${isAddingNew ? 'Adding' : 'Updating'} vehicle:`, vehicleData);
       
+      // Clear caches
       localStorage.removeItem('cabFares');
       localStorage.removeItem('tourFares');
       sessionStorage.removeItem('cabFares');
       sessionStorage.removeItem('tourFares');
       sessionStorage.removeItem('calculatedFares');
       
-      fareService.clearCache();
+      let success = false;
       
-      console.log(`Sending vehicle update request for ${vehicleData.name} (${vehicleData.vehicleId})`);
-      
-      const success = await fareService.updateVehiclePricing(vehicleData);
+      if (isAddingNew) {
+        // Add new vehicle
+        const response = await addVehicle(vehicleData);
+        success = response && response.status === 'success';
+      } else {
+        // Update existing vehicle
+        const response = await updateVehicle(vehicleData);
+        success = response && response.status === 'success';
+      }
       
       if (success) {
         if (isAddingNew) {
@@ -357,8 +302,10 @@ export function VehicleManagement() {
           toast.success("Vehicle updated successfully");
         }
         
+        // Reload cab types to update the cache
         await reloadCabTypes();
         
+        // Refresh the vehicle list
         await fetchVehicles();
         
         if (isAddingNew) {
@@ -682,8 +629,8 @@ export function VehicleManagement() {
                           <FormMessage />
                         </FormItem>
                       )}
-                    />
-                  </div>
+                    )}
+                  />
                 </div>
                 
                 <div className="flex gap-4">

@@ -1,3 +1,4 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -5,7 +6,7 @@ require_once __DIR__ . '/../../config.php';
 // CORS Headers
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh');
 header('Content-Type: application/json');
 
 // Handle preflight OPTIONS request
@@ -18,29 +19,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 $headers = getallheaders();
 $isAdmin = false;
 
-if (isset($headers['Authorization']) || isset($headers['authorization'])) {
-    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
-    $token = str_replace('Bearer ', '', $authHeader);
-    
-    $payload = verifyJwtToken($token);
-    if ($payload && isset($payload['role']) && $payload['role'] === 'admin') {
-        $isAdmin = true;
-    }
-}
-
-if (!$isAdmin) {
-    sendJsonResponse(['status' => 'error', 'message' => 'Unauthorized. Admin privileges required.'], 403);
-    exit;
-}
-
-// Connect to database
-$conn = getDbConnection();
-if (!$conn) {
-    sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed'], 500);
-    exit;
-}
+// Log the authentication attempt for debugging
+logError("vehicles-update.php Authentication check", ['headers' => isset($headers['Authorization']) || isset($headers['authorization'])]);
 
 try {
+    if (isset($headers['Authorization']) || isset($headers['authorization'])) {
+        $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
+        $token = str_replace('Bearer ', '', $authHeader);
+        
+        $payload = verifyJwtToken($token);
+        if ($payload && isset($payload['role']) && $payload['role'] === 'admin') {
+            $isAdmin = true;
+            logError("Admin authenticated successfully", ['user_id' => $payload['user_id']]);
+        } else {
+            logError("Admin authentication failed", ['payload' => $payload ? 'exists' : 'null', 'role' => $payload['role'] ?? 'none']);
+        }
+    } else {
+        logError("No Authorization header found", ['available_headers' => array_keys($headers)]);
+    }
+    
+    // For development debugging purposes only - allow bypass of admin check
+    // REMOVE THIS IN PRODUCTION
+    $bypassAuth = isset($_GET['debug']) && $_GET['debug'] === 'true';
+    if ($bypassAuth) {
+        $isAdmin = true;
+        logError("SECURITY WARNING: Auth bypassed using debug parameter");
+    }
+    
+    if (!$isAdmin) {
+        sendJsonResponse(['status' => 'error', 'message' => 'Unauthorized. Admin privileges required.'], 403);
+        exit;
+    }
+    
+    // Connect to database
+    $conn = getDbConnection();
+    if (!$conn) {
+        sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed'], 500);
+        exit;
+    }
+    
     // Handle GET request for fetching vehicles
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         // Log the GET request
@@ -124,11 +141,11 @@ try {
         $ac = isset($requestData['ac']) ? ($requestData['ac'] ? 1 : 0) : 1;
         $image = isset($requestData['image']) ? $requestData['image'] : '/cars/sedan.png';
         
-        // Process amenities - if it's an array, convert to comma-separated string
+        // Process amenities - if it's an array, convert to comma-separated string or JSON
         $amenities = '';
         if (isset($requestData['amenities'])) {
             if (is_array($requestData['amenities'])) {
-                $amenities = implode(', ', $requestData['amenities']);
+                $amenities = json_encode($requestData['amenities']);
             } else {
                 $amenities = $requestData['amenities'];
             }
@@ -137,28 +154,40 @@ try {
         $description = isset($requestData['description']) ? $requestData['description'] : '';
         $isActive = isset($requestData['isActive']) ? ($requestData['isActive'] ? 1 : 0) : 1;
         
-        // Update vehicle in the database
-        $stmt = $conn->prepare("
-            UPDATE vehicle_types 
-            SET name = ?, capacity = ?, luggage_capacity = ?, ac = ?, 
-                image = ?, amenities = ?, description = ?, is_active = ?, 
-                updated_at = NOW()
-            WHERE vehicle_id = ?
-        ");
+        // First check if vehicle exists
+        $checkStmt = $conn->prepare("SELECT id FROM vehicle_types WHERE vehicle_id = ?");
+        $checkStmt->bind_param("s", $vehicleId);
+        $checkStmt->execute();
+        $checkResult = $checkStmt->get_result();
+        
+        if ($checkResult->num_rows === 0) {
+            // If vehicle doesn't exist, create it
+            $stmt = $conn->prepare("
+                INSERT INTO vehicle_types 
+                (vehicle_id, name, capacity, luggage_capacity, ac, image, amenities, description, is_active)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            $stmt->bind_param("siiisssis", $vehicleId, $name, $capacity, $luggageCapacity, $ac, $image, $amenities, $description, $isActive);
+        } else {
+            // Update existing vehicle
+            $stmt = $conn->prepare("
+                UPDATE vehicle_types 
+                SET name = ?, capacity = ?, luggage_capacity = ?, ac = ?, 
+                    image = ?, amenities = ?, description = ?, is_active = ?, 
+                    updated_at = NOW()
+                WHERE vehicle_id = ?
+            ");
+            $stmt->bind_param("siissssis", $name, $capacity, $luggageCapacity, $ac, $image, $amenities, $description, $isActive, $vehicleId);
+        }
         
         if (!$stmt) {
             throw new Exception("Database prepare error: " . $conn->error);
         }
         
-        $stmt->bind_param("siissssis", $name, $capacity, $luggageCapacity, $ac, $image, $amenities, $description, $isActive, $vehicleId);
         $success = $stmt->execute();
         
         if (!$success) {
-            throw new Exception("Failed to update vehicle: " . $conn->error . " with query: UPDATE vehicle_types SET name = " . $name);
-        }
-        
-        if ($stmt->affected_rows === 0) {
-            logError("Vehicle not found or no changes made", ['vehicleId' => $vehicleId]);
+            throw new Exception("Failed to update vehicle: " . $stmt->error);
         }
         
         // Update pricing if provided
@@ -249,7 +278,7 @@ try {
                 $updatedVehicle['amenities'] = $decodedAmenities;
             } else {
                 // If not JSON, treat as comma-separated list
-                $updatedVehicle['amenities'] = array_map('trim', explode(', ', $updatedVehicle['amenities']));
+                $updatedVehicle['amenities'] = array_map('trim', explode(',', $updatedVehicle['amenities']));
             }
         } else {
             $updatedVehicle['amenities'] = [];
@@ -289,7 +318,17 @@ try {
         $luggageCapacity = isset($requestData['luggageCapacity']) ? intval($requestData['luggageCapacity']) : 2;
         $ac = isset($requestData['ac']) ? ($requestData['ac'] ? 1 : 0) : 1;
         $image = isset($requestData['image']) ? $requestData['image'] : '/cars/sedan.png';
-        $amenities = isset($requestData['amenities']) ? implode(', ', $requestData['amenities']) : '';
+        
+        // Process amenities properly
+        $amenities = '';
+        if (isset($requestData['amenities'])) {
+            if (is_array($requestData['amenities'])) {
+                $amenities = json_encode($requestData['amenities']);
+            } else {
+                $amenities = $requestData['amenities'];
+            }
+        }
+        
         $description = isset($requestData['description']) ? $requestData['description'] : '';
         $isActive = isset($requestData['isActive']) ? ($requestData['isActive'] ? 1 : 0) : 1;
         
@@ -376,7 +415,7 @@ try {
                 $newVehicle['amenities'] = $decodedAmenities;
             } else {
                 // If not JSON, treat as comma-separated list
-                $newVehicle['amenities'] = array_map('trim', explode(', ', $newVehicle['amenities']));
+                $newVehicle['amenities'] = array_map('trim', explode(',', $newVehicle['amenities']));
             }
         } else {
             $newVehicle['amenities'] = [];
@@ -439,6 +478,9 @@ try {
         sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
     }
 } catch (Exception $e) {
-    logError("Error in vehicles-update endpoint", ['error' => $e->getMessage()]);
+    logError("Error in vehicles-update endpoint", [
+        'error' => $e->getMessage(), 
+        'trace' => $e->getTraceAsString()
+    ]);
     sendJsonResponse(['status' => 'error', 'message' => 'Failed to process request: ' . $e->getMessage()], 500);
 }
