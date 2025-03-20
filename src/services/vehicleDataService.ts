@@ -12,7 +12,7 @@ const RETRY_DELAY = 1000; // 1 second
 const vehicleCache = {
   timestamp: 0,
   data: [] as any[],
-  expiresIn: 5 * 60 * 1000, // 5 minutes cache validity
+  expiresIn: 2 * 60 * 1000, // 2 minutes cache validity (reduced for more frequent refreshes)
 };
 
 // Default vehicles as fallback
@@ -23,7 +23,14 @@ const defaultVehicles = [
     capacity: 4,
     luggageCapacity: 2,
     price: 4200,
-    pricePerKm: 14
+    pricePerKm: 14,
+    nightHaltCharge: 700,
+    driverAllowance: 250,
+    hr8km80Price: 1800,
+    hr10km100Price: 2500,
+    extraKmRate: 16,
+    extraHourRate: 150,
+    airportFee: 200
   },
   {
     id: 'ertiga',
@@ -31,7 +38,14 @@ const defaultVehicles = [
     capacity: 6,
     luggageCapacity: 3,
     price: 5400,
-    pricePerKm: 18
+    pricePerKm: 18,
+    nightHaltCharge: 800, 
+    driverAllowance: 250,
+    hr8km80Price: 2300,
+    hr10km100Price: 2800,
+    extraKmRate: 20,
+    extraHourRate: 200,
+    airportFee: 250
   },
   {
     id: 'innova_crysta',
@@ -39,27 +53,75 @@ const defaultVehicles = [
     capacity: 7,
     luggageCapacity: 4,
     price: 6000,
-    pricePerKm: 20
+    pricePerKm: 20,
+    nightHaltCharge: 1000,
+    driverAllowance: 300,
+    hr8km80Price: 2600,
+    hr10km100Price: 3200,
+    extraKmRate: 22,
+    extraHourRate: 250,
+    airportFee: 300
   }
 ];
 
 // Helper function to add delay
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Helper function to perform API requests with retry logic
-const fetchWithRetry = async (url: string, options: any = {}, retries = MAX_RETRIES): Promise<any> => {
-  try {
-    console.log(`Attempting to fetch: ${url} (Attempts left: ${retries})`);
-    const response = await axios(url, options);
-    return response.data;
-  } catch (error: any) {
-    if (retries > 0 && error.response?.status >= 500) {
-      console.log(`Request failed, retrying in ${RETRY_DELAY}ms... (${retries} attempts left)`);
-      await delay(RETRY_DELAY);
-      return fetchWithRetry(url, options, retries - 1);
+// Array of potential API endpoints to try
+const vehicleEndpoints = [
+  // Primary endpoints
+  (timestamp: number) => `${API_BASE_URL}/api/admin/vehicle-pricing.php?_t=${timestamp}`,
+  (timestamp: number) => `/api/admin/vehicle-pricing?_t=${timestamp}`,
+  // Fallback endpoints
+  (timestamp: number) => `${API_BASE_URL}/api/admin/vehicles-update.php?action=getAll&_t=${timestamp}`,
+  (timestamp: number) => `/api/admin/vehicles-update?action=getAll&_t=${timestamp}`,
+  (timestamp: number) => `${API_BASE_URL}/api/fares/vehicles.php?_t=${timestamp}`,
+  (timestamp: number) => `/api/fares/vehicles.php?_t=${timestamp}`
+];
+
+// Helper function to attempt multiple API endpoints in sequence
+const tryMultipleEndpoints = async (endpointFunctions: ((timestamp: number) => string)[]): Promise<any> => {
+  const timestamp = Date.now();
+  const errors: any[] = [];
+  
+  for (let i = 0; i < endpointFunctions.length; i++) {
+    const endpoint = endpointFunctions[i](timestamp);
+    console.log(`Attempting to fetch vehicles from endpoint ${i+1}/${endpointFunctions.length}: ${endpoint}`);
+    
+    try {
+      const response = await axios.get(endpoint, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          'X-API-Version': API_VERSION,
+          'X-Force-Refresh': 'true'
+        },
+        timeout: 15000 // 15 seconds
+      });
+      
+      // Check if response is valid
+      if (response.status === 200) {
+        // Different APIs might return data in different formats
+        if (Array.isArray(response.data)) {
+          return response.data;
+        } else if (response.data?.vehicles && Array.isArray(response.data.vehicles)) {
+          return response.data.vehicles;
+        } else if (response.data?.data && Array.isArray(response.data.data)) {
+          return response.data.data;
+        }
+      }
+    } catch (error) {
+      console.warn(`Error fetching from endpoint ${i+1}: ${endpoint}`, error);
+      errors.push(error);
+      
+      // Add delay before trying next endpoint
+      await delay(500);
     }
-    throw error;
   }
+  
+  // If we reached here, all endpoints failed
+  throw new Error(`All endpoints failed. Last error: ${errors[errors.length - 1]?.message || 'Unknown error'}`);
 };
 
 /**
@@ -70,7 +132,7 @@ export const getVehicleTypes = async (includeInactive = false): Promise<{id: str
     // Check cache first
     const now = Date.now();
     if (vehicleCache.data.length > 0 && now - vehicleCache.timestamp < vehicleCache.expiresIn) {
-      console.log('Using cached vehicle data');
+      console.log('Using cached vehicle data for types');
       const cachedVehicles = vehicleCache.data;
       return cachedVehicles.map(vehicle => ({
         id: vehicle.id || vehicle.vehicleId || '', 
@@ -82,55 +144,31 @@ export const getVehicleTypes = async (includeInactive = false): Promise<{id: str
     localStorage.removeItem('cabTypes');
     localStorage.removeItem('vehicleTypes');
     
-    // Add cache busting timestamp
-    const timestamp = Date.now();
-    
-    // Try to get vehicle types directly from the pricing endpoint which should have all vehicles
+    // Try to get vehicle types from any endpoint that works
     try {
-      // First try the vehicle-pricing.php endpoint
-      const endpoint = `${API_BASE_URL}/api/admin/vehicle-pricing.php?_t=${timestamp}`;
-      console.log(`Attempting to load vehicles from pricing endpoint: ${endpoint}`);
+      const vehicles = await tryMultipleEndpoints(vehicleEndpoints);
       
-      const response = await fetchWithRetry(endpoint, {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-          'X-API-Version': API_VERSION,
-          'X-Force-Refresh': 'true'
-        },
-        timeout: 12000
-      });
-      
-      if (Array.isArray(response) && response.length > 0) {
-        console.log(`Loaded ${response.length} vehicles from pricing endpoint`);
+      if (Array.isArray(vehicles) && vehicles.length > 0) {
+        console.log(`Retrieved ${vehicles.length} vehicles for types`);
         
-        // Update the cache
-        vehicleCache.data = response;
+        // Update cache
+        vehicleCache.data = vehicles;
         vehicleCache.timestamp = now;
         
-        const vehiclesList = response.map((vehicle: any) => ({
-          id: vehicle.id || vehicle.vehicleId,
-          name: vehicle.name || vehicle.vehicleType || vehicle.id || 'Unknown'
+        return vehicles.map(vehicle => ({
+          id: vehicle.id || vehicle.vehicleId || '', 
+          name: vehicle.name || vehicle.id || 'Unknown'
         }));
-        
-        return vehiclesList;
       }
     } catch (error) {
-      console.warn("Error loading from pricing endpoint, trying fallback:", error);
+      console.warn("All endpoints failed for vehicle types:", error);
     }
     
-    // If direct request failed, use the general vehicle data endpoint
-    const vehicles = await getVehicleData(includeInactive);
-    
-    const vehiclesList = vehicles.map(vehicle => ({
-      id: vehicle.id || vehicle.vehicleId || '', 
-      name: vehicle.name || vehicle.id || 'Unknown'
+    console.warn('No data returned from any endpoint, using default vehicles');
+    return defaultVehicles.map(vehicle => ({
+      id: vehicle.id,
+      name: vehicle.name || vehicle.id
     }));
-    
-    console.log('Available vehicle types for selection:', vehiclesList);
-    
-    return vehiclesList;
   } catch (error) {
     console.error('Error getting vehicle types:', error);
     
@@ -151,70 +189,57 @@ export const getVehicleData = async (includeInactive = false): Promise<any[]> =>
     const now = Date.now();
     if (vehicleCache.data.length > 0 && now - vehicleCache.timestamp < vehicleCache.expiresIn) {
       console.log('Using cached vehicle data');
-      return vehicleCache.data;
+      const cachedVehicles = vehicleCache.data;
+      
+      // Filter out inactive vehicles if needed
+      if (!includeInactive) {
+        return cachedVehicles.filter(v => v.isActive !== false);
+      }
+      
+      return cachedVehicles;
     }
     
-    const timestamp = Date.now();
-    const endpoint = `${API_BASE_URL}/api/admin/vehicle-pricing.php?_t=${timestamp}`;
-    
-    console.log(`Fetching vehicle data from: ${endpoint}`);
-    
     try {
-      const response = await fetchWithRetry(endpoint, {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-          'X-API-Version': API_VERSION,
-          'X-Force-Refresh': 'true'
-        },
-        timeout: 12000
-      });
+      const vehicles = await tryMultipleEndpoints(vehicleEndpoints);
       
-      if (Array.isArray(response) && response.length > 0) {
-        console.log(`Retrieved ${response.length} vehicles`);
+      if (Array.isArray(vehicles) && vehicles.length > 0) {
+        console.log(`Successfully fetched ${vehicles.length} vehicles`);
+        
+        // Normalize all vehicles to have consistent property names
+        const normalizedVehicles = vehicles.map(vehicle => ({
+          id: vehicle.id || vehicle.vehicleId || vehicle.vehicle_id || '',
+          vehicleId: vehicle.id || vehicle.vehicleId || vehicle.vehicle_id || '',
+          name: vehicle.name || vehicle.vehicleName || vehicle.vehicle_name || 'Unknown',
+          capacity: parseInt(vehicle.capacity || vehicle.passengerCapacity || '4'),
+          luggageCapacity: parseInt(vehicle.luggageCapacity || vehicle.luggage_capacity || '2'),
+          price: parseFloat(vehicle.price || vehicle.basePrice || vehicle.base_price || '0'),
+          basePrice: parseFloat(vehicle.basePrice || vehicle.base_price || vehicle.price || '0'),
+          pricePerKm: parseFloat(vehicle.pricePerKm || vehicle.price_per_km || '0'),
+          nightHaltCharge: parseFloat(vehicle.nightHaltCharge || vehicle.night_halt_charge || '0'),
+          driverAllowance: parseFloat(vehicle.driverAllowance || vehicle.driver_allowance || '0'),
+          hr8km80Price: parseFloat(vehicle.hr8km80Price || vehicle.price_8hrs_80km || '0'),
+          hr10km100Price: parseFloat(vehicle.hr10km100Price || vehicle.price_10hrs_100km || '0'),
+          extraKmRate: parseFloat(vehicle.extraKmRate || vehicle.price_extra_km || '0'),
+          extraHourRate: parseFloat(vehicle.extraHourRate || vehicle.price_extra_hour || '0'),
+          airportFee: parseFloat(vehicle.airportFee || vehicle.airport_fee || '0'),
+          image: vehicle.image || '',
+          isActive: vehicle.isActive !== false && vehicle.is_active !== false,
+          amenities: vehicle.amenities || ['AC']
+        }));
         
         // Update cache
-        vehicleCache.data = response;
+        vehicleCache.data = normalizedVehicles;
         vehicleCache.timestamp = now;
         
         // Filter out inactive vehicles if needed
-        let vehicles = response;
         if (!includeInactive) {
-          vehicles = vehicles.filter((v: any) => v.isActive !== false);
+          return normalizedVehicles.filter(v => v.isActive !== false);
         }
         
-        return vehicles;
+        return normalizedVehicles;
       }
     } catch (error) {
-      console.warn('Failed to fetch from primary endpoint, trying fallback:', error);
-      
-      // Try fallback endpoint
-      const fallbackEndpoint = `${API_BASE_URL}/api/admin/vehicles-update.php?action=getAll&_t=${timestamp}`;
-      try {
-        const fallbackResponse = await fetchWithRetry(fallbackEndpoint, {
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0',
-            'X-API-Version': API_VERSION,
-            'X-Force-Refresh': 'true'
-          },
-          timeout: 12000
-        });
-        
-        if (Array.isArray(fallbackResponse) && fallbackResponse.length > 0) {
-          console.log(`Retrieved ${fallbackResponse.length} vehicles from fallback`);
-          
-          // Update cache
-          vehicleCache.data = fallbackResponse;
-          vehicleCache.timestamp = now;
-          
-          return fallbackResponse;
-        }
-      } catch (fallbackError) {
-        console.error('Fallback endpoint also failed:', fallbackError);
-      }
+      console.error('All endpoints failed for vehicle data:', error);
     }
     
     console.warn('Received invalid vehicle data format or empty data, using defaults');
@@ -232,27 +257,58 @@ export const getVehicleData = async (includeInactive = false): Promise<any[]> =>
 export const updateVehicle = async (vehicleData: any): Promise<boolean> => {
   try {
     const timestamp = Date.now();
-    const endpoint = `${API_BASE_URL}/api/admin/vehicle-pricing.php?_t=${timestamp}`;
     
-    console.log(`Updating vehicle at: ${endpoint}`, vehicleData);
+    // Try multiple endpoints in sequence
+    const endpoints = [
+      `${API_BASE_URL}/api/admin/vehicle-pricing.php?_t=${timestamp}`,
+      `/api/admin/vehicle-pricing?_t=${timestamp}`,
+      `${API_BASE_URL}/api/fares/vehicles.php?_t=${timestamp}`,
+      `/api/fares/vehicles.php?_t=${timestamp}`
+    ];
     
-    const response = await fetchWithRetry(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache',
-        'X-API-Version': API_VERSION,
-        'X-Force-Refresh': 'true'
-      },
-      data: vehicleData
-    });
+    console.log(`Attempting to update vehicle:`, vehicleData);
     
-    // Clear cache on successful update
-    vehicleCache.data = [];
-    vehicleCache.timestamp = 0;
+    let success = false;
+    let lastError = null;
     
-    console.log('Vehicle updated successfully:', response);
-    return true;
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Trying update at endpoint: ${endpoint}`);
+        
+        const response = await axios({
+          method: 'POST',
+          url: endpoint,
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache',
+            'X-API-Version': API_VERSION,
+            'X-Force-Refresh': 'true'
+          },
+          data: vehicleData,
+          timeout: 15000
+        });
+        
+        if (response.status === 200) {
+          console.log('Vehicle updated successfully at', endpoint);
+          success = true;
+          break;
+        }
+      } catch (error: any) {
+        console.warn(`Update failed at ${endpoint}:`, error.message);
+        lastError = error;
+        await delay(500);
+      }
+    }
+    
+    if (success) {
+      // Clear cache on successful update
+      vehicleCache.data = [];
+      vehicleCache.timestamp = 0;
+      
+      return true;
+    } else {
+      throw lastError || new Error('All update attempts failed');
+    }
   } catch (error) {
     console.error('Error updating vehicle:', error);
     toast.error('Failed to update vehicle');
@@ -266,25 +322,54 @@ export const updateVehicle = async (vehicleData: any): Promise<boolean> => {
 export const deleteVehicle = async (vehicleId: string): Promise<boolean> => {
   try {
     const timestamp = Date.now();
-    const endpoint = `${API_BASE_URL}/api/admin/vehicle-pricing.php?action=delete&id=${vehicleId}&_t=${timestamp}`;
     
-    console.log(`Deleting vehicle at: ${endpoint}`);
+    // Try multiple endpoints in sequence
+    const endpoints = [
+      `${API_BASE_URL}/api/admin/vehicle-pricing.php?action=delete&id=${vehicleId}&_t=${timestamp}`,
+      `/api/admin/vehicle-pricing?action=delete&id=${vehicleId}&_t=${timestamp}`,
+      `${API_BASE_URL}/api/fares/vehicles.php?vehicleId=${vehicleId}&_t=${timestamp}`,
+      `/api/fares/vehicles.php?vehicleId=${vehicleId}&_t=${timestamp}`
+    ];
     
-    const response = await fetchWithRetry(endpoint, {
-      method: 'DELETE',
-      headers: {
-        'Cache-Control': 'no-cache',
-        'X-API-Version': API_VERSION,
-        'X-Force-Refresh': 'true'
+    console.log(`Attempting to delete vehicle: ${vehicleId}`);
+    
+    let success = false;
+    
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Trying delete at endpoint: ${endpoint}`);
+        
+        const response = await axios({
+          method: 'DELETE',
+          url: endpoint,
+          headers: {
+            'Cache-Control': 'no-cache',
+            'X-API-Version': API_VERSION,
+            'X-Force-Refresh': 'true'
+          },
+          timeout: 10000
+        });
+        
+        if (response.status === 200) {
+          console.log('Vehicle deleted successfully at', endpoint);
+          success = true;
+          break;
+        }
+      } catch (error) {
+        console.warn(`Delete failed at ${endpoint}:`, error);
+        await delay(500);
       }
-    });
+    }
     
-    // Clear cache on successful delete
-    vehicleCache.data = [];
-    vehicleCache.timestamp = 0;
-    
-    console.log('Vehicle deleted successfully:', response);
-    return true;
+    if (success) {
+      // Clear cache on successful delete
+      vehicleCache.data = [];
+      vehicleCache.timestamp = 0;
+      
+      return true;
+    } else {
+      throw new Error('All delete attempts failed');
+    }
   } catch (error) {
     console.error('Error deleting vehicle:', error);
     toast.error('Failed to delete vehicle');
@@ -298,27 +383,56 @@ export const deleteVehicle = async (vehicleId: string): Promise<boolean> => {
 export const createVehicle = async (vehicleData: any): Promise<boolean> => {
   try {
     const timestamp = Date.now();
-    const endpoint = `${API_BASE_URL}/api/admin/vehicles-update.php?_t=${timestamp}`;
     
-    console.log(`Creating vehicle at: ${endpoint}`, vehicleData);
+    // Try multiple endpoints in sequence
+    const endpoints = [
+      `${API_BASE_URL}/api/admin/vehicles-update.php?_t=${timestamp}`,
+      `/api/admin/vehicles-update?_t=${timestamp}`,
+      `${API_BASE_URL}/api/fares/vehicles.php?_t=${timestamp}`,
+      `/api/fares/vehicles.php?_t=${timestamp}`
+    ];
     
-    const response = await fetchWithRetry(endpoint, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache',
-        'X-API-Version': API_VERSION,
-        'X-Force-Refresh': 'true'
-      },
-      data: vehicleData
-    });
+    console.log(`Attempting to create vehicle:`, vehicleData);
     
-    // Clear cache on successful create
-    vehicleCache.data = [];
-    vehicleCache.timestamp = 0;
+    let success = false;
     
-    console.log('Vehicle created successfully:', response);
-    return true;
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Trying create at endpoint: ${endpoint}`);
+        
+        const response = await axios({
+          method: endpoint.includes('vehicles.php') ? 'PUT' : 'POST',
+          url: endpoint,
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache',
+            'X-API-Version': API_VERSION,
+            'X-Force-Refresh': 'true'
+          },
+          data: vehicleData,
+          timeout: 15000
+        });
+        
+        if (response.status === 200) {
+          console.log('Vehicle created successfully at', endpoint);
+          success = true;
+          break;
+        }
+      } catch (error) {
+        console.warn(`Create failed at ${endpoint}:`, error);
+        await delay(500);
+      }
+    }
+    
+    if (success) {
+      // Clear cache on successful create
+      vehicleCache.data = [];
+      vehicleCache.timestamp = 0;
+      
+      return true;
+    } else {
+      throw new Error('All create attempts failed');
+    }
   } catch (error) {
     console.error('Error creating vehicle:', error);
     toast.error('Failed to create vehicle');
