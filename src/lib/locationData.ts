@@ -25,7 +25,8 @@ export const vizagLocations: Location[] = [
     isPickupLocation: true,
     lat: 17.7215, 
     lng: 83.2248,
-    address: 'Vizag RTC Complex, Visakhapatnam'
+    address: 'Vizag RTC Complex, Visakhapatnam',
+    isInVizag: true
   },
   {
     id: 'vizag_railway',
@@ -37,7 +38,8 @@ export const vizagLocations: Location[] = [
     isPickupLocation: true,
     lat: 17.7215, 
     lng: 83.2248,
-    address: 'Visakhapatnam Railway Station, Visakhapatnam'
+    address: 'Visakhapatnam Railway Station, Visakhapatnam',
+    isInVizag: true
   },
   {
     id: 'vizag_airport',
@@ -49,7 +51,8 @@ export const vizagLocations: Location[] = [
     isPickupLocation: true,
     lat: 17.7215, 
     lng: 83.2248,
-    address: 'Visakhapatnam International Airport, Visakhapatnam'
+    address: 'Visakhapatnam International Airport, Visakhapatnam',
+    isInVizag: true
   },
   {
     id: 'rk_beach',
@@ -61,7 +64,8 @@ export const vizagLocations: Location[] = [
     isPickupLocation: true,
     lat: 17.7175,
     lng: 83.3162,
-    address: 'RK Beach, Visakhapatnam'
+    address: 'RK Beach, Visakhapatnam',
+    isInVizag: true
   },
   {
     id: 'jagadamba_junction',
@@ -73,7 +77,8 @@ export const vizagLocations: Location[] = [
     isPickupLocation: true,
     lat: 17.7215, 
     lng: 83.2248,
-    address: 'Jagadamba Junction, Visakhapatnam'
+    address: 'Jagadamba Junction, Visakhapatnam',
+    isInVizag: true
   },
   {
     id: 'mvp_colony',
@@ -85,7 +90,8 @@ export const vizagLocations: Location[] = [
     isPickupLocation: true,
     lat: 17.7215, 
     lng: 83.2248,
-    address: 'MVP Colony, Visakhapatnam'
+    address: 'MVP Colony, Visakhapatnam',
+    isInVizag: true
   },
   {
     id: 'gajuwaka',
@@ -97,7 +103,8 @@ export const vizagLocations: Location[] = [
     isPickupLocation: true,
     lat: 17.7337,
     lng: 83.1385,
-    address: 'Gajuwaka, Visakhapatnam'
+    address: 'Gajuwaka, Visakhapatnam',
+    isInVizag: true
   },
   {
     id: 'nad_junction',
@@ -109,7 +116,8 @@ export const vizagLocations: Location[] = [
     isPickupLocation: true,
     lat: 17.7215, 
     lng: 83.2248,
-    address: 'NAD Junction, Visakhapatnam'
+    address: 'NAD Junction, Visakhapatnam',
+    isInVizag: true
   }
 ];
 
@@ -122,9 +130,10 @@ export const apDestinations: Location[] = [
     type: 'landmark',
     popularityScore: 95,
     isDropLocation: true,
-    lat: 17.7215, 
-    lng: 83.2248,
-    address: 'Araku Valley, Andhra Pradesh'
+    lat: 18.3273, 
+    lng: 82.8695,
+    address: 'Araku Valley, Andhra Pradesh',
+    isInVizag: false
   },
   {
     id: 'srikakulam',
@@ -134,9 +143,10 @@ export const apDestinations: Location[] = [
     type: 'landmark',
     popularityScore: 88,
     isDropLocation: true,
-    lat: 17.7215, 
-    lng: 83.2248,
-    address: 'Srikakulam, Andhra Pradesh'
+    lat: 18.2949, 
+    lng: 83.8938,
+    address: 'Srikakulam, Andhra Pradesh',
+    isInVizag: false
   },
   {
     id: 'rajahmundry',
@@ -146,9 +156,10 @@ export const apDestinations: Location[] = [
     type: 'landmark',
     popularityScore: 90,
     isDropLocation: true,
-    lat: 17.7215, 
-    lng: 83.2248,
-    address: 'Rajahmundry, Andhra Pradesh'
+    lat: 16.9891, 
+    lng: 81.7840,
+    address: 'Rajahmundry, Andhra Pradesh',
+    isInVizag: false
   },
   {
     id: 'vijayawada',
@@ -158,9 +169,10 @@ export const apDestinations: Location[] = [
     type: 'landmark',
     popularityScore: 92,
     isDropLocation: true,
-    lat: 17.7215, 
-    lng: 83.2248,
-    address: 'Vijayawada, Andhra Pradesh'
+    lat: 16.5062, 
+    lng: 80.6480,
+    address: 'Vijayawada, Andhra Pradesh',
+    isInVizag: false
   },
   {
     id: 'tirupati',
@@ -170,9 +182,10 @@ export const apDestinations: Location[] = [
     type: 'landmark',
     popularityScore: 94,
     isDropLocation: true,
-    lat: 17.7215, 
-    lng: 83.2248,
-    address: 'Tirupati, Andhra Pradesh'
+    lat: 13.6288, 
+    lng: 79.4192,
+    address: 'Tirupati, Andhra Pradesh',
+    isInVizag: false
   },
   {
     id: 'kakinada',
@@ -182,9 +195,10 @@ export const apDestinations: Location[] = [
     type: 'landmark',
     popularityScore: 87,
     isDropLocation: true,
-    lat: 17.7215, 
-    lng: 83.2248,
-    address: 'Kakinada, Andhra Pradesh'
+    lat: 16.9891, 
+    lng: 82.2475,
+    address: 'Kakinada, Andhra Pradesh',
+    isInVizag: false
   },
   {
     id: 'guntur',
@@ -194,45 +208,49 @@ export const apDestinations: Location[] = [
     type: 'landmark',
     popularityScore: 89,
     isDropLocation: true,
-    lat: 17.7215, 
-    lng: 83.2248,
-    address: 'Guntur, Andhra Pradesh'
+    lat: 16.3067, 
+    lng: 80.4365,
+    address: 'Guntur, Andhra Pradesh',
+    isInVizag: false
   },
   {
-    id: 'ongole',
-    name: 'Ongole',
-    city: 'Ongole',
-    state: 'Andhra Pradesh',
+    id: 'hyderabad',
+    name: 'Hyderabad',
+    city: 'Hyderabad',
+    state: 'Telangana',
     type: 'landmark',
-    popularityScore: 83,
+    popularityScore: 96,
     isDropLocation: true,
-    lat: 17.7215, 
-    lng: 83.2248,
-    address: 'Ongole, Andhra Pradesh'
+    lat: 17.3850,
+    lng: 78.4867,
+    address: 'Hyderabad, Telangana',
+    isInVizag: false
   },
   {
-    id: 'kadapa',
-    name: 'Kadapa',
-    city: 'Kadapa',
-    state: 'Andhra Pradesh',
+    id: 'bangalore',
+    name: 'Bangalore',
+    city: 'Bangalore',
+    state: 'Karnataka',
     type: 'landmark',
-    popularityScore: 82,
+    popularityScore: 97,
     isDropLocation: true,
-    lat: 17.7215, 
-    lng: 83.2248,
-    address: 'Kadapa, Andhra Pradesh'
+    lat: 12.9716,
+    lng: 77.5946,
+    address: 'Bangalore, Karnataka',
+    isInVizag: false
   },
   {
-    id: 'nellore',
-    name: 'Nellore',
-    city: 'Nellore',
-    state: 'Andhra Pradesh',
+    id: 'chennai',
+    name: 'Chennai',
+    city: 'Chennai',
+    state: 'Tamil Nadu',
     type: 'landmark',
-    popularityScore: 84,
+    popularityScore: 95,
     isDropLocation: true,
-    lat: 17.7215, 
-    lng: 83.2248,
-    address: 'Nellore, Andhra Pradesh'
+    lat: 13.0827,
+    lng: 80.2707,
+    address: 'Chennai, Tamil Nadu',
+    isInVizag: false
   }
 ];
 
@@ -245,12 +263,54 @@ export const popularLocations: Location[] = [
 export const isVizagLocation = (location: Location): boolean => {
   if (!location) return false;
   
-  return location.city.toLowerCase() === 'visakhapatnam' || 
-         location.name.toLowerCase().includes('visakhapatnam') ||
-         location.name.toLowerCase().includes('vizag') ||
-         // Check against known Vizag area IDs
-         vizagLocations.some(vizagLoc => vizagLoc.id === location.id);
+  if (location.isInVizag !== undefined) {
+    return location.isInVizag;
+  }
+  
+  // Check city name
+  if (location.city?.toLowerCase() === 'visakhapatnam' || 
+      location.name?.toLowerCase().includes('visakhapatnam') ||
+      location.name?.toLowerCase().includes('vizag')) {
+    return true;
+  }
+  
+  // Check known Vizag locations
+  if (vizagLocations.some(vizagLoc => vizagLoc.id === location.id)) {
+    return true;
+  }
+  
+  // Check coordinates if available (within 25km of Vizag center)
+  if (location.lat && location.lng) {
+    const vizagCenter = { lat: 17.6868, lng: 83.2185 };
+    const distance = getDistanceFromLatLonInKm(
+      location.lat, 
+      location.lng, 
+      vizagCenter.lat, 
+      vizagCenter.lng
+    );
+    return distance <= 25; // 25km radius
+  }
+  
+  return false;
 };
+
+// Helper function to calculate distance between two coordinates
+function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371; // Radius of the earth in km
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2); 
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+  const d = R * c; // Distance in km
+  return d;
+}
+
+function deg2rad(deg: number) {
+  return deg * (Math.PI/180);
+}
 
 // Check if both pickup and drop locations are within Visakhapatnam
 export const areBothLocationsInVizag = (pickup: Location | null, drop: Location | null): boolean => {
@@ -263,10 +323,7 @@ export const searchLocations = (query: string, isPickup: boolean = false): Locat
     if (isPickup) {
       return vizagLocations.sort((a, b) => b.popularityScore - a.popularityScore);
     }
-    if (!isPickup) {
-      return apDestinations.sort((a, b) => b.popularityScore - a.popularityScore);
-    }
-    return [];
+    return popularLocations.sort((a, b) => b.popularityScore - a.popularityScore);
   }
   
   const lowerQuery = query.toLowerCase();
@@ -274,7 +331,8 @@ export const searchLocations = (query: string, isPickup: boolean = false): Locat
   let filteredLocations = popularLocations.filter(
     location => 
       location.name.toLowerCase().includes(lowerQuery) || 
-      location.city.toLowerCase().includes(lowerQuery)
+      location.city.toLowerCase().includes(lowerQuery) ||
+      location.address.toLowerCase().includes(lowerQuery)
   );
   
   if (isPickup) {
@@ -282,6 +340,7 @@ export const searchLocations = (query: string, isPickup: boolean = false): Locat
       isVizagLocation(loc) && loc.isPickupLocation !== false
     );
   } else {
+    // For drop locations, we don't restrict by location (can be anywhere in India)
     filteredLocations = filteredLocations.filter(loc => 
       loc.isDropLocation !== false
     );
@@ -305,7 +364,10 @@ export const getDistanceBetweenLocations = (fromId: string, toId: string): numbe
       'guntur': 370,
       'ongole': 460,
       'kadapa': 660,
-      'nellore': 590
+      'nellore': 590,
+      'hyderabad': 610,
+      'bangalore': 995,
+      'chennai': 780
     },
     'vizag_railway': {
       'araku_valley': 112,
@@ -317,7 +379,10 @@ export const getDistanceBetweenLocations = (fromId: string, toId: string): numbe
       'guntur': 365,
       'ongole': 455,
       'kadapa': 655,
-      'nellore': 585
+      'nellore': 585,
+      'hyderabad': 605,
+      'bangalore': 990,
+      'chennai': 775
     },
     'vizag_rtc': {
       'araku_valley': 110,
@@ -329,7 +394,10 @@ export const getDistanceBetweenLocations = (fromId: string, toId: string): numbe
       'guntur': 363,
       'ongole': 453,
       'kadapa': 653,
-      'nellore': 583
+      'nellore': 583,
+      'hyderabad': 603,
+      'bangalore': 988,
+      'chennai': 773
     }
   };
   
@@ -341,7 +409,30 @@ export const getDistanceBetweenLocations = (fromId: string, toId: string): numbe
     return Math.floor(Math.random() * 20) + 5;
   }
   
-  return Math.floor(Math.random() * 700) + 100;
+  // Default fallback - calculate approximate distance based on well-known locations
+  const fromLocation = [...vizagLocations, ...apDestinations].find(loc => loc.id === fromId);
+  const toLocation = [...vizagLocations, ...apDestinations].find(loc => loc.id === toId);
+  
+  if (fromLocation && toLocation && fromLocation.lat && toLocation.lat) {
+    return Math.round(
+      getDistanceFromLatLonInKm(
+        fromLocation.lat, 
+        fromLocation.lng, 
+        toLocation.lat, 
+        toLocation.lng
+      )
+    );
+  }
+  
+  // Final fallback - reasonable distance based on location
+  if (toId.includes('bangalore')) return 995;
+  if (toId.includes('hyderabad')) return 610;
+  if (toId.includes('chennai')) return 780;
+  if (toId.includes('mumbai')) return 1200;
+  if (toId.includes('delhi')) return 1800;
+  if (toId.includes('kolkata')) return 850;
+  
+  return Math.floor(Math.random() * 500) + 100;
 };
 
 // Calculate airport transfer fare based on distance and cab type
@@ -374,7 +465,14 @@ export const calculateAirportFare = (cabType: string, distance: number): number 
 };
 
 export const getEstimatedTravelTime = (distance: number): number => {
-  const averageSpeed = 55;
+  // For very long distances (inter-city)
+  if (distance > 100) {
+    const averageSpeed = 55; // km/hr
+    return Math.ceil((distance / averageSpeed) * 60);
+  }
+  
+  // For shorter distances (within city)
+  const averageSpeed = 35; // km/hr within city
   return Math.ceil((distance / averageSpeed) * 60);
 };
 

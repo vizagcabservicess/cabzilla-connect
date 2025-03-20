@@ -9,7 +9,7 @@ export const useGoogleMaps = () => {
   const context = useContext(GoogleMapsContext);
   const [placesInitialized, setPlacesInitialized] = useState(false);
   const initializationAttempts = useRef(0);
-  const MAX_ATTEMPTS = 5;
+  const MAX_ATTEMPTS = 8;  // Increased from 5 to 8
   const hasShownPlacesError = useRef(false);
   
   // Verify if places API is available
@@ -81,7 +81,10 @@ export const useGoogleMaps = () => {
       }
     };
     
-    attemptInitialization();
+    // Retry immediately on context change
+    if (context.isLoaded && context.google) {
+      attemptInitialization();
+    }
   }, [context.isLoaded, context.google]);
   
   // Return enhanced context

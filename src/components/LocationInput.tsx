@@ -70,6 +70,7 @@ export function LocationInput({
   const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [useLocalSuggestions, setUseLocalSuggestions] = useState<boolean>(false);
+  const [searchAttempts, setSearchAttempts] = useState<number>(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const { isLoaded, google, placesInitialized } = useGoogleMaps();
   const {
@@ -104,6 +105,7 @@ export function LocationInput({
     }
     
     setIsLoading(true);
+    setSearchAttempts(prev => prev + 1);
     
     // Try to use Google Places API if available
     const useGoogle = isLoaded && google && (placesInitialized || isAutocompleteInitialized);
@@ -111,21 +113,24 @@ export function LocationInput({
     if (useGoogle) {
       try {
         console.log("Using Google Places API for search");
-        // Set India bounds for autocomplete
-        const indiaBounds = new google.maps.LatLngBounds(
-          new google.maps.LatLng(8.0, 68.0),   // SW corner of India
-          new google.maps.LatLng(37.0, 97.0)   // NE corner of India
-        );
         
-        // Set Vizag bounds for more local results
-        const vizagBounds = new google.maps.LatLngBounds(
-          new google.maps.LatLng(17.5, 83.1),  // SW corner of Vizag
-          new google.maps.LatLng(17.8, 83.4)   // NE corner of Vizag
-        );
+        // Set bounds for search
+        let bounds;
         
-        // Use appropriate bounds - for pickup locations in airport transfers, limit to Vizag
-        // For drop locations and non-airport transfers, allow all of India
-        const bounds = isPickupLocation && isAirportTransfer ? vizagBounds : indiaBounds;
+        // For pickup locations, restrict to Vizag area (25km radius)
+        if (isPickupLocation) {
+          // Vizag centered bounds with 25km radius approximately
+          bounds = new google.maps.LatLngBounds(
+            new google.maps.LatLng(17.6315, 83.1015),  // SW corner of Vizag + 25km
+            new google.maps.LatLng(17.8115, 83.3415)   // NE corner of Vizag + 25km
+          );
+        } else {
+          // For drop locations, allow all of India
+          bounds = new google.maps.LatLngBounds(
+            new google.maps.LatLng(8.0, 68.0),   // SW corner of India
+            new google.maps.LatLng(37.0, 97.0)   // NE corner of India
+          );
+        }
         
         // Get predictions with the usePlacesAutocomplete hook
         getPlacePredictions(value, bounds)
@@ -156,7 +161,7 @@ export function LocationInput({
       console.log("Using local location search as fallback");
       fallbackToLocalSearch(value);
     }
-  }, [google, isLoaded, isPickupLocation, isAirportTransfer, placesInitialized, isAutocompleteInitialized, getPlacePredictions]);
+  }, [google, isLoaded, isPickupLocation, placesInitialized, isAutocompleteInitialized, getPlacePredictions]);
 
   // Fallback to local search when Google Places API is not available
   const fallbackToLocalSearch = (query: string) => {
@@ -182,6 +187,25 @@ export function LocationInput({
       if (placeDetails && placeDetails.geometry) {
         const { lat, lng } = placeDetails.geometry.location.toJSON();
         
+        // Determine if the location is in Vizag (important for pickup validation)
+        let isInVizag = false;
+        
+        if (isPickupLocation) {
+          // Check if it's within ~25km of Vizag center (17.6868° N, 83.2185° E)
+          const vizagCenter = { lat: 17.6868, lng: 83.2185 };
+          const distance = getDistanceFromLatLonInKm(lat, lng, vizagCenter.lat, vizagCenter.lng);
+          isInVizag = distance <= 25;
+          
+          // If it's a pickup location and not in Vizag, show an error
+          if (!isInVizag) {
+            toast.error("Pickup location must be within 25km of Visakhapatnam", {
+              duration: 3000
+            });
+            setIsLoading(false);
+            return;
+          }
+        }
+        
         // Create a Location object
         const location: Location = {
           id: suggestion.place_id,
@@ -192,18 +216,7 @@ export function LocationInput({
           lat,
           lng,
           type: 'custom',
-          isInVizag: isVizagLocation({ 
-            id: suggestion.place_id,
-            name: suggestion.structured_formatting ? 
-                  suggestion.structured_formatting.main_text : '',
-            address: placeDetails.formatted_address || suggestion.description,
-            city: '',
-            state: '',
-            lat, 
-            lng,
-            type: 'other',
-            popularityScore: 0
-          })
+          isInVizag
         };
         
         console.log("Selected location details:", location);
@@ -222,7 +235,7 @@ export function LocationInput({
         lat: 0, // Default coordinates
         lng: 0,
         type: 'custom',
-        isInVizag: false
+        isInVizag: isPickupLocation // Assume it's in Vizag if it's a pickup location (user selected it)
       };
       
       console.log("Created basic location from suggestion:", basicLocation);
@@ -230,15 +243,42 @@ export function LocationInput({
     } finally {
       setIsLoading(false);
     }
-  }, [getPlaceDetails, onLocationChange]);
+  }, [getPlaceDetails, onLocationChange, isPickupLocation]);
+
+  // Helper function to calculate distance between two coordinates
+  function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+    const R = 6371; // Radius of the earth in km
+    const dLat = deg2rad(lat2 - lat1);
+    const dLon = deg2rad(lon2 - lon1);
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2); 
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+    const d = R * c; // Distance in km
+    return d;
+  }
+  
+  function deg2rad(deg: number) {
+    return deg * (Math.PI/180);
+  }
 
   // Handle local suggestion selection
   const handleLocalSuggestionClick = useCallback((location: Location) => {
     setInputValue(location.name || location.address);
     setShowSuggestions(false);
     console.log("Selected local location:", location);
+    
+    // For pickup locations, ensure it's in Vizag
+    if (isPickupLocation && !location.isInVizag) {
+      toast.error("Pickup location must be within Visakhapatnam", {
+        duration: 3000
+      });
+      return;
+    }
+    
     onLocationChange(location);
-  }, [onLocationChange]);
+  }, [onLocationChange, isPickupLocation]);
 
   // Effect to initialize input with value
   useEffect(() => {
@@ -276,6 +316,14 @@ export function LocationInput({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+
+  // Force a retry with local search if Google search fails
+  useEffect(() => {
+    if (searchAttempts > 0 && inputValue && !suggestions.length && !localSuggestions.length && !isLoading) {
+      console.log("No suggestions found after search attempt, trying local search");
+      fallbackToLocalSearch(inputValue);
+    }
+  }, [searchAttempts, suggestions.length, localSuggestions.length, inputValue, isLoading]);
 
   return (
     <div className={`relative mb-4 ${className}`}>
@@ -324,7 +372,7 @@ export function LocationInput({
                   </div>
                 ))
               ) : (
-                <div className="px-4 py-2 text-gray-500">No locations found</div>
+                <div className="px-4 py-2 text-gray-500">No locations found. Please try a different search term.</div>
               )
             ) : (
               // Google Places suggestions
@@ -348,7 +396,7 @@ export function LocationInput({
                   </div>
                 ))
               ) : (
-                <div className="px-4 py-2 text-gray-500">No locations found</div>
+                <div className="px-4 py-2 text-gray-500">No locations found. Please try a different search term.</div>
               )
             )}
           </div>

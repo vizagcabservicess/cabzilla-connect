@@ -26,7 +26,7 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
   const [mapCanvasInitialized, setMapCanvasInitialized] = useState(false);
   const [placesInitializationAttempted, setPlacesInitializationAttempted] = useState(false);
   const initializationAttempts = useRef(0);
-  const maxRetries = useRef(8);
+  const maxRetries = useRef(10); // Increased from 8 to 10
   
   // Use provided apiKey or fallback to environment variable
   const googleMapsApiKey = apiKey || GOOGLE_MAPS_API_KEY;

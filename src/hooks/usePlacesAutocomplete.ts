@@ -8,6 +8,7 @@ interface PlacesAutocompleteOptions {
   debounceTime?: number;
   radius?: number; 
   country?: string;
+  vizagOnly?: boolean;
 }
 
 export function usePlacesAutocomplete(options: PlacesAutocompleteOptions = {}) {
@@ -175,11 +176,16 @@ export function usePlacesAutocomplete(options: PlacesAutocompleteOptions = {}) {
         const requestOptions: google.maps.places.AutocompletionRequest = {
           input: query,
           componentRestrictions: { country: options.country || 'in' },
-          types: ['geocode', 'establishment']
+          types: ['geocode', 'establishment', 'address', 'regions', 'cities']
         };
         
         if (bounds) {
           requestOptions.bounds = bounds;
+          
+          // Only set strictBounds for Vizag pickup locations
+          if (options.vizagOnly) {
+            requestOptions.strictBounds = true;
+          }
         }
         
         try {
@@ -199,8 +205,32 @@ export function usePlacesAutocomplete(options: PlacesAutocompleteOptions = {}) {
                 resolve([]);
               } else {
                 console.error("Autocomplete request failed:", status);
-                setSuggestions([]);
-                reject(new Error(`Autocomplete request failed: ${status}`));
+                
+                // Try one more time without bounds restrictions if it failed
+                if (requestOptions.strictBounds || requestOptions.bounds) {
+                  console.log("Retrying without bounds restrictions");
+                  
+                  delete requestOptions.strictBounds;
+                  delete requestOptions.bounds;
+                  
+                  autocompleteServiceRef.current?.getPlacePredictions(
+                    requestOptions,
+                    (retryResults, retryStatus) => {
+                      if (retryStatus === google.maps.places.PlacesServiceStatus.OK && retryResults && retryResults.length > 0) {
+                        console.log("Retry autocomplete results:", retryResults.length);
+                        setSuggestions(retryResults);
+                        resolve(retryResults);
+                      } else {
+                        console.log("Retry also failed:", retryStatus);
+                        setSuggestions([]);
+                        resolve([]);
+                      }
+                    }
+                  );
+                } else {
+                  setSuggestions([]);
+                  reject(new Error(`Autocomplete request failed: ${status}`));
+                }
               }
             }
           );
@@ -212,7 +242,7 @@ export function usePlacesAutocomplete(options: PlacesAutocompleteOptions = {}) {
         }
       }, debounceTime);
     });
-  }, [google, options.country, debounceTime]);
+  }, [google, options.country, options.vizagOnly, debounceTime]);
 
   // Helper to force initialization
   const forceInitialization = useCallback(() => {
