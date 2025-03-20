@@ -32,7 +32,8 @@ export default function BookingEditPage() {
     lat: 0,
     lng: 0,
     type: 'other',
-    popularityScore: 0
+    popularityScore: 0,
+    isInVizag: true
   });
   const [dropLocation, setDropLocation] = useState<Location>({ 
     id: 'drop', 
@@ -43,7 +44,8 @@ export default function BookingEditPage() {
     lat: 0,
     lng: 0,
     type: 'other',
-    popularityScore: 0
+    popularityScore: 0,
+    isInVizag: false
   });
   const [pickupDate, setPickupDate] = useState<Date | undefined>(undefined);
   const isAdmin = authAPI.isAdmin();
@@ -80,7 +82,14 @@ export default function BookingEditPage() {
           setPickupLocation({ 
             id: 'pickup',
             name: 'Pickup Location',
-            address: response.pickupLocation 
+            address: response.pickupLocation,
+            city: 'Visakhapatnam',
+            state: 'Andhra Pradesh',
+            lat: 0,
+            lng: 0,
+            type: 'other',
+            popularityScore: 0,
+            isInVizag: true
           });
         }
         
@@ -88,7 +97,14 @@ export default function BookingEditPage() {
           setDropLocation({ 
             id: 'drop',
             name: 'Drop Location',
-            address: response.dropLocation 
+            address: response.dropLocation,
+            city: 'Visakhapatnam',
+            state: 'Andhra Pradesh',
+            lat: 0,
+            lng: 0,
+            type: 'other',
+            popularityScore: 0,
+            isInVizag: false
           });
         }
         
