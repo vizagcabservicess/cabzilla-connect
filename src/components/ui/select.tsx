@@ -113,37 +113,23 @@ SelectLabel.displayName = SelectPrimitive.Label.displayName
 const SelectItem = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item> & { value: string }
->(({ className, children, ...props }, ref) => {
-  // Ensure we have a clean value with no prefixes
-  const cleanValue = (inputValue: string): string => {
-    if (!inputValue) return '';
+>(({ className, children, value, ...props }, ref) => {
+  // Ensure value is never empty string
+  const safeValue = value || "undefined";
+  
+  // Clean vehicle ID (remove item- prefix if present)
+  const cleanValue = (): string => {
+    if (!safeValue) return 'undefined';
     
     // Remove 'item-' prefix if it exists
-    if (inputValue.startsWith('item-')) {
-      return inputValue.substring(5);
+    if (typeof safeValue === 'string' && safeValue.startsWith('item-')) {
+      return safeValue.substring(5);
     }
     
-    // Remove any random alphanumeric IDs if they match a pattern like: r31yw7w
-    if (/^[a-z0-9]{7}$/.test(inputValue)) {
-      // If it's just a random ID and we have children, use the children as a value
-      return children?.toString() || inputValue;
-    }
-    
-    return inputValue;
+    return safeValue;
   };
   
-  // Make sure we have a valid value
-  const safeValue = props.value ? cleanValue(props.value) : '';
-  
-  const safeProps = {
-    ...props,
-    value: safeValue,
-    // Ensure the key matches the value for proper React rendering
-    key: safeValue
-  };
-  
-  // If no children provided, use the value for display (without item- prefix)
-  const displayText = children || safeValue;
+  const displayValue = cleanValue();
   
   return (
     <SelectPrimitive.Item
@@ -152,7 +138,8 @@ const SelectItem = React.forwardRef<
         "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className
       )}
-      {...safeProps}
+      value={displayValue}
+      {...props}
     >
       <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
         <SelectPrimitive.ItemIndicator>
@@ -160,7 +147,7 @@ const SelectItem = React.forwardRef<
         </SelectPrimitive.ItemIndicator>
       </span>
 
-      <SelectPrimitive.ItemText>{displayText}</SelectPrimitive.ItemText>
+      <SelectPrimitive.ItemText>{children || displayValue}</SelectPrimitive.ItemText>
     </SelectPrimitive.Item>
   );
 })

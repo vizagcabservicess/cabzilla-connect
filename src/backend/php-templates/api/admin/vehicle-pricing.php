@@ -8,6 +8,9 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: *');
 header('Content-Type: application/json');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -20,6 +23,18 @@ error_log("Vehicle pricing endpoint called. Method: " . $_SERVER['REQUEST_METHOD
 error_log("Request headers: " . json_encode(getallheaders()));
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     error_log("POST data: " . file_get_contents('php://input'));
+}
+
+// Clean vehicle ID by removing prefixes if present
+function cleanVehicleId($id) {
+    if (empty($id)) return '';
+    
+    // Remove 'item-' prefix if it exists
+    if (strpos($id, 'item-') === 0) {
+        return substr($id, 5);
+    }
+    
+    return $id;
 }
 
 // Check if user is authenticated and is admin
@@ -78,6 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         while ($row = $result->fetch_assoc()) {
             $pricing[] = [
                 'id' => intval($row['id']),
+                'vehicleId' => $row['vehicle_type'],
                 'vehicleType' => $row['vehicle_type'],
                 'basePrice' => floatval($row['base_price']),
                 'pricePerKm' => floatval($row['price_per_km']),
@@ -121,18 +137,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Log the input data
     error_log("Vehicle pricing update request: " . json_encode($input));
     
-    // Validate input
-    if (!$input || !isset($input['vehicleType']) || !isset($input['basePrice']) || !isset($input['pricePerKm'])) {
-        sendJsonResponse(['status' => 'error', 'message' => 'Missing required fields (vehicleType, basePrice, pricePerKm)'], 400);
+    // Check if we're updating trip-specific fares
+    if (isset($input['tripType'])) {
+        return handleTripFareUpdate($conn, $input);
+    }
+    
+    // Validate input for regular vehicle pricing update
+    if (!$input || !isset($input['vehicleType']) && !isset($input['vehicleId'])) {
+        sendJsonResponse(['status' => 'error', 'message' => 'Missing required fields (vehicleType or vehicleId is required)'], 400);
+        exit;
+    }
+    
+    // Determine vehicle ID from either vehicleType or vehicleId
+    $vehicleType = isset($input['vehicleId']) ? cleanVehicleId($input['vehicleId']) : 
+                  (isset($input['vehicleType']) ? cleanVehicleId($input['vehicleType']) : '');
+    
+    if (empty($vehicleType)) {
+        sendJsonResponse(['status' => 'error', 'message' => 'Invalid vehicle ID'], 400);
         exit;
     }
     
     // Convert numeric values
-    $basePrice = floatval($input['basePrice']);
-    $pricePerKm = floatval($input['pricePerKm']);
+    $basePrice = isset($input['basePrice']) ? floatval($input['basePrice']) : 0;
+    $pricePerKm = isset($input['pricePerKm']) ? floatval($input['pricePerKm']) : 0;
     $nightHaltCharge = isset($input['nightHaltCharge']) ? floatval($input['nightHaltCharge']) : 0;
     $driverAllowance = isset($input['driverAllowance']) ? floatval($input['driverAllowance']) : 0;
-    $vehicleType = $input['vehicleType'];
     
     try {
         // First check if the vehicle type exists in vehicle_types table
@@ -190,6 +219,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $response = [
                 'id' => intval($updatedRecord['id']),
                 'vehicleType' => $updatedRecord['vehicle_type'],
+                'vehicleId' => $updatedRecord['vehicle_type'],
                 'basePrice' => floatval($updatedRecord['base_price']),
                 'pricePerKm' => floatval($updatedRecord['price_per_km']),
                 'nightHaltCharge' => floatval($updatedRecord['night_halt_charge']),
@@ -200,7 +230,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             // Insert new record
             $stmt = $conn->prepare("
-                INSERT INTO vehicle_pricing (vehicle_type, base_price, price_per_km, night_halt_charge, driver_allowance, created_at, updated_at)
+                INSERT INTO vehicle_pricing 
+                (vehicle_type, base_price, price_per_km, night_halt_charge, driver_allowance, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, NOW(), NOW())
             ");
             $stmt->bind_param("sdddd", $vehicleType, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
@@ -220,6 +251,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $response = [
                 'id' => $newId,
                 'vehicleType' => $vehicleType,
+                'vehicleId' => $vehicleType,
                 'basePrice' => $basePrice,
                 'pricePerKm' => $pricePerKm,
                 'nightHaltCharge' => $nightHaltCharge,
@@ -236,6 +268,254 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
+// Handle trip-specific fare updates
+function handleTripFareUpdate($conn, $input) {
+    // Validate input
+    if (!isset($input['vehicleId']) || !isset($input['tripType'])) {
+        sendJsonResponse(['status' => 'error', 'message' => 'Missing required fields (vehicleId and tripType)'], 400);
+        exit;
+    }
+    
+    $vehicleId = cleanVehicleId($input['vehicleId']);
+    $tripType = $input['tripType'];
+    
+    error_log("Processing trip fare update for $vehicleId, trip type: $tripType");
+    
+    // Determine which table to update based on trip type
+    $tableMap = [
+        'outstation-one-way' => 'outstation_one_way_fares',
+        'outstation-round-trip' => 'outstation_round_trip_fares',
+        'local' => 'local_package_fares',
+        'airport' => 'airport_transfer_fares',
+        'tour' => 'tour_fares'
+    ];
+    
+    $tableName = $tableMap[$tripType] ?? '';
+    
+    if (empty($tableName)) {
+        sendJsonResponse(['status' => 'error', 'message' => 'Invalid trip type: ' . $tripType], 400);
+        exit;
+    }
+    
+    try {
+        // Check if table exists, if not create it
+        checkAndCreateTable($conn, $tableName, $tripType);
+        
+        // Prepare data for update/insert based on trip type
+        $data = [];
+        $updateColumns = '';
+        $insertColumns = [];
+        $insertValues = [];
+        $types = '';
+        
+        switch ($tripType) {
+            case 'outstation-one-way':
+            case 'outstation-round-trip':
+                $data = [
+                    'base_price' => isset($input['basePrice']) ? floatval($input['basePrice']) : 0,
+                    'price_per_km' => isset($input['pricePerKm']) ? floatval($input['pricePerKm']) : 0
+                ];
+                $types = 'dd';
+                break;
+                
+            case 'local':
+                $data = [
+                    'hr8_km80_price' => isset($input['hr8km80Price']) ? floatval($input['hr8km80Price']) : 0,
+                    'hr10_km100_price' => isset($input['hr10km100Price']) ? floatval($input['hr10km100Price']) : 0,
+                    'extra_km_rate' => isset($input['extraKmRate']) ? floatval($input['extraKmRate']) : 0
+                ];
+                $types = 'ddd';
+                break;
+                
+            case 'airport':
+                $data = [
+                    'base_price' => isset($input['basePrice']) ? floatval($input['basePrice']) : 0,
+                    'price_per_km' => isset($input['pricePerKm']) ? floatval($input['pricePerKm']) : 0,
+                    'airport_fee' => isset($input['airportFee']) ? floatval($input['airportFee']) : 0
+                ];
+                $types = 'ddd';
+                break;
+                
+            case 'tour':
+                // Tours need special handling for different tour IDs
+                if (!isset($input['tourId'])) {
+                    sendJsonResponse(['status' => 'error', 'message' => 'Missing tourId for tour fare update'], 400);
+                    exit;
+                }
+                
+                $data = [
+                    'tour_id' => $input['tourId'],
+                    'price' => isset($input['price']) ? floatval($input['price']) : 0
+                ];
+                $types = 'sd';
+                break;
+        }
+        
+        // Build update columns string
+        foreach ($data as $key => $value) {
+            if (!empty($updateColumns)) $updateColumns .= ', ';
+            $updateColumns .= "$key = ?";
+            
+            $insertColumns[] = $key;
+            $insertValues[] = $value;
+        }
+        
+        // Check if record exists
+        $checkSql = "SELECT id FROM $tableName WHERE vehicle_id = ?";
+        if ($tripType === 'tour' && isset($input['tourId'])) {
+            $checkSql .= " AND tour_id = ?";
+            $checkStmt = $conn->prepare($checkSql);
+            $checkStmt->bind_param("ss", $vehicleId, $input['tourId']);
+        } else {
+            $checkStmt = $conn->prepare($checkSql);
+            $checkStmt->bind_param("s", $vehicleId);
+        }
+        
+        $checkStmt->execute();
+        $checkResult = $checkStmt->get_result();
+        
+        if ($checkResult->num_rows > 0) {
+            // Update existing record
+            $updateSql = "UPDATE $tableName SET $updateColumns, updated_at = NOW() WHERE vehicle_id = ?";
+            if ($tripType === 'tour' && isset($input['tourId'])) {
+                $updateSql .= " AND tour_id = ?";
+                $stmt = $conn->prepare($updateSql);
+                
+                $params = array_values($data);
+                $params[] = $vehicleId;
+                $params[] = $input['tourId'];
+                
+                $bindParams = array_merge([$types . 'ss'], $params);
+                call_user_func_array([$stmt, 'bind_param'], $bindParams);
+            } else {
+                $stmt = $conn->prepare($updateSql);
+                
+                $params = array_values($data);
+                $params[] = $vehicleId;
+                
+                $bindParams = array_merge([$types . 's'], $params);
+                call_user_func_array([$stmt, 'bind_param'], $bindParams);
+            }
+            
+            if (!$stmt->execute()) {
+                throw new Exception("Failed to update $tripType fares: " . $stmt->error);
+            }
+            
+            error_log("$tripType fares updated successfully for vehicle: $vehicleId");
+            sendJsonResponse(['status' => 'success', 'message' => "$tripType fares updated successfully"]);
+            
+        } else {
+            // Insert new record
+            $insertColumnsSql = implode(', ', $insertColumns);
+            $placeholders = str_repeat('?, ', count($insertColumns) - 1) . '?';
+            
+            $insertSql = "INSERT INTO $tableName (vehicle_id, $insertColumnsSql, created_at, updated_at) 
+                          VALUES (?, $placeholders, NOW(), NOW())";
+            
+            $stmt = $conn->prepare($insertSql);
+            
+            $params = [$vehicleId];
+            $params = array_merge($params, array_values($data));
+            
+            $bindParams = array_merge(['s' . $types], $params);
+            call_user_func_array([$stmt, 'bind_param'], $bindParams);
+            
+            if (!$stmt->execute()) {
+                throw new Exception("Failed to insert $tripType fares: " . $stmt->error);
+            }
+            
+            error_log("$tripType fares created successfully for vehicle: $vehicleId");
+            sendJsonResponse(['status' => 'success', 'message' => "$tripType fares created successfully"]);
+        }
+        
+    } catch (Exception $e) {
+        error_log("Error updating $tripType fares: " . $e->getMessage());
+        sendJsonResponse(['status' => 'error', 'message' => $e->getMessage()], 500);
+    }
+    
+    exit;
+}
+
+// Create table if it doesn't exist
+function checkAndCreateTable($conn, $tableName, $tripType) {
+    // Check if table exists
+    $result = $conn->query("SHOW TABLES LIKE '$tableName'");
+    
+    if ($result->num_rows == 0) {
+        $createTableSql = "";
+        
+        // Create table based on trip type
+        switch ($tripType) {
+            case 'outstation-one-way':
+            case 'outstation-round-trip':
+                $createTableSql = "
+                    CREATE TABLE $tableName (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        vehicle_id VARCHAR(50) NOT NULL,
+                        base_price DECIMAL(10,2) DEFAULT 0,
+                        price_per_km DECIMAL(10,2) DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE KEY (vehicle_id)
+                    )
+                ";
+                break;
+                
+            case 'local':
+                $createTableSql = "
+                    CREATE TABLE $tableName (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        vehicle_id VARCHAR(50) NOT NULL,
+                        hr8_km80_price DECIMAL(10,2) DEFAULT 0,
+                        hr10_km100_price DECIMAL(10,2) DEFAULT 0,
+                        extra_km_rate DECIMAL(10,2) DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE KEY (vehicle_id)
+                    )
+                ";
+                break;
+                
+            case 'airport':
+                $createTableSql = "
+                    CREATE TABLE $tableName (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        vehicle_id VARCHAR(50) NOT NULL,
+                        base_price DECIMAL(10,2) DEFAULT 0,
+                        price_per_km DECIMAL(10,2) DEFAULT 0,
+                        airport_fee DECIMAL(10,2) DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE KEY (vehicle_id)
+                    )
+                ";
+                break;
+                
+            case 'tour':
+                $createTableSql = "
+                    CREATE TABLE $tableName (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        vehicle_id VARCHAR(50) NOT NULL,
+                        tour_id VARCHAR(50) NOT NULL,
+                        price DECIMAL(10,2) DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE KEY (vehicle_id, tour_id)
+                    )
+                ";
+                break;
+        }
+        
+        if (!empty($createTableSql)) {
+            $result = $conn->query($createTableSql);
+            if (!$result) {
+                throw new Exception("Failed to create table $tableName: " . $conn->error);
+            }
+            error_log("Created table $tableName for $tripType fares");
+        }
+    }
+}
+
 // If we get here, the method is not supported
 sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed: ' . $_SERVER['REQUEST_METHOD']], 405);
 
@@ -244,6 +524,7 @@ function getFallbackVehiclePricing() {
     return [
         [
             'id' => 1,
+            'vehicleId' => 'sedan',
             'vehicleType' => 'sedan',
             'basePrice' => 4200,
             'pricePerKm' => 14,
@@ -253,6 +534,7 @@ function getFallbackVehiclePricing() {
         ],
         [
             'id' => 2,
+            'vehicleId' => 'ertiga',
             'vehicleType' => 'ertiga',
             'basePrice' => 5400,
             'pricePerKm' => 18,
@@ -262,6 +544,7 @@ function getFallbackVehiclePricing() {
         ],
         [
             'id' => 3,
+            'vehicleId' => 'innova_crysta',
             'vehicleType' => 'innova_crysta',
             'basePrice' => 6000,
             'pricePerKm' => 20,
