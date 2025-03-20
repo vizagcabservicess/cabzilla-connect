@@ -278,7 +278,9 @@ export function LocationInput({
 
   // Setup Google Maps autocomplete - using a ref to prevent multiple listeners
   useEffect(() => {
-    if (!google || !isLoaded || disabled || readOnly || !inputRef.current) return;
+    if (!google || !isLoaded || disabled || readOnly || !inputRef.current) {
+      return;
+    }
     
     // Cleanup previous listeners to prevent duplication
     const cleanupAutocomplete = () => {
@@ -297,6 +299,9 @@ export function LocationInput({
     cleanupAutocomplete();
     
     try {
+      // Log that we're initializing autocomplete
+      console.log("Initializing Google Maps Autocomplete...");
+      
       const options: google.maps.places.AutocompleteOptions = {
         fields: ['address_components', 'geometry', 'name', 'formatted_address'],
         componentRestrictions: { country: 'in' }, // Restrict to India
@@ -333,6 +338,8 @@ export function LocationInput({
         
         const place = autocompleteRef.current.getPlace();
         setLocationError(null);
+        
+        console.log("Place selected from autocomplete:", place);
         
         if (!place || !place.geometry || !place.geometry.location) {
           console.error("No place details returned from autocomplete");

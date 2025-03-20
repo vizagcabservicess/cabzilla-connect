@@ -63,7 +63,7 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
   // Log loading status
   useEffect(() => {
     if (isLoaded) {
-      console.log("Google Maps API loading started");
+      console.log("Google Maps API loaded successfully");
     }
     if (loadError) {
       console.error("Error during Google Maps load:", loadError);
