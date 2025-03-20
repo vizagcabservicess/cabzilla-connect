@@ -1,10 +1,10 @@
-
 import { CabType, FareCalculationParams } from '@/types/cab';
 import { calculateFare } from '@/lib/fareCalculationService';
 import { differenceInDays } from 'date-fns';
 import { TripType, TripMode } from '@/lib/tripTypes';
 import { fareAPI } from '@/services/api';
 import { toast } from 'sonner';
+import axios from 'axios';
 
 // In-memory cache for fare calculations
 type FareCache = Map<string, { expire: number, fare: number }>;
