@@ -73,7 +73,7 @@ export function useLocationInput(
         let bounds;
         
         if (isPickupLocation) {
-          // For pickup locations, set a wider radius around Visakhapatnam (approximately 20km)
+          // For pickup locations, set a wider radius around Visakhapatnam (approximately 25km)
           bounds = new google.maps.LatLngBounds(
             new google.maps.LatLng(17.5615, 83.0315), // SW corner - expanded
             new google.maps.LatLng(17.8815, 83.4115)  // NE corner - expanded
@@ -140,7 +140,7 @@ export function useLocationInput(
         if (isPickupLocation) {
           const vizagCenter = { lat: 17.6868, lng: 83.2185 };
           const distance = getDistanceFromLatLonInKm(lat, lng, vizagCenter.lat, vizagCenter.lng);
-          isInVizag = distance <= 25; // Increased from original 20km
+          isInVizag = distance <= 25; // Using 25km radius for Visakhapatnam
           
           if (!isInVizag) {
             toast.error("Pickup location must be within 25km of Visakhapatnam", {
@@ -159,7 +159,7 @@ export function useLocationInput(
           address: placeDetails.formatted_address || suggestion.description,
           lat,
           lng,
-          type: 'other', // Changed from 'custom' to 'other' to match type definition
+          type: 'other', // Using 'other' instead of 'custom' to match type definition
           isInVizag,
           city: extractCityFromPlaceDetails(placeDetails) || 'Visakhapatnam',
           state: extractStateFromPlaceDetails(placeDetails) || 'Andhra Pradesh',
@@ -180,7 +180,7 @@ export function useLocationInput(
         address: suggestion.description,
         lat: 0,
         lng: 0,
-        type: 'other', // Changed from 'custom' to 'other' to match type definition
+        type: 'other', // Using 'other' instead of 'custom' to match type definition
         isInVizag: isPickupLocation,
         city: 'Visakhapatnam',
         state: 'Andhra Pradesh',
