@@ -530,29 +530,74 @@ class FareService {
       
       const cleanedVehicleId = cleanVehicleId(vehicleId);
       
+      // Handle special case for local trip type
+      if (tripType === 'local') {
+        try {
+          console.log("Using dedicated local fares update endpoint");
+          
+          const localFareData = {
+            vehicleId: cleanedVehicleId,
+            price8hrs80km: parseFloat(fareData.hr8km80Price || fareData.price8hrs80km || 0),
+            price10hrs100km: parseFloat(fareData.hr10km100Price || fareData.price10hrs100km || 0),
+            priceExtraKm: parseFloat(fareData.extraKmRate || fareData.priceExtraKm || 0)
+          };
+          
+          console.log("Sending local fare data:", localFareData);
+          
+          const localResponse = await fetch('/api/admin/local-fares-update.php', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'Expires': '0',
+              'X-Force-Refresh': 'true'
+            },
+            body: JSON.stringify(localFareData)
+          });
+          
+          if (localResponse.ok) {
+            const localData = await localResponse.json();
+            console.log("Local fares update response:", localData);
+            
+            if (localData.status === 'success') {
+              this.clearCache();
+              return true;
+            }
+          } else {
+            const errorText = await localResponse.text();
+            console.error("Local fares update error:", errorText);
+            // Try fallback methods below
+          }
+        } catch (localError) {
+          console.error("Error with local fares update endpoint:", localError);
+          // Continue to fallback methods
+        }
+      }
+      
       // Prepare the request data based on trip type
       let requestData: any = {
         vehicleId: cleanedVehicleId,
-        tripType: tripType.includes('-') ? tripType.split('-')[0] : tripType
+        tripType: tripType
       };
       
       // Add fare specific fields based on trip type
       if (tripType === 'outstation-one-way' || tripType === 'outstation-round-trip' || tripType === 'airport') {
         requestData = {
           ...requestData,
-          basePrice: parseFloat(fareData.basePrice) || 0,
-          pricePerKm: parseFloat(fareData.pricePerKm) || 0
+          baseFare: parseFloat(fareData.basePrice || fareData.baseFare || 0),
+          pricePerKm: parseFloat(fareData.pricePerKm || 0)
         };
         
         if (tripType === 'airport' && fareData.airportFee !== undefined) {
-          requestData.airportFee = parseFloat(fareData.airportFee) || 0;
+          requestData.airportFee = parseFloat(fareData.airportFee || 0);
         }
       } else if (tripType === 'local') {
         requestData = {
           ...requestData,
-          price8hrs80km: parseFloat(fareData.hr8km80Price) || 0,
-          price10hrs100km: parseFloat(fareData.hr10km100Price) || 0,
-          priceExtraKm: parseFloat(fareData.extraKmRate) || 0,
+          price8hrs80km: parseFloat(fareData.hr8km80Price || fareData.price8hrs80km || 0),
+          price10hrs100km: parseFloat(fareData.hr10km100Price || fareData.price10hrs100km || 0),
+          priceExtraKm: parseFloat(fareData.extraKmRate || fareData.priceExtraKm || 0),
           priceExtraHour: 0 // Default value
         };
       }
@@ -585,6 +630,7 @@ class FareService {
         const data = await response.json();
         
         if (data.status === 'success') {
+          this.clearCache();
           return true;
         } else {
           throw new Error(data.message || "Unknown API error");
@@ -625,6 +671,7 @@ class FareService {
           const fallbackData2 = await fallbackResponse.json();
           
           if (fallbackData2.status === 'success' || (typeof fallbackData2 === 'object' && fallbackData2 !== null)) {
+            this.clearCache();
             return true;
           } else {
             throw new Error("Fallback endpoint also failed");

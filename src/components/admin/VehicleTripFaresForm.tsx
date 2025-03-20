@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -168,7 +169,38 @@ export const VehicleTripFaresForm = () => {
         extraKmRate
       });
       
-      // Use a direct fetch call to the backend to troubleshoot API issues
+      // Try using the dedicated local fares update endpoint
+      try {
+        const localFaresResponse = await fetch('/api/admin/local-fares-update.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          },
+          body: JSON.stringify({
+            vehicleId: selectedVehicle,
+            price8hrs80km: hr8km80Price,
+            price10hrs100km: hr10km100Price,
+            priceExtraKm: extraKmRate
+          })
+        });
+        
+        const responseData = await localFaresResponse.json();
+        console.log("Local fares update response:", responseData);
+        
+        if (responseData.status === 'success') {
+          // Clear cache and show success message
+          fareService.clearCache();
+          toast.success("Local fares updated successfully");
+          return;
+        }
+      } catch (localError) {
+        console.warn("Local fares endpoint failed, trying fallback:", localError);
+      }
+      
+      // Fallback to the general vehicle pricing endpoint
       const apiUrl = '/api/admin/vehicle-pricing.php';
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -188,20 +220,29 @@ export const VehicleTripFaresForm = () => {
         })
       });
       
+      // If that fails too, try using fareService's updateTripFares method as last resort
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('API Error Response:', {
-          status: response.status,
-          statusText: response.statusText,
-          body: errorText
+        console.warn("Vehicle pricing endpoint failed, trying fareService as last resort");
+        
+        const success = await fareService.updateTripFares(selectedVehicle, "local", {
+          hr8km80Price: hr8km80Price,
+          hr10km100Price: hr10km100Price,
+          extraKmRate: extraKmRate
         });
-        throw new Error(`API error (${response.status}): ${errorText}`);
+        
+        if (success) {
+          toast.success("Local fares updated successfully");
+          return;
+        } else {
+          throw new Error("All update methods failed");
+        }
       }
       
       const data = await response.json();
       console.log("API Response:", data);
       
       if (data.status === 'success') {
+        fareService.clearCache();
         toast.success("Local fares updated successfully");
       } else {
         throw new Error(data.message || "Unknown API error");
@@ -240,6 +281,40 @@ export const VehicleTripFaresForm = () => {
         airportFee: airportFeeValue
       });
       
+      // Try direct fetch first
+      try {
+        const airportResponse = await fetch('/api/admin/vehicle-pricing.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          },
+          body: JSON.stringify({
+            vehicleId: selectedVehicle,
+            tripType: 'airport',
+            baseFare: basePrice,
+            pricePerKm: pricePerKm,
+            airportFee: airportFeeValue
+          })
+        });
+        
+        if (airportResponse.ok) {
+          const responseData = await airportResponse.json();
+          console.log("Airport fare update response:", responseData);
+          
+          if (responseData.status === 'success') {
+            fareService.clearCache();
+            toast.success("Airport fares updated successfully");
+            return;
+          }
+        }
+      } catch (airportError) {
+        console.warn("Direct API call failed, trying fareService:", airportError);
+      }
+      
+      // Fallback to fareService
       const success = await fareService.updateTripFares(selectedVehicle, "airport", {
         basePrice: basePrice,
         pricePerKm: pricePerKm,
@@ -247,6 +322,7 @@ export const VehicleTripFaresForm = () => {
       });
       
       if (success) {
+        fareService.clearCache();
         toast.success("Airport fares updated successfully");
       } else {
         throw new Error("Failed to update airport fares");
