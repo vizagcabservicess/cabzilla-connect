@@ -1,4 +1,3 @@
-
 import { createMapCanvas } from '@/utils/googleMapsUtils';
 
 /**
@@ -72,11 +71,9 @@ export function createAutocompleteRequest(
     requestOptions.componentRestrictions = { country: options.country };
   }
   
-  // If bounds are provided, use them but don't enforce strict bounds
+  // If bounds are provided, use them
   if (bounds) {
     requestOptions.bounds = bounds;
-    // Force strictBounds to false to get more results
-    requestOptions.strictBounds = false;
   }
   
   return requestOptions;
