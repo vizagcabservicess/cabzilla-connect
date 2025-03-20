@@ -10,11 +10,9 @@ import {
   SelectValue 
 } from "@/components/ui/select";
 import { RefreshCw, Save, AlertTriangle } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PricingForm } from './PricingForm';
 import { fareService } from '@/services/fareService';
-import { getVehiclePricingUrls } from '@/lib/apiEndpoints';
+import { getVehiclePricingUrls, getVehicleUpdateUrls } from '@/lib/apiEndpoints';
 
 interface VehiclePricingFormProps {
   vehicles: any[];
@@ -83,8 +81,10 @@ export const VehiclePricingForm: React.FC<VehiclePricingFormProps> = ({
       });
       
       // Log available endpoints for debugging
-      const endpoints = getVehiclePricingUrls();
-      console.log("Available pricing endpoints:", endpoints);
+      const pricingEndpoints = getVehiclePricingUrls();
+      const updateEndpoints = getVehicleUpdateUrls();
+      console.log("Available pricing endpoints:", pricingEndpoints);
+      console.log("Available update endpoints:", updateEndpoints);
       
       // Clear all caches before update
       localStorage.removeItem('cabTypes');
@@ -102,45 +102,89 @@ export const VehiclePricingForm: React.FC<VehiclePricingFormProps> = ({
       };
       
       // Send update request
-      const success = await fareService.updateTripFares(
-        selectedVehicleId,
-        tripType,
-        fareData
-      );
+      let success = false;
+      
+      // First try with the standard method
+      try {
+        success = await fareService.updateTripFares(
+          selectedVehicleId,
+          tripType,
+          fareData
+        );
+      } catch (err) {
+        console.warn("First update attempt failed:", err);
+      }
+      
+      // If standard method failed, try alternate approach
+      if (!success) {
+        console.log("First attempt failed, trying alternate approach...");
+        
+        // Try with alternate trip type
+        const alternateType = tripType === 'base' ? 'outstation' : 'base';
+        
+        try {
+          const fallbackSuccess = await fareService.updateTripFares(
+            selectedVehicleId,
+            alternateType,
+            fareData
+          );
+          
+          if (fallbackSuccess) {
+            console.log("Updated vehicle pricing using alternate trip type");
+            success = true;
+            if (onSuccess) onSuccess(selectedVehicleId, alternateType);
+          }
+        } catch (err) {
+          console.warn("Alternate trip type approach failed:", err);
+        }
+      }
+      
+      // If both methods failed, try one more approach with direct endpoint override
+      if (!success) {
+        console.log("Trying direct endpoint override approach...");
+        fareService.clearCache();
+        
+        try {
+          // Set a flag to force direct API path
+          const forceDirectPath = true;
+          const directSuccess = await fareService.updateTripFares(
+            selectedVehicleId,
+            tripType,
+            fareData,
+            forceDirectPath
+          );
+          
+          if (directSuccess) {
+            console.log("Updated vehicle pricing using direct path override");
+            success = true;
+            if (onSuccess) onSuccess(selectedVehicleId, tripType);
+          }
+        } catch (err) {
+          console.warn("Direct path override approach failed:", err);
+        }
+      }
       
       if (success) {
         toast.success(`Vehicle pricing updated successfully for ${vehicleName}`);
-        onSuccess?.(selectedVehicleId, tripType);
-      } else {
-        // Try alternate approach if failure
-        console.log("First attempt failed, trying alternate approach...");
-        const alternateType = tripType === 'base' ? 'outstation' : 'base';
-        
-        // Retry with fallback trip type
-        const fallbackSuccess = await fareService.updateTripFares(
-          selectedVehicleId,
-          alternateType,
-          fareData
-        );
-        
-        if (fallbackSuccess) {
-          toast.success(`Updated vehicle pricing using fallback method`);
-          onSuccess?.(selectedVehicleId, alternateType);
-        } else {
-          throw new Error("All pricing update attempts failed");
+        // If we haven't already called onSuccess in one of the fallback methods
+        if (onSuccess && tripType) {
+          onSuccess(selectedVehicleId, tripType);
         }
+      } else {
+        throw new Error("All pricing update attempts failed");
       }
     } catch (err: any) {
       console.error("Error updating pricing:", err);
       setError(`Failed to update vehicle pricing: ${err.message || 'Unknown error'}. Please check server connectivity.`);
-      onError?.(err);
+      if (onError) onError(err);
       
       toast.error(`Update failed: ${err.message || 'Server connection error'}`);
       
       // Auto-retry logic
       if (retryCount < 2) {
-        setRetryCount(prev => prev + 1);
-        toast.info(`Retrying update (attempt ${retryCount + 1})...`);
+        const newRetryCount = retryCount + 1;
+        setRetryCount(newRetryCount);
+        toast.info(`Retrying update (attempt ${newRetryCount})...`);
         
         // Wait briefly before retrying
         setTimeout(() => {
@@ -157,10 +201,12 @@ export const VehiclePricingForm: React.FC<VehiclePricingFormProps> = ({
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {error && (
-        <Alert variant="destructive">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
+        <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-4">
+          <div className="flex">
+            <AlertTriangle className="h-5 w-5 text-red-500 mr-2" />
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        </div>
       )}
       
       <div className="space-y-4">

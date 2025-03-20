@@ -5,6 +5,7 @@ import { TripType, TripMode } from '@/lib/tripTypes';
 import { formatPrice } from '@/lib/cabData';
 import { differenceInDays } from 'date-fns';
 import { toast } from 'sonner';
+import { getVehiclePricingUrls, getVehicleUpdateUrls } from '@/lib/apiEndpoints';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 const API_VERSION = import.meta.env.VITE_API_VERSION || '1.0.0';
@@ -229,7 +230,8 @@ class FareService {
   async updateTripFares(
     vehicleId: string, 
     tripType: string, 
-    fareData: Record<string, any>
+    fareData: Record<string, any>,
+    forceDirectPath: boolean = false
   ): Promise<boolean> {
     // Validate inputs
     if (!vehicleId || !tripType) {
@@ -247,21 +249,32 @@ class FareService {
       vehicleId: cleanedVehicleId,
       tripType,
       ...fareData,
-      name: fareData.name || vehicleId
+      name: fareData.name || vehicleId,
+      _t: Date.now() // Add timestamp to bust cache
     };
-    
-    // Add timestamp to bust cache
-    const timestamp = Date.now();
     
     // Create an abort controller for the request
     const controller = new AbortController();
     
     try {
-      // Try both API paths in parallel to increase chances of success
-      const directEndpoint = `${API_BASE_URL}/api/admin/vehicle-pricing.php?_t=${timestamp}`;
-      const proxyEndpoint = `/api/admin/vehicle-pricing?_t=${timestamp}`; 
+      // Get endpoints from apiEndpoints service
+      const pricingEndpoints = getVehiclePricingUrls(true);
+      const updateEndpoints = getVehicleUpdateUrls(true);
       
-      console.log(`Sending vehicle pricing update requests to multiple endpoints`);
+      // Add direct endpoints for more robustness
+      const directEndpoints = [
+        `${API_BASE_URL}/api/admin/vehicle-pricing.php?_t=${Date.now()}`,
+        `${API_BASE_URL}/api/fares/vehicles.php?_t=${Date.now()}`,
+        `/api/admin/vehicle-pricing?_t=${Date.now()}`,
+        `/api/fares/vehicles?_t=${Date.now()}`
+      ];
+      
+      // Use direct endpoints if forced or if using direct API path
+      const endpoints = forceDirectPath || USE_DIRECT_API_PATH 
+        ? [...directEndpoints, ...pricingEndpoints, ...updateEndpoints]
+        : [...pricingEndpoints, ...updateEndpoints, ...directEndpoints];
+      
+      console.log(`Sending vehicle pricing update to ${endpoints.length} potential endpoints`);
       
       // Create common request config
       const requestConfig = {
@@ -277,61 +290,31 @@ class FareService {
         timeout: 20000 // 20 seconds
       };
       
-      // Try both direct and proxy endpoints
-      const directPromise = axios.post(directEndpoint, payload, requestConfig)
-        .catch(err => {
-          console.warn(`Direct API call failed: ${err.message}`);
-          return null;
-        });
-        
-      const proxyPromise = axios.post(proxyEndpoint, payload, requestConfig)
-        .catch(err => {
-          console.warn(`Proxy API call failed: ${err.message}`);
-          return null;
-        });
-      
-      // Also try the vehicles.php endpoint as another fallback
-      const fallbackEndpoint = `${API_BASE_URL}/api/fares/vehicles.php?_t=${timestamp}`;
-      const fallbackPromise = axios.post(fallbackEndpoint, payload, requestConfig)
-        .catch(err => {
-          console.warn(`Fallback API call failed: ${err.message}`);
-          return null;
-        });
-      
-      // Wait for the first successful response
-      const responses = await Promise.all([directPromise, proxyPromise, fallbackPromise]);
-      const successfulResponse = responses.find(res => res && res.status === 200);
-      
-      if (successfulResponse) {
-        console.log('Fare update successful:', successfulResponse.data);
-        
-        // Clear caches
-        this.clearCache();
-        localStorage.removeItem('cabTypes');
-        
-        return true;
-      } else {
-        // If all parallel requests failed, try sequentially with the fallback endpoints
-        console.warn('All parallel requests failed, trying sequential fallbacks');
-        
-        // Try alternate endpoint if no response was successful
+      // Try each endpoint sequentially until one works
+      for (let i = 0; i < endpoints.length; i++) {
+        const endpoint = endpoints[i];
         try {
-          const altEndpoint = `${API_BASE_URL}/api/admin/vehicles-update.php?_t=${timestamp}`;
-          console.log(`Trying alternate endpoint: ${altEndpoint}`);
+          console.log(`Trying endpoint ${i+1}/${endpoints.length}: ${endpoint}`);
           
-          const altResponse = await axios.post(altEndpoint, payload, requestConfig);
+          const response = await axios.post(endpoint, payload, requestConfig);
           
-          if (altResponse.status === 200) {
-            console.log('Alternate endpoint fare update successful:', altResponse.data);
+          if (response.status === 200 || response.status === 201) {
+            console.log(`Endpoint ${i+1} (${endpoint}) successful:`, response.data);
+            
+            // Clear caches
             this.clearCache();
+            localStorage.removeItem('cabTypes');
+            
             return true;
           }
-        } catch (altError) {
-          console.warn('Alternate endpoint failed:', altError);
+        } catch (error: any) {
+          console.warn(`Endpoint ${i+1} (${endpoint}) failed:`, error.message);
+          // Continue to the next endpoint
         }
-        
-        throw new Error('All API endpoints failed');
       }
+      
+      // If we've tried all endpoints and none worked
+      throw new Error('All API endpoints failed');
     } catch (error: any) {
       console.error('Error updating trip fares:', error.response?.data || error);
       

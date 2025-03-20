@@ -58,6 +58,7 @@ export function LocationInput({
   const pendingLocationUpdateRef = useRef<Location | null>(null);
   const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
   const autocompleteInitializedRef = useRef<boolean>(false);
+  const initializationAttemptsRef = useRef<number>(0);
   
   // Update the address whenever locationData changes
   useEffect(() => {
@@ -110,6 +111,11 @@ export function LocationInput({
     wasLocationSelectedRef.current = false;
     isManualInputRef.current = true; // Mark that this is manual input
     
+    // Ensure the autocomplete is initialized
+    if (isLoaded && google && inputRef.current && !autocompleteInitializedRef.current) {
+      initializeAutocomplete();
+    }
+    
     // If the input is cleared completely, immediately update the parent
     if (newAddress === '') {
       const emptyLocation: Location = {
@@ -143,10 +149,15 @@ export function LocationInput({
           document.body.appendChild(newMapCanvas);
         }
         
-        placesServiceRef.current = new google.maps.places.PlacesService(
-          document.getElementById('map-canvas') as HTMLDivElement
-        );
-        console.log("PlacesService initialized");
+        try {
+          placesServiceRef.current = new google.maps.places.PlacesService(
+            document.getElementById('map-canvas') as HTMLDivElement
+          );
+          console.log("PlacesService initialized");
+        } catch (error) {
+          console.error("Failed to initialize PlacesService:", error);
+          return null;
+        }
       }
       
       return new Promise<google.maps.places.PlaceResult | null>((resolve, reject) => {
@@ -279,24 +290,50 @@ export function LocationInput({
   // Setup Google Maps autocomplete
   const initializeAutocomplete = useCallback(() => {
     if (!google || !google.maps || !google.maps.places || !inputRef.current || 
-        disabled || readOnly || autocompleteInitializedRef.current) {
-      return;
+        disabled || readOnly || !isLoaded) {
+      console.log("Cannot initialize autocomplete yet, conditions not met:", {
+        googleAvailable: !!google,
+        mapsAvailable: !!(google && google.maps),
+        placesAvailable: !!(google && google.maps && google.maps.places),
+        inputRefAvailable: !!inputRef.current,
+        notDisabled: !disabled,
+        notReadOnly: !readOnly,
+        isLoaded: isLoaded
+      });
+      return false;
     }
     
-    console.log("Initializing Google Places Autocomplete...");
+    // Force create map-canvas if it doesn't exist
+    if (!document.getElementById('map-canvas')) {
+      console.log("Creating map-canvas element for autocomplete initialization");
+      const mapCanvas = document.createElement('div');
+      mapCanvas.id = 'map-canvas';
+      mapCanvas.style.display = 'none';
+      document.body.appendChild(mapCanvas);
+    }
     
     // Cleanup previous listeners to prevent duplication
     if (autocompleteListenerRef.current) {
-      google.maps.event.removeListener(autocompleteListenerRef.current);
+      try {
+        google.maps.event.removeListener(autocompleteListenerRef.current);
+      } catch (error) {
+        console.error("Error removing autocomplete listener:", error);
+      }
       autocompleteListenerRef.current = null;
     }
     
     if (autocompleteRef.current) {
-      google.maps.event.clearInstanceListeners(autocompleteRef.current);
+      try {
+        google.maps.event.clearInstanceListeners(autocompleteRef.current);
+      } catch (error) {
+        console.error("Error clearing instance listeners:", error);
+      }
       autocompleteRef.current = null;
     }
     
     try {
+      console.log("🔄 Initializing Google Places Autocomplete...");
+      
       // Create options for autocomplete
       const options: google.maps.places.AutocompleteOptions = {
         fields: ['address_components', 'geometry', 'name', 'formatted_address'],
@@ -327,6 +364,7 @@ export function LocationInput({
       // Create new autocomplete instance
       const autocomplete = new google.maps.places.Autocomplete(inputRef.current, options);
       autocompleteRef.current = autocomplete;
+      console.log("Created new Autocomplete instance");
       
       // Add place_changed listener
       autocompleteListenerRef.current = autocomplete.addListener('place_changed', () => {
@@ -379,28 +417,56 @@ export function LocationInput({
       
       autocompleteInitializedRef.current = true;
       console.log("✅ Autocomplete initialized successfully");
+      return true;
     } catch (error) {
       console.error("❌ Error initializing autocomplete:", error);
-      toast.error("Error setting up location search. Please refresh the page.");
+      autocompleteInitializedRef.current = false;
+      
+      // Only show toast for final attempt
+      if (initializationAttemptsRef.current >= 2) {
+        toast.error("Error setting up location search. Please refresh the page.");
+      }
+      return false;
     }
-  }, [google, disabled, readOnly, isPickupLocation, isAirportTransfer, updateParentLocation, locationData.id]);
+  }, [google, disabled, readOnly, isPickupLocation, isAirportTransfer, updateParentLocation, locationData.id, isLoaded]);
 
   // Initialize autocomplete when Google Maps is loaded
   useEffect(() => {
     if (isLoaded && google && inputRef.current && !autocompleteInitializedRef.current) {
+      initializationAttemptsRef.current++;
+      console.log(`Attempt #${initializationAttemptsRef.current} to initialize autocomplete`);
+      
       // Delay initialization to ensure everything is properly loaded
-      setTimeout(() => {
-        initializeAutocomplete();
-      }, 500);
+      const initTimeout = setTimeout(() => {
+        const success = initializeAutocomplete();
+        
+        // Retry initialization if it failed (up to 3 times)
+        if (!success && initializationAttemptsRef.current < 3) {
+          console.log(`Autocomplete initialization failed, will retry. Attempt: ${initializationAttemptsRef.current}`);
+          
+          // Try to force-initialize Places API
+          if (google && google.maps && !google.maps.places) {
+            try {
+              console.log("Attempting to manually load Places library");
+              // This is a hack to try to force the Places library to load
+              new google.maps.places.Autocomplete(document.createElement('input'));
+            } catch (error) {
+              console.error("Failed to manually initialize Places library:", error);
+            }
+          }
+        }
+      }, 500 + (initializationAttemptsRef.current * 500)); // Increase delay with each attempt
+      
+      return () => clearTimeout(initTimeout);
     }
   }, [isLoaded, google, initializeAutocomplete]);
 
   // Re-initialize autocomplete when props change
   useEffect(() => {
-    if (isLoaded && google && inputRef.current) {
+    if (isLoaded && google && inputRef.current && (isPickupLocation !== undefined || isAirportTransfer !== undefined)) {
       initializeAutocomplete();
     }
-  }, [isPickupLocation, isAirportTransfer, disabled, readOnly, initializeAutocomplete, isLoaded, google]);
+  }, [isPickupLocation, isAirportTransfer, initializeAutocomplete, isLoaded, google]);
 
   // Helper function to safely determine if a location is in Vizag
   function isInVizagArea(lat: number, lng: number, address: string | undefined | null): boolean {
@@ -439,8 +505,12 @@ export function LocationInput({
       
       // Initialize the PlacesService
       if (!placesServiceRef.current && google.maps.places) {
-        placesServiceRef.current = new google.maps.places.PlacesService(mapCanvas);
-        console.log("PlacesService initialized via useEffect");
+        try {
+          placesServiceRef.current = new google.maps.places.PlacesService(mapCanvas);
+          console.log("PlacesService initialized via useEffect");
+        } catch (error) {
+          console.error("Failed to initialize PlacesService in useEffect:", error);
+        }
       }
     }
     
@@ -475,6 +545,14 @@ export function LocationInput({
           onClick={() => {
             // Re-initialize autocomplete on click if it wasn't initialized successfully
             if (!autocompleteInitializedRef.current && google && isLoaded) {
+              console.log("Trying to initialize autocomplete on click");
+              initializeAutocomplete();
+            }
+          }}
+          onFocus={() => {
+            // Also try to initialize on focus
+            if (!autocompleteInitializedRef.current && google && isLoaded) {
+              console.log("Trying to initialize autocomplete on focus");
               initializeAutocomplete();
             }
           }}

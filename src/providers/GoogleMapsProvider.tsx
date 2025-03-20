@@ -36,6 +36,7 @@ export const useGoogleMaps = () => useContext(GoogleMapsContext);
 export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps) => {
   const [googleInstance, setGoogleInstance] = useState<typeof google | null>(null);
   const [hasShownAPIKeyError, setHasShownAPIKeyError] = useState(false);
+  const [mapCanvasInitialized, setMapCanvasInitialized] = useState(false);
   
   // Use provided apiKey or fallback to environment variable
   const googleMapsApiKey = apiKey || GOOGLE_MAPS_API_KEY;
@@ -60,17 +61,35 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
     language: 'en',
   });
 
-  // Log loading status
+  // Create hidden div for PlacesService
   useEffect(() => {
-    if (isLoaded) {
-      console.log("Google Maps API loaded successfully!");
-      // Create hidden div for PlacesService if it doesn't exist
+    if (isLoaded && !mapCanvasInitialized) {
       if (!document.getElementById('map-canvas')) {
+        console.log("Creating hidden map-canvas element for PlacesService");
         const mapCanvas = document.createElement('div');
         mapCanvas.id = 'map-canvas';
         mapCanvas.style.display = 'none';
         document.body.appendChild(mapCanvas);
-        console.log("Created hidden map-canvas element for PlacesService");
+      }
+      setMapCanvasInitialized(true);
+    }
+  }, [isLoaded, mapCanvasInitialized]);
+
+  // Log loading status
+  useEffect(() => {
+    if (isLoaded) {
+      console.log("Google Maps API loaded successfully!");
+      
+      // Initialize Places API if not already done
+      if (window.google && window.google.maps && !window.google.maps.places) {
+        console.log("Initializing Places API");
+        try {
+          // Force Places library initialization if needed
+          new window.google.maps.places.AutocompleteService();
+          console.log("Places API initialized manually");
+        } catch (error) {
+          console.error("Failed to initialize Places API manually:", error);
+        }
       }
     }
     if (loadError) {
@@ -85,8 +104,8 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
   // Store the google object once loaded
   useEffect(() => {
     if (isLoaded && !loadError && window.google) {
+      console.log("Setting Google instance in context", window.google);
       setGoogleInstance(window.google);
-      console.log("✅ Google Maps API loaded successfully");
       
       // Set default bounds to India if Maps loaded successfully
       if (window.google.maps) {

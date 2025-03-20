@@ -1,3 +1,4 @@
+
 // API Endpoints for the application
 // This file centralizes all API endpoint URLs and provides fallback mechanisms
 
@@ -55,6 +56,15 @@ export const getEndpointUrls = (endpointPath: string, appendTimestamp = true): s
   // For local development fallback to /api path
   urls.push(`/api${endpointPath}.php${timestamp}`);
   urls.push(`/api${endpointPath}${timestamp}`);
+  
+  // Direct access for some endpoints (fallback)
+  if (API_BASE_URL) {
+    // Add direct access without /api prefix for some endpoints
+    urls.push(`${API_BASE_URL}/admin${endpointPath.replace('/admin', '')}.php${timestamp}`);
+    urls.push(`${API_BASE_URL}/admin${endpointPath.replace('/admin', '')}${timestamp}`);
+    urls.push(`${API_BASE_URL}/fares${endpointPath.replace('/fares', '')}.php${timestamp}`);
+    urls.push(`${API_BASE_URL}/fares${endpointPath.replace('/fares', '')}${timestamp}`);
+  }
 
   // Remove duplicates
   return [...new Set(urls)];
