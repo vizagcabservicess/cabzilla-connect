@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -21,13 +21,50 @@ import {
   Navigation,
   RepeatIcon,
   Warehouse,
-  RotateCw
+  RotateCw,
+  AlertTriangle
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
-import { VehiclePricing, VehiclePricingUpdateRequest } from '@/types/api';
 import { fareAPI } from '@/services/api';
 import { reloadCabTypes } from '@/lib/cabData';
+import axios from 'axios';
+
+interface VehiclePricing {
+  vehicleId: string;
+  vehicleType: string;
+  basePrice: number;
+  pricePerKm: number;
+  nightHaltCharge: number;
+  driverAllowance: number;
+}
+
+const DEFAULT_VEHICLES: VehiclePricing[] = [
+  {
+    vehicleId: 'sedan',
+    vehicleType: 'Sedan',
+    basePrice: 1000,
+    pricePerKm: 12,
+    nightHaltCharge: 300,
+    driverAllowance: 300
+  },
+  {
+    vehicleId: 'ertiga',
+    vehicleType: 'Ertiga',
+    basePrice: 1200,
+    pricePerKm: 14,
+    nightHaltCharge: 350,
+    driverAllowance: 350
+  },
+  {
+    vehicleId: 'innova_crysta',
+    vehicleType: 'Innova Crysta',
+    basePrice: 1500,
+    pricePerKm: 16,
+    nightHaltCharge: 400,
+    driverAllowance: 400
+  }
+];
 
 const basePricingSchema = z.object({
   vehicleType: z.string().min(1, { message: "Vehicle type is required" }),
@@ -65,11 +102,18 @@ const outstationFormSchema = z.object({
 });
 
 export function VehiclePricingManagement() {
-  const [vehiclePricing, setVehiclePricing] = useState<VehiclePricing[]>([]);
+  const [vehiclePricing, setVehiclePricing] = useState<VehiclePricing[]>(DEFAULT_VEHICLES);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { toast: uiToast } = useToast();
+  const [apiEndpoint, setApiEndpoint] = useState('');
+  
+  useEffect(() => {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+    setApiEndpoint(`${baseUrl}/api/admin/vehicle-pricing.php`);
+    console.log('API Endpoint:', `${baseUrl}/api/admin/vehicle-pricing.php`);
+  }, []);
   
   const baseForm = useForm<z.infer<typeof basePricingSchema>>({
     resolver: zodResolver(basePricingSchema),
@@ -125,11 +169,13 @@ export function VehiclePricingManagement() {
     localStorage.removeItem('tourFares');
     localStorage.removeItem('lastFareUpdate');
     localStorage.removeItem('vehiclePricing');
+    localStorage.removeItem('cabTypes');
     
     sessionStorage.removeItem('cabFares');
     sessionStorage.removeItem('tourFares');
     sessionStorage.removeItem('calculatedFares');
     sessionStorage.removeItem('vehiclePricing');
+    sessionStorage.removeItem('cabTypes');
     
     const cachePrefixes = ['fare-', 'price-', 'cab-', 'vehicle-'];
     
@@ -157,23 +203,50 @@ export function VehiclePricingManagement() {
   }, []);
   
   const fetchVehiclePricing = useCallback(async () => {
+    if (!apiEndpoint) {
+      console.log("API endpoint not set yet, skipping fetch");
+      return;
+    }
+    
     try {
       setIsRefreshing(true);
       setError(null);
       
       clearAllCaches();
       
-      console.log("Refreshing vehicle pricing with timestamp:", Date.now());
-      
       const timestamp = Date.now();
-      const data = await fareAPI.getVehiclePricing();
+      console.log(`Refreshing vehicle pricing with timestamp: ${timestamp}`);
+      console.log(`API endpoint: ${apiEndpoint}?_t=${timestamp}`);
       
-      if (Array.isArray(data) && data.length > 0) {
-        console.log("✅ Fetched vehicle pricing:", data);
-        setVehiclePricing(data);
+      const response = await axios.get(`${apiEndpoint}?_t=${timestamp}`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          'X-API-Version': import.meta.env.VITE_API_VERSION || '1.0.29',
+          'X-Force-Refresh': 'true'
+        },
+        timeout: 8000
+      });
+      
+      console.log('Vehicle pricing API response:', response.data);
+      
+      if (Array.isArray(response.data) && response.data.length > 0) {
+        console.log("✅ Fetched vehicle pricing:", response.data);
+        
+        const normalizedData = response.data.map((item: any) => ({
+          vehicleId: item.vehicleId || item.id || `vehicle-${Math.random().toString(36).substring(2, 10)}`,
+          vehicleType: item.vehicleType || item.name || 'Unknown Vehicle',
+          basePrice: parseFloat(item.basePrice) || 0,
+          pricePerKm: parseFloat(item.pricePerKm) || 0,
+          nightHaltCharge: parseFloat(item.nightHaltCharge) || 0,
+          driverAllowance: parseFloat(item.driverAllowance) || 0
+        }));
+        
+        setVehiclePricing(normalizedData);
         
         sessionStorage.setItem('vehiclePricing', JSON.stringify({
-          data,
+          data: normalizedData,
           timestamp: Date.now()
         }));
         
@@ -181,130 +254,329 @@ export function VehiclePricingManagement() {
         
         await reloadCabTypes();
       } else {
-        console.warn("❌ Empty or invalid vehicle pricing data:", data);
-        setError("No vehicle pricing data available. The API may be down or returned an empty result.");
+        console.warn("❌ Empty or invalid vehicle pricing data:", response.data);
+        setError("No vehicle pricing data available. Using default vehicles.");
+        setVehiclePricing(DEFAULT_VEHICLES);
+        toast.warning("Using default vehicle pricing");
       }
     } catch (error) {
       console.error("Error refreshing vehicle pricing:", error);
-      setError("Failed to refresh vehicle pricing. Please try again.");
+      setError("Failed to refresh vehicle pricing. Using default vehicles.");
+      setVehiclePricing(DEFAULT_VEHICLES);
       toast.error("Failed to refresh vehicle pricing");
     } finally {
       setIsRefreshing(false);
     }
-  }, [clearAllCaches]);
+  }, [apiEndpoint, clearAllCaches]);
   
   useEffect(() => {
-    fetchVehiclePricing();
-  }, [fetchVehiclePricing]);
+    if (apiEndpoint) {
+      fetchVehiclePricing();
+    }
+  }, [fetchVehiclePricing, apiEndpoint]);
   
   const onBasePricingSubmit = async (values: z.infer<typeof basePricingSchema>) => {
+    if (!apiEndpoint) {
+      toast.error("API endpoint not configured");
+      return;
+    }
+    
     try {
       setIsLoading(true);
-      
       clearAllCaches();
       
-      console.log("Submitting vehicle pricing update:", values);
+      console.log("Submitting base pricing update:", values);
       
-      const data = await fareAPI.updateVehiclePricing(values as VehiclePricingUpdateRequest);
-      console.log("Vehicle pricing update response:", data);
+      const selectedVehicle = vehiclePricing.find(v => v.vehicleType === values.vehicleType);
+      const vehicleId = selectedVehicle?.vehicleId || values.vehicleType.toLowerCase().replace(/\s+/g, '_');
       
-      toast.success("Vehicle pricing updated successfully");
+      const requestData = {
+        vehicleId: vehicleId,
+        tripType: 'base',
+        basePrice: values.basePrice,
+        pricePerKm: values.pricePerKm,
+        nightHaltCharge: values.nightHaltCharge,
+        driverAllowance: values.driverAllowance
+      };
       
-      await reloadCabTypes();
+      console.log("API endpoint:", apiEndpoint);
+      console.log("Request data:", requestData);
       
-      await fetchVehiclePricing();
+      let retries = 0;
+      const maxRetries = 3;
+      let success = false;
+      
+      while (retries < maxRetries && !success) {
+        try {
+          const response = await axios.post(apiEndpoint, requestData, {
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'X-API-Version': import.meta.env.VITE_API_VERSION || '1.0.29',
+              'X-Force-Refresh': 'true'
+            },
+            timeout: 10000
+          });
+          
+          console.log("Vehicle pricing update response:", response.data);
+          
+          if (response.data && response.data.status === 'success') {
+            success = true;
+            toast.success("Vehicle pricing updated successfully");
+            
+            setVehiclePricing(prev => prev.map(v => 
+              v.vehicleType === values.vehicleType 
+                ? { ...v, basePrice: values.basePrice, pricePerKm: values.pricePerKm, 
+                    nightHaltCharge: values.nightHaltCharge, driverAllowance: values.driverAllowance }
+                : v
+            ));
+            
+            await reloadCabTypes();
+          } else {
+            throw new Error(response.data?.message || "Unknown error");
+          }
+        } catch (error) {
+          console.error(`Attempt ${retries + 1} failed:`, error);
+          retries++;
+          
+          if (retries >= maxRetries) {
+            throw error;
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
     } catch (error) {
       console.error("Error updating vehicle pricing:", error);
-      toast.error("Failed to update vehicle pricing");
+      toast.error("Failed to update vehicle pricing. Please try again.");
     } finally {
       setIsLoading(false);
     }
   };
   
   const onLocalFareSubmit = async (values: z.infer<typeof localFareSchema>) => {
+    if (!apiEndpoint) {
+      toast.error("API endpoint not configured");
+      return;
+    }
+    
     try {
       setIsLoading(true);
-      console.log("Submitting local fare update:", values);
-      
       clearAllCaches();
       
+      console.log("Submitting local fare update:", values);
+      
+      const selectedVehicle = vehiclePricing.find(v => v.vehicleType === values.vehicleType);
+      const vehicleId = selectedVehicle?.vehicleId || values.vehicleType.toLowerCase().replace(/\s+/g, '_');
+      
       const requestData = {
-        vehicleType: values.vehicleType,
-        package8hrs: values.package8hrs,
-        package10hrs: values.package10hrs,
-        extraHourCharge: values.extraHourCharge,
-        extraKmCharge: values.extraKmCharge,
+        vehicleId: vehicleId,
+        tripType: 'local',
+        price8hrs80km: values.package8hrs,
+        price10hrs100km: values.package10hrs,
+        priceExtraKm: values.extraKmCharge,
+        priceExtraHour: values.extraHourCharge
       };
       
-      setTimeout(async () => {
-        toast.success("Local fare settings updated successfully");
-        
-        await reloadCabTypes();
-        
-        setIsLoading(false);
-      }, 500);
+      console.log("API endpoint:", apiEndpoint);
+      console.log("Request data:", requestData);
+      
+      let retries = 0;
+      const maxRetries = 3;
+      let success = false;
+      
+      while (retries < maxRetries && !success) {
+        try {
+          const response = await axios.post(apiEndpoint, requestData, {
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'X-API-Version': import.meta.env.VITE_API_VERSION || '1.0.29',
+              'X-Force-Refresh': 'true'
+            },
+            timeout: 10000
+          });
+          
+          console.log("Local fare update response:", response.data);
+          
+          if (response.data && response.data.status === 'success') {
+            success = true;
+            toast.success("Local fare settings updated successfully");
+            
+            await reloadCabTypes();
+          } else {
+            throw new Error(response.data?.message || "Unknown error");
+          }
+        } catch (error) {
+          console.error(`Attempt ${retries + 1} failed:`, error);
+          retries++;
+          
+          if (retries >= maxRetries) {
+            throw error;
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
     } catch (error) {
       console.error("Error updating local fares:", error);
-      toast.error("Failed to update local fares");
+      toast.error("Failed to update local fares. Please try again.");
+    } finally {
       setIsLoading(false);
     }
   };
   
   const onAirportFareSubmit = async (values: z.infer<typeof airportFareSchema>) => {
+    if (!apiEndpoint) {
+      toast.error("API endpoint not configured");
+      return;
+    }
+    
     try {
       setIsLoading(true);
-      console.log("Submitting airport fare update:", values);
-      
       clearAllCaches();
       
+      console.log("Submitting airport fare update:", values);
+      
+      const selectedVehicle = vehiclePricing.find(v => v.vehicleType === values.vehicleType);
+      const vehicleId = selectedVehicle?.vehicleId || values.vehicleType.toLowerCase().replace(/\s+/g, '_');
+      
       const requestData = {
-        vehicleType: values.vehicleType,
-        tier1: values.tier1,
-        tier2: values.tier2,
-        tier3: values.tier3,
-        tier4: values.tier4,
-        extraKmCharge: values.extraKmCharge,
+        vehicleId: vehicleId,
+        tripType: 'airport',
+        pickupFare: values.tier2,
+        dropFare: values.tier3,
+        extraZones: {
+          tier1: values.tier1,
+          tier4: values.tier4
+        },
+        extraKmCharge: values.extraKmCharge
       };
       
-      setTimeout(async () => {
-        toast.success("Airport fare settings updated successfully");
-        
-        await reloadCabTypes();
-        
-        setIsLoading(false);
-      }, 500);
+      console.log("API endpoint:", apiEndpoint);
+      console.log("Request data:", requestData);
+      
+      let retries = 0;
+      const maxRetries = 3;
+      let success = false;
+      
+      while (retries < maxRetries && !success) {
+        try {
+          const response = await axios.post(apiEndpoint, requestData, {
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'X-API-Version': import.meta.env.VITE_API_VERSION || '1.0.29',
+              'X-Force-Refresh': 'true'
+            },
+            timeout: 10000
+          });
+          
+          console.log("Airport fare update response:", response.data);
+          
+          if (response.data && response.data.status === 'success') {
+            success = true;
+            toast.success("Airport fare settings updated successfully");
+            
+            await reloadCabTypes();
+          } else {
+            throw new Error(response.data?.message || "Unknown error");
+          }
+        } catch (error) {
+          console.error(`Attempt ${retries + 1} failed:`, error);
+          retries++;
+          
+          if (retries >= maxRetries) {
+            throw error;
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
     } catch (error) {
       console.error("Error updating airport fares:", error);
-      toast.error("Failed to update airport fares");
+      toast.error("Failed to update airport fares. Please try again.");
+    } finally {
       setIsLoading(false);
     }
   };
   
   const onOutstationFareSubmit = async (values: z.infer<typeof outstationFormSchema>) => {
+    if (!apiEndpoint) {
+      toast.error("API endpoint not configured");
+      return;
+    }
+    
     try {
       setIsLoading(true);
-      console.log("Submitting outstation fare update:", values);
-      
       clearAllCaches();
       
+      console.log("Submitting outstation fare update:", values);
+      
+      const selectedVehicle = vehiclePricing.find(v => v.vehicleType === values.vehicleType);
+      const vehicleId = selectedVehicle?.vehicleId || values.vehicleType.toLowerCase().replace(/\s+/g, '_');
+      
       const oneWayRequest = {
-        vehicleType: values.vehicleType,
-        basePrice: values.oneWayBasePrice,
+        vehicleId: vehicleId,
+        tripType: 'outstation',
+        tripMode: 'one-way',
+        baseFare: values.oneWayBasePrice,
         pricePerKm: values.oneWayPerKm,
         nightHaltCharge: values.nightHaltCharge,
-        driverAllowance: values.driverAllowance,
+        driverAllowance: values.driverAllowance
       };
       
-      setTimeout(async () => {
-        toast.success("Outstation fare settings updated successfully");
-        
-        await reloadCabTypes();
-        
-        setIsLoading(false);
-      }, 500);
+      console.log("API endpoint for one-way:", apiEndpoint);
+      console.log("One-way request data:", oneWayRequest);
+      
+      let retries = 0;
+      const maxRetries = 3;
+      let success = false;
+      
+      while (retries < maxRetries && !success) {
+        try {
+          const response = await axios.post(apiEndpoint, oneWayRequest, {
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'X-API-Version': import.meta.env.VITE_API_VERSION || '1.0.29',
+              'X-Force-Refresh': 'true'
+            },
+            timeout: 10000
+          });
+          
+          console.log("One-way fare update response:", response.data);
+          
+          if (response.data && response.data.status === 'success') {
+            success = true;
+            toast.success("Outstation fare settings updated successfully");
+            
+            setVehiclePricing(prev => prev.map(v => 
+              v.vehicleType === values.vehicleType 
+                ? { ...v, basePrice: values.oneWayBasePrice, pricePerKm: values.oneWayPerKm, 
+                    nightHaltCharge: values.nightHaltCharge, driverAllowance: values.driverAllowance }
+                : v
+            ));
+            
+            await reloadCabTypes();
+          } else {
+            throw new Error(response.data?.message || "Unknown error");
+          }
+        } catch (error) {
+          console.error(`Attempt ${retries + 1} failed:`, error);
+          retries++;
+          
+          if (retries >= maxRetries) {
+            throw error;
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
     } catch (error) {
       console.error("Error updating outstation fares:", error);
-      toast.error("Failed to update outstation fares");
+      toast.error("Failed to update outstation fares. Please try again.");
+    } finally {
       setIsLoading(false);
     }
   };
@@ -383,7 +655,7 @@ export function VehiclePricingManagement() {
       outstationForm.setValue("driverAllowance", selectedVehicle.driverAllowance || 0);
     }
   };
-  
+
   if (error && !vehiclePricing.length) {
     return (
       <ApiErrorFallback 

@@ -58,13 +58,24 @@ export function CabOptions({
       
       setIsLoadingCabs(true);
       try {
-        console.log('Loading dynamic cab types...');
+        console.log('Loading dynamic cab types...', Date.now());
         fareService.clearCache(); // Clear the fare cache to force fresh data
         
-        const dynamicCabTypes = await loadCabTypes();
+        // Add cache-busting timestamp to avoid stale data
+        const cacheBuster = new Date().getTime();
+        const dynamicCabTypes = await loadCabTypes(`?_t=${cacheBuster}`);
         console.log('Loaded dynamic cab types:', dynamicCabTypes);
+        
         if (Array.isArray(dynamicCabTypes) && dynamicCabTypes.length > 0) {
-          setCabTypes(dynamicCabTypes);
+          // Ensure all cabs have valid IDs and names
+          const validCabTypes = dynamicCabTypes.map(cab => ({
+            ...cab,
+            id: cab.id || cab.vehicleId || `cab-${Math.random().toString(36).substring(2, 10)}`,
+            name: cab.name || (cab.id ? cab.id.charAt(0).toUpperCase() + cab.id.slice(1).replace('_', ' ') : 'Unknown')
+          }));
+          
+          console.log('Processed cab types:', validCabTypes);
+          setCabTypes(validCabTypes);
           setRefreshSuccessful(true);
         } else {
           console.warn('API returned empty vehicle data, using initial cab types');
@@ -98,12 +109,21 @@ export function CabOptions({
       // Force clear local cache
       fareService.clearCache();
       
-      console.log('Forcing cab types refresh...');
-      const freshCabTypes = await reloadCabTypes();
+      console.log('Forcing cab types refresh...', Date.now());
+      // Add timestamp to avoid caching issues
+      const cacheBuster = new Date().getTime();
+      const freshCabTypes = await reloadCabTypes(`?_t=${cacheBuster}`);
       console.log('Refreshed cab types:', freshCabTypes);
       
       if (Array.isArray(freshCabTypes) && freshCabTypes.length > 0) {
-        setCabTypes(freshCabTypes);
+        // Ensure all cabs have valid IDs and names
+        const validCabTypes = freshCabTypes.map(cab => ({
+          ...cab,
+          id: cab.id || cab.vehicleId || `cab-${Math.random().toString(36).substring(2, 10)}`,
+          name: cab.name || (cab.id ? cab.id.charAt(0).toUpperCase() + cab.id.slice(1).replace('_', ' ') : 'Unknown')
+        }));
+        
+        setCabTypes(validCabTypes);
         toast.success('Vehicle data refreshed successfully');
         setRefreshSuccessful(true);
         

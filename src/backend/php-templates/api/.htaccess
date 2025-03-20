@@ -31,7 +31,7 @@ RewriteRule ^vehicles-data$ fares/vehicles-data.php [L,QSA]
 Header set X-Requested-Path "%{REQUEST_URI}e"
 Header set X-Query-String "%{QUERY_STRING}e"
 
-# Disable caching for API endpoints - Enforce no caching very strictly
+# Disable caching for API endpoints - Force no caching very strictly
 <IfModule mod_headers.c>
     Header unset ETag
     Header unset Last-Modified
@@ -45,9 +45,16 @@ Header set X-Query-String "%{QUERY_STRING}e"
     Header always set X-Cache-Timestamp "%{TIME}e"
 </IfModule>
 
-# Set content type
+# Set content type for PHP files to JSON
 <FilesMatch "\.(php)$">
     Header set Content-Type "application/json"
+</FilesMatch>
+
+# Ensure PHP files are not cached by setting headers
+<FilesMatch "\.(php)$">
+    Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
 </FilesMatch>
 
 # Enable CORS with maximum permissive settings

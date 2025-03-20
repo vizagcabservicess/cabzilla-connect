@@ -21,6 +21,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // Get the request method
 $method = $_SERVER['REQUEST_METHOD'];
 
+// Log incoming request for debugging
+logError("Vehicle pricing request received", [
+    'method' => $method,
+    'uri' => $_SERVER['REQUEST_URI'],
+    'query' => $_SERVER['QUERY_STRING'] ?? '',
+    'content_type' => $_SERVER['CONTENT_TYPE'] ?? ''
+]);
+
 // Function to check if a vehicle exists
 function vehicleExists($conn, $vehicleId) {
     $stmt = $conn->prepare("SELECT id FROM vehicles WHERE id = ? OR vehicle_id = ?");
@@ -44,8 +52,15 @@ function updateOutstationFares($conn, $vehicleId, $fareData) {
     // Clean the vehicle ID
     $vehicleId = cleanVehicleId($vehicleId);
     
+    // Log what we're trying to update
+    logError("Updating outstation fares", [
+        'vehicleId' => $vehicleId,
+        'data' => $fareData
+    ]);
+    
     // Check required fields
     if (!isset($fareData['baseFare']) || !isset($fareData['pricePerKm'])) {
+        logError("Missing required fields for outstation fares", $fareData);
         sendJsonResponse(['status' => 'error', 'message' => 'Missing required fields for outstation fares'], 400);
         return false;
     }
@@ -73,6 +88,7 @@ function updateOutstationFares($conn, $vehicleId, $fareData) {
     }
     
     if (!$stmt->execute()) {
+        logError("Database error updating outstation fares", ['error' => $stmt->error]);
         sendJsonResponse(['status' => 'error', 'message' => 'Database error: ' . $stmt->error], 500);
         return false;
     }
@@ -90,8 +106,15 @@ function updateLocalFares($conn, $vehicleId, $fareData) {
     // Clean the vehicle ID
     $vehicleId = cleanVehicleId($vehicleId);
     
+    // Log what we're trying to update
+    logError("Updating local fares", [
+        'vehicleId' => $vehicleId,
+        'data' => $fareData
+    ]);
+    
     // Check required fields
     if (!isset($fareData['price8hrs80km']) || !isset($fareData['price10hrs100km']) || !isset($fareData['priceExtraKm']) || !isset($fareData['priceExtraHour'])) {
+        logError("Missing required fields for local fares", $fareData);
         sendJsonResponse(['status' => 'error', 'message' => 'Missing required fields for local fares'], 400);
         return false;
     }
@@ -119,6 +142,7 @@ function updateLocalFares($conn, $vehicleId, $fareData) {
     }
     
     if (!$stmt->execute()) {
+        logError("Database error updating local fares", ['error' => $stmt->error]);
         sendJsonResponse(['status' => 'error', 'message' => 'Database error: ' . $stmt->error], 500);
         return false;
     }
@@ -131,8 +155,15 @@ function updateAirportFares($conn, $vehicleId, $fareData) {
     // Clean the vehicle ID
     $vehicleId = cleanVehicleId($vehicleId);
     
+    // Log what we're trying to update
+    logError("Updating airport fares", [
+        'vehicleId' => $vehicleId,
+        'data' => $fareData
+    ]);
+    
     // Check required fields
     if (!isset($fareData['pickupFare']) || !isset($fareData['dropFare'])) {
+        logError("Missing required fields for airport fares", $fareData);
         sendJsonResponse(['status' => 'error', 'message' => 'Missing required fields for airport fares'], 400);
         return false;
     }
@@ -158,55 +189,7 @@ function updateAirportFares($conn, $vehicleId, $fareData) {
     }
     
     if (!$stmt->execute()) {
-        sendJsonResponse(['status' => 'error', 'message' => 'Database error: ' . $stmt->error], 500);
-        return false;
-    }
-    
-    return true;
-}
-
-// Function to handle tour fare updates for a specific vehicle
-function updateTourFares($conn, $vehicleId, $tourId, $price) {
-    // Clean the vehicle ID
-    $vehicleId = cleanVehicleId($vehicleId);
-    
-    // Convert to numeric value
-    $price = floatval($price);
-    
-    // Determine the column name based on vehicle ID
-    $columnMap = [
-        'sedan' => 'sedan',
-        'ertiga' => 'ertiga',
-        'innova' => 'innova',
-        'innova_crysta' => 'innova',
-        'tempo' => 'tempo',
-        'luxury' => 'luxury'
-    ];
-    
-    $columnName = $columnMap[$vehicleId] ?? null;
-    
-    if (!$columnName) {
-        sendJsonResponse(['status' => 'error', 'message' => 'Invalid vehicle ID for tour pricing: ' . $vehicleId], 400);
-        return false;
-    }
-    
-    // Check if tour exists
-    $stmt = $conn->prepare("SELECT id FROM tour_fares WHERE tour_id = ?");
-    $stmt->bind_param("s", $tourId);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    if ($result->num_rows === 0) {
-        sendJsonResponse(['status' => 'error', 'message' => 'Tour not found: ' . $tourId], 404);
-        return false;
-    }
-    
-    // Update the price for this vehicle
-    $sql = "UPDATE tour_fares SET " . $columnName . " = ?, updated_at = NOW() WHERE tour_id = ?";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("ds", $price, $tourId);
-    
-    if (!$stmt->execute()) {
+        logError("Database error updating airport fares", ['error' => $stmt->error]);
         sendJsonResponse(['status' => 'error', 'message' => 'Database error: ' . $stmt->error], 500);
         return false;
     }
@@ -220,8 +203,12 @@ if ($method === 'POST') {
     $json = file_get_contents('php://input');
     $data = json_decode($json, true);
     
+    // Log the incoming data
+    logError("Received vehicle pricing update request", $data);
+    
     // Validate required fields
     if (!isset($data['vehicleId']) || !isset($data['tripType'])) {
+        logError("Missing required fields in request", $data);
         sendJsonResponse(['status' => 'error', 'message' => 'Missing required fields: vehicleId and tripType'], 400);
         exit;
     }
@@ -230,11 +217,15 @@ if ($method === 'POST') {
     $vehicleId = cleanVehicleId($data['vehicleId']);
     $tripType = $data['tripType'];
     
-    // Check if vehicle exists
-    if (!vehicleExists($conn, $vehicleId)) {
+    // Log the cleaned data
+    logError("Cleaned vehicle pricing data", ['vehicleId' => $vehicleId, 'tripType' => $tripType]);
+    
+    // Check if vehicle exists - skip this check to allow new vehicles
+    /*if (!vehicleExists($conn, $vehicleId)) {
+        logError("Vehicle not found", ['vehicleId' => $vehicleId]);
         sendJsonResponse(['status' => 'error', 'message' => 'Vehicle not found: ' . $vehicleId], 404);
         exit;
-    }
+    }*/
     
     // Switch based on trip type
     $success = false;
@@ -244,12 +235,14 @@ if ($method === 'POST') {
         'outstation' => 'outstation_fares',
         'local' => 'local_package_fares',
         'airport' => 'airport_transfer_fares',
+        'base' => 'vehicles',
         'tour' => 'tour_fares'
     ];
     
     $tableName = isset($tableMap[$tripType]) ? $tableMap[$tripType] : '';
     
     if (empty($tableName)) {
+        logError("Invalid trip type", ['tripType' => $tripType]);
         sendJsonResponse(['status' => 'error', 'message' => 'Invalid trip type: ' . $tripType], 400);
         exit;
     }
@@ -268,94 +261,87 @@ if ($method === 'POST') {
             $success = updateAirportFares($conn, $vehicleId, $data);
             break;
             
-        case 'tour':
-            // Tour fares require tourId as well
-            if (!isset($data['tourId']) || !isset($data['price'])) {
-                sendJsonResponse(['status' => 'error', 'message' => 'Missing required fields for tour fares: tourId and price'], 400);
+        case 'base':
+            // Handle base price updates directly in the vehicles table
+            if (!isset($data['basePrice']) || !isset($data['pricePerKm'])) {
+                logError("Missing required fields for base pricing", $data);
+                sendJsonResponse(['status' => 'error', 'message' => 'Missing required fields for base pricing'], 400);
                 exit;
             }
             
-            $success = updateTourFares($conn, $vehicleId, $data['tourId'], $data['price']);
+            $basePrice = floatval($data['basePrice']);
+            $pricePerKm = floatval($data['pricePerKm']);
+            $nightHaltCharge = isset($data['nightHaltCharge']) ? floatval($data['nightHaltCharge']) : 0;
+            $driverAllowance = isset($data['driverAllowance']) ? floatval($data['driverAllowance']) : 0;
+            
+            // Check if vehicle exists, if not add it
+            $stmt = $conn->prepare("SELECT id FROM vehicles WHERE id = ? OR vehicle_id = ?");
+            $stmt->bind_param("ss", $vehicleId, $vehicleId);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            if ($result->num_rows > 0) {
+                // Update existing vehicle
+                $stmt = $conn->prepare("UPDATE vehicles SET base_price = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?, updated_at = NOW() WHERE id = ? OR vehicle_id = ?");
+                $stmt->bind_param("ddddss", $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, $vehicleId, $vehicleId);
+            } else {
+                // Insert new vehicle
+                $stmt = $conn->prepare("INSERT INTO vehicles (id, vehicle_id, name, base_price, price_per_km, night_halt_charge, driver_allowance, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())");
+                $name = ucfirst(str_replace('_', ' ', $vehicleId));
+                $stmt->bind_param("sssdddd", $vehicleId, $vehicleId, $name, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
+            }
+            
+            $success = $stmt->execute();
+            if (!$success) {
+                logError("Database error updating base pricing", ['error' => $stmt->error]);
+                sendJsonResponse(['status' => 'error', 'message' => 'Database error: ' . $stmt->error], 500);
+                exit;
+            }
+            
+            // Also update outstation_fares for consistency
+            $success = updateOutstationFares($conn, $vehicleId, [
+                'baseFare' => $basePrice,
+                'pricePerKm' => $pricePerKm,
+                'nightHaltCharge' => $nightHaltCharge,
+                'driverAllowance' => $driverAllowance
+            ]);
+            
             break;
     }
     
     if ($success) {
-        sendJsonResponse(['status' => 'success', 'message' => 'Pricing updated successfully for ' . $tripType]);
+        sendJsonResponse(['status' => 'success', 'message' => 'Pricing updated successfully for ' . $tripType, 'vehicleId' => $vehicleId]);
     } else {
         sendJsonResponse(['status' => 'error', 'message' => 'Failed to update pricing'], 500);
     }
 } 
 // Handle GET request to fetch pricing
 else if ($method === 'GET') {
-    // Get vehicle ID from query parameter
-    $vehicleId = isset($_GET['vehicleId']) ? cleanVehicleId($_GET['vehicleId']) : null;
+    // Get all vehicles pricing data
+    $query = "SELECT id, vehicle_id, name, base_price, price_per_km, night_halt_charge, driver_allowance FROM vehicles WHERE is_active = 1 ORDER BY name";
+    $result = $conn->query($query);
     
-    if (!$vehicleId) {
-        sendJsonResponse(['status' => 'error', 'message' => 'Missing required parameter: vehicleId'], 400);
+    if (!$result) {
+        logError("Database error fetching vehicle pricing", ['error' => $conn->error]);
+        sendJsonResponse(['status' => 'error', 'message' => 'Database error: ' . $conn->error], 500);
         exit;
     }
     
-    // Check if vehicle exists
-    if (!vehicleExists($conn, $vehicleId)) {
-        sendJsonResponse(['status' => 'error', 'message' => 'Vehicle not found: ' . $vehicleId], 404);
-        exit;
-    }
+    $vehicles = [];
     
-    // Fetch pricing data for all trip types
-    $pricingData = [
-        'vehicleId' => $vehicleId,
-        'outstation' => null,
-        'local' => null,
-        'airport' => null
-    ];
-    
-    // Get outstation fares
-    $stmt = $conn->prepare("SELECT base_fare, price_per_km, night_halt_charge, driver_allowance FROM outstation_fares WHERE vehicle_id = ?");
-    $stmt->bind_param("s", $vehicleId);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    if ($result->num_rows > 0) {
-        $row = $result->fetch_assoc();
-        $pricingData['outstation'] = [
-            'baseFare' => (float)$row['base_fare'],
+    while ($row = $result->fetch_assoc()) {
+        $vehicleId = $row['id'] ?? $row['vehicle_id'];
+        $vehicles[] = [
+            'vehicleId' => $vehicleId,
+            'vehicleType' => $row['name'],
+            'basePrice' => (float)$row['base_price'],
             'pricePerKm' => (float)$row['price_per_km'],
             'nightHaltCharge' => (float)$row['night_halt_charge'],
             'driverAllowance' => (float)$row['driver_allowance']
         ];
     }
     
-    // Get local package fares
-    $stmt = $conn->prepare("SELECT price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour FROM local_package_fares WHERE vehicle_id = ?");
-    $stmt->bind_param("s", $vehicleId);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    if ($result->num_rows > 0) {
-        $row = $result->fetch_assoc();
-        $pricingData['local'] = [
-            'price8hrs80km' => (float)$row['price_8hrs_80km'],
-            'price10hrs100km' => (float)$row['price_10hrs_100km'],
-            'priceExtraKm' => (float)$row['price_extra_km'],
-            'priceExtraHour' => (float)$row['price_extra_hour']
-        ];
-    }
-    
-    // Get airport transfer fares
-    $stmt = $conn->prepare("SELECT pickup_fare, drop_fare FROM airport_transfer_fares WHERE vehicle_id = ?");
-    $stmt->bind_param("s", $vehicleId);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    if ($result->num_rows > 0) {
-        $row = $result->fetch_assoc();
-        $pricingData['airport'] = [
-            'pickupFare' => (float)$row['pickup_fare'],
-            'dropFare' => (float)$row['drop_fare']
-        ];
-    }
-    
-    sendJsonResponse($pricingData);
+    sendJsonResponse($vehicles);
 } else {
     // Method not allowed
     sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
