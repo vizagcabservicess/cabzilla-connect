@@ -223,27 +223,44 @@ class FareService {
       // Clear fare cache when vehicles are refreshed
       this.clearCache();
       
+      // Clean vehicle IDs to ensure no item- prefixes
+      const cleanVehicleId = (id: string | undefined): string => {
+        if (!id) return '';
+        
+        // Remove 'item-' prefix if it exists
+        if (id.startsWith('item-')) {
+          return id.substring(5);
+        }
+        
+        return id;
+      };
+      
       // Map the vehicles to CabType format with safe defaults for all fields
       const cabTypes: CabType[] = vehicleArray
         .filter(vehicle => vehicle && typeof vehicle === 'object')
-        .map(vehicle => ({
-          id: String(vehicle.id || vehicle.vehicleId || vehicle.vehicle_id || Math.random().toString(36).substring(2, 9)),
-          name: String(vehicle.name || 'Unnamed Vehicle'),
-          capacity: Number(vehicle.capacity) || 4,
-          luggageCapacity: Number(vehicle.luggageCapacity || vehicle.luggage_capacity) || 2,
-          price: Number(vehicle.basePrice || vehicle.price || vehicle.base_price) || 4200,
-          pricePerKm: Number(vehicle.pricePerKm || vehicle.price_per_km) || 14,
-          image: String(vehicle.image || '/cars/sedan.png'),
-          amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC'],
-          description: String(vehicle.description || ''),
-          ac: vehicle.ac !== undefined ? Boolean(vehicle.ac) : true,
-          nightHaltCharge: Number(vehicle.nightHaltCharge || vehicle.night_halt_charge) || 700,
-          driverAllowance: Number(vehicle.driverAllowance || vehicle.driver_allowance) || 250,
-          isActive: vehicle.isActive !== undefined ? Boolean(vehicle.isActive) : 
-                   (vehicle.is_active !== undefined ? Boolean(vehicle.is_active) : true),
-          vehicleId: String(vehicle.vehicleId || vehicle.id || vehicle.vehicle_id || Math.random().toString(36).substring(2, 9)),
-          basePrice: Number(vehicle.basePrice || vehicle.price || vehicle.base_price) || 4200
-        }))
+        .map(vehicle => {
+          const rawVehicleId = vehicle.id || vehicle.vehicleId || vehicle.vehicle_id || '';
+          const cleanedId = cleanVehicleId(String(rawVehicleId));
+          
+          return {
+            id: cleanedId,
+            name: String(vehicle.name || 'Unnamed Vehicle'),
+            capacity: Number(vehicle.capacity) || 4,
+            luggageCapacity: Number(vehicle.luggageCapacity || vehicle.luggage_capacity) || 2,
+            price: Number(vehicle.basePrice || vehicle.price || vehicle.base_price) || 4200,
+            pricePerKm: Number(vehicle.pricePerKm || vehicle.price_per_km) || 14,
+            image: String(vehicle.image || '/cars/sedan.png'),
+            amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC'],
+            description: String(vehicle.description || ''),
+            ac: vehicle.ac !== undefined ? Boolean(vehicle.ac) : true,
+            nightHaltCharge: Number(vehicle.nightHaltCharge || vehicle.night_halt_charge) || 700,
+            driverAllowance: Number(vehicle.driverAllowance || vehicle.driver_allowance) || 250,
+            isActive: vehicle.isActive !== undefined ? Boolean(vehicle.isActive) : 
+                    (vehicle.is_active !== undefined ? Boolean(vehicle.is_active) : true),
+            vehicleId: cleanedId, // Store the cleaned ID
+            basePrice: Number(vehicle.basePrice || vehicle.price || vehicle.base_price) || 4200
+          };
+        })
         .filter(cab => cab.isActive !== false && cab.id); // Only return active cabs with valid IDs
       
       this.isRefreshing = false;
@@ -398,9 +415,21 @@ class FareService {
         return false;
       }
       
+      // Clean the vehicle ID
+      const cleanVehicleId = (id: string | undefined): string => {
+        if (!id) return '';
+        
+        // Remove 'item-' prefix if it exists
+        if (id.startsWith('item-')) {
+          return id.substring(5);
+        }
+        
+        return id;
+      };
+      
       // Create a sanitized copy of the vehicle data with proper type conversions
       const sanitizedData = {
-        vehicleId: String(vehicleData.vehicleId || vehicleData.id || vehicleData.vehicleType || '').trim(),
+        vehicleId: cleanVehicleId(String(vehicleData.vehicleId || vehicleData.id || vehicleData.vehicleType || '')),
         name: String(vehicleData.name || vehicleData.vehicleType || '').trim() || 'Unnamed Vehicle',
         capacity: Number(vehicleData.capacity) || 4,
         luggageCapacity: Number(vehicleData.luggageCapacity) || 2,
@@ -414,7 +443,7 @@ class FareService {
         pricePerKm: Number(vehicleData.pricePerKm) || 0,
         nightHaltCharge: Number(vehicleData.nightHaltCharge) || 0,
         driverAllowance: Number(vehicleData.driverAllowance) || 0,
-        id: String(vehicleData.vehicleId || vehicleData.id || vehicleData.vehicleType || '').trim() // Include id for compatibility
+        id: cleanVehicleId(String(vehicleData.vehicleId || vehicleData.id || vehicleData.vehicleType || '')) // Include id for compatibility
       };
       
       console.log("Sending sanitized data to API:", sanitizedData);
@@ -424,83 +453,53 @@ class FareService {
       
       // Method 1: Using updateVehicle endpoint
       try {
-        const response = await fareAPI.updateVehicle(sanitizedData);
-        if (response) {
-          console.log("Successfully updated vehicle using primary endpoint", response);
+        const response = await axios.post(`/api/admin/vehicles-update.php?_t=${Date.now()}`, sanitizedData, {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        });
+        
+        if (response.status === 200) {
+          console.log("Successfully updated vehicle using primary endpoint", response.data);
           success = true;
+          toast.success("Vehicle updated successfully");
+          this.clearCache();
+          return true;
         }
       } catch (err) {
         console.error("Error with vehicle update endpoint:", err);
         // Continue to next method
       }
       
-      // Method 2: Direct API call with different format if first method failed
+      // Method 2: Direct API call to vehicles.php
       if (!success) {
         try {
           // Wait briefly before trying the next method
           await new Promise(resolve => setTimeout(resolve, 1000));
           
-          const formData = new FormData();
-          Object.entries(sanitizedData).forEach(([key, value]) => {
-            if (Array.isArray(value)) {
-              formData.append(key, JSON.stringify(value));
-            } else if (typeof value === 'boolean') {
-              formData.append(key, value ? '1' : '0');
-            } else {
-              formData.append(key, String(value));
-            }
-          });
-          
-          const response = await fetch('/api/admin/vehicles-update.php', {
-            method: 'POST',
-            body: formData,
-            headers: {
-              'X-Requested-With': 'XMLHttpRequest'
-            }
-          });
-          
-          const result = await response.json();
-          console.log("Direct API response:", result);
-          
-          if (response.ok && result && result.status !== 'error') {
-            console.log("Successfully updated vehicle using direct API call");
-            success = true;
-          } else {
-            throw new Error(result?.message || 'Unknown error');
-          }
-        } catch (err) {
-          console.error("Error with direct API call:", err);
-          // Continue to next method
-        }
-      }
-      
-      // Method 3: Try the vehicles.php endpoint as a last resort
-      if (!success) {
-        try {
-          // Wait briefly before trying the last method
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          const response = await fetch('/api/fares/vehicles.php', {
-            method: 'POST',
+          const response = await axios.post(`/api/fares/vehicles.php?_t=${Date.now()}`, sanitizedData, {
             headers: {
               'Content-Type': 'application/json',
-              'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify(sanitizedData)
+              'X-Force-Refresh': 'true',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'Expires': '0'
+            }
           });
           
-          const result = await response.json();
-          console.log("vehicles.php endpoint response:", result);
-          
-          if (response.ok && result && result.status !== 'error') {
-            console.log("Successfully updated vehicle using vehicles.php endpoint");
+          if (response.status === 200) {
+            console.log("Successfully updated vehicle using vehicles.php endpoint", response.data);
             success = true;
-          } else {
-            throw new Error(result?.message || 'Unknown error');
+            toast.success("Vehicle updated successfully");
+            this.clearCache();
+            return true;
           }
         } catch (err) {
           console.error("Error with vehicles.php endpoint:", err);
-          success = false;
           
           // Show detailed error to help with debugging
           if (err instanceof Error) {
@@ -511,23 +510,143 @@ class FareService {
         }
       }
       
-      // Clear cache to ensure fresh data on next fetch
-      this.clearCache();
-      
-      // Also clear cached data in localStorage/sessionStorage
-      localStorage.removeItem('cabFares');
-      sessionStorage.removeItem('cabFares');
-      sessionStorage.removeItem('calculatedFares');
-      
-      if (success) {
-        toast.success("Vehicle updated successfully");
-      }
-      
-      // Return success
       return success;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating vehicle pricing:', error);
       toast.error("Failed to update vehicle data");
+      return false;
+    }
+  }
+  
+  /**
+   * Update fares for various trip types (outstation, local, airport, tours)
+   */
+  public async updateTripFares(
+    vehicleId: string, 
+    tripType: string, 
+    fareData: Record<string, any>
+  ): Promise<boolean> {
+    try {
+      // Clean the vehicle ID
+      const cleanVehicleId = (id: string | undefined): string => {
+        if (!id) return '';
+        
+        // Remove 'item-' prefix if it exists
+        if (id.startsWith('item-')) {
+          return id.substring(5);
+        }
+        
+        return id;
+      };
+      
+      const cleanedVehicleId = cleanVehicleId(vehicleId);
+      
+      console.log(`Updating ${tripType} fares for vehicle ${cleanedVehicleId}:`, fareData);
+      
+      // Create payload combining vehicle ID, trip type, and fare data
+      const payload = {
+        vehicleId: cleanedVehicleId,
+        tripType,
+        ...fareData
+      };
+      
+      // Get token for authorization
+      const token = localStorage.getItem('token');
+      const authHeader: Record<string, string> = {};
+      
+      if (token) {
+        authHeader.Authorization = `Bearer ${token}`;
+      }
+      
+      // Try to update fares through the API
+      const response = await axios.post(`/api/admin/fares-update.php?_t=${Date.now()}`, payload, {
+        headers: {
+          ...authHeader,
+          'Content-Type': 'application/json',
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
+      
+      if (response.status === 200) {
+        console.log(`${tripType} fares updated successfully`, response.data);
+        toast.success(`${tripType} fares updated successfully`);
+        
+        // Clear cache to ensure fresh data on next fetch
+        this.clearCache();
+        return true;
+      } else {
+        console.error(`Failed to update ${tripType} fares:`, response);
+        toast.error(`Failed to update ${tripType} fares`);
+        return false;
+      }
+    } catch (error: any) {
+      console.error(`Error updating ${tripType} fares:`, error);
+      toast.error(`Failed to update ${tripType} fares: ${error.response?.data?.message || error.message || 'Unknown error'}`);
+      return false;
+    }
+  }
+  
+  /**
+   * Delete vehicle from database
+   */
+  public async deleteVehicle(vehicleId: string): Promise<boolean> {
+    try {
+      // Clean the vehicle ID
+      const cleanVehicleId = (id: string | undefined): string => {
+        if (!id) return '';
+        
+        // Remove 'item-' prefix if it exists
+        if (id.startsWith('item-')) {
+          return id.substring(5);
+        }
+        
+        return id;
+      };
+      
+      const cleanedVehicleId = cleanVehicleId(vehicleId);
+      
+      console.log(`Deleting vehicle with ID: ${cleanedVehicleId}`);
+      
+      // Get token for authorization
+      const token = localStorage.getItem('token');
+      const authHeader: Record<string, string> = {};
+      
+      if (token) {
+        authHeader.Authorization = `Bearer ${token}`;
+      }
+      
+      // Try to delete via API
+      const response = await fetch(`/api/admin/vehicles-update.php?vehicleId=${cleanedVehicleId}&_t=${Date.now()}`, {
+        method: 'DELETE',
+        headers: {
+          ...authHeader,
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
+      
+      const responseData = await response.json();
+      
+      if (response.ok) {
+        console.log("Vehicle deleted successfully", responseData);
+        toast.success("Vehicle deleted successfully");
+        
+        // Clear cache to ensure fresh data on next fetch
+        this.clearCache();
+        return true;
+      } else {
+        console.error("Failed to delete vehicle:", responseData);
+        toast.error(`Failed to delete vehicle: ${responseData.message || 'Unknown error'}`);
+        return false;
+      }
+    } catch (error: any) {
+      console.error("Error deleting vehicle:", error);
+      toast.error(`Error deleting vehicle: ${error.message || 'Unknown error'}`);
       return false;
     }
   }

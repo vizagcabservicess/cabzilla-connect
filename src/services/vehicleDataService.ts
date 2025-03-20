@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { CabType } from '@/types/cab';
 import { toast } from 'sonner';
@@ -67,6 +66,13 @@ const cleanVehicleId = (id: string | undefined): string => {
     return id.substring(5);
   }
   
+  // Remove any random alphanumeric IDs matching a pattern like: r31yw7w
+  if (/^[a-z0-9]{7}$/.test(id)) {
+    // For random IDs, we should try to find the actual vehicle name
+    // but since we don't have it here, we'll keep the ID for now
+    return id;
+  }
+  
   return id;
 };
 
@@ -99,11 +105,14 @@ const normalizeVehiclesData = (data: any): CabType[] => {
   // Map and normalize the vehicle data
   return vehicles.map((vehicle: any) => {
     // Extract and clean ID from various possible sources
-    const vehicleId = cleanVehicleId(String(vehicle.id || vehicle.vehicleId || vehicle.vehicle_id || vehicle.vehicleType || ''));
+    const rawVehicleId = vehicle.id || vehicle.vehicleId || vehicle.vehicle_id || vehicle.vehicleType || '';
+    const vehicleId = cleanVehicleId(String(rawVehicleId));
+    
+    const name = String(vehicle.name || vehicleId || '').trim();
     
     return {
       id: vehicleId,
-      name: String(vehicle.name || vehicleId || ''),
+      name: name || vehicleId, // Use ID as fallback for empty names
       capacity: Number(vehicle.capacity) || 4,
       luggageCapacity: Number(vehicle.luggageCapacity || vehicle.luggage_capacity) || 2,
       price: Number(vehicle.basePrice || vehicle.price || vehicle.base_price) || 0,
@@ -118,7 +127,7 @@ const normalizeVehiclesData = (data: any): CabType[] => {
       isActive: vehicle.isActive !== undefined ? Boolean(vehicle.isActive) : 
               (vehicle.is_active !== undefined ? Boolean(vehicle.is_active) : true),
       basePrice: Number(vehicle.basePrice || vehicle.price || vehicle.base_price) || 0,
-      vehicleId: vehicleId
+      vehicleId: vehicleId // Store the cleaned ID again for consistency
     };
   });
 };
@@ -160,8 +169,9 @@ export const getVehicleData = async (includeInactive: boolean = false): Promise<
       
       const response = await axios.get(endpoint, {
         headers: {
-          'Cache-Control': 'no-cache',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache',
+          'Expires': '0',
           'X-API-Version': apiVersion,
           'X-Force-Refresh': 'true'
         },
@@ -214,6 +224,18 @@ export const updateVehicle = async (vehicleData: any): Promise<any> => {
   try {
     console.log('Updating vehicle with data:', vehicleData);
     
+    // Clean the vehicle ID
+    if (vehicleData.vehicleId) {
+      vehicleData.vehicleId = cleanVehicleId(vehicleData.vehicleId);
+    }
+    if (vehicleData.id) {
+      vehicleData.id = cleanVehicleId(vehicleData.id);
+      // Ensure both id and vehicleId are set and consistent
+      if (!vehicleData.vehicleId) {
+        vehicleData.vehicleId = vehicleData.id;
+      }
+    }
+    
     // Set the Authorization header if JWT is available in localStorage
     const authHeader: Record<string, string> = {};
     const token = localStorage.getItem('token');
@@ -242,7 +264,10 @@ export const updateVehicle = async (vehicleData: any): Promise<any> => {
             ...authHeader,
             'Content-Type': 'application/json',
             'X-API-Version': apiVersion,
-            'X-Force-Refresh': 'true'
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
           },
           timeout: 10000 // 10 second timeout for updates
         });
@@ -280,6 +305,18 @@ export const addVehicle = async (vehicleData: any): Promise<any> => {
   try {
     console.log('Adding new vehicle with data:', vehicleData);
     
+    // Clean the vehicle ID
+    if (vehicleData.vehicleId) {
+      vehicleData.vehicleId = cleanVehicleId(vehicleData.vehicleId);
+    }
+    if (vehicleData.id) {
+      vehicleData.id = cleanVehicleId(vehicleData.id);
+      // Ensure both id and vehicleId are set and consistent
+      if (!vehicleData.vehicleId) {
+        vehicleData.vehicleId = vehicleData.id;
+      }
+    }
+    
     // Set the Authorization header if JWT is available in localStorage
     const authHeader: Record<string, string> = {};
     const token = localStorage.getItem('token');
@@ -308,7 +345,10 @@ export const addVehicle = async (vehicleData: any): Promise<any> => {
             ...authHeader,
             'Content-Type': 'application/json',
             'X-API-Version': apiVersion,
-            'X-Force-Refresh': 'true'
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
           },
           timeout: 10000 // 10 second timeout for adds
         });
@@ -344,7 +384,10 @@ export const addVehicle = async (vehicleData: any): Promise<any> => {
  */
 export const deleteVehicle = async (vehicleId: string): Promise<boolean> => {
   try {
-    console.log('Deleting vehicle with ID:', vehicleId);
+    // Clean the vehicle ID
+    const cleanedVehicleId = cleanVehicleId(vehicleId);
+    
+    console.log('Deleting vehicle with ID:', cleanedVehicleId);
     
     // Set the Authorization header if JWT is available in localStorage
     const authHeader: Record<string, string> = {};
@@ -358,8 +401,8 @@ export const deleteVehicle = async (vehicleId: string): Promise<boolean> => {
     
     // Try multiple API endpoints in sequence
     const endpoints = [
-      `${apiBaseUrl}/api/admin/vehicles-update.php?vehicleId=${vehicleId}&_t=${timestamp}`,
-      `/api/admin/vehicles-update.php?vehicleId=${vehicleId}&_t=${timestamp}`
+      `${apiBaseUrl}/api/admin/vehicles-update.php?vehicleId=${cleanedVehicleId}&_t=${timestamp}`,
+      `/api/admin/vehicles-update.php?vehicleId=${cleanedVehicleId}&_t=${timestamp}`
     ];
     
     // Try each endpoint until one works
@@ -367,24 +410,35 @@ export const deleteVehicle = async (vehicleId: string): Promise<boolean> => {
       try {
         console.log(`Trying to delete vehicle using endpoint: ${endpoint}`);
         
-        const response = await axios.delete(endpoint, {
+        const response = await fetch(endpoint, {
+          method: 'DELETE',
           headers: {
             ...authHeader,
             'X-API-Version': apiVersion,
-            'X-Force-Refresh': 'true'
-          },
-          timeout: 8000
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
         });
         
-        if (response.status === 200) {
+        const responseData = await response.json();
+        console.log('Delete response:', responseData);
+        
+        if (response.ok) {
           console.log('Vehicle deleted successfully via', endpoint);
+          toast.success('Vehicle deleted successfully');
           return true;
+        } else {
+          console.error('Delete failed with status:', response.status);
+          throw new Error(responseData.message || 'Delete failed');
         }
       } catch (error: any) {
-        console.error(`Error deleting vehicle at endpoint ${endpoint}:`, error.response || error);
+        console.error(`Error deleting vehicle at endpoint ${endpoint}:`, error);
         
         // If this is the last endpoint, rethrow the error
         if (endpoint === endpoints[endpoints.length - 1]) {
+          toast.error(`Error deleting vehicle: ${error.message || 'Unknown error'}`);
           throw error;
         }
       }
@@ -392,7 +446,8 @@ export const deleteVehicle = async (vehicleId: string): Promise<boolean> => {
     
     return false;
   } catch (error: any) {
-    console.error('Error deleting vehicle:', error.response?.data || error);
+    console.error('Error deleting vehicle:', error);
+    toast.error(`Error deleting vehicle: ${error.message || 'Unknown error'}`);
     return false;
   }
 };
@@ -405,7 +460,7 @@ export const getVehicleTypes = async (): Promise<{id: string, name: string}[]> =
     const vehicles = await getVehicleData(true); // Get all vehicles including inactive
     
     const vehiclesList = vehicles.map(vehicle => ({
-      id: cleanVehicleId(vehicle.id), // Clean ID to remove any prefixes
+      id: vehicle.id, // Already cleaned in getVehicleData
       name: vehicle.name || vehicle.id
     }));
     
@@ -418,5 +473,83 @@ export const getVehicleTypes = async (): Promise<{id: string, name: string}[]> =
       id: vehicle.id,
       name: vehicle.name || vehicle.id
     }));
+  }
+};
+
+/**
+ * Update fare settings for specific trip types
+ */
+export const updateTripFares = async (
+  vehicleId: string, 
+  tripType: string, 
+  fareData: Record<string, any>
+): Promise<boolean> => {
+  try {
+    // Clean the vehicle ID
+    const cleanedVehicleId = cleanVehicleId(vehicleId);
+    
+    console.log(`Updating ${tripType} fares for vehicle ${cleanedVehicleId}:`, fareData);
+    
+    // Set the Authorization header if JWT is available in localStorage
+    const authHeader: Record<string, string> = {};
+    const token = localStorage.getItem('token');
+    if (token) {
+      authHeader.Authorization = `Bearer ${token}`;
+    }
+    
+    // Add cache busting timestamp
+    const timestamp = Date.now();
+    
+    // Create payload combining vehicle ID, trip type, and fare data
+    const payload = {
+      vehicleId: cleanedVehicleId,
+      tripType,
+      ...fareData
+    };
+    
+    // Try multiple API endpoints in sequence
+    const endpoints = [
+      `${apiBaseUrl}/api/admin/fares-update.php?_t=${timestamp}`,
+      `/api/admin/fares-update.php?_t=${timestamp}`
+    ];
+    
+    // Try each endpoint until one works
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Trying to update ${tripType} fares using endpoint: ${endpoint}`);
+        
+        const response = await axios.post(endpoint, payload, {
+          headers: {
+            ...authHeader,
+            'Content-Type': 'application/json',
+            'X-API-Version': apiVersion,
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          },
+          timeout: 10000
+        });
+        
+        if (response.status === 200) {
+          console.log(`${tripType} fares updated successfully via`, endpoint);
+          toast.success(`${tripType} fares updated successfully`);
+          return true;
+        }
+      } catch (error: any) {
+        console.error(`Error updating ${tripType} fares at endpoint ${endpoint}:`, error.response || error);
+        
+        // If this is the last endpoint, rethrow the error
+        if (endpoint === endpoints[endpoints.length - 1]) {
+          toast.error(`Failed to update ${tripType} fares: ${error.response?.data?.message || error.message || 'Unknown error'}`);
+          throw error;
+        }
+      }
+    }
+    
+    return false;
+  } catch (error: any) {
+    console.error(`Error updating ${tripType} fares:`, error);
+    return false;
   }
 };

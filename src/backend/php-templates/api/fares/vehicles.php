@@ -4,8 +4,8 @@ require_once '../../config.php';
 
 // Allow CORS for all domains
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Force-Refresh');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Force-Refresh, X-Requested-With');
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
@@ -78,6 +78,42 @@ $fallbackVehicles = [
     ]
 ];
 
+// Parse the input data either from POST body or PUT body
+function getRequestData() {
+    $contentType = isset($_SERVER['CONTENT_TYPE']) ? $_SERVER['CONTENT_TYPE'] : '';
+    
+    // For JSON content
+    if (strpos($contentType, 'application/json') !== false) {
+        $inputJSON = file_get_contents('php://input');
+        return json_decode($inputJSON, true);
+    }
+    
+    // For form data
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        return $_POST;
+    }
+    
+    // For other PUT or DELETE requests
+    if ($_SERVER['REQUEST_METHOD'] === 'PUT' || $_SERVER['REQUEST_METHOD'] === 'DELETE') {
+        parse_str(file_get_contents('php://input'), $data);
+        return $data;
+    }
+    
+    return [];
+}
+
+// Clean vehicle ID by removing prefixes if present
+function cleanVehicleId($id) {
+    if (empty($id)) return '';
+    
+    // Remove 'item-' prefix if it exists
+    if (strpos($id, 'item-') === 0) {
+        return substr($id, 5);
+    }
+    
+    return $id;
+}
+
 // Handle requests
 try {
     // Connect to database
@@ -94,26 +130,75 @@ try {
         exit;
     }
 
+    // Handle DELETE requests for vehicle deletion
+    if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
+        // Get vehicle ID from query string
+        $vehicleId = isset($_GET['vehicleId']) ? cleanVehicleId($_GET['vehicleId']) : null;
+        
+        if (!$vehicleId) {
+            throw new Exception("Vehicle ID is required for deletion");
+        }
+        
+        error_log("DELETE request for vehicle ID: " . $vehicleId);
+        
+        // First delete pricing records for this vehicle
+        $deleteStmt = $conn->prepare("DELETE FROM vehicle_pricing WHERE vehicle_type = ?");
+        if (!$deleteStmt) {
+            throw new Exception("Database prepare error on pricing delete: " . $conn->error);
+        }
+        
+        $deleteStmt->bind_param("s", $vehicleId);
+        $deleteSuccess = $deleteStmt->execute();
+        
+        if (!$deleteSuccess) {
+            error_log("Failed to delete vehicle pricing: " . $deleteStmt->error);
+        } else {
+            error_log("Deleted pricing for vehicle ID: " . $vehicleId);
+        }
+        
+        // Now delete the vehicle type
+        $deleteStmt = $conn->prepare("DELETE FROM vehicle_types WHERE vehicle_id = ?");
+        if (!$deleteStmt) {
+            throw new Exception("Database prepare error on vehicle delete: " . $conn->error);
+        }
+        
+        $deleteStmt->bind_param("s", $vehicleId);
+        $deleteSuccess = $deleteStmt->execute();
+        
+        if (!$deleteSuccess) {
+            throw new Exception("Failed to delete vehicle: " . $deleteStmt->error);
+        }
+        
+        echo json_encode([
+            'status' => 'success',
+            'message' => 'Vehicle deleted successfully',
+            'vehicleId' => $vehicleId,
+            'timestamp' => time()
+        ]);
+        exit;
+    }
+
     // Handle POST requests for updating vehicle pricing
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Get the JSON data from the request
-        $inputJSON = file_get_contents('php://input');
-        $input = json_decode($inputJSON, true);
+        $input = getRequestData();
         
         // Log the input data
         error_log("Vehicle pricing update request: " . json_encode($input));
         
         // Validate input
-        if (!$input || !isset($input['vehicleId']) || !isset($input['basePrice']) || !isset($input['pricePerKm'])) {
-            throw new Exception("Invalid input data. Required fields: vehicleId, basePrice, pricePerKm");
+        if (!$input || !isset($input['vehicleId'])) {
+            throw new Exception("Invalid input data. Required field: vehicleId");
         }
         
+        // Clean the vehicle ID
+        $vehicleId = cleanVehicleId($input['vehicleId']);
+        
         // Convert values to appropriate types
-        $basePrice = floatval($input['basePrice']);
-        $pricePerKm = floatval($input['pricePerKm']);
+        $basePrice = isset($input['basePrice']) ? floatval($input['basePrice']) : 0;
+        $pricePerKm = isset($input['pricePerKm']) ? floatval($input['pricePerKm']) : 0;
         $nightHaltCharge = isset($input['nightHaltCharge']) ? floatval($input['nightHaltCharge']) : 0;
         $driverAllowance = isset($input['driverAllowance']) ? floatval($input['driverAllowance']) : 0;
-        $vehicleId = $input['vehicleId'];
         $name = isset($input['name']) ? $input['name'] : $vehicleId;
         $capacity = isset($input['capacity']) ? intval($input['capacity']) : 4;
         $luggageCapacity = isset($input['luggageCapacity']) ? intval($input['luggageCapacity']) : 2;
@@ -370,6 +455,112 @@ try {
             'vehicles' => $vehicles,
             'timestamp' => time(),
             'cached' => false
+        ]);
+        exit;
+    }
+    
+    // Handle PUT request to add a new vehicle
+    else if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
+        // Get the JSON data from the request
+        $input = getRequestData();
+        
+        // Log the input data
+        error_log("Vehicle add request: " . json_encode($input));
+        
+        // Validate input
+        if (!$input || !isset($input['vehicleId']) || !isset($input['name'])) {
+            throw new Exception("Invalid input data. Required fields: vehicleId, name");
+        }
+        
+        // Clean the vehicle ID
+        $vehicleId = cleanVehicleId($input['vehicleId']);
+        
+        // Convert values to appropriate types
+        $name = $input['name'];
+        $basePrice = isset($input['basePrice']) ? floatval($input['basePrice']) : 0;
+        $pricePerKm = isset($input['pricePerKm']) ? floatval($input['pricePerKm']) : 0;
+        $nightHaltCharge = isset($input['nightHaltCharge']) ? floatval($input['nightHaltCharge']) : 0;
+        $driverAllowance = isset($input['driverAllowance']) ? floatval($input['driverAllowance']) : 0;
+        $capacity = isset($input['capacity']) ? intval($input['capacity']) : 4;
+        $luggageCapacity = isset($input['luggageCapacity']) ? intval($input['luggageCapacity']) : 2;
+        $ac = isset($input['ac']) ? ($input['ac'] ? 1 : 0) : 1;
+        $image = isset($input['image']) ? $input['image'] : '';
+        $description = isset($input['description']) ? $input['description'] : '';
+        
+        // Process amenities
+        $amenities = '';
+        if (isset($input['amenities'])) {
+            if (is_array($input['amenities'])) {
+                $amenities = json_encode($input['amenities']);
+            } else {
+                $amenities = $input['amenities'];
+            }
+        } else {
+            $amenities = json_encode(['AC']);
+        }
+        
+        $isActive = isset($input['isActive']) ? ($input['isActive'] ? 1 : 0) : 1;
+        
+        // First check if vehicle type exists
+        $checkStmt = $conn->prepare("SELECT COUNT(*) as count FROM vehicle_types WHERE vehicle_id = ?");
+        if (!$checkStmt) {
+            throw new Exception("Database prepare error on check: " . $conn->error);
+        }
+        
+        $checkStmt->bind_param("s", $vehicleId);
+        if (!$checkStmt->execute()) {
+            throw new Exception("Failed to check vehicle type: " . $checkStmt->error);
+        }
+        
+        $result = $checkStmt->get_result();
+        $row = $result->fetch_assoc();
+        
+        // If vehicle type exists, return error
+        if ($row['count'] > 0) {
+            throw new Exception("Vehicle with ID '$vehicleId' already exists. Use POST to update.");
+        }
+        
+        // Insert the new vehicle
+        $insertVehicleStmt = $conn->prepare("
+            INSERT INTO vehicle_types (vehicle_id, name, capacity, luggage_capacity, ac, image, description, amenities, is_active) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ");
+        
+        if (!$insertVehicleStmt) {
+            throw new Exception("Database prepare error on insert vehicle: " . $conn->error);
+        }
+        
+        $insertVehicleStmt->bind_param("ssiisssis", $vehicleId, $name, $capacity, $luggageCapacity, $ac, $image, $description, $amenities, $isActive);
+        
+        if (!$insertVehicleStmt->execute()) {
+            throw new Exception("Failed to insert vehicle type: " . $insertVehicleStmt->error);
+        }
+        
+        // Insert the pricing
+        $insertStmt = $conn->prepare("
+            INSERT INTO vehicle_pricing (vehicle_type, base_price, price_per_km, night_halt_charge, driver_allowance, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, NOW(), NOW())
+        ");
+        
+        if (!$insertStmt) {
+            throw new Exception("Database prepare error on insert pricing: " . $conn->error);
+        }
+        
+        $insertStmt->bind_param("sdddd", $vehicleId, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
+        
+        if (!$insertStmt->execute()) {
+            throw new Exception("Failed to insert vehicle pricing: " . $insertStmt->error);
+        }
+        
+        error_log("Created new vehicle with pricing: " . $vehicleId);
+        echo json_encode([
+            'status' => 'success', 
+            'message' => 'Vehicle added successfully', 
+            'vehicleId' => $vehicleId, 
+            'name' => $name,
+            'basePrice' => $basePrice,
+            'pricePerKm' => $pricePerKm,
+            'timestamp' => time()
         ]);
         exit;
     }

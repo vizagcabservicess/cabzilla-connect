@@ -8,11 +8,26 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh');
 header('Content-Type: application/json');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
+}
+
+// Clean vehicle ID by removing prefixes if present
+function cleanVehicleId($id) {
+    if (empty($id)) return '';
+    
+    // Remove 'item-' prefix if it exists
+    if (strpos($id, 'item-') === 0) {
+        return substr($id, 5);
+    }
+    
+    return $id;
 }
 
 // Check authentication and admin role
@@ -141,7 +156,7 @@ try {
             exit;
         }
         
-        $vehicleId = $requestData['vehicleId'];
+        $vehicleId = cleanVehicleId($requestData['vehicleId']);
         // Ensure name is not empty, use vehicleId as fallback
         $name = isset($requestData['name']) && !empty($requestData['name']) && $requestData['name'] !== '0' 
             ? $requestData['name'] 
@@ -344,7 +359,7 @@ try {
             exit;
         }
         
-        $vehicleId = $requestData['vehicleId'];
+        $vehicleId = cleanVehicleId($requestData['vehicleId']);
         // Ensure name is not empty
         $name = isset($requestData['name']) && !empty($requestData['name']) ? $requestData['name'] : $vehicleId;
         $capacity = isset($requestData['capacity']) ? intval($requestData['capacity']) : 4;
@@ -471,7 +486,7 @@ try {
     // Handle DELETE request to delete a vehicle
     else if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
         // Get vehicle ID from query string
-        $vehicleId = isset($_GET['vehicleId']) ? $_GET['vehicleId'] : null;
+        $vehicleId = isset($_GET['vehicleId']) ? cleanVehicleId($_GET['vehicleId']) : null;
         
         // Log the DELETE request
         logError("vehicles-update.php DELETE request", ['vehicleId' => $vehicleId]);
@@ -492,21 +507,37 @@ try {
             exit;
         }
         
-        // Delete the vehicle's pricing first due to foreign key constraints
-        $pricingStmt = $conn->prepare("DELETE FROM vehicle_pricing WHERE vehicle_type = ?");
-        $pricingStmt->bind_param("s", $vehicleId);
-        $pricingStmt->execute();
-        
-        // Delete the vehicle
-        $stmt = $conn->prepare("DELETE FROM vehicle_types WHERE vehicle_id = ?");
-        $stmt->bind_param("s", $vehicleId);
-        $success = $stmt->execute();
-        
-        if (!$success) {
-            throw new Exception("Failed to delete vehicle: " . $conn->error);
+        try {
+            // Start transaction
+            $conn->begin_transaction();
+            
+            // Delete the vehicle's pricing first (ignoring errors as the pricing might not exist)
+            $pricingStmt = $conn->prepare("DELETE FROM vehicle_pricing WHERE vehicle_type = ?");
+            $pricingStmt->bind_param("s", $vehicleId);
+            $pricingStmt->execute();
+            
+            // Delete the vehicle
+            $stmt = $conn->prepare("DELETE FROM vehicle_types WHERE vehicle_id = ?");
+            $stmt->bind_param("s", $vehicleId);
+            $success = $stmt->execute();
+            
+            if (!$success) {
+                throw new Exception("Failed to delete vehicle: " . $stmt->error);
+            }
+            
+            // Commit transaction
+            $conn->commit();
+            
+            sendJsonResponse([
+                'status' => 'success', 
+                'message' => 'Vehicle deleted successfully',
+                'vehicleId' => $vehicleId
+            ]);
+        } catch (Exception $e) {
+            // Rollback transaction on error
+            $conn->rollback();
+            throw $e;
         }
-        
-        sendJsonResponse(['status' => 'success', 'message' => 'Vehicle deleted successfully']);
     } else {
         sendJsonResponse(['status' => 'error', 'message' => 'Method not allowed'], 405);
     }

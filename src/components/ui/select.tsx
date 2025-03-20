@@ -114,7 +114,7 @@ const SelectItem = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item> & { value: string }
 >(({ className, children, ...props }, ref) => {
-  // Clean up the value by removing item- prefix if present
+  // Ensure we have a clean value with no prefixes
   const cleanValue = (inputValue: string): string => {
     if (!inputValue) return '';
     
@@ -123,30 +123,24 @@ const SelectItem = React.forwardRef<
       return inputValue.substring(5);
     }
     
-    // Special case for placeholder
-    if (inputValue === 'placeholder') {
-      return 'placeholder';
+    // Remove any random alphanumeric IDs if they match a pattern like: r31yw7w
+    if (/^[a-z0-9]{7}$/.test(inputValue)) {
+      // If it's just a random ID and we have children, use the children as a value
+      return children?.toString() || inputValue;
     }
     
     return inputValue;
   };
   
   // Make sure we have a valid value
-  const safeValue = props.value && typeof props.value === 'string' && props.value.trim() !== '' 
-    ? cleanValue(props.value)
-    : props.value === 'placeholder' 
-      ? 'placeholder' 
-      : `${Math.random().toString(36).substring(2, 9)}`;
+  const safeValue = props.value ? cleanValue(props.value) : '';
   
   const safeProps = {
     ...props,
-    value: safeValue
+    value: safeValue,
+    // Ensure the key matches the value for proper React rendering
+    key: safeValue
   };
-  
-  // Add a default key if none is provided to prevent React warnings
-  if (!safeProps.key && safeValue) {
-    safeProps.key = safeValue;
-  }
   
   // If no children provided, use the value for display (without item- prefix)
   const displayText = children || safeValue;
