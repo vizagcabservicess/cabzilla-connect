@@ -58,9 +58,17 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
     libraries,
     region: 'IN', // Set region to India
     language: 'en',
-    onLoad: () => console.log("Google Maps API loading started"),
-    onError: (error) => console.error("Error during Google Maps load:", error)
   });
+
+  // Log loading status
+  useEffect(() => {
+    if (isLoaded) {
+      console.log("Google Maps API loading started");
+    }
+    if (loadError) {
+      console.error("Error during Google Maps load:", loadError);
+    }
+  }, [isLoaded, loadError]);
 
   // Store the google object once loaded
   useEffect(() => {
