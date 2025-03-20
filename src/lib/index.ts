@@ -8,8 +8,7 @@ export * from './tourData';
 
 // Export everything from fareCalculationService except clearFareCache
 export { 
-  calculateFare, 
-  calculateAirportFare
+  calculateFare 
 } from './fareCalculationService';
 
 // Explicitly re-export clearFareCache from fareCalculationService to avoid ambiguity with the one from cabData
