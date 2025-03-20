@@ -18,10 +18,6 @@ type LocationInputProps = {
   className?: string;
 };
 
-// Use type augmentation to ensure TypeScript recognizes structured_formatting
-// Instead of extending the interface incorrectly, we'll create a type alias
-type AutocompletePredictionWithFormatting = google.maps.places.AutocompletePrediction;
-
 // Ensure the compiler knows that structured_formatting exists on the prediction object
 declare global {
   namespace google.maps.places {
@@ -63,16 +59,11 @@ export function LocationInput({
       return value.description;
     }
     
-    // Safety check for structured_formatting
-    if ('structured_formatting' in value && value.structured_formatting) {
-      return value.structured_formatting.main_text;
-    }
-    
     return '';
   };
 
   const [inputValue, setInputValue] = useState<string>(getInitialInputValue());
-  const [suggestions, setSuggestions] = useState<AutocompletePredictionWithFormatting[]>([]);
+  const [suggestions, setSuggestions] = useState<google.maps.places.AutocompletePrediction[]>([]);
   const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -249,7 +240,7 @@ export function LocationInput({
   }, [google, isPickupLocation]);
 
   // Handle suggestion selection
-  const handleSuggestionClick = useCallback(async (suggestion: AutocompletePredictionWithFormatting) => {
+  const handleSuggestionClick = useCallback(async (suggestion: google.maps.places.AutocompletePrediction) => {
     setInputValue(suggestion.description);
     setShowSuggestions(false);
     setIsLoading(true);
@@ -381,10 +372,14 @@ export function LocationInput({
                 onClick={() => handleSuggestionClick(suggestion)}
               >
                 <div className="font-medium">
-                  {suggestion.structured_formatting?.main_text || suggestion.description}
+                  {suggestion.structured_formatting ? 
+                    suggestion.structured_formatting.main_text : 
+                    suggestion.description}
                 </div>
                 <div className="text-sm text-gray-500">
-                  {suggestion.structured_formatting?.secondary_text || ''}
+                  {suggestion.structured_formatting ? 
+                    suggestion.structured_formatting.secondary_text : 
+                    ''}
                 </div>
               </div>
             ))}
