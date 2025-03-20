@@ -21,8 +21,8 @@ export function useCabTypes(initialCabTypes: CabType[]) {
         console.log('Loading dynamic cab types...', Date.now());
         fareService.clearCache();
         
-        const cacheBuster = new Date().getTime();
-        const dynamicCabTypes = await loadCabTypes(`?_t=${cacheBuster}`);
+        // Remove the argument from loadCabTypes call
+        const dynamicCabTypes = await loadCabTypes();
         console.log('Loaded dynamic cab types:', dynamicCabTypes);
         
         if (Array.isArray(dynamicCabTypes) && dynamicCabTypes.length > 0) {
@@ -65,8 +65,8 @@ export function useCabTypes(initialCabTypes: CabType[]) {
       fareService.clearCache();
       
       console.log('Forcing cab types refresh...', Date.now());
-      const cacheBuster = new Date().getTime();
-      const freshCabTypes = await reloadCabTypes(`?_t=${cacheBuster}`);
+      // Remove the argument from reloadCabTypes call
+      const freshCabTypes = await reloadCabTypes();
       console.log('Refreshed cab types:', freshCabTypes);
       
       if (Array.isArray(freshCabTypes) && freshCabTypes.length > 0) {
