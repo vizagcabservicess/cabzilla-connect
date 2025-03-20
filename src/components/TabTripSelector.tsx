@@ -1,3 +1,4 @@
+
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useEffect, useCallback, useState, useRef } from "react";
@@ -42,11 +43,13 @@ export function TabTripSelector({
           'tour': 'Tour Package'
         };
         
-        toast({
-          title: `Switched to ${tabNames[selectedTab]}`,
-          description: "Previous selections have been reset.",
-          duration: 3000,
-        });
+        toast(
+          `Switched to ${tabNames[selectedTab]}`,
+          {
+            description: "Previous selections have been reset.",
+            duration: 3000,
+          }
+        );
         
         setTimeout(() => {
           isClearing.current = false;
