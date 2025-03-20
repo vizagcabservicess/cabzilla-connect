@@ -40,44 +40,44 @@ export function useCabOptions({
     return `${tripType}-${tripMode}-${hourlyPackage || 'none'}-${distance}-${pickupDate?.getTime() || 0}-${returnDate?.getTime() || 0}`;
   }, [tripType, tripMode, hourlyPackage, distance, pickupDate, returnDate]);
   
-  useEffect(() => {
-    const fetchCabTypes = async () => {
-      if (cabTypes.length > 0) return; // Skip if we already have cab types
+  const fetchCabTypes = async () => {
+    if (cabTypes.length > 0) return; // Skip if we already have cab types
+    
+    setIsLoadingCabs(true);
+    try {
+      console.log('Loading dynamic cab types...', Date.now());
+      fareService.clearCache(); // Fixed: Removed argument
       
-      setIsLoadingCabs(true);
-      try {
-        console.log('Loading dynamic cab types...', Date.now());
-        fareService.clearCache();
+      const cacheBuster = new Date().getTime();
+      const dynamicCabTypes = await loadCabTypes(`?_t=${cacheBuster}`);
+      console.log('Loaded dynamic cab types:', dynamicCabTypes);
+      
+      if (Array.isArray(dynamicCabTypes) && dynamicCabTypes.length > 0) {
+        const validCabTypes = dynamicCabTypes.map(cab => ({
+          ...cab,
+          id: cab.id || cab.vehicleId || `cab-${Math.random().toString(36).substring(2, 10)}`,
+          name: cab.name || (cab.id ? cab.id.charAt(0).toUpperCase() + cab.id.slice(1).replace('_', ' ') : 'Unknown')
+        }));
         
-        const cacheBuster = new Date().getTime();
-        const dynamicCabTypes = await loadCabTypes(`?_t=${cacheBuster}`);
-        console.log('Loaded dynamic cab types:', dynamicCabTypes);
-        
-        if (Array.isArray(dynamicCabTypes) && dynamicCabTypes.length > 0) {
-          const validCabTypes = dynamicCabTypes.map(cab => ({
-            ...cab,
-            id: cab.id || cab.vehicleId || `cab-${Math.random().toString(36).substring(2, 10)}`,
-            name: cab.name || (cab.id ? cab.id.charAt(0).toUpperCase() + cab.id.slice(1).replace('_', ' ') : 'Unknown')
-          }));
-          
-          console.log('Processed cab types:', validCabTypes);
-          setCabTypes(validCabTypes);
-          setRefreshSuccessful(true);
-        } else {
-          console.warn('API returned empty vehicle data, using initial cab types');
-          setCabTypes(initialCabTypes);
-          setRefreshSuccessful(false);
-        }
-      } catch (error) {
-        console.error('Error loading dynamic cab types:', error);
-        toast.error('Could not load vehicle data. Using default values.');
+        console.log('Processed cab types:', validCabTypes);
+        setCabTypes(validCabTypes);
+        setRefreshSuccessful(true);
+      } else {
+        console.warn('API returned empty vehicle data, using initial cab types');
         setCabTypes(initialCabTypes);
         setRefreshSuccessful(false);
-      } finally {
-        setIsLoadingCabs(false);
       }
-    };
-    
+    } catch (error) {
+      console.error('Error loading dynamic cab types:', error);
+      toast.error('Could not load vehicle data. Using default values.');
+      setCabTypes(initialCabTypes);
+      setRefreshSuccessful(false);
+    } finally {
+      setIsLoadingCabs(false);
+    }
+  };
+
+  useEffect(() => {
     fetchCabTypes();
   }, [initialCabTypes, cabTypes.length]);
 
@@ -90,7 +90,7 @@ export function useCabOptions({
       sessionStorage.removeItem('calculatedFares');
       localStorage.removeItem('cabTypes');
       
-      fareService.clearCache();
+      fareService.clearCache(); // Fixed: Removed argument
       
       console.log('Forcing cab types refresh...', Date.now());
       const cacheBuster = new Date().getTime();
