@@ -244,14 +244,17 @@ export function LocationInput({
         // Create a Location object
         const location: Location = {
           id: suggestion.place_id,
-          name: suggestion.structured_formatting?.main_text || placeDetails.name || suggestion.description,
+          name: suggestion.structured_formatting ? 
+                suggestion.structured_formatting.main_text : 
+                (placeDetails.name || suggestion.description),
           address: placeDetails.formatted_address || suggestion.description,
           lat,
           lng,
           type: 'custom',
           isInVizag: isVizagLocation({ 
             id: suggestion.place_id,
-            name: suggestion.structured_formatting?.main_text || '',
+            name: suggestion.structured_formatting ? 
+                  suggestion.structured_formatting.main_text : '',
             address: placeDetails.formatted_address || suggestion.description,
             city: '',
             state: '',
