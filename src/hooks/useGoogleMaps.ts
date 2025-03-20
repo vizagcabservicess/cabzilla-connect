@@ -10,6 +10,7 @@ export const useGoogleMaps = () => {
   const [placesInitialized, setPlacesInitialized] = useState(false);
   const initializationAttempts = useRef(0);
   const MAX_ATTEMPTS = 5;
+  const hasShownPlacesError = useRef(false);
   
   // Verify if places API is available
   useEffect(() => {
@@ -26,6 +27,7 @@ export const useGoogleMaps = () => {
           if (placesAvailable) {
             console.log("Places API is available in useGoogleMaps");
             setPlacesInitialized(true);
+            hasShownPlacesError.current = false;
             return true;
           }
           
@@ -43,13 +45,24 @@ export const useGoogleMaps = () => {
                 new context.google.maps.places.PlacesService(mapCanvas);
                 console.log("Successfully initialized Places services");
                 setPlacesInitialized(true);
+                hasShownPlacesError.current = false;
                 return true;
               }
             } catch (error) {
               console.error("Failed to initialize Places services:", error);
-              return false;
             }
           }
+          
+          if (!hasShownPlacesError.current && initializationAttempts.current >= MAX_ATTEMPTS) {
+            console.log("Showing Places API error message");
+            toast.error("Location search might have limited functionality", {
+              id: "places-api-error",
+              duration: 3000
+            });
+            hasShownPlacesError.current = true;
+          }
+          
+          return false;
         } catch (error) {
           console.error("Error checking Places API:", error);
           return false;

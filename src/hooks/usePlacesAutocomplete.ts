@@ -34,27 +34,45 @@ export function usePlacesAutocomplete(options: PlacesAutocompleteOptions = {}) {
         
         // Check if Places API is available
         if (!google.maps.places) {
-          throw new Error("Google Maps Places API not available");
+          if (initializationAttempts.current < MAX_INITIALIZATION_ATTEMPTS) {
+            throw new Error("Google Maps Places API not available yet");
+          } else {
+            console.warn("Places API unavailable after max attempts");
+            return;
+          }
         }
         
         // Initialize autocomplete service
-        autocompleteServiceRef.current = new google.maps.places.AutocompleteService();
+        try {
+          autocompleteServiceRef.current = new google.maps.places.AutocompleteService();
+          console.log("AutocompleteService initialized successfully");
+        } catch (e) {
+          console.error("Failed to initialize AutocompleteService:", e);
+        }
         
         // Get or create map canvas for places service
         const mapCanvas = createMapCanvas();
         if (!mapCanvas) {
-          throw new Error("Failed to create map canvas for Places service");
+          console.error("Failed to create map canvas for Places service");
+        } else {
+          // Initialize places service
+          try {
+            placesServiceRef.current = new google.maps.places.PlacesService(mapCanvas);
+            console.log("PlacesService initialized successfully");
+          } catch (e) {
+            console.error("Failed to initialize PlacesService:", e);
+          }
         }
         
-        // Initialize places service
-        placesServiceRef.current = new google.maps.places.PlacesService(mapCanvas);
-        
-        // Set initialization flag
-        setIsInitialized(true);
-        initializationAttempts.current = 0;
-        hasLoggedError.current = false;
-        
-        console.log("Places services initialized successfully");
+        // If either service was successfully initialized, mark as initialized
+        if (autocompleteServiceRef.current || placesServiceRef.current) {
+          setIsInitialized(true);
+          initializationAttempts.current = 0;
+          hasLoggedError.current = false;
+          console.log("Places services initialized successfully");
+        } else {
+          throw new Error("Failed to initialize any Places services");
+        }
       } catch (error) {
         console.error("Error initializing Places services:", error);
         
@@ -65,7 +83,6 @@ export function usePlacesAutocomplete(options: PlacesAutocompleteOptions = {}) {
         } else if (!hasLoggedError.current) {
           console.error(`Failed to initialize Places services after ${MAX_INITIALIZATION_ATTEMPTS} attempts`);
           hasLoggedError.current = true;
-          toast.error("Location search is temporarily unavailable", { id: "places-init-failed" });
         }
       }
     };
@@ -110,6 +127,7 @@ export function usePlacesAutocomplete(options: PlacesAutocompleteOptions = {}) {
           if (status === google.maps.places.PlacesServiceStatus.OK && result) {
             resolve(result);
           } else {
+            console.error("Places detail request failed with status:", status);
             reject(new Error(`Places detail request failed: ${status}`));
           }
         }
@@ -139,6 +157,7 @@ export function usePlacesAutocomplete(options: PlacesAutocompleteOptions = {}) {
         // If autocomplete service is not initialized, try to initialize it on-demand
         if (!autocompleteServiceRef.current && google?.maps?.places) {
           try {
+            console.log("Initializing AutocompleteService on-demand");
             autocompleteServiceRef.current = new google.maps.places.AutocompleteService();
             setIsInitialized(true);
           } catch (error) {
@@ -147,6 +166,7 @@ export function usePlacesAutocomplete(options: PlacesAutocompleteOptions = {}) {
         }
         
         if (!autocompleteServiceRef.current) {
+          console.log("AutocompleteService not available, using fallback");
           setIsLoading(false);
           reject(new Error('Autocomplete service not initialized'));
           return;
@@ -163,6 +183,7 @@ export function usePlacesAutocomplete(options: PlacesAutocompleteOptions = {}) {
         }
         
         try {
+          console.log("Making Places autocomplete request:", query);
           autocompleteServiceRef.current.getPlacePredictions(
             requestOptions,
             (results, status) => {
@@ -197,21 +218,34 @@ export function usePlacesAutocomplete(options: PlacesAutocompleteOptions = {}) {
   const forceInitialization = useCallback(() => {
     if (google?.maps?.places && !isInitialized) {
       try {
+        console.log("Force initializing Places services");
         // Initialize autocomplete service
-        autocompleteServiceRef.current = new google.maps.places.AutocompleteService();
+        try {
+          autocompleteServiceRef.current = new google.maps.places.AutocompleteService();
+          console.log("AutocompleteService force initialized successfully");
+        } catch (e) {
+          console.error("Error force initializing AutocompleteService:", e);
+        }
         
         // Initialize places service
         const mapCanvas = createMapCanvas();
         if (mapCanvas) {
-          placesServiceRef.current = new google.maps.places.PlacesService(mapCanvas);
+          try {
+            placesServiceRef.current = new google.maps.places.PlacesService(mapCanvas);
+            console.log("PlacesService force initialized successfully");
+          } catch (e) {
+            console.error("Error force initializing PlacesService:", e);
+          }
         }
         
-        setIsInitialized(true);
-        hasLoggedError.current = false;
-        return true;
+        // If either service was successfully initialized, mark as initialized
+        if (autocompleteServiceRef.current || placesServiceRef.current) {
+          setIsInitialized(true);
+          hasLoggedError.current = false;
+          return true;
+        }
       } catch (error) {
         console.error("Error in force initialization:", error);
-        return false;
       }
     }
     return false;

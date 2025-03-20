@@ -24,8 +24,9 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
   const [googleInstance, setGoogleInstance] = useState<typeof google | null>(null);
   const [hasShownAPIKeyError, setHasShownAPIKeyError] = useState(false);
   const [mapCanvasInitialized, setMapCanvasInitialized] = useState(false);
+  const [placesInitializationAttempted, setPlacesInitializationAttempted] = useState(false);
   const initializationAttempts = useRef(0);
-  const maxRetries = useRef(5);
+  const maxRetries = useRef(8);
   
   // Use provided apiKey or fallback to environment variable
   const googleMapsApiKey = apiKey || GOOGLE_MAPS_API_KEY;
@@ -64,40 +65,61 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
           // Create autocomplete service immediately once map is initialized
           if (window.google.maps.places) {
             console.log("Creating Autocomplete service");
-            new window.google.maps.places.AutocompleteService();
-            new window.google.maps.places.PlacesService(mapCanvas);
+            try {
+              new window.google.maps.places.AutocompleteService();
+              new window.google.maps.places.PlacesService(mapCanvas);
+              console.log("Successfully created Places services");
+            } catch (e) {
+              console.error("Error creating initial Places services:", e);
+            }
+          } else {
+            console.log("Places API not available during initial initialization");
           }
         }
         
         setMapCanvasInitialized(true);
-        
-        // Force Places API initialization with multiple attempts
-        const initializePlacesWithRetry = (attempt = 0) => {
-          try {
-            forcePlacesInitialization();
-            console.log(`Places initialization attempt ${attempt+1} completed`);
-            
-            // Check if it worked
-            if (window.google?.maps?.places?.AutocompleteService) {
-              console.log("Places service successfully initialized");
-            } else if (attempt < maxRetries.current) {
-              console.log(`Places service not available yet, retrying (${attempt+1}/${maxRetries.current})`);
-              setTimeout(() => initializePlacesWithRetry(attempt + 1), 800);
-            }
-          } catch (error) {
-            console.error(`Error in Places initialization attempt ${attempt+1}:`, error);
-            if (attempt < maxRetries.current) {
-              setTimeout(() => initializePlacesWithRetry(attempt + 1), 800);
-            }
-          }
-        };
-        
-        setTimeout(() => initializePlacesWithRetry(), 300);
       } catch (error) {
         console.error("Error initializing map canvas:", error);
       }
     }
   }, [isLoaded, mapCanvasInitialized]);
+
+  // Force Places API initialization with multiple attempts
+  useEffect(() => {
+    if (isLoaded && window.google && !placesInitializationAttempted) {
+      setPlacesInitializationAttempted(true);
+      
+      const initializePlacesWithRetry = (attempt = 0) => {
+        try {
+          if (!window.google?.maps?.places) {
+            console.log(`Waiting for places API (attempt ${attempt+1})...`);
+            if (attempt < maxRetries.current) {
+              setTimeout(() => initializePlacesWithRetry(attempt + 1), 800);
+            }
+            return;
+          }
+          
+          forcePlacesInitialization();
+          console.log(`Places initialization attempt ${attempt+1} completed`);
+          
+          // Check if it worked
+          if (window.google?.maps?.places?.AutocompleteService) {
+            console.log("Places service successfully initialized");
+          } else if (attempt < maxRetries.current) {
+            console.log(`Places service not available yet, retrying (${attempt+1}/${maxRetries.current})`);
+            setTimeout(() => initializePlacesWithRetry(attempt + 1), 800);
+          }
+        } catch (error) {
+          console.error(`Error in Places initialization attempt ${attempt+1}:`, error);
+          if (attempt < maxRetries.current) {
+            setTimeout(() => initializePlacesWithRetry(attempt + 1), 800);
+          }
+        }
+      };
+      
+      setTimeout(() => initializePlacesWithRetry(), 300);
+    }
+  }, [isLoaded, placesInitializationAttempted]);
 
   // Store the google object once loaded and set default bounds
   useEffect(() => {
@@ -114,9 +136,13 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
       // Force another Places initialization a bit later if needed
       const timer = setTimeout(() => {
         try {
-          if (window.google?.maps?.places && !window.google.maps.places.AutocompleteService) {
-            console.log("Forcing places initialization again");
-            forcePlacesInitialization();
+          if (window.google?.maps) {
+            if (!window.google.maps.places || !window.google.maps.places.AutocompleteService) {
+              console.log("Forcing places initialization again");
+              forcePlacesInitialization();
+            } else {
+              console.log("Places API already available, no need to force initialization");
+            }
           }
         } catch (error) {
           console.error("Error in delayed Places init:", error);
@@ -140,6 +166,43 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
       });
     }
   }, [isLoaded, loadError]);
+
+  // Check if Places service actually works by testing it
+  useEffect(() => {
+    if (isLoaded && window.google?.maps?.places) {
+      let testedPlacesAPI = false;
+      
+      const testPlacesService = () => {
+        if (testedPlacesAPI) return;
+        testedPlacesAPI = true;
+        
+        try {
+          const autocompleteService = new window.google.maps.places.AutocompleteService();
+          
+          // Try to make a real request to confirm it works
+          autocompleteService.getPlacePredictions(
+            {
+              input: "New Delhi",
+              componentRestrictions: { country: "in" }
+            },
+            (results, status) => {
+              if (status === window.google.maps.places.PlacesServiceStatus.OK) {
+                console.log("Places API test successful:", results?.length);
+              } else {
+                console.error("Places API test failed with status:", status);
+              }
+            }
+          );
+        } catch (e) {
+          console.error("Error testing Places API:", e);
+        }
+      };
+      
+      // Wait a short time after load to test
+      const timer = setTimeout(testPlacesService, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoaded]);
 
   // Provide context values - ensure we have a consistent value for the google object
   const contextValue = {

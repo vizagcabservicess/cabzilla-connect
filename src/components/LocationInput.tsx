@@ -110,6 +110,7 @@ export function LocationInput({
     
     if (useGoogle) {
       try {
+        console.log("Using Google Places API for search");
         // Set India bounds for autocomplete
         const indiaBounds = new google.maps.LatLngBounds(
           new google.maps.LatLng(8.0, 68.0),   // SW corner of India
@@ -122,9 +123,9 @@ export function LocationInput({
           new google.maps.LatLng(17.8, 83.4)   // NE corner of Vizag
         );
         
-        // Use appropriate bounds - for pickup locations, limit to Vizag
-        // For drop locations, allow all of India
-        const bounds = isPickupLocation ? vizagBounds : indiaBounds;
+        // Use appropriate bounds - for pickup locations in airport transfers, limit to Vizag
+        // For drop locations and non-airport transfers, allow all of India
+        const bounds = isPickupLocation && isAirportTransfer ? vizagBounds : indiaBounds;
         
         // Get predictions with the usePlacesAutocomplete hook
         getPlacePredictions(value, bounds)
@@ -155,7 +156,7 @@ export function LocationInput({
       console.log("Using local location search as fallback");
       fallbackToLocalSearch(value);
     }
-  }, [google, isLoaded, isPickupLocation, placesInitialized, isAutocompleteInitialized, getPlacePredictions]);
+  }, [google, isLoaded, isPickupLocation, isAirportTransfer, placesInitialized, isAutocompleteInitialized, getPlacePredictions]);
 
   // Fallback to local search when Google Places API is not available
   const fallbackToLocalSearch = (query: string) => {
@@ -213,7 +214,7 @@ export function LocationInput({
       
       // Create a basic location even if details fail
       const basicLocation: Location = {
-        id: suggestion.place_id,
+        id: suggestion.place_id || `loc_${Date.now()}`,
         name: suggestion.structured_formatting ? 
               suggestion.structured_formatting.main_text : 
               suggestion.description,
@@ -226,11 +227,6 @@ export function LocationInput({
       
       console.log("Created basic location from suggestion:", basicLocation);
       onLocationChange(basicLocation);
-      
-      toast.error("Limited location details available", {
-        description: "Some features might not work correctly",
-        duration: 3000
-      });
     } finally {
       setIsLoading(false);
     }
@@ -258,15 +254,14 @@ export function LocationInput({
   const handleInputFocus = useCallback(() => {
     if (inputValue.trim()) {
       setShowSuggestions(true);
+      
+      // If we have no suggestions yet, try to get some based on current input
+      if ((!suggestions || suggestions.length === 0) && 
+          (!localSuggestions || localSuggestions.length === 0)) {
+        handleInputChange({ target: { value: inputValue } } as React.ChangeEvent<HTMLInputElement>);
+      }
     }
-  }, [inputValue]);
-
-  // Effect to show toast if Google Maps is not loaded
-  useEffect(() => {
-    if (isLoaded && !placesInitialized && !useLocalSuggestions) {
-      console.warn("Google Places API not initialized yet, will use local suggestions");
-    }
-  }, [isLoaded, placesInitialized, useLocalSuggestions]);
+  }, [inputValue, suggestions, localSuggestions, handleInputChange]);
 
   // Close suggestions when clicking outside
   useEffect(() => {
