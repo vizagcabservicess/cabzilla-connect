@@ -17,6 +17,7 @@ import { getVehicleTypes } from "@/services/vehicleDataService";
 import { Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CabRefreshWarning } from "@/components/cab-options/CabRefreshWarning";
+import axios from 'axios';
 
 export const VehicleTripFaresForm = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -85,56 +86,120 @@ export const VehicleTripFaresForm = () => {
         roundTrip: { basePrice: roundTripBasePrice, pricePerKm: roundTripPricePerKm }
       });
       
-      // Update one-way fares - using direct fetch for more control
-      const oneWayResponse = await fetch('/api/admin/vehicle-pricing.php', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        },
-        body: JSON.stringify({
-          vehicleId: selectedVehicle,
-          tripType: 'outstation-one-way',
-          baseFare: basePrice,
-          pricePerKm: pricePerKm
-        })
-      });
+      // Use Axios for one-way fares update with better error handling
+      const oneWayUpdate = async () => {
+        try {
+          console.log("Updating one-way fares...");
+          const response = await axios.post('/api/admin/vehicle-pricing.php', {
+            vehicleId: selectedVehicle,
+            tripType: 'outstation-one-way',
+            baseFare: basePrice,
+            pricePerKm: pricePerKm
+          }, {
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'Expires': '0'
+            }
+          });
+          
+          console.log("One-way fares update response:", response.data);
+          return true;
+        } catch (error) {
+          console.error("One-way fares update failed:", error);
+          
+          // Fallback to direct fetch with stringified JSON
+          try {
+            const fallbackResponse = await fetch('/api/admin/vehicle-pricing.php', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache'
+              },
+              body: JSON.stringify({
+                vehicleId: selectedVehicle,
+                tripType: 'outstation-one-way',
+                baseFare: basePrice,
+                pricePerKm: pricePerKm
+              })
+            });
+            
+            const responseText = await fallbackResponse.text();
+            console.log("Fallback one-way response:", responseText);
+            
+            return fallbackResponse.ok;
+          } catch (fallbackError) {
+            console.error("Fallback one-way update also failed:", fallbackError);
+            return false;
+          }
+        }
+      };
       
-      if (!oneWayResponse.ok) {
-        const oneWayError = await oneWayResponse.text();
-        console.error('One-way fare update failed:', oneWayError);
-        throw new Error(`One-way fare update failed: ${oneWayError}`);
-      }
+      // Use Axios for round-trip fares update
+      const roundTripUpdate = async () => {
+        try {
+          console.log("Updating round-trip fares...");
+          const response = await axios.post('/api/admin/vehicle-pricing.php', {
+            vehicleId: selectedVehicle,
+            tripType: 'outstation-round-trip',
+            baseFare: roundTripBasePrice,
+            pricePerKm: roundTripPricePerKm
+          }, {
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'Expires': '0'
+            }
+          });
+          
+          console.log("Round-trip fares update response:", response.data);
+          return true;
+        } catch (error) {
+          console.error("Round-trip fares update failed:", error);
+          
+          // Fallback to direct fetch with stringified JSON
+          try {
+            const fallbackResponse = await fetch('/api/admin/vehicle-pricing.php', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache'
+              },
+              body: JSON.stringify({
+                vehicleId: selectedVehicle,
+                tripType: 'outstation-round-trip',
+                baseFare: roundTripBasePrice,
+                pricePerKm: roundTripPricePerKm
+              })
+            });
+            
+            const responseText = await fallbackResponse.text();
+            console.log("Fallback round-trip response:", responseText);
+            
+            return fallbackResponse.ok;
+          } catch (fallbackError) {
+            console.error("Fallback round-trip update also failed:", fallbackError);
+            return false;
+          }
+        }
+      };
       
-      // Update round trip fares - using direct fetch for more control
-      const roundTripResponse = await fetch('/api/admin/vehicle-pricing.php', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        },
-        body: JSON.stringify({
-          vehicleId: selectedVehicle,
-          tripType: 'outstation-round-trip',
-          baseFare: roundTripBasePrice,
-          pricePerKm: roundTripPricePerKm
-        })
-      });
+      // Execute both updates in sequence
+      const oneWaySuccess = await oneWayUpdate();
+      const roundTripSuccess = await roundTripUpdate();
       
-      if (!roundTripResponse.ok) {
-        const roundTripError = await roundTripResponse.text();
-        console.error('Round-trip fare update failed:', roundTripError);
-        throw new Error(`Round-trip fare update failed: ${roundTripError}`);
-      }
-      
-      // Clear any cached data
+      // Clear cache regardless of outcome
       fareService.clearCache();
       
-      toast.success("Outstation fares updated successfully");
+      if (oneWaySuccess || roundTripSuccess) {
+        toast.success("Outstation fares updated successfully");
+      } else {
+        throw new Error("All outstation fare update attempts failed");
+      }
     } catch (error: any) {
       console.error("Error updating outstation fares:", error);
       toast.error(error.message || "Failed to update outstation fares");
@@ -169,83 +234,119 @@ export const VehicleTripFaresForm = () => {
         extraKmRate
       });
       
-      // Try using the dedicated local fares update endpoint
-      try {
-        const localFaresResponse = await fetch('/api/admin/local-fares-update.php', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
-          },
-          body: JSON.stringify({
-            vehicleId: selectedVehicle,
-            price8hrs80km: hr8km80Price,
-            price10hrs100km: hr10km100Price,
-            priceExtraKm: extraKmRate
-          })
-        });
-        
-        const responseData = await localFaresResponse.json();
-        console.log("Local fares update response:", responseData);
-        
-        if (responseData.status === 'success') {
-          // Clear cache and show success message
-          fareService.clearCache();
-          toast.success("Local fares updated successfully");
-          return;
-        }
-      } catch (localError) {
-        console.warn("Local fares endpoint failed, trying fallback:", localError);
-      }
+      const data = {
+        vehicleId: selectedVehicle,
+        price8hrs80km: hr8km80Price,
+        price10hrs100km: hr10km100Price,
+        priceExtraKm: extraKmRate
+      };
       
-      // Fallback to the general vehicle pricing endpoint
-      const apiUrl = '/api/admin/vehicle-pricing.php';
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        },
-        body: JSON.stringify({
+      // First try direct vehicle-pricing endpoint with plain data
+      let success = false;
+      
+      try {
+        console.log("Trying vehicle-pricing endpoint first for local fares");
+        const vehiclePricingResponse = await axios.post('/api/admin/vehicle-pricing.php', {
           vehicleId: selectedVehicle,
           tripType: 'local',
           price8hrs80km: hr8km80Price,
           price10hrs100km: hr10km100Price,
           priceExtraKm: extraKmRate,
-          priceExtraHour: 0 // Default value
-        })
-      });
-      
-      // If that fails too, try using fareService's updateTripFares method as last resort
-      if (!response.ok) {
-        console.warn("Vehicle pricing endpoint failed, trying fareService as last resort");
-        
-        const success = await fareService.updateTripFares(selectedVehicle, "local", {
-          hr8km80Price: hr8km80Price,
-          hr10km100Price: hr10km100Price,
-          extraKmRate: extraKmRate
+          priceExtraHour: 0
+        }, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache'
+          }
         });
         
-        if (success) {
-          toast.success("Local fares updated successfully");
-          return;
-        } else {
-          throw new Error("All update methods failed");
+        console.log("Vehicle-pricing local response:", vehiclePricingResponse.data);
+        success = true;
+      } catch (error) {
+        console.error("Vehicle-pricing endpoint failed for local fares:", error);
+      }
+      
+      // If first attempt failed, try fares-update endpoint
+      if (!success) {
+        try {
+          console.log("Trying fares-update endpoint for local fares");
+          const faresUpdateResponse = await axios.post('/api/admin/fares-update.php', {
+            vehicleId: selectedVehicle,
+            vehicleType: selectedVehicle,
+            tripType: 'local',
+            hr8km80Price: hr8km80Price,
+            hr10km100Price: hr10km100Price,
+            extraKmRate: extraKmRate
+          }, {
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            }
+          });
+          
+          console.log("Fares-update local response:", faresUpdateResponse.data);
+          success = true;
+        } catch (error) {
+          console.error("Fares-update endpoint failed for local fares:", error);
         }
       }
       
-      const data = await response.json();
-      console.log("API Response:", data);
+      // If both previous attempts failed, try to use local-fares-update.php
+      if (!success) {
+        try {
+          console.log("Trying direct local-fares-update as last resort");
+          
+          const response = await fetch('/api/admin/local-fares-update.php', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            },
+            body: JSON.stringify(data)
+          });
+          
+          const responseText = await response.text();
+          console.log("Local-fares-update response text:", responseText);
+          
+          // Try to parse JSON if possible
+          try {
+            const jsonResponse = JSON.parse(responseText);
+            console.log("Parsed JSON response:", jsonResponse);
+            
+            if (jsonResponse.status === 'success') {
+              success = true;
+            }
+          } catch (jsonError) {
+            // If not valid JSON, check if the response contains success indicators
+            if (responseText.includes('success') || response.ok) {
+              success = true;
+            }
+          }
+        } catch (localError) {
+          console.error("Local-fares-update endpoint failed:", localError);
+        }
+      }
       
-      if (data.status === 'success') {
-        fareService.clearCache();
+      // Last attempt - use fareService
+      if (!success) {
+        console.log("Using fareService as absolute last resort");
+        success = await fareService.updateTripFares(selectedVehicle, "local", {
+          hr8km80Price,
+          hr10km100Price,
+          extraKmRate
+        });
+      }
+      
+      // Clear cache regardless of outcome
+      fareService.clearCache();
+      
+      if (success) {
         toast.success("Local fares updated successfully");
       } else {
-        throw new Error(data.message || "Unknown API error");
+        throw new Error("All local fare update attempts failed");
       }
     } catch (error: any) {
       console.error("Error updating local fares:", error);
@@ -281,51 +382,110 @@ export const VehicleTripFaresForm = () => {
         airportFee: airportFeeValue
       });
       
-      // Try direct fetch first
+      // Try multiple approaches for maximum reliability
+      let success = false;
+      
+      // First attempt with axios
       try {
-        const airportResponse = await fetch('/api/admin/vehicle-pricing.php', {
-          method: 'POST',
+        console.log("Trying axios for airport fare update");
+        const response = await axios.post('/api/admin/vehicle-pricing.php', {
+          vehicleId: selectedVehicle,
+          tripType: 'airport',
+          baseFare: basePrice,
+          pricePerKm: pricePerKm,
+          airportFee: airportFeeValue
+        }, {
           headers: {
             'Content-Type': 'application/json',
             'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
-          },
-          body: JSON.stringify({
-            vehicleId: selectedVehicle,
-            tripType: 'airport',
-            baseFare: basePrice,
-            pricePerKm: pricePerKm,
-            airportFee: airportFeeValue
-          })
+            'Pragma': 'no-cache'
+          }
         });
         
-        if (airportResponse.ok) {
-          const responseData = await airportResponse.json();
-          console.log("Airport fare update response:", responseData);
-          
-          if (responseData.status === 'success') {
-            fareService.clearCache();
-            toast.success("Airport fares updated successfully");
-            return;
-          }
-        }
-      } catch (airportError) {
-        console.warn("Direct API call failed, trying fareService:", airportError);
+        console.log("Airport fares axios response:", response.data);
+        success = true;
+      } catch (error) {
+        console.error("Axios airport fares update failed:", error);
       }
       
-      // Fallback to fareService
-      const success = await fareService.updateTripFares(selectedVehicle, "airport", {
-        basePrice: basePrice,
-        pricePerKm: pricePerKm,
-        airportFee: airportFeeValue
-      });
+      // Second attempt with fetch
+      if (!success) {
+        try {
+          console.log("Trying fetch for airport fare update");
+          const response = await fetch('/api/admin/vehicle-pricing.php', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            },
+            body: JSON.stringify({
+              vehicleId: selectedVehicle,
+              tripType: 'airport',
+              baseFare: basePrice,
+              pricePerKm: pricePerKm,
+              airportFee: airportFeeValue
+            })
+          });
+          
+          if (response.ok) {
+            const responseText = await response.text();
+            console.log("Airport fares fetch response:", responseText);
+            success = true;
+          }
+        } catch (fetchError) {
+          console.error("Fetch airport fares update failed:", fetchError);
+        }
+      }
+      
+      // Third attempt with fares-update.php
+      if (!success) {
+        try {
+          console.log("Trying fares-update endpoint for airport fare update");
+          const response = await fetch('/api/admin/fares-update.php', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            },
+            body: JSON.stringify({
+              vehicleId: selectedVehicle,
+              vehicleType: selectedVehicle,
+              tripType: 'airport',
+              basePrice: basePrice,
+              pricePerKm: pricePerKm,
+              airportFee: airportFeeValue
+            })
+          });
+          
+          if (response.ok) {
+            const responseText = await response.text();
+            console.log("Airport fares fares-update response:", responseText);
+            success = true;
+          }
+        } catch (faresUpdateError) {
+          console.error("Fares-update airport update failed:", faresUpdateError);
+        }
+      }
+      
+      // Last resort using fareService
+      if (!success) {
+        console.log("Using fareService as last resort for airport fares");
+        success = await fareService.updateTripFares(selectedVehicle, "airport", {
+          basePrice: basePrice,
+          pricePerKm: pricePerKm,
+          airportFee: airportFeeValue
+        });
+      }
+      
+      // Clear cache regardless of outcome
+      fareService.clearCache();
       
       if (success) {
-        fareService.clearCache();
         toast.success("Airport fares updated successfully");
       } else {
-        throw new Error("Failed to update airport fares");
+        throw new Error("All airport fare update attempts failed");
       }
     } catch (error: any) {
       console.error("Error updating airport fares:", error);

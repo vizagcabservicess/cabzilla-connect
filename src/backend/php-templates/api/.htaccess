@@ -28,6 +28,9 @@ RewriteRule ^receipt/([0-9]+)$ receipt.php?id=$1 [QSA,L]
 RewriteRule ^vehicles-data$ fares/vehicles-data.php [L,QSA]
 RewriteRule ^admin/local-fares-update$ admin/local-fares-update.php [QSA,L]
 
+# Add fallback endpoint mapping for local-fares-update
+RewriteRule ^admin/local-fares-update.php$ admin/local-fares-update.php [QSA,L]
+
 # Debug header to help troubleshoot routing
 Header set X-Requested-Path "%{REQUEST_URI}e"
 Header set X-Query-String "%{QUERY_STRING}e"
