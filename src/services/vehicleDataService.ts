@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { CabType } from '@/types/cab';
 import { toast } from 'sonner';
@@ -69,8 +68,6 @@ const cleanVehicleId = (id: string | undefined): string => {
   
   // Remove any random alphanumeric IDs matching a pattern like: r31yw7w
   if (/^[a-z0-9]{7}$/.test(id)) {
-    // For random IDs, we should try to find the actual vehicle name
-    // but since we don't have it here, we'll keep the ID for now
     return id;
   }
   
@@ -270,7 +267,7 @@ export const updateVehicle = async (vehicleData: any): Promise<any> => {
             'Pragma': 'no-cache',
             'Expires': '0'
           },
-          timeout: 10000 // 10 second timeout for updates
+          timeout: 10000 // 10 second timeout
         });
         
         if (response.status === 200) {
@@ -351,7 +348,7 @@ export const addVehicle = async (vehicleData: any): Promise<any> => {
             'Pragma': 'no-cache',
             'Expires': '0'
           },
-          timeout: 10000 // 10 second timeout for adds
+          timeout: 10000 // 10 second timeout
         });
         
         if (response.status === 200) {
@@ -537,6 +534,14 @@ export const updateTripFares = async (
         if (response.status === 200) {
           console.log(`${tripType} fares updated successfully via`, endpoint);
           toast.success(`${tripType} fares updated successfully`);
+          
+          // Clear all caches to ensure fresh data
+          localStorage.removeItem('cabFares');
+          localStorage.removeItem('tourFares');
+          sessionStorage.removeItem('cabFares');
+          sessionStorage.removeItem('tourFares');
+          sessionStorage.removeItem('calculatedFares');
+          
           return true;
         }
       } catch (error: any) {

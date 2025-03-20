@@ -558,30 +558,52 @@ class FareService {
         authHeader.Authorization = `Bearer ${token}`;
       }
       
-      // Try to update fares through the API
-      const response = await axios.post(`/api/admin/fares-update.php?_t=${Date.now()}`, payload, {
-        headers: {
-          ...authHeader,
-          'Content-Type': 'application/json',
-          'X-Force-Refresh': 'true',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        }
-      });
+      // Add timestamp for cache busting
+      const timestamp = Date.now();
       
-      if (response.status === 200) {
-        console.log(`${tripType} fares updated successfully`, response.data);
-        toast.success(`${tripType} fares updated successfully`);
-        
-        // Clear cache to ensure fresh data on next fetch
-        this.clearCache();
-        return true;
-      } else {
-        console.error(`Failed to update ${tripType} fares:`, response);
-        toast.error(`Failed to update ${tripType} fares`);
-        return false;
+      // Try multiple endpoints with retry logic
+      const endpoints = [
+        `/api/admin/fares-update.php?_t=${timestamp}`,
+        `/api/admin/vehicle-pricing.php?_t=${timestamp}`
+      ];
+      
+      // Try each endpoint until one works
+      for (const endpoint of endpoints) {
+        try {
+          console.log(`Trying to update ${tripType} fares using endpoint: ${endpoint}`);
+          
+          const response = await axios.post(endpoint, payload, {
+            headers: {
+              ...authHeader,
+              'Content-Type': 'application/json',
+              'X-Force-Refresh': 'true',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'Expires': '0'
+            }
+          });
+          
+          if (response.status === 200) {
+            console.log(`${tripType} fares updated successfully via`, endpoint);
+            toast.success(`${tripType} fares updated successfully`);
+            
+            // Clear cache to ensure fresh data on next fetch
+            this.clearCache();
+            return true;
+          }
+        } catch (error: any) {
+          console.error(`Error updating ${tripType} fares at endpoint ${endpoint}:`, error);
+          
+          // If this is the last endpoint, show error
+          if (endpoint === endpoints[endpoints.length - 1]) {
+            toast.error(`Failed to update ${tripType} fares: ${error.response?.data?.message || error.message || 'Unknown error'}`);
+          }
+        }
       }
+      
+      // If we reach here, all endpoints failed
+      toast.error(`Failed to update ${tripType} fares after trying all endpoints`);
+      return false;
     } catch (error: any) {
       console.error(`Error updating ${tripType} fares:`, error);
       toast.error(`Failed to update ${tripType} fares: ${error.response?.data?.message || error.message || 'Unknown error'}`);
@@ -652,5 +674,5 @@ class FareService {
   }
 }
 
-// Export a singleton instance
+// Create and export a singleton instance
 export const fareService = FareService.getInstance();
