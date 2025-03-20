@@ -19,6 +19,14 @@ type LocationInputProps = {
   className?: string;
 };
 
+// Add a more specific type for Google Autocomplete predictions to ensure TypeScript recognizes structured_formatting
+interface AutocompletePredictionWithFormatting extends google.maps.places.AutocompletePrediction {
+  structured_formatting?: {
+    main_text: string;
+    secondary_text: string;
+  };
+}
+
 export function LocationInput({
   label,
   placeholder,
@@ -53,7 +61,7 @@ export function LocationInput({
   };
 
   const [inputValue, setInputValue] = useState<string>(getInitialInputValue());
-  const [suggestions, setSuggestions] = useState<google.maps.places.AutocompletePrediction[]>([]);
+  const [suggestions, setSuggestions] = useState<AutocompletePredictionWithFormatting[]>([]);
   const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -230,7 +238,7 @@ export function LocationInput({
   }, [google, isPickupLocation]);
 
   // Handle suggestion selection
-  const handleSuggestionClick = useCallback(async (suggestion: google.maps.places.AutocompletePrediction) => {
+  const handleSuggestionClick = useCallback(async (suggestion: AutocompletePredictionWithFormatting) => {
     setInputValue(suggestion.description);
     setShowSuggestions(false);
     setIsLoading(true);
