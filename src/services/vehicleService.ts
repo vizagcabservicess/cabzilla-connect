@@ -25,7 +25,7 @@ export const vehicleService = {
         return [];
       }
       
-      // Normalize vehicle data to ensure consistent structure
+      // Normalize vehicle data to ensure consistent structure with CabType
       return vehicles.map(vehicle => ({
         id: vehicle.id || vehicle.cab_id || vehicle.vehicle_id || `cab_${Math.random().toString(36).substring(2, 9)}`,
         name: vehicle.name || vehicle.cab_name || vehicle.vehicle_name || 'Unknown Vehicle',
@@ -35,13 +35,15 @@ export const vehicleService = {
         pricePerKm: Number(vehicle.pricePerKm || vehicle.price_per_km || 0),
         price: Number(vehicle.price || vehicle.basePrice || vehicle.base_price || 0),
         capacity: Number(vehicle.capacity || vehicle.passenger_capacity || 4),
-        luggage: Number(vehicle.luggage || vehicle.luggage_capacity || 2),
-        acAvailable: Boolean(vehicle.acAvailable || vehicle.ac_available || true),
+        luggageCapacity: Number(vehicle.luggageCapacity || vehicle.luggage || vehicle.luggage_capacity || 2),
+        ac: Boolean(vehicle.ac || vehicle.acAvailable || vehicle.ac_available || true),
         hr8km80Price: Number(vehicle.hr8km80Price || vehicle.hr_8km_80_price || 0),
         hr10km100Price: Number(vehicle.hr10km100Price || vehicle.hr_10km_100_price || 0),
         driverAllowance: Number(vehicle.driverAllowance || vehicle.driver_allowance || 300),
         nightHaltCharge: Number(vehicle.nightHaltCharge || vehicle.night_halt_charge || 300),
-        airportFee: Number(vehicle.airportFee || vehicle.airport_fee || 0)
+        airportFee: Number(vehicle.airportFee || vehicle.airport_fee || 0),
+        amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC'],
+        isActive: vehicle.isActive !== false
       }));
     } catch (error) {
       console.error("Error fetching vehicles:", error);
@@ -58,12 +60,15 @@ export const vehicleService = {
           pricePerKm: 12,
           price: 800,
           capacity: 4,
-          luggage: 2,
-          acAvailable: true,
+          luggageCapacity: 2,
+          ac: true,
           hr8km80Price: 1200,
           hr10km100Price: 1500,
           driverAllowance: 300,
-          nightHaltCharge: 300
+          nightHaltCharge: 300,
+          airportFee: 0,
+          amenities: ['AC', 'Music System'],
+          isActive: true
         },
         {
           id: "ertiga",
@@ -74,12 +79,15 @@ export const vehicleService = {
           pricePerKm: 15,
           price: 1200,
           capacity: 6,
-          luggage: 3,
-          acAvailable: true,
+          luggageCapacity: 3,
+          ac: true,
           hr8km80Price: 1800,
           hr10km100Price: 2100,
           driverAllowance: 350,
-          nightHaltCharge: 350
+          nightHaltCharge: 350,
+          airportFee: 0,
+          amenities: ['AC', 'Music System', 'Extra Legroom'],
+          isActive: true
         },
         {
           id: "innovacrys",
@@ -90,12 +98,15 @@ export const vehicleService = {
           pricePerKm: 18,
           price: 1500,
           capacity: 6,
-          luggage: 4,
-          acAvailable: true,
+          luggageCapacity: 4,
+          ac: true,
           hr8km80Price: 2100,
           hr10km100Price: 2400,
           driverAllowance: 400,
-          nightHaltCharge: 400
+          nightHaltCharge: 400,
+          airportFee: 0,
+          amenities: ['AC', 'Music System', 'Extra Legroom', 'Charging Point'],
+          isActive: true
         }
       ];
     }
@@ -120,8 +131,8 @@ export const vehicleService = {
           base_price: vehicle.basePrice,
           price_per_km: vehicle.pricePerKm,
           passenger_capacity: vehicle.capacity,
-          luggage_capacity: vehicle.luggage,
-          ac_available: vehicle.acAvailable,
+          luggage_capacity: vehicle.luggageCapacity, // Using the proper CabType property
+          ac_available: vehicle.ac, // Using the proper CabType property
           hr_8km_80_price: vehicle.hr8km80Price,
           hr_10km_100_price: vehicle.hr10km100Price,
           driver_allowance: vehicle.driverAllowance,
