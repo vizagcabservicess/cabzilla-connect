@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +13,7 @@ import {
 import { toast } from "sonner";
 import { fareService } from "@/services/fareService";
 import { getVehicleTypes } from "@/services/vehicleDataService";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CabRefreshWarning } from "@/components/cab-options/CabRefreshWarning";
 
@@ -42,7 +41,7 @@ export const VehicleTripFaresForm = () => {
   const [airportFee, setAirportFee] = useState("");
   
   // Load vehicles on mount
-  React.useEffect(() => {
+  useEffect(() => {
     const loadVehicles = async () => {
       try {
         const vehicleList = await getVehicleTypes();
@@ -75,37 +74,66 @@ export const VehicleTripFaresForm = () => {
     
     try {
       // Validate inputs are numeric
-      const basePrice = parseFloat(outstationOneWayBasePrice);
-      const pricePerKm = parseFloat(outstationOneWayPricePerKm);
-      const roundTripBasePrice = parseFloat(outstationRoundTripBasePrice);
-      const roundTripPricePerKm = parseFloat(outstationRoundTripPricePerKm);
-      
-      if (isNaN(basePrice) || isNaN(pricePerKm) || isNaN(roundTripBasePrice) || isNaN(roundTripPricePerKm)) {
-        throw new Error("All prices must be valid numbers");
-      }
+      const basePrice = parseFloat(outstationOneWayBasePrice) || 0;
+      const pricePerKm = parseFloat(outstationOneWayPricePerKm) || 0;
+      const roundTripBasePrice = parseFloat(outstationRoundTripBasePrice) || 0;
+      const roundTripPricePerKm = parseFloat(outstationRoundTripPricePerKm) || 0;
       
       console.log("Updating outstation fares for vehicle:", selectedVehicle, {
         oneWay: { basePrice, pricePerKm },
         roundTrip: { basePrice: roundTripBasePrice, pricePerKm: roundTripPricePerKm }
       });
       
-      // Update one-way fares
-      const oneWaySuccess = await fareService.updateTripFares(selectedVehicle, "outstation-one-way", {
-        basePrice: basePrice,
-        pricePerKm: pricePerKm
+      // Update one-way fares - using direct fetch for more control
+      const oneWayResponse = await fetch('/api/admin/vehicle-pricing.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        },
+        body: JSON.stringify({
+          vehicleId: selectedVehicle,
+          tripType: 'outstation-one-way',
+          baseFare: basePrice,
+          pricePerKm: pricePerKm
+        })
       });
       
-      // Update round trip fares
-      const roundTripSuccess = await fareService.updateTripFares(selectedVehicle, "outstation-round-trip", {
-        basePrice: roundTripBasePrice,
-        pricePerKm: roundTripPricePerKm
-      });
-      
-      if (oneWaySuccess && roundTripSuccess) {
-        toast.success("Outstation fares updated successfully");
-      } else {
-        throw new Error("Failed to update one or more fare types");
+      if (!oneWayResponse.ok) {
+        const oneWayError = await oneWayResponse.text();
+        console.error('One-way fare update failed:', oneWayError);
+        throw new Error(`One-way fare update failed: ${oneWayError}`);
       }
+      
+      // Update round trip fares - using direct fetch for more control
+      const roundTripResponse = await fetch('/api/admin/vehicle-pricing.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        },
+        body: JSON.stringify({
+          vehicleId: selectedVehicle,
+          tripType: 'outstation-round-trip',
+          baseFare: roundTripBasePrice,
+          pricePerKm: roundTripPricePerKm
+        })
+      });
+      
+      if (!roundTripResponse.ok) {
+        const roundTripError = await roundTripResponse.text();
+        console.error('Round-trip fare update failed:', roundTripError);
+        throw new Error(`Round-trip fare update failed: ${roundTripError}`);
+      }
+      
+      // Clear any cached data
+      fareService.clearCache();
+      
+      toast.success("Outstation fares updated successfully");
     } catch (error: any) {
       console.error("Error updating outstation fares:", error);
       toast.error(error.message || "Failed to update outstation fares");
@@ -235,7 +263,18 @@ export const VehicleTripFaresForm = () => {
   return (
     <Card className="bg-white shadow-md">
       <CardHeader>
-        <CardTitle className="text-xl font-bold">Manage Trip Fares</CardTitle>
+        <div className="flex justify-between items-center">
+          <CardTitle className="text-xl font-bold">Manage Trip Fares</CardTitle>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => window.location.reload()}
+            className="ml-auto"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh Page
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="grid gap-4">

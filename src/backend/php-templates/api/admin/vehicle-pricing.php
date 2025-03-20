@@ -62,16 +62,9 @@ function updateOutstationFares($conn, $vehicleId, $fareData) {
         'data' => $fareData
     ]);
     
-    // Check required fields
-    if (!isset($fareData['baseFare']) || !isset($fareData['pricePerKm'])) {
-        logError("Missing required fields for outstation fares", $fareData);
-        sendJsonResponse(['status' => 'error', 'message' => 'Missing required fields for outstation fares'], 400);
-        return false;
-    }
-    
-    // Convert to numeric values
-    $baseFare = floatval($fareData['baseFare']);
-    $pricePerKm = floatval($fareData['pricePerKm']);
+    // Check required fields - make baseFare and pricePerKm optional with defaults
+    $baseFare = isset($fareData['baseFare']) ? floatval($fareData['baseFare']) : 0;
+    $pricePerKm = isset($fareData['pricePerKm']) ? floatval($fareData['pricePerKm']) : 0;
     $nightHaltCharge = isset($fareData['nightHaltCharge']) ? floatval($fareData['nightHaltCharge']) : 0;
     $driverAllowance = isset($fareData['driverAllowance']) ? floatval($fareData['driverAllowance']) : 0;
     
@@ -113,6 +106,7 @@ function updateOutstationFares($conn, $vehicleId, $fareData) {
     $stmt->bind_param("s", $vehicleId);
     $stmt->execute();
     $result = $stmt->get_result();
+    $success = false;
     
     if ($result->num_rows > 0) {
         // Update existing record
@@ -125,6 +119,10 @@ function updateOutstationFares($conn, $vehicleId, $fareData) {
         
         $updateStmt->bind_param("dddds", $baseFare, $pricePerKm, $nightHaltCharge, $driverAllowance, $vehicleId);
         $success = $updateStmt->execute();
+        
+        if (!$success) {
+            logError("Failed to execute outstation fare update", ['error' => $updateStmt->error]);
+        }
     } else {
         // Insert new record
         $insertQuery = "INSERT INTO outstation_fares (vehicle_id, base_fare, price_per_km, night_halt_charge, driver_allowance, created_at, updated_at) 
@@ -137,15 +135,19 @@ function updateOutstationFares($conn, $vehicleId, $fareData) {
         
         $insertStmt->bind_param("sdddd", $vehicleId, $baseFare, $pricePerKm, $nightHaltCharge, $driverAllowance);
         $success = $insertStmt->execute();
+        
+        if (!$success) {
+            logError("Failed to execute outstation fare insert", ['error' => $insertStmt->error]);
+        }
     }
     
     if (!$success) {
-        logError("Database error updating outstation fares", ['error' => $stmt->error]);
+        logError("Database error updating outstation fares", ['error' => $conn->error]);
         return false;
     }
     
     // Also update the main vehicles table to keep pricing consistent
-    $updateVehicleQuery = "UPDATE vehicles SET base_price = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ? WHERE id = ? OR vehicle_id = ?";
+    $updateVehicleQuery = "UPDATE vehicles SET base_price = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?, updated_at = NOW() WHERE id = ? OR vehicle_id = ?";
     $updateVehicleStmt = $conn->prepare($updateVehicleQuery);
     if (!$updateVehicleStmt) {
         logError("Failed to prepare statement for vehicle update", ['error' => $conn->error]);
@@ -153,7 +155,11 @@ function updateOutstationFares($conn, $vehicleId, $fareData) {
     }
     
     $updateVehicleStmt->bind_param("ddddss", $baseFare, $pricePerKm, $nightHaltCharge, $driverAllowance, $vehicleId, $vehicleId);
-    $updateVehicleStmt->execute();
+    $updateVehicleSuccess = $updateVehicleStmt->execute();
+    
+    if (!$updateVehicleSuccess) {
+        logError("Failed to update main vehicle record", ['error' => $updateVehicleStmt->error]);
+    }
     
     logError("Successfully updated outstation fares", ['vehicleId' => $vehicleId]);
     return true;
@@ -304,6 +310,12 @@ if ($method === 'POST') {
     // Log the incoming data
     logError("Received vehicle pricing update request", $data);
     
+    if ($json === false || $data === null) {
+        logError("Invalid JSON in request", ['raw_input' => file_get_contents('php://input')]);
+        sendJsonResponse(['status' => 'error', 'message' => 'Invalid JSON format'], 400);
+        exit;
+    }
+    
     // Validate required fields
     if (!isset($data['vehicleId']) || !isset($data['tripType'])) {
         logError("Missing required fields in request", $data);
@@ -324,6 +336,8 @@ if ($method === 'POST') {
     // Handle different trip types
     switch ($tripType) {
         case 'outstation':
+        case 'outstation-one-way':
+        case 'outstation-round-trip':
             $success = updateOutstationFares($conn, $vehicleId, $data);
             break;
             
@@ -337,14 +351,8 @@ if ($method === 'POST') {
             
         case 'base':
             // Handle base price updates directly in the vehicles table
-            if (!isset($data['basePrice']) || !isset($data['pricePerKm'])) {
-                logError("Missing required fields for base pricing", $data);
-                sendJsonResponse(['status' => 'error', 'message' => 'Missing required fields for base pricing'], 400);
-                exit;
-            }
-            
-            $basePrice = floatval($data['basePrice']);
-            $pricePerKm = floatval($data['pricePerKm']);
+            $basePrice = isset($data['basePrice']) ? floatval($data['basePrice']) : 0;
+            $pricePerKm = isset($data['pricePerKm']) ? floatval($data['pricePerKm']) : 0;
             $nightHaltCharge = isset($data['nightHaltCharge']) ? floatval($data['nightHaltCharge']) : 0;
             $driverAllowance = isset($data['driverAllowance']) ? floatval($data['driverAllowance']) : 0;
             
