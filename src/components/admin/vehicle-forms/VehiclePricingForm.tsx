@@ -88,90 +88,100 @@ export const VehiclePricingForm: React.FC<VehiclePricingFormProps> = ({
       
       // Clear all caches before update
       localStorage.removeItem('cabTypes');
+      localStorage.removeItem('vehicleTypes');
+      localStorage.removeItem('fareCache');
       fareService.clearCache();
       
       // Prepare data for API
       const fareData = {
         vehicleId: selectedVehicleId,
+        vehicle_id: selectedVehicleId, // Alternative API field
+        id: selectedVehicleId, // Another alternative
         name: vehicleName,
         basePrice: parseFloat(basePrice) || 0,
+        base_price: parseFloat(basePrice) || 0, // Alternative field
+        price: parseFloat(basePrice) || 0, // Another alternative
         pricePerKm: parseFloat(pricePerKm) || 0,
+        price_per_km: parseFloat(pricePerKm) || 0, // Alternative field
         nightHaltCharge: parseFloat(nightHaltCharge) || 0,
+        night_halt_charge: parseFloat(nightHaltCharge) || 0, // Alternative field
         driverAllowance: parseFloat(driverAllowance) || 0,
-        tripType: tripType
+        driver_allowance: parseFloat(driverAllowance) || 0, // Alternative field
+        tripType: tripType,
+        trip_type: tripType // Alternative field
       };
       
-      // Send update request
+      // Send update request directly to the vehicles-data.php endpoint with POST method
+      const timestamp = Date.now();
+      const urls = [
+        `/api/fares/vehicles-data.php?_t=${timestamp}`,
+        `/api/admin/vehicle-pricing.php?_t=${timestamp}`,
+        `/api/admin/vehicles-update.php?_t=${timestamp}`,
+        `https://saddlebrown-oryx-227656.hostingersite.com/api/fares/vehicles-data.php?_t=${timestamp}`,
+        `https://saddlebrown-oryx-227656.hostingersite.com/api/admin/vehicle-pricing.php?_t=${timestamp}`,
+        `https://saddlebrown-oryx-227656.hostingersite.com/api/admin/vehicles-update.php?_t=${timestamp}`
+      ];
+
       let success = false;
-      
-      // First try with the standard method
-      try {
-        success = await fareService.updateTripFares(
-          selectedVehicleId,
-          tripType,
-          fareData
-        );
-      } catch (err) {
-        console.warn("First update attempt failed:", err);
-      }
-      
-      // If standard method failed, try alternate approach
-      if (!success) {
-        console.log("First attempt failed, trying alternate approach...");
-        
-        // Try with alternate trip type
-        const alternateType = tripType === 'base' ? 'outstation' : 'base';
+      let lastError = null;
+
+      for (const url of urls) {
+        if (success) break;
         
         try {
-          const fallbackSuccess = await fareService.updateTripFares(
-            selectedVehicleId,
-            alternateType,
-            fareData
-          );
+          console.log(`Trying to update vehicle pricing at ${url}`);
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'Expires': '0',
+              'X-Force-Refresh': 'true'
+            },
+            body: JSON.stringify(fareData)
+          });
           
-          if (fallbackSuccess) {
-            console.log("Updated vehicle pricing using alternate trip type");
+          if (response.ok) {
+            console.log(`Successfully updated pricing at ${url}`);
             success = true;
-            if (onSuccess) onSuccess(selectedVehicleId, alternateType);
           }
-        } catch (err) {
-          console.warn("Alternate trip type approach failed:", err);
+        } catch (error) {
+          console.warn(`Failed to update at ${url}:`, error);
+          lastError = error;
         }
       }
       
-      // If both methods failed, try one more approach with direct endpoint override
+      // If direct POST failed, try with the standard method
       if (!success) {
-        console.log("Trying direct endpoint override approach...");
-        fareService.clearCache();
-        
         try {
-          // Set a flag to force direct API path
-          const forceDirectPath = true;
-          const directSuccess = await fareService.updateTripFares(
+          console.log("Trying standard fare service update method");
+          success = await fareService.updateTripFares(
             selectedVehicleId,
             tripType,
             fareData,
-            forceDirectPath
+            true // Force direct path
           );
-          
-          if (directSuccess) {
-            console.log("Updated vehicle pricing using direct path override");
-            success = true;
-            if (onSuccess) onSuccess(selectedVehicleId, tripType);
-          }
         } catch (err) {
-          console.warn("Direct path override approach failed:", err);
+          console.warn("Standard update attempt failed:", err);
+          lastError = err;
         }
       }
       
       if (success) {
         toast.success(`Vehicle pricing updated successfully for ${vehicleName}`);
-        // If we haven't already called onSuccess in one of the fallback methods
-        if (onSuccess && tripType) {
+        
+        // Clear all caches after update
+        localStorage.removeItem('cabTypes');
+        localStorage.removeItem('vehicleTypes');
+        localStorage.removeItem('fareCache');
+        fareService.clearCache();
+        
+        if (onSuccess) {
           onSuccess(selectedVehicleId, tripType);
         }
       } else {
-        throw new Error("All pricing update attempts failed");
+        throw new Error(lastError?.message || "All pricing update attempts failed");
       }
     } catch (err: any) {
       console.error("Error updating pricing:", err);
@@ -251,7 +261,7 @@ export const VehiclePricingForm: React.FC<VehiclePricingFormProps> = ({
         ) : (
           <>
             <Save className="mr-2 h-4 w-4" />
-            Update Base Pricing
+            Update {tripType.charAt(0).toUpperCase() + tripType.slice(1)} Pricing
           </>
         )}
       </Button>

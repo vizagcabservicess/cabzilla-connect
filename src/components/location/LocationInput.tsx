@@ -17,6 +17,7 @@ export function LocationInput({
   className = ''
 }: LocationInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const suggestionsListRef = useRef<HTMLDivElement>(null);
   const {
     inputValue,
     suggestions,
@@ -34,7 +35,12 @@ export function LocationInput({
   // Close suggestions when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (inputRef.current && !inputRef.current.contains(event.target as Node)) {
+      if (
+        inputRef.current && 
+        !inputRef.current.contains(event.target as Node) && 
+        suggestionsListRef.current && 
+        !suggestionsListRef.current.contains(event.target as Node)
+      ) {
         setShowSuggestions(false);
       }
     };
@@ -67,6 +73,7 @@ export function LocationInput({
             placeholder={placeholder}
             className="pl-10 pr-12 py-2 w-full rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             readOnly={readOnly}
+            autoComplete="off" // Disable browser autocomplete
           />
           
           {isLoading && (
@@ -76,14 +83,16 @@ export function LocationInput({
           )}
         </div>
         
-        <SuggestionsList
-          showSuggestions={showSuggestions}
-          useLocalSuggestions={useLocalSuggestions}
-          localSuggestions={localSuggestions}
-          googleSuggestions={suggestions}
-          onLocalSuggestionClick={handleLocalSuggestionClick}
-          onGoogleSuggestionClick={handleSuggestionClick}
-        />
+        <div ref={suggestionsListRef}>
+          <SuggestionsList
+            showSuggestions={showSuggestions}
+            useLocalSuggestions={useLocalSuggestions}
+            localSuggestions={localSuggestions}
+            googleSuggestions={suggestions}
+            onLocalSuggestionClick={handleLocalSuggestionClick}
+            onGoogleSuggestionClick={handleSuggestionClick}
+          />
+        </div>
       </div>
     </div>
   );

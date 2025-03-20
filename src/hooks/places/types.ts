@@ -1,9 +1,6 @@
 
-import { Location as ApiLocation } from '@/types/api';
-
 export interface PlacesAutocompleteOptions {
   debounceTime?: number;
-  radius?: number; 
   country?: string;
   vizagOnly?: boolean;
 }

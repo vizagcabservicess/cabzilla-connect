@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
 import { usePlacesAutocomplete } from '@/hooks/usePlacesAutocomplete';
@@ -29,7 +30,8 @@ export function useLocationInput(
     isInitialized: isAutocompleteInitialized,
     forceInitialization
   } = usePlacesAutocomplete({
-    country: 'in' // Always restrict to India
+    country: 'in', // Always restrict to India
+    vizagOnly: isPickupLocation // Only restrict to Vizag for pickup locations
   });
 
   useEffect(() => {
@@ -71,14 +73,16 @@ export function useLocationInput(
         let bounds;
         
         if (isPickupLocation) {
+          // For pickup locations, set a wider radius around Visakhapatnam (approximately 20km)
           bounds = new google.maps.LatLngBounds(
-            new google.maps.LatLng(17.6315, 83.1015), 
-            new google.maps.LatLng(17.8115, 83.3415)
+            new google.maps.LatLng(17.5615, 83.0315), // SW corner - expanded
+            new google.maps.LatLng(17.8815, 83.4115)  // NE corner - expanded
           );
         } else {
+          // For drop locations, use all of India
           bounds = new google.maps.LatLngBounds(
-            new google.maps.LatLng(8.0, 68.0), 
-            new google.maps.LatLng(37.0, 97.0)
+            new google.maps.LatLng(8.0, 68.0), // SW corner of India
+            new google.maps.LatLng(37.0, 97.0)  // NE corner of India
           );
         }
         
@@ -136,7 +140,7 @@ export function useLocationInput(
         if (isPickupLocation) {
           const vizagCenter = { lat: 17.6868, lng: 83.2185 };
           const distance = getDistanceFromLatLonInKm(lat, lng, vizagCenter.lat, vizagCenter.lng);
-          isInVizag = distance <= 25;
+          isInVizag = distance <= 25; // Increased from original 20km
           
           if (!isInVizag) {
             toast.error("Pickup location must be within 25km of Visakhapatnam", {
@@ -155,10 +159,10 @@ export function useLocationInput(
           address: placeDetails.formatted_address || suggestion.description,
           lat,
           lng,
-          type: 'other',
+          type: 'other', // Changed from 'custom' to 'other' to match type definition
           isInVizag,
-          city: 'Visakhapatnam',
-          state: 'Andhra Pradesh',
+          city: extractCityFromPlaceDetails(placeDetails) || 'Visakhapatnam',
+          state: extractStateFromPlaceDetails(placeDetails) || 'Andhra Pradesh',
           popularityScore: 50
         };
         
@@ -176,7 +180,7 @@ export function useLocationInput(
         address: suggestion.description,
         lat: 0,
         lng: 0,
-        type: 'other',
+        type: 'other', // Changed from 'custom' to 'other' to match type definition
         isInVizag: isPickupLocation,
         city: 'Visakhapatnam',
         state: 'Andhra Pradesh',
@@ -209,6 +213,7 @@ export function useLocationInput(
     if (inputValue.trim()) {
       setShowSuggestions(true);
       
+      // If no suggestions are currently shown, trigger a search
       if ((!suggestions || suggestions.length === 0) && 
           (!localSuggestions || localSuggestions.length === 0)) {
         handleInputChange({ target: { value: inputValue } } as React.ChangeEvent<HTMLInputElement>);
@@ -236,4 +241,37 @@ export function useLocationInput(
     handleSuggestionClick,
     handleLocalSuggestionClick
   };
+}
+
+// Helper functions to extract city and state from place details
+function extractCityFromPlaceDetails(placeDetails: google.maps.places.PlaceResult): string {
+  if (!placeDetails.address_components) return '';
+  
+  // Look for locality (city)
+  const cityComponent = placeDetails.address_components.find(component => 
+    component.types.includes('locality')
+  );
+  
+  // Fall back to administrative_area_level_2 (district)
+  if (!cityComponent) {
+    const districtComponent = placeDetails.address_components.find(component => 
+      component.types.includes('administrative_area_level_2')
+    );
+    if (districtComponent) return districtComponent.long_name;
+  } else {
+    return cityComponent.long_name;
+  }
+  
+  return '';
+}
+
+function extractStateFromPlaceDetails(placeDetails: google.maps.places.PlaceResult): string {
+  if (!placeDetails.address_components) return '';
+  
+  // Look for administrative_area_level_1 (state)
+  const stateComponent = placeDetails.address_components.find(component => 
+    component.types.includes('administrative_area_level_1')
+  );
+  
+  return stateComponent ? stateComponent.long_name : '';
 }
