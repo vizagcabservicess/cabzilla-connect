@@ -50,11 +50,23 @@ export const VehicleTripFaresForm = () => {
     setIsRefreshing(true);
     setError(null);
     try {
-      const vehicleList = await getVehicleTypes();
-      setVehicles(vehicleList);
+      // Force cache clearing
+      localStorage.removeItem('cabTypes');
+      localStorage.removeItem('vehicleTypes');
       
-      console.log("Loaded vehicles for fare management:", vehicleList);
-      toast.success("Vehicle data refreshed");
+      const vehicleList = await getVehicleTypes(true); // Pass true to include inactive vehicles
+      
+      // Add timestamp to bust cache
+      const timestamp = new Date().getTime().toString();
+      console.log(`Loaded vehicles for fare management (${timestamp}):`, vehicleList);
+      
+      if (Array.isArray(vehicleList) && vehicleList.length > 0) {
+        setVehicles(vehicleList);
+        toast.success(`Loaded ${vehicleList.length} vehicles`);
+      } else {
+        setError("No vehicles found. Please check database connection.");
+        toast.error("No vehicles found");
+      }
     } catch (error) {
       console.error("Error loading vehicles:", error);
       setError("Failed to load vehicles. The API may be down or returned an error.");
@@ -91,25 +103,30 @@ export const VehicleTripFaresForm = () => {
     try {
       console.log("Updating outstation fares for vehicle:", selectedVehicle);
       
-      // Update one-way fares
+      // First try updating one-way fares
       const oneWaySuccess = await fareService.updateTripFares(selectedVehicle, "outstation-one-way", {
         basePrice: parseFloat(outstationOneWayBasePrice) || 0,
         pricePerKm: parseFloat(outstationOneWayPricePerKm) || 0
       });
       
-      // Update round trip fares
+      if (!oneWaySuccess) {
+        setError("Failed to update one-way fares. Please check the logs.");
+        return;
+      }
+      
+      // Then update round-trip fares
       const roundTripSuccess = await fareService.updateTripFares(selectedVehicle, "outstation-round-trip", {
         basePrice: parseFloat(outstationRoundTripBasePrice) || 0,
         pricePerKm: parseFloat(outstationRoundTripPricePerKm) || 0
       });
       
-      if (oneWaySuccess && roundTripSuccess) {
-        toast.success("Outstation fares updated successfully");
-      } else {
-        // If either update fails, show an error
-        toast.error("Failed to update some outstation fares");
-        setError("API returned an error when updating fares. Please try again.");
+      if (!roundTripSuccess) {
+        setError("Updated one-way fares but failed to update round-trip fares.");
+        return;
       }
+      
+      toast.success("Outstation fares updated successfully");
+      
     } catch (error) {
       console.error("Error updating outstation fares:", error);
       toast.error("Failed to update outstation fares");
@@ -218,13 +235,22 @@ export const VehicleTripFaresForm = () => {
                   <SelectValue placeholder="Select a vehicle" />
                 </SelectTrigger>
                 <SelectContent>
-                  {vehicles.map((vehicle) => (
-                    <SelectItem key={vehicle.id} value={vehicle.id}>
-                      {vehicle.name}
-                    </SelectItem>
-                  ))}
+                  {vehicles.length === 0 ? (
+                    <div className="p-2 text-center text-gray-500">No vehicles found</div>
+                  ) : (
+                    vehicles.map((vehicle) => (
+                      <SelectItem key={vehicle.id} value={vehicle.id}>
+                        {vehicle.name}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
+              {vehicles.length === 0 && !isRefreshing && (
+                <div className="text-sm text-red-500 mt-1">
+                  No vehicles found. Try refreshing or check the database connection.
+                </div>
+              )}
             </div>
             
             <Tabs defaultValue="outstation" value={activeTab} onValueChange={setActiveTab} className="w-full">

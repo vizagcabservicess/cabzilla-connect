@@ -31,6 +31,7 @@ RewriteRule ^vehicles-data$ fares/vehicles-data.php [L,QSA]
 Header set X-Requested-Path "%{REQUEST_URI}e"
 Header set X-Query-String "%{QUERY_STRING}e"
 Header set X-API-Version "1.0.51"
+Header set X-Cache-Control "No-Store"
 
 # Disable caching for API endpoints - Force no caching very strictly
 <IfModule mod_headers.c>
