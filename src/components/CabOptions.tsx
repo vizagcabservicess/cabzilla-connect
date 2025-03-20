@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { CabType } from '@/types/cab';
 import { formatPrice } from '@/lib/cabData';
@@ -248,6 +247,17 @@ export function CabOptions({
     }
   }, [selectedCab]);
 
+  const getFareDetails = useCallback((): string => {
+    return fareService.getFareExplanation(
+      distance,
+      tripType,
+      tripMode,
+      hourlyPackage,
+      pickupDate,
+      returnDate
+    );
+  }, [distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate]);
+
   const handleSelectCab = (cab: CabType) => {
     setSelectedCabId(cab.id);
     onSelectCab(cab);
@@ -269,17 +279,6 @@ export function CabOptions({
       }, 100);
     }
   };
-
-  const getFareDetails = useCallback((): string => {
-    return fareService.getFareExplanation(
-      distance,
-      tripType,
-      tripMode,
-      hourlyPackage,
-      pickupDate,
-      returnDate
-    );
-  }, [distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate]);
 
   if (isLoadingCabs) {
     return (
