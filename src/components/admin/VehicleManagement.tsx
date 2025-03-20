@@ -1,21 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Trash2 } from "lucide-react";
-import { getVehicleTypes, updateVehicle, deleteVehicle } from "@/services/vehicleDataService";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Textarea } from "@/components/ui/textarea";
+import { getVehicleTypes, updateVehicle, deleteVehicle } from "@/services/vehicleDataService";
 import { VehicleTripFaresForm } from './VehicleTripFaresForm';
+import { VehicleSelector } from './vehicle-forms/VehicleSelector';
+import { BasicInfoForm } from './vehicle-forms/BasicInfoForm';
+import { PricingForm } from './vehicle-forms/PricingForm';
+import { ActionButtons } from './vehicle-forms/ActionButtons';
 
 export const VehicleManagement = () => {
   const [vehicles, setVehicles] = useState<{id: string, name: string}[]>([]);
@@ -207,21 +198,11 @@ export const VehicleManagement = () => {
   return (
     <div className="grid gap-6">
       <div className="flex flex-col gap-4">
-        <div>
-          <label className="text-sm font-medium">Select Vehicle</label>
-          <Select value={selectedVehicle} onValueChange={handleVehicleChange}>
-            <SelectTrigger className="w-full mt-1">
-              <SelectValue placeholder="Select a vehicle" />
-            </SelectTrigger>
-            <SelectContent>
-              {vehicles.map((vehicle) => (
-                <SelectItem key={vehicle.id} value={vehicle.id}>
-                  {vehicle.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <VehicleSelector 
+          vehicles={vehicles} 
+          selectedVehicle={selectedVehicle} 
+          onVehicleChange={handleVehicleChange} 
+        />
         
         <Tabs defaultValue="basic" value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="w-full">
@@ -232,127 +213,34 @@ export const VehicleManagement = () => {
           
           {/* Basic Info Tab */}
           <TabsContent value="basic">
-            <Card className="bg-white shadow-md">
-              <CardHeader>
-                <CardTitle className="text-xl font-bold">Basic Vehicle Information</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-4">
-                  <div>
-                    <label className="text-sm font-medium">Vehicle Name</label>
-                    <Input 
-                      value={name} 
-                      onChange={(e) => setName(e.target.value)} 
-                      placeholder="e.g., Sedan, SUV, etc." 
-                    />
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium">Passenger Capacity</label>
-                      <Input 
-                        type="number" 
-                        value={capacity} 
-                        onChange={(e) => setCapacity(e.target.value)} 
-                        placeholder="e.g., 4" 
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium">Luggage Capacity</label>
-                      <Input 
-                        type="number" 
-                        value={luggageCapacity} 
-                        onChange={(e) => setLuggageCapacity(e.target.value)} 
-                        placeholder="e.g., 2" 
-                      />
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label className="text-sm font-medium">Image URL</label>
-                    <Input 
-                      value={image} 
-                      onChange={(e) => setImage(e.target.value)} 
-                      placeholder="/cars/sedan.png" 
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="text-sm font-medium">Description</label>
-                    <Textarea 
-                      value={description} 
-                      onChange={(e) => setDescription(e.target.value)} 
-                      placeholder="Vehicle description" 
-                    />
-                  </div>
-                  
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="isActive" 
-                      checked={isActive} 
-                      onCheckedChange={(checked) => setIsActive(checked === true)} 
-                    />
-                    <label htmlFor="isActive" className="text-sm font-medium">
-                      Active (available for booking)
-                    </label>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <BasicInfoForm 
+              name={name}
+              setName={setName}
+              capacity={capacity}
+              setCapacity={setCapacity}
+              luggageCapacity={luggageCapacity}
+              setLuggageCapacity={setLuggageCapacity}
+              isActive={isActive}
+              setIsActive={setIsActive}
+              description={description}
+              setDescription={setDescription}
+              image={image}
+              setImage={setImage}
+            />
           </TabsContent>
           
           {/* Pricing Tab */}
           <TabsContent value="pricing">
-            <Card className="bg-white shadow-md">
-              <CardHeader>
-                <CardTitle className="text-xl font-bold">Pricing Information</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium">Base Price (₹)</label>
-                      <Input 
-                        type="number" 
-                        value={basePrice} 
-                        onChange={(e) => setBasePrice(e.target.value)} 
-                        placeholder="e.g., 4200" 
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium">Price per Km (₹)</label>
-                      <Input 
-                        type="number" 
-                        value={pricePerKm} 
-                        onChange={(e) => setPricePerKm(e.target.value)} 
-                        placeholder="e.g., 14" 
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium">Night Halt Charge (₹)</label>
-                      <Input 
-                        type="number" 
-                        value={nightHaltCharge} 
-                        onChange={(e) => setNightHaltCharge(e.target.value)} 
-                        placeholder="e.g., 700" 
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium">Driver Allowance (₹)</label>
-                      <Input 
-                        type="number" 
-                        value={driverAllowance} 
-                        onChange={(e) => setDriverAllowance(e.target.value)} 
-                        placeholder="e.g., 250" 
-                      />
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <PricingForm 
+              basePrice={basePrice}
+              setBasePrice={setBasePrice}
+              pricePerKm={pricePerKm}
+              setPricePerKm={setPricePerKm}
+              nightHaltCharge={nightHaltCharge}
+              setNightHaltCharge={setNightHaltCharge}
+              driverAllowance={driverAllowance}
+              setDriverAllowance={setDriverAllowance}
+            />
           </TabsContent>
           
           {/* Trip Fares Tab */}
@@ -361,36 +249,12 @@ export const VehicleManagement = () => {
           </TabsContent>
         </Tabs>
         
-        <div className="flex justify-between mt-4">
-          <Button 
-            variant="destructive" 
-            onClick={handleDelete} 
-            disabled={!selectedVehicle || isLoading}
-          >
-            {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <>
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete Vehicle
-              </>
-            )}
-          </Button>
-          
-          <Button 
-            onClick={handleUpdate} 
-            disabled={!selectedVehicle || isLoading}
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Updating...
-              </>
-            ) : (
-              "Update Vehicle"
-            )}
-          </Button>
-        </div>
+        <ActionButtons 
+          isLoading={isLoading}
+          selectedVehicle={selectedVehicle}
+          onDelete={handleDelete}
+          onUpdate={handleUpdate}
+        />
       </div>
     </div>
   );
