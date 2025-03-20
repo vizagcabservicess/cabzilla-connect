@@ -48,7 +48,7 @@ export function useCabOptions({
       setIsLoadingCabs(true);
       try {
         console.log('Loading dynamic cab types...', Date.now());
-        fareService.clearCache(); // Removed the argument here
+        fareService.clearCache(); // No arguments should be passed here
         
         const cacheBuster = new Date().getTime();
         const dynamicCabTypes = await loadCabTypes(`?_t=${cacheBuster}`);
@@ -91,7 +91,7 @@ export function useCabOptions({
       sessionStorage.removeItem('calculatedFares');
       localStorage.removeItem('cabTypes');
       
-      fareService.clearCache(); // Removed the argument here
+      fareService.clearCache(); // No arguments should be passed here
       
       console.log('Forcing cab types refresh...', Date.now());
       const cacheBuster = new Date().getTime();
