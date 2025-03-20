@@ -59,7 +59,7 @@ export function CabOptions({
       setIsLoadingCabs(true);
       try {
         console.log('Loading dynamic cab types...', Date.now());
-        fareService.clearCache(); // Clear the fare cache to force fresh data
+        fareService.clearCache(); // Fixed: Remove argument here
         
         // Add cache-busting timestamp to avoid stale data
         const cacheBuster = new Date().getTime();
@@ -107,7 +107,7 @@ export function CabOptions({
       localStorage.removeItem('cabTypes');
       
       // Force clear local cache
-      fareService.clearCache();
+      fareService.clearCache(); // Fixed: Remove argument here
       
       console.log('Forcing cab types refresh...', Date.now());
       // Add timestamp to avoid caching issues
