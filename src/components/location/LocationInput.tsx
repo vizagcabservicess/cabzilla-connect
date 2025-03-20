@@ -57,6 +57,7 @@ export function LocationInput({
     e.preventDefault();
     e.stopPropagation();
     resetInputValue();
+    onLocationChange(null as any); // Clear the parent component's state too
     if (inputRef.current) {
       inputRef.current.focus();
     }

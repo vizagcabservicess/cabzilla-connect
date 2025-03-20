@@ -61,13 +61,14 @@ export function createAutocompleteRequest(
   const requestOptions: google.maps.places.AutocompletionRequest = {
     input: query,
     componentRestrictions: { country: options?.country || 'in' },
-    types: ['geocode', 'establishment', 'address', 'regions', 'cities']
+    // Using the broadest set of types for more results
+    types: ['geocode', 'establishment', 'address', 'regions', 'cities', '(regions)']
   };
   
   if (bounds) {
     requestOptions.bounds = bounds;
     
-    // Setting strictBounds to false to expand search area
+    // Always setting strictBounds to false to expand search area
     (requestOptions as any).strictBounds = false;
   }
   

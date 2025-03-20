@@ -16,7 +16,7 @@ export function usePlacesAutocomplete(options: PlacesAutocompleteOptions = {}): 
   const autocompleteServiceRef = useRef<google.maps.places.AutocompleteService | null>(null);
   const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
   
-  const MAX_INITIALIZATION_ATTEMPTS = 5;
+  const MAX_INITIALIZATION_ATTEMPTS = 3;
   const debounceTime = options.debounceTime || 300;
 
   // Get prediction functionality from the usePredictions hook
@@ -31,7 +31,7 @@ export function usePlacesAutocomplete(options: PlacesAutocompleteOptions = {}): 
 
   // Initialize services with better error handling
   useEffect(() => {
-    if (!isLoaded || !google?.maps) return;
+    if (!isLoaded || !google?.maps || isInitialized) return;
     
     const initializeServices = () => {
       try {
@@ -42,33 +42,19 @@ export function usePlacesAutocomplete(options: PlacesAutocompleteOptions = {}): 
           initializationAttempts.current = 0;
           hasLoggedError.current = false;
           console.log("Places services initialized successfully");
-        } else {
-          throw new Error("Failed to initialize any Places services");
-        }
-      } catch (error) {
-        console.error("Error initializing Places services:", error);
-        
-        if (initializationAttempts.current < MAX_INITIALIZATION_ATTEMPTS) {
+        } else if (initializationAttempts.current < MAX_INITIALIZATION_ATTEMPTS) {
           initializationAttempts.current++;
           console.log(`Retrying Places initialization (${initializationAttempts.current}/${MAX_INITIALIZATION_ATTEMPTS})`);
           setTimeout(initializeServices, 800);
-        } else if (!hasLoggedError.current) {
-          console.error(`Failed to initialize Places services after ${MAX_INITIALIZATION_ATTEMPTS} attempts`);
-          hasLoggedError.current = true;
         }
+      } catch (error) {
+        console.error("Error initializing Places services:", error);
       }
     };
     
     // Call initialization function
     initializeServices();
-    
-    // Cleanup function
-    return () => {
-      if (isLoading) {
-        // cancel any pending requests
-      }
-    };
-  }, [isLoaded, google, placesInitialized, isLoading]);
+  }, [isLoaded, google, isInitialized]);
 
   // Wrapper for getPlacePredictions to apply options
   const getPlacePredictions = useCallback((

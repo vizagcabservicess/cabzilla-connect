@@ -92,7 +92,7 @@ export function usePredictions(
               } else {
                 console.error("Autocomplete request failed:", status);
                 
-                // Try one more time without any restrictions
+                // Try one more time with minimal restrictions
                 const fallbackRequest = {
                   input: query
                 };
