@@ -50,24 +50,59 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
     version: "weekly", // Use the latest weekly version
   });
 
-  // Create hidden div for PlacesService
+  // Create hidden div for PlacesService and initialize it
   useEffect(() => {
-    if (isLoaded && !mapCanvasInitialized) {
-      const mapCanvas = createMapCanvas();
-      
-      if (mapCanvas) {
-        initializeHiddenMap(mapCanvas);
+    if (isLoaded && !mapCanvasInitialized && window.google?.maps) {
+      console.log("Initializing Google Maps hidden canvas");
+      try {
+        const mapCanvas = createMapCanvas();
+        
+        if (mapCanvas) {
+          initializeHiddenMap(mapCanvas);
+          
+          // Create autocomplete service immediately once map is initialized
+          if (window.google.maps.places) {
+            console.log("Creating Autocomplete service");
+            new window.google.maps.places.AutocompleteService();
+            new window.google.maps.places.PlacesService(mapCanvas);
+          }
+        }
+        
+        setMapCanvasInitialized(true);
+        
+        // Force Places API initialization with a slight delay
+        setTimeout(() => forcePlacesInitialization(), 300);
+      } catch (error) {
+        console.error("Error initializing map canvas:", error);
       }
-      
-      setMapCanvasInitialized(true);
     }
   }, [isLoaded, mapCanvasInitialized]);
 
-  // Force Places API initialization
+  // Store the google object once loaded and set default bounds
   useEffect(() => {
-    if (isLoaded && !loadError) {
-      // Give a short delay to ensure Google Maps is fully loaded
-      setTimeout(() => forcePlacesInitialization(), 500);
+    if (isLoaded && !loadError && window.google) {
+      console.log("Setting Google instance in context");
+      setGoogleInstance(window.google);
+      
+      // Set default bounds for India if Maps loaded successfully
+      setDefaultIndiaBounds();
+      
+      // Set global debug variables
+      setGlobalDebugVariables();
+      
+      // Force another Places initialization a bit later if needed
+      const timer = setTimeout(() => {
+        try {
+          if (window.google?.maps?.places && !window.google.maps.places.AutocompleteService) {
+            console.log("Forcing places initialization again");
+            forcePlacesInitialization();
+          }
+        } catch (error) {
+          console.error("Error in delayed Places init:", error);
+        }
+      }, 1500);
+      
+      return () => clearTimeout(timer);
     }
   }, [isLoaded, loadError]);
 
@@ -84,24 +119,6 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
       });
     }
   }, [isLoaded, loadError]);
-
-  // Store the google object once loaded and set default bounds
-  useEffect(() => {
-    if (isLoaded && !loadError && window.google) {
-      console.log("Setting Google instance in context", window.google);
-      setGoogleInstance(window.google);
-      
-      // Set default bounds for India if Maps loaded successfully
-      setDefaultIndiaBounds();
-    }
-  }, [isLoaded, loadError]);
-
-  // Set global debug variables
-  useEffect(() => {
-    if (isLoaded) {
-      setGlobalDebugVariables();
-    }
-  }, [isLoaded]);
 
   // Provide context values - ensure we have a consistent value for the google object
   const contextValue = {

@@ -1,9 +1,11 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
+import { usePlacesAutocomplete } from '@/hooks/usePlacesAutocomplete';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { MapPin, Loader2 } from 'lucide-react';
-import { isVizagLocation, apDestinations, vizagLocations } from '@/lib/locationData';
+import { isVizagLocation, searchLocations } from '@/lib/locationData';
 import { toast } from 'sonner';
 import { Location } from '@/types/api';
 
@@ -64,188 +66,101 @@ export function LocationInput({
 
   const [inputValue, setInputValue] = useState<string>(getInitialInputValue());
   const [suggestions, setSuggestions] = useState<google.maps.places.AutocompletePrediction[]>([]);
+  const [localSuggestions, setLocalSuggestions] = useState<Location[]>([]);
   const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [useLocalSuggestions, setUseLocalSuggestions] = useState<boolean>(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const autocompleteServiceRef = useRef<google.maps.places.AutocompleteService | null>(null);
-  const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
-  const { isLoaded, google } = useGoogleMaps();
+  const { isLoaded, google, placesInitialized } = useGoogleMaps();
+  const {
+    suggestions: autocompleteSuggestions,
+    isLoading: isAutocompleteLoading,
+    getPlacePredictions,
+    getPlaceDetails,
+    isInitialized: isAutocompleteInitialized
+  } = usePlacesAutocomplete();
 
-  // Track if autocomplete has been initialized
-  const autocompleteInitialized = useRef<boolean>(false);
-  const initializationAttempts = useRef<number>(0);
-  const MAX_INITIALIZATION_ATTEMPTS = 3;
-
-  // Initialize autocomplete service
-  useEffect(() => {
-    const initializeAutocomplete = () => {
-      if (!google || !google.maps || !google.maps.places) {
-        console.warn("Google Maps Places API not available yet, retrying...");
-        
-        // Increment attempt counter and retry if under max attempts
-        if (initializationAttempts.current < MAX_INITIALIZATION_ATTEMPTS) {
-          initializationAttempts.current++;
-          setTimeout(initializeAutocomplete, 1000);
-        } else {
-          console.error("Failed to initialize Google Places after multiple attempts");
-          toast.error("Maps service is temporarily unavailable. Please try refreshing the page.");
-        }
-        return;
-      }
-      
-      try {
-        console.log("Initializing Google Places Autocomplete service");
-        autocompleteServiceRef.current = new google.maps.places.AutocompleteService();
-        
-        // Initialize PlacesService if we have a valid DOM element
-        const mapCanvas = document.getElementById('map-canvas');
-        if (mapCanvas) {
-          // Use a cast to satisfy TypeScript
-          placesServiceRef.current = new google.maps.places.PlacesService(mapCanvas as HTMLDivElement);
-          console.log("Places Service initialized");
-        } else {
-          console.warn("No map-canvas element found for PlacesService");
-          
-          // Create map-canvas if it doesn't exist
-          const newMapCanvas = document.createElement('div');
-          newMapCanvas.id = 'map-canvas';
-          newMapCanvas.style.display = 'none';
-          newMapCanvas.style.width = '200px';
-          newMapCanvas.style.height = '200px';
-          document.body.appendChild(newMapCanvas);
-          
-          // Try again to initialize PlacesService with the proper type cast
-          placesServiceRef.current = new google.maps.places.PlacesService(newMapCanvas as HTMLDivElement);
-        }
-        
-        autocompleteInitialized.current = true;
-        console.log("Autocomplete service initialization complete");
-      } catch (error) {
-        console.error("Error initializing Google Places:", error);
-        
-        // Retry initialization on error
-        if (initializationAttempts.current < MAX_INITIALIZATION_ATTEMPTS) {
-          initializationAttempts.current++;
-          setTimeout(initializeAutocomplete, 1000);
-        }
-      }
-    };
-
-    if (isLoaded && !autocompleteInitialized.current) {
-      initializeAutocomplete();
-    }
-    
-    // Clean up
-    return () => {
-      autocompleteInitialized.current = false;
-    };
-  }, [isLoaded, google]);
-
-  // Function to fetch place details
-  const getPlaceDetails = useCallback((placeId: string) => {
-    return new Promise<google.maps.places.PlaceResult>((resolve, reject) => {
-      if (!placesServiceRef.current) {
-        reject(new Error('Places service not initialized'));
-        return;
-      }
-      
-      placesServiceRef.current.getDetails(
-        {
-          placeId: placeId,
-          fields: ['name', 'formatted_address', 'geometry', 'address_components']
-        },
-        (result, status) => {
-          if (status === google.maps.places.PlacesServiceStatus.OK && result) {
-            resolve(result);
-          } else {
-            reject(new Error(`Places detail request failed: ${status}`));
-          }
-        }
-      );
-    });
-  }, []);
-
-  // Handle input change
+  // Handle input change with throttling
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setInputValue(value);
     
     if (!value.trim()) {
       setSuggestions([]);
+      setLocalSuggestions([]);
       setShowSuggestions(false);
       return;
     }
     
-    if (!autocompleteServiceRef.current) {
-      console.warn("Autocomplete service not initialized yet");
-      
-      // Try to initialize on demand
-      if (google && google.maps && google.maps.places) {
-        try {
-          autocompleteServiceRef.current = new google.maps.places.AutocompleteService();
-        } catch (error) {
-          console.error("Failed to initialize autocomplete on demand:", error);
-        }
-      }
-      
-      if (!autocompleteServiceRef.current) {
-        // Still not initialized, show error
-        toast.error("Location search is temporarily unavailable");
-        return;
-      }
-    }
-    
     setIsLoading(true);
     
-    // Set India bounds for autocomplete
-    const indiaBounds = new google.maps.LatLngBounds(
-      new google.maps.LatLng(8.0, 68.0),   // SW corner of India
-      new google.maps.LatLng(37.0, 97.0)   // NE corner of India
-    );
+    // Try to use Google Places API if available
+    const useGoogle = isLoaded && google && placesInitialized && isAutocompleteInitialized;
     
-    // Set Vizag bounds for more local results
-    const vizagBounds = new google.maps.LatLngBounds(
-      new google.maps.LatLng(17.5, 83.1),  // SW corner of Vizag
-      new google.maps.LatLng(17.8, 83.4)   // NE corner of Vizag
-    );
-    
-    // Use appropriate bounds based on pickup/dropoff
-    const bounds = isPickupLocation ? vizagBounds : indiaBounds;
-    
-    autocompleteServiceRef.current.getPlacePredictions(
-      {
-        input: value,
-        bounds: bounds,
-        componentRestrictions: { country: 'in' },
-        types: ['geocode', 'establishment']
-      },
-      (results, status) => {
-        setIsLoading(false);
+    if (useGoogle) {
+      try {
+        // Set India bounds for autocomplete
+        const indiaBounds = new google.maps.LatLngBounds(
+          new google.maps.LatLng(8.0, 68.0),   // SW corner of India
+          new google.maps.LatLng(37.0, 97.0)   // NE corner of India
+        );
         
-        if (status === google.maps.places.PlacesServiceStatus.OK && results) {
-          setSuggestions(results);
-          setShowSuggestions(true);
-        } else {
-          setSuggestions([]);
-          
-          if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
-            // No need to show error for zero results
-            console.log("No suggestions found for:", value);
-          } else {
-            console.error("Autocomplete request failed:", status);
-          }
-        }
+        // Set Vizag bounds for more local results
+        const vizagBounds = new google.maps.LatLngBounds(
+          new google.maps.LatLng(17.5, 83.1),  // SW corner of Vizag
+          new google.maps.LatLng(17.8, 83.4)   // NE corner of Vizag
+        );
+        
+        // Use appropriate bounds based on pickup/dropoff
+        const bounds = isPickupLocation ? vizagBounds : indiaBounds;
+        
+        // Get predictions with the usePlacesAutocomplete hook
+        getPlacePredictions(value, bounds)
+          .then(results => {
+            setSuggestions(results);
+            setShowSuggestions(true);
+            setUseLocalSuggestions(false);
+          })
+          .catch(error => {
+            console.error("Failed to get Google predictions:", error);
+            // Fallback to local suggestions
+            const localResults = searchLocations(value, isPickupLocation);
+            setLocalSuggestions(localResults);
+            setUseLocalSuggestions(true);
+            setShowSuggestions(true);
+          })
+          .finally(() => {
+            setIsLoading(false);
+          });
+      } catch (error) {
+        console.error("Error in Google Places autocomplete:", error);
+        fallbackToLocalSearch(value);
       }
-    );
-  }, [google, isPickupLocation]);
+    } else {
+      console.log("Using local location search as fallback");
+      fallbackToLocalSearch(value);
+    }
+  }, [google, isLoaded, isPickupLocation, placesInitialized, isAutocompleteInitialized, getPlacePredictions]);
 
-  // Handle suggestion selection
+  // Fallback to local search when Google Places API is not available
+  const fallbackToLocalSearch = (query: string) => {
+    // Call our local search function instead
+    const localResults = searchLocations(query, isPickupLocation);
+    console.log("Using fallback location for manual input:", localResults);
+    setLocalSuggestions(localResults);
+    setUseLocalSuggestions(true);
+    setShowSuggestions(true);
+    setIsLoading(false);
+  };
+
+  // Handle suggestion selection from Google Places
   const handleSuggestionClick = useCallback(async (suggestion: google.maps.places.AutocompletePrediction) => {
     setInputValue(suggestion.description);
     setShowSuggestions(false);
     setIsLoading(true);
     
     try {
+      // Get details using the hook's getPlaceDetails
       const placeDetails = await getPlaceDetails(suggestion.place_id);
       
       if (placeDetails && placeDetails.geometry) {
@@ -285,6 +200,13 @@ export function LocationInput({
     }
   }, [getPlaceDetails, onLocationChange]);
 
+  // Handle local suggestion selection
+  const handleLocalSuggestionClick = useCallback((location: Location) => {
+    setInputValue(location.name || location.address);
+    setShowSuggestions(false);
+    onLocationChange(location);
+  }, [onLocationChange]);
+
   // Effect to initialize input with value
   useEffect(() => {
     if (value) {
@@ -295,28 +217,19 @@ export function LocationInput({
     }
   }, [value]);
 
-  // Handle input focus to ensure autocomplete is initialized
+  // Handle input focus to show suggestions
   const handleInputFocus = useCallback(() => {
-    // Re-initialize autocomplete service on focus if needed
-    if (!autocompleteServiceRef.current && google && google.maps && google.maps.places) {
-      try {
-        console.log("Re-initializing autocomplete service on focus");
-        autocompleteServiceRef.current = new google.maps.places.AutocompleteService();
-        
-        // Also re-initialize places service
-        const mapCanvas = document.getElementById('map-canvas');
-        if (mapCanvas) {
-          placesServiceRef.current = new google.maps.places.PlacesService(mapCanvas as HTMLDivElement);
-        }
-        
-        autocompleteInitialized.current = true;
-      } catch (error) {
-        console.error("Failed to re-initialize autocomplete on focus:", error);
-      }
+    if (inputValue.trim()) {
+      setShowSuggestions(true);
     }
-    
-    setShowSuggestions(!!suggestions.length);
-  }, [google, suggestions.length]);
+  }, [inputValue]);
+
+  // Effect to show toast if Google Maps is not loaded
+  useEffect(() => {
+    if (isLoaded && !placesInitialized && !useLocalSuggestions) {
+      console.warn("Google Places API not initialized yet, will use local suggestions");
+    }
+  }, [isLoaded, placesInitialized, useLocalSuggestions]);
 
   // Close suggestions when clicking outside
   useEffect(() => {
@@ -363,26 +276,49 @@ export function LocationInput({
           )}
         </div>
         
-        {showSuggestions && suggestions.length > 0 && (
+        {showSuggestions && (
           <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg max-h-60 overflow-auto">
-            {suggestions.map((suggestion) => (
-              <div
-                key={suggestion.place_id}
-                className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                onClick={() => handleSuggestionClick(suggestion)}
-              >
-                <div className="font-medium">
-                  {suggestion.structured_formatting ? 
-                    suggestion.structured_formatting.main_text : 
-                    suggestion.description}
-                </div>
-                <div className="text-sm text-gray-500">
-                  {suggestion.structured_formatting ? 
-                    suggestion.structured_formatting.secondary_text : 
-                    ''}
-                </div>
-              </div>
-            ))}
+            {useLocalSuggestions ? (
+              // Local suggestions from our data
+              localSuggestions.length > 0 ? (
+                localSuggestions.map((location) => (
+                  <div
+                    key={location.id}
+                    className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                    onClick={() => handleLocalSuggestionClick(location)}
+                  >
+                    <div className="font-medium">{location.name}</div>
+                    <div className="text-sm text-gray-500">{location.address}</div>
+                  </div>
+                ))
+              ) : (
+                <div className="px-4 py-2 text-gray-500">No locations found</div>
+              )
+            ) : (
+              // Google Places suggestions
+              suggestions.length > 0 ? (
+                suggestions.map((suggestion) => (
+                  <div
+                    key={suggestion.place_id}
+                    className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                    onClick={() => handleSuggestionClick(suggestion)}
+                  >
+                    <div className="font-medium">
+                      {suggestion.structured_formatting ? 
+                        suggestion.structured_formatting.main_text : 
+                        suggestion.description}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {suggestion.structured_formatting ? 
+                        suggestion.structured_formatting.secondary_text : 
+                        ''}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="px-4 py-2 text-gray-500">No locations found</div>
+              )
+            )}
           </div>
         )}
       </div>

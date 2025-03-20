@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useGoogleMaps } from './useGoogleMaps';
 import { toast } from 'sonner';
+import { createMapCanvas } from '@/utils/googleMapsUtils';
 
 interface PlacesAutocompleteOptions {
   debounceTime?: number;
@@ -15,56 +16,65 @@ export function usePlacesAutocomplete(options: PlacesAutocompleteOptions = {}) {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const autocompleteServiceRef = useRef<google.maps.places.AutocompleteService | null>(null);
   const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
-  const autocompleteInitialized = useRef<boolean>(false);
+  const [isInitialized, setIsInitialized] = useState<boolean>(false);
   const initializationAttempts = useRef<number>(0);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   
-  const MAX_INITIALIZATION_ATTEMPTS = 3;
+  const MAX_INITIALIZATION_ATTEMPTS = 5;
   const debounceTime = options.debounceTime || 300;
 
   // Initialize services
   useEffect(() => {
-    if (!isLoaded || autocompleteInitialized.current) return;
+    if (!isLoaded || !google?.maps) return;
     
     const initializeServices = () => {
-      if (!google?.maps?.places) {
-        if (initializationAttempts.current < MAX_INITIALIZATION_ATTEMPTS) {
-          console.warn("Google Places API not available yet, retrying...");
-          initializationAttempts.current++;
-          setTimeout(initializeServices, 1000);
-        } else {
-          console.error("Failed to initialize Places services after multiple attempts");
-          toast.error("Maps services are temporarily unavailable");
-        }
-        return;
-      }
+      // Clear any previous services
+      autocompleteServiceRef.current = null;
+      placesServiceRef.current = null;
       
       try {
+        console.log("Initializing Places services in usePlacesAutocomplete hook");
+        
+        // Check if Places API is available
+        if (!google.maps.places) {
+          throw new Error("Google Maps Places API not available");
+        }
+        
         // Initialize autocomplete service
         autocompleteServiceRef.current = new google.maps.places.AutocompleteService();
         
-        // Initialize places service with existing map-canvas element
-        const mapCanvas = document.getElementById('map-canvas');
-        if (mapCanvas) {
-          placesServiceRef.current = new google.maps.places.PlacesService(mapCanvas as HTMLDivElement);
-        } else {
-          console.warn("No map-canvas element found for PlacesService");
+        // Get or create map canvas for places service
+        const mapCanvas = createMapCanvas();
+        if (!mapCanvas) {
+          throw new Error("Failed to create map canvas for Places service");
         }
         
-        autocompleteInitialized.current = true;
-        console.log("Places services initialization complete");
+        // Initialize places service
+        placesServiceRef.current = new google.maps.places.PlacesService(mapCanvas);
+        
+        // Set initialization flag
+        setIsInitialized(true);
+        initializationAttempts.current = 0;
+        
+        console.log("Places services initialized successfully");
       } catch (error) {
         console.error("Error initializing Places services:", error);
         
         if (initializationAttempts.current < MAX_INITIALIZATION_ATTEMPTS) {
           initializationAttempts.current++;
-          setTimeout(initializeServices, 1000);
+          console.log(`Retrying Places initialization (${initializationAttempts.current}/${MAX_INITIALIZATION_ATTEMPTS})`);
+          setTimeout(initializeServices, 800);
+        } else {
+          console.error(`Failed to initialize Places services after ${MAX_INITIALIZATION_ATTEMPTS} attempts`);
+          toast.error("Location search is temporarily unavailable", { id: "places-init-failed" });
         }
       }
     };
     
+    // Call initialization function
     initializeServices();
     
+    // Cleanup function
     return () => {
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
@@ -75,6 +85,18 @@ export function usePlacesAutocomplete(options: PlacesAutocompleteOptions = {}) {
   // Get place details from place ID
   const getPlaceDetails = useCallback((placeId: string): Promise<google.maps.places.PlaceResult> => {
     return new Promise((resolve, reject) => {
+      // If Places service is not initialized, try to initialize it on-demand
+      if (!placesServiceRef.current && google?.maps?.places) {
+        const mapCanvas = createMapCanvas();
+        if (mapCanvas) {
+          try {
+            placesServiceRef.current = new google.maps.places.PlacesService(mapCanvas);
+          } catch (error) {
+            console.error("Failed to initialize Places service on-demand:", error);
+          }
+        }
+      }
+      
       if (!placesServiceRef.current) {
         reject(new Error('Places service not initialized'));
         return;
@@ -94,7 +116,7 @@ export function usePlacesAutocomplete(options: PlacesAutocompleteOptions = {}) {
         }
       );
     });
-  }, []);
+  }, [google]);
 
   // Search for places with debounce
   const getPlacePredictions = useCallback((
@@ -115,6 +137,16 @@ export function usePlacesAutocomplete(options: PlacesAutocompleteOptions = {}) {
       setIsLoading(true);
       
       debounceTimerRef.current = setTimeout(() => {
+        // If autocomplete service is not initialized, try to initialize it on-demand
+        if (!autocompleteServiceRef.current && google?.maps?.places) {
+          try {
+            autocompleteServiceRef.current = new google.maps.places.AutocompleteService();
+            setIsInitialized(true);
+          } catch (error) {
+            console.error("Failed to initialize Autocomplete service on-demand:", error);
+          }
+        }
+        
         if (!autocompleteServiceRef.current) {
           setIsLoading(false);
           reject(new Error('Autocomplete service not initialized'));
@@ -151,13 +183,37 @@ export function usePlacesAutocomplete(options: PlacesAutocompleteOptions = {}) {
         );
       }, debounceTime);
     });
-  }, [options.country, debounceTime]);
+  }, [google, options.country, debounceTime]);
+
+  // Helper to force initialization
+  const forceInitialization = useCallback(() => {
+    if (google?.maps?.places && !isInitialized) {
+      try {
+        // Initialize autocomplete service
+        autocompleteServiceRef.current = new google.maps.places.AutocompleteService();
+        
+        // Initialize places service
+        const mapCanvas = createMapCanvas();
+        if (mapCanvas) {
+          placesServiceRef.current = new google.maps.places.PlacesService(mapCanvas);
+        }
+        
+        setIsInitialized(true);
+        return true;
+      } catch (error) {
+        console.error("Error in force initialization:", error);
+        return false;
+      }
+    }
+    return false;
+  }, [google, isInitialized]);
 
   return {
     suggestions,
     isLoading,
     getPlacePredictions,
     getPlaceDetails,
-    isInitialized: autocompleteInitialized.current
+    isInitialized,
+    forceInitialization
   };
 }
