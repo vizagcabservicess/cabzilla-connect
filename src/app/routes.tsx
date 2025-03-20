@@ -8,6 +8,7 @@ import AdminLayout from '@/layouts/AdminLayout';
 import VehiclesPage from '@/pages/admin/vehicles';
 import DashboardPage from '@/pages/DashboardPage';
 import BookingConfirmationPage from '@/pages/BookingConfirmationPage';
+import AdminDashboardPage from '@/pages/AdminDashboardPage';
 
 // Define routes
 const router = createBrowserRouter([
@@ -30,6 +31,34 @@ const router = createBrowserRouter([
       {
         path: 'bookings',
         element: <DashboardPage />,
+      },
+      {
+        path: 'financials',
+        element: <AdminDashboardPage />,
+      },
+      {
+        path: 'reports',
+        element: <AdminDashboardPage />,
+      },
+      {
+        path: 'users',
+        element: <AdminDashboardPage />,
+      },
+      {
+        path: 'drivers',
+        element: <AdminDashboardPage />,
+      },
+      {
+        path: 'customers',
+        element: <AdminDashboardPage />,
+      },
+      {
+        path: 'notifications',
+        element: <AdminDashboardPage />,
+      },
+      {
+        path: 'settings',
+        element: <AdminDashboardPage />,
       },
     ],
   },
