@@ -8,9 +8,12 @@ const USE_DIRECT_API_PATH = import.meta.env.VITE_USE_DIRECT_API_PATH === 'true';
 
 // Base URLs for API requests - prioritize relative paths for better CORS handling
 const API_BASE_URLS = [
-  '/api',                   // Primary endpoint - relative to current domain
-  API_BASE_URL ? `${API_BASE_URL}/api` : '', // Environment-configured base URL
-  'https://api.example.com', // Placeholder for production API (update with real URL)
+  '/api',                                      // Primary endpoint - relative to current domain
+  API_BASE_URL ? `${API_BASE_URL}/api` : '',   // Environment-configured base URL
+  'https://api.example.com',                   // Placeholder for production API
+  'https://preview--cabzilla-connect.lovable.app/api', // Preview environment fallback
+  'https://preview--cabzilla-connect.lovable.app',     // Preview environment root fallback
+  '/cabzilla-api',                             // Alternative API path
 ];
 
 // Filter out empty URLs
@@ -53,9 +56,13 @@ export const getEndpointUrls = (endpointPath: string, appendTimestamp = true): s
     urls.push(`${base}${endpointPath}${timestamp}`);
   });
   
-  // For local development fallback to /api path
+  // For local development fallbacks
   urls.push(`/api${endpointPath}.php${timestamp}`);
   urls.push(`/api${endpointPath}${timestamp}`);
+  
+  // Add preview environment fallbacks
+  urls.push(`https://preview--cabzilla-connect.lovable.app/api${endpointPath}.php${timestamp}`);
+  urls.push(`https://preview--cabzilla-connect.lovable.app/api${endpointPath}${timestamp}`);
   
   // Direct access for some endpoints (fallback)
   if (API_BASE_URL) {
@@ -66,6 +73,9 @@ export const getEndpointUrls = (endpointPath: string, appendTimestamp = true): s
     urls.push(`${API_BASE_URL}/fares${endpointPath.replace('/fares', '')}${timestamp}`);
   }
 
+  // Add mock API endpoints as absolute last resort
+  urls.push(`/mock${endpointPath}.json${timestamp}`);
+  
   // Remove duplicates
   return [...new Set(urls)];
 };

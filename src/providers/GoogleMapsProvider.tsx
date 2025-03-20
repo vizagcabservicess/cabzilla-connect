@@ -1,5 +1,5 @@
 
-import { ReactNode, createContext, useContext, useEffect, useState } from "react";
+import { ReactNode, createContext, useContext, useEffect, useState, useRef } from "react";
 import { useLoadScript } from "@react-google-maps/api";
 import { toast } from "sonner";
 
@@ -37,6 +37,7 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
   const [googleInstance, setGoogleInstance] = useState<typeof google | null>(null);
   const [hasShownAPIKeyError, setHasShownAPIKeyError] = useState(false);
   const [mapCanvasInitialized, setMapCanvasInitialized] = useState(false);
+  const initializationAttempts = useRef(0);
   
   // Use provided apiKey or fallback to environment variable
   const googleMapsApiKey = apiKey || GOOGLE_MAPS_API_KEY;
@@ -59,6 +60,7 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
     libraries,
     region: 'IN', // Set region to India
     language: 'en',
+    version: "weekly", // Use the latest weekly version
   });
 
   // Create hidden div for PlacesService
@@ -69,28 +71,78 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
         const mapCanvas = document.createElement('div');
         mapCanvas.id = 'map-canvas';
         mapCanvas.style.display = 'none';
+        mapCanvas.style.height = '200px';
+        mapCanvas.style.width = '200px';
         document.body.appendChild(mapCanvas);
+        
+        // Initialize a map on this hidden canvas to fully activate the Places API
+        if (window.google && window.google.maps) {
+          try {
+            new window.google.maps.Map(mapCanvas, {
+              center: { lat: 17.6868, lng: 83.2185 }, // Visakhapatnam coordinates
+              zoom: 13,
+              disableDefaultUI: true,
+            });
+            console.log("Hidden map initialized for Places API");
+          } catch (e) {
+            console.error("Failed to initialize hidden map:", e);
+          }
+        }
       }
       setMapCanvasInitialized(true);
     }
   }, [isLoaded, mapCanvasInitialized]);
 
+  // Force Places API initialization
+  useEffect(() => {
+    const forcePlacesInitialization = () => {
+      if (window.google && window.google.maps) {
+        try {
+          // These calls will force the Places library to load properly
+          new window.google.maps.places.AutocompleteService();
+          
+          if (document.getElementById('map-canvas')) {
+            const placesService = new window.google.maps.places.PlacesService(
+              document.getElementById('map-canvas') as HTMLElement
+            );
+            // Make a simple request to ensure the service is initialized
+            placesService.nearbySearch(
+              {
+                location: { lat: 17.6868, lng: 83.2185 }, // Visakhapatnam
+                radius: 500,
+                type: "transit_station"
+              },
+              (results, status) => {
+                console.log("Places API initialization status:", status);
+              }
+            );
+          }
+          
+          console.log("Places API initialized successfully");
+          initializationAttempts.current = 0; // Reset counter on success
+        } catch (error) {
+          console.error("Error initializing Places API:", error);
+          
+          // Retry initialization if not too many attempts
+          if (initializationAttempts.current < 3) {
+            initializationAttempts.current++;
+            console.log(`Retrying Places API initialization (attempt ${initializationAttempts.current}/3)...`);
+            setTimeout(forcePlacesInitialization, 1000);
+          }
+        }
+      }
+    };
+    
+    if (isLoaded && !loadError) {
+      // Give a short delay to ensure Google Maps is fully loaded
+      setTimeout(forcePlacesInitialization, 500);
+    }
+  }, [isLoaded, loadError]);
+
   // Log loading status
   useEffect(() => {
     if (isLoaded) {
       console.log("Google Maps API loaded successfully!");
-      
-      // Initialize Places API if not already done
-      if (window.google && window.google.maps && !window.google.maps.places) {
-        console.log("Initializing Places API");
-        try {
-          // Force Places library initialization if needed
-          new window.google.maps.places.AutocompleteService();
-          console.log("Places API initialized manually");
-        } catch (error) {
-          console.error("Failed to initialize Places API manually:", error);
-        }
-      }
     }
     if (loadError) {
       console.error("Error during Google Maps load:", loadError);
@@ -124,14 +176,25 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
           console.error("Error setting default bounds:", error);
         }
       }
-    } else if (loadError) {
-      console.error("❌ Error loading Google Maps API:", loadError);
-      toast.error("Failed to load Google Maps. Please check your internet connection and refresh the page.", {
-        duration: 5000,
-        id: "google-maps-load-error",
-      });
     }
   }, [isLoaded, loadError]);
+
+  // Create a function to check if Places API is available
+  const checkPlacesApiAvailability = () => {
+    if (window.google && window.google.maps && window.google.maps.places) {
+      return true;
+    }
+    return false;
+  };
+
+  // Make Places API available as a global variable for debugging
+  useEffect(() => {
+    if (isLoaded && window.google && window.google.maps) {
+      (window as any).googleMapsLoaded = true;
+      (window as any).googlePlacesAvailable = checkPlacesApiAvailability();
+      console.log("Google Maps loaded status set on window object");
+    }
+  }, [isLoaded]);
 
   // Provide context values - ensure we have a consistent value for the google object
   const contextValue = {

@@ -11,6 +11,8 @@ export function useCabTypes(initialCabTypes: CabType[]) {
   const [isRefreshingCabs, setIsRefreshingCabs] = useState(false);
   const [refreshSuccessful, setRefreshSuccessful] = useState<boolean | null>(null);
   const [lastRefreshTime, setLastRefreshTime] = useState<number>(0);
+  const [retryCount, setRetryCount] = useState(0);
+  const MAX_RETRIES = 3;
 
   // Load cab types initially if needed
   useEffect(() => {
@@ -29,10 +31,34 @@ export function useCabTypes(initialCabTypes: CabType[]) {
           return;
         }
         
-        // Remove the argument from loadCabTypes call
-        const dynamicCabTypes = await loadCabTypes();
-        console.log('Loaded dynamic cab types:', dynamicCabTypes);
+        // Load cab types with retry mechanism
+        let dynamicCabTypes = [];
+        let loadError = null;
         
+        for (let i = 0; i <= MAX_RETRIES; i++) {
+          try {
+            if (i > 0) {
+              console.log(`Retry attempt ${i} of ${MAX_RETRIES} to load cab types...`);
+              await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second between retries
+            }
+            
+            dynamicCabTypes = await loadCabTypes();
+            
+            if (Array.isArray(dynamicCabTypes) && dynamicCabTypes.length > 0) {
+              console.log(`Successfully loaded ${dynamicCabTypes.length} cab types on ${i > 0 ? `retry ${i}` : 'first attempt'}`);
+              loadError = null;
+              break;
+            } else {
+              console.warn(`Received empty cab types array on ${i > 0 ? `retry ${i}` : 'first attempt'}`);
+              loadError = new Error('Received empty cab types array');
+            }
+          } catch (error) {
+            console.error(`Error loading cab types on ${i > 0 ? `retry ${i}` : 'first attempt'}:`, error);
+            loadError = error;
+          }
+        }
+        
+        // Process results after retries
         if (Array.isArray(dynamicCabTypes) && dynamicCabTypes.length > 0) {
           const validCabTypes = dynamicCabTypes.map(cab => ({
             ...cab,
@@ -48,6 +74,10 @@ export function useCabTypes(initialCabTypes: CabType[]) {
           console.warn('API returned empty vehicle data, using initial cab types');
           setCabTypes(initialCabTypes);
           setRefreshSuccessful(false);
+          
+          if (loadError) {
+            console.error('Final load error after retries:', loadError);
+          }
         }
       } catch (error) {
         console.error('Error loading dynamic cab types:', error);
@@ -62,7 +92,7 @@ export function useCabTypes(initialCabTypes: CabType[]) {
     fetchCabTypes();
   }, [initialCabTypes, cabTypes.length, lastRefreshTime]);
 
-  // Function to refresh cab types with debouncing
+  // Function to refresh cab types with debouncing and retries
   const refreshCabTypes = useCallback(async () => {
     // Prevent multiple refreshes in quick succession
     const now = Date.now();
@@ -72,19 +102,45 @@ export function useCabTypes(initialCabTypes: CabType[]) {
     }
     
     setIsRefreshingCabs(true);
+    setRefreshSuccessful(null);
     
     try {
+      // Clear all caches
       sessionStorage.removeItem('cabFares');
       sessionStorage.removeItem('calculatedFares');
       localStorage.removeItem('cabTypes');
-      
       fareService.clearCache();
       
       console.log('Forcing cab types refresh...', Date.now());
-      // Remove the argument from reloadCabTypes call
-      const freshCabTypes = await reloadCabTypes();
-      console.log('Refreshed cab types:', freshCabTypes);
       
+      // Implement retry mechanism for refresh
+      let freshCabTypes = [];
+      let refreshError = null;
+      
+      for (let i = 0; i <= MAX_RETRIES; i++) {
+        try {
+          if (i > 0) {
+            console.log(`Retry attempt ${i} of ${MAX_RETRIES} to refresh cab types...`);
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second between retries
+          }
+          
+          freshCabTypes = await reloadCabTypes();
+          
+          if (Array.isArray(freshCabTypes) && freshCabTypes.length > 0) {
+            console.log(`Successfully refreshed ${freshCabTypes.length} cab types on ${i > 0 ? `retry ${i}` : 'first attempt'}`);
+            refreshError = null;
+            break;
+          } else {
+            console.warn(`Received empty cab types array on refresh ${i > 0 ? `retry ${i}` : 'first attempt'}`);
+            refreshError = new Error('Received empty cab types array on refresh');
+          }
+        } catch (error) {
+          console.error(`Error refreshing cab types on ${i > 0 ? `retry ${i}` : 'first attempt'}:`, error);
+          refreshError = error;
+        }
+      }
+      
+      // Process results after retries
       if (Array.isArray(freshCabTypes) && freshCabTypes.length > 0) {
         const validCabTypes = freshCabTypes.map(cab => ({
           ...cab,
@@ -96,21 +152,29 @@ export function useCabTypes(initialCabTypes: CabType[]) {
         toast.success('Vehicle data refreshed successfully');
         setRefreshSuccessful(true);
         setLastRefreshTime(now);
+        setRetryCount(0); // Reset retry count on success
       } else {
-        console.warn('API returned empty vehicle data on refresh');
+        console.warn('API returned empty vehicle data on refresh after all retries');
         toast.error('No vehicle data available. Using default values.');
         setRefreshSuccessful(false);
+        
+        if (refreshError) {
+          console.error('Final refresh error after retries:', refreshError);
+        }
       }
     } catch (error) {
       console.error('Error refreshing cab types:', error);
       toast.error('Failed to refresh vehicle data');
       setRefreshSuccessful(false);
+      
+      // Increment retry count for potential future automated retries
+      setRetryCount(prev => Math.min(prev + 1, MAX_RETRIES));
     } finally {
       setIsRefreshingCabs(false);
     }
     
     return cabTypes;
-  }, [cabTypes, lastRefreshTime]);
+  }, [cabTypes, lastRefreshTime, MAX_RETRIES]);
 
   return {
     cabTypes,

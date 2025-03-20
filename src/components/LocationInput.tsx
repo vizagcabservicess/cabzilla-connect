@@ -1,594 +1,339 @@
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Input } from "@/components/ui/input";
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
-import { Location } from '@/types/api';
-import { debounce } from '@/lib/utils';
-import { isLocationInVizag, safeIncludes } from '@/lib/locationUtils';
-import { AlertCircle, Map, MapPin, X } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { MapPin, Loader2 } from 'lucide-react';
+import { isVizagLocation, apDestinations, vizagLocations } from '@/lib/locationData';
 import { toast } from 'sonner';
 
-interface LocationInputProps {
-  location?: Location;
-  value?: Location;
-  onLocationChange?: (location: Location) => void;
-  onChange?: (location: Location) => void;
-  placeholder?: string;
-  className?: string;
-  disabled?: boolean;
-  label?: string;
+type LocationInputProps = {
+  label: string;
+  placeholder: string;
+  value?: google.maps.places.AutocompletePrediction | null;
+  onLocationChange: (location: any) => void;
   isPickupLocation?: boolean;
   isAirportTransfer?: boolean;
   readOnly?: boolean;
-}
+};
 
 export function LocationInput({
-  location,
+  label,
+  placeholder,
   value,
   onLocationChange,
-  onChange,
-  placeholder = "Enter location",
-  className = "",
-  disabled = false,
-  label,
-  isPickupLocation,
-  isAirportTransfer,
-  readOnly
+  isPickupLocation = false,
+  isAirportTransfer = false,
+  readOnly = false
 }: LocationInputProps) {
-  // Use value prop if location is not provided
-  const locationData = location || value || { address: '', id: '', name: '' };
-  const handleLocationChange = onLocationChange || onChange;
-  
-  // Ensure address is always a string to prevent type errors
-  const initialAddress = typeof locationData.address === 'string' ? locationData.address : 
-                         typeof locationData.name === 'string' ? locationData.name : '';
-  const [address, setAddress] = useState<string>(initialAddress);
-  const [locationError, setLocationError] = useState<string | null>(null);
-  const { google, isLoaded, loadError } = useGoogleMaps();
-  
-  // Reference to the autocomplete instance
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const [inputValue, setInputValue] = useState<string>(value?.description || value?.structured_formatting?.main_text || '');
+  const [suggestions, setSuggestions] = useState<google.maps.places.AutocompletePrediction[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const locationChangedRef = useRef<boolean>(false);
-  const prevLocationRef = useRef<Location | null>(null);
-  const wasLocationSelectedRef = useRef<boolean>(false);
-  const autocompleteListenerRef = useRef<google.maps.MapsEventListener | null>(null);
-  const isManualInputRef = useRef<boolean>(false);
-  const pendingLocationUpdateRef = useRef<Location | null>(null);
+  const autocompleteServiceRef = useRef<google.maps.places.AutocompleteService | null>(null);
   const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
-  const autocompleteInitializedRef = useRef<boolean>(false);
-  const initializationAttemptsRef = useRef<number>(0);
-  
-  // Update the address whenever locationData changes
+  const { isLoaded, google } = useGoogleMaps();
+
+  // Track if autocomplete has been initialized
+  const autocompleteInitialized = useRef<boolean>(false);
+  const initializationAttempts = useRef<number>(0);
+  const MAX_INITIALIZATION_ATTEMPTS = 3;
+
+  // Initialize autocomplete service
   useEffect(() => {
-    if (!locationData) return;
-    
-    // Store current location to prevent unnecessary updates
-    if (prevLocationRef.current && JSON.stringify(prevLocationRef.current) === JSON.stringify(locationData)) {
-      return;
-    }
-    
-    prevLocationRef.current = locationData;
-    
-    // Only update if we haven't manually changed the location
-    if (!locationChangedRef.current) {
-      // Prioritize address over name, ensuring they are strings
-      const newAddress = typeof locationData.address === 'string' && locationData.address.trim() !== '' 
-        ? locationData.address 
-        : typeof locationData.name === 'string' && locationData.name.trim() !== '' 
-          ? locationData.name 
-          : '';
-          
-      if (newAddress && newAddress !== address) {
-        console.log('Updating address from props:', newAddress);
-        setAddress(newAddress);
+    const initializeAutocomplete = () => {
+      if (!google || !google.maps || !google.maps.places) {
+        console.warn("Google Maps Places API not available yet, retrying...");
+        
+        // Increment attempt counter and retry if under max attempts
+        if (initializationAttempts.current < MAX_INITIALIZATION_ATTEMPTS) {
+          initializationAttempts.current++;
+          setTimeout(initializeAutocomplete, 1000);
+        } else {
+          console.error("Failed to initialize Google Places after multiple attempts");
+          toast.error("Maps service is temporarily unavailable. Please try refreshing the page.");
+        }
+        return;
       }
-    }
-  }, [locationData, address]);
-
-  // Display error message if Google Maps fails to load
-  useEffect(() => {
-    if (loadError) {
-      console.error("Google Maps failed to load:", loadError);
-      setLocationError("Location services unavailable. Please check your internet connection.");
-    }
-  }, [loadError]);
-
-  // Check if location is in India
-  const isLocationInIndia = (lat: number, lng: number): boolean => {
-    // Approximate India bounds
-    return lat >= 8.0 && lat <= 37.0 && lng >= 68.0 && lng <= 97.0;
-  };
-
-  // Handle direct input changes (without using the debounced version)
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e || !e.target) return;
-    
-    const newAddress = e.target.value;
-    setAddress(newAddress);
-    setLocationError(null);
-    wasLocationSelectedRef.current = false;
-    isManualInputRef.current = true; // Mark that this is manual input
-    
-    // Ensure the autocomplete is initialized
-    if (isLoaded && google && inputRef.current && !autocompleteInitializedRef.current) {
-      initializeAutocomplete();
-    }
-    
-    // If the input is cleared completely, immediately update the parent
-    if (newAddress === '') {
-      const emptyLocation: Location = {
-        id: `loc_${Date.now()}`,
-        name: '',
-        address: '',
-        isInVizag: false
-      };
-      locationChangedRef.current = true;
-      if (handleLocationChange) {
-        handleLocationChange(emptyLocation);
-      }
-    }
-  };
-
-  // Handle Places API geocoding manually
-  const searchPlaceByText = useCallback(async (searchText: string) => {
-    if (!google || !google.maps || searchText.trim() === '') {
-      return null;
-    }
-    
-    try {
-      // Create a PlacesService if it doesn't exist yet
-      if (!placesServiceRef.current) {
+      
+      try {
+        console.log("Initializing Google Places Autocomplete service");
+        autocompleteServiceRef.current = new google.maps.places.AutocompleteService();
+        
+        // Initialize PlacesService if we have a valid DOM element
         const mapCanvas = document.getElementById('map-canvas');
-        if (!mapCanvas) {
-          console.log("Creating map-canvas element for PlacesService");
+        if (mapCanvas) {
+          placesServiceRef.current = new google.maps.places.PlacesService(mapCanvas);
+          console.log("Places Service initialized");
+        } else {
+          console.warn("No map-canvas element found for PlacesService");
+          
+          // Create map-canvas if it doesn't exist
           const newMapCanvas = document.createElement('div');
           newMapCanvas.id = 'map-canvas';
           newMapCanvas.style.display = 'none';
+          newMapCanvas.style.width = '200px';
+          newMapCanvas.style.height = '200px';
           document.body.appendChild(newMapCanvas);
+          
+          // Try again to initialize PlacesService
+          placesServiceRef.current = new google.maps.places.PlacesService(newMapCanvas);
         }
         
-        try {
-          placesServiceRef.current = new google.maps.places.PlacesService(
-            document.getElementById('map-canvas') as HTMLDivElement
-          );
-          console.log("PlacesService initialized");
-        } catch (error) {
-          console.error("Failed to initialize PlacesService:", error);
-          return null;
+        autocompleteInitialized.current = true;
+        console.log("Autocomplete service initialization complete");
+      } catch (error) {
+        console.error("Error initializing Google Places:", error);
+        
+        // Retry initialization on error
+        if (initializationAttempts.current < MAX_INITIALIZATION_ATTEMPTS) {
+          initializationAttempts.current++;
+          setTimeout(initializeAutocomplete, 1000);
         }
       }
-      
-      return new Promise<google.maps.places.PlaceResult | null>((resolve, reject) => {
-        if (!placesServiceRef.current) {
-          reject(new Error("Places service not available"));
-          return;
-        }
-        
-        placesServiceRef.current.findPlaceFromQuery({
-          query: searchText + ' India', // Append India to bias results
-          fields: ['name', 'geometry', 'formatted_address']
-        }, (results, status) => {
-          if (status === google.maps.places.PlacesServiceStatus.OK && results && results.length > 0) {
-            resolve(results[0]);
-          } else {
-            console.warn("Place search failed:", status);
-            resolve(null);
-          }
-        });
-      });
-    } catch (error) {
-      console.error("Error searching for place:", error);
-      return null;
-    }
-  }, [google]);
+    };
 
-  // Send location update to parent component
-  const updateParentLocation = useCallback((newLocation: Location) => {
-    if (!handleLocationChange) return;
+    if (isLoaded && !autocompleteInitialized.current) {
+      initializeAutocomplete();
+    }
     
-    // Check if this is a duplicate update by comparing with the pending update
-    const pendingUpdate = pendingLocationUpdateRef.current;
-    if (pendingUpdate && JSON.stringify(pendingUpdate) === JSON.stringify(newLocation)) {
-      console.log('Skipping duplicate location update');
+    // Clean up
+    return () => {
+      autocompleteInitialized.current = false;
+    };
+  }, [isLoaded, google]);
+
+  // Function to fetch place details
+  const getPlaceDetails = useCallback((placeId: string) => {
+    return new Promise<google.maps.places.PlaceResult>((resolve, reject) => {
+      if (!placesServiceRef.current) {
+        reject(new Error('Places service not initialized'));
+        return;
+      }
+      
+      placesServiceRef.current.getDetails(
+        {
+          placeId: placeId,
+          fields: ['name', 'formatted_address', 'geometry', 'address_components']
+        },
+        (result, status) => {
+          if (status === google.maps.places.PlacesServiceStatus.OK && result) {
+            resolve(result);
+          } else {
+            reject(new Error(`Places detail request failed: ${status}`));
+          }
+        }
+      );
+    });
+  }, []);
+
+  // Handle input change
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setInputValue(value);
+    
+    if (!value.trim()) {
+      setSuggestions([]);
+      setShowSuggestions(false);
       return;
     }
     
-    // Store this update as pending to prevent duplicates
-    pendingLocationUpdateRef.current = newLocation;
-    
-    // Mark that we've manually changed the location
-    locationChangedRef.current = true;
-    
-    // Send the updated location to parent
-    console.log('Sending location update to parent:', newLocation);
-    handleLocationChange(newLocation);
-  }, [handleLocationChange]);
-
-  // Debounced version to handle manual text input
-  const handleManualTextInput = useCallback(
-    debounce(async (address: string) => {
-      if (!handleLocationChange || !address || !isManualInputRef.current) return;
+    if (!autocompleteServiceRef.current) {
+      console.warn("Autocomplete service not initialized yet");
       
-      // Only send update if this was a manual text input (not a selection from dropdown)
-      console.log("Manual address entry - not selected from dropdown:", address);
-      
-      // Try to geocode the address if Google Maps is available
-      if (google && google.maps) {
-        console.log("Attempting to geocode manually entered address");
+      // Try to initialize on demand
+      if (google && google.maps && google.maps.places) {
         try {
-          const place = await searchPlaceByText(address);
-          
-          if (place && place.geometry && place.geometry.location) {
-            const lat = place.geometry.location.lat();
-            const lng = place.geometry.location.lng();
-            const formattedAddress = place.formatted_address || place.name || address;
-            
-            // Create a new location with geocoded information
-            const geocodedLocation: Location = {
-              id: locationData.id || `loc_${Date.now()}`,
-              name: place.name || formattedAddress.split(',')[0] || address,
-              address: formattedAddress,
-              lat: lat,
-              lng: lng,
-              isInVizag: isInVizagArea(lat, lng, formattedAddress)
-            };
-            
-            console.log("Geocoded manual input successfully:", geocodedLocation);
-            updateParentLocation(geocodedLocation);
-            return;
-          }
+          autocompleteServiceRef.current = new google.maps.places.AutocompleteService();
         } catch (error) {
-          console.warn("Geocoding failed for manual input:", error);
+          console.error("Failed to initialize autocomplete on demand:", error);
         }
       }
       
-      // Fallback: Create a new location object with safe defaults if geocoding fails
-      const fallbackLocation: Location = {
-        id: locationData.id || `loc_${Date.now()}`,
-        name: address,
-        address: address,
-        // Don't include lat/lng if they're not numbers to avoid type errors
-        ...(typeof locationData.lat === 'number' && !isNaN(locationData.lat) ? { lat: locationData.lat } : {}),
-        ...(typeof locationData.lng === 'number' && !isNaN(locationData.lng) ? { lng: locationData.lng } : {}),
-        // Always set isInVizag to a boolean value
-        isInVizag: locationData.isInVizag === true
-      };
-      
-      console.log("Using fallback location for manual input:", fallbackLocation);
-      updateParentLocation(fallbackLocation);
-    }, 500),
-    [google, handleLocationChange, locationData, searchPlaceByText, updateParentLocation]
-  );
-
-  // Clear location 
-  const handleClearLocation = () => {
-    setAddress('');
-    locationChangedRef.current = true;
-    wasLocationSelectedRef.current = false;
-    
-    // Create an empty location object
-    const emptyLocation: Location = {
-      id: `loc_${Date.now()}`,
-      name: '',
-      address: '',
-      isInVizag: false
-    };
-    
-    if (handleLocationChange) {
-      console.log('Location cleared by user. Sending empty location to parent.');
-      handleLocationChange(emptyLocation);
-    }
-    
-    // Focus the input after clearing
-    if (inputRef.current) {
-      inputRef.current.focus();
-    }
-  };
-
-  // Setup Google Maps autocomplete
-  const initializeAutocomplete = useCallback(() => {
-    if (!google || !google.maps || !google.maps.places || !inputRef.current || 
-        disabled || readOnly || !isLoaded) {
-      console.log("Cannot initialize autocomplete yet, conditions not met:", {
-        googleAvailable: !!google,
-        mapsAvailable: !!(google && google.maps),
-        placesAvailable: !!(google && google.maps && google.maps.places),
-        inputRefAvailable: !!inputRef.current,
-        notDisabled: !disabled,
-        notReadOnly: !readOnly,
-        isLoaded: isLoaded
-      });
-      return false;
-    }
-    
-    // Force create map-canvas if it doesn't exist
-    if (!document.getElementById('map-canvas')) {
-      console.log("Creating map-canvas element for autocomplete initialization");
-      const mapCanvas = document.createElement('div');
-      mapCanvas.id = 'map-canvas';
-      mapCanvas.style.display = 'none';
-      document.body.appendChild(mapCanvas);
-    }
-    
-    // Cleanup previous listeners to prevent duplication
-    if (autocompleteListenerRef.current) {
-      try {
-        google.maps.event.removeListener(autocompleteListenerRef.current);
-      } catch (error) {
-        console.error("Error removing autocomplete listener:", error);
+      if (!autocompleteServiceRef.current) {
+        // Still not initialized, show error
+        toast.error("Location search is temporarily unavailable");
+        return;
       }
-      autocompleteListenerRef.current = null;
     }
     
-    if (autocompleteRef.current) {
-      try {
-        google.maps.event.clearInstanceListeners(autocompleteRef.current);
-      } catch (error) {
-        console.error("Error clearing instance listeners:", error);
+    setIsLoading(true);
+    
+    // Set India bounds for autocomplete
+    const indiaBounds = new google.maps.LatLngBounds(
+      new google.maps.LatLng(8.0, 68.0),   // SW corner of India
+      new google.maps.LatLng(37.0, 97.0)   // NE corner of India
+    );
+    
+    // Set Vizag bounds for more local results
+    const vizagBounds = new google.maps.LatLngBounds(
+      new google.maps.LatLng(17.5, 83.1),  // SW corner of Vizag
+      new google.maps.LatLng(17.8, 83.4)   // NE corner of Vizag
+    );
+    
+    // Use appropriate bounds based on pickup/dropoff
+    const bounds = isPickupLocation ? vizagBounds : indiaBounds;
+    
+    autocompleteServiceRef.current.getPlacePredictions(
+      {
+        input: value,
+        bounds: bounds,
+        componentRestrictions: { country: 'in' },
+        types: ['geocode', 'establishment']
+      },
+      (results, status) => {
+        setIsLoading(false);
+        
+        if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+          setSuggestions(results);
+          setShowSuggestions(true);
+        } else {
+          setSuggestions([]);
+          
+          if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+            // No need to show error for zero results
+            console.log("No suggestions found for:", value);
+          } else {
+            console.error("Autocomplete request failed:", status);
+          }
+        }
       }
-      autocompleteRef.current = null;
-    }
+    );
+  }, [google, isPickupLocation]);
+
+  // Handle suggestion selection
+  const handleSuggestionClick = useCallback(async (suggestion: google.maps.places.AutocompletePrediction) => {
+    setInputValue(suggestion.description);
+    setShowSuggestions(false);
+    setIsLoading(true);
     
     try {
-      console.log("🔄 Initializing Google Places Autocomplete...");
+      const placeDetails = await getPlaceDetails(suggestion.place_id);
       
-      // Create options for autocomplete
-      const options: google.maps.places.AutocompleteOptions = {
-        fields: ['address_components', 'geometry', 'name', 'formatted_address'],
-        componentRestrictions: { country: 'in' }, // Restrict to India
-        types: ['geocode', 'establishment'] // Restrict to addresses and businesses
-      };
-      
-      // Apply location restrictions for Visakhapatnam if needed
-      if (isPickupLocation === true || isAirportTransfer === true) {
-        // Set bounds to Visakhapatnam region for pickup locations
-        const vizagBounds = new google.maps.LatLngBounds(
-          new google.maps.LatLng(17.6, 83.1),  // SW corner
-          new google.maps.LatLng(17.9, 83.4)   // NE corner
-        );
+      if (placeDetails && placeDetails.geometry) {
+        const { lat, lng } = placeDetails.geometry.location.toJSON();
         
-        options.bounds = vizagBounds;
-        options.strictBounds = isPickupLocation === true;
-      } else {
-        // Use India bounds for non-pickup locations
-        const indiaBounds = new google.maps.LatLngBounds(
-          new google.maps.LatLng(8.0, 68.0),   // SW corner of India
-          new google.maps.LatLng(37.0, 97.0)   // NE corner of India
-        );
-        
-        options.bounds = indiaBounds;
-      }
-      
-      // Create new autocomplete instance
-      const autocomplete = new google.maps.places.Autocomplete(inputRef.current, options);
-      autocompleteRef.current = autocomplete;
-      console.log("Created new Autocomplete instance");
-      
-      // Add place_changed listener
-      autocompleteListenerRef.current = autocomplete.addListener('place_changed', () => {
-        if (!autocompleteRef.current) return;
-        
-        const place = autocompleteRef.current.getPlace();
-        setLocationError(null);
-        
-        console.log("Place selected from autocomplete:", place);
-        
-        if (!place || !place.geometry || !place.geometry.location) {
-          console.error("No place details returned from autocomplete");
-          setLocationError("Please select a valid location from the dropdown");
-          return;
-        }
-        
-        // Get formatted address, with fallbacks
-        const formattedAddress = place.formatted_address || place.name || '';
-        
-        // Update local state
-        setAddress(formattedAddress);
-        wasLocationSelectedRef.current = true;
-        isManualInputRef.current = false; // Reset manual input flag since this was a selection
-        
-        // Get coordinates
-        const lat = place.geometry.location.lat();
-        const lng = place.geometry.location.lng();
-        
-        // Check if location is in India
-        if (!isLocationInIndia(lat, lng)) {
-          console.error("Selected location is outside India");
-          setLocationError("Please select a location within India");
-          return;
-        }
-        
-        // Create location object with all required properties
-        const newLocation: Location = {
-          id: locationData.id || `loc_${Date.now()}`,
-          name: place.name || formattedAddress.split(',')[0] || '',
-          address: formattedAddress,
-          lat: lat,
-          lng: lng,
-          // Determine if location is in Vizag (with defaults)
-          isInVizag: isInVizagArea(lat, lng, formattedAddress)
+        const location = {
+          id: suggestion.place_id,
+          name: suggestion.structured_formatting?.main_text || placeDetails.name || suggestion.description,
+          address: placeDetails.formatted_address || suggestion.description,
+          lat,
+          lng,
+          type: 'custom',
+          isInVizag: isVizagLocation({ lat, lng })
         };
         
-        console.log('Autocomplete selected location:', newLocation);
-        updateParentLocation(newLocation);
-      });
-      
-      autocompleteInitializedRef.current = true;
-      console.log("✅ Autocomplete initialized successfully");
-      return true;
+        onLocationChange(location);
+      }
     } catch (error) {
-      console.error("❌ Error initializing autocomplete:", error);
-      autocompleteInitializedRef.current = false;
-      
-      // Only show toast for final attempt
-      if (initializationAttemptsRef.current >= 2) {
-        toast.error("Error setting up location search. Please refresh the page.");
-      }
-      return false;
+      console.error("Error fetching place details:", error);
+      toast.error("Failed to get location details. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
-  }, [google, disabled, readOnly, isPickupLocation, isAirportTransfer, updateParentLocation, locationData.id, isLoaded]);
+  }, [getPlaceDetails, onLocationChange]);
 
-  // Initialize autocomplete when Google Maps is loaded
+  // Effect to initialize input with value
   useEffect(() => {
-    if (isLoaded && google && inputRef.current && !autocompleteInitializedRef.current) {
-      initializationAttemptsRef.current++;
-      console.log(`Attempt #${initializationAttemptsRef.current} to initialize autocomplete`);
-      
-      // Delay initialization to ensure everything is properly loaded
-      const initTimeout = setTimeout(() => {
-        const success = initializeAutocomplete();
+    if (value) {
+      if (typeof value === 'string') {
+        setInputValue(value);
+      } else if (value.description) {
+        setInputValue(value.description);
+      } else if (value.structured_formatting?.main_text) {
+        setInputValue(value.structured_formatting.main_text);
+      } else if ((value as any).name) {
+        setInputValue((value as any).name);
+      } else if ((value as any).address) {
+        setInputValue((value as any).address);
+      }
+    }
+  }, [value]);
+
+  // Handle input focus to ensure autocomplete is initialized
+  const handleInputFocus = useCallback(() => {
+    // Re-initialize autocomplete service on focus if needed
+    if (!autocompleteServiceRef.current && google && google.maps && google.maps.places) {
+      try {
+        console.log("Re-initializing autocomplete service on focus");
+        autocompleteServiceRef.current = new google.maps.places.AutocompleteService();
         
-        // Retry initialization if it failed (up to 3 times)
-        if (!success && initializationAttemptsRef.current < 3) {
-          console.log(`Autocomplete initialization failed, will retry. Attempt: ${initializationAttemptsRef.current}`);
-          
-          // Try to force-initialize Places API
-          if (google && google.maps && !google.maps.places) {
-            try {
-              console.log("Attempting to manually load Places library");
-              // This is a hack to try to force the Places library to load
-              new google.maps.places.Autocomplete(document.createElement('input'));
-            } catch (error) {
-              console.error("Failed to manually initialize Places library:", error);
-            }
-          }
-        }
-      }, 500 + (initializationAttemptsRef.current * 500)); // Increase delay with each attempt
-      
-      return () => clearTimeout(initTimeout);
-    }
-  }, [isLoaded, google, initializeAutocomplete]);
-
-  // Re-initialize autocomplete when props change
-  useEffect(() => {
-    if (isLoaded && google && inputRef.current && (isPickupLocation !== undefined || isAirportTransfer !== undefined)) {
-      initializeAutocomplete();
-    }
-  }, [isPickupLocation, isAirportTransfer, initializeAutocomplete, isLoaded, google]);
-
-  // Helper function to safely determine if a location is in Vizag
-  function isInVizagArea(lat: number, lng: number, address: string | undefined | null): boolean {
-    // Check by coordinates first (Visakhapatnam bounds)
-    const isInVizagBounds = 
-      lat >= 17.6 && lat <= 17.9 && 
-      lng >= 83.1 && lng <= 83.4;
-    
-    // If we don't have a valid address string, just use coordinates
-    if (!address || typeof address !== 'string') {
-      return isInVizagBounds;
-    }
-    
-    // Ensure address is a string and convert to lowercase safely
-    const safeAddressLower = address.toLowerCase();
-    
-    // Check if address contains any Vizag-related names
-    const vizagNames = ['visakhapatnam', 'vizag', 'waltair', 'vizianagaram'];
-    
-    for (const name of vizagNames) {
-      if (safeAddressLower.includes(name)) {
-        return true;
-      }
-    }
-    
-    return isInVizagBounds;
-  }
-
-  // Create a hidden element for the PlacesService if it doesn't exist
-  useEffect(() => {
-    if (!document.getElementById('map-canvas') && google && google.maps) {
-      const mapCanvas = document.createElement('div');
-      mapCanvas.id = 'map-canvas';
-      mapCanvas.style.display = 'none';
-      document.body.appendChild(mapCanvas);
-      
-      // Initialize the PlacesService
-      if (!placesServiceRef.current && google.maps.places) {
-        try {
+        // Also re-initialize places service
+        const mapCanvas = document.getElementById('map-canvas');
+        if (mapCanvas) {
           placesServiceRef.current = new google.maps.places.PlacesService(mapCanvas);
-          console.log("PlacesService initialized via useEffect");
-        } catch (error) {
-          console.error("Failed to initialize PlacesService in useEffect:", error);
         }
+        
+        autocompleteInitialized.current = true;
+      } catch (error) {
+        console.error("Failed to re-initialize autocomplete on focus:", error);
       }
     }
     
-    return () => {
-      // Don't remove the map-canvas on unmount as other components might use it
+    setShowSuggestions(!!suggestions.length);
+  }, [google, suggestions.length]);
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (inputRef.current && !inputRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
     };
-  }, [google]);
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   return (
-    <div className="space-y-2">
-      {label && (
-        <label className="block text-sm font-medium text-gray-700">
-          {label}
-        </label>
-      )}
+    <div className="relative mb-4">
+      <div className="mb-2">
+        <label className="block text-sm font-medium text-gray-700">{label}</label>
+      </div>
+      
       <div className="relative">
-        <Input
-          type="text"
-          ref={inputRef}
-          placeholder={placeholder}
-          className={className + (locationError ? " border-red-500" : "")}
-          value={address}
-          onChange={(e) => {
-            handleInputChange(e);
-          }}
-          onBlur={() => {
-            // If user typed but didn't select from autocomplete
-            if (!wasLocationSelectedRef.current && address.trim() !== '' && isManualInputRef.current) {
-              handleManualTextInput(address);
-            }
-          }}
-          onClick={() => {
-            // Re-initialize autocomplete on click if it wasn't initialized successfully
-            if (!autocompleteInitializedRef.current && google && isLoaded) {
-              console.log("Trying to initialize autocomplete on click");
-              initializeAutocomplete();
-            }
-          }}
-          onFocus={() => {
-            // Also try to initialize on focus
-            if (!autocompleteInitializedRef.current && google && isLoaded) {
-              console.log("Trying to initialize autocomplete on focus");
-              initializeAutocomplete();
-            }
-          }}
-          disabled={disabled}
-          readOnly={readOnly}
-          autoComplete="off" // Prevent browser's default autocomplete
-        />
-        {address && (
-          <Button
-            type="button"
-            variant="ghost" 
-            size="icon"
-            className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 text-gray-400 hover:text-gray-700"
-            onClick={handleClearLocation}
-            aria-label="Clear location"
-          >
-            <X size={16} />
-          </Button>
-        )}
-        {locationError && !address && (
-          <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-red-500">
-            <AlertCircle size={16} />
+        <div className="flex items-center relative">
+          <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
+            <MapPin className="h-4 w-4" />
           </div>
-        )}
-        {loadError && (
-          <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-amber-500">
-            <Map size={16} />
+          
+          <Input
+            ref={inputRef}
+            type="text"
+            value={inputValue}
+            onChange={handleInputChange}
+            onFocus={handleInputFocus}
+            onClick={handleInputFocus}
+            placeholder={placeholder}
+            className="pl-10 pr-12 py-2 w-full rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            readOnly={readOnly}
+          />
+          
+          {isLoading && (
+            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+              <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+            </div>
+          )}
+        </div>
+        
+        {showSuggestions && suggestions.length > 0 && (
+          <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg max-h-60 overflow-auto">
+            {suggestions.map((suggestion) => (
+              <div
+                key={suggestion.place_id}
+                className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                onClick={() => handleSuggestionClick(suggestion)}
+              >
+                <div className="font-medium">{suggestion.structured_formatting?.main_text}</div>
+                <div className="text-sm text-gray-500">{suggestion.structured_formatting?.secondary_text}</div>
+              </div>
+            ))}
           </div>
         )}
       </div>
-      {locationError && (
-        <p className="text-xs text-red-500 mt-1">{locationError}</p>
-      )}
-      <p className="text-xs text-gray-500">
-        {isPickupLocation ? "Select a location in India" : "Select a destination in India"}
-      </p>
     </div>
   );
 }
