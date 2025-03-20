@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { CabType } from '@/types/cab';
 import { formatPrice } from '@/lib/cabData';
@@ -348,7 +347,7 @@ export function CabOptions({
               fare={cabFares[cab.id] || 0}
               isSelected={selectedCabId === cab.id}
               onSelect={handleSelectCab}
-              fareDetails={getFareDetails()} 
+              fareDetails={getFareDetails()}
               isCalculating={isCalculatingFares}
             />
           ))}
