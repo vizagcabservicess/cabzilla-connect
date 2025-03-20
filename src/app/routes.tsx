@@ -6,6 +6,8 @@ import Index from '@/pages/Index';
 import NotFound from '@/pages/NotFound';
 import AdminLayout from '@/layouts/AdminLayout';
 import VehiclesPage from '@/pages/admin/vehicles';
+import DashboardPage from '@/pages/DashboardPage';
+import BookingConfirmationPage from '@/pages/BookingConfirmationPage';
 
 // Define routes
 const router = createBrowserRouter([
@@ -25,7 +27,15 @@ const router = createBrowserRouter([
         path: 'vehicles',
         element: <VehiclesPage />,
       },
+      {
+        path: 'bookings',
+        element: <DashboardPage />,
+      },
     ],
+  },
+  {
+    path: '/booking-confirmation/:id',
+    element: <BookingConfirmationPage />,
   },
   {
     path: '*',
