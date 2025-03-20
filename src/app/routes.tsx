@@ -4,7 +4,7 @@ import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
 import { Toaster } from 'sonner';
 import Index from '@/pages/Index';
 import NotFound from '@/pages/NotFound';
-import AdminDashboardPage from '@/pages/AdminDashboardPage';
+import AdminLayout from '@/layouts/AdminLayout';
 import VehiclesPage from '@/pages/admin/vehicles';
 
 // Define routes
@@ -12,11 +12,10 @@ const router = createBrowserRouter([
   {
     path: '/',
     element: <Index />,
-    children: [],
   },
   {
     path: '/admin',
-    element: <AdminDashboardPage />,
+    element: <AdminLayout />,
     children: [
       {
         index: true,
