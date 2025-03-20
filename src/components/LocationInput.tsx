@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
 import { Input } from '@/components/ui/input';
@@ -19,12 +18,24 @@ type LocationInputProps = {
   className?: string;
 };
 
-// Add a more specific type for Google Autocomplete predictions to ensure TypeScript recognizes structured_formatting
-interface AutocompletePredictionWithFormatting extends google.maps.places.AutocompletePrediction {
-  structured_formatting?: {
-    main_text: string;
-    secondary_text: string;
-  };
+// Use type augmentation to ensure TypeScript recognizes structured_formatting
+// Instead of extending the interface incorrectly, we'll create a type alias
+type AutocompletePredictionWithFormatting = google.maps.places.AutocompletePrediction;
+
+// Ensure the compiler knows that structured_formatting exists on the prediction object
+declare global {
+  namespace google.maps.places {
+    interface AutocompletePrediction {
+      structured_formatting: {
+        main_text: string;
+        main_text_matched_substrings: Array<{
+          length: number;
+          offset: number;
+        }>;
+        secondary_text: string;
+      };
+    }
+  }
 }
 
 export function LocationInput({
