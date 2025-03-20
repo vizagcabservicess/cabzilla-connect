@@ -5,8 +5,9 @@ import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
 import { Location } from '@/types/api';
 import { debounce } from '@/lib/utils';
 import { isLocationInVizag, safeIncludes } from '@/lib/locationUtils';
-import { AlertCircle, X } from 'lucide-react';
+import { AlertCircle, Map, MapPin, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 interface LocationInputProps {
   location?: Location;
@@ -44,7 +45,7 @@ export function LocationInput({
                          typeof locationData.name === 'string' ? locationData.name : '';
   const [address, setAddress] = useState<string>(initialAddress);
   const [locationError, setLocationError] = useState<string | null>(null);
-  const { google, isLoaded } = useGoogleMaps();
+  const { google, isLoaded, loadError } = useGoogleMaps();
   
   // Reference to the autocomplete instance
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
@@ -55,6 +56,7 @@ export function LocationInput({
   const autocompleteListenerRef = useRef<google.maps.MapsEventListener | null>(null);
   const isManualInputRef = useRef<boolean>(false);
   const pendingLocationUpdateRef = useRef<Location | null>(null);
+  const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
   
   // Update the address whenever locationData changes
   useEffect(() => {
@@ -82,6 +84,14 @@ export function LocationInput({
       }
     }
   }, [locationData, address]);
+
+  // Display error message if Google Maps fails to load
+  useEffect(() => {
+    if (loadError) {
+      console.error("Google Maps failed to load:", loadError);
+      setLocationError("Location services unavailable. Please check your internet connection.");
+    }
+  }, [loadError]);
 
   // Check if location is in India
   const isLocationInIndia = (lat: number, lng: number): boolean => {
@@ -114,6 +124,55 @@ export function LocationInput({
     }
   };
 
+  // Handle Places API geocoding manually
+  const searchPlaceByText = useCallback(async (searchText: string) => {
+    if (!google || !google.maps || searchText.trim() === '') {
+      return null;
+    }
+    
+    try {
+      // Create a PlacesService if it doesn't exist yet
+      if (!placesServiceRef.current && document.getElementById('map-canvas')) {
+        placesServiceRef.current = new google.maps.places.PlacesService(
+          document.getElementById('map-canvas') as HTMLDivElement
+        );
+      }
+      
+      // If we couldn't create a PlacesService, we can't proceed
+      if (!placesServiceRef.current) {
+        // Create a hidden div for PlacesService
+        const mapCanvas = document.createElement('div');
+        mapCanvas.id = 'map-canvas';
+        mapCanvas.style.display = 'none';
+        document.body.appendChild(mapCanvas);
+        
+        placesServiceRef.current = new google.maps.places.PlacesService(mapCanvas);
+      }
+      
+      return new Promise<google.maps.places.PlaceResult | null>((resolve, reject) => {
+        if (!placesServiceRef.current) {
+          reject(new Error("Places service not available"));
+          return;
+        }
+        
+        placesServiceRef.current.findPlaceFromQuery({
+          query: searchText + ' India', // Append India to bias results
+          fields: ['name', 'geometry', 'formatted_address']
+        }, (results, status) => {
+          if (status === google.maps.places.PlacesServiceStatus.OK && results && results.length > 0) {
+            resolve(results[0]);
+          } else {
+            console.warn("Place search failed:", status);
+            resolve(null);
+          }
+        });
+      });
+    } catch (error) {
+      console.error("Error searching for place:", error);
+      return null;
+    }
+  }, [google]);
+
   // Send location update to parent component
   const updateParentLocation = useCallback((newLocation: Location) => {
     if (!handleLocationChange) return;
@@ -138,14 +197,44 @@ export function LocationInput({
 
   // Debounced version to handle manual text input
   const handleManualTextInput = useCallback(
-    debounce((address: string) => {
+    debounce(async (address: string) => {
       if (!handleLocationChange || !address || !isManualInputRef.current) return;
       
       // Only send update if this was a manual text input (not a selection from dropdown)
       console.log("Manual address entry - not selected from dropdown:", address);
       
-      // Create a new location object with safe defaults
-      const updatedLocation: Location = {
+      // Try to geocode the address if Google Maps is available
+      if (google && google.maps) {
+        console.log("Attempting to geocode manually entered address");
+        try {
+          const place = await searchPlaceByText(address);
+          
+          if (place && place.geometry && place.geometry.location) {
+            const lat = place.geometry.location.lat();
+            const lng = place.geometry.location.lng();
+            const formattedAddress = place.formatted_address || place.name || address;
+            
+            // Create a new location with geocoded information
+            const geocodedLocation: Location = {
+              id: locationData.id || `loc_${Date.now()}`,
+              name: place.name || formattedAddress.split(',')[0] || address,
+              address: formattedAddress,
+              lat: lat,
+              lng: lng,
+              isInVizag: isInVizagArea(lat, lng, formattedAddress)
+            };
+            
+            console.log("Geocoded manual input successfully:", geocodedLocation);
+            updateParentLocation(geocodedLocation);
+            return;
+          }
+        } catch (error) {
+          console.warn("Geocoding failed for manual input:", error);
+        }
+      }
+      
+      // Fallback: Create a new location object with safe defaults if geocoding fails
+      const fallbackLocation: Location = {
         id: locationData.id || `loc_${Date.now()}`,
         name: address,
         address: address,
@@ -156,9 +245,10 @@ export function LocationInput({
         isInVizag: locationData.isInVizag === true
       };
       
-      updateParentLocation(updatedLocation);
+      console.log("Using fallback location for manual input:", fallbackLocation);
+      updateParentLocation(fallbackLocation);
     }, 500),
-    [handleLocationChange, locationData, updateParentLocation]
+    [google, handleLocationChange, locationData, searchPlaceByText, updateParentLocation]
   );
 
   // Clear location 
@@ -283,8 +373,11 @@ export function LocationInput({
         console.log('Autocomplete selected location:', newLocation);
         updateParentLocation(newLocation);
       });
+      
+      console.log("✅ Autocomplete initialized successfully");
     } catch (error) {
-      console.error("Error initializing autocomplete:", error);
+      console.error("❌ Error initializing autocomplete:", error);
+      toast.error("Error setting up location search. Please refresh the page.");
     }
     
     // Cleanup when component unmounts
@@ -319,6 +412,29 @@ export function LocationInput({
     
     return isInVizagBounds;
   }
+
+  // Create a hidden element for the PlacesService if it doesn't exist
+  useEffect(() => {
+    if (!document.getElementById('map-canvas') && google && google.maps) {
+      const mapCanvas = document.createElement('div');
+      mapCanvas.id = 'map-canvas';
+      mapCanvas.style.display = 'none';
+      document.body.appendChild(mapCanvas);
+      
+      // Initialize the PlacesService
+      if (!placesServiceRef.current) {
+        placesServiceRef.current = new google.maps.places.PlacesService(mapCanvas);
+      }
+    }
+    
+    return () => {
+      // Cleanup the hidden element on unmount
+      const mapCanvas = document.getElementById('map-canvas');
+      if (mapCanvas) {
+        mapCanvas.remove();
+      }
+    };
+  }, [google]);
 
   return (
     <div className="space-y-2">
@@ -362,6 +478,11 @@ export function LocationInput({
         {locationError && !address && (
           <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-red-500">
             <AlertCircle size={16} />
+          </div>
+        )}
+        {loadError && (
+          <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-amber-500">
+            <Map size={16} />
           </div>
         )}
       </div>

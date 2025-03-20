@@ -1,6 +1,7 @@
 
 import { ReactNode, createContext, useContext, useEffect, useState } from "react";
 import { useLoadScript } from "@react-google-maps/api";
+import { toast } from "sonner";
 
 // Environment variable for Google Maps API Key
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
@@ -34,9 +35,22 @@ export const useGoogleMaps = () => useContext(GoogleMapsContext);
 // Provider component for Google Maps
 export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps) => {
   const [googleInstance, setGoogleInstance] = useState<typeof google | null>(null);
+  const [hasShownAPIKeyError, setHasShownAPIKeyError] = useState(false);
   
   // Use provided apiKey or fallback to environment variable
   const googleMapsApiKey = apiKey || GOOGLE_MAPS_API_KEY;
+  
+  // Validate API key before attempting to load
+  useEffect(() => {
+    if (!googleMapsApiKey && !hasShownAPIKeyError) {
+      console.error("No Google Maps API key provided");
+      toast.error("Google Maps API key is missing. Some features may not work correctly.", {
+        duration: 5000,
+        id: "google-maps-api-key-missing",
+      });
+      setHasShownAPIKeyError(true);
+    }
+  }, [googleMapsApiKey, hasShownAPIKeyError]);
   
   // Load the Google Maps script with India region bias
   const { isLoaded, loadError } = useLoadScript({
@@ -44,6 +58,8 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
     libraries,
     region: 'IN', // Set region to India
     language: 'en',
+    onLoad: () => console.log("Google Maps API loading started"),
+    onError: (error) => console.error("Error during Google Maps load:", error)
   });
 
   // Store the google object once loaded
@@ -64,7 +80,6 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
           // Store default bounds in window object for later use
           (window as any).indiaBounds = indiaBounds;
           
-          // We don't set defaultBounds here anymore as it's not a valid property
           console.log("Default India bounds set for Maps");
         } catch (error) {
           console.error("Error setting default bounds:", error);
@@ -72,6 +87,10 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
       }
     } else if (loadError) {
       console.error("❌ Error loading Google Maps API:", loadError);
+      toast.error("Failed to load Google Maps. Please check your internet connection and refresh the page.", {
+        duration: 5000,
+        id: "google-maps-load-error",
+      });
     }
   }, [isLoaded, loadError]);
 

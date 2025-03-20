@@ -1,8 +1,11 @@
+
 import { GoogleMap, Marker, DirectionsService, DirectionsRenderer } from "@react-google-maps/api";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Location } from "@/lib/locationData";
 import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
 import { ApiErrorFallback } from "./ApiErrorFallback";
+import { toast } from "sonner";
+import { MapPin } from "lucide-react";
 
 interface GoogleMapComponentProps {
   pickupLocation: Location;
@@ -35,7 +38,7 @@ const GoogleMapComponent = ({
   dropLocation,
   onDistanceCalculated 
 }: GoogleMapComponentProps) => {
-  const { isLoaded, google } = useGoogleMaps();
+  const { isLoaded, google, loadError } = useGoogleMaps();
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [directionsRequested, setDirectionsRequested] = useState(false);
@@ -46,6 +49,7 @@ const GoogleMapComponent = ({
   const maxRetries = useRef(3);
   const directionsServiceRef = useRef<any>(null);
   const distanceCalculatedRef = useRef<boolean>(false);
+  const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
 
   const mapContainerStyle = {
     width: "100%",
@@ -85,6 +89,18 @@ const GoogleMapComponent = ({
     lat: safePickupLocation.lat,
     lng: safePickupLocation.lng
   };
+
+  // Display error if Google Maps API fails to load
+  useEffect(() => {
+    if (loadError) {
+      console.error("Google Maps API failed to load:", loadError);
+      setMapError(new Error("Failed to load Google Maps. Please check your internet connection."));
+      toast.error("Google Maps couldn't load. Distance calculations might be less accurate.", {
+        duration: 5000,
+        id: "google-maps-load-error"
+      });
+    }
+  }, [loadError]);
 
   // Check if locations are too far apart (more than 2000km)
   const areLocationsTooFarApart = () => {
@@ -220,9 +236,32 @@ const GoogleMapComponent = ({
   }, [safePickupLocation, safeDropLocation]);
 
   // Handle map load - single definition to avoid duplicates
-  const handleMapLoad = useCallback(() => {
+  const handleMapLoad = useCallback((map: google.maps.Map) => {
     console.log("Map loaded successfully");
     setMapLoaded(true);
+    setMapInstance(map);
+    
+    // Add custom map styles
+    try {
+      // Set some basic style options for better visibility
+      map.setOptions({
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: true,
+        // Restrict to India view
+        restriction: {
+          latLngBounds: {
+            north: 37.0,
+            south: 8.0,
+            west: 68.0,
+            east: 97.0
+          },
+          strictBounds: false
+        }
+      });
+    } catch (error) {
+      console.error("Error setting map options:", error);
+    }
   }, []);
 
   // Handle directions request - now with caching
@@ -286,22 +325,62 @@ const GoogleMapComponent = ({
     } catch (error) {
       console.error("Error in directions request effect:", error);
       setMapError(error instanceof Error ? error : new Error(String(error)));
+      
+      // Use fallback distance calculation if directions request fails
+      if (!distanceCalculatedRef.current && onDistanceCalculated) {
+        const distance = calculateHaversineDistance(
+          safePickupLocation.lat, safePickupLocation.lng,
+          safeDropLocation.lat, safeDropLocation.lng
+        );
+        const duration = Math.round(distance * 2);
+        distanceCalculatedRef.current = true;
+        onDistanceCalculated(distance, duration);
+      }
     }
   }, [mapLoaded, directionsRequested, google, cacheKey, safePickupLocation, safeDropLocation, onDistanceCalculated]);
 
-  // Handle errors
+  // Fallback if Google Maps fails to load
   if (mapError) {
+    // Calculate and provide a fallback distance before showing error
+    if (!distanceCalculatedRef.current && onDistanceCalculated) {
+      try {
+        const distance = calculateHaversineDistance(
+          safePickupLocation.lat, safePickupLocation.lng,
+          safeDropLocation.lat, safeDropLocation.lng
+        );
+        const duration = Math.round(distance * 2);
+        onDistanceCalculated(distance, duration);
+        distanceCalculatedRef.current = true;
+      } catch (error) {
+        console.error("Error calculating fallback distance:", error);
+      }
+    }
+    
     return (
-      <ApiErrorFallback 
-        error={mapError}
-        onRetry={() => window.location.reload()}
-        title="Map Error"
-      />
+      <div className="bg-gray-100 rounded-lg p-6 text-center border border-gray-300">
+        <div className="flex flex-col items-center justify-center gap-4">
+          <MapPin className="h-12 w-12 text-blue-500" />
+          <h3 className="text-lg font-semibold">Map temporarily unavailable</h3>
+          <p className="text-gray-600 mb-4">
+            We're using an approximate distance calculation instead.
+          </p>
+          <p className="text-sm text-gray-500">
+            From: {safePickupLocation.address || safePickupLocation.name}
+            <br />
+            To: {safeDropLocation.address || safeDropLocation.name}
+          </p>
+        </div>
+      </div>
     );
   }
 
   if (!isLoaded) {
-    return <div className="p-4 text-center bg-gray-100 rounded-lg">Loading map...</div>;
+    return (
+      <div className="p-4 text-center bg-gray-100 rounded-lg">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
+        <p>Loading map...</p>
+      </div>
+    );
   }
 
   return (
