@@ -58,17 +58,24 @@ export function LocationInput({
     e.preventDefault();
     e.stopPropagation();
     
-    // Clear the input value
+    // Clear the input value immediately
     resetInputValue();
     
-    // Explicitly notify parent component that location has been cleared
+    // Notify parent component that location has been cleared
     if (onLocationChange) {
-      onLocationChange(null as any);
+      // Use setTimeout to ensure this runs after the current event loop cycle
+      setTimeout(() => {
+        onLocationChange(null);
+      }, 0);
     }
     
     // Focus input after clearing
     if (inputRef.current) {
-      inputRef.current.focus();
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+      }, 10);
     }
   };
 
@@ -103,7 +110,7 @@ export function LocationInput({
               variant="ghost"
               size="icon"
               onClick={handleClearInput}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 h-6 w-6"
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 h-6 w-6 z-10"
               aria-label="Clear input"
             >
               <X className="h-4 w-4 text-gray-400" />

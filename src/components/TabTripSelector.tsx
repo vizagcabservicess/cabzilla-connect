@@ -19,6 +19,7 @@ export function TabTripSelector({
 }: TabTripSelectorProps) {
   const [prevTab, setPrevTab] = useState<string | null>(null);
   const isClearing = useRef(false);
+  const isProcessingTabChange = useRef(false);
 
   const updateSessionStorage = useCallback(() => {
     sessionStorage.setItem('tripType', selectedTab);
@@ -26,10 +27,11 @@ export function TabTripSelector({
   }, [selectedTab, tripMode]);
   
   useEffect(() => {
-    if (prevTab !== selectedTab && prevTab !== null) {
+    if (prevTab !== selectedTab && prevTab !== null && !isProcessingTabChange.current) {
       if (!isClearing.current) {
         isClearing.current = true;
         
+        // Remove stored locations to reset the form
         sessionStorage.removeItem('dropLocation');
         sessionStorage.removeItem('pickupLocation');
         sessionStorage.removeItem('selectedCab');
@@ -53,7 +55,7 @@ export function TabTripSelector({
         
         setTimeout(() => {
           isClearing.current = false;
-        }, 300);
+        }, 500); // Increased from 300ms to 500ms for more reliability
       }
     }
     
@@ -61,8 +63,14 @@ export function TabTripSelector({
   }, [selectedTab, updateSessionStorage]);
   
   const handleTabChange = (value: string) => {
-    if (value !== selectedTab && !isClearing.current) {
-      onTabChange(value as 'outstation' | 'local' | 'airport' | 'tour');
+    if (value !== selectedTab && !isClearing.current && !isProcessingTabChange.current) {
+      isProcessingTabChange.current = true;
+      
+      // Small delay to prevent rapid tab changes
+      setTimeout(() => {
+        onTabChange(value as 'outstation' | 'local' | 'airport' | 'tour');
+        isProcessingTabChange.current = false;
+      }, 100);
     }
   };
   

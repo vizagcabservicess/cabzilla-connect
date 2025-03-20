@@ -20,6 +20,7 @@ export function useLocationInput(
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [useLocalSuggestions, setUseLocalSuggestions] = useState<boolean>(false);
   const [searchAttempts, setSearchAttempts] = useState<number>(0);
+  const clearingInProgress = useRef(false);
   
   const { isLoaded, google, placesInitialized } = useGoogleMaps();
   const {
@@ -41,11 +42,11 @@ export function useLocationInput(
       if (newInputValue !== inputValue) {
         setInputValue(newInputValue);
       }
-    } else {
+    } else if (!clearingInProgress.current) {
       // Clear the input value if value is null or undefined
       setInputValue('');
     }
-  }, [value]);
+  }, [value, inputValue]);
 
   // Force initialization of Places API when needed
   useEffect(() => {
@@ -57,11 +58,17 @@ export function useLocationInput(
 
   // Reset input value
   const resetInputValue = useCallback(() => {
+    clearingInProgress.current = true;
     setInputValue('');
     setSuggestions([]);
     setLocalSuggestions([]);
     setShowSuggestions(false);
     console.log("Input value cleared");
+    
+    // Mark clearing as complete after a short delay
+    setTimeout(() => {
+      clearingInProgress.current = false;
+    }, 100);
   }, []);
 
   // Handle input change
@@ -91,8 +98,8 @@ export function useLocationInput(
         if (isPickupLocation) {
           // For pickup locations, set a much wider radius around Visakhapatnam (approximately 100km)
           bounds = new google.maps.LatLngBounds(
-            new google.maps.LatLng(17.1, 82.5), // SW corner - greatly expanded
-            new google.maps.LatLng(18.3, 83.9)  // NE corner - greatly expanded
+            new google.maps.LatLng(16.9, 82.2), // SW corner - greatly expanded
+            new google.maps.LatLng(18.5, 84.2)  // NE corner - greatly expanded
           );
         } else {
           // For drop locations, use all of India (very wide area)
@@ -158,10 +165,10 @@ export function useLocationInput(
         if (isPickupLocation) {
           const vizagCenter = { lat: 17.6868, lng: 83.2185 };
           const distance = getDistanceFromLatLonInKm(lat, lng, vizagCenter.lat, vizagCenter.lng);
-          isInVizag = distance <= 50; // Using 50km radius for Visakhapatnam
+          isInVizag = distance <= 80; // Using 80km radius for Visakhapatnam
           
           if (!isInVizag) {
-            toast.error("Pickup location must be within 50km of Visakhapatnam", {
+            toast.error("Pickup location must be within Visakhapatnam area", {
               duration: 3000
             });
             setIsLoading(false);
@@ -186,31 +193,65 @@ export function useLocationInput(
         
         console.log("Selected location details:", location);
         onLocationChange(location);
+      } else {
+        // Fallback if geometry is missing
+        const location: Location = createBasicLocationFromSuggestion(suggestion, isPickupLocation);
+        console.log("Created basic location from suggestion (no geometry):", location);
+        onLocationChange(location);
       }
     } catch (error) {
       console.error("Error fetching place details:", error);
       
-      const basicLocation: Location = {
-        id: suggestion.place_id || `loc_${Date.now()}`,
-        name: suggestion.structured_formatting ? 
-              suggestion.structured_formatting.main_text : 
-              suggestion.description,
-        address: suggestion.description,
-        lat: 0,
-        lng: 0,
-        type: 'other', // Using 'other' instead of 'custom' to match type definition
-        isInVizag: isPickupLocation,
-        city: 'Visakhapatnam',
-        state: 'Andhra Pradesh',
-        popularityScore: 50
-      };
-      
-      console.log("Created basic location from suggestion:", basicLocation);
+      const basicLocation = createBasicLocationFromSuggestion(suggestion, isPickupLocation);
+      console.log("Created basic location from suggestion (error case):", basicLocation);
       onLocationChange(basicLocation);
     } finally {
       setIsLoading(false);
     }
   }, [getPlaceDetails, onLocationChange, isPickupLocation]);
+
+  // Function to create a basic location from a suggestion when details aren't available
+  function createBasicLocationFromSuggestion(
+    suggestion: google.maps.places.AutocompletePrediction, 
+    isPickup: boolean
+  ): Location {
+    return {
+      id: suggestion.place_id || `loc_${Date.now()}`,
+      name: suggestion.structured_formatting ? 
+            suggestion.structured_formatting.main_text : 
+            suggestion.description,
+      address: suggestion.description,
+      lat: isPickup ? 17.6868 : 0, // Default to Vizag center for pickup
+      lng: isPickup ? 83.2185 : 0, // Default to Vizag center for pickup
+      type: 'other',
+      isInVizag: isPickup, // Force true for pickup locations
+      city: isPickup ? 'Visakhapatnam' : extractCityFromSuggestionText(suggestion),
+      state: isPickup ? 'Andhra Pradesh' : extractStateFromSuggestionText(suggestion),
+      popularityScore: 50
+    };
+  }
+
+  // Extract city from suggestion text when place details not available
+  function extractCityFromSuggestionText(suggestion: google.maps.places.AutocompletePrediction): string {
+    if (suggestion.structured_formatting && suggestion.structured_formatting.secondary_text) {
+      const parts = suggestion.structured_formatting.secondary_text.split(',');
+      if (parts.length > 0) {
+        return parts[0].trim();
+      }
+    }
+    return '';
+  }
+
+  // Extract state from suggestion text when place details not available
+  function extractStateFromSuggestionText(suggestion: google.maps.places.AutocompletePrediction): string {
+    if (suggestion.structured_formatting && suggestion.structured_formatting.secondary_text) {
+      const parts = suggestion.structured_formatting.secondary_text.split(',');
+      if (parts.length > 1) {
+        return parts[1].trim();
+      }
+    }
+    return 'Andhra Pradesh'; // Default fallback
+  }
 
   // Handle local suggestion click
   const handleLocalSuggestionClick = useCallback((location: Location) => {

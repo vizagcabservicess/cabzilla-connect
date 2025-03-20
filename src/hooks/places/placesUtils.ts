@@ -61,8 +61,8 @@ export function createAutocompleteRequest(
   // Create a very permissive request that will return more results
   const requestOptions: google.maps.places.AutocompletionRequest = {
     input: query,
-    // Only restrict by country, not by specific types to get more results
-    types: ['establishment', 'geocode', 'address', '(cities)', '(regions)']
+    // For maximum results, don't restrict the type
+    types: [] 
   };
   
   // Add country restriction only if specifically requested
