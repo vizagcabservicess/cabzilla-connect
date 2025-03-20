@@ -1,3 +1,4 @@
+
 import { CabType, FareCalculationParams } from '@/types/cab';
 import { calculateFare } from '@/lib/fareCalculationService';
 import { differenceInDays } from 'date-fns';
@@ -429,250 +430,217 @@ class FareService {
       
       // Create a sanitized copy of the vehicle data with proper type conversions
       const sanitizedData = {
-        vehicleId: cleanVehicleId(String(vehicleData.vehicleId || vehicleData.id || vehicleData.vehicleType || '')),
-        name: String(vehicleData.name || vehicleData.vehicleType || '').trim() || 'Unnamed Vehicle',
-        capacity: Number(vehicleData.capacity) || 4,
-        luggageCapacity: Number(vehicleData.luggageCapacity) || 2,
-        ac: Boolean(vehicleData.ac !== undefined ? vehicleData.ac : true),
-        image: String(vehicleData.image || '/cars/sedan.png').trim(),
-        amenities: Array.isArray(vehicleData.amenities) ? vehicleData.amenities.map(a => String(a).trim()) : 
-                  (typeof vehicleData.amenities === 'string' ? vehicleData.amenities.split(',').map(a => a.trim()) : ['AC']),
-        description: String(vehicleData.description || '').trim(),
-        isActive: Boolean(vehicleData.isActive !== undefined ? vehicleData.isActive : true),
-        basePrice: Number(vehicleData.basePrice) || 0,
-        pricePerKm: Number(vehicleData.pricePerKm) || 0,
-        nightHaltCharge: Number(vehicleData.nightHaltCharge) || 0,
-        driverAllowance: Number(vehicleData.driverAllowance) || 0,
-        id: cleanVehicleId(String(vehicleData.vehicleId || vehicleData.id || vehicleData.vehicleType || '')) // Include id for compatibility
+        vehicleId: cleanVehicleId(vehicleData.vehicleId || vehicleData.id || vehicleData.vehicleType),
+        tripType: 'base',
+        basePrice: parseFloat(vehicleData.basePrice),
+        pricePerKm: parseFloat(vehicleData.pricePerKm),
+        nightHaltCharge: parseFloat(vehicleData.nightHaltCharge || 0),
+        driverAllowance: parseFloat(vehicleData.driverAllowance || 0)
       };
       
-      console.log("Sending sanitized data to API:", sanitizedData);
-      
-      // Try multiple update methods with retry logic
-      let success = false;
-      
-      // Method 1: Using updateVehicle endpoint
+      // Try using vehicle-pricing.php endpoint first
       try {
-        const response = await axios.post(`/api/admin/vehicles-update.php?_t=${Date.now()}`, sanitizedData, {
+        console.log("Trying to update using vehicle-pricing endpoint");
+        const response = await fetch('/api/admin/vehicle-pricing.php', {
+          method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Force-Refresh': 'true',
             'Cache-Control': 'no-cache, no-store, must-revalidate',
             'Pragma': 'no-cache',
-            'Expires': '0'
-          }
+            'X-Force-Refresh': 'true'
+          },
+          body: JSON.stringify(sanitizedData)
         });
         
-        if (response.status === 200) {
-          console.log("Successfully updated vehicle using primary endpoint", response.data);
-          success = true;
-          toast.success("Vehicle updated successfully");
-          this.clearCache();
+        const data = await response.json();
+        console.log("Vehicle pricing update response:", data);
+        
+        if (data.status === 'success') {
+          toast.success("Vehicle pricing updated successfully");
           return true;
+        } else {
+          console.warn("Failed to update vehicle pricing using primary endpoint:", data);
+          // Continue to fallback method
         }
-      } catch (err) {
-        console.error("Error with vehicle update endpoint:", err);
-        // Continue to next method
+      } catch (error) {
+        console.error("Error updating with primary endpoint:", error);
+        // Continue to fallback method
       }
       
-      // Method 2: Direct API call to vehicles.php
-      if (!success) {
-        try {
-          // Wait briefly before trying the next method
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          const response = await axios.post(`/api/fares/vehicles.php?_t=${Date.now()}`, sanitizedData, {
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Force-Refresh': 'true',
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
-              'Pragma': 'no-cache',
-              'Expires': '0'
-            }
-          });
-          
-          if (response.status === 200) {
-            console.log("Successfully updated vehicle using vehicles.php endpoint", response.data);
-            success = true;
-            toast.success("Vehicle updated successfully");
-            this.clearCache();
-            return true;
-          }
-        } catch (err) {
-          console.error("Error with vehicles.php endpoint:", err);
-          
-          // Show detailed error to help with debugging
-          if (err instanceof Error) {
-            toast.error(`Failed to update: ${err.message}`, { duration: 5000 });
-          } else {
-            toast.error("Failed to update vehicle: Server error", { duration: 5000 });
-          }
-        }
-      }
-      
-      return success;
-    } catch (error: any) {
-      console.error('Error updating vehicle pricing:', error);
-      toast.error("Failed to update vehicle data");
-      return false;
-    }
-  }
-  
-  /**
-   * Update fares for various trip types (outstation, local, airport, tours)
-   */
-  public async updateTripFares(
-    vehicleId: string, 
-    tripType: string, 
-    fareData: Record<string, any>
-  ): Promise<boolean> {
-    try {
-      // Clean the vehicle ID
-      const cleanVehicleId = (id: string | undefined): string => {
-        if (!id) return '';
+      // Fallback to fares-update.php endpoint
+      try {
+        console.log("Trying fallback endpoint for vehicle update");
+        const fallbackData = {
+          ...sanitizedData,
+          vehicleType: sanitizedData.vehicleId,
+          price: sanitizedData.basePrice
+        };
         
-        // Remove 'item-' prefix if it exists
-        if (id.startsWith('item-')) {
-          return id.substring(5);
-        }
+        const response = await fetch('/api/admin/fares-update.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'X-Force-Refresh': 'true'
+          },
+          body: JSON.stringify(fallbackData)
+        });
         
-        return id;
-      };
-      
-      const cleanedVehicleId = cleanVehicleId(vehicleId);
-      
-      console.log(`Updating ${tripType} fares for vehicle ${cleanedVehicleId}:`, fareData);
-      
-      // Create payload combining vehicle ID, trip type, and fare data
-      const payload = {
-        vehicleId: cleanedVehicleId,
-        tripType,
-        ...fareData
-      };
-      
-      // Get token for authorization
-      const token = localStorage.getItem('token');
-      const authHeader: Record<string, string> = {};
-      
-      if (token) {
-        authHeader.Authorization = `Bearer ${token}`;
-      }
-      
-      // Add timestamp for cache busting
-      const timestamp = Date.now();
-      
-      // Try multiple endpoints with retry logic
-      const endpoints = [
-        `/api/admin/fares-update.php?_t=${timestamp}`,
-        `/api/admin/vehicle-pricing.php?_t=${timestamp}`
-      ];
-      
-      // Try each endpoint until one works
-      for (const endpoint of endpoints) {
-        try {
-          console.log(`Trying to update ${tripType} fares using endpoint: ${endpoint}`);
-          
-          const response = await axios.post(endpoint, payload, {
-            headers: {
-              ...authHeader,
-              'Content-Type': 'application/json',
-              'X-Force-Refresh': 'true',
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
-              'Pragma': 'no-cache',
-              'Expires': '0'
-            }
-          });
-          
-          if (response.status === 200) {
-            console.log(`${tripType} fares updated successfully via`, endpoint);
-            toast.success(`${tripType} fares updated successfully`);
-            
-            // Clear cache to ensure fresh data on next fetch
-            this.clearCache();
-            return true;
-          }
-        } catch (error: any) {
-          console.error(`Error updating ${tripType} fares at endpoint ${endpoint}:`, error);
-          
-          // If this is the last endpoint, show error
-          if (endpoint === endpoints[endpoints.length - 1]) {
-            toast.error(`Failed to update ${tripType} fares: ${error.response?.data?.message || error.message || 'Unknown error'}`);
-          }
-        }
-      }
-      
-      // If we reach here, all endpoints failed
-      toast.error(`Failed to update ${tripType} fares after trying all endpoints`);
-      return false;
-    } catch (error: any) {
-      console.error(`Error updating ${tripType} fares:`, error);
-      toast.error(`Failed to update ${tripType} fares: ${error.response?.data?.message || error.message || 'Unknown error'}`);
-      return false;
-    }
-  }
-  
-  /**
-   * Delete vehicle from database
-   */
-  public async deleteVehicle(vehicleId: string): Promise<boolean> {
-    try {
-      // Clean the vehicle ID
-      const cleanVehicleId = (id: string | undefined): string => {
-        if (!id) return '';
+        const data = await response.json();
+        console.log("Fallback update response:", data);
         
-        // Remove 'item-' prefix if it exists
-        if (id.startsWith('item-')) {
-          return id.substring(5);
+        if (data.status === 'success' || (typeof data === 'object' && data !== null)) {
+          toast.success("Vehicle pricing updated using fallback method");
+          return true;
+        } else {
+          console.warn("Failed to update vehicle pricing using fallback endpoint:", data);
+          toast.error("Failed to update vehicle pricing");
+          return false;
         }
-        
-        return id;
-      };
-      
-      const cleanedVehicleId = cleanVehicleId(vehicleId);
-      
-      console.log(`Deleting vehicle with ID: ${cleanedVehicleId}`);
-      
-      // Get token for authorization
-      const token = localStorage.getItem('token');
-      const authHeader: Record<string, string> = {};
-      
-      if (token) {
-        authHeader.Authorization = `Bearer ${token}`;
-      }
-      
-      // Try to delete via API
-      const response = await fetch(`/api/admin/vehicles-update.php?vehicleId=${cleanedVehicleId}&_t=${Date.now()}`, {
-        method: 'DELETE',
-        headers: {
-          ...authHeader,
-          'X-Force-Refresh': 'true',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        }
-      });
-      
-      const responseData = await response.json();
-      
-      if (response.ok) {
-        console.log("Vehicle deleted successfully", responseData);
-        toast.success("Vehicle deleted successfully");
-        
-        // Clear cache to ensure fresh data on next fetch
-        this.clearCache();
-        return true;
-      } else {
-        console.error("Failed to delete vehicle:", responseData);
-        toast.error(`Failed to delete vehicle: ${responseData.message || 'Unknown error'}`);
+      } catch (error) {
+        console.error("Error updating with fallback endpoint:", error);
+        toast.error("All update methods failed");
         return false;
       }
+    } catch (error) {
+      console.error("Error in vehicle pricing update:", error);
+      toast.error("Failed to update vehicle pricing");
+      return false;
+    }
+  }
+  
+  // Update trip fares in the backend with fallback logic
+  public async updateTripFares(vehicleId: string, tripType: string, fareData: any): Promise<boolean> {
+    try {
+      if (!vehicleId || !tripType) {
+        throw new Error("Vehicle ID and trip type are required");
+      }
+      
+      console.log(`Updating ${tripType} fares for vehicle ${vehicleId}:`, fareData);
+      
+      // Clean the vehicle ID
+      const cleanVehicleId = (id: string): string => {
+        // Remove 'item-' prefix if it exists
+        if (id.startsWith('item-')) {
+          return id.substring(5);
+        }
+        return id;
+      };
+      
+      const cleanedVehicleId = cleanVehicleId(vehicleId);
+      
+      // Prepare the request data based on trip type
+      let requestData: any = {
+        vehicleId: cleanedVehicleId,
+        tripType: tripType.includes('-') ? tripType.split('-')[0] : tripType
+      };
+      
+      // Add fare specific fields based on trip type
+      if (tripType === 'outstation-one-way' || tripType === 'outstation-round-trip' || tripType === 'airport') {
+        requestData = {
+          ...requestData,
+          basePrice: parseFloat(fareData.basePrice) || 0,
+          pricePerKm: parseFloat(fareData.pricePerKm) || 0
+        };
+        
+        if (tripType === 'airport' && fareData.airportFee !== undefined) {
+          requestData.airportFee = parseFloat(fareData.airportFee) || 0;
+        }
+      } else if (tripType === 'local') {
+        requestData = {
+          ...requestData,
+          price8hrs80km: parseFloat(fareData.hr8km80Price) || 0,
+          price10hrs100km: parseFloat(fareData.hr10km100Price) || 0,
+          priceExtraKm: parseFloat(fareData.extraKmRate) || 0,
+          priceExtraHour: 0 // Default value
+        };
+      }
+      
+      console.log("Sending trip fare update request:", requestData);
+      
+      // Try first endpoint
+      try {
+        const response = await fetch('/api/admin/vehicle-pricing.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'X-Force-Refresh': 'true'
+          },
+          body: JSON.stringify(requestData)
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('API Error Response:', {
+            status: response.status,
+            statusText: response.statusText,
+            body: errorText
+          });
+          throw new Error(`API error (${response.status}): ${errorText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+          return true;
+        } else {
+          throw new Error(data.message || "Unknown API error");
+        }
+      } catch (primaryError) {
+        console.error("Error with primary endpoint:", primaryError);
+        
+        // Try fallback endpoint
+        try {
+          console.log("Trying fallback endpoint for fare update");
+          
+          // Modify request data for fallback endpoint
+          let fallbackData: any = {
+            ...requestData,
+            vehicleType: cleanedVehicleId
+          };
+          
+          // Adjust keys for the fallback endpoint
+          if (tripType === 'local') {
+            fallbackData = {
+              ...fallbackData,
+              hr8km80Price: fallbackData.price8hrs80km,
+              hr10km100Price: fallbackData.price10hrs100km,
+              extraKmRate: fallbackData.priceExtraKm
+            };
+          }
+          
+          const fallbackResponse = await fetch('/api/admin/fares-update.php', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            },
+            body: JSON.stringify(fallbackData)
+          });
+          
+          const fallbackData2 = await fallbackResponse.json();
+          
+          if (fallbackData2.status === 'success' || (typeof fallbackData2 === 'object' && fallbackData2 !== null)) {
+            return true;
+          } else {
+            throw new Error("Fallback endpoint also failed");
+          }
+        } catch (fallbackError) {
+          console.error("Error with fallback endpoint:", fallbackError);
+          throw new Error("All update methods failed");
+        }
+      }
     } catch (error: any) {
-      console.error("Error deleting vehicle:", error);
-      toast.error(`Error deleting vehicle: ${error.message || 'Unknown error'}`);
+      console.error("Error updating trip fares:", error);
+      toast.error(error.message || "Failed to update trip fares");
       return false;
     }
   }
 }
 
-// Create and export a singleton instance
+// Export singleton instance
 export const fareService = FareService.getInstance();

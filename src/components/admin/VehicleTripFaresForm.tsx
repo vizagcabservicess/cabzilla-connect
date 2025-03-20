@@ -14,13 +14,16 @@ import {
 import { toast } from "sonner";
 import { fareService } from "@/services/fareService";
 import { getVehicleTypes } from "@/services/vehicleDataService";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { CabRefreshWarning } from "@/components/cab-options/CabRefreshWarning";
 
 export const VehicleTripFaresForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [vehicles, setVehicles] = useState<{id: string, name: string}[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState("");
   const [activeTab, setActiveTab] = useState("outstation");
+  const [error, setError] = useState<string | null>(null);
   
   // Outstation fare state
   const [outstationOneWayBasePrice, setOutstationOneWayBasePrice] = useState("");
@@ -49,6 +52,7 @@ export const VehicleTripFaresForm = () => {
       } catch (error) {
         console.error("Error loading vehicles:", error);
         toast.error("Failed to load vehicles");
+        setError("Failed to load vehicle data. Please try refreshing the page.");
       }
     };
     
@@ -57,6 +61,7 @@ export const VehicleTripFaresForm = () => {
   
   const handleVehicleChange = (value: string) => {
     setSelectedVehicle(value);
+    setError(null);
   };
   
   const handleOutstationFareUpdate = async () => {
@@ -66,26 +71,45 @@ export const VehicleTripFaresForm = () => {
     }
 
     setIsLoading(true);
+    setError(null);
     
     try {
+      // Validate inputs are numeric
+      const basePrice = parseFloat(outstationOneWayBasePrice);
+      const pricePerKm = parseFloat(outstationOneWayPricePerKm);
+      const roundTripBasePrice = parseFloat(outstationRoundTripBasePrice);
+      const roundTripPricePerKm = parseFloat(outstationRoundTripPricePerKm);
+      
+      if (isNaN(basePrice) || isNaN(pricePerKm) || isNaN(roundTripBasePrice) || isNaN(roundTripPricePerKm)) {
+        throw new Error("All prices must be valid numbers");
+      }
+      
+      console.log("Updating outstation fares for vehicle:", selectedVehicle, {
+        oneWay: { basePrice, pricePerKm },
+        roundTrip: { basePrice: roundTripBasePrice, pricePerKm: roundTripPricePerKm }
+      });
+      
       // Update one-way fares
       const oneWaySuccess = await fareService.updateTripFares(selectedVehicle, "outstation-one-way", {
-        basePrice: parseFloat(outstationOneWayBasePrice) || 0,
-        pricePerKm: parseFloat(outstationOneWayPricePerKm) || 0
+        basePrice: basePrice,
+        pricePerKm: pricePerKm
       });
       
       // Update round trip fares
       const roundTripSuccess = await fareService.updateTripFares(selectedVehicle, "outstation-round-trip", {
-        basePrice: parseFloat(outstationRoundTripBasePrice) || 0,
-        pricePerKm: parseFloat(outstationRoundTripPricePerKm) || 0
+        basePrice: roundTripBasePrice,
+        pricePerKm: roundTripPricePerKm
       });
       
       if (oneWaySuccess && roundTripSuccess) {
         toast.success("Outstation fares updated successfully");
+      } else {
+        throw new Error("Failed to update one or more fare types");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating outstation fares:", error);
-      toast.error("Failed to update outstation fares");
+      toast.error(error.message || "Failed to update outstation fares");
+      setError(`Error updating outstation fares: ${error.message || "Unknown error"}`);
     } finally {
       setIsLoading(false);
     }
@@ -98,20 +122,66 @@ export const VehicleTripFaresForm = () => {
     }
 
     setIsLoading(true);
+    setError(null);
     
     try {
-      const success = await fareService.updateTripFares(selectedVehicle, "local", {
-        hr8km80Price: parseFloat(localHr8Km80) || 0,
-        hr10km100Price: parseFloat(localHr10Km100) || 0,
-        extraKmRate: parseFloat(localExtraKmRate) || 0
+      // Validate inputs are numeric
+      const hr8km80Price = parseFloat(localHr8Km80);
+      const hr10km100Price = parseFloat(localHr10Km100);
+      const extraKmRate = parseFloat(localExtraKmRate);
+      
+      if (isNaN(hr8km80Price) || isNaN(hr10km100Price) || isNaN(extraKmRate)) {
+        throw new Error("All prices must be valid numbers");
+      }
+      
+      console.log("Updating local fares for vehicle:", selectedVehicle, {
+        hr8km80Price,
+        hr10km100Price,
+        extraKmRate
       });
       
-      if (success) {
-        toast.success("Local fares updated successfully");
+      // Use a direct fetch call to the backend to troubleshoot API issues
+      const apiUrl = '/api/admin/vehicle-pricing.php';
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        },
+        body: JSON.stringify({
+          vehicleId: selectedVehicle,
+          tripType: 'local',
+          price8hrs80km: hr8km80Price,
+          price10hrs100km: hr10km100Price,
+          priceExtraKm: extraKmRate,
+          priceExtraHour: 0 // Default value
+        })
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API Error Response:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        });
+        throw new Error(`API error (${response.status}): ${errorText}`);
       }
-    } catch (error) {
+      
+      const data = await response.json();
+      console.log("API Response:", data);
+      
+      if (data.status === 'success') {
+        toast.success("Local fares updated successfully");
+      } else {
+        throw new Error(data.message || "Unknown API error");
+      }
+    } catch (error: any) {
       console.error("Error updating local fares:", error);
-      toast.error("Failed to update local fares");
+      toast.error(error.message || "Failed to update local fares");
+      setError(`Error updating local fares: ${error.message || "Unknown error"}`);
     } finally {
       setIsLoading(false);
     }
@@ -124,20 +194,39 @@ export const VehicleTripFaresForm = () => {
     }
 
     setIsLoading(true);
+    setError(null);
     
     try {
+      // Validate inputs are numeric
+      const basePrice = parseFloat(airportBasePrice);
+      const pricePerKm = parseFloat(airportPricePerKm);
+      const airportFeeValue = parseFloat(airportFee);
+      
+      if (isNaN(basePrice) || isNaN(pricePerKm) || isNaN(airportFeeValue)) {
+        throw new Error("All prices must be valid numbers");
+      }
+      
+      console.log("Updating airport fares for vehicle:", selectedVehicle, {
+        basePrice,
+        pricePerKm,
+        airportFee: airportFeeValue
+      });
+      
       const success = await fareService.updateTripFares(selectedVehicle, "airport", {
-        basePrice: parseFloat(airportBasePrice) || 0,
-        pricePerKm: parseFloat(airportPricePerKm) || 0,
-        airportFee: parseFloat(airportFee) || 0
+        basePrice: basePrice,
+        pricePerKm: pricePerKm,
+        airportFee: airportFeeValue
       });
       
       if (success) {
         toast.success("Airport fares updated successfully");
+      } else {
+        throw new Error("Failed to update airport fares");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating airport fares:", error);
-      toast.error("Failed to update airport fares");
+      toast.error(error.message || "Failed to update airport fares");
+      setError(`Error updating airport fares: ${error.message || "Unknown error"}`);
     } finally {
       setIsLoading(false);
     }
@@ -150,6 +239,13 @@ export const VehicleTripFaresForm = () => {
       </CardHeader>
       <CardContent>
         <div className="grid gap-4">
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          
           <div className="flex flex-col gap-4">
             <div>
               <label className="text-sm font-medium">Select Vehicle</label>
