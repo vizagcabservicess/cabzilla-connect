@@ -1,261 +1,333 @@
-import React, { useState, useEffect } from 'react';
-import { toast } from "sonner";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getVehicleTypes, updateVehicle, deleteVehicle } from "@/services/vehicleDataService";
-import { VehicleTripFaresForm } from './VehicleTripFaresForm';
-import { VehicleSelector } from './vehicle-forms/VehicleSelector';
-import { BasicInfoForm } from './vehicle-forms/BasicInfoForm';
-import { PricingForm } from './vehicle-forms/PricingForm';
-import { ActionButtons } from './vehicle-forms/ActionButtons';
 
-export const VehicleManagement = () => {
-  const [vehicles, setVehicles] = useState<{id: string, name: string}[]>([]);
-  const [selectedVehicle, setSelectedVehicle] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  
-  // Basic info state
-  const [name, setName] = useState("");
-  const [capacity, setCapacity] = useState("");
-  const [luggageCapacity, setLuggageCapacity] = useState("");
-  const [isActive, setIsActive] = useState(true);
-  const [description, setDescription] = useState("");
-  const [image, setImage] = useState("");
-  
-  // Pricing state
-  const [basePrice, setBasePrice] = useState("");
-  const [pricePerKm, setPricePerKm] = useState("");
-  const [nightHaltCharge, setNightHaltCharge] = useState("");
-  const [driverAllowance, setDriverAllowance] = useState("");
-  
-  // Other state
-  const [activeTab, setActiveTab] = useState("basic");
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
-  
-  useEffect(() => {
-    loadVehicles();
-  }, [refreshTrigger]);
-  
+import React, { useState, useEffect } from 'react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { 
+  Card, 
+  CardContent, 
+  CardDescription, 
+  CardHeader, 
+  CardTitle 
+} from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { toast } from "sonner";
+import { Loader2, Plus, Trash2, Edit, Car } from "lucide-react";
+import { VehicleForm } from './VehicleForm';
+import { getVehicleData, deleteVehicle } from '@/services/vehicleDataService';
+
+export function VehicleManagement() {
+  const [vehicles, setVehicles] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedVehicle, setSelectedVehicle] = useState<any>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [vehicleToDelete, setVehicleToDelete] = useState<any>(null);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showAddDialog, setShowAddDialog] = useState(false);
+
+  // Load vehicles
   const loadVehicles = async () => {
     try {
-      console.log("Loading vehicles for management UI");
-      const vehicleList = await getVehicleTypes();
-      setVehicles(vehicleList);
-      
-      console.log("Successfully loaded vehicles:", vehicleList);
-    } catch (error) {
-      console.error("Error loading vehicles:", error);
-      toast.error("Failed to load vehicles");
-    }
-  };
-  
-  const handleVehicleChange = (vehicleId: string) => {
-    setSelectedVehicle(vehicleId);
-    
-    // Find the selected vehicle in the list
-    const vehicle = vehicles.find(v => v.id === vehicleId);
-    
-    if (vehicle) {
-      // Clear previous values
-      resetForm();
-      
-      // Set basic info
-      setName(vehicle.name || "");
-      setIsActive(true); // Default to active
-      
-      // Load full vehicle details 
-      fetchVehicleDetails(vehicleId);
-    }
-  };
-  
-  const fetchVehicleDetails = async (vehicleId: string) => {
-    try {
-      setIsLoading(true);
-      
-      // For now, we're just using placeholder data until we implement the API
-      // This would typically fetch from an API endpoint
-      console.log(`Fetching details for vehicle: ${vehicleId}`);
-      
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // This is a placeholder. In a real implementation, you would fetch from an API
-      const vehicleData = {
-        capacity: 4,
-        luggageCapacity: 2,
-        isActive: true,
-        description: "Standard vehicle",
-        image: "/cars/sedan.png",
-        basePrice: 4200,
-        pricePerKm: 14,
-        nightHaltCharge: 700,
-        driverAllowance: 250
-      };
-      
-      // Set form values
-      setCapacity(String(vehicleData.capacity || ""));
-      setLuggageCapacity(String(vehicleData.luggageCapacity || ""));
-      setIsActive(Boolean(vehicleData.isActive));
-      setDescription(vehicleData.description || "");
-      setImage(vehicleData.image || "");
-      setBasePrice(String(vehicleData.basePrice || ""));
-      setPricePerKm(String(vehicleData.pricePerKm || ""));
-      setNightHaltCharge(String(vehicleData.nightHaltCharge || ""));
-      setDriverAllowance(String(vehicleData.driverAllowance || ""));
-      
-    } catch (error) {
-      console.error("Error fetching vehicle details:", error);
-      toast.error("Failed to load vehicle details");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  const resetForm = () => {
-    setName("");
-    setCapacity("");
-    setLuggageCapacity("");
-    setIsActive(true);
-    setDescription("");
-    setImage("");
-    setBasePrice("");
-    setPricePerKm("");
-    setNightHaltCharge("");
-    setDriverAllowance("");
-  };
-  
-  const handleUpdate = async () => {
-    if (!selectedVehicle) {
-      toast.error("Please select a vehicle to update");
-      return;
-    }
-    
-    setIsLoading(true);
-    
-    try {
-      const vehicleData = {
-        id: selectedVehicle,
-        vehicleId: selectedVehicle,
-        name: name,
-        capacity: parseInt(capacity) || 4,
-        luggageCapacity: parseInt(luggageCapacity) || 2,
-        isActive: isActive,
-        description: description,
-        image: image || "/cars/sedan.png",
-        basePrice: parseFloat(basePrice) || 0,
-        pricePerKm: parseFloat(pricePerKm) || 0,
-        nightHaltCharge: parseFloat(nightHaltCharge) || 0,
-        driverAllowance: parseFloat(driverAllowance) || 0
-      };
-      
-      console.log("Updating vehicle with data:", vehicleData);
-      
-      await updateVehicle(vehicleData);
-      toast.success("Vehicle updated successfully");
-      
-      // Refresh the vehicles list
-      setRefreshTrigger(prev => prev + 1);
-    } catch (error) {
-      console.error("Error updating vehicle:", error);
-      toast.error("Failed to update vehicle");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  const handleDelete = async () => {
-    if (!selectedVehicle) {
-      toast.error("Please select a vehicle to delete");
-      return;
-    }
-    
-    if (!confirm(`Are you sure you want to delete ${name}?`)) {
-      return;
-    }
-    
-    setIsLoading(true);
-    
-    try {
-      const success = await deleteVehicle(selectedVehicle);
-      
-      if (success) {
-        toast.success("Vehicle deleted successfully");
-        resetForm();
-        setSelectedVehicle("");
-        
-        // Refresh the vehicles list
-        setRefreshTrigger(prev => prev + 1);
-      } else {
-        throw new Error("Delete operation returned false");
+      setLoading(true);
+      const data = await getVehicleData(true); // Include inactive vehicles
+      if (Array.isArray(data)) {
+        setVehicles(data);
       }
     } catch (error) {
-      console.error("Error deleting vehicle:", error);
-      toast.error("Failed to delete vehicle");
+      console.error('Failed to load vehicles:', error);
+      toast.error('Failed to load vehicles');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
-  
+
+  // Refresh vehicles
+  const refreshVehicles = async () => {
+    try {
+      setRefreshing(true);
+      await loadVehicles();
+      toast.success('Vehicle list refreshed');
+    } catch (error) {
+      toast.error('Failed to refresh vehicle list');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // Handle vehicle deletion
+  const handleDeleteVehicle = async () => {
+    if (!vehicleToDelete) return;
+    
+    try {
+      const success = await deleteVehicle(vehicleToDelete.id || vehicleToDelete.vehicleId);
+      if (success) {
+        toast.success(`Vehicle "${vehicleToDelete.name}" deleted successfully`);
+        loadVehicles(); // Refresh the list
+      } else {
+        toast.error('Failed to delete vehicle');
+      }
+    } catch (error) {
+      console.error('Error deleting vehicle:', error);
+      toast.error('Failed to delete vehicle');
+    } finally {
+      setVehicleToDelete(null);
+      setShowDeleteConfirm(false);
+    }
+  };
+
+  // Load vehicles on component mount
+  useEffect(() => {
+    loadVehicles();
+  }, []);
+
   return (
-    <div className="grid gap-6">
-      <div className="flex flex-col gap-4">
-        <VehicleSelector 
-          vehicles={vehicles} 
-          selectedVehicle={selectedVehicle} 
-          onVehicleChange={handleVehicleChange} 
-        />
-        
-        <Tabs defaultValue="basic" value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="w-full">
-            <TabsTrigger value="basic" className="flex-1">Basic Info</TabsTrigger>
-            <TabsTrigger value="pricing" className="flex-1">Pricing</TabsTrigger>
-            <TabsTrigger value="fares" className="flex-1">Trip Fares</TabsTrigger>
+    <div className="space-y-4">
+      <Tabs defaultValue="list" className="w-full">
+        <div className="flex justify-between items-center mb-4">
+          <TabsList>
+            <TabsTrigger value="list">List View</TabsTrigger>
+            <TabsTrigger value="cards">Card View</TabsTrigger>
           </TabsList>
           
-          {/* Basic Info Tab */}
-          <TabsContent value="basic">
-            <BasicInfoForm 
-              name={name}
-              setName={setName}
-              capacity={capacity}
-              setCapacity={setCapacity}
-              luggageCapacity={luggageCapacity}
-              setLuggageCapacity={setLuggageCapacity}
-              isActive={isActive}
-              setIsActive={setIsActive}
-              description={description}
-              setDescription={setDescription}
-              image={image}
-              setImage={setImage}
+          <div className="flex space-x-2">
+            <Button 
+              variant="outline" 
+              onClick={refreshVehicles} 
+              disabled={refreshing}
+            >
+              {refreshing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Refresh
+            </Button>
+            
+            <Button onClick={() => setShowAddDialog(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Vehicle
+            </Button>
+          </div>
+        </div>
+
+        {/* List View */}
+        <TabsContent value="list" className="w-full">
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>ID</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Capacity</TableHead>
+                  <TableHead className="text-right">Base Price</TableHead>
+                  <TableHead className="text-right">Per KM</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="h-24 text-center">
+                      <Loader2 className="h-6 w-6 animate-spin mx-auto" />
+                      <span className="text-sm text-muted-foreground">Loading vehicles...</span>
+                    </TableCell>
+                  </TableRow>
+                ) : vehicles.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="h-24 text-center">
+                      <span className="text-sm text-muted-foreground">No vehicles found</span>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  vehicles.map((vehicle) => (
+                    <TableRow key={vehicle.id || vehicle.vehicleId}>
+                      <TableCell className="font-medium">{vehicle.id || vehicle.vehicleId}</TableCell>
+                      <TableCell>{vehicle.name}</TableCell>
+                      <TableCell>{vehicle.capacity || 0}</TableCell>
+                      <TableCell className="text-right">₹{vehicle.basePrice || vehicle.price || 0}</TableCell>
+                      <TableCell className="text-right">₹{vehicle.pricePerKm || 0}</TableCell>
+                      <TableCell>
+                        <span className={`px-2 py-1 rounded-full text-xs ${vehicle.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                          {vehicle.isActive ? 'Active' : 'Inactive'}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end space-x-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedVehicle(vehicle);
+                              setShowEditDialog(true);
+                            }}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setVehicleToDelete(vehicle);
+                              setShowDeleteConfirm(true);
+                            }}
+                            className="text-red-500 hover:text-red-700"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </TabsContent>
+
+        {/* Card View */}
+        <TabsContent value="cards">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <Loader2 className="h-10 w-10 animate-spin text-primary" />
+              <p className="mt-4 text-muted-foreground">Loading vehicles...</p>
+            </div>
+          ) : vehicles.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <Car className="h-10 w-10 text-muted-foreground" />
+              <p className="mt-4 text-muted-foreground">No vehicles found</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {vehicles.map((vehicle) => (
+                <Card key={vehicle.id || vehicle.vehicleId} className={vehicle.isActive ? "" : "opacity-70"}>
+                  <CardHeader className="pb-2">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <CardTitle>{vehicle.name}</CardTitle>
+                        <CardDescription>{vehicle.id || vehicle.vehicleId}</CardDescription>
+                      </div>
+                      <span className={`px-2 py-1 rounded-full text-xs ${vehicle.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        {vehicle.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span>Capacity:</span>
+                        <span className="font-medium">{vehicle.capacity || 0} passengers</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span>Luggage:</span>
+                        <span className="font-medium">{vehicle.luggageCapacity || 0} bags</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span>Base Price:</span>
+                        <span className="font-medium">₹{vehicle.basePrice || vehicle.price || 0}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span>Price per KM:</span>
+                        <span className="font-medium">₹{vehicle.pricePerKm || 0}</span>
+                      </div>
+                      <div className="pt-2 flex justify-end space-x-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedVehicle(vehicle);
+                            setShowEditDialog(true);
+                          }}
+                        >
+                          <Edit className="h-4 w-4 mr-1" /> Edit
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setVehicleToDelete(vehicle);
+                            setShowDeleteConfirm(true);
+                          }}
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" /> Delete
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {/* Edit Vehicle Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Vehicle</DialogTitle>
+          </DialogHeader>
+          {selectedVehicle && (
+            <VehicleForm 
+              vehicle={selectedVehicle} 
+              onSuccess={() => {
+                setShowEditDialog(false);
+                loadVehicles();
+              }}
+              isEdit={true}
             />
-          </TabsContent>
-          
-          {/* Pricing Tab */}
-          <TabsContent value="pricing">
-            <PricingForm 
-              basePrice={basePrice}
-              setBasePrice={setBasePrice}
-              pricePerKm={pricePerKm}
-              setPricePerKm={setPricePerKm}
-              nightHaltCharge={nightHaltCharge}
-              setNightHaltCharge={setNightHaltCharge}
-              driverAllowance={driverAllowance}
-              setDriverAllowance={setDriverAllowance}
-            />
-          </TabsContent>
-          
-          {/* Trip Fares Tab */}
-          <TabsContent value="fares">
-            <VehicleTripFaresForm />
-          </TabsContent>
-        </Tabs>
-        
-        <ActionButtons 
-          isLoading={isLoading}
-          selectedVehicle={selectedVehicle}
-          onDelete={handleDelete}
-          onUpdate={handleUpdate}
-        />
-      </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Vehicle Dialog */}
+      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add New Vehicle</DialogTitle>
+          </DialogHeader>
+          <VehicleForm 
+            onSuccess={() => {
+              setShowAddDialog(false);
+              loadVehicles();
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Vehicle</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{vehicleToDelete?.name}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteVehicle} className="bg-red-500 hover:bg-red-600">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
-};
+}

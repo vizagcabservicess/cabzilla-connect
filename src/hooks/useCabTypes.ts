@@ -10,6 +10,7 @@ export function useCabTypes(initialCabTypes: CabType[]) {
   const [isLoadingCabs, setIsLoadingCabs] = useState(false);
   const [isRefreshingCabs, setIsRefreshingCabs] = useState(false);
   const [refreshSuccessful, setRefreshSuccessful] = useState<boolean | null>(null);
+  const [lastRefreshTime, setLastRefreshTime] = useState<number>(0);
 
   // Load cab types initially if needed
   useEffect(() => {
@@ -20,6 +21,13 @@ export function useCabTypes(initialCabTypes: CabType[]) {
       try {
         console.log('Loading dynamic cab types...', Date.now());
         fareService.clearCache();
+        
+        // Add debounce - don't reload if we just did within the last 30 seconds
+        const now = Date.now();
+        if (now - lastRefreshTime < 30000) {
+          console.log('Skipping load - last refresh was less than 30 seconds ago');
+          return;
+        }
         
         // Remove the argument from loadCabTypes call
         const dynamicCabTypes = await loadCabTypes();
@@ -35,6 +43,7 @@ export function useCabTypes(initialCabTypes: CabType[]) {
           console.log('Processed cab types:', validCabTypes);
           setCabTypes(validCabTypes);
           setRefreshSuccessful(true);
+          setLastRefreshTime(now);
         } else {
           console.warn('API returned empty vehicle data, using initial cab types');
           setCabTypes(initialCabTypes);
@@ -51,10 +60,17 @@ export function useCabTypes(initialCabTypes: CabType[]) {
     };
     
     fetchCabTypes();
-  }, [initialCabTypes, cabTypes.length]);
+  }, [initialCabTypes, cabTypes.length, lastRefreshTime]);
 
-  // Function to refresh cab types
+  // Function to refresh cab types with debouncing
   const refreshCabTypes = useCallback(async () => {
+    // Prevent multiple refreshes in quick succession
+    const now = Date.now();
+    if (now - lastRefreshTime < 30000) {
+      toast.info('Please wait at least 30 seconds between refreshes');
+      return cabTypes;
+    }
+    
     setIsRefreshingCabs(true);
     
     try {
@@ -79,6 +95,7 @@ export function useCabTypes(initialCabTypes: CabType[]) {
         setCabTypes(validCabTypes);
         toast.success('Vehicle data refreshed successfully');
         setRefreshSuccessful(true);
+        setLastRefreshTime(now);
       } else {
         console.warn('API returned empty vehicle data on refresh');
         toast.error('No vehicle data available. Using default values.');
@@ -93,13 +110,14 @@ export function useCabTypes(initialCabTypes: CabType[]) {
     }
     
     return cabTypes;
-  }, [cabTypes]);
+  }, [cabTypes, lastRefreshTime]);
 
   return {
     cabTypes,
     isLoadingCabs,
     isRefreshingCabs,
     refreshSuccessful,
-    refreshCabTypes
+    refreshCabTypes,
+    lastRefreshTime
   };
 }
