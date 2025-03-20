@@ -6,13 +6,11 @@ export * from './cabData';
 export * from './packageData';
 export * from './tourData';
 
-// Export everything from fareCalculationService except clearFareCache
+// Export everything from fareCalculationService
 export { 
-  calculateFare 
+  calculateFare,
+  clearFareCache 
 } from './fareCalculationService';
-
-// Explicitly re-export clearFareCache from fareCalculationService to avoid ambiguity with the one from cabData
-export { clearFareCache as clearFareServiceCache } from './fareCalculationService';
 
 // Export types with the 'export type' syntax to avoid TypeScript errors
 export type { TripType, TripMode } from './tripTypes';
