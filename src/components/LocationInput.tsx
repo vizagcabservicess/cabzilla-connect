@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useGoogleMaps } from '@/providers/GoogleMapsProvider';
+import { useGoogleMaps } from '@/hooks/useGoogleMaps';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { MapPin, Loader2 } from 'lucide-react';
@@ -362,10 +362,10 @@ export function LocationInput({
                 onClick={() => handleSuggestionClick(suggestion)}
               >
                 <div className="font-medium">
-                  {suggestion.structured_formatting ? suggestion.structured_formatting.main_text : suggestion.description}
+                  {suggestion.structured_formatting?.main_text || suggestion.description}
                 </div>
                 <div className="text-sm text-gray-500">
-                  {suggestion.structured_formatting ? suggestion.structured_formatting.secondary_text : ''}
+                  {suggestion.structured_formatting?.secondary_text || ''}
                 </div>
               </div>
             ))}
