@@ -51,24 +51,29 @@ export function initializePlacesService(
 }
 
 /**
- * Creates a request options object for Places autocomplete
+ * Creates a request options object for Places autocomplete with much broader search parameters
  */
 export function createAutocompleteRequest(
   query: string,
   bounds?: google.maps.LatLngBounds,
   options?: { country?: string; vizagOnly?: boolean }
 ): google.maps.places.AutocompletionRequest {
+  // Create a very permissive request that will return more results
   const requestOptions: google.maps.places.AutocompletionRequest = {
     input: query,
-    componentRestrictions: { country: options?.country || 'in' },
-    // Using the broadest set of types for more results
-    types: ['geocode', 'establishment', 'address', 'regions', 'cities', '(regions)']
+    // Only restrict by country, not by specific types to get more results
+    types: ['establishment', 'geocode', 'address', '(cities)', '(regions)']
   };
   
+  // Add country restriction only if specifically requested
+  if (options?.country) {
+    requestOptions.componentRestrictions = { country: options.country };
+  }
+  
+  // If bounds are provided, use them but don't enforce strict bounds
   if (bounds) {
     requestOptions.bounds = bounds;
-    
-    // Always setting strictBounds to false to expand search area
+    // Force strictBounds to false to get more results
     (requestOptions as any).strictBounds = false;
   }
   

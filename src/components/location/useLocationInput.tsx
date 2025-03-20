@@ -34,6 +34,7 @@ export function useLocationInput(
     vizagOnly: isPickupLocation // Only restrict to Vizag for pickup locations
   });
 
+  // Update input value when value changes from parent
   useEffect(() => {
     if (value) {
       const newInputValue = getInitialInputValue(value);
@@ -44,8 +45,9 @@ export function useLocationInput(
       // Clear the input value if value is null or undefined
       setInputValue('');
     }
-  }, [value, inputValue]);
+  }, [value]);
 
+  // Force initialization of Places API when needed
   useEffect(() => {
     if (isLoaded && google && !isAutocompleteInitialized) {
       console.log("Forcing Places initialization in LocationInput");
@@ -59,8 +61,10 @@ export function useLocationInput(
     setSuggestions([]);
     setLocalSuggestions([]);
     setShowSuggestions(false);
+    console.log("Input value cleared");
   }, []);
 
+  // Handle input change
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setInputValue(value);
@@ -75,6 +79,7 @@ export function useLocationInput(
     setIsLoading(true);
     setSearchAttempts(prev => prev + 1);
     
+    // Check if we can use Google Places API
     const useGoogle = isLoaded && google && (placesInitialized || isAutocompleteInitialized);
     
     if (useGoogle) {
@@ -84,10 +89,10 @@ export function useLocationInput(
         let bounds;
         
         if (isPickupLocation) {
-          // For pickup locations, set a wider radius around Visakhapatnam (approximately 50km)
+          // For pickup locations, set a much wider radius around Visakhapatnam (approximately 100km)
           bounds = new google.maps.LatLngBounds(
-            new google.maps.LatLng(17.3615, 82.8315), // SW corner - expanded
-            new google.maps.LatLng(18.1815, 83.6115)  // NE corner - expanded
+            new google.maps.LatLng(17.1, 82.5), // SW corner - greatly expanded
+            new google.maps.LatLng(18.3, 83.9)  // NE corner - greatly expanded
           );
         } else {
           // For drop locations, use all of India (very wide area)
@@ -126,6 +131,7 @@ export function useLocationInput(
     }
   }, [google, isLoaded, isPickupLocation, placesInitialized, isAutocompleteInitialized, getPlacePredictions]);
 
+  // Fallback to local search when Google search fails
   const fallbackToLocalSearch = useCallback((query: string) => {
     const localResults = searchLocations(query, isPickupLocation);
     console.log(`Using fallback location search: found ${localResults.length} results`);
@@ -135,6 +141,7 @@ export function useLocationInput(
     setIsLoading(false);
   }, [isPickupLocation]);
 
+  // Handle Google suggestion click
   const handleSuggestionClick = useCallback(async (suggestion: google.maps.places.AutocompletePrediction) => {
     setInputValue(suggestion.description);
     setShowSuggestions(false);
@@ -205,6 +212,7 @@ export function useLocationInput(
     }
   }, [getPlaceDetails, onLocationChange, isPickupLocation]);
 
+  // Handle local suggestion click
   const handleLocalSuggestionClick = useCallback((location: Location) => {
     setInputValue(location.name || location.address);
     setShowSuggestions(false);
@@ -220,6 +228,7 @@ export function useLocationInput(
     onLocationChange(location);
   }, [onLocationChange, isPickupLocation]);
 
+  // Handle input focus
   const handleInputFocus = useCallback(() => {
     if (inputValue.trim()) {
       setShowSuggestions(true);
@@ -232,6 +241,7 @@ export function useLocationInput(
     }
   }, [inputValue, suggestions, localSuggestions, handleInputChange]);
 
+  // Try local search if no suggestions found
   useEffect(() => {
     if (searchAttempts > 0 && inputValue && !suggestions.length && !localSuggestions.length && !isLoading) {
       console.log("No suggestions found after search attempt, trying local search");

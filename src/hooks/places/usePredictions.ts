@@ -19,6 +19,7 @@ export function usePredictions(
     bounds?: google.maps.LatLngBounds,
     options?: { country?: string; vizagOnly?: boolean }
   ): Promise<google.maps.places.AutocompletePrediction[]> => {
+    // Don't search if the query is empty
     if (!query?.trim()) {
       setSuggestions([]);
       setIsLoading(false);
@@ -26,6 +27,7 @@ export function usePredictions(
     }
     
     return new Promise((resolve, reject) => {
+      // Clear any existing timer to avoid multiple simultaneous requests
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
       }
@@ -50,9 +52,8 @@ export function usePredictions(
           return;
         }
         
+        // Create a request with all necessary options
         const requestOptions = createAutocompleteRequest(query, bounds, options);
-        // Always turn off strictBounds for more results
-        (requestOptions as any).strictBounds = false;
         
         try {
           console.log("Making Places autocomplete request:", query);
@@ -62,50 +63,26 @@ export function usePredictions(
               setIsLoading(false);
               
               if (status === google.maps.places.PlacesServiceStatus.OK && results && results.length > 0) {
-                console.log("Autocomplete results:", results.length);
+                console.log(`Found ${results.length} matches for "${query}"`);
                 setSuggestions(results);
                 resolve(results);
-              } else if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
-                console.log("No autocomplete results found, trying without restrictions");
+              } else {
+                console.log(`No results found for "${query}", trying broader search`);
                 
-                // Try without bounds and with broader types
+                // Try a much broader search without any restrictions
                 const broadRequest = {
                   input: query,
-                  componentRestrictions: { country: options?.country || 'in' },
-                  types: ['geocode', 'establishment', 'address', 'regions', 'cities']
                 };
                 
                 autocompleteServiceRef.current?.getPlacePredictions(
                   broadRequest,
                   (broadResults, broadStatus) => {
                     if (broadStatus === google.maps.places.PlacesServiceStatus.OK && broadResults && broadResults.length > 0) {
-                      console.log("Broader search results:", broadResults.length);
+                      console.log(`Broader search found ${broadResults.length} results`);
                       setSuggestions(broadResults);
                       resolve(broadResults);
                     } else {
-                      console.log("All searches returned zero results");
-                      setSuggestions([]);
-                      resolve([]);
-                    }
-                  }
-                );
-              } else {
-                console.error("Autocomplete request failed:", status);
-                
-                // Try one more time with minimal restrictions
-                const fallbackRequest = {
-                  input: query
-                };
-                
-                autocompleteServiceRef.current?.getPlacePredictions(
-                  fallbackRequest,
-                  (fallbackResults, fallbackStatus) => {
-                    if (fallbackStatus === google.maps.places.PlacesServiceStatus.OK && fallbackResults && fallbackResults.length > 0) {
-                      console.log("Fallback search results:", fallbackResults.length);
-                      setSuggestions(fallbackResults);
-                      resolve(fallbackResults);
-                    } else {
-                      console.log("All searches failed:", fallbackStatus);
+                      console.log("No results found in broader search either");
                       setSuggestions([]);
                       resolve([]);
                     }

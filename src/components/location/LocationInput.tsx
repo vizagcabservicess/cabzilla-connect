@@ -53,11 +53,20 @@ export function LocationInput({
     };
   }, [setShowSuggestions]);
 
+  // Function to clear input and notify parent
   const handleClearInput = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    
+    // Clear the input value
     resetInputValue();
-    onLocationChange(null as any); // Clear the parent component's state too
+    
+    // Explicitly notify parent component that location has been cleared
+    if (onLocationChange) {
+      onLocationChange(null as any);
+    }
+    
+    // Focus input after clearing
     if (inputRef.current) {
       inputRef.current.focus();
     }
@@ -93,8 +102,8 @@ export function LocationInput({
               type="button"
               variant="ghost"
               size="icon"
-              className="absolute right-10 top-1/2 transform -translate-y-1/2 h-6 w-6"
               onClick={handleClearInput}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 h-6 w-6"
               aria-label="Clear input"
             >
               <X className="h-4 w-4 text-gray-400" />
@@ -102,7 +111,7 @@ export function LocationInput({
           )}
           
           {isLoading && (
-            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+            <div className="absolute right-10 top-1/2 transform -translate-y-1/2">
               <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
             </div>
           )}

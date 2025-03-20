@@ -1,11 +1,7 @@
-
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useEffect, useCallback, useState } from "react";
-import { useToast } from "@/components/ui/use-toast";
+import { useEffect, useCallback, useState, useRef } from "react";
 import { toast } from "sonner";
-import { reloadCabTypes } from "@/lib/cabData";
-import { fareService } from "@/services/fareService";
 
 interface TabTripSelectorProps {
   selectedTab: 'outstation' | 'local' | 'airport' | 'tour';
@@ -20,57 +16,49 @@ export function TabTripSelector({
   onTabChange, 
   onTripModeChange 
 }: TabTripSelectorProps) {
-  const { toast } = useToast();
   const [prevTab, setPrevTab] = useState<string | null>(null);
-  const [isClearing, setIsClearing] = useState(false);
-  
-  // Function to clear form state without excessive operations
-  const clearFormState = useCallback(() => {
-    if (isClearing) return; // Prevent multiple simultaneous clearing operations
-    
-    setIsClearing(true);
-    console.log("Clearing form state for tab change");
-    
-    // Clear key session storage items
-    sessionStorage.removeItem('dropLocation');
-    sessionStorage.removeItem('pickupLocation');
-    sessionStorage.removeItem('selectedCab');
-    
-    // Store current trip type in sessionStorage
+  const isClearing = useRef(false);
+
+  const updateSessionStorage = useCallback(() => {
     sessionStorage.setItem('tripType', selectedTab);
     sessionStorage.setItem('tripMode', tripMode);
-    
-    // Allow clearing to happen again after a short delay
-    setTimeout(() => setIsClearing(false), 300);
-  }, [selectedTab, tripMode, isClearing]);
+  }, [selectedTab, tripMode]);
   
-  // Clear form state when tab changes
   useEffect(() => {
-    if (prevTab !== selectedTab) {
-      clearFormState();
-      setPrevTab(selectedTab);
-      
-      // Notify user of tab change with toast
-      const tabNames = {
-        'outstation': 'Outstation Trip',
-        'local': 'Local Hourly Rental',
-        'airport': 'Airport Transfer',
-        'tour': 'Tour Package'
-      };
-      
-      toast({
-        title: `Switched to ${tabNames[selectedTab]}`,
-        description: "Previous selections have been reset.",
-        duration: 3000,
-      });
+    if (prevTab !== selectedTab && prevTab !== null) {
+      if (!isClearing.current) {
+        isClearing.current = true;
+        
+        sessionStorage.removeItem('dropLocation');
+        sessionStorage.removeItem('pickupLocation');
+        sessionStorage.removeItem('selectedCab');
+        
+        updateSessionStorage();
+        
+        const tabNames = {
+          'outstation': 'Outstation Trip',
+          'local': 'Local Hourly Rental',
+          'airport': 'Airport Transfer',
+          'tour': 'Tour Package'
+        };
+        
+        toast({
+          title: `Switched to ${tabNames[selectedTab]}`,
+          description: "Previous selections have been reset.",
+          duration: 3000,
+        });
+        
+        setTimeout(() => {
+          isClearing.current = false;
+        }, 300);
+      }
     }
-  }, [selectedTab, toast, clearFormState, prevTab]);
+    
+    setPrevTab(selectedTab);
+  }, [selectedTab, updateSessionStorage]);
   
-  // Function to handle tab change
   const handleTabChange = (value: string) => {
-    // Only perform a full reset when changing to a different tab
-    if (value !== selectedTab) {
-      // This will trigger the useEffect above
+    if (value !== selectedTab && !isClearing.current) {
       onTabChange(value as 'outstation' | 'local' | 'airport' | 'tour');
     }
   };
