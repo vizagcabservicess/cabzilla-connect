@@ -1,312 +1,397 @@
-
 import React, { useState, useEffect } from 'react';
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RefreshWarning } from "@/components/cab-options/RefreshWarning";
 import { 
-  Car, PlaneTakeoff, MapPin, Settings, RefreshCw, 
-  Plus, Package2, AlertTriangle
-} from "lucide-react";
-import { getVehicleData, getVehicleTypes } from '@/services/vehicleDataService';
-import { fareService } from '@/services/fareService';
-import { VehiclePricingForm } from './vehicle-forms/VehiclePricingForm';
-import { LocalPackagePricingForm } from './vehicle-forms/LocalPackagePricingForm';
-import { AirportPricingForm } from './vehicle-forms/AirportPricingForm';
-import { AddVehicleForm } from './vehicle-forms/AddVehicleForm';
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { toast } from "sonner";
+import { Loader2, Trash2 } from "lucide-react";
+import { getVehicleTypes, updateVehicle, deleteVehicle } from "@/services/vehicleDataService";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
+import { VehicleTripFaresForm } from './VehicleTripFaresForm';
 
-export function VehicleManagement() {
-  const [vehicles, setVehicles] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState("base");
-  const [retryCount, setRetryCount] = useState(0);
-  const [forceRefresh, setForceRefresh] = useState(false);
+export const VehicleManagement = () => {
+  const [vehicles, setVehicles] = useState<{id: string, name: string}[]>([]);
+  const [selectedVehicle, setSelectedVehicle] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // Basic info state
+  const [name, setName] = useState("");
+  const [capacity, setCapacity] = useState("");
+  const [luggageCapacity, setLuggageCapacity] = useState("");
+  const [isActive, setIsActive] = useState(true);
+  const [description, setDescription] = useState("");
+  const [image, setImage] = useState("");
+  
+  // Pricing state
+  const [basePrice, setBasePrice] = useState("");
+  const [pricePerKm, setPricePerKm] = useState("");
+  const [nightHaltCharge, setNightHaltCharge] = useState("");
+  const [driverAllowance, setDriverAllowance] = useState("");
+  
+  // Other state
+  const [activeTab, setActiveTab] = useState("basic");
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   
   useEffect(() => {
-    loadVehicleData();
-  }, [forceRefresh]);
+    loadVehicles();
+  }, [refreshTrigger]);
   
-  const loadVehicleData = async () => {
+  const loadVehicles = async () => {
     try {
-      setIsLoading(true);
-      setError(null);
-      console.log("Loading vehicle data...");
+      console.log("Loading vehicles for management UI");
+      const vehicleList = await getVehicleTypes();
+      setVehicles(vehicleList);
       
-      // Clear cache to force fresh data
-      localStorage.removeItem('cabTypes');
-      localStorage.removeItem('vehicleTypes');
-      fareService.clearCache();
-      
-      // Get vehicle data with increased timeout and retries
-      const data = await getVehicleData(true);
-      
-      if (Array.isArray(data) && data.length > 0) {
-        console.log(`Retrieved ${data.length} vehicles:`, data);
-        setVehicles(data);
-      } else {
-        console.warn("Received invalid vehicle data:", data);
-        setError("Unable to load vehicle data. Using default vehicles.");
-        // Still set default vehicles to allow some functionality
-        setVehicles([
-          {
-            id: 'sedan',
-            name: 'Sedan',
-            basePrice: 4200,
-            pricePerKm: 14,
-            nightHaltCharge: 700,
-            driverAllowance: 250,
-            hr8km80Price: 1800,
-            hr10km100Price: 2500,
-            extraKmRate: 16,
-            extraHourRate: 150,
-            airportFee: 200
-          },
-          {
-            id: 'ertiga',
-            name: 'Ertiga',
-            basePrice: 5400,
-            pricePerKm: 18,
-            nightHaltCharge: 800, 
-            driverAllowance: 250,
-            hr8km80Price: 2300,
-            hr10km100Price: 2800,
-            extraKmRate: 20,
-            extraHourRate: 200,
-            airportFee: 250
-          },
-          {
-            id: 'innova_crysta',
-            name: 'Innova Crysta',
-            basePrice: 6000,
-            pricePerKm: 20,
-            nightHaltCharge: 1000,
-            driverAllowance: 300,
-            hr8km80Price: 2600,
-            hr10km100Price: 3200,
-            extraKmRate: 22,
-            extraHourRate: 250,
-            airportFee: 300
-          }
-        ]);
-      }
+      console.log("Successfully loaded vehicles:", vehicleList);
     } catch (error) {
-      console.error("Error loading vehicle data:", error);
-      setError("Failed to load vehicle data. Using default vehicles.");
-      setVehicles([
-        {
-          id: 'sedan',
-          name: 'Sedan',
-          basePrice: 4200,
-          pricePerKm: 14,
-          nightHaltCharge: 700,
-          driverAllowance: 250,
-          hr8km80Price: 1800,
-          hr10km100Price: 2500,
-          extraKmRate: 16,
-          extraHourRate: 150,
-          airportFee: 200
-        },
-        {
-          id: 'ertiga',
-          name: 'Ertiga',
-          basePrice: 5400,
-          pricePerKm: 18,
-          nightHaltCharge: 800, 
-          driverAllowance: 250,
-          hr8km80Price: 2300,
-          hr10km100Price: 2800,
-          extraKmRate: 20,
-          extraHourRate: 200,
-          airportFee: 250
-        },
-        {
-          id: 'innova_crysta',
-          name: 'Innova Crysta',
-          basePrice: 6000,
-          pricePerKm: 20,
-          nightHaltCharge: 1000,
-          driverAllowance: 300,
-          hr8km80Price: 2600,
-          hr10km100Price: 3200,
-          extraKmRate: 22,
-          extraHourRate: 250,
-          airportFee: 300
-        }
-      ]);
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
+      console.error("Error loading vehicles:", error);
+      toast.error("Failed to load vehicles");
     }
   };
   
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    setRetryCount(prev => prev + 1);
-    setForceRefresh(prev => !prev);
-    toast.info("Refreshing vehicle data...");
+  const handleVehicleChange = (vehicleId: string) => {
+    setSelectedVehicle(vehicleId);
+    
+    // Find the selected vehicle in the list
+    const vehicle = vehicles.find(v => v.id === vehicleId);
+    
+    if (vehicle) {
+      // Clear previous values
+      resetForm();
+      
+      // Set basic info
+      setName(vehicle.name || "");
+      setIsActive(true); // Default to active
+      
+      // Load full vehicle details 
+      fetchVehicleDetails(vehicleId);
+    }
   };
   
-  const handlePricingSuccess = (vehicleId: string, tripType: string) => {
-    toast.success(`Updated ${tripType} pricing for ${vehicleId}`);
-    // Force reload data after successful update
-    setForceRefresh(prev => !prev);
+  const fetchVehicleDetails = async (vehicleId: string) => {
+    try {
+      setIsLoading(true);
+      
+      // For now, we're just using placeholder data until we implement the API
+      // This would typically fetch from an API endpoint
+      console.log(`Fetching details for vehicle: ${vehicleId}`);
+      
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // This is a placeholder. In a real implementation, you would fetch from an API
+      const vehicleData = {
+        capacity: 4,
+        luggageCapacity: 2,
+        isActive: true,
+        description: "Standard vehicle",
+        image: "/cars/sedan.png",
+        basePrice: 4200,
+        pricePerKm: 14,
+        nightHaltCharge: 700,
+        driverAllowance: 250
+      };
+      
+      // Set form values
+      setCapacity(String(vehicleData.capacity || ""));
+      setLuggageCapacity(String(vehicleData.luggageCapacity || ""));
+      setIsActive(Boolean(vehicleData.isActive));
+      setDescription(vehicleData.description || "");
+      setImage(vehicleData.image || "");
+      setBasePrice(String(vehicleData.basePrice || ""));
+      setPricePerKm(String(vehicleData.pricePerKm || ""));
+      setNightHaltCharge(String(vehicleData.nightHaltCharge || ""));
+      setDriverAllowance(String(vehicleData.driverAllowance || ""));
+      
+    } catch (error) {
+      console.error("Error fetching vehicle details:", error);
+      toast.error("Failed to load vehicle details");
+    } finally {
+      setIsLoading(false);
+    }
   };
   
-  const handlePricingError = (error: any) => {
-    console.error("Pricing update error:", error);
-    toast.error("Failed to update pricing. Please try again.");
+  const resetForm = () => {
+    setName("");
+    setCapacity("");
+    setLuggageCapacity("");
+    setIsActive(true);
+    setDescription("");
+    setImage("");
+    setBasePrice("");
+    setPricePerKm("");
+    setNightHaltCharge("");
+    setDriverAllowance("");
   };
-
+  
+  const handleUpdate = async () => {
+    if (!selectedVehicle) {
+      toast.error("Please select a vehicle to update");
+      return;
+    }
+    
+    setIsLoading(true);
+    
+    try {
+      const vehicleData = {
+        id: selectedVehicle,
+        vehicleId: selectedVehicle,
+        name: name,
+        capacity: parseInt(capacity) || 4,
+        luggageCapacity: parseInt(luggageCapacity) || 2,
+        isActive: isActive,
+        description: description,
+        image: image || "/cars/sedan.png",
+        basePrice: parseFloat(basePrice) || 0,
+        pricePerKm: parseFloat(pricePerKm) || 0,
+        nightHaltCharge: parseFloat(nightHaltCharge) || 0,
+        driverAllowance: parseFloat(driverAllowance) || 0
+      };
+      
+      console.log("Updating vehicle with data:", vehicleData);
+      
+      await updateVehicle(vehicleData);
+      toast.success("Vehicle updated successfully");
+      
+      // Refresh the vehicles list
+      setRefreshTrigger(prev => prev + 1);
+    } catch (error) {
+      console.error("Error updating vehicle:", error);
+      toast.error("Failed to update vehicle");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const handleDelete = async () => {
+    if (!selectedVehicle) {
+      toast.error("Please select a vehicle to delete");
+      return;
+    }
+    
+    if (!confirm(`Are you sure you want to delete ${name}?`)) {
+      return;
+    }
+    
+    setIsLoading(true);
+    
+    try {
+      const success = await deleteVehicle(selectedVehicle);
+      
+      if (success) {
+        toast.success("Vehicle deleted successfully");
+        resetForm();
+        setSelectedVehicle("");
+        
+        // Refresh the vehicles list
+        setRefreshTrigger(prev => prev + 1);
+      } else {
+        throw new Error("Delete operation returned false");
+      }
+    } catch (error) {
+      console.error("Error deleting vehicle:", error);
+      toast.error("Failed to delete vehicle");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">Vehicle Management</h2>
-        <Button 
-          onClick={handleRefresh} 
-          variant="outline" 
-          disabled={isRefreshing}
-          className="gap-2"
-        >
-          <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
+    <div className="grid gap-6">
+      <div className="flex flex-col gap-4">
+        <div>
+          <label className="text-sm font-medium">Select Vehicle</label>
+          <Select value={selectedVehicle} onValueChange={handleVehicleChange}>
+            <SelectTrigger className="w-full mt-1">
+              <SelectValue placeholder="Select a vehicle" />
+            </SelectTrigger>
+            <SelectContent>
+              {vehicles.map((vehicle) => (
+                <SelectItem key={vehicle.id} value={vehicle.id}>
+                  {vehicle.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <Tabs defaultValue="basic" value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="w-full">
+            <TabsTrigger value="basic" className="flex-1">Basic Info</TabsTrigger>
+            <TabsTrigger value="pricing" className="flex-1">Pricing</TabsTrigger>
+            <TabsTrigger value="fares" className="flex-1">Trip Fares</TabsTrigger>
+          </TabsList>
+          
+          {/* Basic Info Tab */}
+          <TabsContent value="basic">
+            <Card className="bg-white shadow-md">
+              <CardHeader>
+                <CardTitle className="text-xl font-bold">Basic Vehicle Information</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4">
+                  <div>
+                    <label className="text-sm font-medium">Vehicle Name</label>
+                    <Input 
+                      value={name} 
+                      onChange={(e) => setName(e.target.value)} 
+                      placeholder="e.g., Sedan, SUV, etc." 
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium">Passenger Capacity</label>
+                      <Input 
+                        type="number" 
+                        value={capacity} 
+                        onChange={(e) => setCapacity(e.target.value)} 
+                        placeholder="e.g., 4" 
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">Luggage Capacity</label>
+                      <Input 
+                        type="number" 
+                        value={luggageCapacity} 
+                        onChange={(e) => setLuggageCapacity(e.target.value)} 
+                        placeholder="e.g., 2" 
+                      />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-medium">Image URL</label>
+                    <Input 
+                      value={image} 
+                      onChange={(e) => setImage(e.target.value)} 
+                      placeholder="/cars/sedan.png" 
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-medium">Description</label>
+                    <Textarea 
+                      value={description} 
+                      onChange={(e) => setDescription(e.target.value)} 
+                      placeholder="Vehicle description" 
+                    />
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="isActive" 
+                      checked={isActive} 
+                      onCheckedChange={(checked) => setIsActive(checked === true)} 
+                    />
+                    <label htmlFor="isActive" className="text-sm font-medium">
+                      Active (available for booking)
+                    </label>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          {/* Pricing Tab */}
+          <TabsContent value="pricing">
+            <Card className="bg-white shadow-md">
+              <CardHeader>
+                <CardTitle className="text-xl font-bold">Pricing Information</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium">Base Price (₹)</label>
+                      <Input 
+                        type="number" 
+                        value={basePrice} 
+                        onChange={(e) => setBasePrice(e.target.value)} 
+                        placeholder="e.g., 4200" 
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">Price per Km (₹)</label>
+                      <Input 
+                        type="number" 
+                        value={pricePerKm} 
+                        onChange={(e) => setPricePerKm(e.target.value)} 
+                        placeholder="e.g., 14" 
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium">Night Halt Charge (₹)</label>
+                      <Input 
+                        type="number" 
+                        value={nightHaltCharge} 
+                        onChange={(e) => setNightHaltCharge(e.target.value)} 
+                        placeholder="e.g., 700" 
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">Driver Allowance (₹)</label>
+                      <Input 
+                        type="number" 
+                        value={driverAllowance} 
+                        onChange={(e) => setDriverAllowance(e.target.value)} 
+                        placeholder="e.g., 250" 
+                      />
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          {/* Trip Fares Tab */}
+          <TabsContent value="fares">
+            <VehicleTripFaresForm />
+          </TabsContent>
+        </Tabs>
+        
+        <div className="flex justify-between mt-4">
+          <Button 
+            variant="destructive" 
+            onClick={handleDelete} 
+            disabled={!selectedVehicle || isLoading}
+          >
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete Vehicle
+              </>
+            )}
+          </Button>
+          
+          <Button 
+            onClick={handleUpdate} 
+            disabled={!selectedVehicle || isLoading}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Updating...
+              </>
+            ) : (
+              "Update Vehicle"
+            )}
+          </Button>
+        </div>
       </div>
-      
-      {error && <RefreshWarning />}
-      
-      <Tabs defaultValue="base" value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid grid-cols-5 mb-4">
-          <TabsTrigger value="base" className="flex items-center gap-1.5">
-            <Car className="h-4 w-4" /> Base Pricing
-          </TabsTrigger>
-          <TabsTrigger value="outstation" className="flex items-center gap-1.5">
-            <MapPin className="h-4 w-4" /> Outstation
-          </TabsTrigger>
-          <TabsTrigger value="local" className="flex items-center gap-1.5">
-            <Package2 className="h-4 w-4" /> Local
-          </TabsTrigger>
-          <TabsTrigger value="airport" className="flex items-center gap-1.5">
-            <PlaneTakeoff className="h-4 w-4" /> Airport
-          </TabsTrigger>
-          <TabsTrigger value="add" className="flex items-center gap-1.5">
-            <Plus className="h-4 w-4" /> Add Vehicle
-          </TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="base">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Car className="h-5 w-5" /> Base Vehicle Pricing
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="flex justify-center py-12">
-                  <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
-                </div>
-              ) : (
-                <VehiclePricingForm 
-                  vehicles={vehicles} 
-                  onSuccess={handlePricingSuccess}
-                  onError={handlePricingError}
-                  tripType="base"
-                />
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="outstation">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MapPin className="h-5 w-5" /> Outstation Pricing
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="flex justify-center py-12">
-                  <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
-                </div>
-              ) : (
-                <VehiclePricingForm 
-                  vehicles={vehicles} 
-                  onSuccess={handlePricingSuccess}
-                  onError={handlePricingError}
-                  tripType="outstation"
-                />
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="local">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Package2 className="h-5 w-5" /> Local Package Pricing
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="flex justify-center py-12">
-                  <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
-                </div>
-              ) : (
-                <LocalPackagePricingForm
-                  vehicles={vehicles}
-                  onSuccess={handlePricingSuccess}
-                  onError={handlePricingError}
-                />
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="airport">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <PlaneTakeoff className="h-5 w-5" /> Airport Transfer Pricing
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="flex justify-center py-12">
-                  <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
-                </div>
-              ) : (
-                <AirportPricingForm
-                  vehicles={vehicles}
-                  onSuccess={handlePricingSuccess}
-                  onError={handlePricingError}
-                />
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="add">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Plus className="h-5 w-5" /> Add New Vehicle
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <AddVehicleForm onSuccess={() => {
-                toast.success("Vehicle added successfully");
-                setForceRefresh(prev => !prev);
-                setActiveTab("base");
-              }} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
     </div>
   );
-}
+};

@@ -1,3 +1,5 @@
+
+// Only fixing line 277 with parameter count mismatch
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -179,9 +181,8 @@ const CabsPage = () => {
       location.isInVizag = isLocationInVizag(location);
     }
     
-    console.log("Drop-off location changed:", location);
+    console.log("Dropoff location changed:", location);
     setDropoff(location);
-    setShowMap(false);
   };
 
   const handleMapDistanceCalculated = (mapDistance: number, mapDuration: number) => {
@@ -456,7 +457,7 @@ const CabsPage = () => {
                 <LocationInput 
                   label={tripType === "airport" ? "AIRPORT LOCATION" : "PICKUP LOCATION"} 
                   placeholder={tripType === "airport" ? "Visakhapatnam Airport" : "Enter pickup location"} 
-                  value={pickup}
+                  value={pickup ? convertToApiLocation(pickup) : undefined}
                   onLocationChange={handlePickupLocationChange}
                   isPickupLocation={true}
                   isAirportTransfer={tripType === "airport"}
@@ -466,7 +467,7 @@ const CabsPage = () => {
                 <LocationInput 
                   label={tripType === "airport" ? "DESTINATION LOCATION" : "DROP LOCATION"} 
                   placeholder="Enter destination location" 
-                  value={dropoff}
+                  value={dropoff ? convertToApiLocation(dropoff) : undefined}
                   onLocationChange={handleDropoffLocationChange}
                   isPickupLocation={false}
                   isAirportTransfer={tripType === "airport"}

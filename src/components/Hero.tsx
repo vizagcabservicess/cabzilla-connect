@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { LocationInput } from './LocationInput';
 import { DateTimePicker } from './DateTimePicker';
@@ -435,7 +436,7 @@ export function Hero() {
                   <LocationInput
                     label="PICKUP LOCATION"
                     placeholder="Enter pickup location"
-                    value={pickupLocation}
+                    value={pickupLocation ? convertToApiLocation(pickupLocation) : undefined}
                     onLocationChange={handlePickupLocationChange}
                     isPickupLocation={true}
                     isAirportTransfer={tripType === 'airport'}
@@ -445,7 +446,7 @@ export function Hero() {
                     <LocationInput
                       label="DROP LOCATION"
                       placeholder="Enter drop location"
-                      value={dropLocation}
+                      value={dropLocation ? convertToApiLocation(dropLocation) : undefined}
                       onLocationChange={handleDropLocationChange}
                       isPickupLocation={false}
                       isAirportTransfer={tripType === 'airport'}

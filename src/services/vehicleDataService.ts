@@ -1,22 +1,9 @@
-
 import axios from 'axios';
-import { toast } from 'sonner';
 import { CabType } from '@/types/cab';
+import { toast } from 'sonner';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-const API_VERSION = import.meta.env.VITE_API_VERSION || '1.0.0';
-const MAX_RETRIES = 3;
-const RETRY_DELAY = 1000; // 1 second
-
-// Global cache to prevent excessive API calls
-const vehicleCache = {
-  timestamp: 0,
-  data: [] as any[],
-  expiresIn: 2 * 60 * 1000, // 2 minutes cache validity (reduced for more frequent refreshes)
-};
-
-// Default vehicles as fallback
-const defaultVehicles = [
+// Default fallback values in case of API failure
+const defaultVehicles: CabType[] = [
   {
     id: 'sedan',
     name: 'Sedan',
@@ -24,13 +11,13 @@ const defaultVehicles = [
     luggageCapacity: 2,
     price: 4200,
     pricePerKm: 14,
+    image: '/cars/sedan.png',
+    amenities: ['AC', 'Bottle Water', 'Music System'],
+    description: 'Comfortable sedan suitable for 4 passengers.',
+    ac: true,
     nightHaltCharge: 700,
     driverAllowance: 250,
-    hr8km80Price: 1800,
-    hr10km100Price: 2500,
-    extraKmRate: 16,
-    extraHourRate: 150,
-    airportFee: 200
+    isActive: true
   },
   {
     id: 'ertiga',
@@ -39,13 +26,13 @@ const defaultVehicles = [
     luggageCapacity: 3,
     price: 5400,
     pricePerKm: 18,
-    nightHaltCharge: 800, 
+    image: '/cars/ertiga.png',
+    amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
+    description: 'Spacious SUV suitable for 6 passengers.',
+    ac: true,
+    nightHaltCharge: 1000,
     driverAllowance: 250,
-    hr8km80Price: 2300,
-    hr10km100Price: 2800,
-    extraKmRate: 20,
-    extraHourRate: 200,
-    airportFee: 250
+    isActive: true
   },
   {
     id: 'innova_crysta',
@@ -54,125 +41,432 @@ const defaultVehicles = [
     luggageCapacity: 4,
     price: 6000,
     pricePerKm: 20,
+    image: '/cars/innova.png',
+    amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
+    description: 'Premium SUV with ample space for 7 passengers.',
+    ac: true,
     nightHaltCharge: 1000,
-    driverAllowance: 300,
-    hr8km80Price: 2600,
-    hr10km100Price: 3200,
-    extraKmRate: 22,
-    extraHourRate: 250,
-    airportFee: 300
+    driverAllowance: 250,
+    isActive: true
   }
 ];
 
-// Helper function to add delay
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+// Base API URL and version
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+const apiVersion = import.meta.env.VITE_API_VERSION || '1.0.0';
 
-// Array of potential API endpoints to try
-const vehicleEndpoints = [
-  // Primary endpoints
-  (timestamp: number) => `${API_BASE_URL}/api/admin/vehicle-pricing.php?_t=${timestamp}`,
-  (timestamp: number) => `/api/admin/vehicle-pricing?_t=${timestamp}`,
-  // Fallback endpoints
-  (timestamp: number) => `${API_BASE_URL}/api/admin/vehicles-update.php?action=getAll&_t=${timestamp}`,
-  (timestamp: number) => `/api/admin/vehicles-update?action=getAll&_t=${timestamp}`,
-  (timestamp: number) => `${API_BASE_URL}/api/fares/vehicles.php?_t=${timestamp}`,
-  (timestamp: number) => `/api/fares/vehicles.php?_t=${timestamp}`
-];
-
-// Helper function to attempt multiple API endpoints in sequence
-const tryMultipleEndpoints = async (endpointFunctions: ((timestamp: number) => string)[]): Promise<any> => {
-  const timestamp = Date.now();
-  const errors: any[] = [];
+/**
+ * Clean vehicle ID by removing prefixes if present
+ */
+const cleanVehicleId = (id: string | undefined): string => {
+  if (!id) return '';
   
-  for (let i = 0; i < endpointFunctions.length; i++) {
-    const endpoint = endpointFunctions[i](timestamp);
-    console.log(`Attempting to fetch vehicles from endpoint ${i+1}/${endpointFunctions.length}: ${endpoint}`);
+  // Remove 'item-' prefix if it exists
+  if (id.startsWith('item-')) {
+    return id.substring(5);
+  }
+  
+  // Remove any random alphanumeric IDs matching a pattern like: r31yw7w
+  if (/^[a-z0-9]{7}$/.test(id)) {
+    return id;
+  }
+  
+  return id;
+};
+
+/**
+ * Normalize API response to handle different formats
+ */
+const normalizeVehiclesData = (data: any): CabType[] => {
+  if (!data) return [];
+  
+  let vehicles = [];
+  
+  // Check if the data is already an array
+  if (Array.isArray(data)) {
+    vehicles = data;
+  }
+  // Check if data.vehicles is an array
+  else if (data.vehicles && Array.isArray(data.vehicles)) {
+    vehicles = data.vehicles;
+  }
+  // Check if data.data is an array
+  else if (data.data && Array.isArray(data.data)) {
+    vehicles = data.data;
+  }
+  
+  if (vehicles.length === 0) {
+    console.warn('No valid vehicle data found in API response');
+    return defaultVehicles;
+  }
+  
+  // Map and normalize the vehicle data
+  return vehicles.map((vehicle: any) => {
+    // Extract and clean ID from various possible sources
+    const rawVehicleId = vehicle.id || vehicle.vehicleId || vehicle.vehicle_id || vehicle.vehicleType || '';
+    const vehicleId = cleanVehicleId(String(rawVehicleId));
     
+    const name = String(vehicle.name || vehicleId || '').trim();
+    
+    return {
+      id: vehicleId,
+      name: name || vehicleId, // Use ID as fallback for empty names
+      capacity: Number(vehicle.capacity) || 4,
+      luggageCapacity: Number(vehicle.luggageCapacity || vehicle.luggage_capacity) || 2,
+      price: Number(vehicle.basePrice || vehicle.price || vehicle.base_price) || 0,
+      pricePerKm: Number(vehicle.pricePerKm || vehicle.price_per_km) || 0,
+      image: String(vehicle.image || '/cars/sedan.png'),
+      amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : 
+               (typeof vehicle.amenities === 'string' ? vehicle.amenities.split(',').map((a: string) => a.trim()) : ['AC']),
+      description: String(vehicle.description || ''),
+      ac: vehicle.ac !== undefined ? Boolean(vehicle.ac) : true,
+      nightHaltCharge: Number(vehicle.nightHaltCharge || vehicle.night_halt_charge) || 0,
+      driverAllowance: Number(vehicle.driverAllowance || vehicle.driver_allowance) || 0,
+      isActive: vehicle.isActive !== undefined ? Boolean(vehicle.isActive) : 
+              (vehicle.is_active !== undefined ? Boolean(vehicle.is_active) : true),
+      basePrice: Number(vehicle.basePrice || vehicle.price || vehicle.base_price) || 0,
+      vehicleId: vehicleId // Store the cleaned ID again for consistency
+    };
+  });
+};
+
+/**
+ * Get all vehicle data from API with multiple fallbacks
+ */
+export const getVehicleData = async (includeInactive: boolean = false): Promise<CabType[]> => {
+  console.log('Loading vehicle data from API...');
+  
+  // Add cache busting timestamp
+  const timestamp = Date.now();
+  const cacheParam = `_t=${timestamp}`;
+  
+  // Try multiple API endpoints in sequence
+  const endpoints = [
+    // Primary endpoint
+    `${apiBaseUrl}/api/fares/vehicles-data.php?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`,
+    // Alternate path
+    `${apiBaseUrl}/api/fares/vehicles-data?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`,
+    // Local fallback
+    `/api/fares/vehicles-data.php?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`,
+    // Alternate local
+    `/api/fares/vehicles-data?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`,
+    // Direct vehicles endpoint
+    `${apiBaseUrl}/api/fares/vehicles.php?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`,
+    // Local vehicles endpoint
+    `/api/fares/vehicles.php?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`,
+    // Admin endpoint with debug bypass for development
+    `${apiBaseUrl}/api/admin/vehicles-update.php?action=getAll&debug=true&${cacheParam}`,
+    // Local admin endpoint with debug bypass for development
+    `/api/admin/vehicles-update.php?action=getAll&debug=true&${cacheParam}`
+  ];
+  
+  // Try each endpoint until one works
+  for (const endpoint of endpoints) {
     try {
+      console.log(`Trying to load vehicles from: ${endpoint}`);
+      
       const response = await axios.get(endpoint, {
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache',
           'Expires': '0',
-          'X-API-Version': API_VERSION,
+          'X-API-Version': apiVersion,
           'X-Force-Refresh': 'true'
         },
-        timeout: 15000 // 15 seconds
+        timeout: 8000 // 8 second timeout
       });
       
-      // Check if response is valid
-      if (response.status === 200) {
-        // Different APIs might return data in different formats
-        if (Array.isArray(response.data)) {
-          return response.data;
-        } else if (response.data?.vehicles && Array.isArray(response.data.vehicles)) {
-          return response.data.vehicles;
-        } else if (response.data?.data && Array.isArray(response.data.data)) {
-          return response.data.data;
+      if (response.status === 200 && response.data) {
+        console.log('Successfully fetched vehicles from', endpoint);
+        
+        const normalizedVehicles = normalizeVehiclesData(response.data);
+        
+        // Filter active vehicles if needed
+        const filteredVehicles = includeInactive ? 
+          normalizedVehicles : 
+          normalizedVehicles.filter(v => v.isActive !== false);
+        
+        if (filteredVehicles.length > 0) {
+          console.log(`Successfully fetched ${filteredVehicles.length} vehicles from primary endpoint`);
+          
+          // Do additional logging to debug vehicle IDs
+          console.log('Vehicle IDs fetched:', filteredVehicles.map(v => ({
+            id: v.id,
+            name: v.name,
+            vehicleId: v.vehicleId
+          })));
+          
+          return filteredVehicles;
         }
       }
+      console.log('Invalid response format or empty result, trying next endpoint');
     } catch (error) {
-      console.warn(`Error fetching from endpoint ${i+1}: ${endpoint}`, error);
-      errors.push(error);
-      
-      // Add delay before trying next endpoint
-      await delay(500);
+      console.error(`Error fetching from endpoint ${endpoint}:`, error);
     }
   }
   
-  // If we reached here, all endpoints failed
-  throw new Error(`All endpoints failed. Last error: ${errors[errors.length - 1]?.message || 'Unknown error'}`);
+  // If all endpoints fail, use default vehicles
+  console.warn('No vehicles found in any API response, using defaults');
+  toast.warning("Using default vehicle data - API connections failed", {
+    id: "vehicle-api-error",
+    duration: 4000
+  });
+  
+  return defaultVehicles;
+};
+
+/**
+ * Update a vehicle in the database
+ */
+export const updateVehicle = async (vehicleData: any): Promise<any> => {
+  try {
+    console.log('Updating vehicle with data:', vehicleData);
+    
+    // Clean the vehicle ID
+    if (vehicleData.vehicleId) {
+      vehicleData.vehicleId = cleanVehicleId(vehicleData.vehicleId);
+    }
+    if (vehicleData.id) {
+      vehicleData.id = cleanVehicleId(vehicleData.id);
+      // Ensure both id and vehicleId are set and consistent
+      if (!vehicleData.vehicleId) {
+        vehicleData.vehicleId = vehicleData.id;
+      }
+    }
+    
+    // Set the Authorization header if JWT is available in localStorage
+    const authHeader: Record<string, string> = {};
+    const token = localStorage.getItem('token');
+    if (token) {
+      authHeader.Authorization = `Bearer ${token}`;
+    }
+    
+    // Add cache busting timestamp
+    const timestamp = Date.now();
+    
+    // Try multiple API endpoints in sequence
+    const endpoints = [
+      `${apiBaseUrl}/api/admin/vehicles-update.php?_t=${timestamp}`,
+      `/api/admin/vehicles-update.php?_t=${timestamp}`
+    ];
+    
+    let successResponse = null;
+    
+    // Try each endpoint until one works
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Trying to update vehicle using endpoint: ${endpoint}`);
+        
+        const response = await axios.post(endpoint, vehicleData, {
+          headers: {
+            ...authHeader,
+            'Content-Type': 'application/json',
+            'X-API-Version': apiVersion,
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          },
+          timeout: 10000 // 10 second timeout
+        });
+        
+        if (response.status === 200) {
+          console.log('Vehicle updated successfully via', endpoint);
+          successResponse = response.data;
+          break;
+        }
+      } catch (error: any) {
+        console.error(`Error updating vehicle at endpoint ${endpoint}:`, error.response || error);
+        
+        // If this is the last endpoint, rethrow the error
+        if (endpoint === endpoints[endpoints.length - 1]) {
+          throw error;
+        }
+      }
+    }
+    
+    if (successResponse) {
+      return successResponse;
+    } else {
+      throw new Error('All update endpoints failed');
+    }
+  } catch (error: any) {
+    console.error('Error updating vehicle:', error.response?.data || error);
+    throw error;
+  }
+};
+
+/**
+ * Add a new vehicle to the database
+ */
+export const addVehicle = async (vehicleData: any): Promise<any> => {
+  try {
+    console.log('Adding new vehicle with data:', vehicleData);
+    
+    // Clean the vehicle ID
+    if (vehicleData.vehicleId) {
+      vehicleData.vehicleId = cleanVehicleId(vehicleData.vehicleId);
+    }
+    if (vehicleData.id) {
+      vehicleData.id = cleanVehicleId(vehicleData.id);
+      // Ensure both id and vehicleId are set and consistent
+      if (!vehicleData.vehicleId) {
+        vehicleData.vehicleId = vehicleData.id;
+      }
+    }
+    
+    // Set the Authorization header if JWT is available in localStorage
+    const authHeader: Record<string, string> = {};
+    const token = localStorage.getItem('token');
+    if (token) {
+      authHeader.Authorization = `Bearer ${token}`;
+    }
+    
+    // Add cache busting timestamp
+    const timestamp = Date.now();
+    
+    // Try multiple API endpoints in sequence
+    const endpoints = [
+      `${apiBaseUrl}/api/admin/vehicles-update.php?_t=${timestamp}`,
+      `/api/admin/vehicles-update.php?_t=${timestamp}`
+    ];
+    
+    let successResponse = null;
+    
+    // Try each endpoint until one works
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Trying to add vehicle using endpoint: ${endpoint}`);
+        
+        const response = await axios.put(endpoint, vehicleData, {
+          headers: {
+            ...authHeader,
+            'Content-Type': 'application/json',
+            'X-API-Version': apiVersion,
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          },
+          timeout: 10000 // 10 second timeout
+        });
+        
+        if (response.status === 200) {
+          console.log('Vehicle added successfully via', endpoint);
+          successResponse = response.data;
+          break;
+        }
+      } catch (error: any) {
+        console.error(`Error adding vehicle at endpoint ${endpoint}:`, error.response || error);
+        
+        // If this is the last endpoint, rethrow the error
+        if (endpoint === endpoints[endpoints.length - 1]) {
+          throw error;
+        }
+      }
+    }
+    
+    if (successResponse) {
+      return successResponse;
+    } else {
+      throw new Error('All add endpoints failed');
+    }
+  } catch (error: any) {
+    console.error('Error adding vehicle:', error.response?.data || error);
+    throw error;
+  }
+};
+
+/**
+ * Delete a vehicle from the database
+ */
+export const deleteVehicle = async (vehicleId: string): Promise<boolean> => {
+  try {
+    // Clean the vehicle ID
+    const cleanedVehicleId = cleanVehicleId(vehicleId);
+    
+    console.log('Deleting vehicle with ID:', cleanedVehicleId);
+    
+    // Set the Authorization header if JWT is available in localStorage
+    const authHeader: Record<string, string> = {};
+    const token = localStorage.getItem('token');
+    if (token) {
+      authHeader.Authorization = `Bearer ${token}`;
+    }
+    
+    // Add cache busting timestamp
+    const timestamp = Date.now();
+    
+    // Try multiple API endpoints in sequence
+    const endpoints = [
+      `${apiBaseUrl}/api/admin/vehicles-update.php?vehicleId=${cleanedVehicleId}&_t=${timestamp}`,
+      `/api/admin/vehicles-update.php?vehicleId=${cleanedVehicleId}&_t=${timestamp}`
+    ];
+    
+    // Try each endpoint until one works
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Trying to delete vehicle using endpoint: ${endpoint}`);
+        
+        const response = await fetch(endpoint, {
+          method: 'DELETE',
+          headers: {
+            ...authHeader,
+            'X-API-Version': apiVersion,
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        });
+        
+        const responseData = await response.json();
+        console.log('Delete response:', responseData);
+        
+        if (response.ok) {
+          console.log('Vehicle deleted successfully via', endpoint);
+          toast.success('Vehicle deleted successfully');
+          return true;
+        } else {
+          console.error('Delete failed with status:', response.status);
+          throw new Error(responseData.message || 'Delete failed');
+        }
+      } catch (error: any) {
+        console.error(`Error deleting vehicle at endpoint ${endpoint}:`, error);
+        
+        // If this is the last endpoint, rethrow the error
+        if (endpoint === endpoints[endpoints.length - 1]) {
+          toast.error(`Error deleting vehicle: ${error.message || 'Unknown error'}`);
+          throw error;
+        }
+      }
+    }
+    
+    return false;
+  } catch (error: any) {
+    console.error('Error deleting vehicle:', error);
+    toast.error(`Error deleting vehicle: ${error.message || 'Unknown error'}`);
+    return false;
+  }
 };
 
 /**
  * Get all vehicle types for dropdown selection
  */
-export const getVehicleTypes = async (includeInactive = false): Promise<{id: string, name: string}[]> => {
+export const getVehicleTypes = async (): Promise<{id: string, name: string}[]> => {
   try {
-    // Check cache first
-    const now = Date.now();
-    if (vehicleCache.data.length > 0 && now - vehicleCache.timestamp < vehicleCache.expiresIn) {
-      console.log('Using cached vehicle data for types');
-      const cachedVehicles = vehicleCache.data;
-      return cachedVehicles.map(vehicle => ({
-        id: vehicle.id || vehicle.vehicleId || '', 
-        name: vehicle.name || vehicle.id || 'Unknown'
-      }));
-    }
+    const vehicles = await getVehicleData(true); // Get all vehicles including inactive
     
-    // Force fresh load
-    localStorage.removeItem('cabTypes');
-    localStorage.removeItem('vehicleTypes');
-    
-    // Try to get vehicle types from any endpoint that works
-    try {
-      const vehicles = await tryMultipleEndpoints(vehicleEndpoints);
-      
-      if (Array.isArray(vehicles) && vehicles.length > 0) {
-        console.log(`Retrieved ${vehicles.length} vehicles for types`);
-        
-        // Update cache
-        vehicleCache.data = vehicles;
-        vehicleCache.timestamp = now;
-        
-        return vehicles.map(vehicle => ({
-          id: vehicle.id || vehicle.vehicleId || '', 
-          name: vehicle.name || vehicle.id || 'Unknown'
-        }));
-      }
-    } catch (error) {
-      console.warn("All endpoints failed for vehicle types:", error);
-    }
-    
-    console.warn('No data returned from any endpoint, using default vehicles');
-    return defaultVehicles.map(vehicle => ({
-      id: vehicle.id,
+    const vehiclesList = vehicles.map(vehicle => ({
+      id: vehicle.id, // Already cleaned in getVehicleData
       name: vehicle.name || vehicle.id
     }));
+    
+    console.log('Available vehicle types for selection:', vehiclesList);
+    
+    return vehiclesList;
   } catch (error) {
     console.error('Error getting vehicle types:', error);
-    
-    // Return default vehicles as last resort
     return defaultVehicles.map(vehicle => ({
       id: vehicle.id,
       name: vehicle.name || vehicle.id
@@ -181,261 +475,89 @@ export const getVehicleTypes = async (includeInactive = false): Promise<{id: str
 };
 
 /**
- * Get all vehicle data including pricing and details
+ * Update fare settings for specific trip types
  */
-export const getVehicleData = async (includeInactive = false): Promise<any[]> => {
+export const updateTripFares = async (
+  vehicleId: string, 
+  tripType: string, 
+  fareData: Record<string, any>
+): Promise<boolean> => {
   try {
-    // Check cache first
-    const now = Date.now();
-    if (vehicleCache.data.length > 0 && now - vehicleCache.timestamp < vehicleCache.expiresIn) {
-      console.log('Using cached vehicle data');
-      const cachedVehicles = vehicleCache.data;
-      
-      // Filter out inactive vehicles if needed
-      if (!includeInactive) {
-        return cachedVehicles.filter(v => v.isActive !== false);
-      }
-      
-      return cachedVehicles;
+    // Clean the vehicle ID
+    const cleanedVehicleId = cleanVehicleId(vehicleId);
+    
+    console.log(`Updating ${tripType} fares for vehicle ${cleanedVehicleId}:`, fareData);
+    
+    // Set the Authorization header if JWT is available in localStorage
+    const authHeader: Record<string, string> = {};
+    const token = localStorage.getItem('token');
+    if (token) {
+      authHeader.Authorization = `Bearer ${token}`;
     }
     
-    try {
-      const vehicles = await tryMultipleEndpoints(vehicleEndpoints);
-      
-      if (Array.isArray(vehicles) && vehicles.length > 0) {
-        console.log(`Successfully fetched ${vehicles.length} vehicles`);
-        
-        // Normalize all vehicles to have consistent property names
-        const normalizedVehicles = vehicles.map(vehicle => ({
-          id: vehicle.id || vehicle.vehicleId || vehicle.vehicle_id || '',
-          vehicleId: vehicle.id || vehicle.vehicleId || vehicle.vehicle_id || '',
-          name: vehicle.name || vehicle.vehicleName || vehicle.vehicle_name || 'Unknown',
-          capacity: parseInt(vehicle.capacity || vehicle.passengerCapacity || '4'),
-          luggageCapacity: parseInt(vehicle.luggageCapacity || vehicle.luggage_capacity || '2'),
-          price: parseFloat(vehicle.price || vehicle.basePrice || vehicle.base_price || '0'),
-          basePrice: parseFloat(vehicle.basePrice || vehicle.base_price || vehicle.price || '0'),
-          pricePerKm: parseFloat(vehicle.pricePerKm || vehicle.price_per_km || '0'),
-          nightHaltCharge: parseFloat(vehicle.nightHaltCharge || vehicle.night_halt_charge || '0'),
-          driverAllowance: parseFloat(vehicle.driverAllowance || vehicle.driver_allowance || '0'),
-          hr8km80Price: parseFloat(vehicle.hr8km80Price || vehicle.price_8hrs_80km || '0'),
-          hr10km100Price: parseFloat(vehicle.hr10km100Price || vehicle.price_10hrs_100km || '0'),
-          extraKmRate: parseFloat(vehicle.extraKmRate || vehicle.price_extra_km || '0'),
-          extraHourRate: parseFloat(vehicle.extraHourRate || vehicle.price_extra_hour || '0'),
-          airportFee: parseFloat(vehicle.airportFee || vehicle.airport_fee || '0'),
-          image: vehicle.image || '',
-          isActive: vehicle.isActive !== false && vehicle.is_active !== false,
-          amenities: vehicle.amenities || ['AC']
-        }));
-        
-        // Update cache
-        vehicleCache.data = normalizedVehicles;
-        vehicleCache.timestamp = now;
-        
-        // Filter out inactive vehicles if needed
-        if (!includeInactive) {
-          return normalizedVehicles.filter(v => v.isActive !== false);
-        }
-        
-        return normalizedVehicles;
-      }
-    } catch (error) {
-      console.error('All endpoints failed for vehicle data:', error);
-    }
-    
-    console.warn('Received invalid vehicle data format or empty data, using defaults');
-    return defaultVehicles;
-  } catch (error) {
-    console.error('Error fetching vehicle data:', error);
-    toast.error('Failed to load vehicle data');
-    return defaultVehicles;
-  }
-};
-
-/**
- * Update vehicle information
- */
-export const updateVehicle = async (vehicleData: any): Promise<boolean> => {
-  try {
+    // Add cache busting timestamp
     const timestamp = Date.now();
     
-    // Try multiple endpoints in sequence
+    // Create payload combining vehicle ID, trip type, and fare data
+    const payload = {
+      vehicleId: cleanedVehicleId,
+      tripType,
+      ...fareData
+    };
+    
+    // Try multiple API endpoints in sequence
     const endpoints = [
-      `${API_BASE_URL}/api/admin/vehicle-pricing.php?_t=${timestamp}`,
-      `/api/admin/vehicle-pricing?_t=${timestamp}`,
-      `${API_BASE_URL}/api/fares/vehicles.php?_t=${timestamp}`,
-      `/api/fares/vehicles.php?_t=${timestamp}`
+      `${apiBaseUrl}/api/admin/fares-update.php?_t=${timestamp}`,
+      `/api/admin/fares-update.php?_t=${timestamp}`,
+      `${apiBaseUrl}/api/admin/vehicle-pricing.php?_t=${timestamp}`,
+      `/api/admin/vehicle-pricing.php?_t=${timestamp}`
     ];
     
-    console.log(`Attempting to update vehicle:`, vehicleData);
-    
-    let success = false;
-    let lastError = null;
-    
+    // Try each endpoint until one works
     for (const endpoint of endpoints) {
       try {
-        console.log(`Trying update at endpoint: ${endpoint}`);
+        console.log(`Trying to update ${tripType} fares using endpoint: ${endpoint}`);
         
-        const response = await axios({
-          method: 'POST',
-          url: endpoint,
+        const response = await axios.post(endpoint, payload, {
           headers: {
+            ...authHeader,
             'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache',
-            'X-API-Version': API_VERSION,
-            'X-Force-Refresh': 'true'
-          },
-          data: vehicleData,
-          timeout: 15000
-        });
-        
-        if (response.status === 200) {
-          console.log('Vehicle updated successfully at', endpoint);
-          success = true;
-          break;
-        }
-      } catch (error: any) {
-        console.warn(`Update failed at ${endpoint}:`, error.message);
-        lastError = error;
-        await delay(500);
-      }
-    }
-    
-    if (success) {
-      // Clear cache on successful update
-      vehicleCache.data = [];
-      vehicleCache.timestamp = 0;
-      
-      return true;
-    } else {
-      throw lastError || new Error('All update attempts failed');
-    }
-  } catch (error) {
-    console.error('Error updating vehicle:', error);
-    toast.error('Failed to update vehicle');
-    return false;
-  }
-};
-
-/**
- * Delete a vehicle
- */
-export const deleteVehicle = async (vehicleId: string): Promise<boolean> => {
-  try {
-    const timestamp = Date.now();
-    
-    // Try multiple endpoints in sequence
-    const endpoints = [
-      `${API_BASE_URL}/api/admin/vehicle-pricing.php?action=delete&id=${vehicleId}&_t=${timestamp}`,
-      `/api/admin/vehicle-pricing?action=delete&id=${vehicleId}&_t=${timestamp}`,
-      `${API_BASE_URL}/api/fares/vehicles.php?vehicleId=${vehicleId}&_t=${timestamp}`,
-      `/api/fares/vehicles.php?vehicleId=${vehicleId}&_t=${timestamp}`
-    ];
-    
-    console.log(`Attempting to delete vehicle: ${vehicleId}`);
-    
-    let success = false;
-    
-    for (const endpoint of endpoints) {
-      try {
-        console.log(`Trying delete at endpoint: ${endpoint}`);
-        
-        const response = await axios({
-          method: 'DELETE',
-          url: endpoint,
-          headers: {
-            'Cache-Control': 'no-cache',
-            'X-API-Version': API_VERSION,
-            'X-Force-Refresh': 'true'
+            'X-API-Version': apiVersion,
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
           },
           timeout: 10000
         });
         
         if (response.status === 200) {
-          console.log('Vehicle deleted successfully at', endpoint);
-          success = true;
-          break;
+          console.log(`${tripType} fares updated successfully via`, endpoint);
+          toast.success(`${tripType} fares updated successfully`);
+          
+          // Clear all caches to ensure fresh data
+          localStorage.removeItem('cabFares');
+          localStorage.removeItem('tourFares');
+          sessionStorage.removeItem('cabFares');
+          sessionStorage.removeItem('tourFares');
+          sessionStorage.removeItem('calculatedFares');
+          
+          return true;
         }
-      } catch (error) {
-        console.warn(`Delete failed at ${endpoint}:`, error);
-        await delay(500);
+      } catch (error: any) {
+        console.error(`Error updating ${tripType} fares at endpoint ${endpoint}:`, error.response || error);
+        
+        // If this is the last endpoint, rethrow the error
+        if (endpoint === endpoints[endpoints.length - 1]) {
+          toast.error(`Failed to update ${tripType} fares: ${error.response?.data?.message || error.message || 'Unknown error'}`);
+          throw error;
+        }
       }
     }
     
-    if (success) {
-      // Clear cache on successful delete
-      vehicleCache.data = [];
-      vehicleCache.timestamp = 0;
-      
-      return true;
-    } else {
-      throw new Error('All delete attempts failed');
-    }
-  } catch (error) {
-    console.error('Error deleting vehicle:', error);
-    toast.error('Failed to delete vehicle');
     return false;
-  }
-};
-
-/**
- * Create a new vehicle
- */
-export const createVehicle = async (vehicleData: any): Promise<boolean> => {
-  try {
-    const timestamp = Date.now();
-    
-    // Try multiple endpoints in sequence
-    const endpoints = [
-      `${API_BASE_URL}/api/admin/vehicles-update.php?_t=${timestamp}`,
-      `/api/admin/vehicles-update?_t=${timestamp}`,
-      `${API_BASE_URL}/api/fares/vehicles.php?_t=${timestamp}`,
-      `/api/fares/vehicles.php?_t=${timestamp}`
-    ];
-    
-    console.log(`Attempting to create vehicle:`, vehicleData);
-    
-    let success = false;
-    
-    for (const endpoint of endpoints) {
-      try {
-        console.log(`Trying create at endpoint: ${endpoint}`);
-        
-        const response = await axios({
-          method: endpoint.includes('vehicles.php') ? 'PUT' : 'POST',
-          url: endpoint,
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache',
-            'X-API-Version': API_VERSION,
-            'X-Force-Refresh': 'true'
-          },
-          data: vehicleData,
-          timeout: 15000
-        });
-        
-        if (response.status === 200) {
-          console.log('Vehicle created successfully at', endpoint);
-          success = true;
-          break;
-        }
-      } catch (error) {
-        console.warn(`Create failed at ${endpoint}:`, error);
-        await delay(500);
-      }
-    }
-    
-    if (success) {
-      // Clear cache on successful create
-      vehicleCache.data = [];
-      vehicleCache.timestamp = 0;
-      
-      return true;
-    } else {
-      throw new Error('All create attempts failed');
-    }
-  } catch (error) {
-    console.error('Error creating vehicle:', error);
-    toast.error('Failed to create vehicle');
+  } catch (error: any) {
+    console.error(`Error updating ${tripType} fares:`, error);
     return false;
   }
 };

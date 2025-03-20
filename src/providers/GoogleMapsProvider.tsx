@@ -1,17 +1,19 @@
 
-import { ReactNode, useEffect, useState, useRef } from "react";
+import { ReactNode, createContext, useContext, useEffect, useState } from "react";
 import { useLoadScript } from "@react-google-maps/api";
-import { toast } from "sonner";
-import GoogleMapsContext from "../contexts/GoogleMapsContext";
-import { 
-  GOOGLE_MAPS_API_KEY, 
-  MAPS_LIBRARIES,
-  createMapCanvas,
-  initializeHiddenMap,
-  forcePlacesInitialization,
-  setDefaultIndiaBounds,
-  setGlobalDebugVariables
-} from "../utils/googleMapsUtils";
+
+// Environment variable for Google Maps API Key
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
+
+// Define libraries array as a constant to prevent unnecessary re-renders
+const libraries = ["places"] as ["places"];
+
+// Create a more comprehensive context
+interface GoogleMapsContextType {
+  isLoaded: boolean;
+  loadError: Error | undefined;
+  google: typeof google | null;
+}
 
 // Provider props interface
 interface GoogleMapsProviderProps {
@@ -19,198 +21,66 @@ interface GoogleMapsProviderProps {
   apiKey?: string;
 }
 
+// Context for Google Maps
+const GoogleMapsContext = createContext<GoogleMapsContextType>({
+  isLoaded: false,
+  loadError: undefined,
+  google: null
+});
+
+// Hook to use Google Maps context
+export const useGoogleMaps = () => useContext(GoogleMapsContext);
+
 // Provider component for Google Maps
 export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps) => {
   const [googleInstance, setGoogleInstance] = useState<typeof google | null>(null);
-  const [hasShownAPIKeyError, setHasShownAPIKeyError] = useState(false);
-  const [mapCanvasInitialized, setMapCanvasInitialized] = useState(false);
-  const [placesInitializationAttempted, setPlacesInitializationAttempted] = useState(false);
-  const initializationAttempts = useRef(0);
-  const maxRetries = useRef(10); // Increased from 8 to 10
   
   // Use provided apiKey or fallback to environment variable
   const googleMapsApiKey = apiKey || GOOGLE_MAPS_API_KEY;
   
-  // Validate API key before attempting to load
-  useEffect(() => {
-    if (!googleMapsApiKey && !hasShownAPIKeyError) {
-      console.error("No Google Maps API key provided");
-      toast.error("Google Maps API key is missing. Some features may not work correctly.", {
-        duration: 5000,
-        id: "google-maps-api-key-missing",
-      });
-      setHasShownAPIKeyError(true);
-    }
-  }, [googleMapsApiKey, hasShownAPIKeyError]);
-  
   // Load the Google Maps script with India region bias
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey,
-    libraries: MAPS_LIBRARIES,
+    libraries,
     region: 'IN', // Set region to India
     language: 'en',
-    version: "weekly", // Use the latest weekly version
   });
 
-  // Create hidden div for PlacesService and initialize it
-  useEffect(() => {
-    if (isLoaded && !mapCanvasInitialized && window.google?.maps) {
-      console.log("Initializing Google Maps hidden canvas");
-      try {
-        const mapCanvas = createMapCanvas();
-        
-        if (mapCanvas) {
-          initializeHiddenMap(mapCanvas);
-          
-          // Create autocomplete service immediately once map is initialized
-          if (window.google.maps.places) {
-            console.log("Creating Autocomplete service");
-            try {
-              new window.google.maps.places.AutocompleteService();
-              new window.google.maps.places.PlacesService(mapCanvas);
-              console.log("Successfully created Places services");
-            } catch (e) {
-              console.error("Error creating initial Places services:", e);
-            }
-          } else {
-            console.log("Places API not available during initial initialization");
-          }
-        }
-        
-        setMapCanvasInitialized(true);
-      } catch (error) {
-        console.error("Error initializing map canvas:", error);
-      }
-    }
-  }, [isLoaded, mapCanvasInitialized]);
-
-  // Force Places API initialization with multiple attempts
-  useEffect(() => {
-    if (isLoaded && window.google && !placesInitializationAttempted) {
-      setPlacesInitializationAttempted(true);
-      
-      const initializePlacesWithRetry = (attempt = 0) => {
-        try {
-          if (!window.google?.maps?.places) {
-            console.log(`Waiting for places API (attempt ${attempt+1})...`);
-            if (attempt < maxRetries.current) {
-              setTimeout(() => initializePlacesWithRetry(attempt + 1), 800);
-            }
-            return;
-          }
-          
-          forcePlacesInitialization();
-          console.log(`Places initialization attempt ${attempt+1} completed`);
-          
-          // Check if it worked
-          if (window.google?.maps?.places?.AutocompleteService) {
-            console.log("Places service successfully initialized");
-          } else if (attempt < maxRetries.current) {
-            console.log(`Places service not available yet, retrying (${attempt+1}/${maxRetries.current})`);
-            setTimeout(() => initializePlacesWithRetry(attempt + 1), 800);
-          }
-        } catch (error) {
-          console.error(`Error in Places initialization attempt ${attempt+1}:`, error);
-          if (attempt < maxRetries.current) {
-            setTimeout(() => initializePlacesWithRetry(attempt + 1), 800);
-          }
-        }
-      };
-      
-      setTimeout(() => initializePlacesWithRetry(), 300);
-    }
-  }, [isLoaded, placesInitializationAttempted]);
-
-  // Store the google object once loaded and set default bounds
+  // Store the google object once loaded
   useEffect(() => {
     if (isLoaded && !loadError && window.google) {
-      console.log("Setting Google instance in context");
       setGoogleInstance(window.google);
+      console.log("✅ Google Maps API loaded successfully");
       
-      // Set default bounds for India if Maps loaded successfully
-      setDefaultIndiaBounds();
-      
-      // Set global debug variables
-      setGlobalDebugVariables();
-      
-      // Force another Places initialization a bit later if needed
-      const timer = setTimeout(() => {
+      // Set default bounds to India if Maps loaded successfully
+      if (window.google.maps) {
         try {
-          if (window.google?.maps) {
-            if (!window.google.maps.places || !window.google.maps.places.AutocompleteService) {
-              console.log("Forcing places initialization again");
-              forcePlacesInitialization();
-            } else {
-              console.log("Places API already available, no need to force initialization");
-            }
-          }
-        } catch (error) {
-          console.error("Error in delayed Places init:", error);
-        }
-      }, 1500);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [isLoaded, loadError]);
-
-  // Log loading status
-  useEffect(() => {
-    if (isLoaded) {
-      console.log("Google Maps API loaded successfully!");
-    }
-    if (loadError) {
-      console.error("Error during Google Maps load:", loadError);
-      toast.error("Failed to load Google Maps. Please check your API key and internet connection.", {
-        duration: 5000,
-        id: "google-maps-load-error",
-      });
-    }
-  }, [isLoaded, loadError]);
-
-  // Check if Places service actually works by testing it
-  useEffect(() => {
-    if (isLoaded && window.google?.maps?.places) {
-      let testedPlacesAPI = false;
-      
-      const testPlacesService = () => {
-        if (testedPlacesAPI) return;
-        testedPlacesAPI = true;
-        
-        try {
-          const autocompleteService = new window.google.maps.places.AutocompleteService();
-          
-          // Try to make a real request to confirm it works
-          autocompleteService.getPlacePredictions(
-            {
-              input: "New Delhi",
-              componentRestrictions: { country: "in" }
-            },
-            (results, status) => {
-              if (status === window.google.maps.places.PlacesServiceStatus.OK) {
-                console.log("Places API test successful:", results?.length);
-              } else {
-                console.error("Places API test failed with status:", status);
-              }
-            }
+          // Set default map options for all instances
+          const indiaBounds = new window.google.maps.LatLngBounds(
+            new window.google.maps.LatLng(8.0, 68.0),  // SW corner of India
+            new window.google.maps.LatLng(37.0, 97.0)  // NE corner of India
           );
-        } catch (e) {
-          console.error("Error testing Places API:", e);
+          
+          // Store default bounds in window object for later use
+          (window as any).indiaBounds = indiaBounds;
+          
+          // We don't set defaultBounds here anymore as it's not a valid property
+          console.log("Default India bounds set for Maps");
+        } catch (error) {
+          console.error("Error setting default bounds:", error);
         }
-      };
-      
-      // Wait a short time after load to test
-      const timer = setTimeout(testPlacesService, 2000);
-      return () => clearTimeout(timer);
+      }
+    } else if (loadError) {
+      console.error("❌ Error loading Google Maps API:", loadError);
     }
-  }, [isLoaded]);
+  }, [isLoaded, loadError]);
 
   // Provide context values - ensure we have a consistent value for the google object
   const contextValue = {
     isLoaded, 
     loadError,
     // Always use window.google as a fallback to ensure it's available even if state hasn't updated
-    google: googleInstance || (isLoaded && window.google ? window.google : null),
-    placesInitialized: !!(window.google?.maps?.places?.AutocompleteService)
+    google: googleInstance || (isLoaded && window.google ? window.google : null)
   };
 
   return (
@@ -219,8 +89,5 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
     </GoogleMapsContext.Provider>
   );
 };
-
-// Re-export the hook for convenient usage
-export { useGoogleMaps } from "../hooks/useGoogleMaps";
 
 export default GoogleMapsProvider;

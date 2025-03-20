@@ -9,8 +9,7 @@ import { DateTimePicker } from "@/components/DateTimePicker";
 import { LocationInput } from "@/components/LocationInput";
 import { BookingStatusManager } from "@/components/BookingStatusManager";
 import { bookingAPI, authAPI } from '@/services/api';
-import { Booking, Location as ApiLocation, BookingStatus } from '@/types/api';
-import { Location } from '@/lib/locationData';
+import { Booking, Location, BookingStatus } from '@/types/api';
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, AlertCircle, Loader2 } from 'lucide-react';
 import { safeGetString } from '@/lib/safeStringUtils';
@@ -26,26 +25,12 @@ export default function BookingEditPage() {
   const [pickupLocation, setPickupLocation] = useState<Location>({ 
     id: 'pickup', 
     name: 'Pickup Location',
-    address: '',
-    city: 'Visakhapatnam',
-    state: 'Andhra Pradesh',
-    lat: 0,
-    lng: 0,
-    type: 'other',
-    popularityScore: 0,
-    isInVizag: true
+    address: '' 
   });
   const [dropLocation, setDropLocation] = useState<Location>({ 
     id: 'drop', 
     name: 'Drop Location',
-    address: '',
-    city: 'Visakhapatnam',
-    state: 'Andhra Pradesh',
-    lat: 0,
-    lng: 0,
-    type: 'other',
-    popularityScore: 0,
-    isInVizag: false
+    address: '' 
   });
   const [pickupDate, setPickupDate] = useState<Date | undefined>(undefined);
   const isAdmin = authAPI.isAdmin();
@@ -82,14 +67,7 @@ export default function BookingEditPage() {
           setPickupLocation({ 
             id: 'pickup',
             name: 'Pickup Location',
-            address: response.pickupLocation,
-            city: 'Visakhapatnam',
-            state: 'Andhra Pradesh',
-            lat: 0,
-            lng: 0,
-            type: 'other',
-            popularityScore: 0,
-            isInVizag: true
+            address: response.pickupLocation 
           });
         }
         
@@ -97,14 +75,7 @@ export default function BookingEditPage() {
           setDropLocation({ 
             id: 'drop',
             name: 'Drop Location',
-            address: response.dropLocation,
-            city: 'Visakhapatnam',
-            state: 'Andhra Pradesh',
-            lat: 0,
-            lng: 0,
-            type: 'other',
-            popularityScore: 0,
-            isInVizag: false
+            address: response.dropLocation 
           });
         }
         
@@ -345,12 +316,11 @@ export default function BookingEditPage() {
               <div>
                 <p className="text-sm font-medium mb-1">Pickup Location</p>
                 <LocationInput
-                  value={pickupLocation}
+                  location={pickupLocation}
                   onLocationChange={(location: Location) => {
                     setPickupLocation(location);
                   }}
                   placeholder="Enter pickup location"
-                  label="Pickup Location"
                   className="w-full"
                 />
               </div>
@@ -360,12 +330,11 @@ export default function BookingEditPage() {
                   <div>
                     <p className="text-sm font-medium mb-1">Drop Location</p>
                     <LocationInput
-                      value={dropLocation}
+                      location={dropLocation}
                       onLocationChange={(location: Location) => {
                         setDropLocation(location);
                       }}
                       placeholder="Enter drop location"
-                      label="Drop Location"
                       className="w-full"
                     />
                   </div>

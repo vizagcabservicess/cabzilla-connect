@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,16 +14,13 @@ import {
 import { toast } from "sonner";
 import { fareService } from "@/services/fareService";
 import { getVehicleTypes } from "@/services/vehicleDataService";
-import { Loader2, RefreshCw, AlertCircle } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2 } from "lucide-react";
 
 export const VehicleTripFaresForm = () => {
   const [isLoading, setIsLoading] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [vehicles, setVehicles] = useState<{id: string, name: string}[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState("");
   const [activeTab, setActiveTab] = useState("outstation");
-  const [error, setError] = useState<string | null>(null);
   
   // Outstation fare state
   const [outstationOneWayBasePrice, setOutstationOneWayBasePrice] = useState("");
@@ -42,53 +39,24 @@ export const VehicleTripFaresForm = () => {
   const [airportFee, setAirportFee] = useState("");
   
   // Load vehicles on mount
-  useEffect(() => {
+  React.useEffect(() => {
+    const loadVehicles = async () => {
+      try {
+        const vehicleList = await getVehicleTypes();
+        setVehicles(vehicleList);
+        
+        console.log("Loaded vehicles for fare management:", vehicleList);
+      } catch (error) {
+        console.error("Error loading vehicles:", error);
+        toast.error("Failed to load vehicles");
+      }
+    };
+    
     loadVehicles();
   }, []);
   
-  const loadVehicles = async () => {
-    setIsRefreshing(true);
-    setError(null);
-    try {
-      // Force cache clearing
-      localStorage.removeItem('cabTypes');
-      localStorage.removeItem('vehicleTypes');
-      
-      const vehicleList = await getVehicleTypes(true); // Pass true to include inactive vehicles
-      
-      // Add timestamp to bust cache
-      const timestamp = new Date().getTime().toString();
-      console.log(`Loaded vehicles for fare management (${timestamp}):`, vehicleList);
-      
-      if (Array.isArray(vehicleList) && vehicleList.length > 0) {
-        setVehicles(vehicleList);
-        toast.success(`Loaded ${vehicleList.length} vehicles`);
-      } else {
-        setError("No vehicles found. Please check database connection.");
-        toast.error("No vehicles found");
-      }
-    } catch (error) {
-      console.error("Error loading vehicles:", error);
-      setError("Failed to load vehicles. The API may be down or returned an error.");
-      toast.error("Failed to load vehicles");
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
-  
   const handleVehicleChange = (value: string) => {
     setSelectedVehicle(value);
-    // Reset form values when vehicle changes
-    setOutstationOneWayBasePrice("");
-    setOutstationOneWayPricePerKm("");
-    setOutstationRoundTripBasePrice("");
-    setOutstationRoundTripPricePerKm("");
-    setLocalHr8Km80("");
-    setLocalHr10Km100("");
-    setLocalExtraKmRate("");
-    setAirportBasePrice("");
-    setAirportPricePerKm("");
-    setAirportFee("");
   };
   
   const handleOutstationFareUpdate = async () => {
@@ -98,39 +66,26 @@ export const VehicleTripFaresForm = () => {
     }
 
     setIsLoading(true);
-    setError(null);
     
     try {
-      console.log("Updating outstation fares for vehicle:", selectedVehicle);
-      
-      // First try updating one-way fares
+      // Update one-way fares
       const oneWaySuccess = await fareService.updateTripFares(selectedVehicle, "outstation-one-way", {
         basePrice: parseFloat(outstationOneWayBasePrice) || 0,
         pricePerKm: parseFloat(outstationOneWayPricePerKm) || 0
       });
       
-      if (!oneWaySuccess) {
-        setError("Failed to update one-way fares. Please check the logs.");
-        return;
-      }
-      
-      // Then update round-trip fares
+      // Update round trip fares
       const roundTripSuccess = await fareService.updateTripFares(selectedVehicle, "outstation-round-trip", {
         basePrice: parseFloat(outstationRoundTripBasePrice) || 0,
         pricePerKm: parseFloat(outstationRoundTripPricePerKm) || 0
       });
       
-      if (!roundTripSuccess) {
-        setError("Updated one-way fares but failed to update round-trip fares.");
-        return;
+      if (oneWaySuccess && roundTripSuccess) {
+        toast.success("Outstation fares updated successfully");
       }
-      
-      toast.success("Outstation fares updated successfully");
-      
     } catch (error) {
       console.error("Error updating outstation fares:", error);
       toast.error("Failed to update outstation fares");
-      setError("An error occurred when updating fares. The API may be unavailable.");
     } finally {
       setIsLoading(false);
     }
@@ -143,11 +98,8 @@ export const VehicleTripFaresForm = () => {
     }
 
     setIsLoading(true);
-    setError(null);
     
     try {
-      console.log("Updating local fares for vehicle:", selectedVehicle);
-      
       const success = await fareService.updateTripFares(selectedVehicle, "local", {
         hr8km80Price: parseFloat(localHr8Km80) || 0,
         hr10km100Price: parseFloat(localHr10Km100) || 0,
@@ -156,14 +108,10 @@ export const VehicleTripFaresForm = () => {
       
       if (success) {
         toast.success("Local fares updated successfully");
-      } else {
-        toast.error("Failed to update local fares");
-        setError("API returned an error when updating local fares. Please try again.");
       }
     } catch (error) {
       console.error("Error updating local fares:", error);
       toast.error("Failed to update local fares");
-      setError("An error occurred when updating local fares. The API may be unavailable.");
     } finally {
       setIsLoading(false);
     }
@@ -176,11 +124,8 @@ export const VehicleTripFaresForm = () => {
     }
 
     setIsLoading(true);
-    setError(null);
     
     try {
-      console.log("Updating airport fares for vehicle:", selectedVehicle);
-      
       const success = await fareService.updateTripFares(selectedVehicle, "airport", {
         basePrice: parseFloat(airportBasePrice) || 0,
         pricePerKm: parseFloat(airportPricePerKm) || 0,
@@ -189,14 +134,10 @@ export const VehicleTripFaresForm = () => {
       
       if (success) {
         toast.success("Airport fares updated successfully");
-      } else {
-        toast.error("Failed to update airport fares");
-        setError("API returned an error when updating airport fares. Please try again.");
       }
     } catch (error) {
       console.error("Error updating airport fares:", error);
       toast.error("Failed to update airport fares");
-      setError("An error occurred when updating airport fares. The API may be unavailable.");
     } finally {
       setIsLoading(false);
     }
@@ -210,47 +151,20 @@ export const VehicleTripFaresForm = () => {
       <CardContent>
         <div className="grid gap-4">
           <div className="flex flex-col gap-4">
-            {error && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-            
             <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="text-sm font-medium">Select Vehicle</label>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={loadVehicles} 
-                  disabled={isRefreshing}
-                >
-                  <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                  Refresh Vehicles
-                </Button>
-              </div>
+              <label className="text-sm font-medium">Select Vehicle</label>
               <Select value={selectedVehicle} onValueChange={handleVehicleChange}>
                 <SelectTrigger className="w-full mt-1">
                   <SelectValue placeholder="Select a vehicle" />
                 </SelectTrigger>
                 <SelectContent>
-                  {vehicles.length === 0 ? (
-                    <div className="p-2 text-center text-gray-500">No vehicles found</div>
-                  ) : (
-                    vehicles.map((vehicle) => (
-                      <SelectItem key={vehicle.id} value={vehicle.id}>
-                        {vehicle.name}
-                      </SelectItem>
-                    ))
-                  )}
+                  {vehicles.map((vehicle) => (
+                    <SelectItem key={vehicle.id} value={vehicle.id}>
+                      {vehicle.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-              {vehicles.length === 0 && !isRefreshing && (
-                <div className="text-sm text-red-500 mt-1">
-                  No vehicles found. Try refreshing or check the database connection.
-                </div>
-              )}
             </div>
             
             <Tabs defaultValue="outstation" value={activeTab} onValueChange={setActiveTab} className="w-full">

@@ -1,70 +1,66 @@
 
-import React from 'react';
 import { createBrowserRouter } from 'react-router-dom';
-import NotFound from './pages/NotFound';
 import Index from './pages/Index';
+import NotFound from './pages/NotFound';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import DashboardPage from './pages/DashboardPage';
-import BookingConfirmationPage from './pages/BookingConfirmationPage';
-import BookingEditPage from './pages/BookingEditPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
-import ReceiptPage from './pages/ReceiptPage';
-import ToursPage from './pages/ToursPage';
+import BookingConfirmationPage from './pages/BookingConfirmationPage';
 import CabsPage from './pages/CabsPage';
-import VehiclePage from './pages/admin/vehicles';
-import MapDebugPage from './pages/MapDebugPage';
+import ToursPage from './pages/ToursPage';
+import BookingEditPage from './pages/BookingEditPage';
+import ReceiptPage from './pages/ReceiptPage';
 
-const router = createBrowserRouter([
+export const router = createBrowserRouter([
   {
     path: '/',
     element: <Index />,
-    errorElement: <NotFound />
   },
   {
     path: '/login',
-    element: <LoginPage />
+    element: <LoginPage />,
   },
   {
     path: '/signup',
-    element: <SignupPage />
+    element: <SignupPage />,
   },
   {
     path: '/dashboard',
-    element: <DashboardPage />
-  },
-  {
-    path: '/booking-confirmation',
-    element: <BookingConfirmationPage />
-  },
-  {
-    path: '/edit-booking/:id',
-    element: <BookingEditPage />
+    element: <DashboardPage />,
   },
   {
     path: '/admin',
-    element: <AdminDashboardPage />
+    element: <AdminDashboardPage />,
   },
   {
-    path: '/admin/vehicles',
-    element: <VehiclePage />
+    path: '/booking/:bookingId/confirmation',
+    element: <BookingConfirmationPage />,
   },
   {
-    path: '/receipt/:id',
-    element: <ReceiptPage />
+    path: '/booking-confirmation',
+    element: <BookingConfirmationPage />,
   },
   {
-    path: '/tours',
-    element: <ToursPage />
+    path: '/booking/:bookingId/edit',
+    element: <BookingEditPage />,
+  },
+  {
+    path: '/receipt/:bookingId',
+    element: <ReceiptPage />,
   },
   {
     path: '/cabs',
-    element: <CabsPage />
+    element: <CabsPage />,
   },
   {
-    path: '/map-debug',
-    element: <MapDebugPage />
-  }
+    path: '/tours',
+    element: <ToursPage />,
+  },
+  {
+    path: '*',
+    element: <NotFound />,
+  },
 ]);
 
 export default router;

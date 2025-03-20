@@ -1,3 +1,4 @@
+
 export interface Location {
   id: string;
   name: string;
@@ -5,7 +6,7 @@ export interface Location {
   state: string;
   lat: number;
   lng: number; 
-  type: 'airport' | 'train_station' | 'bus_station' | 'hotel' | 'landmark' | 'other' | 'custom';
+  type: 'airport' | 'train_station' | 'bus_station' | 'hotel' | 'landmark' | 'other';
   popularityScore: number;
   isPickupLocation?: boolean;
   isDropLocation?: boolean;
@@ -24,8 +25,7 @@ export const vizagLocations: Location[] = [
     isPickupLocation: true,
     lat: 17.7215, 
     lng: 83.2248,
-    address: 'Vizag RTC Complex, Visakhapatnam',
-    isInVizag: true
+    address: 'Vizag RTC Complex, Visakhapatnam'
   },
   {
     id: 'vizag_railway',
@@ -37,8 +37,7 @@ export const vizagLocations: Location[] = [
     isPickupLocation: true,
     lat: 17.7215, 
     lng: 83.2248,
-    address: 'Visakhapatnam Railway Station, Visakhapatnam',
-    isInVizag: true
+    address: 'Visakhapatnam Railway Station, Visakhapatnam'
   },
   {
     id: 'vizag_airport',
@@ -50,8 +49,7 @@ export const vizagLocations: Location[] = [
     isPickupLocation: true,
     lat: 17.7215, 
     lng: 83.2248,
-    address: 'Visakhapatnam International Airport, Visakhapatnam',
-    isInVizag: true
+    address: 'Visakhapatnam International Airport, Visakhapatnam'
   },
   {
     id: 'rk_beach',
@@ -63,8 +61,7 @@ export const vizagLocations: Location[] = [
     isPickupLocation: true,
     lat: 17.7175,
     lng: 83.3162,
-    address: 'RK Beach, Visakhapatnam',
-    isInVizag: true
+    address: 'RK Beach, Visakhapatnam'
   },
   {
     id: 'jagadamba_junction',
@@ -76,8 +73,7 @@ export const vizagLocations: Location[] = [
     isPickupLocation: true,
     lat: 17.7215, 
     lng: 83.2248,
-    address: 'Jagadamba Junction, Visakhapatnam',
-    isInVizag: true
+    address: 'Jagadamba Junction, Visakhapatnam'
   },
   {
     id: 'mvp_colony',
@@ -89,8 +85,7 @@ export const vizagLocations: Location[] = [
     isPickupLocation: true,
     lat: 17.7215, 
     lng: 83.2248,
-    address: 'MVP Colony, Visakhapatnam',
-    isInVizag: true
+    address: 'MVP Colony, Visakhapatnam'
   },
   {
     id: 'gajuwaka',
@@ -102,8 +97,7 @@ export const vizagLocations: Location[] = [
     isPickupLocation: true,
     lat: 17.7337,
     lng: 83.1385,
-    address: 'Gajuwaka, Visakhapatnam',
-    isInVizag: true
+    address: 'Gajuwaka, Visakhapatnam'
   },
   {
     id: 'nad_junction',
@@ -115,8 +109,7 @@ export const vizagLocations: Location[] = [
     isPickupLocation: true,
     lat: 17.7215, 
     lng: 83.2248,
-    address: 'NAD Junction, Visakhapatnam',
-    isInVizag: true
+    address: 'NAD Junction, Visakhapatnam'
   }
 ];
 
@@ -129,10 +122,9 @@ export const apDestinations: Location[] = [
     type: 'landmark',
     popularityScore: 95,
     isDropLocation: true,
-    lat: 18.3273, 
-    lng: 82.8695,
-    address: 'Araku Valley, Andhra Pradesh',
-    isInVizag: false
+    lat: 17.7215, 
+    lng: 83.2248,
+    address: 'Araku Valley, Andhra Pradesh'
   },
   {
     id: 'srikakulam',
@@ -142,10 +134,9 @@ export const apDestinations: Location[] = [
     type: 'landmark',
     popularityScore: 88,
     isDropLocation: true,
-    lat: 18.2949, 
-    lng: 83.8938,
-    address: 'Srikakulam, Andhra Pradesh',
-    isInVizag: false
+    lat: 17.7215, 
+    lng: 83.2248,
+    address: 'Srikakulam, Andhra Pradesh'
   },
   {
     id: 'rajahmundry',
@@ -155,10 +146,9 @@ export const apDestinations: Location[] = [
     type: 'landmark',
     popularityScore: 90,
     isDropLocation: true,
-    lat: 16.9891, 
-    lng: 81.7840,
-    address: 'Rajahmundry, Andhra Pradesh',
-    isInVizag: false
+    lat: 17.7215, 
+    lng: 83.2248,
+    address: 'Rajahmundry, Andhra Pradesh'
   },
   {
     id: 'vijayawada',
@@ -168,10 +158,9 @@ export const apDestinations: Location[] = [
     type: 'landmark',
     popularityScore: 92,
     isDropLocation: true,
-    lat: 16.5062, 
-    lng: 80.6480,
-    address: 'Vijayawada, Andhra Pradesh',
-    isInVizag: false
+    lat: 17.7215, 
+    lng: 83.2248,
+    address: 'Vijayawada, Andhra Pradesh'
   },
   {
     id: 'tirupati',
@@ -181,10 +170,9 @@ export const apDestinations: Location[] = [
     type: 'landmark',
     popularityScore: 94,
     isDropLocation: true,
-    lat: 13.6288, 
-    lng: 79.4192,
-    address: 'Tirupati, Andhra Pradesh',
-    isInVizag: false
+    lat: 17.7215, 
+    lng: 83.2248,
+    address: 'Tirupati, Andhra Pradesh'
   },
   {
     id: 'kakinada',
@@ -194,10 +182,9 @@ export const apDestinations: Location[] = [
     type: 'landmark',
     popularityScore: 87,
     isDropLocation: true,
-    lat: 16.9891, 
-    lng: 82.2475,
-    address: 'Kakinada, Andhra Pradesh',
-    isInVizag: false
+    lat: 17.7215, 
+    lng: 83.2248,
+    address: 'Kakinada, Andhra Pradesh'
   },
   {
     id: 'guntur',
@@ -207,49 +194,45 @@ export const apDestinations: Location[] = [
     type: 'landmark',
     popularityScore: 89,
     isDropLocation: true,
-    lat: 16.3067, 
-    lng: 80.4365,
-    address: 'Guntur, Andhra Pradesh',
-    isInVizag: false
+    lat: 17.7215, 
+    lng: 83.2248,
+    address: 'Guntur, Andhra Pradesh'
   },
   {
-    id: 'hyderabad',
-    name: 'Hyderabad',
-    city: 'Hyderabad',
-    state: 'Telangana',
+    id: 'ongole',
+    name: 'Ongole',
+    city: 'Ongole',
+    state: 'Andhra Pradesh',
     type: 'landmark',
-    popularityScore: 96,
+    popularityScore: 83,
     isDropLocation: true,
-    lat: 17.3850,
-    lng: 78.4867,
-    address: 'Hyderabad, Telangana',
-    isInVizag: false
+    lat: 17.7215, 
+    lng: 83.2248,
+    address: 'Ongole, Andhra Pradesh'
   },
   {
-    id: 'bangalore',
-    name: 'Bangalore',
-    city: 'Bangalore',
-    state: 'Karnataka',
+    id: 'kadapa',
+    name: 'Kadapa',
+    city: 'Kadapa',
+    state: 'Andhra Pradesh',
     type: 'landmark',
-    popularityScore: 97,
+    popularityScore: 82,
     isDropLocation: true,
-    lat: 12.9716,
-    lng: 77.5946,
-    address: 'Bangalore, Karnataka',
-    isInVizag: false
+    lat: 17.7215, 
+    lng: 83.2248,
+    address: 'Kadapa, Andhra Pradesh'
   },
   {
-    id: 'chennai',
-    name: 'Chennai',
-    city: 'Chennai',
-    state: 'Tamil Nadu',
+    id: 'nellore',
+    name: 'Nellore',
+    city: 'Nellore',
+    state: 'Andhra Pradesh',
     type: 'landmark',
-    popularityScore: 95,
+    popularityScore: 84,
     isDropLocation: true,
-    lat: 13.0827,
-    lng: 80.2707,
-    address: 'Chennai, Tamil Nadu',
-    isInVizag: false
+    lat: 17.7215, 
+    lng: 83.2248,
+    address: 'Nellore, Andhra Pradesh'
   }
 ];
 
@@ -258,54 +241,18 @@ export const popularLocations: Location[] = [
   ...apDestinations
 ];
 
+// Helper function to check if a location is within Visakhapatnam
 export const isVizagLocation = (location: Location): boolean => {
   if (!location) return false;
   
-  if (location.isInVizag !== undefined) {
-    return location.isInVizag;
-  }
-  
-  if (location.city?.toLowerCase() === 'visakhapatnam' || 
-      location.name?.toLowerCase().includes('visakhapatnam') ||
-      location.name?.toLowerCase().includes('vizag')) {
-    return true;
-  }
-  
-  if (vizagLocations.some(vizagLoc => vizagLoc.id === location.id)) {
-    return true;
-  }
-  
-  if (location.lat && location.lng) {
-    const vizagCenter = { lat: 17.6868, lng: 83.2185 };
-    const distance = getDistanceFromLatLonInKm(
-      location.lat, 
-      location.lng, 
-      vizagCenter.lat, 
-      vizagCenter.lng
-    );
-    return distance <= 25;
-  }
-  
-  return false;
+  return location.city.toLowerCase() === 'visakhapatnam' || 
+         location.name.toLowerCase().includes('visakhapatnam') ||
+         location.name.toLowerCase().includes('vizag') ||
+         // Check against known Vizag area IDs
+         vizagLocations.some(vizagLoc => vizagLoc.id === location.id);
 };
 
-function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371;
-  const dLat = deg2rad(lat2 - lat1);
-  const dLon = deg2rad(lon2 - lon1);
-  const a = 
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
-    Math.sin(dLon/2) * Math.sin(dLon/2); 
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
-  const d = R * c;
-  return d;
-}
-
-function deg2rad(deg: number) {
-  return deg * (Math.PI/180);
-}
-
+// Check if both pickup and drop locations are within Visakhapatnam
 export const areBothLocationsInVizag = (pickup: Location | null, drop: Location | null): boolean => {
   if (!pickup || !drop) return false;
   return isVizagLocation(pickup) && isVizagLocation(drop);
@@ -316,7 +263,10 @@ export const searchLocations = (query: string, isPickup: boolean = false): Locat
     if (isPickup) {
       return vizagLocations.sort((a, b) => b.popularityScore - a.popularityScore);
     }
-    return popularLocations.sort((a, b) => b.popularityScore - a.popularityScore);
+    if (!isPickup) {
+      return apDestinations.sort((a, b) => b.popularityScore - a.popularityScore);
+    }
+    return [];
   }
   
   const lowerQuery = query.toLowerCase();
@@ -324,8 +274,7 @@ export const searchLocations = (query: string, isPickup: boolean = false): Locat
   let filteredLocations = popularLocations.filter(
     location => 
       location.name.toLowerCase().includes(lowerQuery) || 
-      location.city.toLowerCase().includes(lowerQuery) ||
-      location.address.toLowerCase().includes(lowerQuery)
+      location.city.toLowerCase().includes(lowerQuery)
   );
   
   if (isPickup) {
@@ -343,6 +292,7 @@ export const searchLocations = (query: string, isPickup: boolean = false): Locat
     .slice(0, 10);
 };
 
+// Updated distance calculation with consistent values
 export const getDistanceBetweenLocations = (fromId: string, toId: string): number => {
   const distances: Record<string, Record<string, number>> = {
     'vizag_airport': {
@@ -355,10 +305,7 @@ export const getDistanceBetweenLocations = (fromId: string, toId: string): numbe
       'guntur': 370,
       'ongole': 460,
       'kadapa': 660,
-      'nellore': 590,
-      'hyderabad': 610,
-      'bangalore': 995,
-      'chennai': 780
+      'nellore': 590
     },
     'vizag_railway': {
       'araku_valley': 112,
@@ -370,10 +317,7 @@ export const getDistanceBetweenLocations = (fromId: string, toId: string): numbe
       'guntur': 365,
       'ongole': 455,
       'kadapa': 655,
-      'nellore': 585,
-      'hyderabad': 605,
-      'bangalore': 990,
-      'chennai': 775
+      'nellore': 585
     },
     'vizag_rtc': {
       'araku_valley': 110,
@@ -385,10 +329,7 @@ export const getDistanceBetweenLocations = (fromId: string, toId: string): numbe
       'guntur': 363,
       'ongole': 453,
       'kadapa': 653,
-      'nellore': 583,
-      'hyderabad': 603,
-      'bangalore': 988,
-      'chennai': 773
+      'nellore': 583
     }
   };
   
@@ -400,63 +341,40 @@ export const getDistanceBetweenLocations = (fromId: string, toId: string): numbe
     return Math.floor(Math.random() * 20) + 5;
   }
   
-  const fromLocation = [...vizagLocations, ...apDestinations].find(loc => loc.id === fromId);
-  const toLocation = [...vizagLocations, ...apDestinations].find(loc => loc.id === toId);
-  
-  if (fromLocation && toLocation && fromLocation.lat && toLocation.lat) {
-    return Math.round(
-      getDistanceFromLatLonInKm(
-        fromLocation.lat, 
-        fromLocation.lng, 
-        toLocation.lat, 
-        toLocation.lng
-      )
-    );
-  }
-  
-  if (toId.includes('bangalore')) return 995;
-  if (toId.includes('hyderabad')) return 610;
-  if (toId.includes('chennai')) return 780;
-  if (toId.includes('mumbai')) return 1200;
-  if (toId.includes('delhi')) return 1800;
-  if (toId.includes('kolkata')) return 850;
-  
-  return Math.floor(Math.random() * 500) + 100;
+  return Math.floor(Math.random() * 700) + 100;
 };
 
+// Calculate airport transfer fare based on distance and cab type
 export const calculateAirportFare = (cabType: string, distance: number): number => {
+  // Pricing tiers based on distance to/from airport
   if (cabType.toLowerCase() === 'sedan') {
     if (distance <= 15) return 840;
     if (distance <= 20) return 1000;
     if (distance <= 30) return 1200;
     if (distance <= 35) return 1500;
-    return 1500 + (distance - 35) * 14;
+    return 1500 + (distance - 35) * 14; // Additional KM at ₹14/km
   } 
   else if (cabType.toLowerCase() === 'ertiga') {
     if (distance <= 15) return 1200;
     if (distance <= 20) return 1500;
     if (distance <= 30) return 1800;
     if (distance <= 35) return 2100;
-    return 2100 + (distance - 35) * 18;
+    return 2100 + (distance - 35) * 18; // Additional KM at ₹18/km
   }
   else if (cabType.toLowerCase() === 'innova crysta') {
     if (distance <= 15) return 1500;
     if (distance <= 20) return 1800;
     if (distance <= 30) return 2100;
     if (distance <= 35) return 2500;
-    return 2500 + (distance - 35) * 20;
+    return 2500 + (distance - 35) * 20; // Additional KM at ₹20/km
   }
   
+  // Default fallback
   return distance * 20;
 };
 
 export const getEstimatedTravelTime = (distance: number): number => {
-  if (distance > 100) {
-    const averageSpeed = 55;
-    return Math.ceil((distance / averageSpeed) * 60);
-  }
-  
-  const averageSpeed = 35;
+  const averageSpeed = 55;
   return Math.ceil((distance / averageSpeed) * 60);
 };
 

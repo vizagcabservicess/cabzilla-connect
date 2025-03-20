@@ -30,8 +30,6 @@ RewriteRule ^vehicles-data$ fares/vehicles-data.php [L,QSA]
 # Debug header to help troubleshoot routing
 Header set X-Requested-Path "%{REQUEST_URI}e"
 Header set X-Query-String "%{QUERY_STRING}e"
-Header set X-API-Version "1.0.51"
-Header set X-Cache-Control "No-Store"
 
 # Disable caching for API endpoints - Force no caching very strictly
 <IfModule mod_headers.c>
@@ -74,13 +72,9 @@ Header set X-Cache-Control "No-Store"
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
 
-# Send 200 OK for OPTIONS requests with all required CORS headers
+# Send 200 OK for OPTIONS requests
 <If "%{REQUEST_METHOD} == 'OPTIONS'">
     Header set Status "200 OK"
-    Header always set Access-Control-Allow-Origin "*" 
-    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh"
-    Header always set Access-Control-Max-Age "3600"
 </If>
 
 # Prevent directory listing
