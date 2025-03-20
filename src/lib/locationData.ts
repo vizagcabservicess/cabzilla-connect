@@ -1,4 +1,3 @@
-
 export interface Location {
   id: string;
   name: string;
@@ -6,7 +5,7 @@ export interface Location {
   state: string;
   lat: number;
   lng: number; 
-  type: 'airport' | 'train_station' | 'bus_station' | 'hotel' | 'landmark' | 'other';
+  type: 'airport' | 'train_station' | 'bus_station' | 'hotel' | 'landmark' | 'other' | 'custom';
   popularityScore: number;
   isPickupLocation?: boolean;
   isDropLocation?: boolean;
@@ -259,7 +258,6 @@ export const popularLocations: Location[] = [
   ...apDestinations
 ];
 
-// Helper function to check if a location is within Visakhapatnam
 export const isVizagLocation = (location: Location): boolean => {
   if (!location) return false;
   
@@ -267,19 +265,16 @@ export const isVizagLocation = (location: Location): boolean => {
     return location.isInVizag;
   }
   
-  // Check city name
   if (location.city?.toLowerCase() === 'visakhapatnam' || 
       location.name?.toLowerCase().includes('visakhapatnam') ||
       location.name?.toLowerCase().includes('vizag')) {
     return true;
   }
   
-  // Check known Vizag locations
   if (vizagLocations.some(vizagLoc => vizagLoc.id === location.id)) {
     return true;
   }
   
-  // Check coordinates if available (within 25km of Vizag center)
   if (location.lat && location.lng) {
     const vizagCenter = { lat: 17.6868, lng: 83.2185 };
     const distance = getDistanceFromLatLonInKm(
@@ -288,15 +283,14 @@ export const isVizagLocation = (location: Location): boolean => {
       vizagCenter.lat, 
       vizagCenter.lng
     );
-    return distance <= 25; // 25km radius
+    return distance <= 25;
   }
   
   return false;
 };
 
-// Helper function to calculate distance between two coordinates
 function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371; // Radius of the earth in km
+  const R = 6371;
   const dLat = deg2rad(lat2 - lat1);
   const dLon = deg2rad(lon2 - lon1);
   const a = 
@@ -304,7 +298,7 @@ function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon
     Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
     Math.sin(dLon/2) * Math.sin(dLon/2); 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
-  const d = R * c; // Distance in km
+  const d = R * c;
   return d;
 }
 
@@ -312,7 +306,6 @@ function deg2rad(deg: number) {
   return deg * (Math.PI/180);
 }
 
-// Check if both pickup and drop locations are within Visakhapatnam
 export const areBothLocationsInVizag = (pickup: Location | null, drop: Location | null): boolean => {
   if (!pickup || !drop) return false;
   return isVizagLocation(pickup) && isVizagLocation(drop);
@@ -340,7 +333,6 @@ export const searchLocations = (query: string, isPickup: boolean = false): Locat
       isVizagLocation(loc) && loc.isPickupLocation !== false
     );
   } else {
-    // For drop locations, we don't restrict by location (can be anywhere in India)
     filteredLocations = filteredLocations.filter(loc => 
       loc.isDropLocation !== false
     );
@@ -351,7 +343,6 @@ export const searchLocations = (query: string, isPickup: boolean = false): Locat
     .slice(0, 10);
 };
 
-// Updated distance calculation with consistent values
 export const getDistanceBetweenLocations = (fromId: string, toId: string): number => {
   const distances: Record<string, Record<string, number>> = {
     'vizag_airport': {
@@ -409,7 +400,6 @@ export const getDistanceBetweenLocations = (fromId: string, toId: string): numbe
     return Math.floor(Math.random() * 20) + 5;
   }
   
-  // Default fallback - calculate approximate distance based on well-known locations
   const fromLocation = [...vizagLocations, ...apDestinations].find(loc => loc.id === fromId);
   const toLocation = [...vizagLocations, ...apDestinations].find(loc => loc.id === toId);
   
@@ -424,7 +414,6 @@ export const getDistanceBetweenLocations = (fromId: string, toId: string): numbe
     );
   }
   
-  // Final fallback - reasonable distance based on location
   if (toId.includes('bangalore')) return 995;
   if (toId.includes('hyderabad')) return 610;
   if (toId.includes('chennai')) return 780;
@@ -435,44 +424,39 @@ export const getDistanceBetweenLocations = (fromId: string, toId: string): numbe
   return Math.floor(Math.random() * 500) + 100;
 };
 
-// Calculate airport transfer fare based on distance and cab type
 export const calculateAirportFare = (cabType: string, distance: number): number => {
-  // Pricing tiers based on distance to/from airport
   if (cabType.toLowerCase() === 'sedan') {
     if (distance <= 15) return 840;
     if (distance <= 20) return 1000;
     if (distance <= 30) return 1200;
     if (distance <= 35) return 1500;
-    return 1500 + (distance - 35) * 14; // Additional KM at ₹14/km
+    return 1500 + (distance - 35) * 14;
   } 
   else if (cabType.toLowerCase() === 'ertiga') {
     if (distance <= 15) return 1200;
     if (distance <= 20) return 1500;
     if (distance <= 30) return 1800;
     if (distance <= 35) return 2100;
-    return 2100 + (distance - 35) * 18; // Additional KM at ₹18/km
+    return 2100 + (distance - 35) * 18;
   }
   else if (cabType.toLowerCase() === 'innova crysta') {
     if (distance <= 15) return 1500;
     if (distance <= 20) return 1800;
     if (distance <= 30) return 2100;
     if (distance <= 35) return 2500;
-    return 2500 + (distance - 35) * 20; // Additional KM at ₹20/km
+    return 2500 + (distance - 35) * 20;
   }
   
-  // Default fallback
   return distance * 20;
 };
 
 export const getEstimatedTravelTime = (distance: number): number => {
-  // For very long distances (inter-city)
   if (distance > 100) {
-    const averageSpeed = 55; // km/hr
+    const averageSpeed = 55;
     return Math.ceil((distance / averageSpeed) * 60);
   }
   
-  // For shorter distances (within city)
-  const averageSpeed = 35; // km/hr within city
+  const averageSpeed = 35;
   return Math.ceil((distance / averageSpeed) * 60);
 };
 

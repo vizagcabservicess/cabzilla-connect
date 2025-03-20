@@ -9,7 +9,8 @@ import { DateTimePicker } from "@/components/DateTimePicker";
 import { LocationInput } from "@/components/LocationInput";
 import { BookingStatusManager } from "@/components/BookingStatusManager";
 import { bookingAPI, authAPI } from '@/services/api';
-import { Booking, Location, BookingStatus } from '@/types/api';
+import { Booking, Location as ApiLocation, BookingStatus } from '@/types/api';
+import { Location } from '@/lib/locationData';
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, AlertCircle, Loader2 } from 'lucide-react';
 import { safeGetString } from '@/lib/safeStringUtils';
@@ -25,12 +26,24 @@ export default function BookingEditPage() {
   const [pickupLocation, setPickupLocation] = useState<Location>({ 
     id: 'pickup', 
     name: 'Pickup Location',
-    address: '' 
+    address: '',
+    city: 'Visakhapatnam',
+    state: 'Andhra Pradesh',
+    lat: 0,
+    lng: 0,
+    type: 'other',
+    popularityScore: 0
   });
   const [dropLocation, setDropLocation] = useState<Location>({ 
     id: 'drop', 
     name: 'Drop Location',
-    address: '' 
+    address: '',
+    city: 'Visakhapatnam',
+    state: 'Andhra Pradesh',
+    lat: 0,
+    lng: 0,
+    type: 'other',
+    popularityScore: 0
   });
   const [pickupDate, setPickupDate] = useState<Date | undefined>(undefined);
   const isAdmin = authAPI.isAdmin();

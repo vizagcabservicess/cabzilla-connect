@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LocationInput } from "@/components/LocationInput";
 import { toast } from "sonner";
-import { Location } from "@/types/api";
+import { Location as ApiLocation } from "@/types/api";
+import { Location } from "@/lib/locationData";
 
 export default function MapDebugPage() {
   const { isLoaded, loadError, google } = useGoogleMaps();
@@ -16,14 +16,18 @@ export default function MapDebugPage() {
     id: 'debug_loc',
     name: '',
     address: '',
-    isInVizag: false
+    isInVizag: false,
+    city: 'Visakhapatnam',
+    state: 'Andhra Pradesh',
+    lat: 0,
+    lng: 0,
+    type: 'other',
+    popularityScore: 0
   });
 
-  // Check Google Maps loading status
   useEffect(() => {
     const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
     
-    // Safely create masked API key
     let maskedKey = 'Not configured';
     if (apiKey) {
       const firstChars = apiKey.substring(0, 4);
@@ -31,7 +35,6 @@ export default function MapDebugPage() {
       maskedKey = `${firstChars}...${lastChars}`;
     }
     
-    // Gather information about Google Maps
     let info = [
       `API Key (masked): ${maskedKey}`,
       `Maps loaded: ${isLoaded ? 'Yes ✅' : 'No ❌'}`,
@@ -44,19 +47,15 @@ export default function MapDebugPage() {
     setGoogleInfo(info);
   }, [isLoaded, loadError, google]);
   
-  // Function to help restart the Google Maps API
   const handleReloadMaps = () => {
-    // We can't directly reload just the Maps API, but we can reload the page
     window.location.reload();
     toast.info("Reloading page to refresh Maps API...");
   };
 
-  // Handle location change from LocationInput component
   const handleLocationChange = (newLocation: Location) => {
     console.log('Location changed in debug page:', newLocation);
     setLocation(newLocation);
     
-    // Display success toast if a location was selected
     if (newLocation.address) {
       toast.success("Location successfully selected! Check console for details.");
     }
@@ -124,7 +123,13 @@ export default function MapDebugPage() {
                 id: 'debug_loc',
                 name: '',
                 address: '',
-                isInVizag: false
+                isInVizag: false,
+                city: 'Visakhapatnam',
+                state: 'Andhra Pradesh',
+                lat: 0,
+                lng: 0,
+                type: 'other',
+                popularityScore: 0
               })}
             >
               Reset Location
