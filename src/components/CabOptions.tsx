@@ -295,8 +295,8 @@ export function CabOptions({
     }
   };
 
-  // Generate fare details for display
-  const getFareDetails = useCallback((cab: CabType): string => {
+  // Generate fare details for display - FIX: Removed parameter to match function signature
+  const getFareDetails = useCallback((): string => {
     return fareService.getFareExplanation(
       distance,
       tripType,
@@ -374,7 +374,7 @@ export function CabOptions({
               fare={cabFares[cab.id] || 0}
               isSelected={selectedCabId === cab.id}
               onSelect={handleSelectCab}
-              fareDetails={getFareDetails(cab)}
+              fareDetails={getFareDetails()}
               isCalculating={isCalculatingFares}
             />
           ))}
