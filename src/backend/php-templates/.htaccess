@@ -42,13 +42,15 @@ RewriteRule ^api/vehicles-data$ api/fares/vehicles-data.php [L,QSA]
 # Set the default character set
 AddDefaultCharset UTF-8
 
-# Disable caching for API endpoints
+# Disable caching for API endpoints - Make these even more aggressive
 <IfModule mod_headers.c>
     <FilesMatch "^api/">
         Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
         Header always set Pragma "no-cache"
         Header always set Expires "0"
         Header always set X-Cache-Timestamp "%{TIME}e"
+        # Add version number to force cache refresh
+        Header always set X-API-Version "1.0.51"
     </FilesMatch>
 </IfModule>
 
@@ -59,6 +61,8 @@ AddDefaultCharset UTF-8
         Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
         Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh"
         Header always set Access-Control-Max-Age "3600"
+        # Add a debug header for CORS issues
+        Header always set X-CORS-Debug "Enabled"
     </FilesMatch>
 </IfModule>
 
@@ -66,9 +70,13 @@ AddDefaultCharset UTF-8
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule ^api/ - [R=200,L]
 
-# Return 200 OK with necessary CORS headers for OPTIONS
+# Always return 200 OK with necessary CORS headers for OPTIONS
 <If "%{REQUEST_METHOD} == 'OPTIONS'">
     Header always set Status "200 OK"
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh"
+    Header always set Access-Control-Max-Age "3600"
 </If>
 
 # Redirect all non-file/directory/API requests to index.html for React Router

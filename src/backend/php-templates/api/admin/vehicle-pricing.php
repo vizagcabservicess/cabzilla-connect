@@ -1,3 +1,4 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -6,17 +7,21 @@ require_once __DIR__ . '/../utils/database.php';
 require_once __DIR__ . '/../utils/response.php';
 require_once __DIR__ . '/../utils/auth.php';
 
-// Set necessary headers for CORS and JSON responses
-setHeaders();
+// Set necessary headers for CORS and JSON responses with more permissive settings
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh');
+header('Access-Control-Max-Age: 3600');
+header('Content-Type: application/json');
+
+// For preflight OPTIONS request - respond immediately
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit;
+}
 
 // Connect to the database
 $conn = connectToDatabase();
-
-// Handle preflight OPTIONS request
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    sendEmptyResponse();
-    exit;
-}
 
 // Get the request method
 $method = $_SERVER['REQUEST_METHOD'];
@@ -200,73 +205,78 @@ function updateAirportFares($conn, $vehicleId, $fareData) {
 
 // Handle POST request to update pricing
 if ($method === 'POST') {
-    // Get request body
-    $json = file_get_contents('php://input');
-    $data = json_decode($json, true);
-    
-    // Log the incoming data
-    logError("Received vehicle pricing update request", $data);
-    
-    // Validate required fields
-    if (!isset($data['vehicleId']) || !isset($data['tripType'])) {
-        logError("Missing required fields in request", $data);
-        sendJsonResponse(['status' => 'error', 'message' => 'Missing required fields: vehicleId and tripType'], 400);
-        exit;
-    }
-    
-    // Clean the vehicle ID
-    $vehicleId = cleanVehicleId($data['vehicleId']);
-    $tripType = $data['tripType'];
-    
-    // Log the cleaned data
-    logError("Cleaned vehicle pricing data", ['vehicleId' => $vehicleId, 'tripType' => $tripType]);
-    
-    // Enable automatic vehicle creation if it doesn't exist
-    if (!vehicleExists($conn, $vehicleId)) {
-        logError("Vehicle not found, will be created", ['vehicleId' => $vehicleId]);
+    try {
+        // Get request body
+        $json = file_get_contents('php://input');
+        $data = json_decode($json, true);
         
-        // Create the vehicle with basic info
-        $stmt = $conn->prepare("INSERT INTO vehicles (id, vehicle_id, name, is_active, created_at, updated_at) VALUES (?, ?, ?, 1, NOW(), NOW())");
-        $name = isset($data['name']) ? $data['name'] : ucfirst(str_replace('_', ' ', $vehicleId));
-        $stmt->bind_param("sss", $vehicleId, $vehicleId, $name);
+        // Log the incoming data
+        logError("Received vehicle pricing update request", $data);
         
-        if (!$stmt->execute()) {
-            logError("Could not create vehicle", ['error' => $stmt->error]);
-            // Continue anyway as the vehicle might exist in a different format
+        // Validate required fields
+        if (!isset($data['vehicleId']) || !isset($data['tripType'])) {
+            logError("Missing required fields in request", $data);
+            sendJsonResponse(['status' => 'error', 'message' => 'Missing required fields: vehicleId and tripType'], 400);
+            exit;
         }
-    }
-    
-    // Handle different trip types
-    $success = false;
-    
-    // Map front-end trip types to their handling functions
-    $tripTypeMap = [
-        'outstation-one-way' => 'updateOutstationFares',
-        'outstation-round-trip' => 'updateOutstationFares',
-        'outstation' => 'updateOutstationFares',
-        'local' => 'updateLocalFares',
-        'airport' => 'updateAirportFares'
-    ];
-    
-    if (!isset($tripTypeMap[$tripType])) {
-        logError("Invalid trip type", ['tripType' => $tripType]);
-        sendJsonResponse(['status' => 'error', 'message' => 'Invalid trip type: ' . $tripType], 400);
-        exit;
-    }
-    
-    // Call the appropriate function based on trip type
-    $handlerFunction = $tripTypeMap[$tripType];
-    $success = $handlerFunction($conn, $vehicleId, $data);
-    
-    if ($success) {
-        sendJsonResponse([
-            'status' => 'success', 
-            'message' => "Pricing updated successfully for $tripType", 
-            'vehicleId' => $vehicleId,
-            'timestamp' => time()
-        ]);
-    } else {
-        sendJsonResponse(['status' => 'error', 'message' => 'Failed to update pricing'], 500);
+        
+        // Clean the vehicle ID
+        $vehicleId = cleanVehicleId($data['vehicleId']);
+        $tripType = $data['tripType'];
+        
+        // Log the cleaned data
+        logError("Cleaned vehicle pricing data", ['vehicleId' => $vehicleId, 'tripType' => $tripType]);
+        
+        // Enable automatic vehicle creation if it doesn't exist
+        if (!vehicleExists($conn, $vehicleId)) {
+            logError("Vehicle not found, will be created", ['vehicleId' => $vehicleId]);
+            
+            // Create the vehicle with basic info
+            $stmt = $conn->prepare("INSERT INTO vehicles (id, vehicle_id, name, is_active, created_at, updated_at) VALUES (?, ?, ?, 1, NOW(), NOW())");
+            $name = isset($data['name']) ? $data['name'] : ucfirst(str_replace('_', ' ', $vehicleId));
+            $stmt->bind_param("sss", $vehicleId, $vehicleId, $name);
+            
+            if (!$stmt->execute()) {
+                logError("Could not create vehicle", ['error' => $stmt->error]);
+                // Continue anyway as the vehicle might exist in a different format
+            }
+        }
+        
+        // Handle different trip types
+        $success = false;
+        
+        // Map front-end trip types to their handling functions
+        $tripTypeMap = [
+            'outstation-one-way' => 'updateOutstationFares',
+            'outstation-round-trip' => 'updateOutstationFares',
+            'outstation' => 'updateOutstationFares',
+            'local' => 'updateLocalFares',
+            'airport' => 'updateAirportFares'
+        ];
+        
+        if (!isset($tripTypeMap[$tripType])) {
+            logError("Invalid trip type", ['tripType' => $tripType]);
+            sendJsonResponse(['status' => 'error', 'message' => 'Invalid trip type: ' . $tripType], 400);
+            exit;
+        }
+        
+        // Call the appropriate function based on trip type
+        $handlerFunction = $tripTypeMap[$tripType];
+        $success = $handlerFunction($conn, $vehicleId, $data);
+        
+        if ($success) {
+            sendJsonResponse([
+                'status' => 'success', 
+                'message' => "Pricing updated successfully for $tripType", 
+                'vehicleId' => $vehicleId,
+                'timestamp' => time()
+            ]);
+        } else {
+            sendJsonResponse(['status' => 'error', 'message' => 'Failed to update pricing'], 500);
+        }
+    } catch (Exception $e) {
+        logError("Exception in POST handler", ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+        sendJsonResponse(['status' => 'error', 'message' => 'Exception: ' . $e->getMessage()], 500);
     }
 } 
 // Handle GET request to fetch pricing
