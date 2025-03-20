@@ -77,8 +77,19 @@ export function LocationInput({
     isLoading: isAutocompleteLoading,
     getPlacePredictions,
     getPlaceDetails,
-    isInitialized: isAutocompleteInitialized
-  } = usePlacesAutocomplete();
+    isInitialized: isAutocompleteInitialized,
+    forceInitialization
+  } = usePlacesAutocomplete({
+    country: 'in' // Always restrict to India
+  });
+
+  // Force initialization on component mount
+  useEffect(() => {
+    if (isLoaded && google && !isAutocompleteInitialized) {
+      console.log("Forcing Places initialization in LocationInput");
+      forceInitialization();
+    }
+  }, [isLoaded, google, isAutocompleteInitialized, forceInitialization]);
 
   // Handle input change with throttling
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -95,7 +106,7 @@ export function LocationInput({
     setIsLoading(true);
     
     // Try to use Google Places API if available
-    const useGoogle = isLoaded && google && placesInitialized && isAutocompleteInitialized;
+    const useGoogle = isLoaded && google && (placesInitialized || isAutocompleteInitialized);
     
     if (useGoogle) {
       try {
@@ -111,23 +122,27 @@ export function LocationInput({
           new google.maps.LatLng(17.8, 83.4)   // NE corner of Vizag
         );
         
-        // Use appropriate bounds based on pickup/dropoff
+        // Use appropriate bounds - for pickup locations, limit to Vizag
+        // For drop locations, allow all of India
         const bounds = isPickupLocation ? vizagBounds : indiaBounds;
         
         // Get predictions with the usePlacesAutocomplete hook
         getPlacePredictions(value, bounds)
           .then(results => {
-            setSuggestions(results);
-            setShowSuggestions(true);
-            setUseLocalSuggestions(false);
+            if (results && results.length > 0) {
+              setSuggestions(results);
+              setShowSuggestions(true);
+              setUseLocalSuggestions(false);
+              console.log(`Found ${results.length} Google places suggestions`);
+            } else {
+              console.log("No Google predictions found, falling back to local");
+              fallbackToLocalSearch(value);
+            }
           })
           .catch(error => {
             console.error("Failed to get Google predictions:", error);
             // Fallback to local suggestions
-            const localResults = searchLocations(value, isPickupLocation);
-            setLocalSuggestions(localResults);
-            setUseLocalSuggestions(true);
-            setShowSuggestions(true);
+            fallbackToLocalSearch(value);
           })
           .finally(() => {
             setIsLoading(false);
@@ -146,7 +161,7 @@ export function LocationInput({
   const fallbackToLocalSearch = (query: string) => {
     // Call our local search function instead
     const localResults = searchLocations(query, isPickupLocation);
-    console.log("Using fallback location for manual input:", localResults);
+    console.log(`Using fallback location search: found ${localResults.length} results`);
     setLocalSuggestions(localResults);
     setUseLocalSuggestions(true);
     setShowSuggestions(true);
@@ -190,11 +205,32 @@ export function LocationInput({
           })
         };
         
+        console.log("Selected location details:", location);
         onLocationChange(location);
       }
     } catch (error) {
       console.error("Error fetching place details:", error);
-      toast.error("Failed to get location details. Please try again.");
+      
+      // Create a basic location even if details fail
+      const basicLocation: Location = {
+        id: suggestion.place_id,
+        name: suggestion.structured_formatting ? 
+              suggestion.structured_formatting.main_text : 
+              suggestion.description,
+        address: suggestion.description,
+        lat: 0, // Default coordinates
+        lng: 0,
+        type: 'custom',
+        isInVizag: false
+      };
+      
+      console.log("Created basic location from suggestion:", basicLocation);
+      onLocationChange(basicLocation);
+      
+      toast.error("Limited location details available", {
+        description: "Some features might not work correctly",
+        duration: 3000
+      });
     } finally {
       setIsLoading(false);
     }
@@ -204,6 +240,7 @@ export function LocationInput({
   const handleLocalSuggestionClick = useCallback((location: Location) => {
     setInputValue(location.name || location.address);
     setShowSuggestions(false);
+    console.log("Selected local location:", location);
     onLocationChange(location);
   }, [onLocationChange]);
 

@@ -25,6 +25,7 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
   const [hasShownAPIKeyError, setHasShownAPIKeyError] = useState(false);
   const [mapCanvasInitialized, setMapCanvasInitialized] = useState(false);
   const initializationAttempts = useRef(0);
+  const maxRetries = useRef(5);
   
   // Use provided apiKey or fallback to environment variable
   const googleMapsApiKey = apiKey || GOOGLE_MAPS_API_KEY;
@@ -70,8 +71,28 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
         
         setMapCanvasInitialized(true);
         
-        // Force Places API initialization with a slight delay
-        setTimeout(() => forcePlacesInitialization(), 300);
+        // Force Places API initialization with multiple attempts
+        const initializePlacesWithRetry = (attempt = 0) => {
+          try {
+            forcePlacesInitialization();
+            console.log(`Places initialization attempt ${attempt+1} completed`);
+            
+            // Check if it worked
+            if (window.google?.maps?.places?.AutocompleteService) {
+              console.log("Places service successfully initialized");
+            } else if (attempt < maxRetries.current) {
+              console.log(`Places service not available yet, retrying (${attempt+1}/${maxRetries.current})`);
+              setTimeout(() => initializePlacesWithRetry(attempt + 1), 800);
+            }
+          } catch (error) {
+            console.error(`Error in Places initialization attempt ${attempt+1}:`, error);
+            if (attempt < maxRetries.current) {
+              setTimeout(() => initializePlacesWithRetry(attempt + 1), 800);
+            }
+          }
+        };
+        
+        setTimeout(() => initializePlacesWithRetry(), 300);
       } catch (error) {
         console.error("Error initializing map canvas:", error);
       }
@@ -125,7 +146,8 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
     isLoaded, 
     loadError,
     // Always use window.google as a fallback to ensure it's available even if state hasn't updated
-    google: googleInstance || (isLoaded && window.google ? window.google : null)
+    google: googleInstance || (isLoaded && window.google ? window.google : null),
+    placesInitialized: !!(window.google?.maps?.places?.AutocompleteService)
   };
 
   return (

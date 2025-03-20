@@ -11,7 +11,7 @@ interface PlacesAutocompleteOptions {
 }
 
 export function usePlacesAutocomplete(options: PlacesAutocompleteOptions = {}) {
-  const { isLoaded, google } = useGoogleMaps();
+  const { isLoaded, google, placesInitialized } = useGoogleMaps();
   const [suggestions, setSuggestions] = useState<google.maps.places.AutocompletePrediction[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const autocompleteServiceRef = useRef<google.maps.places.AutocompleteService | null>(null);
@@ -19,19 +19,16 @@ export function usePlacesAutocomplete(options: PlacesAutocompleteOptions = {}) {
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
   const initializationAttempts = useRef<number>(0);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const hasLoggedError = useRef<boolean>(false);
   
   const MAX_INITIALIZATION_ATTEMPTS = 5;
   const debounceTime = options.debounceTime || 300;
 
-  // Initialize services
+  // Initialize services with better error handling
   useEffect(() => {
     if (!isLoaded || !google?.maps) return;
     
     const initializeServices = () => {
-      // Clear any previous services
-      autocompleteServiceRef.current = null;
-      placesServiceRef.current = null;
-      
       try {
         console.log("Initializing Places services in usePlacesAutocomplete hook");
         
@@ -55,6 +52,7 @@ export function usePlacesAutocomplete(options: PlacesAutocompleteOptions = {}) {
         // Set initialization flag
         setIsInitialized(true);
         initializationAttempts.current = 0;
+        hasLoggedError.current = false;
         
         console.log("Places services initialized successfully");
       } catch (error) {
@@ -64,8 +62,9 @@ export function usePlacesAutocomplete(options: PlacesAutocompleteOptions = {}) {
           initializationAttempts.current++;
           console.log(`Retrying Places initialization (${initializationAttempts.current}/${MAX_INITIALIZATION_ATTEMPTS})`);
           setTimeout(initializeServices, 800);
-        } else {
+        } else if (!hasLoggedError.current) {
           console.error(`Failed to initialize Places services after ${MAX_INITIALIZATION_ATTEMPTS} attempts`);
+          hasLoggedError.current = true;
           toast.error("Location search is temporarily unavailable", { id: "places-init-failed" });
         }
       }
@@ -80,9 +79,9 @@ export function usePlacesAutocomplete(options: PlacesAutocompleteOptions = {}) {
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [isLoaded, google]);
+  }, [isLoaded, google, placesInitialized]);
 
-  // Get place details from place ID
+  // Get place details from place ID with better error handling
   const getPlaceDetails = useCallback((placeId: string): Promise<google.maps.places.PlaceResult> => {
     return new Promise((resolve, reject) => {
       // If Places service is not initialized, try to initialize it on-demand
@@ -118,7 +117,7 @@ export function usePlacesAutocomplete(options: PlacesAutocompleteOptions = {}) {
     });
   }, [google]);
 
-  // Search for places with debounce
+  // Search for places with debounce and improved error handling
   const getPlacePredictions = useCallback((
     query: string, 
     bounds?: google.maps.LatLngBounds
@@ -163,24 +162,33 @@ export function usePlacesAutocomplete(options: PlacesAutocompleteOptions = {}) {
           requestOptions.bounds = bounds;
         }
         
-        autocompleteServiceRef.current.getPlacePredictions(
-          requestOptions,
-          (results, status) => {
-            setIsLoading(false);
-            
-            if (status === google.maps.places.PlacesServiceStatus.OK && results) {
-              setSuggestions(results);
-              resolve(results);
-            } else if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
-              setSuggestions([]);
-              resolve([]);
-            } else {
-              console.error("Autocomplete request failed:", status);
-              setSuggestions([]);
-              reject(new Error(`Autocomplete request failed: ${status}`));
+        try {
+          autocompleteServiceRef.current.getPlacePredictions(
+            requestOptions,
+            (results, status) => {
+              setIsLoading(false);
+              
+              if (status === google.maps.places.PlacesServiceStatus.OK && results && results.length > 0) {
+                console.log("Autocomplete results:", results.length);
+                setSuggestions(results);
+                resolve(results);
+              } else if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+                console.log("No autocomplete results found");
+                setSuggestions([]);
+                resolve([]);
+              } else {
+                console.error("Autocomplete request failed:", status);
+                setSuggestions([]);
+                reject(new Error(`Autocomplete request failed: ${status}`));
+              }
             }
-          }
-        );
+          );
+        } catch (error) {
+          console.error("Error making autocomplete request:", error);
+          setIsLoading(false);
+          setSuggestions([]);
+          reject(error);
+        }
       }, debounceTime);
     });
   }, [google, options.country, debounceTime]);
@@ -199,6 +207,7 @@ export function usePlacesAutocomplete(options: PlacesAutocompleteOptions = {}) {
         }
         
         setIsInitialized(true);
+        hasLoggedError.current = false;
         return true;
       } catch (error) {
         console.error("Error in force initialization:", error);
