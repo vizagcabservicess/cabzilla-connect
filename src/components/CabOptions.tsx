@@ -347,7 +347,7 @@ export function CabOptions({
               fare={cabFares[cab.id] || 0}
               isSelected={selectedCabId === cab.id}
               onSelect={handleSelectCab}
-              fareDetails={getFareDetails()} // Fixed: Don't pass any arguments, call the function without arguments
+              fareDetails={getFareDetails()} // Call without arguments
               isCalculating={isCalculatingFares}
             />
           ))}
