@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { CabType } from '@/types/cab';
 import { formatPrice } from '@/lib/cabData';
@@ -54,7 +55,7 @@ export function CabOptions({
       setIsLoadingCabs(true);
       try {
         console.log('Loading dynamic cab types...', Date.now());
-        fareService.clearCache(); // Remove argument here
+        fareService.clearCache(); // Removed the argument here
         
         const cacheBuster = new Date().getTime();
         const dynamicCabTypes = await loadCabTypes(`?_t=${cacheBuster}`);
@@ -97,7 +98,7 @@ export function CabOptions({
       sessionStorage.removeItem('calculatedFares');
       localStorage.removeItem('cabTypes');
       
-      fareService.clearCache(); // Remove argument here
+      fareService.clearCache(); // Removed the argument here
       
       console.log('Forcing cab types refresh...', Date.now());
       const cacheBuster = new Date().getTime();
