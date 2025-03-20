@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useEffect, useCallback, useState, useRef } from "react";
@@ -20,6 +19,7 @@ export function TabTripSelector({
   const [prevTab, setPrevTab] = useState<string | null>(null);
   const isClearing = useRef(false);
   const isProcessingTabChange = useRef(false);
+  const lastTabChangeTime = useRef<number>(0);
 
   const updateSessionStorage = useCallback(() => {
     sessionStorage.setItem('tripType', selectedTab);
@@ -55,7 +55,7 @@ export function TabTripSelector({
         
         setTimeout(() => {
           isClearing.current = false;
-        }, 500); // Increased from 300ms to 500ms for more reliability
+        }, 800); // Increased from 500ms to 800ms for more reliability
       }
     }
     
@@ -63,13 +63,26 @@ export function TabTripSelector({
   }, [selectedTab, updateSessionStorage]);
   
   const handleTabChange = (value: string) => {
-    if (value !== selectedTab && !isClearing.current && !isProcessingTabChange.current) {
-      isProcessingTabChange.current = true;
+    // Prevent very rapid tab changes by enforcing a minimum time between changes
+    const now = Date.now();
+    const timeSinceLastChange = now - lastTabChangeTime.current;
+    
+    if (value !== selectedTab && 
+        !isClearing.current && 
+        !isProcessingTabChange.current && 
+        timeSinceLastChange > 1000) { // Enforce 1 second between tab changes
       
-      // Small delay to prevent rapid tab changes
+      isProcessingTabChange.current = true;
+      lastTabChangeTime.current = now;
+      
+      // Add a small delay to prevent rapid tab changes
       setTimeout(() => {
         onTabChange(value as 'outstation' | 'local' | 'airport' | 'tour');
-        isProcessingTabChange.current = false;
+        
+        // Keep processing flag active a bit longer
+        setTimeout(() => {
+          isProcessingTabChange.current = false;
+        }, 500);
       }, 100);
     }
   };

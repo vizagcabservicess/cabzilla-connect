@@ -21,6 +21,7 @@ export function useLocationInput(
   const [useLocalSuggestions, setUseLocalSuggestions] = useState<boolean>(false);
   const [searchAttempts, setSearchAttempts] = useState<number>(0);
   const clearingInProgress = useRef(false);
+  const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
   
   const { isLoaded, google, placesInitialized } = useGoogleMaps();
   const {
@@ -68,10 +69,21 @@ export function useLocationInput(
     // Mark clearing as complete after a short delay
     setTimeout(() => {
       clearingInProgress.current = false;
-    }, 100);
+    }, 500); // Increased delay for more reliability
   }, []);
+  
+  // Clear location (notify parent of null location)
+  const clearLocation = useCallback(() => {
+    console.log("Clearing location in parent component");
+    // Use setTimeout to ensure this happens after the current event loop
+    setTimeout(() => {
+      if (onLocationChange) {
+        onLocationChange(null);
+      }
+    }, 0);
+  }, [onLocationChange]);
 
-  // Handle input change
+  // Handle input change with improved debouncing
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setInputValue(value);
@@ -83,59 +95,69 @@ export function useLocationInput(
       return;
     }
     
+    // Clear previous timeout if it exists
+    if (debounceTimeout.current) {
+      clearTimeout(debounceTimeout.current);
+    }
+    
+    // Set loading immediately
     setIsLoading(true);
-    setSearchAttempts(prev => prev + 1);
     
-    // Check if we can use Google Places API
-    const useGoogle = isLoaded && google && (placesInitialized || isAutocompleteInitialized);
-    
-    if (useGoogle) {
-      try {
-        console.log("Using Google Places API for search");
-        
-        let bounds;
-        
-        if (isPickupLocation) {
-          // For pickup locations, set a much wider radius around Visakhapatnam (approximately 100km)
-          bounds = new google.maps.LatLngBounds(
-            new google.maps.LatLng(16.9, 82.2), // SW corner - greatly expanded
-            new google.maps.LatLng(18.5, 84.2)  // NE corner - greatly expanded
-          );
-        } else {
-          // For drop locations, use all of India (very wide area)
-          bounds = new google.maps.LatLngBounds(
-            new google.maps.LatLng(6.0, 68.0), // SW corner of India - expanded
-            new google.maps.LatLng(38.0, 98.0)  // NE corner of India - expanded
-          );
-        }
-        
-        getPlacePredictions(value, bounds)
-          .then(results => {
-            if (results && results.length > 0) {
-              setSuggestions(results);
-              setShowSuggestions(true);
-              setUseLocalSuggestions(false);
-              console.log(`Found ${results.length} Google places suggestions`);
-            } else {
-              console.log("No Google predictions found, falling back to local");
+    // Debounce the search to avoid too many API calls
+    debounceTimeout.current = setTimeout(() => {
+      setSearchAttempts(prev => prev + 1);
+      
+      // Check if we can use Google Places API
+      const useGoogle = isLoaded && google && (placesInitialized || isAutocompleteInitialized);
+      
+      if (useGoogle) {
+        try {
+          console.log("Using Google Places API for search");
+          
+          let bounds;
+          
+          if (isPickupLocation) {
+            // For pickup locations, set a much wider radius around Visakhapatnam (approximately 150km)
+            bounds = new google.maps.LatLngBounds(
+              new google.maps.LatLng(16.4, 81.8), // SW corner - greatly expanded
+              new google.maps.LatLng(18.8, 84.6)  // NE corner - greatly expanded
+            );
+          } else {
+            // For drop locations, use all of India (very wide area)
+            bounds = new google.maps.LatLngBounds(
+              new google.maps.LatLng(6.0, 68.0), // SW corner of India - expanded
+              new google.maps.LatLng(38.0, 98.0)  // NE corner of India - expanded
+            );
+          }
+          
+          getPlacePredictions(value, bounds)
+            .then(results => {
+              if (results && results.length > 0) {
+                setSuggestions(results);
+                setShowSuggestions(true);
+                setUseLocalSuggestions(false);
+                console.log(`Found ${results.length} Google places suggestions`);
+              } else {
+                console.log("No Google predictions found, falling back to local");
+                fallbackToLocalSearch(value);
+              }
+            })
+            .catch(error => {
+              console.error("Failed to get Google predictions:", error);
               fallbackToLocalSearch(value);
-            }
-          })
-          .catch(error => {
-            console.error("Failed to get Google predictions:", error);
-            fallbackToLocalSearch(value);
-          })
-          .finally(() => {
-            setIsLoading(false);
-          });
-      } catch (error) {
-        console.error("Error in Google Places autocomplete:", error);
+            })
+            .finally(() => {
+              setIsLoading(false);
+            });
+        } catch (error) {
+          console.error("Error in Google Places autocomplete:", error);
+          fallbackToLocalSearch(value);
+        }
+      } else {
+        console.log("Using local location search as fallback");
         fallbackToLocalSearch(value);
       }
-    } else {
-      console.log("Using local location search as fallback");
-      fallbackToLocalSearch(value);
-    }
+    }, 300); // 300ms debounce time
   }, [google, isLoaded, isPickupLocation, placesInitialized, isAutocompleteInitialized, getPlacePredictions]);
 
   // Fallback to local search when Google search fails
@@ -302,7 +324,8 @@ export function useLocationInput(
     handleInputFocus,
     handleSuggestionClick,
     handleLocalSuggestionClick,
-    resetInputValue
+    resetInputValue,
+    clearLocation // Add the new method to the return object
   };
 }
 

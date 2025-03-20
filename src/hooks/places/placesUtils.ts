@@ -62,7 +62,9 @@ export function createAutocompleteRequest(
   const requestOptions: google.maps.places.AutocompletionRequest = {
     input: query,
     // For maximum results, don't restrict the type
-    types: [] 
+    types: [],
+    // Set sessionToken to undefined to avoid any restrictions
+    sessionToken: undefined
   };
   
   // Add country restriction only if specifically requested
@@ -74,7 +76,7 @@ export function createAutocompleteRequest(
   if (bounds) {
     requestOptions.bounds = bounds;
     // Force strictBounds to false to get more results
-    (requestOptions as any).strictBounds = false;
+    requestOptions.strictBounds = false;
   }
   
   return requestOptions;

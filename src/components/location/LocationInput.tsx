@@ -19,6 +19,8 @@ export function LocationInput({
 }: LocationInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsListRef = useRef<HTMLDivElement>(null);
+  const clearClickRef = useRef<boolean>(false);
+  
   const {
     inputValue,
     suggestions,
@@ -31,20 +33,25 @@ export function LocationInput({
     handleInputFocus,
     handleSuggestionClick,
     handleLocalSuggestionClick,
-    resetInputValue
+    resetInputValue,
+    clearLocation
   } = useLocationInput(value, onLocationChange, isPickupLocation);
 
   // Close suggestions when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
-        inputRef.current && 
-        !inputRef.current.contains(event.target as Node) && 
-        suggestionsListRef.current && 
-        !suggestionsListRef.current.contains(event.target as Node)
+        clearClickRef.current ||
+        (inputRef.current && 
+        inputRef.current.contains(event.target as Node)) || 
+        (suggestionsListRef.current && 
+        suggestionsListRef.current.contains(event.target as Node))
       ) {
-        setShowSuggestions(false);
+        // Don't close if clicking on input, suggestions, or the clear button
+        clearClickRef.current = false;
+        return;
       }
+      setShowSuggestions(false);
     };
     
     document.addEventListener('mousedown', handleClickOutside);
@@ -58,16 +65,12 @@ export function LocationInput({
     e.preventDefault();
     e.stopPropagation();
     
-    // Clear the input value immediately
-    resetInputValue();
+    // Set flag to prevent closing suggestions
+    clearClickRef.current = true;
     
-    // Notify parent component that location has been cleared
-    if (onLocationChange) {
-      // Use setTimeout to ensure this runs after the current event loop cycle
-      setTimeout(() => {
-        onLocationChange(null);
-      }, 0);
-    }
+    // Clear both the input value and the location
+    resetInputValue();
+    clearLocation();
     
     // Focus input after clearing
     if (inputRef.current) {
