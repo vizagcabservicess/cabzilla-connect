@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,13 +14,16 @@ import {
 import { toast } from "sonner";
 import { fareService } from "@/services/fareService";
 import { getVehicleTypes } from "@/services/vehicleDataService";
-import { Loader2 } from "lucide-react";
+import { Loader2, RefreshCw, AlertCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export const VehicleTripFaresForm = () => {
   const [isLoading, setIsLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [vehicles, setVehicles] = useState<{id: string, name: string}[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState("");
   const [activeTab, setActiveTab] = useState("outstation");
+  const [error, setError] = useState<string | null>(null);
   
   // Outstation fare state
   const [outstationOneWayBasePrice, setOutstationOneWayBasePrice] = useState("");
@@ -39,24 +42,41 @@ export const VehicleTripFaresForm = () => {
   const [airportFee, setAirportFee] = useState("");
   
   // Load vehicles on mount
-  React.useEffect(() => {
-    const loadVehicles = async () => {
-      try {
-        const vehicleList = await getVehicleTypes();
-        setVehicles(vehicleList);
-        
-        console.log("Loaded vehicles for fare management:", vehicleList);
-      } catch (error) {
-        console.error("Error loading vehicles:", error);
-        toast.error("Failed to load vehicles");
-      }
-    };
-    
+  useEffect(() => {
     loadVehicles();
   }, []);
   
+  const loadVehicles = async () => {
+    setIsRefreshing(true);
+    setError(null);
+    try {
+      const vehicleList = await getVehicleTypes();
+      setVehicles(vehicleList);
+      
+      console.log("Loaded vehicles for fare management:", vehicleList);
+      toast.success("Vehicle data refreshed");
+    } catch (error) {
+      console.error("Error loading vehicles:", error);
+      setError("Failed to load vehicles. The API may be down or returned an error.");
+      toast.error("Failed to load vehicles");
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+  
   const handleVehicleChange = (value: string) => {
     setSelectedVehicle(value);
+    // Reset form values when vehicle changes
+    setOutstationOneWayBasePrice("");
+    setOutstationOneWayPricePerKm("");
+    setOutstationRoundTripBasePrice("");
+    setOutstationRoundTripPricePerKm("");
+    setLocalHr8Km80("");
+    setLocalHr10Km100("");
+    setLocalExtraKmRate("");
+    setAirportBasePrice("");
+    setAirportPricePerKm("");
+    setAirportFee("");
   };
   
   const handleOutstationFareUpdate = async () => {
@@ -66,8 +86,11 @@ export const VehicleTripFaresForm = () => {
     }
 
     setIsLoading(true);
+    setError(null);
     
     try {
+      console.log("Updating outstation fares for vehicle:", selectedVehicle);
+      
       // Update one-way fares
       const oneWaySuccess = await fareService.updateTripFares(selectedVehicle, "outstation-one-way", {
         basePrice: parseFloat(outstationOneWayBasePrice) || 0,
@@ -82,10 +105,15 @@ export const VehicleTripFaresForm = () => {
       
       if (oneWaySuccess && roundTripSuccess) {
         toast.success("Outstation fares updated successfully");
+      } else {
+        // If either update fails, show an error
+        toast.error("Failed to update some outstation fares");
+        setError("API returned an error when updating fares. Please try again.");
       }
     } catch (error) {
       console.error("Error updating outstation fares:", error);
       toast.error("Failed to update outstation fares");
+      setError("An error occurred when updating fares. The API may be unavailable.");
     } finally {
       setIsLoading(false);
     }
@@ -98,8 +126,11 @@ export const VehicleTripFaresForm = () => {
     }
 
     setIsLoading(true);
+    setError(null);
     
     try {
+      console.log("Updating local fares for vehicle:", selectedVehicle);
+      
       const success = await fareService.updateTripFares(selectedVehicle, "local", {
         hr8km80Price: parseFloat(localHr8Km80) || 0,
         hr10km100Price: parseFloat(localHr10Km100) || 0,
@@ -108,10 +139,14 @@ export const VehicleTripFaresForm = () => {
       
       if (success) {
         toast.success("Local fares updated successfully");
+      } else {
+        toast.error("Failed to update local fares");
+        setError("API returned an error when updating local fares. Please try again.");
       }
     } catch (error) {
       console.error("Error updating local fares:", error);
       toast.error("Failed to update local fares");
+      setError("An error occurred when updating local fares. The API may be unavailable.");
     } finally {
       setIsLoading(false);
     }
@@ -124,8 +159,11 @@ export const VehicleTripFaresForm = () => {
     }
 
     setIsLoading(true);
+    setError(null);
     
     try {
+      console.log("Updating airport fares for vehicle:", selectedVehicle);
+      
       const success = await fareService.updateTripFares(selectedVehicle, "airport", {
         basePrice: parseFloat(airportBasePrice) || 0,
         pricePerKm: parseFloat(airportPricePerKm) || 0,
@@ -134,10 +172,14 @@ export const VehicleTripFaresForm = () => {
       
       if (success) {
         toast.success("Airport fares updated successfully");
+      } else {
+        toast.error("Failed to update airport fares");
+        setError("API returned an error when updating airport fares. Please try again.");
       }
     } catch (error) {
       console.error("Error updating airport fares:", error);
       toast.error("Failed to update airport fares");
+      setError("An error occurred when updating airport fares. The API may be unavailable.");
     } finally {
       setIsLoading(false);
     }
@@ -151,8 +193,26 @@ export const VehicleTripFaresForm = () => {
       <CardContent>
         <div className="grid gap-4">
           <div className="flex flex-col gap-4">
+            {error && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            
             <div>
-              <label className="text-sm font-medium">Select Vehicle</label>
+              <div className="flex justify-between items-center mb-2">
+                <label className="text-sm font-medium">Select Vehicle</label>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={loadVehicles} 
+                  disabled={isRefreshing}
+                >
+                  <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  Refresh Vehicles
+                </Button>
+              </div>
               <Select value={selectedVehicle} onValueChange={handleVehicleChange}>
                 <SelectTrigger className="w-full mt-1">
                   <SelectValue placeholder="Select a vehicle" />

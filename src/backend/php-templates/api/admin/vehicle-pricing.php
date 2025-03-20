@@ -59,14 +59,14 @@ function updateOutstationFares($conn, $vehicleId, $fareData) {
     ]);
     
     // Check required fields
-    if (!isset($fareData['baseFare']) || !isset($fareData['pricePerKm'])) {
+    if (!isset($fareData['basePrice']) || !isset($fareData['pricePerKm'])) {
         logError("Missing required fields for outstation fares", $fareData);
         sendJsonResponse(['status' => 'error', 'message' => 'Missing required fields for outstation fares'], 400);
         return false;
     }
     
     // Convert to numeric values
-    $baseFare = floatval($fareData['baseFare']);
+    $baseFare = floatval($fareData['basePrice']);
     $pricePerKm = floatval($fareData['pricePerKm']);
     $nightHaltCharge = isset($fareData['nightHaltCharge']) ? floatval($fareData['nightHaltCharge']) : 0;
     $driverAllowance = isset($fareData['driverAllowance']) ? floatval($fareData['driverAllowance']) : 0;
@@ -113,17 +113,17 @@ function updateLocalFares($conn, $vehicleId, $fareData) {
     ]);
     
     // Check required fields
-    if (!isset($fareData['price8hrs80km']) || !isset($fareData['price10hrs100km']) || !isset($fareData['priceExtraKm']) || !isset($fareData['priceExtraHour'])) {
+    if (!isset($fareData['hr8km80Price']) || !isset($fareData['hr10km100Price']) || !isset($fareData['extraKmRate'])) {
         logError("Missing required fields for local fares", $fareData);
         sendJsonResponse(['status' => 'error', 'message' => 'Missing required fields for local fares'], 400);
         return false;
     }
     
     // Convert to numeric values
-    $price8hrs80km = floatval($fareData['price8hrs80km']);
-    $price10hrs100km = floatval($fareData['price10hrs100km']);
-    $priceExtraKm = floatval($fareData['priceExtraKm']);
-    $priceExtraHour = floatval($fareData['priceExtraHour']);
+    $price8hrs80km = floatval($fareData['hr8km80Price']);
+    $price10hrs100km = floatval($fareData['hr10km100Price']);
+    $priceExtraKm = floatval($fareData['extraKmRate']);
+    $priceExtraHour = isset($fareData['extraHourRate']) ? floatval($fareData['extraHourRate']) : 0;
     
     // Check if record exists
     $stmt = $conn->prepare("SELECT id FROM local_package_fares WHERE vehicle_id = ?");
@@ -162,15 +162,16 @@ function updateAirportFares($conn, $vehicleId, $fareData) {
     ]);
     
     // Check required fields
-    if (!isset($fareData['pickupFare']) || !isset($fareData['dropFare'])) {
+    if (!isset($fareData['basePrice']) || !isset($fareData['pricePerKm'])) {
         logError("Missing required fields for airport fares", $fareData);
         sendJsonResponse(['status' => 'error', 'message' => 'Missing required fields for airport fares'], 400);
         return false;
     }
     
     // Convert to numeric values
-    $pickupFare = floatval($fareData['pickupFare']);
-    $dropFare = floatval($fareData['dropFare']);
+    $basePrice = floatval($fareData['basePrice']);
+    $pricePerKm = floatval($fareData['pricePerKm']);
+    $airportFee = isset($fareData['airportFee']) ? floatval($fareData['airportFee']) : 0;
     
     // Check if record exists
     $stmt = $conn->prepare("SELECT id FROM airport_transfer_fares WHERE vehicle_id = ?");
@@ -180,12 +181,12 @@ function updateAirportFares($conn, $vehicleId, $fareData) {
     
     if ($result->num_rows > 0) {
         // Update existing record
-        $stmt = $conn->prepare("UPDATE airport_transfer_fares SET pickup_fare = ?, drop_fare = ?, updated_at = NOW() WHERE vehicle_id = ?");
-        $stmt->bind_param("dds", $pickupFare, $dropFare, $vehicleId);
+        $stmt = $conn->prepare("UPDATE airport_transfer_fares SET base_price = ?, price_per_km = ?, airport_fee = ?, updated_at = NOW() WHERE vehicle_id = ?");
+        $stmt->bind_param("ddds", $basePrice, $pricePerKm, $airportFee, $vehicleId);
     } else {
         // Insert new record
-        $stmt = $conn->prepare("INSERT INTO airport_transfer_fares (vehicle_id, pickup_fare, drop_fare, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())");
-        $stmt->bind_param("sdd", $vehicleId, $pickupFare, $dropFare);
+        $stmt = $conn->prepare("INSERT INTO airport_transfer_fares (vehicle_id, base_price, price_per_km, airport_fee, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())");
+        $stmt->bind_param("sddd", $vehicleId, $basePrice, $pricePerKm, $airportFee);
     }
     
     if (!$stmt->execute()) {
@@ -220,97 +221,50 @@ if ($method === 'POST') {
     // Log the cleaned data
     logError("Cleaned vehicle pricing data", ['vehicleId' => $vehicleId, 'tripType' => $tripType]);
     
-    // Check if vehicle exists - skip this check to allow new vehicles
-    /*if (!vehicleExists($conn, $vehicleId)) {
-        logError("Vehicle not found", ['vehicleId' => $vehicleId]);
-        sendJsonResponse(['status' => 'error', 'message' => 'Vehicle not found: ' . $vehicleId], 404);
-        exit;
-    }*/
+    // Enable automatic vehicle creation if it doesn't exist
+    if (!vehicleExists($conn, $vehicleId)) {
+        logError("Vehicle not found, will be created", ['vehicleId' => $vehicleId]);
+        
+        // Create the vehicle with basic info
+        $stmt = $conn->prepare("INSERT INTO vehicles (id, vehicle_id, name, is_active, created_at, updated_at) VALUES (?, ?, ?, 1, NOW(), NOW())");
+        $name = isset($data['name']) ? $data['name'] : ucfirst(str_replace('_', ' ', $vehicleId));
+        $stmt->bind_param("sss", $vehicleId, $vehicleId, $name);
+        
+        if (!$stmt->execute()) {
+            logError("Could not create vehicle", ['error' => $stmt->error]);
+            // Continue anyway as the vehicle might exist in a different format
+        }
+    }
     
-    // Switch based on trip type
+    // Handle different trip types
     $success = false;
     
-    // Map trip types to their handling tables
-    $tableMap = [
-        'outstation' => 'outstation_fares',
-        'local' => 'local_package_fares',
-        'airport' => 'airport_transfer_fares',
-        'base' => 'vehicles',
-        'tour' => 'tour_fares'
+    // Map front-end trip types to their handling functions
+    $tripTypeMap = [
+        'outstation-one-way' => 'updateOutstationFares',
+        'outstation-round-trip' => 'updateOutstationFares',
+        'outstation' => 'updateOutstationFares',
+        'local' => 'updateLocalFares',
+        'airport' => 'updateAirportFares'
     ];
     
-    $tableName = isset($tableMap[$tripType]) ? $tableMap[$tripType] : '';
-    
-    if (empty($tableName)) {
+    if (!isset($tripTypeMap[$tripType])) {
         logError("Invalid trip type", ['tripType' => $tripType]);
         sendJsonResponse(['status' => 'error', 'message' => 'Invalid trip type: ' . $tripType], 400);
         exit;
     }
     
-    // Handle different trip types
-    switch ($tripType) {
-        case 'outstation':
-            $success = updateOutstationFares($conn, $vehicleId, $data);
-            break;
-            
-        case 'local':
-            $success = updateLocalFares($conn, $vehicleId, $data);
-            break;
-            
-        case 'airport':
-            $success = updateAirportFares($conn, $vehicleId, $data);
-            break;
-            
-        case 'base':
-            // Handle base price updates directly in the vehicles table
-            if (!isset($data['basePrice']) || !isset($data['pricePerKm'])) {
-                logError("Missing required fields for base pricing", $data);
-                sendJsonResponse(['status' => 'error', 'message' => 'Missing required fields for base pricing'], 400);
-                exit;
-            }
-            
-            $basePrice = floatval($data['basePrice']);
-            $pricePerKm = floatval($data['pricePerKm']);
-            $nightHaltCharge = isset($data['nightHaltCharge']) ? floatval($data['nightHaltCharge']) : 0;
-            $driverAllowance = isset($data['driverAllowance']) ? floatval($data['driverAllowance']) : 0;
-            
-            // Check if vehicle exists, if not add it
-            $stmt = $conn->prepare("SELECT id FROM vehicles WHERE id = ? OR vehicle_id = ?");
-            $stmt->bind_param("ss", $vehicleId, $vehicleId);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            
-            if ($result->num_rows > 0) {
-                // Update existing vehicle
-                $stmt = $conn->prepare("UPDATE vehicles SET base_price = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?, updated_at = NOW() WHERE id = ? OR vehicle_id = ?");
-                $stmt->bind_param("ddddss", $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, $vehicleId, $vehicleId);
-            } else {
-                // Insert new vehicle
-                $stmt = $conn->prepare("INSERT INTO vehicles (id, vehicle_id, name, base_price, price_per_km, night_halt_charge, driver_allowance, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())");
-                $name = ucfirst(str_replace('_', ' ', $vehicleId));
-                $stmt->bind_param("sssdddd", $vehicleId, $vehicleId, $name, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
-            }
-            
-            $success = $stmt->execute();
-            if (!$success) {
-                logError("Database error updating base pricing", ['error' => $stmt->error]);
-                sendJsonResponse(['status' => 'error', 'message' => 'Database error: ' . $stmt->error], 500);
-                exit;
-            }
-            
-            // Also update outstation_fares for consistency
-            $success = updateOutstationFares($conn, $vehicleId, [
-                'baseFare' => $basePrice,
-                'pricePerKm' => $pricePerKm,
-                'nightHaltCharge' => $nightHaltCharge,
-                'driverAllowance' => $driverAllowance
-            ]);
-            
-            break;
-    }
+    // Call the appropriate function based on trip type
+    $handlerFunction = $tripTypeMap[$tripType];
+    $success = $handlerFunction($conn, $vehicleId, $data);
     
     if ($success) {
-        sendJsonResponse(['status' => 'success', 'message' => 'Pricing updated successfully for ' . $tripType, 'vehicleId' => $vehicleId]);
+        sendJsonResponse([
+            'status' => 'success', 
+            'message' => "Pricing updated successfully for $tripType", 
+            'vehicleId' => $vehicleId,
+            'timestamp' => time()
+        ]);
     } else {
         sendJsonResponse(['status' => 'error', 'message' => 'Failed to update pricing'], 500);
     }
