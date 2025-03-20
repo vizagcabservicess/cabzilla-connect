@@ -16,6 +16,9 @@ export interface CabType {
   isActive: boolean;
   vehicleId?: string; // Added for compatibility with API responses
   basePrice?: number; // Added for compatibility with API responses
+  hr8km80Price?: number; // Added for local package pricing
+  hr10km100Price?: number; // Added for local package pricing
+  airportFee?: number; // Added for airport transfer pricing
 }
 
 export interface HourlyPackage {
