@@ -26,8 +26,8 @@ const ensureDefaultValues = (cab: CabType): CabType => {
       name: 'Sedan',
       description: 'Comfortable sedan',
       image: '',
-      passengers: 4,
-      luggage: 2,
+      capacity: 4,
+      luggageCapacity: 2,
       price: 1000,
       basePrice: 1000,
       pricePerKm: 12,
@@ -35,7 +35,10 @@ const ensureDefaultValues = (cab: CabType): CabType => {
       hr10km100Price: 1500,
       nightHaltCharge: 300,
       driverAllowance: 300,
-      airportFee: 0
+      airportFee: 0,
+      amenities: [],
+      ac: true,
+      isActive: true
     };
   }
   

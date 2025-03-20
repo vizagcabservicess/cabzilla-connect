@@ -183,8 +183,9 @@ export function usePlacesAutocomplete(options: PlacesAutocompleteOptions = {}) {
           requestOptions.bounds = bounds;
           
           // Only set strictBounds for Vizag pickup locations
+          // Using type assertion to bypass TypeScript error
           if (options.vizagOnly) {
-            requestOptions.strictBounds = true;
+            (requestOptions as any).strictBounds = true;
           }
         }
         
@@ -207,10 +208,13 @@ export function usePlacesAutocomplete(options: PlacesAutocompleteOptions = {}) {
                 console.error("Autocomplete request failed:", status);
                 
                 // Try one more time without bounds restrictions if it failed
-                if (requestOptions.strictBounds || requestOptions.bounds) {
+                const hasStrictBounds = (requestOptions as any).strictBounds;
+                if (hasStrictBounds || requestOptions.bounds) {
                   console.log("Retrying without bounds restrictions");
                   
-                  delete requestOptions.strictBounds;
+                  if (hasStrictBounds) {
+                    delete (requestOptions as any).strictBounds;
+                  }
                   delete requestOptions.bounds;
                   
                   autocompleteServiceRef.current?.getPlacePredictions(
