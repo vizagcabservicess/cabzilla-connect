@@ -316,11 +316,12 @@ export default function BookingEditPage() {
               <div>
                 <p className="text-sm font-medium mb-1">Pickup Location</p>
                 <LocationInput
-                  location={pickupLocation}
+                  value={pickupLocation}
                   onLocationChange={(location: Location) => {
                     setPickupLocation(location);
                   }}
                   placeholder="Enter pickup location"
+                  label="Pickup Location"
                   className="w-full"
                 />
               </div>
@@ -330,11 +331,12 @@ export default function BookingEditPage() {
                   <div>
                     <p className="text-sm font-medium mb-1">Drop Location</p>
                     <LocationInput
-                      location={dropLocation}
+                      value={dropLocation}
                       onLocationChange={(location: Location) => {
                         setDropLocation(location);
                       }}
                       placeholder="Enter drop location"
+                      label="Drop Location"
                       className="w-full"
                     />
                   </div>

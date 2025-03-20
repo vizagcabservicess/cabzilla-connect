@@ -101,7 +101,7 @@ export default function MapDebugPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <LocationInput
-              location={location}
+              value={location}
               onLocationChange={handleLocationChange}
               placeholder="Try searching for a location"
               label="Test Location Input"

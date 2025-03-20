@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -245,7 +244,7 @@ const ToursPage = () => {
                     <LocationInput
                       label="PICKUP LOCATION"
                       placeholder="Enter your pickup location"
-                      value={pickupLocation ? convertToApiLocation(pickupLocation) : undefined}
+                      value={pickupLocation}
                       onLocationChange={handlePickupLocationChange}
                       isPickupLocation={true}
                     />

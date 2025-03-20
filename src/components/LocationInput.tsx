@@ -6,15 +6,17 @@ import { Button } from '@/components/ui/button';
 import { MapPin, Loader2 } from 'lucide-react';
 import { isVizagLocation, apDestinations, vizagLocations } from '@/lib/locationData';
 import { toast } from 'sonner';
+import { Location } from '@/types/api';
 
 type LocationInputProps = {
   label: string;
   placeholder: string;
-  value?: google.maps.places.AutocompletePrediction | null;
-  onLocationChange: (location: any) => void;
+  value?: google.maps.places.AutocompletePrediction | Location | null;
+  onLocationChange: (location: Location) => void;
   isPickupLocation?: boolean;
   isAirportTransfer?: boolean;
   readOnly?: boolean;
+  className?: string;
 };
 
 export function LocationInput({
@@ -24,9 +26,32 @@ export function LocationInput({
   onLocationChange,
   isPickupLocation = false,
   isAirportTransfer = false,
-  readOnly = false
+  readOnly = false,
+  className = ''
 }: LocationInputProps) {
-  const [inputValue, setInputValue] = useState<string>(value?.description || value?.structured_formatting?.main_text || '');
+  // Initialize inputValue from value prop
+  const getInitialInputValue = () => {
+    if (!value) return '';
+    if (typeof value === 'string') return value;
+    
+    // Handle Location type
+    if ('address' in value) {
+      return value.name || value.address || '';
+    }
+    
+    // Handle AutocompletePrediction type
+    if ('description' in value) {
+      return value.description;
+    }
+    
+    if ('structured_formatting' in value && value.structured_formatting) {
+      return value.structured_formatting.main_text;
+    }
+    
+    return '';
+  };
+
+  const [inputValue, setInputValue] = useState<string>(getInitialInputValue());
   const [suggestions, setSuggestions] = useState<google.maps.places.AutocompletePrediction[]>([]);
   const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -64,7 +89,8 @@ export function LocationInput({
         // Initialize PlacesService if we have a valid DOM element
         const mapCanvas = document.getElementById('map-canvas');
         if (mapCanvas) {
-          placesServiceRef.current = new google.maps.places.PlacesService(mapCanvas);
+          // Use a cast to satisfy TypeScript
+          placesServiceRef.current = new google.maps.places.PlacesService(mapCanvas as HTMLDivElement);
           console.log("Places Service initialized");
         } else {
           console.warn("No map-canvas element found for PlacesService");
@@ -77,8 +103,8 @@ export function LocationInput({
           newMapCanvas.style.height = '200px';
           document.body.appendChild(newMapCanvas);
           
-          // Try again to initialize PlacesService
-          placesServiceRef.current = new google.maps.places.PlacesService(newMapCanvas);
+          // Try again to initialize PlacesService with the proper type cast
+          placesServiceRef.current = new google.maps.places.PlacesService(newMapCanvas as HTMLDivElement);
         }
         
         autocompleteInitialized.current = true;
@@ -214,14 +240,25 @@ export function LocationInput({
       if (placeDetails && placeDetails.geometry) {
         const { lat, lng } = placeDetails.geometry.location.toJSON();
         
-        const location = {
+        // Create a Location object
+        const location: Location = {
           id: suggestion.place_id,
           name: suggestion.structured_formatting?.main_text || placeDetails.name || suggestion.description,
           address: placeDetails.formatted_address || suggestion.description,
           lat,
           lng,
           type: 'custom',
-          isInVizag: isVizagLocation({ lat, lng })
+          isInVizag: isVizagLocation({ 
+            id: suggestion.place_id,
+            name: suggestion.structured_formatting?.main_text || '',
+            city: '',
+            state: '',
+            lat, 
+            lng,
+            type: 'other',
+            popularityScore: 0,
+            address: placeDetails.formatted_address || suggestion.description
+          })
         };
         
         onLocationChange(location);
@@ -237,16 +274,9 @@ export function LocationInput({
   // Effect to initialize input with value
   useEffect(() => {
     if (value) {
-      if (typeof value === 'string') {
-        setInputValue(value);
-      } else if (value.description) {
-        setInputValue(value.description);
-      } else if (value.structured_formatting?.main_text) {
-        setInputValue(value.structured_formatting.main_text);
-      } else if ((value as any).name) {
-        setInputValue((value as any).name);
-      } else if ((value as any).address) {
-        setInputValue((value as any).address);
+      const newInputValue = getInitialInputValue();
+      if (newInputValue !== inputValue) {
+        setInputValue(newInputValue);
       }
     }
   }, [value]);
@@ -262,7 +292,7 @@ export function LocationInput({
         // Also re-initialize places service
         const mapCanvas = document.getElementById('map-canvas');
         if (mapCanvas) {
-          placesServiceRef.current = new google.maps.places.PlacesService(mapCanvas);
+          placesServiceRef.current = new google.maps.places.PlacesService(mapCanvas as HTMLDivElement);
         }
         
         autocompleteInitialized.current = true;
@@ -289,7 +319,7 @@ export function LocationInput({
   }, []);
 
   return (
-    <div className="relative mb-4">
+    <div className={`relative mb-4 ${className}`}>
       <div className="mb-2">
         <label className="block text-sm font-medium text-gray-700">{label}</label>
       </div>

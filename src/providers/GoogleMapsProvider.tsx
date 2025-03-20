@@ -78,7 +78,7 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
         // Initialize a map on this hidden canvas to fully activate the Places API
         if (window.google && window.google.maps) {
           try {
-            new window.google.maps.Map(mapCanvas, {
+            new window.google.maps.Map(mapCanvas as HTMLDivElement, {
               center: { lat: 17.6868, lng: 83.2185 }, // Visakhapatnam coordinates
               zoom: 13,
               disableDefaultUI: true,
@@ -103,7 +103,7 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
           
           if (document.getElementById('map-canvas')) {
             const placesService = new window.google.maps.places.PlacesService(
-              document.getElementById('map-canvas') as HTMLElement
+              document.getElementById('map-canvas') as HTMLDivElement
             );
             // Make a simple request to ensure the service is initialized
             placesService.nearbySearch(
