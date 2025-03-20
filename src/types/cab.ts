@@ -1,3 +1,4 @@
+
 import { TripType, TripMode } from '@/lib/tripTypes';
 
 export interface CabType {
@@ -64,4 +65,31 @@ export interface FareCalculationParams {
   hourlyPackage?: string;
   pickupDate?: Date;
   returnDate?: Date;
+}
+
+// Added for vehicle pricing management
+export interface VehiclePricing {
+  basePrice: number;
+  pricePerKm: number;
+  nightHaltCharge: number;
+  driverAllowance: number;
+}
+
+export interface OutstationFare {
+  baseFare: number;
+  pricePerKm: number;
+  nightHaltCharge: number;
+  driverAllowance: number;
+}
+
+export interface LocalFare {
+  price8hrs80km: number;
+  price10hrs100km: number;
+  priceExtraKm: number;
+  priceExtraHour: number;
+}
+
+export interface AirportFare {
+  pickupFare: number;
+  dropFare: number;
 }

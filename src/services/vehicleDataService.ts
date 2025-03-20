@@ -1,5 +1,6 @@
+
 import axios from 'axios';
-import { CabType } from '@/types/cab';
+import { CabType, OutstationFare, LocalFare, AirportFare } from '@/types/cab';
 import { toast } from 'sonner';
 
 // Default fallback values in case of API failure
@@ -142,21 +143,20 @@ export const getVehicleData = async (includeInactive: boolean = false): Promise<
   
   // Try multiple API endpoints in sequence
   const endpoints = [
-    // Primary endpoint
-    `${apiBaseUrl}/api/fares/vehicles-data.php?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`,
-    // Alternate path
-    `${apiBaseUrl}/api/fares/vehicles-data?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`,
-    // Local fallback
-    `/api/fares/vehicles-data.php?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`,
-    // Alternate local
-    `/api/fares/vehicles-data?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`,
-    // Direct vehicles endpoint
+    // Primary endpoint - try the raw PHP file first
     `${apiBaseUrl}/api/fares/vehicles.php?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`,
-    // Local vehicles endpoint
+    // Alternate local path
     `/api/fares/vehicles.php?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`,
+    // Secondary endpoints
+    `${apiBaseUrl}/api/fares/vehicles-data.php?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`,
+    `/api/fares/vehicles-data.php?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`,
+    // Try without PHP extension
+    `${apiBaseUrl}/api/fares/vehicles?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`,
+    `/api/fares/vehicles?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`,
+    `${apiBaseUrl}/api/fares/vehicles-data?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`,
+    `/api/fares/vehicles-data?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`,
     // Admin endpoint with debug bypass for development
     `${apiBaseUrl}/api/admin/vehicles-update.php?action=getAll&debug=true&${cacheParam}`,
-    // Local admin endpoint with debug bypass for development
     `/api/admin/vehicles-update.php?action=getAll&debug=true&${cacheParam}`
   ];
   
@@ -247,7 +247,10 @@ export const updateVehicle = async (vehicleData: any): Promise<any> => {
     // Try multiple API endpoints in sequence
     const endpoints = [
       `${apiBaseUrl}/api/admin/vehicles-update.php?_t=${timestamp}`,
-      `/api/admin/vehicles-update.php?_t=${timestamp}`
+      `/api/admin/vehicles-update.php?_t=${timestamp}`,
+      // Try the direct vehicles PHP file
+      `${apiBaseUrl}/api/fares/vehicles.php?_t=${timestamp}`,
+      `/api/fares/vehicles.php?_t=${timestamp}`
     ];
     
     let successResponse = null;
@@ -267,7 +270,7 @@ export const updateVehicle = async (vehicleData: any): Promise<any> => {
             'Pragma': 'no-cache',
             'Expires': '0'
           },
-          timeout: 10000 // 10 second timeout
+          timeout: 15000 // 15 second timeout
         });
         
         if (response.status === 200) {
@@ -328,7 +331,10 @@ export const addVehicle = async (vehicleData: any): Promise<any> => {
     // Try multiple API endpoints in sequence
     const endpoints = [
       `${apiBaseUrl}/api/admin/vehicles-update.php?_t=${timestamp}`,
-      `/api/admin/vehicles-update.php?_t=${timestamp}`
+      `/api/admin/vehicles-update.php?_t=${timestamp}`,
+      // Try the direct vehicles PHP file
+      `${apiBaseUrl}/api/fares/vehicles.php?_t=${timestamp}`,
+      `/api/fares/vehicles.php?_t=${timestamp}`
     ];
     
     let successResponse = null;
@@ -348,7 +354,7 @@ export const addVehicle = async (vehicleData: any): Promise<any> => {
             'Pragma': 'no-cache',
             'Expires': '0'
           },
-          timeout: 10000 // 10 second timeout
+          timeout: 15000 // 15 second timeout
         });
         
         if (response.status === 200) {
@@ -400,7 +406,10 @@ export const deleteVehicle = async (vehicleId: string): Promise<boolean> => {
     // Try multiple API endpoints in sequence
     const endpoints = [
       `${apiBaseUrl}/api/admin/vehicles-update.php?vehicleId=${cleanedVehicleId}&_t=${timestamp}`,
-      `/api/admin/vehicles-update.php?vehicleId=${cleanedVehicleId}&_t=${timestamp}`
+      `/api/admin/vehicles-update.php?vehicleId=${cleanedVehicleId}&_t=${timestamp}`,
+      // Try the direct vehicles PHP file
+      `${apiBaseUrl}/api/fares/vehicles.php?vehicleId=${cleanedVehicleId}&_t=${timestamp}`,
+      `/api/fares/vehicles.php?vehicleId=${cleanedVehicleId}&_t=${timestamp}`
     ];
     
     // Try each endpoint until one works
@@ -475,6 +484,46 @@ export const getVehicleTypes = async (): Promise<{id: string, name: string}[]> =
 };
 
 /**
+ * Update outstation fares for a vehicle
+ */
+export const updateOutstationFares = async (
+  vehicleId: string,
+  outstation: OutstationFare
+): Promise<boolean> => {
+  return updateTripFares(vehicleId, 'outstation', outstation);
+};
+
+/**
+ * Update local package fares for a vehicle
+ */
+export const updateLocalFares = async (
+  vehicleId: string,
+  local: LocalFare
+): Promise<boolean> => {
+  return updateTripFares(vehicleId, 'local', local);
+};
+
+/**
+ * Update airport transfer fares for a vehicle
+ */
+export const updateAirportFares = async (
+  vehicleId: string,
+  airport: AirportFare
+): Promise<boolean> => {
+  return updateTripFares(vehicleId, 'airport', airport);
+};
+
+/**
+ * Update base pricing for a vehicle
+ */
+export const updateBasePricing = async (
+  vehicleId: string,
+  basePricing: any
+): Promise<boolean> => {
+  return updateTripFares(vehicleId, 'base', basePricing);
+};
+
+/**
  * Update fare settings for specific trip types
  */
 export const updateTripFares = async (
@@ -505,12 +554,14 @@ export const updateTripFares = async (
       ...fareData
     };
     
-    // Try multiple API endpoints in sequence
+    // Try multiple API endpoints in sequence - starting with vehicle-pricing which is the more reliable endpoint
     const endpoints = [
-      `${apiBaseUrl}/api/admin/fares-update.php?_t=${timestamp}`,
-      `/api/admin/fares-update.php?_t=${timestamp}`,
+      // Try the direct vehicle pricing endpoint first
       `${apiBaseUrl}/api/admin/vehicle-pricing.php?_t=${timestamp}`,
-      `/api/admin/vehicle-pricing.php?_t=${timestamp}`
+      `/api/admin/vehicle-pricing.php?_t=${timestamp}`,
+      // Fall back to fare update endpoints
+      `${apiBaseUrl}/api/admin/fares-update.php?_t=${timestamp}`,
+      `/api/admin/fares-update.php?_t=${timestamp}`
     ];
     
     // Try each endpoint until one works
@@ -518,7 +569,10 @@ export const updateTripFares = async (
       try {
         console.log(`Trying to update ${tripType} fares using endpoint: ${endpoint}`);
         
-        const response = await axios.post(endpoint, payload, {
+        const response = await axios({
+          method: 'POST',
+          url: endpoint,
+          data: payload,
           headers: {
             ...authHeader,
             'Content-Type': 'application/json',
@@ -528,8 +582,10 @@ export const updateTripFares = async (
             'Pragma': 'no-cache',
             'Expires': '0'
           },
-          timeout: 10000
+          timeout: 15000 // Increased timeout to 15 seconds
         });
+        
+        console.log(`Response from ${endpoint}:`, response.data);
         
         if (response.status === 200) {
           console.log(`${tripType} fares updated successfully via`, endpoint);
@@ -547,7 +603,7 @@ export const updateTripFares = async (
       } catch (error: any) {
         console.error(`Error updating ${tripType} fares at endpoint ${endpoint}:`, error.response || error);
         
-        // If this is the last endpoint, rethrow the error
+        // If this is the last endpoint, show error toast
         if (endpoint === endpoints[endpoints.length - 1]) {
           toast.error(`Failed to update ${tripType} fares: ${error.response?.data?.message || error.message || 'Unknown error'}`);
           throw error;

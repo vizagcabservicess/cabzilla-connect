@@ -32,6 +32,10 @@ logError("Vehicle pricing request received", [
 // Function to check if a vehicle exists
 function vehicleExists($conn, $vehicleId) {
     $stmt = $conn->prepare("SELECT id FROM vehicles WHERE id = ? OR vehicle_id = ?");
+    if (!$stmt) {
+        logError("Failed to prepare stmt for checking if vehicle exists", ['error' => $conn->error]);
+        return false;
+    }
     $stmt->bind_param("ss", $vehicleId, $vehicleId);
     $stmt->execute();
     $result = $stmt->get_result();
@@ -71,33 +75,87 @@ function updateOutstationFares($conn, $vehicleId, $fareData) {
     $nightHaltCharge = isset($fareData['nightHaltCharge']) ? floatval($fareData['nightHaltCharge']) : 0;
     $driverAllowance = isset($fareData['driverAllowance']) ? floatval($fareData['driverAllowance']) : 0;
     
-    // Check if record exists
+    // First check if vehicle exists in vehicles table, if not create it
+    $vehicleQuery = "SELECT id FROM vehicles WHERE id = ? OR vehicle_id = ?";
+    $vehicleStmt = $conn->prepare($vehicleQuery);
+    if (!$vehicleStmt) {
+        logError("Failed to prepare statement for vehicle check", ['error' => $conn->error]);
+        return false;
+    }
+    
+    $vehicleStmt->bind_param("ss", $vehicleId, $vehicleId);
+    $vehicleStmt->execute();
+    $vehicleResult = $vehicleStmt->get_result();
+    
+    if ($vehicleResult->num_rows == 0) {
+        // Vehicle doesn't exist, create it
+        $vehicleName = ucfirst(str_replace('_', ' ', $vehicleId));
+        $insertVehicleQuery = "INSERT INTO vehicles (id, vehicle_id, name, base_price, price_per_km, is_active, created_at, updated_at) 
+                              VALUES (?, ?, ?, ?, ?, 1, NOW(), NOW())";
+        $insertVehicleStmt = $conn->prepare($insertVehicleQuery);
+        if (!$insertVehicleStmt) {
+            logError("Failed to prepare statement for vehicle insert", ['error' => $conn->error]);
+            return false;
+        }
+        
+        $insertVehicleStmt->bind_param("sssdd", $vehicleId, $vehicleId, $vehicleName, $baseFare, $pricePerKm);
+        $insertVehicleStmt->execute();
+        logError("Created new vehicle record", ['vehicleId' => $vehicleId]);
+    }
+    
+    // Check if record exists in outstation_fares
     $stmt = $conn->prepare("SELECT id FROM outstation_fares WHERE vehicle_id = ?");
+    if (!$stmt) {
+        logError("Failed to prepare statement for outstation fare check", ['error' => $conn->error]);
+        return false;
+    }
+    
     $stmt->bind_param("s", $vehicleId);
     $stmt->execute();
     $result = $stmt->get_result();
     
     if ($result->num_rows > 0) {
         // Update existing record
-        $stmt = $conn->prepare("UPDATE outstation_fares SET base_fare = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?, updated_at = NOW() WHERE vehicle_id = ?");
-        $stmt->bind_param("dddds", $baseFare, $pricePerKm, $nightHaltCharge, $driverAllowance, $vehicleId);
+        $updateQuery = "UPDATE outstation_fares SET base_fare = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?, updated_at = NOW() WHERE vehicle_id = ?";
+        $updateStmt = $conn->prepare($updateQuery);
+        if (!$updateStmt) {
+            logError("Failed to prepare statement for outstation fare update", ['error' => $conn->error]);
+            return false;
+        }
+        
+        $updateStmt->bind_param("dddds", $baseFare, $pricePerKm, $nightHaltCharge, $driverAllowance, $vehicleId);
+        $success = $updateStmt->execute();
     } else {
         // Insert new record
-        $stmt = $conn->prepare("INSERT INTO outstation_fares (vehicle_id, base_fare, price_per_km, night_halt_charge, driver_allowance, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NOW(), NOW())");
-        $stmt->bind_param("sdddd", $vehicleId, $baseFare, $pricePerKm, $nightHaltCharge, $driverAllowance);
+        $insertQuery = "INSERT INTO outstation_fares (vehicle_id, base_fare, price_per_km, night_halt_charge, driver_allowance, created_at, updated_at) 
+                        VALUES (?, ?, ?, ?, ?, NOW(), NOW())";
+        $insertStmt = $conn->prepare($insertQuery);
+        if (!$insertStmt) {
+            logError("Failed to prepare statement for outstation fare insert", ['error' => $conn->error]);
+            return false;
+        }
+        
+        $insertStmt->bind_param("sdddd", $vehicleId, $baseFare, $pricePerKm, $nightHaltCharge, $driverAllowance);
+        $success = $insertStmt->execute();
     }
     
-    if (!$stmt->execute()) {
+    if (!$success) {
         logError("Database error updating outstation fares", ['error' => $stmt->error]);
-        sendJsonResponse(['status' => 'error', 'message' => 'Database error: ' . $stmt->error], 500);
         return false;
     }
     
     // Also update the main vehicles table to keep pricing consistent
-    $stmt = $conn->prepare("UPDATE vehicles SET base_price = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ? WHERE id = ? OR vehicle_id = ?");
-    $stmt->bind_param("ddddss", $baseFare, $pricePerKm, $nightHaltCharge, $driverAllowance, $vehicleId, $vehicleId);
-    $stmt->execute();
+    $updateVehicleQuery = "UPDATE vehicles SET base_price = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ? WHERE id = ? OR vehicle_id = ?";
+    $updateVehicleStmt = $conn->prepare($updateVehicleQuery);
+    if (!$updateVehicleStmt) {
+        logError("Failed to prepare statement for vehicle update", ['error' => $conn->error]);
+        return false;
+    }
     
+    $updateVehicleStmt->bind_param("ddddss", $baseFare, $pricePerKm, $nightHaltCharge, $driverAllowance, $vehicleId, $vehicleId);
+    $updateVehicleStmt->execute();
+    
+    logError("Successfully updated outstation fares", ['vehicleId' => $vehicleId]);
     return true;
 }
 
@@ -127,26 +185,46 @@ function updateLocalFares($conn, $vehicleId, $fareData) {
     
     // Check if record exists
     $stmt = $conn->prepare("SELECT id FROM local_package_fares WHERE vehicle_id = ?");
+    if (!$stmt) {
+        logError("Failed to prepare statement for local fare check", ['error' => $conn->error]);
+        return false;
+    }
+    
     $stmt->bind_param("s", $vehicleId);
     $stmt->execute();
     $result = $stmt->get_result();
     
     if ($result->num_rows > 0) {
         // Update existing record
-        $stmt = $conn->prepare("UPDATE local_package_fares SET price_8hrs_80km = ?, price_10hrs_100km = ?, price_extra_km = ?, price_extra_hour = ?, updated_at = NOW() WHERE vehicle_id = ?");
-        $stmt->bind_param("dddds", $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour, $vehicleId);
+        $updateQuery = "UPDATE local_package_fares SET price_8hrs_80km = ?, price_10hrs_100km = ?, price_extra_km = ?, price_extra_hour = ?, updated_at = NOW() WHERE vehicle_id = ?";
+        $updateStmt = $conn->prepare($updateQuery);
+        if (!$updateStmt) {
+            logError("Failed to prepare statement for local fare update", ['error' => $conn->error]);
+            return false;
+        }
+        
+        $updateStmt->bind_param("dddds", $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour, $vehicleId);
+        $success = $updateStmt->execute();
     } else {
         // Insert new record
-        $stmt = $conn->prepare("INSERT INTO local_package_fares (vehicle_id, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NOW(), NOW())");
-        $stmt->bind_param("sdddd", $vehicleId, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour);
+        $insertQuery = "INSERT INTO local_package_fares (vehicle_id, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour, created_at, updated_at) 
+                        VALUES (?, ?, ?, ?, ?, NOW(), NOW())";
+        $insertStmt = $conn->prepare($insertQuery);
+        if (!$insertStmt) {
+            logError("Failed to prepare statement for local fare insert", ['error' => $conn->error]);
+            return false;
+        }
+        
+        $insertStmt->bind_param("sdddd", $vehicleId, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour);
+        $success = $insertStmt->execute();
     }
     
-    if (!$stmt->execute()) {
+    if (!$success) {
         logError("Database error updating local fares", ['error' => $stmt->error]);
-        sendJsonResponse(['status' => 'error', 'message' => 'Database error: ' . $stmt->error], 500);
         return false;
     }
     
+    logError("Successfully updated local fares", ['vehicleId' => $vehicleId]);
     return true;
 }
 
@@ -174,26 +252,46 @@ function updateAirportFares($conn, $vehicleId, $fareData) {
     
     // Check if record exists
     $stmt = $conn->prepare("SELECT id FROM airport_transfer_fares WHERE vehicle_id = ?");
+    if (!$stmt) {
+        logError("Failed to prepare statement for airport fare check", ['error' => $conn->error]);
+        return false;
+    }
+    
     $stmt->bind_param("s", $vehicleId);
     $stmt->execute();
     $result = $stmt->get_result();
     
     if ($result->num_rows > 0) {
         // Update existing record
-        $stmt = $conn->prepare("UPDATE airport_transfer_fares SET pickup_fare = ?, drop_fare = ?, updated_at = NOW() WHERE vehicle_id = ?");
-        $stmt->bind_param("dds", $pickupFare, $dropFare, $vehicleId);
+        $updateQuery = "UPDATE airport_transfer_fares SET pickup_fare = ?, drop_fare = ?, updated_at = NOW() WHERE vehicle_id = ?";
+        $updateStmt = $conn->prepare($updateQuery);
+        if (!$updateStmt) {
+            logError("Failed to prepare statement for airport fare update", ['error' => $conn->error]);
+            return false;
+        }
+        
+        $updateStmt->bind_param("dds", $pickupFare, $dropFare, $vehicleId);
+        $success = $updateStmt->execute();
     } else {
         // Insert new record
-        $stmt = $conn->prepare("INSERT INTO airport_transfer_fares (vehicle_id, pickup_fare, drop_fare, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())");
-        $stmt->bind_param("sdd", $vehicleId, $pickupFare, $dropFare);
+        $insertQuery = "INSERT INTO airport_transfer_fares (vehicle_id, pickup_fare, drop_fare, created_at, updated_at) 
+                       VALUES (?, ?, ?, NOW(), NOW())";
+        $insertStmt = $conn->prepare($insertQuery);
+        if (!$insertStmt) {
+            logError("Failed to prepare statement for airport fare insert", ['error' => $conn->error]);
+            return false;
+        }
+        
+        $insertStmt->bind_param("sdd", $vehicleId, $pickupFare, $dropFare);
+        $success = $insertStmt->execute();
     }
     
-    if (!$stmt->execute()) {
+    if (!$success) {
         logError("Database error updating airport fares", ['error' => $stmt->error]);
-        sendJsonResponse(['status' => 'error', 'message' => 'Database error: ' . $stmt->error], 500);
         return false;
     }
     
+    logError("Successfully updated airport fares", ['vehicleId' => $vehicleId]);
     return true;
 }
 
@@ -220,32 +318,8 @@ if ($method === 'POST') {
     // Log the cleaned data
     logError("Cleaned vehicle pricing data", ['vehicleId' => $vehicleId, 'tripType' => $tripType]);
     
-    // Check if vehicle exists - skip this check to allow new vehicles
-    /*if (!vehicleExists($conn, $vehicleId)) {
-        logError("Vehicle not found", ['vehicleId' => $vehicleId]);
-        sendJsonResponse(['status' => 'error', 'message' => 'Vehicle not found: ' . $vehicleId], 404);
-        exit;
-    }*/
-    
     // Switch based on trip type
     $success = false;
-    
-    // Map trip types to their handling tables
-    $tableMap = [
-        'outstation' => 'outstation_fares',
-        'local' => 'local_package_fares',
-        'airport' => 'airport_transfer_fares',
-        'base' => 'vehicles',
-        'tour' => 'tour_fares'
-    ];
-    
-    $tableName = isset($tableMap[$tripType]) ? $tableMap[$tripType] : '';
-    
-    if (empty($tableName)) {
-        logError("Invalid trip type", ['tripType' => $tripType]);
-        sendJsonResponse(['status' => 'error', 'message' => 'Invalid trip type: ' . $tripType], 400);
-        exit;
-    }
     
     // Handle different trip types
     switch ($tripType) {
@@ -275,26 +349,49 @@ if ($method === 'POST') {
             $driverAllowance = isset($data['driverAllowance']) ? floatval($data['driverAllowance']) : 0;
             
             // Check if vehicle exists, if not add it
-            $stmt = $conn->prepare("SELECT id FROM vehicles WHERE id = ? OR vehicle_id = ?");
-            $stmt->bind_param("ss", $vehicleId, $vehicleId);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            
-            if ($result->num_rows > 0) {
-                // Update existing vehicle
-                $stmt = $conn->prepare("UPDATE vehicles SET base_price = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?, updated_at = NOW() WHERE id = ? OR vehicle_id = ?");
-                $stmt->bind_param("ddddss", $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, $vehicleId, $vehicleId);
-            } else {
-                // Insert new vehicle
-                $stmt = $conn->prepare("INSERT INTO vehicles (id, vehicle_id, name, base_price, price_per_km, night_halt_charge, driver_allowance, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())");
-                $name = ucfirst(str_replace('_', ' ', $vehicleId));
-                $stmt->bind_param("sssdddd", $vehicleId, $vehicleId, $name, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
+            $vehicleQuery = "SELECT id FROM vehicles WHERE id = ? OR vehicle_id = ?";
+            $vehicleStmt = $conn->prepare($vehicleQuery);
+            if (!$vehicleStmt) {
+                logError("Failed to prepare statement for vehicle check in base pricing", ['error' => $conn->error]);
+                sendJsonResponse(['status' => 'error', 'message' => 'Database error'], 500);
+                exit;
             }
             
-            $success = $stmt->execute();
+            $vehicleStmt->bind_param("ss", $vehicleId, $vehicleId);
+            $vehicleStmt->execute();
+            $vehicleResult = $vehicleStmt->get_result();
+            
+            if ($vehicleResult->num_rows > 0) {
+                // Update existing vehicle
+                $updateQuery = "UPDATE vehicles SET base_price = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?, updated_at = NOW() WHERE id = ? OR vehicle_id = ?";
+                $updateStmt = $conn->prepare($updateQuery);
+                if (!$updateStmt) {
+                    logError("Failed to prepare statement for vehicle update in base pricing", ['error' => $conn->error]);
+                    sendJsonResponse(['status' => 'error', 'message' => 'Database error'], 500);
+                    exit;
+                }
+                
+                $updateStmt->bind_param("ddddss", $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, $vehicleId, $vehicleId);
+                $success = $updateStmt->execute();
+            } else {
+                // Insert new vehicle
+                $name = ucfirst(str_replace('_', ' ', $vehicleId));
+                $insertQuery = "INSERT INTO vehicles (id, vehicle_id, name, base_price, price_per_km, night_halt_charge, driver_allowance, is_active, created_at, updated_at) 
+                               VALUES (?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())";
+                $insertStmt = $conn->prepare($insertQuery);
+                if (!$insertStmt) {
+                    logError("Failed to prepare statement for vehicle insert in base pricing", ['error' => $conn->error]);
+                    sendJsonResponse(['status' => 'error', 'message' => 'Database error'], 500);
+                    exit;
+                }
+                
+                $insertStmt->bind_param("sssdddd", $vehicleId, $vehicleId, $name, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
+                $success = $insertStmt->execute();
+            }
+            
             if (!$success) {
-                logError("Database error updating base pricing", ['error' => $stmt->error]);
-                sendJsonResponse(['status' => 'error', 'message' => 'Database error: ' . $stmt->error], 500);
+                logError("Database error updating base pricing", ['error' => $conn->error]);
+                sendJsonResponse(['status' => 'error', 'message' => 'Database error: ' . $conn->error], 500);
                 exit;
             }
             
@@ -307,6 +404,11 @@ if ($method === 'POST') {
             ]);
             
             break;
+            
+        default:
+            logError("Invalid trip type", ['tripType' => $tripType]);
+            sendJsonResponse(['status' => 'error', 'message' => 'Invalid trip type: ' . $tripType], 400);
+            exit;
     }
     
     if ($success) {
