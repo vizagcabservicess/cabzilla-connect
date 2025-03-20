@@ -67,10 +67,8 @@ export function createAutocompleteRequest(
   if (bounds) {
     requestOptions.bounds = bounds;
     
-    // Using type assertion to bypass TypeScript error for strictBounds
-    if (options?.vizagOnly) {
-      (requestOptions as any).strictBounds = false; // Setting to false to expand search area beyond strict bounds
-    }
+    // Setting strictBounds to false to expand search area
+    (requestOptions as any).strictBounds = false;
   }
   
   return requestOptions;

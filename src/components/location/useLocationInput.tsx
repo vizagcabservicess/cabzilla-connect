@@ -50,6 +50,15 @@ export function useLocationInput(
     }
   }, [isLoaded, google, isAutocompleteInitialized, forceInitialization]);
 
+  // Reset input value
+  const resetInputValue = useCallback(() => {
+    setInputValue('');
+    setSuggestions([]);
+    setLocalSuggestions([]);
+    setShowSuggestions(false);
+    onLocationChange(null as any);
+  }, [onLocationChange]);
+
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setInputValue(value);
@@ -73,16 +82,16 @@ export function useLocationInput(
         let bounds;
         
         if (isPickupLocation) {
-          // For pickup locations, set a wider radius around Visakhapatnam (approximately 25km)
+          // For pickup locations, set a wider radius around Visakhapatnam (approximately 30km)
           bounds = new google.maps.LatLngBounds(
-            new google.maps.LatLng(17.5615, 83.0315), // SW corner - expanded
-            new google.maps.LatLng(17.8815, 83.4115)  // NE corner - expanded
+            new google.maps.LatLng(17.4615, 82.9315), // SW corner - expanded
+            new google.maps.LatLng(18.0815, 83.5115)  // NE corner - expanded
           );
         } else {
-          // For drop locations, use all of India
+          // For drop locations, use all of India (very wide area)
           bounds = new google.maps.LatLngBounds(
-            new google.maps.LatLng(8.0, 68.0), // SW corner of India
-            new google.maps.LatLng(37.0, 97.0)  // NE corner of India
+            new google.maps.LatLng(6.0, 68.0), // SW corner of India - expanded
+            new google.maps.LatLng(38.0, 98.0)  // NE corner of India - expanded
           );
         }
         
@@ -140,10 +149,10 @@ export function useLocationInput(
         if (isPickupLocation) {
           const vizagCenter = { lat: 17.6868, lng: 83.2185 };
           const distance = getDistanceFromLatLonInKm(lat, lng, vizagCenter.lat, vizagCenter.lng);
-          isInVizag = distance <= 25; // Using 25km radius for Visakhapatnam
+          isInVizag = distance <= 30; // Using 30km radius for Visakhapatnam
           
           if (!isInVizag) {
-            toast.error("Pickup location must be within 25km of Visakhapatnam", {
+            toast.error("Pickup location must be within 30km of Visakhapatnam", {
               duration: 3000
             });
             setIsLoading(false);
@@ -239,7 +248,8 @@ export function useLocationInput(
     handleInputChange,
     handleInputFocus,
     handleSuggestionClick,
-    handleLocalSuggestionClick
+    handleLocalSuggestionClick,
+    resetInputValue
   };
 }
 

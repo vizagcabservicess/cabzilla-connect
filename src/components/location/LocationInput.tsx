@@ -1,10 +1,11 @@
 
 import React, { useRef, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
-import { MapPin, Loader2 } from 'lucide-react';
+import { MapPin, Loader2, X } from 'lucide-react';
 import { LocationInputProps } from './types';
 import { useLocationInput } from './useLocationInput';
 import { SuggestionsList } from './SuggestionsList';
+import { Button } from '@/components/ui/button';
 
 export function LocationInput({
   label,
@@ -29,7 +30,8 @@ export function LocationInput({
     handleInputChange,
     handleInputFocus,
     handleSuggestionClick,
-    handleLocalSuggestionClick
+    handleLocalSuggestionClick,
+    resetInputValue
   } = useLocationInput(value, onLocationChange, isPickupLocation);
 
   // Close suggestions when clicking outside
@@ -50,6 +52,15 @@ export function LocationInput({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [setShowSuggestions]);
+
+  const handleClearInput = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resetInputValue();
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  };
 
   return (
     <div className={`relative mb-4 ${className}`}>
@@ -75,6 +86,19 @@ export function LocationInput({
             readOnly={readOnly}
             autoComplete="off" // Disable browser autocomplete
           />
+          
+          {inputValue && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="absolute right-10 top-1/2 transform -translate-y-1/2 h-6 w-6"
+              onClick={handleClearInput}
+              aria-label="Clear input"
+            >
+              <X className="h-4 w-4 text-gray-400" />
+            </Button>
+          )}
           
           {isLoading && (
             <div className="absolute right-3 top-1/2 transform -translate-y-1/2">

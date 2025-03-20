@@ -51,6 +51,8 @@ export function usePredictions(
         }
         
         const requestOptions = createAutocompleteRequest(query, bounds, options);
+        // Always turn off strictBounds for more results
+        (requestOptions as any).strictBounds = false;
         
         try {
           console.log("Making Places autocomplete request:", query);
@@ -64,40 +66,51 @@ export function usePredictions(
                 setSuggestions(results);
                 resolve(results);
               } else if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
-                console.log("No autocomplete results found");
-                setSuggestions([]);
-                resolve([]);
+                console.log("No autocomplete results found, trying without restrictions");
+                
+                // Try without bounds and with broader types
+                const broadRequest = {
+                  input: query,
+                  componentRestrictions: { country: options?.country || 'in' },
+                  types: ['geocode', 'establishment', 'address', 'regions', 'cities']
+                };
+                
+                autocompleteServiceRef.current?.getPlacePredictions(
+                  broadRequest,
+                  (broadResults, broadStatus) => {
+                    if (broadStatus === google.maps.places.PlacesServiceStatus.OK && broadResults && broadResults.length > 0) {
+                      console.log("Broader search results:", broadResults.length);
+                      setSuggestions(broadResults);
+                      resolve(broadResults);
+                    } else {
+                      console.log("All searches returned zero results");
+                      setSuggestions([]);
+                      resolve([]);
+                    }
+                  }
+                );
               } else {
                 console.error("Autocomplete request failed:", status);
                 
-                // Try one more time without bounds restrictions if it failed
-                const hasStrictBounds = (requestOptions as any).strictBounds;
-                if (hasStrictBounds || requestOptions.bounds) {
-                  console.log("Retrying without bounds restrictions");
-                  
-                  if (hasStrictBounds) {
-                    delete (requestOptions as any).strictBounds;
-                  }
-                  delete requestOptions.bounds;
-                  
-                  autocompleteServiceRef.current?.getPlacePredictions(
-                    requestOptions,
-                    (retryResults, retryStatus) => {
-                      if (retryStatus === google.maps.places.PlacesServiceStatus.OK && retryResults && retryResults.length > 0) {
-                        console.log("Retry autocomplete results:", retryResults.length);
-                        setSuggestions(retryResults);
-                        resolve(retryResults);
-                      } else {
-                        console.log("Retry also failed:", retryStatus);
-                        setSuggestions([]);
-                        resolve([]);
-                      }
+                // Try one more time without any restrictions
+                const fallbackRequest = {
+                  input: query
+                };
+                
+                autocompleteServiceRef.current?.getPlacePredictions(
+                  fallbackRequest,
+                  (fallbackResults, fallbackStatus) => {
+                    if (fallbackStatus === google.maps.places.PlacesServiceStatus.OK && fallbackResults && fallbackResults.length > 0) {
+                      console.log("Fallback search results:", fallbackResults.length);
+                      setSuggestions(fallbackResults);
+                      resolve(fallbackResults);
+                    } else {
+                      console.log("All searches failed:", fallbackStatus);
+                      setSuggestions([]);
+                      resolve([]);
                     }
-                  );
-                } else {
-                  setSuggestions([]);
-                  reject(new Error(`Autocomplete request failed: ${status}`));
-                }
+                  }
+                );
               }
             }
           );
