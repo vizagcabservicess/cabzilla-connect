@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -290,7 +289,7 @@ function handleTripFareUpdate($conn, $input) {
         'tour' => 'tour_fares'
     ];
     
-    $tableName = $tableMap[$tripType] ?? '';
+    $tableName = isset($tableMap[$tripType]) ? $tableMap[$tripType] : '';
     
     if (empty($tableName)) {
         sendJsonResponse(['status' => 'error', 'message' => 'Invalid trip type: ' . $tripType], 400);

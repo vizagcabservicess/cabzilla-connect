@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { CabType } from '@/types/cab';
 import { toast } from 'sonner';
@@ -510,7 +511,9 @@ export const updateTripFares = async (
     // Try multiple API endpoints in sequence
     const endpoints = [
       `${apiBaseUrl}/api/admin/fares-update.php?_t=${timestamp}`,
-      `/api/admin/fares-update.php?_t=${timestamp}`
+      `/api/admin/fares-update.php?_t=${timestamp}`,
+      `${apiBaseUrl}/api/admin/vehicle-pricing.php?_t=${timestamp}`,
+      `/api/admin/vehicle-pricing.php?_t=${timestamp}`
     ];
     
     // Try each endpoint until one works
