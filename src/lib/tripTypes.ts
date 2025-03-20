@@ -8,12 +8,20 @@ export type ExtendedTripType =
   | TripType 
   | 'outstation-one-way' 
   | 'outstation-round-trip' 
-  | 'base';
+  | 'base'
+  | 'local-standard'
+  | 'airport-transfer';
 
 // Helper function to get the basic trip type from extended type
 export const getBasicTripType = (extendedType: ExtendedTripType): TripType => {
   if (extendedType.startsWith('outstation')) {
     return 'outstation';
+  }
+  if (extendedType.startsWith('local')) {
+    return 'local';
+  }
+  if (extendedType.startsWith('airport')) {
+    return 'airport';
   }
   return extendedType as TripType;
 };
