@@ -1,6 +1,3 @@
-
-// Only updating the useEffect for calculating fares where the issue is happening
-
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { CabType } from '@/types/cab';
 import { formatPrice } from '@/lib/cabData';
@@ -46,12 +43,10 @@ export function CabOptions({
   const [refreshSuccessful, setRefreshSuccessful] = useState<boolean | null>(null);
   const [lastCalculationParams, setLastCalculationParams] = useState<string>('');
 
-  // Create a memoized calculation parameters string to detect changes
   const currentCalculationParams = useMemo(() => {
     return `${tripType}-${tripMode}-${hourlyPackage || 'none'}-${distance}-${pickupDate?.getTime() || 0}-${returnDate?.getTime() || 0}`;
   }, [tripType, tripMode, hourlyPackage, distance, pickupDate, returnDate]);
   
-  // Load cab types once on component mount
   useEffect(() => {
     const fetchCabTypes = async () => {
       if (cabTypes.length > 0) return; // Skip if we already have cab types
@@ -59,15 +54,13 @@ export function CabOptions({
       setIsLoadingCabs(true);
       try {
         console.log('Loading dynamic cab types...', Date.now());
-        fareService.clearCache(); // Fixed: Remove argument here
+        fareService.clearCache(); // Remove argument here
         
-        // Add cache-busting timestamp to avoid stale data
         const cacheBuster = new Date().getTime();
         const dynamicCabTypes = await loadCabTypes(`?_t=${cacheBuster}`);
         console.log('Loaded dynamic cab types:', dynamicCabTypes);
         
         if (Array.isArray(dynamicCabTypes) && dynamicCabTypes.length > 0) {
-          // Ensure all cabs have valid IDs and names
           const validCabTypes = dynamicCabTypes.map(cab => ({
             ...cab,
             id: cab.id || cab.vehicleId || `cab-${Math.random().toString(36).substring(2, 10)}`,
@@ -95,28 +88,22 @@ export function CabOptions({
     fetchCabTypes();
   }, [initialCabTypes, cabTypes.length]);
 
-  // Function to manually refresh cab types
   const refreshCabTypes = useCallback(async () => {
     setIsRefreshingCabs(true);
-    setCabFares({}); // Clear fares when refreshing
+    setCabFares({});
     
     try {
-      // Clear caches to force refresh
       sessionStorage.removeItem('cabFares');
       sessionStorage.removeItem('calculatedFares');
       localStorage.removeItem('cabTypes');
       
-      // Force clear local cache
-      fareService.clearCache(); // Fixed: Remove argument here
+      fareService.clearCache(); // Remove argument here
       
       console.log('Forcing cab types refresh...', Date.now());
-      // Add timestamp to avoid caching issues
       const cacheBuster = new Date().getTime();
       const freshCabTypes = await reloadCabTypes(`?_t=${cacheBuster}`);
-      console.log('Refreshed cab types:', freshCabTypes);
       
       if (Array.isArray(freshCabTypes) && freshCabTypes.length > 0) {
-        // Ensure all cabs have valid IDs and names
         const validCabTypes = freshCabTypes.map(cab => ({
           ...cab,
           id: cab.id || cab.vehicleId || `cab-${Math.random().toString(36).substring(2, 10)}`,
@@ -127,7 +114,6 @@ export function CabOptions({
         toast.success('Vehicle data refreshed successfully');
         setRefreshSuccessful(true);
         
-        // Reset selection when refreshing
         setSelectedCabId(null);
         if (selectedCab) {
           onSelectCab(null as any);
@@ -146,7 +132,6 @@ export function CabOptions({
     }
   }, [onSelectCab, selectedCab]);
 
-  // Reset selections when trip parameters change
   useEffect(() => {
     if (lastCalculationParams && lastCalculationParams !== currentCalculationParams) {
       console.log('Trip parameters changed, resetting selections and fares');
@@ -157,7 +142,6 @@ export function CabOptions({
         onSelectCab(null as any);
       }
       
-      // Also force refresh cab types when switching trip types
       refreshCabTypes().catch(err => {
         console.error('Failed to refresh cab types on trip parameter change:', err);
       });
@@ -166,9 +150,7 @@ export function CabOptions({
     setLastCalculationParams(currentCalculationParams);
   }, [currentCalculationParams, lastCalculationParams, onSelectCab, selectedCab, refreshCabTypes]);
 
-  // Calculate fares for all cab types when distance or trip parameters change
   useEffect(() => {
-    // Ensure we have valid cab types and a distance before calculating fares
     if (distance <= 0 || !Array.isArray(cabTypes) || cabTypes.length === 0 || isCalculatingFares) {
       console.log(`Skipping fare calculation: distance=${distance}, cabTypes=${cabTypes?.length}, isCalculating=${isCalculatingFares}`);
       return;
@@ -188,15 +170,12 @@ export function CabOptions({
         
         console.log(`Starting fare calculation for ${cabTypes.length} cab types`);
         
-        // Validate and filter each cab object before calculation
         const validCabs = cabTypes.filter(cab => {
-          // Check if cab has basic required properties and is not null/undefined
           if (!cab || typeof cab !== 'object' || !cab.id) {
             console.warn('Skipping invalid cab object:', cab);
             return false;
           }
           
-          // Ensure all required properties have default values if missing
           if (typeof cab.price !== 'number') cab.price = 0;
           if (typeof cab.pricePerKm !== 'number') cab.pricePerKm = 0;
           if (typeof cab.nightHaltCharge !== 'number') cab.nightHaltCharge = 0;
@@ -214,7 +193,6 @@ export function CabOptions({
         }
         
         try {
-          // Use the fareService to calculate fares
           const fares = await fareService.calculateFaresForCabs(
             validCabs,
             distance,
@@ -229,7 +207,6 @@ export function CabOptions({
           setCabFares(fares);
         } catch (fareError) {
           console.error('Error in fare calculation service:', fareError);
-          // Fallback to direct calculation if service fails
           const manualFares: Record<string, number> = {};
           
           for (const cab of validCabs) {
@@ -263,19 +240,16 @@ export function CabOptions({
     calculateFares();
   }, [cabTypes, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate]);
 
-  // Update selectedCabId when selectedCab changes (from parent)
   useEffect(() => {
     if (selectedCab) {
       setSelectedCabId(selectedCab.id);
     }
   }, [selectedCab]);
 
-  // Handle cab selection
   const handleSelectCab = (cab: CabType) => {
     setSelectedCabId(cab.id);
     onSelectCab(cab);
     
-    // Store selection in session storage
     const cabData = {
       cab: cab,
       tripType: tripType,
@@ -286,7 +260,6 @@ export function CabOptions({
     
     sessionStorage.setItem('selectedCab', JSON.stringify(cabData));
     
-    // Scroll to booking summary if it exists
     const bookingSummary = document.getElementById('booking-summary');
     if (bookingSummary) {
       setTimeout(() => {
@@ -295,7 +268,6 @@ export function CabOptions({
     }
   };
 
-  // Generate fare details for display
   const getFareDetails = useCallback((cab: CabType): string => {
     return fareService.getFareExplanation(
       distance,
