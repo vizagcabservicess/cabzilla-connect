@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PricingForm } from './PricingForm';
 import { fareService } from '@/services/fareService';
+import { getVehiclePricingUrls } from '@/lib/apiEndpoints';
 
 interface VehiclePricingFormProps {
   vehicles: any[];
@@ -81,17 +82,23 @@ export const VehiclePricingForm: React.FC<VehiclePricingFormProps> = ({
         driverAllowance
       });
       
+      // Log available endpoints for debugging
+      const endpoints = getVehiclePricingUrls();
+      console.log("Available pricing endpoints:", endpoints);
+      
       // Clear all caches before update
       localStorage.removeItem('cabTypes');
       fareService.clearCache();
       
       // Prepare data for API
       const fareData = {
+        vehicleId: selectedVehicleId,
         name: vehicleName,
         basePrice: parseFloat(basePrice) || 0,
         pricePerKm: parseFloat(pricePerKm) || 0,
         nightHaltCharge: parseFloat(nightHaltCharge) || 0,
-        driverAllowance: parseFloat(driverAllowance) || 0
+        driverAllowance: parseFloat(driverAllowance) || 0,
+        tripType: tripType
       };
       
       // Send update request
@@ -102,6 +109,7 @@ export const VehiclePricingForm: React.FC<VehiclePricingFormProps> = ({
       );
       
       if (success) {
+        toast.success(`Vehicle pricing updated successfully for ${vehicleName}`);
         onSuccess?.(selectedVehicleId, tripType);
       } else {
         // Try alternate approach if failure
@@ -124,8 +132,10 @@ export const VehiclePricingForm: React.FC<VehiclePricingFormProps> = ({
       }
     } catch (err: any) {
       console.error("Error updating pricing:", err);
-      setError(`Failed to update vehicle pricing: ${err.message || 'Unknown error'}`);
+      setError(`Failed to update vehicle pricing: ${err.message || 'Unknown error'}. Please check server connectivity.`);
       onError?.(err);
+      
+      toast.error(`Update failed: ${err.message || 'Server connection error'}`);
       
       // Auto-retry logic
       if (retryCount < 2) {

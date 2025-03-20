@@ -63,10 +63,22 @@ export const GoogleMapsProvider = ({ children, apiKey }: GoogleMapsProviderProps
   // Log loading status
   useEffect(() => {
     if (isLoaded) {
-      console.log("Google Maps API loaded successfully");
+      console.log("Google Maps API loaded successfully!");
+      // Create hidden div for PlacesService if it doesn't exist
+      if (!document.getElementById('map-canvas')) {
+        const mapCanvas = document.createElement('div');
+        mapCanvas.id = 'map-canvas';
+        mapCanvas.style.display = 'none';
+        document.body.appendChild(mapCanvas);
+        console.log("Created hidden map-canvas element for PlacesService");
+      }
     }
     if (loadError) {
       console.error("Error during Google Maps load:", loadError);
+      toast.error("Failed to load Google Maps. Please check your API key and internet connection.", {
+        duration: 5000,
+        id: "google-maps-load-error",
+      });
     }
   }, [isLoaded, loadError]);
 

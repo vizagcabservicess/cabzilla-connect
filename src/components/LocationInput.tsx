@@ -57,6 +57,7 @@ export function LocationInput({
   const isManualInputRef = useRef<boolean>(false);
   const pendingLocationUpdateRef = useRef<Location | null>(null);
   const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
+  const autocompleteInitializedRef = useRef<boolean>(false);
   
   // Update the address whenever locationData changes
   useEffect(() => {
@@ -132,21 +133,20 @@ export function LocationInput({
     
     try {
       // Create a PlacesService if it doesn't exist yet
-      if (!placesServiceRef.current && document.getElementById('map-canvas')) {
+      if (!placesServiceRef.current) {
+        const mapCanvas = document.getElementById('map-canvas');
+        if (!mapCanvas) {
+          console.log("Creating map-canvas element for PlacesService");
+          const newMapCanvas = document.createElement('div');
+          newMapCanvas.id = 'map-canvas';
+          newMapCanvas.style.display = 'none';
+          document.body.appendChild(newMapCanvas);
+        }
+        
         placesServiceRef.current = new google.maps.places.PlacesService(
           document.getElementById('map-canvas') as HTMLDivElement
         );
-      }
-      
-      // If we couldn't create a PlacesService, we can't proceed
-      if (!placesServiceRef.current) {
-        // Create a hidden div for PlacesService
-        const mapCanvas = document.createElement('div');
-        mapCanvas.id = 'map-canvas';
-        mapCanvas.style.display = 'none';
-        document.body.appendChild(mapCanvas);
-        
-        placesServiceRef.current = new google.maps.places.PlacesService(mapCanvas);
+        console.log("PlacesService initialized");
       }
       
       return new Promise<google.maps.places.PlaceResult | null>((resolve, reject) => {
@@ -276,32 +276,28 @@ export function LocationInput({
     }
   };
 
-  // Setup Google Maps autocomplete - using a ref to prevent multiple listeners
-  useEffect(() => {
-    if (!google || !isLoaded || disabled || readOnly || !inputRef.current) {
+  // Setup Google Maps autocomplete
+  const initializeAutocomplete = useCallback(() => {
+    if (!google || !google.maps || !google.maps.places || !inputRef.current || 
+        disabled || readOnly || autocompleteInitializedRef.current) {
       return;
     }
     
-    // Cleanup previous listeners to prevent duplication
-    const cleanupAutocomplete = () => {
-      if (autocompleteListenerRef.current && google.maps) {
-        google.maps.event.removeListener(autocompleteListenerRef.current);
-        autocompleteListenerRef.current = null;
-      }
-      
-      if (autocompleteRef.current && google.maps) {
-        google.maps.event.clearInstanceListeners(autocompleteRef.current);
-        autocompleteRef.current = null;
-      }
-    };
+    console.log("Initializing Google Places Autocomplete...");
     
-    // Cleanup any existing autocomplete
-    cleanupAutocomplete();
+    // Cleanup previous listeners to prevent duplication
+    if (autocompleteListenerRef.current) {
+      google.maps.event.removeListener(autocompleteListenerRef.current);
+      autocompleteListenerRef.current = null;
+    }
+    
+    if (autocompleteRef.current) {
+      google.maps.event.clearInstanceListeners(autocompleteRef.current);
+      autocompleteRef.current = null;
+    }
     
     try {
-      // Log that we're initializing autocomplete
-      console.log("Initializing Google Maps Autocomplete...");
-      
+      // Create options for autocomplete
       const options: google.maps.places.AutocompleteOptions = {
         fields: ['address_components', 'geometry', 'name', 'formatted_address'],
         componentRestrictions: { country: 'in' }, // Restrict to India
@@ -332,7 +328,7 @@ export function LocationInput({
       const autocomplete = new google.maps.places.Autocomplete(inputRef.current, options);
       autocompleteRef.current = autocomplete;
       
-      // Add place_changed listener with a single reference
+      // Add place_changed listener
       autocompleteListenerRef.current = autocomplete.addListener('place_changed', () => {
         if (!autocompleteRef.current) return;
         
@@ -381,17 +377,30 @@ export function LocationInput({
         updateParentLocation(newLocation);
       });
       
+      autocompleteInitializedRef.current = true;
       console.log("✅ Autocomplete initialized successfully");
     } catch (error) {
       console.error("❌ Error initializing autocomplete:", error);
       toast.error("Error setting up location search. Please refresh the page.");
     }
-    
-    // Cleanup when component unmounts
-    return () => {
-      cleanupAutocomplete();
-    };
-  }, [google, isLoaded, handleLocationChange, disabled, readOnly, isPickupLocation, isAirportTransfer, updateParentLocation, locationData.id]);
+  }, [google, disabled, readOnly, isPickupLocation, isAirportTransfer, updateParentLocation, locationData.id]);
+
+  // Initialize autocomplete when Google Maps is loaded
+  useEffect(() => {
+    if (isLoaded && google && inputRef.current && !autocompleteInitializedRef.current) {
+      // Delay initialization to ensure everything is properly loaded
+      setTimeout(() => {
+        initializeAutocomplete();
+      }, 500);
+    }
+  }, [isLoaded, google, initializeAutocomplete]);
+
+  // Re-initialize autocomplete when props change
+  useEffect(() => {
+    if (isLoaded && google && inputRef.current) {
+      initializeAutocomplete();
+    }
+  }, [isPickupLocation, isAirportTransfer, disabled, readOnly, initializeAutocomplete, isLoaded, google]);
 
   // Helper function to safely determine if a location is in Vizag
   function isInVizagArea(lat: number, lng: number, address: string | undefined | null): boolean {
@@ -429,17 +438,14 @@ export function LocationInput({
       document.body.appendChild(mapCanvas);
       
       // Initialize the PlacesService
-      if (!placesServiceRef.current) {
+      if (!placesServiceRef.current && google.maps.places) {
         placesServiceRef.current = new google.maps.places.PlacesService(mapCanvas);
+        console.log("PlacesService initialized via useEffect");
       }
     }
     
     return () => {
-      // Cleanup the hidden element on unmount
-      const mapCanvas = document.getElementById('map-canvas');
-      if (mapCanvas) {
-        mapCanvas.remove();
-      }
+      // Don't remove the map-canvas on unmount as other components might use it
     };
   }, [google]);
 
@@ -464,6 +470,12 @@ export function LocationInput({
             // If user typed but didn't select from autocomplete
             if (!wasLocationSelectedRef.current && address.trim() !== '' && isManualInputRef.current) {
               handleManualTextInput(address);
+            }
+          }}
+          onClick={() => {
+            // Re-initialize autocomplete on click if it wasn't initialized successfully
+            if (!autocompleteInitializedRef.current && google && isLoaded) {
+              initializeAutocomplete();
             }
           }}
           disabled={disabled}

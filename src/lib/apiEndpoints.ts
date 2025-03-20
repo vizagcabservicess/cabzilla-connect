@@ -1,12 +1,19 @@
 // API Endpoints for the application
 // This file centralizes all API endpoint URLs and provides fallback mechanisms
 
-// Base URLs for API requests
+// Get base URL from environment or use relative paths
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const USE_DIRECT_API_PATH = import.meta.env.VITE_USE_DIRECT_API_PATH === 'true';
+
+// Base URLs for API requests - prioritize relative paths for better CORS handling
 const API_BASE_URLS = [
   '/api',                   // Primary endpoint - relative to current domain
+  API_BASE_URL ? `${API_BASE_URL}/api` : '', // Environment-configured base URL
   'https://api.example.com', // Placeholder for production API (update with real URL)
-  'https://backup-api.example.com', // Placeholder for backup API (update with real URL)
 ];
+
+// Filter out empty URLs
+const FILTERED_BASE_URLS = API_BASE_URLS.filter(url => url);
 
 // Endpoint paths (without base URL)
 const ENDPOINTS = {
@@ -29,16 +36,28 @@ const ENDPOINTS = {
 // Function to get all possible URLs for a specific endpoint
 export const getEndpointUrls = (endpointPath: string, appendTimestamp = true): string[] => {
   const timestamp = appendTimestamp ? `?_t=${Date.now()}` : '';
+  const urls: string[] = [];
+  
+  // For direct path option, just prepend base URL directly
+  if (USE_DIRECT_API_PATH && API_BASE_URL) {
+    urls.push(`${API_BASE_URL}${endpointPath}.php${timestamp}`);
+    urls.push(`${API_BASE_URL}${endpointPath}${timestamp}`);
+  }
   
   // Generate all possible URLs for the endpoint
-  // Primary base + standard PHP extension
-  const standardUrls = API_BASE_URLS.map(base => `${base}${endpointPath}.php${timestamp}`);
+  FILTERED_BASE_URLS.forEach(base => {
+    // Add standard PHP extension
+    urls.push(`${base}${endpointPath}.php${timestamp}`);
+    // Add clean URL (for frameworks that don't use .php)
+    urls.push(`${base}${endpointPath}${timestamp}`);
+  });
   
-  // Primary base without PHP extension (for frameworks that don't use .php)
-  const cleanUrls = API_BASE_URLS.map(base => `${base}${endpointPath}${timestamp}`);
-  
-  // Combine and return all URLs with primary URLs first
-  return [...standardUrls, ...cleanUrls];
+  // For local development fallback to /api path
+  urls.push(`/api${endpointPath}.php${timestamp}`);
+  urls.push(`/api${endpointPath}${timestamp}`);
+
+  // Remove duplicates
+  return [...new Set(urls)];
 };
 
 // Helper function to get vehicle data endpoint URLs with timestamp
