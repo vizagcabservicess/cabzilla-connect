@@ -3,7 +3,20 @@ import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, RefreshCw, Database, ShieldAlert, Terminal, Globe, ExternalLink } from "lucide-react";
+import { 
+  AlertCircle, 
+  RefreshCw, 
+  Database, 
+  ShieldAlert, 
+  Terminal, 
+  Globe, 
+  ExternalLink,
+  Server,
+  FileCode,
+  Wifi,
+  ArrowPathIcon,
+  Network
+} from "lucide-react";
 import { fareService } from '@/services/fareService';
 import { toast } from 'sonner';
 
@@ -58,20 +71,59 @@ export function FareUpdateError({
     }, 800);
   };
 
-  // Open the direct API endpoint in a new tab
-  const openDirectEndpoint = () => {
+  // Open multiple direct API endpoints in new tabs to bypass potential issues
+  const openDirectEndpoints = () => {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+    const timestamp = Date.now();
+    
     const endpoints = [
-      'https://saddlebrown-oryx-227656.hostingersite.com/api/admin/outstation-fares-update.php',
-      'https://saddlebrown-oryx-227656.hostingersite.com/api/admin/local-fares-update.php',
-      'https://saddlebrown-oryx-227656.hostingersite.com/api/admin/airport-fares-update.php'
+      // Try the new direct outstation fares endpoint first
+      `${baseUrl}/api/admin/direct-outstation-fares.php?_t=${timestamp}`,
+      `${baseUrl}/api/admin/direct-vehicle-pricing.php?_t=${timestamp}`,
+      `${baseUrl}/api/admin/outstation-fares-update.php?_t=${timestamp}`,
+      `${baseUrl}/api/admin/local-fares-update.php?_t=${timestamp}`,
+      `${baseUrl}/api/admin/airport-fares-update.php?_t=${timestamp}`
     ];
     
-    // Open each endpoint in a new tab
+    // Open all endpoint URLs in new tabs
     endpoints.forEach(endpoint => {
-      window.open(endpoint, '_blank');
+      const url = new URL(endpoint);
+      url.searchParams.append('test', 'true');
+      url.searchParams.append('_', timestamp.toString());
+      
+      window.open(url.toString(), '_blank');
     });
     
     toast.info('Opened direct API endpoints in new tabs');
+  };
+
+  // Diagnose connection issues
+  const runDiagnostics = () => {
+    toast.info('Running connection diagnostics...');
+    
+    // Try ping to base URL
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+    const timestamp = Date.now();
+    
+    console.log('Running connection diagnostics');
+    
+    // Test with basic fetch to avoid CORS
+    fetch(`${baseUrl}/api/?_t=${timestamp}`, { 
+      method: 'HEAD',
+      mode: 'no-cors',
+      cache: 'no-cache'
+    })
+    .then(() => {
+      console.log('Server reached with no-cors ping');
+      toast.success('Server is reachable');
+    })
+    .catch(err => {
+      console.error('Server ping failed:', err);
+      toast.error('Server is unreachable');
+    });
+    
+    // Clear all caches
+    fareService.clearCache();
   };
 
   // Pick the most appropriate icon
@@ -79,7 +131,7 @@ export function FareUpdateError({
     ? ShieldAlert 
     : (isServerError 
       ? Database 
-      : AlertCircle);
+      : (isNetworkError ? Wifi : AlertCircle));
 
   return (
     <Card className="w-full border-red-200 bg-red-50 mb-4">
@@ -119,7 +171,8 @@ export function FareUpdateError({
             <li>Check if the server is online or experiencing issues</li>
             <li>Try reloading the page</li>
             <li>Log out and log back in to refresh authentication</li>
-            <li>Try accessing the endpoint directly (use the Direct API button)</li>
+            <li>Try the Direct API Access button to bypass the application</li>
+            <li>Contact your administrator if the issue persists</li>
           </ul>
         </div>
         
@@ -127,12 +180,12 @@ export function FareUpdateError({
           <div className="flex items-start">
             <Terminal className="h-4 w-4 mt-1 text-blue-500 mr-2" />
             <div className="text-xs">
-              <p className="font-medium text-blue-800">Data that wasn't updated:</p>
+              <p className="font-medium text-blue-800">Error Details:</p>
               <pre className="mt-1 text-xs text-blue-700 bg-blue-100 p-1 rounded overflow-auto max-h-20">
                 {JSON.stringify({
                   endpoint: error?.['config']?.url || 'Unknown',
-                  data: error?.['config']?.data ? JSON.parse(error['config'].data) : 'Unknown',
                   status: error?.['response']?.status || 'Unknown',
+                  message: errorMessage
                 }, null, 2)}
               </pre>
             </div>
@@ -148,14 +201,23 @@ export function FareUpdateError({
           Clear Cache & Retry
         </Button>
         
+        <Button 
+          onClick={runDiagnostics} 
+          variant="outline" 
+          className="gap-2 border-orange-300 bg-orange-50 hover:bg-orange-100 text-orange-800"
+        >
+          <Network className="h-4 w-4" />
+          Run Diagnostics
+        </Button>
+        
         {showDirectLink && (
           <Button 
-            onClick={openDirectEndpoint} 
+            onClick={openDirectEndpoints} 
             variant="outline" 
-            className="gap-2 border-blue-300 bg-blue-50 hover:bg-blue-100 text-blue-800"
+            className="gap-2 border-green-300 bg-green-50 hover:bg-green-100 text-green-800"
           >
-            <ExternalLink className="h-4 w-4" />
-            Open Direct API
+            <Server className="h-4 w-4" />
+            Direct API Access
           </Button>
         )}
       </CardFooter>
