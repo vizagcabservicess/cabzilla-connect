@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,7 +20,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 
-// Base URL for API calls
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 export const VehicleTripFaresForm = () => {
@@ -32,7 +30,6 @@ export const VehicleTripFaresForm = () => {
   const [error, setError] = useState<string | null>(null);
   const [addVehicleOpen, setAddVehicleOpen] = useState(false);
   
-  // New vehicle state
   const [newVehicleName, setNewVehicleName] = useState("");
   const [newVehicleId, setNewVehicleId] = useState("");
   const [newVehicleCapacity, setNewVehicleCapacity] = useState("4");
@@ -41,23 +38,19 @@ export const VehicleTripFaresForm = () => {
   const [newVehicleActive, setNewVehicleActive] = useState(true);
   const [isAddingVehicle, setIsAddingVehicle] = useState(false);
   
-  // Outstation fare state
   const [outstationOneWayBasePrice, setOutstationOneWayBasePrice] = useState("");
   const [outstationOneWayPricePerKm, setOutstationOneWayPricePerKm] = useState("");
   const [outstationRoundTripBasePrice, setOutstationRoundTripBasePrice] = useState("");
   const [outstationRoundTripPricePerKm, setOutstationRoundTripPricePerKm] = useState("");
   
-  // Local fare state
   const [localHr8Km80, setLocalHr8Km80] = useState("");
   const [localHr10Km100, setLocalHr10Km100] = useState("");
   const [localExtraKmRate, setLocalExtraKmRate] = useState("");
   
-  // Airport fare state
   const [airportBasePrice, setAirportBasePrice] = useState("");
   const [airportPricePerKm, setAirportPricePerKm] = useState("");
   const [airportFee, setAirportFee] = useState("");
-  
-  // Load vehicles on mount
+
   useEffect(() => {
     const loadVehicles = async () => {
       try {
@@ -74,18 +67,15 @@ export const VehicleTripFaresForm = () => {
     
     loadVehicles();
   }, []);
-  
+
   const handleVehicleChange = (value: string) => {
     setSelectedVehicle(value);
     setError(null);
   };
 
-  // Helper function to make a request with multiple fallbacks
   const makeRequestWithFallbacks = async (data: any, endpointPaths: string[], customHeaders: Record<string, string> = {}) => {
-    // Add cache busting timestamp
     const timestamp = Date.now();
     const endpoints = endpointPaths.map(path => {
-      // Add full URL if needed, otherwise use relative path
       if (path.startsWith('http')) {
         return `${path}?_t=${timestamp}`;
       } else {
@@ -93,7 +83,6 @@ export const VehicleTripFaresForm = () => {
       }
     });
     
-    // Try API Base URL + endpoint first if available
     if (API_BASE_URL) {
       endpoints.unshift(`${API_BASE_URL}${endpointPaths[0]}?_t=${timestamp}`);
     }
@@ -110,48 +99,92 @@ export const VehicleTripFaresForm = () => {
     
     let lastError: any = null;
     
-    // Try each endpoint until one works
     for (const endpoint of endpoints) {
       try {
         console.log(`Trying endpoint: ${endpoint} with data:`, data);
         
-        // Try Axios first
+        const formattedData = new URLSearchParams();
+        for (const key in data) {
+          formattedData.append(key, data[key]);
+        }
+        
         try {
-          const response = await axios.post(endpoint, data, { headers });
-          console.log(`Response from ${endpoint}:`, response.data);
-          return { success: true, data: response.data };
+          const formResponse = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              ...headers
+            },
+            body: formattedData
+          });
+          
+          if (formResponse.ok) {
+            const responseData = await formResponse.json();
+            console.log(`Form data succeeded on ${endpoint}:`, responseData);
+            return { success: true, data: responseData };
+          }
+        } catch (formError) {
+          console.log(`Form data failed on ${endpoint}:`, formError);
+        }
+        
+        try {
+          const jsonResponse = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...headers
+            },
+            body: JSON.stringify(data)
+          });
+          
+          if (jsonResponse.ok) {
+            const responseData = await jsonResponse.json();
+            console.log(`JSON data succeeded on ${endpoint}:`, responseData);
+            return { success: true, data: responseData };
+          }
+        } catch (jsonError) {
+          console.log(`JSON data failed on ${endpoint}:`, jsonError);
+        }
+        
+        try {
+          const axiosResponse = await axios.post(endpoint, data, { headers });
+          console.log(`Axios succeeded on ${endpoint}:`, axiosResponse.data);
+          return { success: true, data: axiosResponse.data };
         } catch (axiosError: any) {
           console.log(`Axios error on ${endpoint}:`, axiosError.response || axiosError);
-          
-          // If it's a network error, try fetch as fallback
-          if (axiosError.message && axiosError.message.includes('Network Error')) {
-            const fetchResponse = await fetch(endpoint, {
-              method: 'POST',
-              headers,
-              body: JSON.stringify(data)
-            });
-            
-            if (fetchResponse.ok) {
-              const responseData = await fetchResponse.json();
-              console.log(`Fetch succeeded on ${endpoint}:`, responseData);
-              return { success: true, data: responseData };
-            }
-            
-            throw new Error(`Fetch failed with status: ${fetchResponse.status}`);
-          } else {
-            throw axiosError;
-          }
+          throw axiosError;
         }
       } catch (error: any) {
         console.error(`Error with endpoint ${endpoint}:`, error);
         lastError = error;
+        
+        if (error.response && (error.response.status === 403 || error.response.status === 500)) {
+          try {
+            console.log(`Trying with form-data after 403/500 error`);
+            const formData = new FormData();
+            Object.keys(data).forEach(key => {
+              formData.append(key, data[key]);
+            });
+            
+            const response = await axios.post(endpoint, formData, {
+              headers: {
+                ...headers,
+                'Content-Type': 'multipart/form-data'
+              }
+            });
+            
+            console.log(`Form-data succeeded on ${endpoint}:`, response.data);
+            return { success: true, data: response.data };
+          } catch (formDataError: any) {
+            console.log(`Form-data also failed on ${endpoint}:`, formDataError.response || formDataError);
+          }
+        }
       }
     }
     
-    // All endpoints failed, throw the last error
     throw lastError || new Error('All endpoints failed');
   };
-  
+
   const handleOutstationFareUpdate = async () => {
     if (!selectedVehicle) {
       toast.error("Please select a vehicle first");
@@ -162,7 +195,6 @@ export const VehicleTripFaresForm = () => {
     setError(null);
     
     try {
-      // Validate inputs are numeric
       const oneWayBasePrice = parseFloat(outstationOneWayBasePrice) || 0;
       const oneWayPricePerKm = parseFloat(outstationOneWayPricePerKm) || 0;
       const roundTripBasePrice = parseFloat(outstationRoundTripBasePrice) || 0;
@@ -173,16 +205,19 @@ export const VehicleTripFaresForm = () => {
         roundTrip: { basePrice: roundTripBasePrice, pricePerKm: roundTripPricePerKm }
       });
       
-      // Prepare data object
       const data = {
         vehicleId: selectedVehicle,
-        oneWayBasePrice: oneWayBasePrice,
-        oneWayPricePerKm: oneWayPricePerKm,
-        roundTripBasePrice: roundTripBasePrice,
-        roundTripPricePerKm: roundTripPricePerKm
+        vehicle_id: selectedVehicle,
+        oneWayBasePrice,
+        baseFare: oneWayBasePrice,
+        oneWayPricePerKm, 
+        pricePerKm: oneWayPricePerKm,
+        roundTripBasePrice,
+        roundTripBaseFare: roundTripBasePrice,
+        roundTripPricePerKm,
+        tripType: 'outstation'
       };
       
-      // Try multiple endpoints for maximum compatibility
       const endpoints = [
         '/api/admin/outstation-fares-update',
         '/api/admin/outstation-fares-update.php',
@@ -193,7 +228,6 @@ export const VehicleTripFaresForm = () => {
       const result = await makeRequestWithFallbacks(data, endpoints);
       
       if (result.success) {
-        // Clear cache to ensure fresh data
         fareService.clearCache();
         toast.success("Outstation fares updated successfully");
       } else {
@@ -207,7 +241,7 @@ export const VehicleTripFaresForm = () => {
       setIsLoading(false);
     }
   };
-  
+
   const handleLocalFareUpdate = async () => {
     if (!selectedVehicle) {
       toast.error("Please select a vehicle first");
@@ -218,7 +252,6 @@ export const VehicleTripFaresForm = () => {
     setError(null);
     
     try {
-      // Validate inputs are numeric
       const hr8km80Price = parseFloat(localHr8Km80);
       const hr10km100Price = parseFloat(localHr10Km100);
       const extraKmRate = parseFloat(localExtraKmRate);
@@ -233,19 +266,17 @@ export const VehicleTripFaresForm = () => {
         extraKmRate
       });
       
-      // Prepare data object with multiple field name variations for compatibility
       const data = {
         vehicleId: selectedVehicle,
         price8hrs80km: hr8km80Price,
         price10hrs100km: hr10km100Price,
         priceExtraKm: extraKmRate,
-        hr8km80Price, // Alternative field name
-        hr10km100Price, // Alternative field name
-        extraKmRate, // Alternative field name
+        hr8km80Price,
+        hr10km100Price,
+        extraKmRate,
         tripType: 'local'
       };
       
-      // Try multiple endpoints for maximum compatibility
       const endpoints = [
         '/api/admin/local-fares-update',
         '/api/admin/local-fares-update.php',
@@ -256,7 +287,6 @@ export const VehicleTripFaresForm = () => {
       const result = await makeRequestWithFallbacks(data, endpoints);
       
       if (result.success) {
-        // Clear cache to ensure fresh data
         fareService.clearCache();
         toast.success("Local fares updated successfully");
       } else {
@@ -270,7 +300,7 @@ export const VehicleTripFaresForm = () => {
       setIsLoading(false);
     }
   };
-  
+
   const handleAirportFareUpdate = async () => {
     if (!selectedVehicle) {
       toast.error("Please select a vehicle first");
@@ -281,7 +311,6 @@ export const VehicleTripFaresForm = () => {
     setError(null);
     
     try {
-      // Validate inputs are numeric
       const basePrice = parseFloat(airportBasePrice);
       const pricePerKm = parseFloat(airportPricePerKm);
       const airportFeeValue = parseFloat(airportFee);
@@ -296,19 +325,18 @@ export const VehicleTripFaresForm = () => {
         airportFee: airportFeeValue
       });
       
-      // Prepare data object with multiple field name variations for compatibility
       const data = {
         vehicleId: selectedVehicle,
+        vehicle_id: selectedVehicle,
         tripType: 'airport',
         baseFare: basePrice,
-        basePrice: basePrice, // Alternative field name
-        pickupFare: basePrice, // Alternative field name for airport transfers
+        basePrice: basePrice,
+        pickupFare: basePrice,
         pricePerKm: pricePerKm,
-        dropFare: pricePerKm, // Alternative field name for airport transfers
+        dropFare: pricePerKm,
         airportFee: airportFeeValue
       };
       
-      // Try multiple endpoints for maximum compatibility
       const endpoints = [
         '/api/admin/airport-fares-update',
         '/api/admin/airport-fares-update.php',
@@ -319,7 +347,6 @@ export const VehicleTripFaresForm = () => {
       const result = await makeRequestWithFallbacks(data, endpoints);
       
       if (result.success) {
-        // Clear cache to ensure fresh data
         fareService.clearCache();
         toast.success("Airport fares updated successfully");
       } else {
@@ -344,10 +371,8 @@ export const VehicleTripFaresForm = () => {
     setError(null);
 
     try {
-      // Generate a normalized ID if not provided
       const vehicleId = newVehicleId || newVehicleName.toLowerCase().replace(/\s+/g, '_');
       
-      // Prepare vehicle data
       const vehicleData = {
         vehicleId: vehicleId,
         name: newVehicleName,
@@ -355,10 +380,9 @@ export const VehicleTripFaresForm = () => {
         luggageCapacity: parseInt(newVehicleLuggageCapacity) || 2,
         ac: newVehicleAC,
         isActive: newVehicleActive,
-        image: `/cars/${vehicleId}.png` // Default image path
+        image: `/cars/${vehicleId}.png`
       };
       
-      // Try multiple endpoints for maximum compatibility
       const endpoints = [
         '/api/admin/vehicles-update',
         '/api/admin/vehicles-update.php',
@@ -369,14 +393,11 @@ export const VehicleTripFaresForm = () => {
       const result = await makeRequestWithFallbacks(vehicleData, endpoints);
       
       if (result.success) {
-        // Refresh the vehicles list
         const updatedList = await getVehicleTypes();
         setVehicles(updatedList);
         
-        // Clear cache to ensure fresh data
         fareService.clearCache();
         
-        // Reset form and close dialog
         setNewVehicleName("");
         setNewVehicleId("");
         setNewVehicleCapacity("4");
@@ -387,7 +408,6 @@ export const VehicleTripFaresForm = () => {
         
         toast.success("Vehicle added successfully");
         
-        // Select the newly added vehicle
         setSelectedVehicle(vehicleId);
       } else {
         throw new Error("Failed to add vehicle");
@@ -400,7 +420,7 @@ export const VehicleTripFaresForm = () => {
       setIsAddingVehicle(false);
     }
   };
-  
+
   return (
     <Card className="bg-white shadow-md">
       <CardHeader>
@@ -562,7 +582,6 @@ export const VehicleTripFaresForm = () => {
                 <TabsTrigger value="airport" className="flex-1">Airport</TabsTrigger>
               </TabsList>
               
-              {/* Outstation Tab */}
               <TabsContent value="outstation">
                 <div className="grid md:grid-cols-2 gap-4 mt-4">
                   <div className="space-y-3">
@@ -626,7 +645,6 @@ export const VehicleTripFaresForm = () => {
                 </Button>
               </TabsContent>
               
-              {/* Local Tab */}
               <TabsContent value="local">
                 <div className="grid gap-4 mt-4">
                   <div>
@@ -674,7 +692,6 @@ export const VehicleTripFaresForm = () => {
                 </Button>
               </TabsContent>
               
-              {/* Airport Tab */}
               <TabsContent value="airport">
                 <div className="grid gap-4 mt-4">
                   <div>

@@ -11,7 +11,16 @@ const fareCache = new Map<string, { expire: number, price: number }>();
 // Clear the fare cache (used when refreshing data)
 export const clearFareCache = () => {
   fareCache.clear();
-  console.log('Fare calculation cache cleared');
+  console.log('Fare calculation cache cleared at', new Date().toISOString());
+  
+  // Also dispatch a custom event that other components can listen for
+  try {
+    window.dispatchEvent(new CustomEvent('fare-cache-cleared', {
+      detail: { timestamp: Date.now() }
+    }));
+  } catch (e) {
+    console.error('Error dispatching fare-cache-cleared event:', e);
+  }
 };
 
 // Export the cache clearing function as part of a service object

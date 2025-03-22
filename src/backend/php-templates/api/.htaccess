@@ -42,9 +42,14 @@ RewriteRule ^admin/airport-fares-update$ admin/airport-fares-update.php [QSA,L]
 RewriteRule ^admin/airport-fares-update.php$ admin/airport-fares-update.php [QSA,L]
 RewriteRule ^admin/airport-fares-update/$ admin/airport-fares-update.php [QSA,L]
 
+RewriteRule ^admin/fares-update$ admin/fares-update.php [QSA,L]
+RewriteRule ^admin/fares-update.php$ admin/fares-update.php [QSA,L]
+RewriteRule ^admin/fares-update/$ admin/fares-update.php [QSA,L]
+
 # Debug header to help troubleshoot routing
 Header set X-Requested-Path "%{REQUEST_URI}e"
 Header set X-Query-String "%{QUERY_STRING}e"
+Header set X-Script-Filename "%{SCRIPT_FILENAME}e"
 
 # Disable caching for API endpoints - Force no caching very strictly
 <IfModule mod_headers.c>
@@ -70,6 +75,7 @@ Header set X-Query-String "%{QUERY_STRING}e"
     Header set Access-Control-Allow-Origin "*"
     Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
     Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh"
+    Header set Access-Control-Max-Age "3600"
 </IfModule>
 
 # Handle OPTIONS method for CORS preflight - immediately return 200
@@ -79,6 +85,9 @@ RewriteRule .* - [R=200,L]
 # Send 200 OK for OPTIONS requests
 <If "%{REQUEST_METHOD} == 'OPTIONS'">
     Header set Status "200 OK"
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh"
 </If>
 
 # Prevent directory listing

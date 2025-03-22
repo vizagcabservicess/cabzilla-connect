@@ -36,13 +36,26 @@ RewriteRule ^api/vehicles-data$ api/fares/vehicles-data.php [L,QSA]
 
 # Map dedicated fare update endpoints with high priority
 RewriteRule ^api/admin/local-fares-update$ api/admin/local-fares-update.php [QSA,L]
+RewriteRule ^api/admin/local-fares-update.php$ api/admin/local-fares-update.php [QSA,L]
+RewriteRule ^api/admin/local-fares-update/$ api/admin/local-fares-update.php [QSA,L]
+
 RewriteRule ^api/admin/outstation-fares-update$ api/admin/outstation-fares-update.php [QSA,L]
+RewriteRule ^api/admin/outstation-fares-update.php$ api/admin/outstation-fares-update.php [QSA,L]
+RewriteRule ^api/admin/outstation-fares-update/$ api/admin/outstation-fares-update.php [QSA,L]
+
 RewriteRule ^api/admin/airport-fares-update$ api/admin/airport-fares-update.php [QSA,L]
+RewriteRule ^api/admin/airport-fares-update.php$ api/admin/airport-fares-update.php [QSA,L]
+RewriteRule ^api/admin/airport-fares-update/$ api/admin/airport-fares-update.php [QSA,L]
+
+RewriteRule ^api/admin/fares-update$ api/admin/fares-update.php [QSA,L]
+RewriteRule ^api/admin/fares-update.php$ api/admin/fares-update.php [QSA,L]
+RewriteRule ^api/admin/fares-update/$ api/admin/fares-update.php [QSA,L]
 
 # Add debug header for API paths
 <IfModule mod_headers.c>
     <FilesMatch "^api/">
         Header set X-Debug-Path "%{REQUEST_URI}e"
+        Header set X-PHP-Path "%{SCRIPT_FILENAME}e"
     </FilesMatch>
 </IfModule>
 
@@ -76,6 +89,10 @@ RewriteRule ^api/ - [R=200,L]
 # Return 200 OK with necessary CORS headers for OPTIONS
 <If "%{REQUEST_METHOD} == 'OPTIONS'">
     Header always set Status "200 OK"
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh"
+    Header always set Access-Control-Max-Age "3600"
 </If>
 
 # Redirect all non-file/directory/API requests to index.html for React Router
