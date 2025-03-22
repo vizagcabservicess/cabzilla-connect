@@ -8,7 +8,7 @@ const generateBypassHeaders = () => {
   return {
     'X-Force-Refresh': Date.now().toString(),
     'X-Bypass-Cache': 'true',
-    'X-Client-Version': '1.0.32',
+    'X-Client-Version': import.meta.env.VITE_API_VERSION || '1.0.36',
     'X-Request-Source': 'client-app',
     'Cache-Control': 'no-cache, no-store, must-revalidate',
     'Pragma': 'no-cache',
@@ -36,13 +36,17 @@ async function directApiCall(endpoint: string, data: any) {
   const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
   const timestamp = Date.now();
   
-  // Create URLs with different timestamp patterns for each attempt
+  // Create URLs with different timestamp patterns for each attempt - HIGHEST PRIORITY ENDPOINTS FIRST
   const urls = [
+    // Try the direct outstation fares endpoint first (most reliable)
     `${baseUrl}/api/admin/direct-outstation-fares.php?_t=${timestamp}`,
+    // Then try the other direct endpoints
     `${baseUrl}/api/admin/direct-vehicle-pricing.php?_t=${timestamp}`,
+    // Then try the regular endpoints
     `${baseUrl}/api/admin/outstation-fares-update.php?_t=${timestamp}`,
     `${baseUrl}/api/admin/vehicle-pricing.php?_t=${timestamp}`,
     `${baseUrl}/api/admin/fares-update.php?_t=${timestamp}`,
+    // Finally, try the specified endpoint
     `${endpoint}?_t=${timestamp}`
   ];
   
@@ -54,6 +58,30 @@ async function directApiCall(endpoint: string, data: any) {
     'application/x-www-form-urlencoded',
     'multipart/form-data'
   ];
+  
+  // First, try a very simplified direct approach with the new simplified endpoint
+  try {
+    console.log('Trying direct simplified endpoint first...');
+    const directUrl = `${baseUrl}/api/admin/direct-outstation-fares.php?_t=${timestamp}`;
+    
+    // Basic fetch with JSON payload - simplest approach
+    const simpleFetchResponse = await fetch(directUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...generateBypassHeaders()
+      },
+      body: JSON.stringify(data)
+    });
+    
+    if (simpleFetchResponse.ok) {
+      const jsonData = await simpleFetchResponse.json();
+      console.log('Success with simplified direct endpoint:', jsonData);
+      return jsonData;
+    }
+  } catch (simplifiedError) {
+    console.warn('Simplified approach failed, trying advanced methods');
+  }
   
   // Try all combinations of URLs and content types
   for (const url of urls) {
@@ -76,7 +104,10 @@ async function directApiCall(endpoint: string, data: any) {
           }
           
           console.log(`Trying ${url} with ${contentType} via axios`);
-          const response = await axios.post(url, axiosData, { headers });
+          const response = await axios.post(url, axiosData, { 
+            headers,
+            timeout: 30000 // 30 seconds timeout
+          });
           console.log('Success with axios:', response.data);
           return response.data;
         } catch (axiosError) {
@@ -242,7 +273,7 @@ export const fareService = {
         force: 'true',
         bypass: 'cache'
       },
-      timeout: 15000, // 15 second timeout
+      timeout: 30000, // 30 second timeout (increased from 15s)
       withCredentials: false, // Disable credentials to avoid CORS preflight issues
       allowAbsoluteUrls: true
     };
@@ -250,7 +281,11 @@ export const fareService = {
   
   // Direct fare update method using multiple approaches
   directFareUpdate: async (tripType: string, vehicleId: string, data: any): Promise<any> => {
-    // Prepare the API endpoint URL
+    // Record when the update operation began
+    const startTime = Date.now();
+    console.log(`Starting fare update for ${tripType}, vehicle: ${vehicleId} at ${new Date(startTime).toISOString()}`);
+    
+    // Prepare the API endpoint URL based on trip type
     const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
     let endpoint;
     
@@ -290,9 +325,23 @@ export const fareService = {
       // Log the data we're about to send
       console.log('Using fare update data:', updateData);
       
+      // Show a toast to let the user know the update is in progress
+      toast.info('Updating fare, please wait...', {
+        id: 'fare-update-in-progress',
+        duration: 5000
+      });
+      
+      // Use the direct simplified endpoint for outstation fares
+      if (tripType.includes('outstation')) {
+        // For outstation fares, use the direct outstation fares endpoint
+        endpoint = `${baseUrl}/api/admin/direct-outstation-fares.php`;
+      }
+      
       // Make the direct API call with multiple fallback methods
       const result = await directApiCall(endpoint, updateData);
-      console.log('Direct fare update successful:', result);
+      
+      const endTime = Date.now();
+      console.log(`Direct fare update successful in ${endTime - startTime}ms:`, result);
       
       toast.success('Fare updated successfully', {
         id: 'fare-update-success'
@@ -300,7 +349,8 @@ export const fareService = {
       
       return result;
     } catch (error) {
-      console.error('All fare update methods failed:', error);
+      const endTime = Date.now();
+      console.error(`All fare update methods failed after ${endTime - startTime}ms:`, error);
       
       toast.error('Failed to update fare. Please try again.', {
         id: 'fare-update-error'

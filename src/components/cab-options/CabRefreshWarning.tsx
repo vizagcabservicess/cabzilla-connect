@@ -142,7 +142,7 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
   };
   
   return (
-    <Alert variant="warning" className="bg-yellow-50 border-yellow-200 text-yellow-800 mb-4">
+    <Alert variant="destructive" className="bg-yellow-50 border-yellow-200 text-yellow-800 mb-4">
       <div className="flex flex-col w-full">
         <div className="flex items-start mb-2">
           <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0 text-yellow-600" />

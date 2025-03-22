@@ -14,7 +14,7 @@ import {
   Server,
   FileCode,
   Wifi,
-  ArrowPathIcon,
+  ArrowUp,
   Network
 } from "lucide-react";
 import { fareService } from '@/services/fareService';
