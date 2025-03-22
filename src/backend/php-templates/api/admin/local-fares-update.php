@@ -50,6 +50,11 @@ if (json_last_error() !== JSON_ERROR_NONE) {
     }
 }
 
+// Also check for POST data if JSON parsing failed
+if (empty($data) && !empty($_POST)) {
+    $data = $_POST;
+}
+
 // Log received data for debugging
 error_log('Received local fares update data: ' . print_r($data, true));
 

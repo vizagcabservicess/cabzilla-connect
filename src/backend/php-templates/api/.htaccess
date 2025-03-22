@@ -48,7 +48,9 @@ Header set X-Query-String "%{QUERY_STRING}e"
 
 # Disable caching for API endpoints - Force no caching very strictly
 <IfModule mod_headers.c>
-    # ... keep existing code (caching prevention headers)
+    Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
 </IfModule>
 
 # Set content type for PHP files to JSON
@@ -58,12 +60,16 @@ Header set X-Query-String "%{QUERY_STRING}e"
 
 # Ensure PHP files are not cached by setting headers
 <FilesMatch "\.(php)$">
-    # ... keep existing code (PHP no-cache headers)
+    Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
 </FilesMatch>
 
 # Enable CORS with maximum permissive settings
 <IfModule mod_headers.c>
-    # ... keep existing code (CORS settings)
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh"
 </IfModule>
 
 # Handle OPTIONS method for CORS preflight - immediately return 200

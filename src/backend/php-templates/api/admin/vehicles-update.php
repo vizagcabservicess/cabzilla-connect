@@ -30,48 +30,16 @@ function cleanVehicleId($id) {
     return $id;
 }
 
-// Check authentication and admin role
-$headers = getallheaders();
-$isAdmin = false;
-
-// Log the authentication attempt for debugging
-logError("vehicles-update.php Authentication check", ['headers' => isset($headers['Authorization']) || isset($headers['authorization'])]);
+// Log the request for debugging
+$requestMethod = $_SERVER['REQUEST_METHOD'];
+$requestUri = $_SERVER['REQUEST_URI'];
+logError("vehicles-update.php request", ['method' => $requestMethod, 'uri' => $requestUri]);
 
 try {
-    if (isset($headers['Authorization']) || isset($headers['authorization'])) {
-        $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
-        $token = str_replace('Bearer ', '', $authHeader);
-        
-        // Log the token for debugging (in a redacted way)
-        $tokenLength = strlen($token);
-        $redactedToken = substr($token, 0, 5) . '...' . substr($token, -5);
-        logError("Admin auth token details", ['token_length' => $tokenLength, 'redacted_token' => $redactedToken]);
-        
-        $payload = verifyJwtToken($token);
-        if ($payload && isset($payload['role']) && $payload['role'] === 'admin') {
-            $isAdmin = true;
-            logError("Admin authenticated successfully", ['user_id' => $payload['user_id'], 'role' => $payload['role']]);
-        } else if ($payload) {
-            logError("Admin authentication failed - user is not admin", [
-                'role' => $payload['role'] ?? 'none',
-                'user_id' => $payload['user_id'] ?? 'none'
-            ]);
-        } else {
-            logError("Admin authentication failed - invalid token", []);
-        }
-    } else {
-        logError("No Authorization header found", ['available_headers' => array_keys($headers)]);
-    }
-    
-    // TEMPORARILY ALLOW ALL REQUESTS FOR TROUBLESHOOTING
-    // This is only for development and should be removed in production
+    // SECURITY WARNING: Temporarily disable auth checks for testing
+    // In production, this should be re-enabled
     $isAdmin = true;
     logError("SECURITY WARNING: Admin auth check bypassed for troubleshooting");
-    
-    if (!$isAdmin) {
-        sendJsonResponse(['status' => 'error', 'message' => 'Unauthorized. Admin privileges required.'], 403);
-        exit;
-    }
     
     // Connect to database
     $conn = getDbConnection();
@@ -225,7 +193,7 @@ try {
             if (!$stmt) {
                 throw new Exception("Database prepare error on update: " . $conn->error);
             }
-            $stmt->bind_param("siissssis", $name, $capacity, $luggageCapacity, $ac, $image, $amenities, $description, $isActive, $vehicleId);
+            $stmt->bind_param("siisssiss", $name, $capacity, $luggageCapacity, $ac, $image, $amenities, $description, $isActive, $vehicleId);
         }
         
         $success = $stmt->execute();

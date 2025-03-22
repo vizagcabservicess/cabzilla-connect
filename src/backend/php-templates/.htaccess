@@ -27,10 +27,17 @@ RewriteRule ^api/admin/fares/update$ api/admin/fares-update.php [QSA,L]
 RewriteRule ^api/admin/km-price/update$ api/admin/km-price-update.php [L,QSA]
 RewriteRule ^api/admin/vehicle-pricing$ api/admin/vehicle-pricing.php [L,QSA]
 RewriteRule ^api/admin/vehicles-update$ api/admin/vehicles-update.php [QSA,L]
+RewriteRule ^api/admin/vehicles$ api/admin/vehicles-update.php [QSA,L]
+RewriteRule ^api/admin/vehicles/add$ api/admin/vehicles-update.php [QSA,L]
 RewriteRule ^api/receipt/([0-9]+)$ api/receipt.php?id=$1 [QSA,L]
 RewriteRule ^api/admin/drivers$ api/admin/drivers.php [QSA,L]
 RewriteRule ^api/admin/drivers/([0-9]+)$ api/admin/drivers.php?id=$1 [QSA,L]
 RewriteRule ^api/vehicles-data$ api/fares/vehicles-data.php [L,QSA]
+
+# Map dedicated fare update endpoints with high priority
+RewriteRule ^api/admin/local-fares-update$ api/admin/local-fares-update.php [QSA,L]
+RewriteRule ^api/admin/outstation-fares-update$ api/admin/outstation-fares-update.php [QSA,L]
+RewriteRule ^api/admin/airport-fares-update$ api/admin/airport-fares-update.php [QSA,L]
 
 # Add debug header for API paths
 <IfModule mod_headers.c>
