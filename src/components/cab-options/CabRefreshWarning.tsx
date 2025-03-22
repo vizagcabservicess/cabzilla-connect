@@ -1,23 +1,40 @@
 
 import React from 'react';
-import { AlertCircle, RefreshCw } from 'lucide-react';
+import { AlertCircle, RefreshCw, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { fareService } from '@/services/fareService';
+import { toast } from 'sonner';
 
 interface CabRefreshWarningProps {
   message?: string;
   onRefresh?: () => void;
+  isAdmin?: boolean;
 }
 
-export function CabRefreshWarning({ message, onRefresh }: CabRefreshWarningProps) {
+export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRefreshWarningProps) {
   const handleRefresh = () => {
+    // Show toast that we're clearing cache
+    toast.info('Clearing all caches and refreshing...', {
+      id: 'clearing-cache',
+      duration: 2000
+    });
+    
     // Clear all caches first
     fareService.clearCache();
     
-    // Then call the onRefresh handler if provided
-    if (onRefresh) {
-      setTimeout(onRefresh, 500);
-    }
+    // Log the forced request config for debugging
+    console.log('Using forced request config:', fareService.getForcedRequestConfig());
+    
+    // Wait a moment for caches to clear
+    setTimeout(() => {
+      // Then call the onRefresh handler if provided
+      if (onRefresh) {
+        onRefresh();
+      } else {
+        // If no handler provided, reload the page
+        window.location.reload();
+      }
+    }, 800);
   };
   
   return (
@@ -29,15 +46,32 @@ export function CabRefreshWarning({ message, onRefresh }: CabRefreshWarningProps
         </div>
       </div>
       
-      <Button 
-        variant="outline" 
-        size="sm" 
-        className="self-start ml-7 border-yellow-400 bg-yellow-100 hover:bg-yellow-200 text-yellow-800"
-        onClick={handleRefresh}
-      >
-        <RefreshCw className="h-3.5 w-3.5 mr-1" />
-        Clear Cache & Refresh
-      </Button>
+      <div className="flex flex-wrap gap-2 mt-1">
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="self-start border-yellow-400 bg-yellow-100 hover:bg-yellow-200 text-yellow-800"
+          onClick={handleRefresh}
+        >
+          <RefreshCw className="h-3.5 w-3.5 mr-1" />
+          Clear Cache & Refresh
+        </Button>
+        
+        {isAdmin && (
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="self-start border-blue-400 bg-blue-100 hover:bg-blue-200 text-blue-800"
+            onClick={() => {
+              window.open('https://saddlebrown-oryx-227656.hostingersite.com/api/admin/outstation-fares-update.php', '_blank');
+              toast.info('Opened direct API endpoint');
+            }}
+          >
+            <Globe className="h-3.5 w-3.5 mr-1" />
+            Test API Directly
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

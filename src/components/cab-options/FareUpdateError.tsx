@@ -3,21 +3,24 @@ import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, RefreshCw, Database, ShieldAlert, Terminal } from "lucide-react";
+import { AlertCircle, RefreshCw, Database, ShieldAlert, Terminal, Globe, ExternalLink } from "lucide-react";
 import { fareService } from '@/services/fareService';
+import { toast } from 'sonner';
 
 interface FareUpdateErrorProps {
   error: Error | string;
   onRetry?: () => void;
   title?: string;
   description?: string;
+  showDirectLink?: boolean;
 }
 
 export function FareUpdateError({
   error,
   onRetry,
   title = "Fare Update Failed",
-  description
+  description,
+  showDirectLink = true
 }: FareUpdateErrorProps) {
   const errorMessage = typeof error === "string" ? error : error.message;
   
@@ -34,15 +37,41 @@ export function FareUpdateError({
   const handleRetry = () => {
     console.log("Retrying fare update after error...");
     
-    // Clear all caches
-    fareService.clearCache();
+    // Show toast
+    toast.info('Clearing all caches and refreshing...', {
+      id: 'clearing-cache',
+      duration: 2000
+    });
+    
+    // Clear all caches and create a forced request config
+    const forceConfig = fareService.getForcedRequestConfig();
+    console.log('Using forced request config for retry:', forceConfig);
     
     // Wait a moment before retrying
     setTimeout(() => {
       if (onRetry) {
         onRetry();
+      } else {
+        // If no handler provided, reload the page
+        window.location.reload();
       }
-    }, 500);
+    }, 800);
+  };
+
+  // Open the direct API endpoint in a new tab
+  const openDirectEndpoint = () => {
+    const endpoints = [
+      'https://saddlebrown-oryx-227656.hostingersite.com/api/admin/outstation-fares-update.php',
+      'https://saddlebrown-oryx-227656.hostingersite.com/api/admin/local-fares-update.php',
+      'https://saddlebrown-oryx-227656.hostingersite.com/api/admin/airport-fares-update.php'
+    ];
+    
+    // Open each endpoint in a new tab
+    endpoints.forEach(endpoint => {
+      window.open(endpoint, '_blank');
+    });
+    
+    toast.info('Opened direct API endpoints in new tabs');
   };
 
   // Pick the most appropriate icon
@@ -90,6 +119,7 @@ export function FareUpdateError({
             <li>Check if the server is online or experiencing issues</li>
             <li>Try reloading the page</li>
             <li>Log out and log back in to refresh authentication</li>
+            <li>Try accessing the endpoint directly (use the Direct API button)</li>
           </ul>
         </div>
         
@@ -109,14 +139,25 @@ export function FareUpdateError({
           </div>
         </div>
       </CardContent>
-      <CardFooter className="pt-0">
+      <CardFooter className="pt-0 flex flex-wrap gap-3">
         <Button 
           onClick={handleRetry} 
-          className="w-full gap-2 bg-blue-600 hover:bg-blue-700"
+          className="gap-2 bg-blue-600 hover:bg-blue-700"
         >
           <RefreshCw className="h-4 w-4" />
           Clear Cache & Retry
         </Button>
+        
+        {showDirectLink && (
+          <Button 
+            onClick={openDirectEndpoint} 
+            variant="outline" 
+            className="gap-2 border-blue-300 bg-blue-50 hover:bg-blue-100 text-blue-800"
+          >
+            <ExternalLink className="h-4 w-4" />
+            Open Direct API
+          </Button>
+        )}
       </CardFooter>
     </Card>
   );
