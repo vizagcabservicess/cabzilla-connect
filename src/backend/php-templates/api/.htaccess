@@ -27,20 +27,18 @@ RewriteRule ^admin/drivers/([0-9]+)$ admin/drivers.php?id=$1 [QSA,L]
 RewriteRule ^receipt/([0-9]+)$ receipt.php?id=$1 [QSA,L]
 RewriteRule ^vehicles-data$ fares/vehicles-data.php [L,QSA]
 
-# Add mapping for local-fares-update endpoint (both with and without .php extension)
+# Map dedicated fare update endpoints with high priority
 RewriteRule ^admin/local-fares-update$ admin/local-fares-update.php [QSA,L]
-RewriteRule ^admin/local-fares-update/$ admin/local-fares-update.php [QSA,L]
 RewriteRule ^admin/local-fares-update.php$ admin/local-fares-update.php [QSA,L]
+RewriteRule ^admin/local-fares-update/$ admin/local-fares-update.php [QSA,L]
 
-# Add mapping for outstation-fares-update endpoint
 RewriteRule ^admin/outstation-fares-update$ admin/outstation-fares-update.php [QSA,L]
-RewriteRule ^admin/outstation-fares-update/$ admin/outstation-fares-update.php [QSA,L]
 RewriteRule ^admin/outstation-fares-update.php$ admin/outstation-fares-update.php [QSA,L]
+RewriteRule ^admin/outstation-fares-update/$ admin/outstation-fares-update.php [QSA,L]
 
-# Add mapping for airport-fares-update endpoint
 RewriteRule ^admin/airport-fares-update$ admin/airport-fares-update.php [QSA,L]
-RewriteRule ^admin/airport-fares-update/$ admin/airport-fares-update.php [QSA,L]
 RewriteRule ^admin/airport-fares-update.php$ admin/airport-fares-update.php [QSA,L]
+RewriteRule ^admin/airport-fares-update/$ admin/airport-fares-update.php [QSA,L]
 
 # Debug header to help troubleshoot routing
 Header set X-Requested-Path "%{REQUEST_URI}e"
