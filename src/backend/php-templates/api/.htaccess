@@ -2,6 +2,27 @@
 # Enable rewrite engine
 RewriteEngine On
 
+# Set access headers for all responses with high priority
+<IfModule mod_headers.c>
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh"
+    Header always set Access-Control-Max-Age "3600"
+    
+    # Disable caching for all API responses
+    Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    Header always set Pragma "no-cache"
+    Header always set Expires "0"
+    
+    # Add debugging headers
+    Header always set X-API-Debug "Processed by main API htaccess"
+    Header always set X-API-Version "1.0.30"
+</IfModule>
+
+# Handle OPTIONS requests for CORS preflight - immediately return 200
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule .* - [R=200,L]
+
 # Parse API routes to PHP files
 RewriteRule ^signup$ signup.php [L]
 RewriteRule ^login$ login.php [L]
@@ -29,72 +50,15 @@ RewriteRule ^admin/drivers/([0-9]+)$ admin/drivers.php?id=$1 [QSA,L]
 RewriteRule ^receipt/([0-9]+)$ receipt.php?id=$1 [QSA,L]
 RewriteRule ^vehicles-data$ fares/vehicles-data.php [L,QSA]
 
-# Map dedicated fare update endpoints with high priority
-RewriteRule ^admin/local-fares-update$ admin/local-fares-update.php [QSA,L]
-RewriteRule ^admin/local-fares-update.php$ admin/local-fares-update.php [QSA,L]
-RewriteRule ^admin/local-fares-update/$ admin/local-fares-update.php [QSA,L]
-
+# Direct access routes for fare updates - top priority and simplified
 RewriteRule ^admin/outstation-fares-update$ admin/outstation-fares-update.php [QSA,L]
-RewriteRule ^admin/outstation-fares-update.php$ admin/outstation-fares-update.php [QSA,L]
-RewriteRule ^admin/outstation-fares-update/$ admin/outstation-fares-update.php [QSA,L]
-
+RewriteRule ^admin/local-fares-update$ admin/local-fares-update.php [QSA,L]
 RewriteRule ^admin/airport-fares-update$ admin/airport-fares-update.php [QSA,L]
-RewriteRule ^admin/airport-fares-update.php$ admin/airport-fares-update.php [QSA,L]
-RewriteRule ^admin/airport-fares-update/$ admin/airport-fares-update.php [QSA,L]
 
-RewriteRule ^admin/fares-update$ admin/fares-update.php [QSA,L]
-RewriteRule ^admin/fares-update.php$ admin/fares-update.php [QSA,L]
-RewriteRule ^admin/fares-update/$ admin/fares-update.php [QSA,L]
-
-# Debug header to help troubleshoot routing
+# Debug headers to help troubleshoot routing
 Header set X-Requested-Path "%{REQUEST_URI}e"
 Header set X-Query-String "%{QUERY_STRING}e"
 Header set X-Script-Filename "%{SCRIPT_FILENAME}e"
 
-# Disable caching for API endpoints - Force no caching very strictly
-<IfModule mod_headers.c>
-    Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
-    Header set Pragma "no-cache"
-    Header set Expires "0"
-</IfModule>
-
-# Set content type for PHP files to JSON
-<FilesMatch "\.(php)$">
-    Header set Content-Type "application/json"
-</FilesMatch>
-
-# Ensure PHP files are not cached by setting headers
-<FilesMatch "\.(php)$">
-    Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
-    Header set Pragma "no-cache"
-    Header set Expires "0"
-</FilesMatch>
-
-# Enable CORS with maximum permissive settings
-<IfModule mod_headers.c>
-    Header set Access-Control-Allow-Origin "*"
-    Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh"
-    Header set Access-Control-Max-Age "3600"
-</IfModule>
-
-# Handle OPTIONS method for CORS preflight - immediately return 200
-RewriteCond %{REQUEST_METHOD} OPTIONS
-RewriteRule .* - [R=200,L]
-
-# Send 200 OK for OPTIONS requests
-<If "%{REQUEST_METHOD} == 'OPTIONS'">
-    Header set Status "200 OK"
-    Header set Access-Control-Allow-Origin "*"
-    Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh"
-</If>
-
 # Prevent directory listing
 Options -Indexes
-
-# Deny access to hidden files and directories
-<FilesMatch "^\.">
-    Order allow,deny
-    Deny from all
-</FilesMatch>

@@ -13,12 +13,13 @@ import {
 import { toast } from "sonner";
 import { fareService } from "@/services/fareService";
 import { getVehicleTypes } from "@/services/vehicleDataService";
-import { Loader2, AlertCircle, RefreshCw, Plus, Car } from "lucide-react";
+import { Loader2, AlertCircle, RefreshCw, Plus, Car, ServerCrash } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import axios from 'axios';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { ApiErrorFallback } from "@/components/ApiErrorFallback";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -29,6 +30,8 @@ export const VehicleTripFaresForm = () => {
   const [activeTab, setActiveTab] = useState("outstation");
   const [error, setError] = useState<string | null>(null);
   const [addVehicleOpen, setAddVehicleOpen] = useState(false);
+  const [apiError, setApiError] = useState<Error | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   
   const [newVehicleName, setNewVehicleName] = useState("");
   const [newVehicleId, setNewVehicleId] = useState("");
@@ -50,6 +53,11 @@ export const VehicleTripFaresForm = () => {
   const [airportBasePrice, setAirportBasePrice] = useState("");
   const [airportPricePerKm, setAirportPricePerKm] = useState("");
   const [airportFee, setAirportFee] = useState("");
+  
+  const resetApiError = () => {
+    setApiError(null);
+    setRetryCount(prev => prev + 1);
+  };
 
   useEffect(() => {
     const loadVehicles = async () => {
@@ -66,28 +74,32 @@ export const VehicleTripFaresForm = () => {
     };
     
     loadVehicles();
-  }, []);
+  }, [retryCount]);
 
   const handleVehicleChange = (value: string) => {
     setSelectedVehicle(value);
     setError(null);
   };
 
-  const makeRequestWithFallbacks = async (data: any, endpointPaths: string[], customHeaders: Record<string, string> = {}) => {
+  const makeRequestWithAllFormats = async (data: any, endpoint: string) => {
+    // Generate a cache-busting query parameter
     const timestamp = Date.now();
-    const endpoints = endpointPaths.map(path => {
-      if (path.startsWith('http')) {
-        return `${path}?_t=${timestamp}`;
-      } else {
-        return `${path}?_t=${timestamp}`;
-      }
+    const url = `${endpoint}?_t=${timestamp}`;
+    
+    console.log(`Attempting to update fares at ${url} with data:`, data);
+    
+    // Define the various submission formats we'll try
+    const formData = new FormData();
+    const urlEncodedData = new URLSearchParams();
+    
+    // Populate both formats with the same data
+    Object.keys(data).forEach(key => {
+      formData.append(key, data[key]);
+      urlEncodedData.append(key, data[key]);
     });
     
-    if (API_BASE_URL) {
-      endpoints.unshift(`${API_BASE_URL}${endpointPaths[0]}?_t=${timestamp}`);
-    }
-    
-    const defaultHeaders = {
+    // JSON headers
+    const jsonHeaders = {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-cache, no-store, must-revalidate',
       'Pragma': 'no-cache',
@@ -95,93 +107,138 @@ export const VehicleTripFaresForm = () => {
       'X-Force-Refresh': 'true'
     };
     
-    const headers = { ...defaultHeaders, ...customHeaders };
+    // Form data headers
+    const formDataHeaders = {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'X-Force-Refresh': 'true'
+    };
     
-    let lastError: any = null;
+    // URL encoded form data headers
+    const urlEncodedHeaders = {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'X-Force-Refresh': 'true'
+    };
+    
+    try {
+      // First attempt: Axios with JSON
+      try {
+        const response = await axios.post(url, data, { headers: jsonHeaders });
+        console.log("✅ Success with JSON format:", response.data);
+        return { success: true, data: response.data };
+      } catch (error) {
+        console.log("❌ Failed with JSON format:", error);
+      }
+      
+      // Second attempt: Axios with FormData
+      try {
+        const response = await axios.post(url, formData, { headers: formDataHeaders });
+        console.log("✅ Success with FormData format:", response.data);
+        return { success: true, data: response.data };
+      } catch (error) {
+        console.log("❌ Failed with FormData format:", error);
+      }
+      
+      // Third attempt: Axios with URL Encoded
+      try {
+        const response = await axios.post(url, urlEncodedData.toString(), { headers: urlEncodedHeaders });
+        console.log("✅ Success with URL Encoded format:", response.data);
+        return { success: true, data: response.data };
+      } catch (error) {
+        console.log("❌ Failed with URL Encoded format:", error);
+      }
+      
+      // Fourth attempt: fetch with JSON
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: jsonHeaders,
+          body: JSON.stringify(data)
+        });
+        
+        if (response.ok) {
+          const responseData = await response.json();
+          console.log("✅ Success with fetch JSON:", responseData);
+          return { success: true, data: responseData };
+        }
+      } catch (error) {
+        console.log("❌ Failed with fetch JSON:", error);
+      }
+      
+      // Fifth attempt: fetch with URL Encoded
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: urlEncodedHeaders,
+          body: urlEncodedData
+        });
+        
+        if (response.ok) {
+          const responseData = await response.json();
+          console.log("✅ Success with fetch URL Encoded:", responseData);
+          return { success: true, data: responseData };
+        }
+      } catch (error) {
+        console.log("❌ Failed with fetch URL Encoded:", error);
+      }
+      
+      // If we reach here, all attempts failed
+      throw new Error("All update attempts failed");
+    } catch (error) {
+      console.error("All fare update methods failed:", error);
+      return { success: false, error };
+    }
+  };
+
+  const makeRequestWithFallbacks = async (data: any, endpointPaths: string[]) => {
+    // First try the direct endpoint
+    const directEndpoint = `${API_BASE_URL}/api/admin/direct-fare-update.php`;
+    
+    try {
+      console.log("🔄 Trying direct fare update endpoint first:", directEndpoint);
+      const directResult = await makeRequestWithAllFormats(data, directEndpoint);
+      
+      if (directResult.success) {
+        console.log("✅ Direct fare update succeeded:", directResult.data);
+        return directResult;
+      }
+    } catch (error) {
+      console.error("❌ Direct fare update failed:", error);
+      // Continue to fallback endpoints
+    }
+    
+    // Try all other fallback endpoints
+    const timestamp = Date.now();
+    const endpoints = endpointPaths.map(path => {
+      if (path.startsWith('http')) {
+        return `${path}?_t=${timestamp}`;
+      } else {
+        return `${API_BASE_URL}${path}?_t=${timestamp}`;
+      }
+    });
+    
+    let lastError = null;
     
     for (const endpoint of endpoints) {
       try {
-        console.log(`Trying endpoint: ${endpoint} with data:`, data);
+        console.log(`🔄 Trying endpoint: ${endpoint}`);
+        const result = await makeRequestWithAllFormats(data, endpoint);
         
-        const formattedData = new URLSearchParams();
-        for (const key in data) {
-          formattedData.append(key, data[key]);
+        if (result.success) {
+          console.log(`✅ Update succeeded on ${endpoint}:`, result.data);
+          return result;
         }
-        
-        try {
-          const formResponse = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-              ...headers
-            },
-            body: formattedData
-          });
-          
-          if (formResponse.ok) {
-            const responseData = await formResponse.json();
-            console.log(`Form data succeeded on ${endpoint}:`, responseData);
-            return { success: true, data: responseData };
-          }
-        } catch (formError) {
-          console.log(`Form data failed on ${endpoint}:`, formError);
-        }
-        
-        try {
-          const jsonResponse = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...headers
-            },
-            body: JSON.stringify(data)
-          });
-          
-          if (jsonResponse.ok) {
-            const responseData = await jsonResponse.json();
-            console.log(`JSON data succeeded on ${endpoint}:`, responseData);
-            return { success: true, data: responseData };
-          }
-        } catch (jsonError) {
-          console.log(`JSON data failed on ${endpoint}:`, jsonError);
-        }
-        
-        try {
-          const axiosResponse = await axios.post(endpoint, data, { headers });
-          console.log(`Axios succeeded on ${endpoint}:`, axiosResponse.data);
-          return { success: true, data: axiosResponse.data };
-        } catch (axiosError: any) {
-          console.log(`Axios error on ${endpoint}:`, axiosError.response || axiosError);
-          throw axiosError;
-        }
-      } catch (error: any) {
-        console.error(`Error with endpoint ${endpoint}:`, error);
+      } catch (error) {
+        console.error(`❌ Error with endpoint ${endpoint}:`, error);
         lastError = error;
-        
-        if (error.response && (error.response.status === 403 || error.response.status === 500)) {
-          try {
-            console.log(`Trying with form-data after 403/500 error`);
-            const formData = new FormData();
-            Object.keys(data).forEach(key => {
-              formData.append(key, data[key]);
-            });
-            
-            const response = await axios.post(endpoint, formData, {
-              headers: {
-                ...headers,
-                'Content-Type': 'multipart/form-data'
-              }
-            });
-            
-            console.log(`Form-data succeeded on ${endpoint}:`, response.data);
-            return { success: true, data: response.data };
-          } catch (formDataError: any) {
-            console.log(`Form-data also failed on ${endpoint}:`, formDataError.response || formDataError);
-          }
-        }
       }
     }
     
+    // If we reach here, all endpoints failed
     throw lastError || new Error('All endpoints failed');
   };
 
@@ -193,6 +250,7 @@ export const VehicleTripFaresForm = () => {
 
     setIsLoading(true);
     setError(null);
+    setApiError(null);
     
     try {
       const oneWayBasePrice = parseFloat(outstationOneWayBasePrice) || 0;
@@ -219,7 +277,6 @@ export const VehicleTripFaresForm = () => {
       };
       
       const endpoints = [
-        '/api/admin/outstation-fares-update',
         '/api/admin/outstation-fares-update.php',
         '/api/admin/vehicle-pricing.php',
         '/api/admin/fares-update.php'
@@ -237,6 +294,7 @@ export const VehicleTripFaresForm = () => {
       console.error("Error updating outstation fares:", error);
       toast.error(error.message || "Failed to update outstation fares");
       setError(`Error updating outstation fares: ${error.message || "Unknown error"}`);
+      setApiError(error);
     } finally {
       setIsLoading(false);
     }
@@ -250,6 +308,7 @@ export const VehicleTripFaresForm = () => {
 
     setIsLoading(true);
     setError(null);
+    setApiError(null);
     
     try {
       const hr8km80Price = parseFloat(localHr8Km80);
@@ -278,7 +337,6 @@ export const VehicleTripFaresForm = () => {
       };
       
       const endpoints = [
-        '/api/admin/local-fares-update',
         '/api/admin/local-fares-update.php',
         '/api/admin/vehicle-pricing.php',
         '/api/admin/fares-update.php'
@@ -296,6 +354,7 @@ export const VehicleTripFaresForm = () => {
       console.error("Error updating local fares:", error);
       toast.error(error.message || "Failed to update local fares");
       setError(`Error updating local fares: ${error.message || "Unknown error"}`);
+      setApiError(error);
     } finally {
       setIsLoading(false);
     }
@@ -309,6 +368,7 @@ export const VehicleTripFaresForm = () => {
 
     setIsLoading(true);
     setError(null);
+    setApiError(null);
     
     try {
       const basePrice = parseFloat(airportBasePrice);
@@ -338,7 +398,6 @@ export const VehicleTripFaresForm = () => {
       };
       
       const endpoints = [
-        '/api/admin/airport-fares-update',
         '/api/admin/airport-fares-update.php',
         '/api/admin/vehicle-pricing.php',
         '/api/admin/fares-update.php'
@@ -356,6 +415,7 @@ export const VehicleTripFaresForm = () => {
       console.error("Error updating airport fares:", error);
       toast.error(error.message || "Failed to update airport fares");
       setError(`Error updating airport fares: ${error.message || "Unknown error"}`);
+      setApiError(error);
     } finally {
       setIsLoading(false);
     }
@@ -369,6 +429,7 @@ export const VehicleTripFaresForm = () => {
 
     setIsAddingVehicle(true);
     setError(null);
+    setApiError(null);
 
     try {
       const vehicleId = newVehicleId || newVehicleName.toLowerCase().replace(/\s+/g, '_');
@@ -384,7 +445,6 @@ export const VehicleTripFaresForm = () => {
       };
       
       const endpoints = [
-        '/api/admin/vehicles-update',
         '/api/admin/vehicles-update.php',
         '/api/admin/vehicles',
         '/api/admin/vehicles/add'
@@ -416,10 +476,30 @@ export const VehicleTripFaresForm = () => {
       console.error("Error adding vehicle:", error);
       toast.error(error.message || "Failed to add vehicle");
       setError(`Error adding vehicle: ${error.message || "Unknown error"}`);
+      setApiError(error);
     } finally {
       setIsAddingVehicle(false);
     }
   };
+
+  // If we have an API error, show the error fallback component
+  if (apiError) {
+    return (
+      <Card className="bg-white shadow-md">
+        <CardHeader>
+          <CardTitle className="text-xl font-bold">Manage Trip Fares</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ApiErrorFallback 
+            error={apiError} 
+            onRetry={resetApiError}
+            title="API Connection Error"
+            description="We're having trouble connecting to the fare management API. This could be due to network issues or server configuration problems."
+          />
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="bg-white shadow-md">
@@ -581,6 +661,7 @@ export const VehicleTripFaresForm = () => {
                 <TabsTrigger value="local" className="flex-1">Local</TabsTrigger>
                 <TabsTrigger value="airport" className="flex-1">Airport</TabsTrigger>
               </TabsList>
+              
               
               <TabsContent value="outstation">
                 <div className="grid md:grid-cols-2 gap-4 mt-4">
