@@ -14,6 +14,11 @@ export const clearFareCache = () => {
   console.log('Fare calculation cache cleared');
 };
 
+// Export the cache clearing function as part of a service object
+export const fareService = {
+  clearCache: clearFareCache
+};
+
 // Generate a cache key based on fare calculation parameters
 const generateCacheKey = (params: FareCalculationParams): string => {
   if (!params || !params.cabType) {

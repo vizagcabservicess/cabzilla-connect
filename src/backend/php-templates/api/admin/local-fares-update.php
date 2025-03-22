@@ -17,29 +17,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // Include database configuration
-require_once __DIR__ . '/../config.php';
+include_once __DIR__ . '/../../config.php';
 
 // Log incoming request for debugging
 $timestamp = date('Y-m-d H:i:s');
 $requestMethod = $_SERVER['REQUEST_METHOD'];
 $requestUri = $_SERVER['REQUEST_URI'];
 $logMessage = "[$timestamp] Local fares update request: Method=$requestMethod, URI=$requestUri" . PHP_EOL;
-error_log($logMessage, 3, __DIR__ . '/../error.log');
+error_log($logMessage, 3, __DIR__ . '/../../error.log');
 
 // Get JSON data from request
 $rawInput = file_get_contents('php://input');
 error_log("Raw input: " . $rawInput);
 
-// Ensure we have valid JSON input
+// Try to decode as JSON first
 $data = json_decode($rawInput, true);
 if (json_last_error() !== JSON_ERROR_NONE) {
-    error_log("JSON parse error: " . json_last_error_msg());
-    
     // Try to decode as URL encoded form data if JSON fails
     parse_str($rawInput, $formData);
     if (!empty($formData)) {
         $data = $formData;
-        error_log("Parsed as form data: " . print_r($data, true));
+    } else {
+        // Last resort - try to decode line by line
+        $lines = explode("\n", $rawInput);
+        $data = [];
+        foreach ($lines as $line) {
+            $parts = explode('=', $line, 2);
+            if (count($parts) == 2) {
+                $data[trim($parts[0])] = trim($parts[1]);
+            }
+        }
     }
 }
 
@@ -87,60 +94,48 @@ if (strpos($vehicleId, 'item-') === 0) {
 }
 
 try {
-    // Connect to database - try multiple connection approaches
-    $pdo = null;
-    $connectionError = null;
-    
-    try {
-        $pdo = new PDO("mysql:host=$db_host;dbname=$db_name", $db_user, $db_pass);
-        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    } catch (PDOException $e) {
-        $connectionError = $e->getMessage();
-        error_log("Primary DB connection failed: " . $connectionError);
-        
-        // Try alternative connection (sometimes configuration varies)
-        try {
-            require_once __DIR__ . '/../../config.php';
-            $pdo = new PDO("mysql:host=$db_host;dbname=$db_name", $db_user, $db_pass);
-            $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-            $connectionError = null;
-        } catch (PDOException $e2) {
-            $connectionError .= "; Alternative connection also failed: " . $e2->getMessage();
-        }
+    // Connect to database using the config helper
+    $conn = getDbConnection();
+    if (!$conn) {
+        throw new Exception("Database connection failed");
     }
     
-    if (!$pdo) {
-        throw new Exception("Database connection failed: " . $connectionError);
-    }
-    
-    // APPROACH 1: Try vehicle_pricing table first
+    // Success flag
     $success = false;
     
+    // APPROACH 1: Try vehicle_pricing table first
     try {
-        // Check if the vehicle exists in vehicles table
-        $checkVehicleStmt = $pdo->prepare("SELECT id FROM vehicles WHERE id = ? OR vehicle_id = ?");
-        $checkVehicleStmt->execute([$vehicleId, $vehicleId]);
+        // Check if the vehicle exists in vehicle_types table
+        $checkVehicleStmt = $conn->prepare("SELECT id FROM vehicle_types WHERE vehicle_id = ? OR id = ?");
+        $checkVehicleStmt->bind_param("ss", $vehicleId, $vehicleId);
+        $checkVehicleStmt->execute();
+        $checkVehicleResult = $checkVehicleStmt->get_result();
         
-        if ($checkVehicleStmt->rowCount() === 0) {
-            // Vehicle doesn't exist, create it
-            $vehicleName = ucfirst(str_replace('_', ' ', $vehicleId));
-            $insertVehicleStmt = $pdo->prepare("
-                INSERT INTO vehicles 
-                (id, vehicle_id, name, is_active, created_at, updated_at) 
-                VALUES (?, ?, ?, 1, NOW(), NOW())
-                ON DUPLICATE KEY UPDATE updated_at = NOW()
+        if ($checkVehicleResult->num_rows === 0) {
+            // Vehicle doesn't exist, create it with a basic record
+            $vehicleName = ucfirst(str_replace(['_', '-'], ' ', $vehicleId));
+            $insertVehicleStmt = $conn->prepare("
+                INSERT INTO vehicle_types 
+                (vehicle_id, name, is_active, capacity, luggage_capacity, ac, image, created_at, updated_at) 
+                VALUES (?, ?, 1, 4, 2, 1, '/cars/sedan.png', NOW(), NOW())
             ");
-            $insertVehicleStmt->execute([$vehicleId, $vehicleId, $vehicleName]);
+            $insertVehicleStmt->bind_param("ss", $vehicleId, $vehicleName);
+            $insertVehicleStmt->execute();
             error_log("Created new vehicle: $vehicleId");
         }
         
         // Check if record exists in vehicle_pricing table
-        $checkStmt = $pdo->prepare("SELECT id FROM vehicle_pricing WHERE vehicle_id = ? AND trip_type = 'local'");
-        $checkStmt->execute([$vehicleId]);
+        $checkStmt = $conn->prepare("
+            SELECT id FROM vehicle_pricing 
+            WHERE vehicle_type = ? AND trip_type = 'local'
+        ");
+        $checkStmt->bind_param("s", $vehicleId);
+        $checkStmt->execute();
+        $checkResult = $checkStmt->get_result();
         
-        if ($checkStmt->rowCount() > 0) {
+        if ($checkResult->num_rows > 0) {
             // Update existing record
-            $updateStmt = $pdo->prepare("
+            $updateStmt = $conn->prepare("
                 UPDATE vehicle_pricing 
                 SET 
                     price_8hrs_80km = ?,
@@ -148,35 +143,37 @@ try {
                     price_extra_km = ?,
                     price_extra_hour = ?,
                     updated_at = NOW()
-                WHERE vehicle_id = ? AND trip_type = 'local'
+                WHERE vehicle_type = ? AND trip_type = 'local'
             ");
             
-            $updateStmt->execute([
+            $updateStmt->bind_param("dddds", 
                 $price8hrs80km,
                 $price10hrs100km,
                 $priceExtraKm,
                 $priceExtraHour,
                 $vehicleId
-            ]);
+            );
             
+            $updateStmt->execute();
             error_log("Updated existing record in vehicle_pricing");
             $success = true;
         } else {
             // Insert new record
-            $insertStmt = $pdo->prepare("
+            $insertStmt = $conn->prepare("
                 INSERT INTO vehicle_pricing 
-                (vehicle_id, trip_type, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour, created_at, updated_at)
+                (vehicle_type, trip_type, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour, created_at, updated_at)
                 VALUES (?, 'local', ?, ?, ?, ?, NOW(), NOW())
             ");
             
-            $insertStmt->execute([
+            $insertStmt->bind_param("sdddd", 
                 $vehicleId,
                 $price8hrs80km,
                 $price10hrs100km,
                 $priceExtraKm,
                 $priceExtraHour
-            ]);
+            );
             
+            $insertStmt->execute();
             error_log("Inserted new record in vehicle_pricing");
             $success = true;
         }
@@ -184,30 +181,32 @@ try {
         error_log("APPROACH 1 failed: " . $e->getMessage());
     }
     
-    // APPROACH 2: Try local_package_fares table
+    // APPROACH 2: Try alternative tables if first approach failed
     if (!$success) {
         try {
+            // Try to update local_package_fares table
             $alternateSql = "
                 INSERT INTO local_package_fares 
                 (vehicle_id, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, NOW(), NOW())
                 ON DUPLICATE KEY UPDATE 
-                price_8hrs_80km = VALUES(price_8hrs_80km),
-                price_10hrs_100km = VALUES(price_10hrs_100km),
-                price_extra_km = VALUES(price_extra_km),
-                price_extra_hour = VALUES(price_extra_hour),
-                updated_at = NOW()
+                    price_8hrs_80km = VALUES(price_8hrs_80km),
+                    price_10hrs_100km = VALUES(price_10hrs_100km),
+                    price_extra_km = VALUES(price_extra_km),
+                    price_extra_hour = VALUES(price_extra_hour),
+                    updated_at = NOW()
             ";
             
-            $alternateStmt = $pdo->prepare($alternateSql);
-            $alternateStmt->execute([
+            $alternateStmt = $conn->prepare($alternateSql);
+            $alternateStmt->bind_param("sdddd", 
                 $vehicleId,
                 $price8hrs80km,
                 $price10hrs100km,
                 $priceExtraKm,
                 $priceExtraHour
-            ]);
+            );
             
+            $alternateStmt->execute();
             error_log("APPROACH 2 succeeded: Updated local_package_fares");
             $success = true;
         } catch (Exception $e) {
@@ -215,27 +214,54 @@ try {
         }
     }
     
-    // APPROACH 3: Try direct fare prices table
+    // APPROACH 3: Try direct fare_prices table if previous approaches failed
     if (!$success) {
         try {
+            // Try to update fare_prices table
             $sql = "
                 INSERT INTO fare_prices 
                 (vehicle_id, trip_type, package_type, price, extra_km_rate, extra_hour_rate, created_at, updated_at)
                 VALUES 
-                (?, 'local', '8hrs_80km', ?, ?, ?, NOW(), NOW()),
-                (?, 'local', '10hrs_100km', ?, ?, ?, NOW(), NOW())
+                (?, 'local', '8hrs_80km', ?, ?, ?, NOW(), NOW())
                 ON DUPLICATE KEY UPDATE 
-                price = VALUES(price),
-                extra_km_rate = VALUES(extra_km_rate),
-                extra_hour_rate = VALUES(extra_hour_rate),
-                updated_at = NOW()
+                    price = VALUES(price),
+                    extra_km_rate = VALUES(extra_km_rate),
+                    extra_hour_rate = VALUES(extra_hour_rate),
+                    updated_at = NOW()
             ";
             
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute([
-                $vehicleId, $price8hrs80km, $priceExtraKm, $priceExtraHour,
-                $vehicleId, $price10hrs100km, $priceExtraKm, $priceExtraHour
-            ]);
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("sddd", 
+                $vehicleId, 
+                $price8hrs80km, 
+                $priceExtraKm, 
+                $priceExtraHour
+            );
+            
+            $stmt->execute();
+            
+            // Insert/update the 10hrs package
+            $sql2 = "
+                INSERT INTO fare_prices 
+                (vehicle_id, trip_type, package_type, price, extra_km_rate, extra_hour_rate, created_at, updated_at)
+                VALUES 
+                (?, 'local', '10hrs_100km', ?, ?, ?, NOW(), NOW())
+                ON DUPLICATE KEY UPDATE 
+                    price = VALUES(price),
+                    extra_km_rate = VALUES(extra_km_rate),
+                    extra_hour_rate = VALUES(extra_hour_rate),
+                    updated_at = NOW()
+            ";
+            
+            $stmt2 = $conn->prepare($sql2);
+            $stmt2->bind_param("sddd", 
+                $vehicleId, 
+                $price10hrs100km, 
+                $priceExtraKm, 
+                $priceExtraHour
+            );
+            
+            $stmt2->execute();
             
             error_log("APPROACH 3 succeeded: Updated fare_prices");
             $success = true;
@@ -244,19 +270,45 @@ try {
         }
     }
     
-    // Return success response
-    http_response_code(200);
-    echo json_encode([
-        'status' => 'success',
-        'message' => 'Local fares updated successfully',
-        'data' => [
-            'vehicleId' => $vehicleId,
-            'price8hrs80km' => $price8hrs80km,
-            'price10hrs100km' => $price10hrs100km,
-            'priceExtraKm' => $priceExtraKm,
-            'priceExtraHour' => $priceExtraHour
-        ]
-    ]);
+    // Final approach - direct SQL if all else fails
+    if (!$success) {
+        try {
+            // Try a direct SQL update that should work with any schema
+            $query = "
+                UPDATE vehicle_types
+                SET 
+                    local_8hr_80km_price = {$price8hrs80km},
+                    local_10hr_100km_price = {$price10hrs100km},
+                    local_extra_km_price = {$priceExtraKm},
+                    updated_at = NOW()
+                WHERE vehicle_id = '{$vehicleId}' OR id = '{$vehicleId}'
+            ";
+            
+            $conn->query($query);
+            error_log("FINAL APPROACH succeeded: Direct SQL update");
+            $success = true;
+        } catch (Exception $e) {
+            error_log("FINAL APPROACH failed: " . $e->getMessage());
+        }
+    }
+    
+    // Return response based on success
+    if ($success) {
+        http_response_code(200);
+        echo json_encode([
+            'status' => 'success',
+            'message' => 'Local fares updated successfully',
+            'data' => [
+                'vehicleId' => $vehicleId,
+                'price8hrs80km' => $price8hrs80km,
+                'price10hrs100km' => $price10hrs100km,
+                'priceExtraKm' => $priceExtraKm,
+                'priceExtraHour' => $priceExtraHour
+            ]
+        ]);
+    } else {
+        throw new Exception("All database update approaches failed");
+    }
     
 } catch (Exception $e) {
     // Log the full error

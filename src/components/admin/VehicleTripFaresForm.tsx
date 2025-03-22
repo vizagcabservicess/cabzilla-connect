@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Select,
@@ -14,9 +14,12 @@ import {
 import { toast } from "sonner";
 import { fareService } from "@/services/fareService";
 import { getVehicleTypes } from "@/services/vehicleDataService";
-import { Loader2, AlertCircle, RefreshCw } from "lucide-react";
+import { Loader2, AlertCircle, RefreshCw, Plus, Car } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import axios from 'axios';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 
 // Base URL for API calls
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -27,6 +30,16 @@ export const VehicleTripFaresForm = () => {
   const [selectedVehicle, setSelectedVehicle] = useState("");
   const [activeTab, setActiveTab] = useState("outstation");
   const [error, setError] = useState<string | null>(null);
+  const [addVehicleOpen, setAddVehicleOpen] = useState(false);
+  
+  // New vehicle state
+  const [newVehicleName, setNewVehicleName] = useState("");
+  const [newVehicleId, setNewVehicleId] = useState("");
+  const [newVehicleCapacity, setNewVehicleCapacity] = useState("4");
+  const [newVehicleLuggageCapacity, setNewVehicleLuggageCapacity] = useState("2");
+  const [newVehicleAC, setNewVehicleAC] = useState(true);
+  const [newVehicleActive, setNewVehicleActive] = useState(true);
+  const [isAddingVehicle, setIsAddingVehicle] = useState(false);
   
   // Outstation fare state
   const [outstationOneWayBasePrice, setOutstationOneWayBasePrice] = useState("");
@@ -320,21 +333,200 @@ export const VehicleTripFaresForm = () => {
       setIsLoading(false);
     }
   };
+
+  const handleAddVehicle = async () => {
+    if (!newVehicleName || !newVehicleId) {
+      toast.error("Vehicle name and ID are required");
+      return;
+    }
+
+    setIsAddingVehicle(true);
+    setError(null);
+
+    try {
+      // Generate a normalized ID if not provided
+      const vehicleId = newVehicleId || newVehicleName.toLowerCase().replace(/\s+/g, '_');
+      
+      // Prepare vehicle data
+      const vehicleData = {
+        vehicleId: vehicleId,
+        name: newVehicleName,
+        capacity: parseInt(newVehicleCapacity) || 4,
+        luggageCapacity: parseInt(newVehicleLuggageCapacity) || 2,
+        ac: newVehicleAC,
+        isActive: newVehicleActive,
+        image: `/cars/${vehicleId}.png` // Default image path
+      };
+      
+      // Try multiple endpoints for maximum compatibility
+      const endpoints = [
+        '/api/admin/vehicles-update',
+        '/api/admin/vehicles-update.php',
+        '/api/admin/vehicles',
+        '/api/admin/vehicles/add'
+      ];
+      
+      const result = await makeRequestWithFallbacks(vehicleData, endpoints);
+      
+      if (result.success) {
+        // Refresh the vehicles list
+        const updatedList = await getVehicleTypes();
+        setVehicles(updatedList);
+        
+        // Clear cache to ensure fresh data
+        fareService.clearCache();
+        
+        // Reset form and close dialog
+        setNewVehicleName("");
+        setNewVehicleId("");
+        setNewVehicleCapacity("4");
+        setNewVehicleLuggageCapacity("2");
+        setNewVehicleAC(true);
+        setNewVehicleActive(true);
+        setAddVehicleOpen(false);
+        
+        toast.success("Vehicle added successfully");
+        
+        // Select the newly added vehicle
+        setSelectedVehicle(vehicleId);
+      } else {
+        throw new Error("Failed to add vehicle");
+      }
+    } catch (error: any) {
+      console.error("Error adding vehicle:", error);
+      toast.error(error.message || "Failed to add vehicle");
+      setError(`Error adding vehicle: ${error.message || "Unknown error"}`);
+    } finally {
+      setIsAddingVehicle(false);
+    }
+  };
   
   return (
     <Card className="bg-white shadow-md">
       <CardHeader>
         <div className="flex justify-between items-center">
           <CardTitle className="text-xl font-bold">Manage Trip Fares</CardTitle>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => window.location.reload()}
-            className="ml-auto"
-          >
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh Page
-          </Button>
+          <div className="flex gap-2">
+            <Dialog open={addVehicleOpen} onOpenChange={setAddVehicleOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Vehicle
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add New Vehicle</DialogTitle>
+                  <DialogDescription>
+                    Enter the details for the new vehicle to add it to your fleet.
+                  </DialogDescription>
+                </DialogHeader>
+                
+                <div className="grid gap-4 py-4">
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="vehicleName" className="text-right">
+                      Vehicle Name
+                    </Label>
+                    <Input
+                      id="vehicleName"
+                      value={newVehicleName}
+                      onChange={(e) => setNewVehicleName(e.target.value)}
+                      className="col-span-3"
+                      placeholder="e.g. Innova Crysta"
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="vehicleId" className="text-right">
+                      Vehicle ID
+                    </Label>
+                    <Input
+                      id="vehicleId"
+                      value={newVehicleId}
+                      onChange={(e) => setNewVehicleId(e.target.value)}
+                      className="col-span-3"
+                      placeholder="e.g. innova_crysta (optional)"
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="capacity" className="text-right">
+                      Capacity
+                    </Label>
+                    <Input
+                      id="capacity"
+                      type="number"
+                      value={newVehicleCapacity}
+                      onChange={(e) => setNewVehicleCapacity(e.target.value)}
+                      className="col-span-3"
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="luggageCapacity" className="text-right">
+                      Luggage Capacity
+                    </Label>
+                    <Input
+                      id="luggageCapacity"
+                      type="number"
+                      value={newVehicleLuggageCapacity}
+                      onChange={(e) => setNewVehicleLuggageCapacity(e.target.value)}
+                      className="col-span-3"
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="ac" className="text-right">
+                      AC
+                    </Label>
+                    <div className="col-span-3 flex items-center">
+                      <Switch
+                        id="ac"
+                        checked={newVehicleAC}
+                        onCheckedChange={setNewVehicleAC}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="isActive" className="text-right">
+                      Active
+                    </Label>
+                    <div className="col-span-3 flex items-center">
+                      <Switch
+                        id="isActive"
+                        checked={newVehicleActive}
+                        onCheckedChange={setNewVehicleActive}
+                      />
+                    </div>
+                  </div>
+                </div>
+                
+                <DialogFooter>
+                  <Button
+                    onClick={handleAddVehicle}
+                    disabled={isAddingVehicle || !newVehicleName}
+                  >
+                    {isAddingVehicle ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Adding...
+                      </>
+                    ) : (
+                      <>
+                        <Car className="mr-2 h-4 w-4" />
+                        Add Vehicle
+                      </>
+                    )}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+            
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => window.location.reload()}
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh Page
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
