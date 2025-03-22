@@ -34,6 +34,10 @@ RewriteRule ^api/admin/drivers$ api/admin/drivers.php [QSA,L]
 RewriteRule ^api/admin/drivers/([0-9]+)$ api/admin/drivers.php?id=$1 [QSA,L]
 RewriteRule ^api/vehicles-data$ api/fares/vehicles-data.php [L,QSA]
 
+# Direct access routes for easier fare update API operation
+RewriteRule ^api/admin/direct-vehicle-pricing$ api/admin/direct-vehicle-pricing.php [QSA,L]
+RewriteRule ^api/admin/direct-vehicle-pricing.php$ api/admin/direct-vehicle-pricing.php [QSA,L]
+
 # Map dedicated fare update endpoints with high priority
 RewriteRule ^api/admin/local-fares-update$ api/admin/local-fares-update.php [QSA,L]
 RewriteRule ^api/admin/local-fares-update.php$ api/admin/local-fares-update.php [QSA,L]
@@ -79,6 +83,20 @@ AddDefaultCharset UTF-8
         Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
         Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh"
         Header always set Access-Control-Max-Age "3600"
+    </FilesMatch>
+</IfModule>
+
+# Set CORS headers specifically for OPTIONS preflight requests - highest priority
+<IfModule mod_headers.c>
+    <FilesMatch "^api/">
+        <If "%{REQUEST_METHOD} == 'OPTIONS'">
+            Header always set Access-Control-Allow-Origin "*"
+            Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+            Header always set Access-Control-Allow-Headers "*"
+            Header always set Access-Control-Max-Age "7200"
+            Header always set Content-Type "text/plain"
+            Header always set Content-Length "0"
+        </If>
     </FilesMatch>
 </IfModule>
 

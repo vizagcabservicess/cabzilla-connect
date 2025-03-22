@@ -4,10 +4,21 @@ RewriteEngine On
 
 # Set access headers for all responses with high priority
 <IfModule mod_headers.c>
+    # Set CORS headers unconditionally for all responses - high priority
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
     Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh"
     Header always set Access-Control-Max-Age "3600"
+    
+    # Set CORS headers specifically for OPTIONS preflight requests - highest priority
+    <If "%{REQUEST_METHOD} == 'OPTIONS'">
+        Header always set Access-Control-Allow-Origin "*"
+        Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Header always set Access-Control-Allow-Headers "*"
+        Header always set Access-Control-Max-Age "7200"
+        Header always set Content-Type "text/plain"
+        Header always set Content-Length "0"
+    </If>
     
     # Disable caching for all API responses
     Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
@@ -15,11 +26,12 @@ RewriteEngine On
     Header always set Expires "0"
     
     # Add debugging headers
-    Header always set X-API-Debug "Processed by main API htaccess"
-    Header always set X-API-Version "1.0.30"
+    Header always set X-API-Debug "Processed by main API htaccess - v1.0.31"
+    Header always set X-API-Version "1.0.31"
 </IfModule>
 
 # Handle OPTIONS requests for CORS preflight - immediately return 200
+# This is crucial for preflight requests to succeed
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
 
@@ -54,6 +66,10 @@ RewriteRule ^vehicles-data$ fares/vehicles-data.php [L,QSA]
 RewriteRule ^admin/outstation-fares-update$ admin/outstation-fares-update.php [QSA,L]
 RewriteRule ^admin/local-fares-update$ admin/local-fares-update.php [QSA,L]
 RewriteRule ^admin/airport-fares-update$ admin/airport-fares-update.php [QSA,L]
+
+# Access the "raw" PHP endpoints for direct testing and debugging
+RewriteRule ^raw-vehicle-pricing$ admin/vehicle-pricing.php?raw=1 [QSA,L]
+RewriteRule ^raw-fare-update$ admin/fares-update.php?raw=1 [QSA,L]
 
 # Debug headers to help troubleshoot routing
 Header set X-Requested-Path "%{REQUEST_URI}e"
