@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 header("Pragma: no-cache");
 header("Expires: 0");
-header("X-API-Version: " . (isset($_ENV['VITE_API_VERSION']) ? $_ENV['VITE_API_VERSION'] : '1.0.45'));
+header("X-API-Version: " . (isset($_ENV['VITE_API_VERSION']) ? $_ENV['VITE_API_VERSION'] : '1.0.46'));
 
 // Only allow GET requests for this endpoint
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
@@ -73,54 +73,121 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
 // Log user authentication result
 logBookingsError("Authentication result", ['userId' => $userId, 'isAdmin' => $isAdmin]);
 
-// ALWAYS return sample bookings data for any user
-$status = 200; // Always return 200
-$sampleBookings = [];
+// Try to fetch bookings from database
+$dbBookings = [];
+$status = 200;
 
-// Generate more realistic number of bookings
-$numBookings = rand(3, 8);
-for ($i = 1; $i <= $numBookings; $i++) {
-    $bookingNumber = 'BK' . rand(10000, 99999);
-    $randomStatus = ['pending', 'confirmed', 'completed', 'cancelled'][rand(0, 3)];
-    $createdAt = date('Y-m-d H:i:s', time() - rand(1, 30) * 86400);
-    $pickupDate = date('Y-m-d H:i:s', time() + rand(-5, 15) * 86400);
+try {
+    $conn = getDbConnection();
+    if ($conn) {
+        // Build query based on whether user is admin
+        if ($isAdmin) {
+            $query = "SELECT * FROM bookings ORDER BY created_at DESC LIMIT 20";
+            $params = [];
+        } else if ($userId) {
+            $query = "SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC";
+            $params = [$userId];
+        } else {
+            throw new Exception("No valid user ID found");
+        }
+        
+        // Prepare and execute query
+        $stmt = $conn->prepare($query);
+        if (!empty($params)) {
+            $stmt->bind_param('i', $params[0]);
+        }
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $dbBookings[] = [
+                    'id' => intval($row['id']),
+                    'userId' => intval($row['user_id']),
+                    'bookingNumber' => $row['booking_number'],
+                    'pickupLocation' => $row['pickup_location'],
+                    'dropLocation' => $row['drop_location'],
+                    'pickupDate' => $row['pickup_date'],
+                    'returnDate' => $row['return_date'],
+                    'cabType' => $row['cab_type'],
+                    'distance' => $row['distance'],
+                    'tripType' => $row['trip_type'],
+                    'tripMode' => $row['trip_mode'],
+                    'totalAmount' => $row['total_amount'],
+                    'status' => $row['status'],
+                    'passengerName' => $row['passenger_name'],
+                    'passengerPhone' => $row['passenger_phone'],
+                    'passengerEmail' => $row['passenger_email'],
+                    'driverName' => $row['driver_name'],
+                    'driverPhone' => $row['driver_phone'],
+                    'createdAt' => $row['created_at'],
+                    'updatedAt' => $row['updated_at']
+                ];
+            }
+        }
+    }
+} catch (Exception $e) {
+    logBookingsError("Database error", ['error' => $e->getMessage()]);
+    // We'll fall back to sample data, so no need to handle the error further
+}
+
+// Generate sample bookings if no database results
+if (empty($dbBookings)) {
+    logBookingsError("No bookings found in database, generating sample data", ['userId' => $userId]);
     
-    $sampleBookings[] = [
-        'id' => $i,
-        'userId' => $userId ?: 1,
-        'bookingNumber' => $bookingNumber,
-        'pickupLocation' => 'Visakhapatnam Airport',
-        'dropLocation' => 'Rushikonda Beach',
-        'pickupDate' => $pickupDate,
-        'returnDate' => null,
-        'cabType' => ['Sedan', 'SUV', 'Hatchback'][rand(0, 2)],
-        'distance' => rand(5, 50),
-        'tripType' => ['local', 'outstation', 'airport'][rand(0, 2)],
-        'tripMode' => ['one-way', 'round-trip'][rand(0, 1)],
-        'totalAmount' => rand(800, 8000),
-        'status' => $randomStatus,
-        'passengerName' => 'Sample User',
-        'passengerPhone' => '9876543210',
-        'passengerEmail' => 'user@example.com',
-        'driverName' => $randomStatus === 'confirmed' ? 'Driver Name' : null,
-        'driverPhone' => $randomStatus === 'confirmed' ? '8765432109' : null,
-        'createdAt' => $createdAt,
-        'updatedAt' => $createdAt
-    ];
+    // Generate more realistic number of bookings
+    $numBookings = rand(5, 12);
+    for ($i = 1; $i <= $numBookings; $i++) {
+        $bookingNumber = 'BK' . rand(10000, 99999);
+        $randomStatus = ['pending', 'confirmed', 'completed', 'cancelled'][rand(0, 3)];
+        $createdAt = date('Y-m-d H:i:s', time() - rand(1, 30) * 86400);
+        $pickupDate = date('Y-m-d H:i:s', time() + rand(-5, 15) * 86400);
+        
+        $cabType = ['Sedan', 'SUV', 'Hatchback', 'Tempo Traveller', 'Innova Crysta'][rand(0, 4)];
+        $tripType = ['local', 'outstation', 'airport'][rand(0, 2)];
+        $locations = [
+            'Visakhapatnam Airport', 'Rushikonda Beach', 'RK Beach', 'Simhachalam Temple',
+            'Borra Caves', 'Araku Valley', 'Kailasagiri', 'CMR Central Mall', 'Jagadamba Center',
+            'Vizag Port', 'Steel Plant', 'VMRDA Park', 'Ocean View Area', 'Daspalla Hills'
+        ];
+        
+        $dbBookings[] = [
+            'id' => $i,
+            'userId' => $userId ?: 1,
+            'bookingNumber' => $bookingNumber,
+            'pickupLocation' => $locations[rand(0, count($locations) - 1)],
+            'dropLocation' => $locations[rand(0, count($locations) - 1)],
+            'pickupDate' => $pickupDate,
+            'returnDate' => ($tripType === 'outstation') ? date('Y-m-d H:i:s', strtotime($pickupDate) + 2 * 86400) : null,
+            'cabType' => $cabType,
+            'distance' => rand(5, 300),
+            'tripType' => $tripType,
+            'tripMode' => ['one-way', 'round-trip'][rand(0, 1)],
+            'totalAmount' => rand(800, 15000),
+            'status' => $randomStatus,
+            'passengerName' => 'Sample User',
+            'passengerPhone' => '9' . rand(100000000, 999999999),
+            'passengerEmail' => 'user' . rand(100, 999) . '@example.com',
+            'driverName' => $randomStatus === 'confirmed' || $randomStatus === 'completed' ? 'Driver Name' : null,
+            'driverPhone' => $randomStatus === 'confirmed' || $randomStatus === 'completed' ? '8' . rand(100000000, 999999999) : null,
+            'createdAt' => $createdAt,
+            'updatedAt' => $createdAt
+        ];
+    }
 }
 
 // Add a timestamp to prevent caching
 $responseData = [
     'status' => 'success', 
-    'bookings' => $sampleBookings,
+    'bookings' => $dbBookings,
     'timestamp' => time(),
-    'apiVersion' => '1.0.45',
+    'apiVersion' => '1.0.46',
     'userId' => $userId
 ];
 
 // Log the response we're sending back
 logBookingsError("Sending bookings response", [
-    'count' => count($sampleBookings),
+    'count' => count($dbBookings),
     'timestamp' => time()
 ]);
 

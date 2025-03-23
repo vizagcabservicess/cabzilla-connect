@@ -26,8 +26,8 @@ RewriteEngine On
     Header always set Expires "0"
     
     # Add debugging headers
-    Header always set X-API-Debug "Processed by main API htaccess - v1.0.46"
-    Header always set X-API-Version "1.0.46"
+    Header always set X-API-Debug "Processed by main API htaccess - v1.0.47"
+    Header always set X-API-Version "1.0.47"
 </IfModule>
 
 # Handle OPTIONS requests for CORS preflight - immediately return 200
@@ -36,16 +36,17 @@ RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
 
 # HIGHEST PRIORITY ROUTES - These routes must work reliably
-# These need to bypass any complex routing to ensure they always work
-RewriteRule ^user/bookings$ user/bookings.php [L,QSA]
-RewriteRule ^admin/metrics$ admin/metrics.php [L,QSA]
+# Most important direct endpoints with highest priority at the top
+RewriteRule ^admin/direct-base-pricing$ admin/direct-base-pricing.php [L,QSA]
 RewriteRule ^admin/direct-airport-fares$ admin/direct-airport-fares.php [L,QSA]
 RewriteRule ^admin/direct-local-fares$ admin/direct-local-fares.php [L,QSA]
 RewriteRule ^admin/direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^admin/direct-base-pricing$ admin/direct-base-pricing.php [L,QSA]
+RewriteRule ^user/bookings$ user/bookings.php [L,QSA]
+RewriteRule ^admin/metrics$ admin/metrics.php [L,QSA]
 
 # Secondary priority rules for frequently used endpoints
 RewriteRule ^user/dashboard$ user/dashboard.php [L,QSA]
+RewriteRule ^admin/users$ admin/users.php [L,QSA]
 RewriteRule ^admin/vehicle-pricing$ admin/vehicle-pricing.php [L,QSA]
 RewriteRule ^admin/fares-update$ admin/fares-update.php [L,QSA]
 
@@ -58,7 +59,6 @@ RewriteRule ^update-booking$ update-booking.php [QSA,L]
 RewriteRule ^update-booking/([0-9]+)$ update-booking.php?id=$1 [QSA,L]
 RewriteRule ^admin/booking$ admin/booking.php [QSA,L]
 RewriteRule ^admin/booking/([0-9]+)$ admin/booking.php?id=$1 [QSA,L]
-RewriteRule ^admin/users$ admin/users.php [QSA,L]
 RewriteRule ^fares/tours$ fares/tours.php [L,QSA]
 RewriteRule ^fares/vehicles$ fares/vehicles.php [L,QSA]
 RewriteRule ^fares/vehicles-data$ fares/vehicles-data.php [L,QSA]
