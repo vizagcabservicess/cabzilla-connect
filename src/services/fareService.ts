@@ -16,6 +16,39 @@ class FareService {
       localStorage.removeItem('forceCacheRefresh');
     }
   }
+
+  // New method for forced request configuration
+  getForcedRequestConfig() {
+    const apiVersion = import.meta.env.VITE_API_VERSION || '1.0.0';
+    const timestamp = Date.now();
+    
+    return {
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'X-API-Version': apiVersion,
+        'X-Force-Refresh': 'true'
+      },
+      params: {
+        _t: timestamp
+      }
+    };
+  }
+
+  // New method for bypass headers
+  getBypassHeaders() {
+    const apiVersion = import.meta.env.VITE_API_VERSION || '1.0.0';
+    
+    return {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'X-API-Version': apiVersion,
+      'X-Force-Refresh': 'true',
+      'X-Bypass-Cache': 'true'
+    };
+  }
   
   async getTourFares() {
     // Check if we have cached data
@@ -145,6 +178,24 @@ class FareService {
       }
     }
     
+    // If no cached data or cache is disabled, try to fetch from API
+    try {
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+      const timestamp = Date.now();
+      const endpoint = `${apiBaseUrl}/api/fares/airport.php?vehicleId=${vehicleId}&_t=${timestamp}`;
+      
+      console.log(`Fetching airport fares for ${vehicleId} from API: ${endpoint}`);
+      
+      const response = await axios.get(endpoint, this.getForcedRequestConfig());
+      
+      if (response.data && response.data.status === 'success' && response.data.data) {
+        console.log(`Successfully fetched airport fares for ${vehicleId}:`, response.data.data);
+        return response.data.data;
+      }
+    } catch (error) {
+      console.error(`Failed to fetch airport fares for ${vehicleId} from API:`, error);
+    }
+    
     // Fallback to default values
     return {
       basePrice: 0,
@@ -211,23 +262,18 @@ class FareService {
       endpoint = `${endpoint}?_t=${timestamp}`;
       
       console.log(`Updating ${tripType} fares for vehicle ${vehicleId} at endpoint: ${endpoint}`);
+      console.log("Data being sent:", data);
       
       // First try with JSON
       try {
         const response = await axios.post(endpoint, data, {
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0',
-            'X-API-Version': apiVersion,
-            'X-Force-Refresh': 'true'
-          }
+          headers: this.getBypassHeaders()
         });
         
         if (response.data && response.data.status === 'success') {
           // Clear cache to ensure fresh data is fetched
           this.clearCache();
+          console.log(`Successfully updated ${tripType} fares via JSON:`, response.data);
           return response.data;
         } else {
           console.warn('API request successful but returned error status:', response.data);
@@ -243,18 +289,13 @@ class FareService {
         });
         
         const response = await axios.post(endpoint, formData, {
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0',
-            'X-API-Version': apiVersion,
-            'X-Force-Refresh': 'true'
-          }
+          headers: this.getBypassHeaders()
         });
         
         if (response.data && response.data.status === 'success') {
           // Clear cache to ensure fresh data is fetched
           this.clearCache();
+          console.log(`Successfully updated ${tripType} fares via FormData:`, response.data);
           return response.data;
         } else {
           console.error('FormData API request failed:', response.data);
@@ -274,6 +315,9 @@ class FareService {
     sessionStorage.removeItem('calculatedFares');
     this.cacheEnabled = false; // Disable cache for this session
     localStorage.setItem('forceCacheRefresh', 'true'); // Set flag to force refresh for other components
+    
+    // Dispatch an event to notify other components
+    window.dispatchEvent(new CustomEvent('fare-cache-cleared'));
   }
 }
 

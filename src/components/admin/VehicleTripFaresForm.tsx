@@ -1,843 +1,647 @@
-import React, { useState, useEffect } from 'react';
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { toast } from "sonner";
-import { fareService } from "@/services/fareService";
-import { getVehicleTypes } from "@/services/vehicleDataService";
-import { Loader2, AlertCircle, RefreshCw, Plus, Car, ServerCrash } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import axios from 'axios';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { ApiErrorFallback } from "@/components/ApiErrorFallback";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+import { useState, useEffect } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
+import { RefreshCw, Save } from 'lucide-react';
+import { fareService } from '@/services/fareService';
+import { updateOutstationFares, updateLocalFares, updateAirportFares } from '@/services/vehicleDataService';
+import { getVehicleTypes } from '@/services/vehicleDataService';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-// Add a properly defined props interface for the component
 interface VehicleTripFaresFormProps {
   vehicleId?: string;
 }
 
-export const VehicleTripFaresForm: React.FC<VehicleTripFaresFormProps> = ({ vehicleId }) => {
-  const [isLoading, setIsLoading] = useState(false);
-  const [vehicles, setVehicles] = useState<{id: string, name: string}[]>([]);
-  const [selectedVehicle, setSelectedVehicle] = useState(vehicleId || "");
-  const [activeTab, setActiveTab] = useState("outstation");
-  const [error, setError] = useState<string | null>(null);
-  const [addVehicleOpen, setAddVehicleOpen] = useState(false);
-  const [apiError, setApiError] = useState<Error | null>(null);
-  const [retryCount, setRetryCount] = useState(0);
+export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
+  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('outstation');
+  const [vehicleTypes, setVehicleTypes] = useState<{id: string, name: string}[]>([]);
+  const [selectedVehicleId, setSelectedVehicleId] = useState(vehicleId || '');
   
-  const [newVehicleName, setNewVehicleName] = useState("");
-  const [newVehicleId, setNewVehicleId] = useState("");
-  const [newVehicleCapacity, setNewVehicleCapacity] = useState("4");
-  const [newVehicleLuggageCapacity, setNewVehicleLuggageCapacity] = useState("2");
-  const [newVehicleAC, setNewVehicleAC] = useState(true);
-  const [newVehicleActive, setNewVehicleActive] = useState(true);
-  const [isAddingVehicle, setIsAddingVehicle] = useState(false);
+  // Outstation fare state
+  const [basePrice, setBasePrice] = useState('0');
+  const [pricePerKm, setPricePerKm] = useState('0');
+  const [driverAllowance, setDriverAllowance] = useState('0');
+  const [nightHalt, setNightHalt] = useState('0');
+  const [roundTripBasePrice, setRoundTripBasePrice] = useState('0');
+  const [roundTripPricePerKm, setRoundTripPricePerKm] = useState('0');
   
-  const [outstationOneWayBasePrice, setOutstationOneWayBasePrice] = useState("");
-  const [outstationOneWayPricePerKm, setOutstationOneWayPricePerKm] = useState("");
-  const [outstationRoundTripBasePrice, setOutstationRoundTripBasePrice] = useState("");
-  const [outstationRoundTripPricePerKm, setOutstationRoundTripPricePerKm] = useState("");
+  // Local package fare state
+  const [package4hr40km, setPackage4hr40km] = useState('0');
+  const [package8hr80km, setPackage8hr80km] = useState('0');
+  const [package10hr100km, setPackage10hr100km] = useState('0');
+  const [extraKmRate, setExtraKmRate] = useState('0');
+  const [extraHourRate, setExtraHourRate] = useState('0');
   
-  const [localHr8Km80, setLocalHr8Km80] = useState("");
-  const [localHr10Km100, setLocalHr10Km100] = useState("");
-  const [localExtraKmRate, setLocalExtraKmRate] = useState("");
-  
-  const [airportBasePrice, setAirportBasePrice] = useState("");
-  const [airportPricePerKm, setAirportPricePerKm] = useState("");
-  const [airportFee, setAirportFee] = useState("");
-  
-  // Update selected vehicle when vehicleId prop changes
+  // Airport fare state
+  const [airportBasePrice, setAirportBasePrice] = useState('0');
+  const [airportPricePerKm, setAirportPricePerKm] = useState('0');
+  const [dropPrice, setDropPrice] = useState('0');
+  const [pickupPrice, setPickupPrice] = useState('0');
+  const [tier1Price, setTier1Price] = useState('0'); // 0-10 KM
+  const [tier2Price, setTier2Price] = useState('0'); // 11-20 KM
+  const [tier3Price, setTier3Price] = useState('0'); // 21-30 KM
+  const [tier4Price, setTier4Price] = useState('0'); // 31+ KM
+  const [extraKmCharge, setExtraKmCharge] = useState('0');
+
+  // Fetch vehicle types on mount if no vehicleId provided
   useEffect(() => {
-    if (vehicleId) {
-      setSelectedVehicle(vehicleId);
+    if (!vehicleId) {
+      const loadVehicleTypes = async () => {
+        try {
+          const types = await getVehicleTypes();
+          setVehicleTypes(types);
+        } catch (error) {
+          console.error('Error loading vehicle types:', error);
+          toast.error('Failed to load vehicle types');
+        }
+      };
+      
+      loadVehicleTypes();
     }
   }, [vehicleId]);
-  
 
-  const resetApiError = () => {
-    setApiError(null);
-    setRetryCount(prev => prev + 1);
-  };
-
+  // Load existing fares when vehicle ID is selected
   useEffect(() => {
-    const loadVehicles = async () => {
-      try {
-        const vehicleList = await getVehicleTypes();
-        setVehicles(vehicleList);
-        
-        console.log("Loaded vehicles for fare management:", vehicleList);
-      } catch (error) {
-        console.error("Error loading vehicles:", error);
-        toast.error("Failed to load vehicles");
-        setError("Failed to load vehicle data. Please try refreshing the page.");
-      }
-    };
-    
-    loadVehicles();
-  }, [retryCount]);
+    if (selectedVehicleId) {
+      loadFares(selectedVehicleId);
+    }
+  }, [selectedVehicleId]);
 
-  const handleVehicleChange = (value: string) => {
-    setSelectedVehicle(value);
-    setError(null);
-  };
-
-  const makeRequestWithAllFormats = async (data: any, endpoint: string) => {
-    // Generate a cache-busting query parameter
-    const timestamp = Date.now();
-    const url = `${endpoint}?_t=${timestamp}`;
-    
-    console.log(`Attempting to update fares at ${url} with data:`, data);
-    
-    // Define the various submission formats we'll try
-    const formData = new FormData();
-    const urlEncodedData = new URLSearchParams();
-    
-    // Populate both formats with the same data
-    Object.keys(data).forEach(key => {
-      formData.append(key, data[key]);
-      urlEncodedData.append(key, data[key]);
-    });
-    
-    // JSON headers
-    const jsonHeaders = {
-      'Content-Type': 'application/json',
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0',
-      'X-Force-Refresh': 'true'
-    };
-    
-    // Form data headers
-    const formDataHeaders = {
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0',
-      'X-Force-Refresh': 'true'
-    };
-    
-    // URL encoded form data headers
-    const urlEncodedHeaders = {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0',
-      'X-Force-Refresh': 'true'
-    };
-    
+  const loadFares = async (vehicleId: string) => {
+    setLoading(true);
     try {
-      // First attempt: Axios with JSON
-      try {
-        const response = await axios.post(url, data, { headers: jsonHeaders });
-        console.log("✅ Success with JSON format:", response.data);
-        return { success: true, data: response.data };
-      } catch (error) {
-        console.log("❌ Failed with JSON format:", error);
-      }
+      // Load outstation fares
+      const outstationData = await fareService.getOutstationFaresForVehicle(vehicleId);
+      setBasePrice(outstationData.basePrice.toString());
+      setPricePerKm(outstationData.pricePerKm.toString());
+      setDriverAllowance(outstationData.driverAllowance.toString());
+      setNightHalt(outstationData.nightHalt.toString());
+      setRoundTripBasePrice(outstationData.roundTripBasePrice.toString());
+      setRoundTripPricePerKm(outstationData.roundTripPricePerKm.toString());
       
-      // Second attempt: Axios with FormData
-      try {
-        const response = await axios.post(url, formData, { headers: formDataHeaders });
-        console.log("✅ Success with FormData format:", response.data);
-        return { success: true, data: response.data };
-      } catch (error) {
-        console.log("❌ Failed with FormData format:", error);
-      }
+      // Load local package fares
+      const localData = await fareService.getLocalFaresForVehicle(vehicleId);
+      setPackage4hr40km(localData.package4hr40km.toString());
+      setPackage8hr80km(localData.package8hr80km.toString());
+      setPackage10hr100km(localData.package10hr100km.toString());
+      setExtraKmRate(localData.extraKmRate.toString());
+      setExtraHourRate(localData.extraHourRate.toString());
       
-      // Third attempt: Axios with URL Encoded
-      try {
-        const response = await axios.post(url, urlEncodedData.toString(), { headers: urlEncodedHeaders });
-        console.log("✅ Success with URL Encoded format:", response.data);
-        return { success: true, data: response.data };
-      } catch (error) {
-        console.log("❌ Failed with URL Encoded format:", error);
-      }
+      // Load airport fares
+      const airportData = await fareService.getAirportFaresForVehicle(vehicleId);
+      setAirportBasePrice(airportData.basePrice.toString());
+      setAirportPricePerKm(airportData.pricePerKm.toString());
+      setDropPrice(airportData.dropPrice.toString());
+      setPickupPrice(airportData.pickupPrice.toString());
+      setTier1Price(airportData.tier1Price.toString());
+      setTier2Price(airportData.tier2Price.toString());
+      setTier3Price(airportData.tier3Price.toString());
+      setTier4Price(airportData.tier4Price.toString());
+      setExtraKmCharge(airportData.extraKmCharge.toString());
       
-      // Fourth attempt: fetch with JSON
-      try {
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: jsonHeaders,
-          body: JSON.stringify(data)
-        });
-        
-        if (response.ok) {
-          const responseData = await response.json();
-          console.log("✅ Success with fetch JSON:", responseData);
-          return { success: true, data: responseData };
-        }
-      } catch (error) {
-        console.log("❌ Failed with fetch JSON:", error);
-      }
-      
-      // Fifth attempt: fetch with URL Encoded
-      try {
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: urlEncodedHeaders,
-          body: urlEncodedData
-        });
-        
-        if (response.ok) {
-          const responseData = await response.json();
-          console.log("✅ Success with fetch URL Encoded:", responseData);
-          return { success: true, data: responseData };
-        }
-      } catch (error) {
-        console.log("❌ Failed with fetch URL Encoded:", error);
-      }
-      
-      // If we reach here, all attempts failed
-      throw new Error("All update attempts failed");
+      console.log('Loaded fares for vehicle:', vehicleId);
     } catch (error) {
-      console.error("All fare update methods failed:", error);
-      return { success: false, error };
+      console.error('Error loading fares:', error);
+      toast.error('Failed to load vehicle fares');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const makeRequestWithFallbacks = async (data: any, endpointPaths: string[]) => {
-    // First try the direct endpoint
-    const directEndpoint = `${API_BASE_URL}/api/admin/direct-fare-update.php`;
-    
-    try {
-      console.log("🔄 Trying direct fare update endpoint first:", directEndpoint);
-      const directResult = await makeRequestWithAllFormats(data, directEndpoint);
-      
-      if (directResult.success) {
-        console.log("✅ Direct fare update succeeded:", directResult.data);
-        return directResult;
-      }
-    } catch (error) {
-      console.error("❌ Direct fare update failed:", error);
-      // Continue to fallback endpoints
+  const handleSaveOutstationFares = async () => {
+    if (!selectedVehicleId) {
+      toast.error('Please select a vehicle');
+      return;
     }
     
-    // Try all other fallback endpoints
-    const timestamp = Date.now();
-    const endpoints = endpointPaths.map(path => {
-      if (path.startsWith('http')) {
-        return `${path}?_t=${timestamp}`;
-      } else {
-        return `${API_BASE_URL}${path}?_t=${timestamp}`;
-      }
-    });
-    
-    let lastError = null;
-    
-    for (const endpoint of endpoints) {
+    setLoading(true);
+    try {
+      const data = {
+        basePrice: parseFloat(basePrice) || 0,
+        pricePerKm: parseFloat(pricePerKm) || 0,
+        driverAllowance: parseFloat(driverAllowance) || 0,
+        nightHalt: parseFloat(nightHalt) || 0,
+        roundTripBasePrice: parseFloat(roundTripBasePrice) || 0,
+        roundTripPricePerKm: parseFloat(roundTripPricePerKm) || 0
+      };
+      
+      // Try to use multiple update methods
       try {
-        console.log(`🔄 Trying endpoint: ${endpoint}`);
-        const result = await makeRequestWithAllFormats(data, endpoint);
-        
-        if (result.success) {
-          console.log(`✅ Update succeeded on ${endpoint}:`, result.data);
-          return result;
-        }
+        // First try the specialized API endpoint via fareService
+        await fareService.directFareUpdate('outstation', selectedVehicleId, {
+          vehicleId: selectedVehicleId,
+          ...data
+        });
       } catch (error) {
-        console.error(`❌ Error with endpoint ${endpoint}:`, error);
-        lastError = error;
+        console.error('Direct update failed, trying vehicleDataService:', error);
+        
+        // Fall back to regular update method
+        await updateOutstationFares(selectedVehicleId, data);
       }
+      
+      toast.success('Outstation fares updated successfully');
+      
+      // Force a refresh of fare cache
+      fareService.clearCache();
+      
+      // Dispatch event for other components to update
+      window.dispatchEvent(new CustomEvent('trip-fares-updated', {
+        detail: { 
+          timestamp: Date.now(),
+          tripType: 'outstation',
+          vehicleId: selectedVehicleId
+        }
+      }));
+    } catch (error) {
+      console.error('Error saving outstation fares:', error);
+      toast.error('Failed to update outstation fares');
+    } finally {
+      setLoading(false);
     }
-    
-    // If we reach here, all endpoints failed
-    throw lastError || new Error('All endpoints failed');
   };
 
-  const handleOutstationFareUpdate = async () => {
-    if (!selectedVehicle) {
-      toast.error("Please select a vehicle first");
+  const handleSaveLocalFares = async () => {
+    if (!selectedVehicleId) {
+      toast.error('Please select a vehicle');
       return;
     }
-
-    setIsLoading(true);
-    setError(null);
-    setApiError(null);
     
+    setLoading(true);
     try {
-      const oneWayBasePrice = parseFloat(outstationOneWayBasePrice) || 0;
-      const oneWayPricePerKm = parseFloat(outstationOneWayPricePerKm) || 0;
-      const roundTripBasePrice = parseFloat(outstationRoundTripBasePrice) || 0;
-      const roundTripPricePerKm = parseFloat(outstationRoundTripPricePerKm) || 0;
-      
-      console.log("Updating outstation fares for vehicle:", selectedVehicle, {
-        oneWay: { basePrice: oneWayBasePrice, pricePerKm: oneWayPricePerKm },
-        roundTrip: { basePrice: roundTripBasePrice, pricePerKm: roundTripPricePerKm }
-      });
-      
       const data = {
-        vehicleId: selectedVehicle,
-        vehicle_id: selectedVehicle,
-        oneWayBasePrice,
-        baseFare: oneWayBasePrice,
-        oneWayPricePerKm, 
-        pricePerKm: oneWayPricePerKm,
-        roundTripBasePrice,
-        roundTripBaseFare: roundTripBasePrice,
-        roundTripPricePerKm,
-        tripType: 'outstation'
+        package4hr40km: parseFloat(package4hr40km) || 0,
+        package8hr80km: parseFloat(package8hr80km) || 0,
+        package10hr100km: parseFloat(package10hr100km) || 0,
+        extraKmRate: parseFloat(extraKmRate) || 0,
+        extraHourRate: parseFloat(extraHourRate) || 0
       };
       
-      const endpoints = [
-        '/api/admin/outstation-fares-update.php',
-        '/api/admin/vehicle-pricing.php',
-        '/api/admin/fares-update.php'
-      ];
+      // Also include variations of field names to support different backend implementations
+      const requestData = {
+        vehicleId: selectedVehicleId,
+        ...data,
+        // Add alternative field names
+        price4hrs40km: parseFloat(package4hr40km) || 0,
+        price8hrs80km: parseFloat(package8hr80km) || 0,
+        price10hrs100km: parseFloat(package10hr100km) || 0,
+        priceExtraKm: parseFloat(extraKmRate) || 0,
+        priceExtraHour: parseFloat(extraHourRate) || 0,
+        // More alternative field names
+        local_package_4hr: parseFloat(package4hr40km) || 0,
+        local_package_8hr: parseFloat(package8hr80km) || 0,
+        local_package_10hr: parseFloat(package10hr100km) || 0,
+        extra_km_charge: parseFloat(extraKmRate) || 0,
+        extra_hour_charge: parseFloat(extraHourRate) || 0
+      };
       
-      const result = await makeRequestWithFallbacks(data, endpoints);
-      
-      if (result.success) {
-        fareService.clearCache();
-        toast.success("Outstation fares updated successfully");
-      } else {
-        throw new Error("Failed to update outstation fares");
+      // Try to use multiple update methods
+      try {
+        // First try the specialized API endpoint via fareService
+        await fareService.directFareUpdate('local', selectedVehicleId, requestData);
+      } catch (error) {
+        console.error('Direct update failed, trying vehicleDataService:', error);
+        
+        // Fall back to regular update method
+        await updateLocalFares(selectedVehicleId, data);
       }
-    } catch (error: any) {
-      console.error("Error updating outstation fares:", error);
-      toast.error(error.message || "Failed to update outstation fares");
-      setError(`Error updating outstation fares: ${error.message || "Unknown error"}`);
-      setApiError(error);
+      
+      toast.success('Local package fares updated successfully');
+      
+      // Force a refresh of fare cache
+      fareService.clearCache();
+      
+      // Dispatch event for other components to update
+      window.dispatchEvent(new CustomEvent('local-fares-updated', {
+        detail: { 
+          timestamp: Date.now(),
+          packageId: 'all',
+          vehicleId: selectedVehicleId
+        }
+      }));
+    } catch (error) {
+      console.error('Error saving local fares:', error);
+      toast.error('Failed to update local package fares');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const handleLocalFareUpdate = async () => {
-    if (!selectedVehicle) {
-      toast.error("Please select a vehicle first");
+  const handleSaveAirportFares = async () => {
+    if (!selectedVehicleId) {
+      toast.error('Please select a vehicle');
       return;
     }
-
-    setIsLoading(true);
-    setError(null);
-    setApiError(null);
     
+    setLoading(true);
     try {
-      const hr8km80Price = parseFloat(localHr8Km80);
-      const hr10km100Price = parseFloat(localHr10Km100);
-      const extraKmRate = parseFloat(localExtraKmRate);
-      
-      if (isNaN(hr8km80Price) || isNaN(hr10km100Price) || isNaN(extraKmRate)) {
-        throw new Error("All prices must be valid numbers");
-      }
-      
-      console.log("Updating local fares for vehicle:", selectedVehicle, {
-        hr8km80Price,
-        hr10km100Price,
-        extraKmRate
-      });
-      
       const data = {
-        vehicleId: selectedVehicle,
-        price8hrs80km: hr8km80Price,
-        price10hrs100km: hr10km100Price,
-        priceExtraKm: extraKmRate,
-        hr8km80Price,
-        hr10km100Price,
-        extraKmRate,
-        tripType: 'local'
+        basePrice: parseFloat(airportBasePrice) || 0,
+        pricePerKm: parseFloat(airportPricePerKm) || 0,
+        dropPrice: parseFloat(dropPrice) || 0,
+        pickupPrice: parseFloat(pickupPrice) || 0,
+        tier1Price: parseFloat(tier1Price) || 0,
+        tier2Price: parseFloat(tier2Price) || 0,
+        tier3Price: parseFloat(tier3Price) || 0,
+        tier4Price: parseFloat(tier4Price) || 0,
+        extraKmCharge: parseFloat(extraKmCharge) || 0
       };
       
-      const endpoints = [
-        '/api/admin/local-fares-update.php',
-        '/api/admin/vehicle-pricing.php',
-        '/api/admin/fares-update.php'
-      ];
-      
-      const result = await makeRequestWithFallbacks(data, endpoints);
-      
-      if (result.success) {
-        fareService.clearCache();
-        toast.success("Local fares updated successfully");
-      } else {
-        throw new Error("Failed to update local fares");
-      }
-    } catch (error: any) {
-      console.error("Error updating local fares:", error);
-      toast.error(error.message || "Failed to update local fares");
-      setError(`Error updating local fares: ${error.message || "Unknown error"}`);
-      setApiError(error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleAirportFareUpdate = async () => {
-    if (!selectedVehicle) {
-      toast.error("Please select a vehicle first");
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-    setApiError(null);
-    
-    try {
-      const basePrice = parseFloat(airportBasePrice);
-      const pricePerKm = parseFloat(airportPricePerKm);
-      const airportFeeValue = parseFloat(airportFee);
-      
-      if (isNaN(basePrice) || isNaN(pricePerKm)) {
-        throw new Error("Base price and price per km must be valid numbers");
-      }
-      
-      console.log("Updating airport fares for vehicle:", selectedVehicle, {
-        basePrice,
-        pricePerKm,
-        airportFee: airportFeeValue
-      });
-      
-      const data = {
-        vehicleId: selectedVehicle,
-        vehicle_id: selectedVehicle,
-        tripType: 'airport',
-        baseFare: basePrice,
-        basePrice: basePrice,
-        pickupFare: basePrice,
-        pricePerKm: pricePerKm,
-        dropFare: pricePerKm,
-        airportFee: airportFeeValue
+      // Also include variations of field names to support different backend implementations
+      const requestData = {
+        vehicleId: selectedVehicleId,
+        ...data,
+        // Add alternative field names
+        airportBasePrice: parseFloat(airportBasePrice) || 0,
+        airportPricePerKm: parseFloat(airportPricePerKm) || 0,
+        dropFare: parseFloat(dropPrice) || 0,
+        pickupFare: parseFloat(pickupPrice) || 0,
+        // Add alternative DB column names
+        airport_base_price: parseFloat(airportBasePrice) || 0,
+        airport_price_per_km: parseFloat(airportPricePerKm) || 0,
+        airport_drop_price: parseFloat(dropPrice) || 0,
+        airport_pickup_price: parseFloat(pickupPrice) || 0,
+        airport_tier1_price: parseFloat(tier1Price) || 0,
+        airport_tier2_price: parseFloat(tier2Price) || 0,
+        airport_tier3_price: parseFloat(tier3Price) || 0,
+        airport_tier4_price: parseFloat(tier4Price) || 0,
+        airport_extra_km_charge: parseFloat(extraKmCharge) || 0
       };
       
-      const endpoints = [
-        '/api/admin/airport-fares-update.php',
-        '/api/admin/vehicle-pricing.php',
-        '/api/admin/fares-update.php'
-      ];
-      
-      const result = await makeRequestWithFallbacks(data, endpoints);
-      
-      if (result.success) {
-        fareService.clearCache();
-        toast.success("Airport fares updated successfully");
-      } else {
-        throw new Error("Failed to update airport fares");
+      // Try to use multiple update methods
+      try {
+        // First try the specialized API endpoint via fareService
+        await fareService.directFareUpdate('airport', selectedVehicleId, requestData);
+      } catch (error) {
+        console.error('Direct update failed, trying vehicleDataService:', error);
+        
+        // Fall back to regular update method
+        await updateAirportFares(selectedVehicleId, data);
       }
-    } catch (error: any) {
-      console.error("Error updating airport fares:", error);
-      toast.error(error.message || "Failed to update airport fares");
-      setError(`Error updating airport fares: ${error.message || "Unknown error"}`);
-      setApiError(error);
+      
+      toast.success('Airport transfer fares updated successfully');
+      
+      // Force a refresh of fare cache
+      fareService.clearCache();
+      
+      // Dispatch event for other components to update
+      window.dispatchEvent(new CustomEvent('airport-fares-updated', {
+        detail: { 
+          timestamp: Date.now(),
+          vehicleId: selectedVehicleId
+        }
+      }));
+    } catch (error) {
+      console.error('Error saving airport fares:', error);
+      toast.error('Failed to update airport transfer fares');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
-
-  const handleAddVehicle = async () => {
-    if (!newVehicleName || !newVehicleId) {
-      toast.error("Vehicle name and ID are required");
-      return;
-    }
-
-    setIsAddingVehicle(true);
-    setError(null);
-    setApiError(null);
-
-    try {
-      const vehicleId = newVehicleId || newVehicleName.toLowerCase().replace(/\s+/g, '_');
-      
-      const vehicleData = {
-        vehicleId: vehicleId,
-        name: newVehicleName,
-        capacity: parseInt(newVehicleCapacity) || 4,
-        luggageCapacity: parseInt(newVehicleLuggageCapacity) || 2,
-        ac: newVehicleAC,
-        isActive: newVehicleActive,
-        image: `/cars/${vehicleId}.png`
-      };
-      
-      const endpoints = [
-        '/api/admin/vehicles-update.php',
-        '/api/admin/vehicles',
-        '/api/admin/vehicles/add'
-      ];
-      
-      const result = await makeRequestWithFallbacks(vehicleData, endpoints);
-      
-      if (result.success) {
-        const updatedList = await getVehicleTypes();
-        setVehicles(updatedList);
-        
-        fareService.clearCache();
-        
-        setNewVehicleName("");
-        setNewVehicleId("");
-        setNewVehicleCapacity("4");
-        setNewVehicleLuggageCapacity("2");
-        setNewVehicleAC(true);
-        setNewVehicleActive(true);
-        setAddVehicleOpen(false);
-        
-        toast.success("Vehicle added successfully");
-        
-        setSelectedVehicle(vehicleId);
-      } else {
-        throw new Error("Failed to add vehicle");
-      }
-    } catch (error: any) {
-      console.error("Error adding vehicle:", error);
-      toast.error(error.message || "Failed to add vehicle");
-      setError(`Error adding vehicle: ${error.message || "Unknown error"}`);
-      setApiError(error);
-    } finally {
-      setIsAddingVehicle(false);
-    }
-  };
-
-  // If we have an API error, show the error fallback component
-  if (apiError) {
-    return (
-      <Card className="bg-white shadow-md">
-        <CardHeader>
-          <CardTitle className="text-xl font-bold">Manage Trip Fares</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ApiErrorFallback 
-            error={apiError} 
-            onRetry={resetApiError}
-            title="API Connection Error"
-            description="We're having trouble connecting to the fare management API. This could be due to network issues or server configuration problems."
-          />
-        </CardContent>
-      </Card>
-    );
-  }
 
   return (
-    <Card className="bg-white shadow-md">
-      <CardHeader>
-        <div className="flex justify-between items-center">
-          <CardTitle className="text-xl font-bold">Manage Trip Fares</CardTitle>
-          <div className="flex gap-2">
-            <Dialog open={addVehicleOpen} onOpenChange={setAddVehicleOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Vehicle
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Add New Vehicle</DialogTitle>
-                  <DialogDescription>
-                    Enter the details for the new vehicle to add it to your fleet.
-                  </DialogDescription>
-                </DialogHeader>
-                
-                <div className="grid gap-4 py-4">
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="vehicleName" className="text-right">
-                      Vehicle Name
-                    </Label>
-                    <Input
-                      id="vehicleName"
-                      value={newVehicleName}
-                      onChange={(e) => setNewVehicleName(e.target.value)}
-                      className="col-span-3"
-                      placeholder="e.g. Innova Crysta"
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="vehicleId" className="text-right">
-                      Vehicle ID
-                    </Label>
-                    <Input
-                      id="vehicleId"
-                      value={newVehicleId}
-                      onChange={(e) => setNewVehicleId(e.target.value)}
-                      className="col-span-3"
-                      placeholder="e.g. innova_crysta (optional)"
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="capacity" className="text-right">
-                      Capacity
-                    </Label>
-                    <Input
-                      id="capacity"
-                      type="number"
-                      value={newVehicleCapacity}
-                      onChange={(e) => setNewVehicleCapacity(e.target.value)}
-                      className="col-span-3"
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="luggageCapacity" className="text-right">
-                      Luggage Capacity
-                    </Label>
-                    <Input
-                      id="luggageCapacity"
-                      type="number"
-                      value={newVehicleLuggageCapacity}
-                      onChange={(e) => setNewVehicleLuggageCapacity(e.target.value)}
-                      className="col-span-3"
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="ac" className="text-right">
-                      AC
-                    </Label>
-                    <div className="col-span-3 flex items-center">
-                      <Switch
-                        id="ac"
-                        checked={newVehicleAC}
-                        onCheckedChange={setNewVehicleAC}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="isActive" className="text-right">
-                      Active
-                    </Label>
-                    <div className="col-span-3 flex items-center">
-                      <Switch
-                        id="isActive"
-                        checked={newVehicleActive}
-                        onCheckedChange={setNewVehicleActive}
-                      />
-                    </div>
-                  </div>
-                </div>
-                
-                <DialogFooter>
-                  <Button
-                    onClick={handleAddVehicle}
-                    disabled={isAddingVehicle || !newVehicleName}
-                  >
-                    {isAddingVehicle ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Adding...
-                      </>
-                    ) : (
-                      <>
-                        <Car className="mr-2 h-4 w-4" />
-                        Add Vehicle
-                      </>
-                    )}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-            
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => window.location.reload()}
+    <Card className="w-full">
+      <CardContent className="pt-6">
+        {!vehicleId && (
+          <div className="mb-6">
+            <Label htmlFor="vehicleSelect">Select Vehicle</Label>
+            <Select
+              value={selectedVehicleId}
+              onValueChange={setSelectedVehicleId}
             >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh Page
-            </Button>
+              <SelectTrigger id="vehicleSelect" className="w-full">
+                <SelectValue placeholder="Select a vehicle" />
+              </SelectTrigger>
+              <SelectContent>
+                {vehicleTypes.map((vehicle) => (
+                  <SelectItem key={vehicle.id} value={vehicle.id}>
+                    {vehicle.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="grid gap-4">
-          {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
+        )}
+
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="w-full mb-6">
+            <TabsTrigger value="outstation" className="flex-1">Outstation</TabsTrigger>
+            <TabsTrigger value="local" className="flex-1">Local</TabsTrigger>
+            <TabsTrigger value="airport" className="flex-1">Airport</TabsTrigger>
+          </TabsList>
           
-          <div className="flex flex-col gap-4">
-            {!vehicleId && (
-              <div>
-                <label className="text-sm font-medium">Select Vehicle</label>
-                <Select value={selectedVehicle} onValueChange={handleVehicleChange}>
-                  <SelectTrigger className="w-full mt-1">
-                    <SelectValue placeholder="Select a vehicle" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {vehicles.map((vehicle) => (
-                      <SelectItem key={vehicle.id} value={vehicle.id}>
-                        {vehicle.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+          <TabsContent value="outstation">
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="basePrice">Base Price (₹)</Label>
+                  <Input
+                    id="basePrice"
+                    type="number"
+                    value={basePrice}
+                    onChange={(e) => setBasePrice(e.target.value)}
+                    placeholder="Base price"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="pricePerKm">Price per Km (₹)</Label>
+                  <Input
+                    id="pricePerKm"
+                    type="number"
+                    step="0.01"
+                    value={pricePerKm}
+                    onChange={(e) => setPricePerKm(e.target.value)}
+                    placeholder="Price per km"
+                  />
+                </div>
               </div>
-            )}
-            
-            <Tabs defaultValue="outstation" value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="w-full">
-                <TabsTrigger value="outstation" className="flex-1">Outstation</TabsTrigger>
-                <TabsTrigger value="local" className="flex-1">Local</TabsTrigger>
-                <TabsTrigger value="airport" className="flex-1">Airport</TabsTrigger>
-              </TabsList>
               
-              
-              <TabsContent value="outstation">
-                <div className="grid md:grid-cols-2 gap-4 mt-4">
-                  <div className="space-y-3">
-                    <h3 className="font-semibold text-lg">One Way Trip</h3>
-                    <div>
-                      <label className="text-sm font-medium">Base Price (₹)</label>
-                      <Input 
-                        type="number" 
-                        placeholder="Base price"
-                        value={outstationOneWayBasePrice}
-                        onChange={(e) => setOutstationOneWayBasePrice(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium">Price per Km (₹)</label>
-                      <Input 
-                        type="number" 
-                        placeholder="Price per km"
-                        value={outstationOneWayPricePerKm}
-                        onChange={(e) => setOutstationOneWayPricePerKm(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-3">
-                    <h3 className="font-semibold text-lg">Round Trip</h3>
-                    <div>
-                      <label className="text-sm font-medium">Base Price (₹)</label>
-                      <Input 
-                        type="number" 
-                        placeholder="Base price"
-                        value={outstationRoundTripBasePrice}
-                        onChange={(e) => setOutstationRoundTripBasePrice(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium">Price per Km (₹)</label>
-                      <Input 
-                        type="number" 
-                        placeholder="Price per km"
-                        value={outstationRoundTripPricePerKm}
-                        onChange={(e) => setOutstationRoundTripPricePerKm(e.target.value)}
-                      />
-                    </div>
-                  </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="driverAllowance">Driver Allowance (₹)</Label>
+                  <Input
+                    id="driverAllowance"
+                    type="number"
+                    value={driverAllowance}
+                    onChange={(e) => setDriverAllowance(e.target.value)}
+                    placeholder="Driver allowance"
+                  />
                 </div>
-                
-                <Button
-                  className="mt-4 w-full"
-                  onClick={handleOutstationFareUpdate}
-                  disabled={!selectedVehicle || isLoading}
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Updating...
-                    </>
-                  ) : (
-                    "Update Outstation Fares"
-                  )}
-                </Button>
-              </TabsContent>
+                <div className="space-y-2">
+                  <Label htmlFor="nightHalt">Night Halt Charge (₹)</Label>
+                  <Input
+                    id="nightHalt"
+                    type="number"
+                    value={nightHalt}
+                    onChange={(e) => setNightHalt(e.target.value)}
+                    placeholder="Night halt charge"
+                  />
+                </div>
+              </div>
               
-              <TabsContent value="local">
-                <div className="grid gap-4 mt-4">
-                  <div>
-                    <label className="text-sm font-medium">8 Hours / 80 KM Package Price (₹)</label>
-                    <Input 
-                      type="number" 
-                      placeholder="Package price"
-                      value={localHr8Km80}
-                      onChange={(e) => setLocalHr8Km80(e.target.value)}
+              <div className="pt-4 border-t">
+                <h3 className="text-lg font-medium mb-4">Round Trip Pricing</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="roundTripBasePrice">Round Trip Base Price (₹)</Label>
+                    <Input
+                      id="roundTripBasePrice"
+                      type="number"
+                      value={roundTripBasePrice}
+                      onChange={(e) => setRoundTripBasePrice(e.target.value)}
+                      placeholder="Round trip base price"
                     />
                   </div>
-                  <div>
-                    <label className="text-sm font-medium">10 Hours / 100 KM Package Price (₹)</label>
-                    <Input 
-                      type="number" 
-                      placeholder="Package price"
-                      value={localHr10Km100}
-                      onChange={(e) => setLocalHr10Km100(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium">Extra Km Rate (₹)</label>
-                    <Input 
-                      type="number" 
-                      placeholder="Extra km rate"
-                      value={localExtraKmRate}
-                      onChange={(e) => setLocalExtraKmRate(e.target.value)}
+                  <div className="space-y-2">
+                    <Label htmlFor="roundTripPricePerKm">Round Trip Price per Km (₹)</Label>
+                    <Input
+                      id="roundTripPricePerKm"
+                      type="number"
+                      step="0.01"
+                      value={roundTripPricePerKm}
+                      onChange={(e) => setRoundTripPricePerKm(e.target.value)}
+                      placeholder="Round trip price per km"
                     />
                   </div>
                 </div>
-                
-                <Button
-                  className="mt-4 w-full"
-                  onClick={handleLocalFareUpdate}
-                  disabled={!selectedVehicle || isLoading}
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Updating...
-                    </>
-                  ) : (
-                    "Update Local Fares"
-                  )}
-                </Button>
-              </TabsContent>
+              </div>
               
-              <TabsContent value="airport">
-                <div className="grid gap-4 mt-4">
-                  <div>
-                    <label className="text-sm font-medium">Base Price (₹)</label>
-                    <Input 
-                      type="number" 
-                      placeholder="Base price"
-                      value={airportBasePrice}
-                      onChange={(e) => setAirportBasePrice(e.target.value)}
+              <Button 
+                className="w-full mt-6" 
+                onClick={handleSaveOutstationFares}
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2 h-4 w-4" />
+                    Update Outstation Fares
+                  </>
+                )}
+              </Button>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="local">
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="package4hr40km">4 Hours / 40 KM Package (₹)</Label>
+                  <Input
+                    id="package4hr40km"
+                    type="number"
+                    value={package4hr40km}
+                    onChange={(e) => setPackage4hr40km(e.target.value)}
+                    placeholder="4hr/40km package price"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="package8hr80km">8 Hours / 80 KM Package (₹)</Label>
+                  <Input
+                    id="package8hr80km"
+                    type="number"
+                    value={package8hr80km}
+                    onChange={(e) => setPackage8hr80km(e.target.value)}
+                    placeholder="8hr/80km package price"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="package10hr100km">10 Hours / 100 KM Package (₹)</Label>
+                  <Input
+                    id="package10hr100km"
+                    type="number"
+                    value={package10hr100km}
+                    onChange={(e) => setPackage10hr100km(e.target.value)}
+                    placeholder="10hr/100km package price"
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+                <div className="space-y-2">
+                  <Label htmlFor="extraKmRate">Extra KM Rate (₹)</Label>
+                  <Input
+                    id="extraKmRate"
+                    type="number"
+                    step="0.01"
+                    value={extraKmRate}
+                    onChange={(e) => setExtraKmRate(e.target.value)}
+                    placeholder="Extra km rate"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="extraHourRate">Extra Hour Rate (₹)</Label>
+                  <Input
+                    id="extraHourRate"
+                    type="number"
+                    value={extraHourRate}
+                    onChange={(e) => setExtraHourRate(e.target.value)}
+                    placeholder="Extra hour rate"
+                  />
+                </div>
+              </div>
+              
+              <Button 
+                className="w-full mt-6" 
+                onClick={handleSaveLocalFares}
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2 h-4 w-4" />
+                    Update Local Fares
+                  </>
+                )}
+              </Button>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="airport">
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="airportBasePrice">Base Price (₹)</Label>
+                  <Input
+                    id="airportBasePrice"
+                    type="number"
+                    value={airportBasePrice}
+                    onChange={(e) => setAirportBasePrice(e.target.value)}
+                    placeholder="Base price"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="airportPricePerKm">Price per Km (₹)</Label>
+                  <Input
+                    id="airportPricePerKm"
+                    type="number"
+                    step="0.01"
+                    value={airportPricePerKm}
+                    onChange={(e) => setAirportPricePerKm(e.target.value)}
+                    placeholder="Price per km"
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="pickupPrice">Pickup Price (₹)</Label>
+                  <Input
+                    id="pickupPrice"
+                    type="number"
+                    value={pickupPrice}
+                    onChange={(e) => setPickupPrice(e.target.value)}
+                    placeholder="Pickup price"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="dropPrice">Drop Price (₹)</Label>
+                  <Input
+                    id="dropPrice"
+                    type="number"
+                    value={dropPrice}
+                    onChange={(e) => setDropPrice(e.target.value)}
+                    placeholder="Drop price"
+                  />
+                </div>
+              </div>
+              
+              <div className="pt-4 border-t">
+                <h3 className="text-lg font-medium mb-4">Distance Tier Pricing</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="tier1Price">Tier 1 (0-10 KM) Price (₹)</Label>
+                    <Input
+                      id="tier1Price"
+                      type="number"
+                      value={tier1Price}
+                      onChange={(e) => setTier1Price(e.target.value)}
+                      placeholder="Tier 1 price"
                     />
                   </div>
-                  <div>
-                    <label className="text-sm font-medium">Price per Km (₹)</label>
-                    <Input 
-                      type="number" 
-                      placeholder="Price per km"
-                      value={airportPricePerKm}
-                      onChange={(e) => setAirportPricePerKm(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium">Airport Fee (₹)</label>
-                    <Input 
-                      type="number" 
-                      placeholder="Airport fee"
-                      value={airportFee}
-                      onChange={(e) => setAirportFee(e.target.value)}
+                  <div className="space-y-2">
+                    <Label htmlFor="tier2Price">Tier 2 (11-20 KM) Price (₹)</Label>
+                    <Input
+                      id="tier2Price"
+                      type="number"
+                      value={tier2Price}
+                      onChange={(e) => setTier2Price(e.target.value)}
+                      placeholder="Tier 2 price"
                     />
                   </div>
                 </div>
                 
-                <Button
-                  className="mt-4 w-full"
-                  onClick={handleAirportFareUpdate}
-                  disabled={!selectedVehicle || isLoading}
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Updating...
-                    </>
-                  ) : (
-                    "Update Airport Fares"
-                  )}
-                </Button>
-              </TabsContent>
-            </Tabs>
-          </div>
-        </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="tier3Price">Tier 3 (21-30 KM) Price (₹)</Label>
+                    <Input
+                      id="tier3Price"
+                      type="number"
+                      value={tier3Price}
+                      onChange={(e) => setTier3Price(e.target.value)}
+                      placeholder="Tier 3 price"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="tier4Price">Tier 4 (31+ KM) Price (₹)</Label>
+                    <Input
+                      id="tier4Price"
+                      type="number"
+                      value={tier4Price}
+                      onChange={(e) => setTier4Price(e.target.value)}
+                      placeholder="Tier 4 price"
+                    />
+                  </div>
+                </div>
+                
+                <div className="mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="extraKmCharge">Extra KM Charge (₹)</Label>
+                    <Input
+                      id="extraKmCharge"
+                      type="number"
+                      step="0.01"
+                      value={extraKmCharge}
+                      onChange={(e) => setExtraKmCharge(e.target.value)}
+                      placeholder="Extra KM charge"
+                    />
+                  </div>
+                </div>
+              </div>
+              
+              <Button 
+                className="w-full mt-6" 
+                onClick={handleSaveAirportFares}
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2 h-4 w-4" />
+                    Update Airport Fares
+                  </>
+                )}
+              </Button>
+            </div>
+          </TabsContent>
+        </Tabs>
       </CardContent>
     </Card>
   );
-};
+}

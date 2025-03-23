@@ -114,6 +114,56 @@ CREATE TABLE `admin_settings` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Airport Transfer Fares Table
+CREATE TABLE `airport_transfer_fares` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `vehicle_id` varchar(50) NOT NULL,
+  `base_price` decimal(10,2) NOT NULL DEFAULT 0,
+  `price_per_km` decimal(5,2) NOT NULL DEFAULT 0,
+  `pickup_price` decimal(10,2) NOT NULL DEFAULT 0,
+  `drop_price` decimal(10,2) NOT NULL DEFAULT 0,
+  `tier1_price` decimal(10,2) NOT NULL DEFAULT 0,
+  `tier2_price` decimal(10,2) NOT NULL DEFAULT 0,
+  `tier3_price` decimal(10,2) NOT NULL DEFAULT 0,
+  `tier4_price` decimal(10,2) NOT NULL DEFAULT 0,
+  `extra_km_charge` decimal(5,2) NOT NULL DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `vehicle_id` (`vehicle_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Local Package Fares Table
+CREATE TABLE `local_package_fares` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `vehicle_id` varchar(50) NOT NULL,
+  `price_4hrs_40km` decimal(10,2) NOT NULL DEFAULT 0,
+  `price_8hrs_80km` decimal(10,2) NOT NULL DEFAULT 0,
+  `price_10hrs_100km` decimal(10,2) NOT NULL DEFAULT 0,
+  `price_extra_km` decimal(5,2) NOT NULL DEFAULT 0,
+  `price_extra_hour` decimal(5,2) NOT NULL DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `vehicle_id` (`vehicle_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Outstation Fares Table
+CREATE TABLE `outstation_fares` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `vehicle_id` varchar(50) NOT NULL,
+  `base_fare` decimal(10,2) NOT NULL DEFAULT 0,
+  `price_per_km` decimal(5,2) NOT NULL DEFAULT 0,
+  `night_halt_charge` decimal(10,2) NOT NULL DEFAULT 0,
+  `driver_allowance` decimal(10,2) NOT NULL DEFAULT 0,
+  `roundtrip_base_fare` decimal(10,2) DEFAULT NULL,
+  `roundtrip_price_per_km` decimal(5,2) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `vehicle_id` (`vehicle_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Insert default data for tours
 INSERT INTO `tour_fares` (`tour_id`, `tour_name`, `sedan`, `ertiga`, `innova`, `tempo`, `luxury`) VALUES
 ('araku', 'Araku Day Tour', 5000, 6500, 8000, 12000, 15000),
@@ -136,12 +186,38 @@ INSERT INTO `vehicle_pricing` (`vehicle_type`, `base_price`, `price_per_km`, `ni
 ('luxury', 10500, 25, 1500, 300, 10000, 22, 3500, 5500, 6500, 25, 300, 7000, 22, 2500, 2500, 2000, 2200, 2500, 3000, 22);
 
 -- Insert default vehicle types
-INSERT INTO `vehicle_types` (`vehicle_id`, `name`, `capacity`, `luggage_capacity`, `ac`, `image`, `amenities`, `description`) VALUES
-('sedan', 'Sedan', 4, 2, 1, '/cars/sedan.png', 'AC, Bottle Water, Music System', 'Comfortable sedan suitable for 4 passengers.'),
-('ertiga', 'Ertiga', 6, 3, 1, '/cars/ertiga.png', 'AC, Bottle Water, Music System, Extra Legroom', 'Spacious SUV suitable for 6 passengers.'),
-('innova_crysta', 'Innova Crysta', 7, 4, 1, '/cars/innova.png', 'AC, Bottle Water, Music System, Extra Legroom, Charging Point', 'Premium SUV with ample space for 7 passengers.'),
-('tempo', 'Tempo Traveller', 12, 8, 1, '/cars/tempo.png', 'AC, Bottle Water, Music System, Extra Legroom, Charging Point', 'Spacious van suitable for group travel of up to 12 passengers.'),
-('luxury', 'Luxury Sedan', 4, 3, 1, '/cars/luxury.png', 'AC, Bottle Water, Music System, Premium Leather Seats, WiFi, Charging Points', 'Premium luxury sedan with high-end amenities for a comfortable journey.');
+INSERT INTO `vehicle_types` (`vehicle_id`, `name`, `capacity`, `luggage_capacity`, `ac`, `image`, `amenities`, `description`, `is_active`) VALUES
+('sedan', 'Sedan', 4, 2, 1, '/cars/sedan.png', 'AC, Bottle Water, Music System', 'Comfortable sedan suitable for 4 passengers.', 1),
+('ertiga', 'Ertiga', 6, 3, 1, '/cars/ertiga.png', 'AC, Bottle Water, Music System, Extra Legroom', 'Spacious SUV suitable for 6 passengers.', 1),
+('innova_crysta', 'Innova Crysta', 7, 4, 1, '/cars/innova.png', 'AC, Bottle Water, Music System, Extra Legroom, Charging Point', 'Premium SUV with ample space for 7 passengers.', 1),
+('tempo', 'Tempo Traveller', 12, 8, 1, '/cars/tempo.png', 'AC, Bottle Water, Music System, Extra Legroom, Charging Point', 'Spacious van suitable for group travel of up to 12 passengers.', 1),
+('luxury', 'Luxury Sedan', 4, 3, 1, '/cars/luxury.png', 'AC, Bottle Water, Music System, Premium Leather Seats, WiFi, Charging Points', 'Premium luxury sedan with high-end amenities for a comfortable journey.', 1);
+
+-- Insert default airport transfer fares
+INSERT INTO `airport_transfer_fares` (`vehicle_id`, `base_price`, `price_per_km`, `pickup_price`, `drop_price`, 
+                                    `tier1_price`, `tier2_price`, `tier3_price`, `tier4_price`, `extra_km_charge`) VALUES
+('sedan', 3000, 12, 800, 800, 600, 800, 1000, 1200, 12),
+('ertiga', 3500, 15, 1000, 1000, 800, 1000, 1200, 1400, 15),
+('innova_crysta', 4000, 17, 1200, 1200, 1000, 1200, 1400, 1600, 17),
+('tempo', 6000, 19, 2000, 2000, 1600, 1800, 2000, 2500, 19),
+('luxury', 7000, 22, 2500, 2500, 2000, 2200, 2500, 3000, 22);
+
+-- Insert default local package fares
+INSERT INTO `local_package_fares` (`vehicle_id`, `price_4hrs_40km`, `price_8hrs_80km`, `price_10hrs_100km`, `price_extra_km`, `price_extra_hour`) VALUES
+('sedan', 1200, 2200, 2500, 14, 250),
+('ertiga', 1500, 2700, 3000, 18, 250),
+('innova_crysta', 1800, 3000, 3500, 20, 250),
+('tempo', 3000, 4500, 5500, 22, 300),
+('luxury', 3500, 5500, 6500, 25, 300);
+
+-- Insert default outstation fares
+INSERT INTO `outstation_fares` (`vehicle_id`, `base_fare`, `price_per_km`, `night_halt_charge`, `driver_allowance`, 
+                              `roundtrip_base_fare`, `roundtrip_price_per_km`) VALUES
+('sedan', 4200, 14, 700, 250, 4000, 12),
+('ertiga', 5400, 18, 1000, 250, 5000, 15),
+('innova_crysta', 6000, 20, 1000, 250, 5600, 17),
+('tempo', 9000, 22, 1500, 300, 8500, 19),
+('luxury', 10500, 25, 1500, 300, 10000, 22);
 
 -- Insert default admin user
 INSERT INTO `users` (`name`, `email`, `phone`, `password`, `role`) VALUES
