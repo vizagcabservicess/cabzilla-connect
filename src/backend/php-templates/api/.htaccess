@@ -7,7 +7,7 @@ RewriteEngine On
     # Set CORS headers unconditionally for all responses - high priority
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, X-Bypass-Cache"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh"
     Header always set Access-Control-Max-Age "3600"
     
     # Set CORS headers specifically for OPTIONS preflight requests - highest priority
@@ -26,8 +26,8 @@ RewriteEngine On
     Header always set Expires "0"
     
     # Add debugging headers
-    Header always set X-API-Debug "Processed by main API htaccess - v1.0.48"
-    Header always set X-API-Version "1.0.48"
+    Header always set X-API-Debug "Processed by main API htaccess - v1.0.31"
+    Header always set X-API-Version "1.0.31"
 </IfModule>
 
 # Handle OPTIONS requests for CORS preflight - immediately return 200
@@ -35,34 +35,25 @@ RewriteEngine On
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
 
-# HIGHEST PRIORITY ROUTES - These routes must work reliably
-# Most important direct endpoints with highest priority at the top
-RewriteRule ^admin/direct-base-pricing$ admin/direct-base-pricing.php [L,QSA]
-RewriteRule ^admin/direct-airport-fares$ admin/direct-airport-fares.php [L,QSA]
-RewriteRule ^admin/direct-local-fares$ admin/direct-local-fares.php [L,QSA]
-RewriteRule ^admin/direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^user/bookings$ user/bookings.php [L,QSA]
-RewriteRule ^admin/users$ admin/users.php [L,QSA]
-RewriteRule ^admin/metrics$ admin/metrics.php [L,QSA]
-
-# Secondary priority rules for frequently used endpoints
-RewriteRule ^user/dashboard$ user/dashboard.php [L,QSA]
-RewriteRule ^admin/vehicle-pricing$ admin/vehicle-pricing.php [L,QSA]
-RewriteRule ^admin/fares-update$ admin/fares-update.php [L,QSA]
-
 # Parse API routes to PHP files
 RewriteRule ^signup$ signup.php [L]
 RewriteRule ^login$ login.php [L]
+RewriteRule ^user/dashboard$ user/dashboard.php [L,QSA]
 RewriteRule ^user/booking/([0-9]+)$ user/booking.php?id=$1 [QSA,L]
+RewriteRule ^user/bookings$ user/bookings.php [L,QSA]
 RewriteRule ^book$ book.php [L,QSA]
 RewriteRule ^update-booking$ update-booking.php [QSA,L]
 RewriteRule ^update-booking/([0-9]+)$ update-booking.php?id=$1 [QSA,L]
 RewriteRule ^admin/booking$ admin/booking.php [QSA,L]
 RewriteRule ^admin/booking/([0-9]+)$ admin/booking.php?id=$1 [QSA,L]
+RewriteRule ^admin/metrics$ admin/metrics.php [QSA,L]
+RewriteRule ^admin/users$ admin/users.php [QSA,L]
 RewriteRule ^fares/tours$ fares/tours.php [L,QSA]
 RewriteRule ^fares/vehicles$ fares/vehicles.php [L,QSA]
 RewriteRule ^fares/vehicles-data$ fares/vehicles-data.php [L,QSA]
+RewriteRule ^admin/fares/update$ admin/fares-update.php [QSA,L]
 RewriteRule ^admin/km-price/update$ admin/km-price-update.php [L,QSA]
+RewriteRule ^admin/vehicle-pricing$ admin/vehicle-pricing.php [L,QSA]
 RewriteRule ^admin/vehicles-update$ admin/vehicles-update.php [QSA,L]
 RewriteRule ^admin/vehicles$ admin/vehicles-update.php [QSA,L]
 RewriteRule ^admin/vehicles/add$ admin/vehicles-update.php [QSA,L]
@@ -75,6 +66,10 @@ RewriteRule ^vehicles-data$ fares/vehicles-data.php [L,QSA]
 RewriteRule ^admin/outstation-fares-update$ admin/outstation-fares-update.php [QSA,L]
 RewriteRule ^admin/local-fares-update$ admin/local-fares-update.php [QSA,L]
 RewriteRule ^admin/airport-fares-update$ admin/airport-fares-update.php [QSA,L]
+
+# Access the "raw" PHP endpoints for direct testing and debugging
+RewriteRule ^raw-vehicle-pricing$ admin/vehicle-pricing.php?raw=1 [QSA,L]
+RewriteRule ^raw-fare-update$ admin/fares-update.php?raw=1 [QSA,L]
 
 # Debug headers to help troubleshoot routing
 Header set X-Requested-Path "%{REQUEST_URI}e"

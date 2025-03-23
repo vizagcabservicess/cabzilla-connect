@@ -1,6 +1,6 @@
 
 <?php
-// direct-outstation-fares.php - Ultra simplified outstation fare update endpoint
+// direct-outstation-fares.php - Ultra simplified direct outstation fare update endpoint
 // Maximum compatibility, minimal error checking, pure database operation
 
 // Set CORS headers for all cases
@@ -8,10 +8,6 @@ header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
 header('Access-Control-Allow-Headers: *');
-header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
-header("Pragma: no-cache");
-header("Expires: 0");
-header("X-API-Version: 1.0.46");
 
 // Handle OPTIONS request immediately for CORS preflight
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -30,9 +26,15 @@ $logMessage .= "GET data: " . json_encode($_GET) . "\n";
 $logMessage .= "POST data: " . json_encode($_POST) . "\n";
 error_log($logMessage, 3, __DIR__ . '/../direct-outstation.log');
 
-// Always return a success response regardless of database connection or update outcome
-// This prevents frontend errors and ensures the UI stays responsive
-http_response_code(200);
+// Database connection - hardcoded for maximum reliability
+try {
+    $pdo = new PDO("mysql:host=localhost;dbname=u644605165_new_bookingdb", "u644605165_new_bookingusr", "Vizag@1213");
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+} catch (PDOException $e) {
+    http_response_code(500);
+    echo json_encode(['status' => 'error', 'message' => 'Database connection failed: ' . $e->getMessage()]);
+    exit;
+}
 
 // Get data from all possible sources - maximum flexibility
 $data = [];
@@ -75,88 +77,77 @@ if (isset($data['vehicleId'])) {
 }
 
 // Clean vehicleId - remove "item-" prefix if exists
-if ($vehicleId && strpos($vehicleId, 'item-') === 0) {
+if (strpos($vehicleId, 'item-') === 0) {
     $vehicleId = substr($vehicleId, 5);
 }
 
 // Extract pricing data with multiple fallbacks
-$oneWayBasePrice = isset($data['oneWayBasePrice']) ? $data['oneWayBasePrice'] : 
-                  (isset($data['baseFare']) ? $data['baseFare'] : 2000);
+$baseFare = isset($data['oneWayBasePrice']) ? $data['oneWayBasePrice'] : 
+           (isset($data['baseFare']) ? $data['baseFare'] : 
+           (isset($data['basePrice']) ? $data['basePrice'] : 
+           (isset($data['base_fare']) ? $data['base_fare'] : 
+           (isset($data['base_price']) ? $data['base_price'] : 0))));
+           
+$pricePerKm = isset($data['oneWayPricePerKm']) ? $data['oneWayPricePerKm'] : 
+             (isset($data['pricePerKm']) ? $data['pricePerKm'] : 
+             (isset($data['price_per_km']) ? $data['price_per_km'] : 0));
 
-$oneWayPricePerKm = isset($data['oneWayPricePerKm']) ? $data['oneWayPricePerKm'] : 
-                   (isset($data['pricePerKm']) ? $data['pricePerKm'] : 20);
-
-$roundTripBasePrice = isset($data['roundTripBasePrice']) ? $data['roundTripBasePrice'] : 
-                     (isset($data['roundTripBaseFare']) ? $data['roundTripBaseFare'] : 2500);
-
-$roundTripPricePerKm = isset($data['roundTripPricePerKm']) ? $data['roundTripPricePerKm'] : 
-                      (isset($data['roundTripPerKm']) ? $data['roundTripPerKm'] : 15);
-
-// Simple validation - use defaults if missing
+// Simple validation
 if (empty($vehicleId)) {
-    $vehicleId = 1; // Default vehicle ID
+    http_response_code(400);
+    echo json_encode(['status' => 'error', 'message' => 'Vehicle ID is required', 'received_data' => $data]);
+    exit;
 }
 
-// Return success regardless of database operation
-echo json_encode([
-    'status' => 'success',
-    'message' => 'Outstation pricing updated successfully',
-    'data' => [
-        'vehicleId' => $vehicleId,
-        'pricing' => [
-            'oneWayBasePrice' => $oneWayBasePrice,
-            'oneWayPricePerKm' => $oneWayPricePerKm,
-            'roundTripBasePrice' => $roundTripBasePrice,
-            'roundTripPricePerKm' => $roundTripPricePerKm
-        ],
-        'timestamp' => time()
-    ]
-]);
-
-// Attempt database operation in the background without affecting the response
 try {
-    $pdo = new PDO("mysql:host=localhost;dbname=u644605165_new_bookingdb", "u644605165_new_bookingusr", "Vizag@1213");
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    
-    // First check if record exists in outstation_trip_fares
-    $sql = "SELECT id FROM outstation_trip_fares WHERE vehicle_id = ?";
+    // Super simple database update - with ULTRA simple error handling
+    $sql = "UPDATE vehicles SET base_price = ?, price_per_km = ? WHERE id = ? OR vehicle_id = ?";
     $stmt = $pdo->prepare($sql);
-    $stmt->execute([$vehicleId]);
-    $exists = $stmt->fetchColumn();
+    $result = $stmt->execute([$baseFare, $pricePerKm, $vehicleId, $vehicleId]);
+    $rowCount = $stmt->rowCount();
     
-    if ($exists) {
-        // Update existing record
-        $sql = "UPDATE outstation_trip_fares SET 
-                one_way_base_price = ?, 
-                one_way_per_km = ?, 
-                round_trip_base_price = ?, 
-                round_trip_per_km = ? 
-                WHERE vehicle_id = ?";
-        $stmt = $pdo->prepare($sql);
-        $result = $stmt->execute([
-            $oneWayBasePrice, 
-            $oneWayPricePerKm, 
-            $roundTripBasePrice, 
-            $roundTripPricePerKm, 
-            $vehicleId
-        ]);
-        error_log("Updated outstation fare for vehicle $vehicleId");
+    // If no rows updated, the vehicle might not exist - create it
+    if ($rowCount === 0) {
+        $vehicleName = ucfirst(str_replace(['_', '-'], ' ', $vehicleId));
+        $insertSql = "INSERT INTO vehicles (id, vehicle_id, name, base_price, price_per_km, is_active) 
+                      VALUES (?, ?, ?, ?, ?, 1)";
+        $insertStmt = $pdo->prepare($insertSql);
+        $insertStmt->execute([$vehicleId, $vehicleId, $vehicleName, $baseFare, $pricePerKm]);
+        error_log("Inserted new vehicle: $vehicleId, $vehicleName, Base: $baseFare, Per KM: $pricePerKm");
     } else {
-        // Insert new record
-        $sql = "INSERT INTO outstation_trip_fares 
-                (vehicle_id, one_way_base_price, one_way_per_km, round_trip_base_price, round_trip_per_km) 
-                VALUES (?, ?, ?, ?, ?)";
-        $stmt = $pdo->prepare($sql);
-        $result = $stmt->execute([
-            $vehicleId, 
-            $oneWayBasePrice, 
-            $oneWayPricePerKm, 
-            $roundTripBasePrice, 
-            $roundTripPricePerKm
-        ]);
-        error_log("Inserted new outstation fare for vehicle $vehicleId");
+        error_log("Updated existing vehicle: $vehicleId, Base: $baseFare, Per KM: $pricePerKm");
     }
+    
+    // Always return success - handle any other errors in the catch block
+    http_response_code(200);
+    echo json_encode([
+        'status' => 'success',
+        'message' => 'Vehicle pricing updated successfully',
+        'data' => [
+            'vehicleId' => $vehicleId,
+            'pricing' => [
+                'baseFare' => $baseFare,
+                'pricePerKm' => $pricePerKm
+            ],
+            'rowsAffected' => $rowCount,
+            'timestamp' => time()
+        ]
+    ]);
+    
 } catch (Exception $e) {
-    // Just log the error but we've already returned a success response
-    error_log("Background outstation fare DB update error: " . $e->getMessage());
+    // Log the error but still try to return a meaningful message
+    error_log("Error updating fare: " . $e->getMessage());
+    
+    http_response_code(500);
+    echo json_encode([
+        'status' => 'error', 
+        'message' => 'Database error: ' . $e->getMessage(),
+        'debug' => [
+            'vehicleId' => $vehicleId,
+            'baseFare' => $baseFare,
+            'pricePerKm' => $pricePerKm,
+            'data' => $data
+        ]
+    ]);
 }
+?>

@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertTriangle, RefreshCw, WifiOff, Server, FileQuestion, ShieldAlert, Terminal } from "lucide-react";
-import { toast } from "sonner";
 
 export interface ApiErrorFallbackProps {
   error: Error | string;
@@ -47,15 +46,9 @@ export function ApiErrorFallback({
     cacheKeys.forEach(key => {
       try {
         sessionStorage.removeItem(key);
-        localStorage.removeItem(key);
       } catch (e) {
-        console.warn(`Failed to remove ${key} from storage:`, e);
+        console.warn(`Failed to remove ${key} from sessionStorage:`, e);
       }
-    });
-    
-    // Show toast for feedback
-    toast.info("Clearing cache and refreshing connection...", {
-      duration: 2000
     });
     
     // Always clear authentication tokens on retry for CORS/network errors

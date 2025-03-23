@@ -51,16 +51,6 @@ RewriteRule ^api/admin/airport-fares-update$ api/admin/airport-fares-update.php 
 RewriteRule ^api/admin/airport-fares-update.php$ api/admin/airport-fares-update.php [QSA,L]
 RewriteRule ^api/admin/airport-fares-update/$ api/admin/airport-fares-update.php [QSA,L]
 
-# Direct access to the new simplified endpoints with highest priority
-RewriteRule ^api/admin/direct-outstation-fares$ api/admin/direct-outstation-fares.php [QSA,L]
-RewriteRule ^api/admin/direct-outstation-fares.php$ api/admin/direct-outstation-fares.php [QSA,L]
-RewriteRule ^api/admin/direct-local-fares$ api/admin/direct-local-fares.php [QSA,L]
-RewriteRule ^api/admin/direct-local-fares.php$ api/admin/direct-local-fares.php [QSA,L]
-RewriteRule ^api/admin/direct-airport-fares$ api/admin/direct-airport-fares.php [QSA,L]
-RewriteRule ^api/admin/direct-airport-fares.php$ api/admin/direct-airport-fares.php [QSA,L]
-RewriteRule ^api/admin/direct-base-pricing$ api/admin/direct-base-pricing.php [QSA,L]
-RewriteRule ^api/admin/direct-base-pricing.php$ api/admin/direct-base-pricing.php [QSA,L]
-
 RewriteRule ^api/admin/fares-update$ api/admin/fares-update.php [QSA,L]
 RewriteRule ^api/admin/fares-update.php$ api/admin/fares-update.php [QSA,L]
 RewriteRule ^api/admin/fares-update/$ api/admin/fares-update.php [QSA,L]
