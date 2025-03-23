@@ -36,14 +36,15 @@ export const oneWayRates = {
 };
 
 // Local package price matrix to store pricing data for different cab types
-const localPackagePriceMatrix: LocalPackagePriceMatrix = {
+let localPackagePriceMatrix: LocalPackagePriceMatrix = {
   '8hrs-80km': {
     'sedan': 2500,
     'ertiga': 3000,
     'innova crysta': 3800,
     'innova': 3800,
     'tempo': 4500,
-    'luxury': 5500
+    'luxury': 5500,
+    'swift_02': 100  // Adding Swift_02 with sample price
   },
   '10hrs-100km': {
     'sedan': 3000,
@@ -51,7 +52,8 @@ const localPackagePriceMatrix: LocalPackagePriceMatrix = {
     'innova crysta': 4500,
     'innova': 4500,
     'tempo': 5500,
-    'luxury': 6500
+    'luxury': 6500,
+    'swift_02': 200  // Adding Swift_02 with sample price
   }
 };
 
@@ -71,6 +73,7 @@ export function getLocalPackagePrice(packageId: string, cabType: string): number
   
   // Check if we have a price in the matrix
   if (localPackagePriceMatrix[packageId] && localPackagePriceMatrix[packageId][lowerCabType]) {
+    console.log(`Found price for ${packageId} and ${lowerCabType}: ${localPackagePriceMatrix[packageId][lowerCabType]}`);
     return localPackagePriceMatrix[packageId][lowerCabType];
   }
   
@@ -102,6 +105,8 @@ export function updateLocalPackagePrice(packageId: string, cabType: string, pric
   
   const lowerCabType = cabType.toLowerCase();
   
+  console.log(`Updating local package price: package=${packageId}, cab=${lowerCabType}, price=${price}`);
+  
   // Ensure the package exists in the matrix
   if (!localPackagePriceMatrix[packageId]) {
     localPackagePriceMatrix[packageId] = {};
@@ -109,10 +114,42 @@ export function updateLocalPackagePrice(packageId: string, cabType: string, pric
   
   // Update the price for the specified cab type
   localPackagePriceMatrix[packageId][lowerCabType] = price;
-  console.log(`Updated local package price: package=${packageId}, cab=${cabType}, price=${price}`);
+  
+  // Save to localStorage for persistence
+  try {
+    const savedMatrix = JSON.stringify(localPackagePriceMatrix);
+    localStorage.setItem('localPackagePriceMatrix', savedMatrix);
+    console.log(`Updated and saved local price matrix to localStorage: ${savedMatrix.substring(0, 100)}...`);
+  } catch (e) {
+    console.error('Failed to save local package price matrix to localStorage:', e);
+  }
 }
 
 // Function to get all local package prices
 export function getAllLocalPackagePrices(): LocalPackagePriceMatrix {
+  // Try to load from localStorage first
+  try {
+    const savedMatrix = localStorage.getItem('localPackagePriceMatrix');
+    if (savedMatrix) {
+      console.log('Loading local package price matrix from localStorage');
+      localPackagePriceMatrix = JSON.parse(savedMatrix);
+    }
+  } catch (e) {
+    console.error('Failed to load local package price matrix from localStorage:', e);
+  }
+  
   return localPackagePriceMatrix;
 }
+
+// Load any saved pricing data from localStorage when the module initializes
+(function initializePackageData() {
+  try {
+    const savedMatrix = localStorage.getItem('localPackagePriceMatrix');
+    if (savedMatrix) {
+      console.log('Initializing local package price matrix from localStorage');
+      localPackagePriceMatrix = JSON.parse(savedMatrix);
+    }
+  } catch (e) {
+    console.error('Failed to initialize local package price matrix from localStorage:', e);
+  }
+})();

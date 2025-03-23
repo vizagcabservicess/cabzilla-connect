@@ -73,7 +73,7 @@ export function CabOptions({
       // Clear session and local storage caches
       const keysToRemove = [
         'cachedFareData', 'cabPricing', 'fareCache', 'fares', 'cabData', 
-        'vehicles', 'calculatedFares', 'cabTypes', 'tourFares'
+        'vehicles', 'calculatedFares', 'cabTypes', 'tourFares', 'localPackagePriceMatrix'
       ];
       
       keysToRemove.forEach(key => {
@@ -184,16 +184,25 @@ export function CabOptions({
 
   // Listen for fare cache cleared events
   useEffect(() => {
-    const handleCacheCleared = (event: Event) => {
+    const handleCacheCleared = () => {
       console.log('Detected fare cache cleared event, recalculating fares');
       // Force update the lastUpdate timestamp to trigger recalculation
       setLastUpdate(Date.now());
     };
     
+    const handleLocalFaresUpdated = () => {
+      console.log('Detected local fares updated event, recalculating fares');
+      // Force update the lastUpdate timestamp to trigger recalculation
+      setLastUpdate(Date.now());
+      setRefreshCount(prev => prev + 1);
+    };
+    
     window.addEventListener('fare-cache-cleared', handleCacheCleared);
+    window.addEventListener('local-fares-updated', handleLocalFaresUpdated);
     
     return () => {
       window.removeEventListener('fare-cache-cleared', handleCacheCleared);
+      window.removeEventListener('local-fares-updated', handleLocalFaresUpdated);
     };
   }, []);
 

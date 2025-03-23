@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -14,6 +15,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { getAllLocalPackagePrices, updateLocalPackagePrice, hourlyPackages } from '@/lib/packageData';
 import { loadCabTypes } from '@/lib/cabData';
 import { CabType } from '@/types/cab';
+import { fareService } from '@/services/fareService';
 
 const formSchema = z.object({
   packageId: z.string().min(1, { message: "Package is required" }),
@@ -45,10 +47,15 @@ export function LocalFareManagement() {
       setIsLoading(true);
       setError(null);
       
+      // Force clear caches to ensure we get fresh data
+      fareService.clearCache();
+      
       const prices = getAllLocalPackagePrices();
+      console.log("Loaded local fare prices:", prices);
       setLocalFares(prices);
       
       const types = await loadCabTypes();
+      console.log("Loaded cab types:", types);
       setCabTypes(types);
     } catch (error) {
       console.error("Error loading data:", error);
@@ -61,11 +68,62 @@ export function LocalFareManagement() {
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       setIsLoading(true);
+      console.log("Updating local fare:", values);
       
+      // First, update the price locally using the function from packageData.ts
       updateLocalPackagePrice(values.packageId, values.cabType, values.price);
       
+      // Now, try to update on the server
+      const cabTypeId = values.cabType.toLowerCase();
+      
+      // Define the data to send to the API
+      const updateData = {
+        vehicleId: cabTypeId,
+        vehicle_id: cabTypeId,
+        tripType: 'local',
+        trip_type: 'local'
+      };
+      
+      // Add the specific package prices
+      if (values.packageId === '8hrs-80km') {
+        Object.assign(updateData, {
+          priceRate: values.price,
+          price8hrs80km: values.price,
+          hr8km80Price: values.price,
+          local_package_8hr: values.price
+        });
+      } else if (values.packageId === '10hrs-100km') {
+        Object.assign(updateData, {
+          priceRate: values.price,
+          price10hrs100km: values.price,
+          hr10km100Price: values.price,
+          local_package_10hr: values.price
+        });
+      }
+      
+      // Add extra km rate (use default if not provided)
+      Object.assign(updateData, {
+        priceExtraKm: 14,
+        extraKmRate: 14
+      });
+      
+      console.log("Sending update data to server:", updateData);
+      
+      // Use the fareService to update the server
+      await fareService.directFareUpdate('local', cabTypeId, updateData);
+      
+      // Force cache refresh to ensure new prices are used
+      localStorage.setItem('forceCacheRefresh', 'true');
+      fareService.clearCache();
+      
+      // Refetch the updated prices
       const updatedPrices = getAllLocalPackagePrices();
       setLocalFares(updatedPrices);
+      
+      // Dispatch a custom event that other components can listen for
+      window.dispatchEvent(new CustomEvent('local-fares-updated', {
+        detail: { timestamp: Date.now() }
+      }));
       
       toast.success("Local fare updated successfully");
     } catch (error) {
