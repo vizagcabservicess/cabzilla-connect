@@ -3,12 +3,12 @@ import { clearFareCache } from '@/lib/fareCalculationService';
 import { toast } from 'sonner';
 import axios from 'axios';
 
-// Try these custom headers to bypass caching and access issues
+// Generate bypass headers with unique timestamps
 const generateBypassHeaders = () => {
   return {
     'X-Force-Refresh': Date.now().toString(),
     'X-Bypass-Cache': 'true',
-    'X-Client-Version': import.meta.env.VITE_API_VERSION || '1.0.36',
+    'X-Client-Version': import.meta.env.VITE_API_VERSION || '1.0.40',
     'X-Request-Source': 'client-app',
     'Cache-Control': 'no-cache, no-store, must-revalidate',
     'Pragma': 'no-cache',
@@ -17,30 +17,46 @@ const generateBypassHeaders = () => {
   };
 };
 
-// Alternative fetch implementation for fallback
-async function doFetchRequest(url: string, options: RequestInit) {
-  try {
-    const response = await fetch(url, options);
-    if (!response.ok) {
-      throw new Error(`Fetch request failed with status: ${response.status}`);
-    }
-    return await response.json();
-  } catch (error) {
-    console.error('Fetch attempt failed:', error);
-    throw error;
-  }
-}
-
-// Direct API call function that tries multiple methods
+// Direct API call with ultra-simplified approach first, then fallbacks
 async function directApiCall(endpoint: string, data: any) {
   const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
   const timestamp = Date.now();
   
+  // Log the attempt
+  console.log(`Starting direct API call to ${endpoint} with data:`, data);
+  
+  // Try ultra-simplified approach first - most reliable
+  try {
+    console.log('ATTEMPT 1: Using ultra-simplified direct approach');
+    const directUrl = `${baseUrl}/api/admin/direct-outstation-fares.php?_t=${timestamp}`;
+    
+    // Basic fetch with JSON payload - simplest approach
+    const simpleFetchResponse = await fetch(directUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...generateBypassHeaders()
+      },
+      body: JSON.stringify(data)
+    });
+    
+    if (simpleFetchResponse.ok) {
+      const jsonData = await simpleFetchResponse.json();
+      console.log('✅ Success with ultra-simplified endpoint:', jsonData);
+      return jsonData;
+    } else {
+      console.warn(`❌ Ultra-simplified approach failed with status ${simpleFetchResponse.status}`);
+      // Don't throw, continue to next attempt
+    }
+  } catch (simplifiedError) {
+    console.warn('❌ Ultra-simplified approach failed with error:', simplifiedError);
+    // Continue to next attempts
+  }
+  
   // Create URLs with different timestamp patterns for each attempt - HIGHEST PRIORITY ENDPOINTS FIRST
   const urls = [
-    // Try the direct outstation fares endpoint first (most reliable)
+    // Try the new direct endpoints first (most reliable)
     `${baseUrl}/api/admin/direct-outstation-fares.php?_t=${timestamp}`,
-    // Then try the other direct endpoints
     `${baseUrl}/api/admin/direct-vehicle-pricing.php?_t=${timestamp}`,
     // Then try the regular endpoints
     `${baseUrl}/api/admin/outstation-fares-update.php?_t=${timestamp}`,
@@ -59,33 +75,11 @@ async function directApiCall(endpoint: string, data: any) {
     'multipart/form-data'
   ];
   
-  // First, try a very simplified direct approach with the new simplified endpoint
-  try {
-    console.log('Trying direct simplified endpoint first...');
-    const directUrl = `${baseUrl}/api/admin/direct-outstation-fares.php?_t=${timestamp}`;
-    
-    // Basic fetch with JSON payload - simplest approach
-    const simpleFetchResponse = await fetch(directUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...generateBypassHeaders()
-      },
-      body: JSON.stringify(data)
-    });
-    
-    if (simpleFetchResponse.ok) {
-      const jsonData = await simpleFetchResponse.json();
-      console.log('Success with simplified direct endpoint:', jsonData);
-      return jsonData;
-    }
-  } catch (simplifiedError) {
-    console.warn('Simplified approach failed, trying advanced methods');
-  }
-  
   // Try all combinations of URLs and content types
   for (const url of urls) {
     for (const contentType of contentTypes) {
+      console.log(`ATTEMPT: Trying ${url} with ${contentType}`);
+      
       try {
         // Try axios first
         try {
@@ -106,12 +100,14 @@ async function directApiCall(endpoint: string, data: any) {
           console.log(`Trying ${url} with ${contentType} via axios`);
           const response = await axios.post(url, axiosData, { 
             headers,
-            timeout: 30000 // 30 seconds timeout
+            timeout: 30000, // 30 seconds timeout
+            withCredentials: false // Disable credentials to avoid CORS issues
           });
-          console.log('Success with axios:', response.data);
+          
+          console.log('✅ Success with axios:', response.data);
           return response.data;
         } catch (axiosError) {
-          console.warn(`Axios attempt failed for ${url} with ${contentType}:`, axiosError);
+          console.warn(`❌ Axios attempt failed for ${url} with ${contentType}:`, axiosError);
         }
         
         // Try fetch as backup
@@ -120,7 +116,10 @@ async function directApiCall(endpoint: string, data: any) {
             method: 'POST',
             headers: {
               ...generateBypassHeaders()
-            }
+            },
+            mode: 'cors',
+            cache: 'no-cache',
+            credentials: 'omit' // Don't send cookies for CORS
           };
           
           if (contentType === 'application/json') {
@@ -145,24 +144,28 @@ async function directApiCall(endpoint: string, data: any) {
           console.log(`Trying ${url} with ${contentType} via fetch`);
           const response = await fetch(url, fetchOptions);
           
-          // Accept both success responses and text responses
-          if (response.headers.get('content-type')?.includes('application/json')) {
-            const jsonData = await response.json();
-            console.log('Success with fetch (JSON):', jsonData);
-            return jsonData;
-          } else {
-            const textData = await response.text();
-            console.log('Success with fetch (text):', textData);
-            
-            // Try to parse as JSON anyway
-            try {
-              return JSON.parse(textData);
-            } catch (parseError) {
-              return { status: 'success', message: 'Received text response', data: textData };
+          if (response.ok) {
+            // Accept both success responses and text responses
+            if (response.headers.get('content-type')?.includes('application/json')) {
+              const jsonData = await response.json();
+              console.log('✅ Success with fetch (JSON):', jsonData);
+              return jsonData;
+            } else {
+              const textData = await response.text();
+              console.log('✅ Success with fetch (text):', textData);
+              
+              // Try to parse as JSON anyway
+              try {
+                return JSON.parse(textData);
+              } catch (parseError) {
+                return { status: 'success', message: 'Received text response', data: textData };
+              }
             }
+          } else {
+            console.warn(`❌ Fetch attempt failed with status ${response.status}`);
           }
         } catch (fetchError) {
-          console.warn(`Fetch attempt failed for ${url} with ${contentType}:`, fetchError);
+          console.warn(`❌ Fetch attempt failed for ${url} with ${contentType}:`, fetchError);
         }
       } catch (error) {
         console.error(`All attempts failed for ${url} with ${contentType}:`, error);
@@ -275,7 +278,9 @@ export const fareService = {
       },
       timeout: 30000, // 30 second timeout (increased from 15s)
       withCredentials: false, // Disable credentials to avoid CORS preflight issues
-      allowAbsoluteUrls: true
+      mode: 'cors',
+      cache: 'no-cache',
+      credentials: 'omit' // Don't send cookies for CORS
     };
   },
   
@@ -285,26 +290,8 @@ export const fareService = {
     const startTime = Date.now();
     console.log(`Starting fare update for ${tripType}, vehicle: ${vehicleId} at ${new Date(startTime).toISOString()}`);
     
-    // Prepare the API endpoint URL based on trip type
+    // Always try the ultra-simplified direct endpoint first
     const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
-    let endpoint;
-    
-    // Select appropriate endpoint based on trip type
-    switch (tripType) {
-      case 'outstation':
-      case 'outstation-one-way':
-      case 'outstation-round-trip':
-        endpoint = `${baseUrl}/api/admin/direct-outstation-fares.php`;
-        break;
-      case 'local':
-        endpoint = `${baseUrl}/api/admin/local-fares-update.php`;
-        break;
-      case 'airport':
-        endpoint = `${baseUrl}/api/admin/airport-fares-update.php`;
-        break;
-      default:
-        endpoint = `${baseUrl}/api/admin/vehicle-pricing.php`;
-    }
     
     try {
       console.log(`Starting direct fare update for ${tripType}, vehicle: ${vehicleId}`);
@@ -331,17 +318,14 @@ export const fareService = {
         duration: 5000
       });
       
-      // Use the direct simplified endpoint for outstation fares
-      if (tripType.includes('outstation')) {
-        // For outstation fares, use the direct outstation fares endpoint
-        endpoint = `${baseUrl}/api/admin/direct-outstation-fares.php`;
-      }
+      // ALWAYS use the direct outstation fares endpoint - it's the most reliable
+      const directEndpoint = `${baseUrl}/api/admin/direct-outstation-fares.php`;
       
       // Make the direct API call with multiple fallback methods
-      const result = await directApiCall(endpoint, updateData);
+      const result = await directApiCall(directEndpoint, updateData);
       
       const endTime = Date.now();
-      console.log(`Direct fare update successful in ${endTime - startTime}ms:`, result);
+      console.log(`✅ Direct fare update successful in ${endTime - startTime}ms:`, result);
       
       toast.success('Fare updated successfully', {
         id: 'fare-update-success'
@@ -350,7 +334,7 @@ export const fareService = {
       return result;
     } catch (error) {
       const endTime = Date.now();
-      console.error(`All fare update methods failed after ${endTime - startTime}ms:`, error);
+      console.error(`❌ All fare update methods failed after ${endTime - startTime}ms:`, error);
       
       toast.error('Failed to update fare. Please try again.', {
         id: 'fare-update-error'

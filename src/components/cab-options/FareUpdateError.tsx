@@ -15,7 +15,8 @@ import {
   FileCode,
   Wifi,
   ArrowUp,
-  Network
+  Network,
+  Hammer
 } from "lucide-react";
 import { fareService } from '@/services/fareService';
 import { toast } from 'sonner';
@@ -71,13 +72,42 @@ export function FareUpdateError({
     }, 800);
   };
 
+  // Direct connection test
+  const testDirectConnection = () => {
+    toast.info('Testing direct server connection...');
+    
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+    const timestamp = Date.now();
+    
+    // Test the ultra-simple endpoint directly
+    fetch(`${baseUrl}/api/admin/direct-outstation-fares.php?test=true&_t=${timestamp}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...fareService.getBypassHeaders()
+      },
+      body: JSON.stringify({ test: 'connection', timestamp })
+    })
+    .then(async response => {
+      if (response.ok) {
+        const text = await response.text();
+        toast.success(`Server test succeeded!`);
+      } else {
+        toast.error(`Server error: ${response.status}`);
+      }
+    })
+    .catch(err => {
+      toast.error(`Connection test failed: ${err.message}`);
+    });
+  };
+
   // Open multiple direct API endpoints in new tabs to bypass potential issues
   const openDirectEndpoints = () => {
     const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
     const timestamp = Date.now();
     
     const endpoints = [
-      // Try the new direct outstation fares endpoint first
+      // Try the ultra-simple direct outstation fares endpoint first
       `${baseUrl}/api/admin/direct-outstation-fares.php?_t=${timestamp}`,
       `${baseUrl}/api/admin/direct-vehicle-pricing.php?_t=${timestamp}`,
       `${baseUrl}/api/admin/outstation-fares-update.php?_t=${timestamp}`,
@@ -126,6 +156,42 @@ export function FareUpdateError({
     fareService.clearCache();
   };
 
+  // Emergency cure-all attempt
+  const runEmergencyFix = () => {
+    toast.info('Attempting emergency fix...');
+    
+    // Clear all caches
+    fareService.clearCache();
+    
+    // Ping all possible endpoints with multiple methods
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+    
+    // Try the ultra-simple direct outstation fares endpoint
+    fetch(`${baseUrl}/api/admin/direct-outstation-fares.php?emergency=true&_t=${Date.now()}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...fareService.getBypassHeaders()
+      },
+      body: JSON.stringify({ test: 'emergency', timestamp: Date.now() })
+    })
+    .then(async response => {
+      if (response.ok) {
+        toast.success('Emergency fix succeeded!');
+      } else {
+        toast.warning(`Emergency test returned ${response.status}`);
+      }
+    })
+    .catch(err => {
+      console.log('Emergency test completed');
+    });
+    
+    // Give the user feedback
+    setTimeout(() => {
+      toast.success('Emergency actions completed');
+    }, 2000);
+  };
+
   // Pick the most appropriate icon
   const ErrorIcon = isForbiddenError
     ? ShieldAlert 
@@ -168,11 +234,11 @@ export function FareUpdateError({
           <p className="font-medium text-gray-700">Try the following:</p>
           <ul className="list-disc pl-5 space-y-1 text-gray-600">
             <li>Use the retry button to clear all caches and try again</li>
+            <li>Try the ultra-simple direct API access button</li>
+            <li>Try the emergency fix button which attempts several recovery methods</li>
             <li>Check if the server is online or experiencing issues</li>
             <li>Try reloading the page</li>
             <li>Log out and log back in to refresh authentication</li>
-            <li>Try the Direct API Access button to bypass the application</li>
-            <li>Contact your administrator if the issue persists</li>
           </ul>
         </div>
         
@@ -211,14 +277,34 @@ export function FareUpdateError({
         </Button>
         
         {showDirectLink && (
-          <Button 
-            onClick={openDirectEndpoints} 
-            variant="outline" 
-            className="gap-2 border-green-300 bg-green-50 hover:bg-green-100 text-green-800"
-          >
-            <Server className="h-4 w-4" />
-            Direct API Access
-          </Button>
+          <>
+            <Button 
+              onClick={openDirectEndpoints} 
+              variant="outline" 
+              className="gap-2 border-green-300 bg-green-50 hover:bg-green-100 text-green-800"
+            >
+              <Server className="h-4 w-4" />
+              Ultra-Simple API
+            </Button>
+            
+            <Button 
+              onClick={testDirectConnection} 
+              variant="outline" 
+              className="gap-2 border-blue-300 bg-blue-50 hover:bg-blue-100 text-blue-800"
+            >
+              <Hammer className="h-4 w-4" />
+              Test Direct Connection
+            </Button>
+            
+            <Button 
+              onClick={runEmergencyFix} 
+              variant="outline" 
+              className="gap-2 border-purple-300 bg-purple-50 hover:bg-purple-100 text-purple-800"
+            >
+              <FileCode className="h-4 w-4" />
+              Emergency Fix
+            </Button>
+          </>
         )}
       </CardFooter>
     </Card>

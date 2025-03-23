@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { AlertCircle, RefreshCw, Globe, Server, Network, ExternalLink, FileCog } from 'lucide-react';
+import { AlertCircle, RefreshCw, Globe, Server, Network, ExternalLink, FileCog, Hammer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { fareService } from '@/services/fareService';
@@ -141,6 +141,32 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
     toast.success('Emergency reconnection attempt completed');
   };
   
+  const runServerchecks = () => {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+    toast.info('Testing direct server connection...');
+    
+    // Test the most reliable direct endpoint
+    fetch(`${baseUrl}/api/admin/direct-outstation-fares.php`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...fareService.getBypassHeaders()
+      },
+      body: JSON.stringify({ test: 'connection', _t: Date.now() })
+    })
+    .then(async response => {
+      if (response.ok) {
+        const text = await response.text();
+        toast.success(`Server responded: ${text.substring(0, 50)}...`);
+      } else {
+        toast.error(`Server error: ${response.status} ${response.statusText}`);
+      }
+    })
+    .catch(err => {
+      toast.error(`Connection failed: ${err.message}`);
+    });
+  };
+  
   return (
     <Alert variant="destructive" className="bg-yellow-50 border-yellow-200 text-yellow-800 mb-4">
       <div className="flex flex-col w-full">
@@ -192,11 +218,11 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
                     <Button 
                       variant="outline" 
                       size="sm"
-                      className="text-blue-700"
+                      className="text-green-700"
                       onClick={() => openDirectApi('direct-outstation-fares.php')}
                     >
                       <ExternalLink className="h-3.5 w-3.5 mr-1" />
-                      Direct Outstation Fares
+                      Ultra-Simple Direct API
                     </Button>
                     <Button 
                       variant="outline" 
@@ -224,6 +250,15 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
                     >
                       <FileCog className="h-3.5 w-3.5 mr-1" />
                       Run Emergency Fix
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="text-purple-700"
+                      onClick={runServerchecks}
+                    >
+                      <Hammer className="h-3.5 w-3.5 mr-1" />
+                      Test Direct Connection
                     </Button>
                   </div>
                 </PopoverContent>
