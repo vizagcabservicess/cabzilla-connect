@@ -68,11 +68,29 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
     if (!selectedPackage && sortedPackages.length > 0) {
       onPackageSelect(sortedPackages[0].id);
     }
+    
+    // Listen for local fare updates event and refresh packages
+    const handleLocalFaresUpdated = () => {
+      console.log('LocalTripSelector detected local fares updated event, refreshing packages');
+      // Force a refresh of the component by triggering a re-render
+      setPackages([...sortedPackages]);
+    };
+    
+    window.addEventListener('local-fares-updated', handleLocalFaresUpdated);
+    
+    return () => {
+      window.removeEventListener('local-fares-updated', handleLocalFaresUpdated);
+    };
   }, [selectedPackage, onPackageSelect]);
   
   // Handle package selection
   const handlePackageSelect = (packageId: string) => {
     onPackageSelect(packageId);
+    
+    // Dispatch an event to notify other components about the package selection
+    window.dispatchEvent(new CustomEvent('hourly-package-selected', {
+      detail: { packageId, timestamp: Date.now() }
+    }));
   };
   
   // Display a message if no packages are available
