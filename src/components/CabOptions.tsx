@@ -1,4 +1,3 @@
-
 import { CabType } from '@/types/cab';
 import { TripType, TripMode } from '@/lib/tripTypes';
 import { CabOptionCard } from './CabOptionCard';
@@ -208,6 +207,11 @@ export function CabOptions({
       setLastUpdate(Date.now());
       setForceRecalculation(prev => prev + 1);
       setGlobalRefreshTrigger(prev => prev + 1);
+      
+      // Force recalculation with fresh data
+      if (cabOptions.length > 0) {
+        calculateFares(cabOptions, true);
+      }
     };
     
     const handleLocalFaresUpdated = (event: Event) => {
@@ -228,10 +232,12 @@ export function CabOptions({
         console.log('Updated package matches current selection, forced recalculation');
         // Force recalculation with cache clearing
         calculateFares(cabOptions, true);
+      } else {
+        // Force recalculation for all cabs anyway to ensure fresh data
+        calculateFares(cabOptions, true);
       }
     };
     
-    // Listen for trip fares updated events
     const handleTripFaresUpdated = (event: Event) => {
       const customEvent = event as CustomEvent;
       console.log('Detected trip fares updated event, recalculating fares', customEvent.detail);

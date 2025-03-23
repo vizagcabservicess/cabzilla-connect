@@ -142,8 +142,8 @@ foreach (['extraHourRate', 'priceExtraHour', 'extra_hour_rate', 'extra_hour_char
 
 error_log("Extracted data: vehicleId=$vehicleId, 4hr=$price4hrs40km, 8hr=$price8hrs80km, 10hr=$price10hrs100km, extraKm=$priceExtraKm, extraHour=$priceExtraHour");
 
-// Simple success response for debugging
-echo json_encode([
+// Prepare response with all packages data
+$responseData = [
     'status' => 'success',
     'message' => 'Local fares updated successfully',
     'data' => [
@@ -154,6 +154,11 @@ echo json_encode([
             '10hrs-100km' => $price10hrs100km,
             'extra-km' => $priceExtraKm,
             'extra-hour' => $priceExtraHour
-        ]
+        ],
+        'message' => 'Local fares updated successfully',
+        'status' => 'success'
     ]
-]);
+];
+
+// Echo the response data with more detailed package information
+echo json_encode($responseData);

@@ -1,4 +1,3 @@
-
 import { HourlyPackage, LocalPackagePriceMatrix } from '@/types/cab';
 
 // Define standard hourly packages
@@ -8,7 +7,7 @@ export const hourlyPackages: HourlyPackage[] = [
     name: '4 Hours / 40 KM',
     hours: 4,
     kilometers: 40,
-    basePrice: 1500,
+    basePrice: 1200,
     multiplier: 0.6
   },
   {
@@ -46,18 +45,18 @@ export const oneWayRates = {
 // Initialize local package price matrix
 let localPackagePriceMatrix: LocalPackagePriceMatrix = {
   '4hrs-40km': {
-    'sedan': 1500,
+    'sedan': 1200,
     'ertiga': 1800,
     'innova crysta': 2300,
     'innova': 2300,
     'tempo': 3000,
     'luxury': 3500,
     'swift_02': 80,
-    'etios': 1500,
-    'dzire': 1500,
-    'amaze': 1500,
-    'dzire cng': 1500,
-    'swift': 1500
+    'etios': 1200,
+    'dzire': 1200,
+    'amaze': 1200,
+    'dzire cng': 1200,
+    'swift': 1200
   },
   '8hrs-80km': {
     'sedan': 2500,
@@ -234,6 +233,11 @@ export function updateLocalPackagePrice(packageId: string, cabType: string, pric
     window.dispatchEvent(new CustomEvent('fare-cache-cleared', {
       detail: { timestamp: Date.now() }
     }));
+    
+    // Force clear local storage cache as well
+    localStorage.setItem('forceCacheRefresh', 'true');
+    localStorage.removeItem('fareCache');
+    localStorage.removeItem('calculatedFares');
     
     console.log('Dispatched local-fares-updated and fare-cache-cleared events');
   } catch (e) {

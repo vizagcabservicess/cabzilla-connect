@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -28,6 +29,7 @@ export function LocalFareManagement() {
   const [cabTypes, setCabTypes] = useState<CabType[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -49,6 +51,7 @@ export function LocalFareManagement() {
       
       // Force clear caches to ensure we get fresh data
       fareService.clearCache();
+      localStorage.setItem('forceCacheRefresh', 'true');
       
       const prices = getAllLocalPackagePrices();
       console.log("Loaded local fare prices:", prices);
@@ -57,11 +60,14 @@ export function LocalFareManagement() {
       const types = await loadCabTypes();
       console.log("Loaded cab types:", types);
       setCabTypes(types);
+      
+      setLastUpdated(new Date());
     } catch (error) {
       console.error("Error loading data:", error);
       setError("Failed to load data. Please try again.");
     } finally {
       setIsLoading(false);
+      localStorage.removeItem('forceCacheRefresh');
     }
   };
   
@@ -109,37 +115,68 @@ export function LocalFareManagement() {
       formData.append('extraKmRate', '14');
       formData.append('extra_km_charge', '14');
       formData.append('extraKmCharge', '14');
+      formData.append('priceExtraKm', '14');
+      
       formData.append('extraHourRate', '250');
       formData.append('extra_hour_charge', '250');
       formData.append('extraHourCharge', '250');
+      formData.append('priceExtraHour', '250');
       
       console.log("Sending update data to server via FormData");
       
-      // Direct API call with FormData
+      // Try with the local-fares-update.php endpoint first
       try {
         const response = await fetch(`${baseUrl}/api/admin/local-fares-update.php`, {
           method: 'POST',
           body: formData,
           headers: {
-            'X-Force-Refresh': 'true'
-          }
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache'
+          },
+          cache: 'no-store'
         });
         
         if (!response.ok) {
           const errorText = await response.text();
           console.error("API response not OK:", response.status, errorText);
-          throw new Error(`Direct API call failed with status: ${response.status}`);
+          throw new Error(`Local fares API call failed with status: ${response.status}`);
         }
         
         const result = await response.json();
-        console.log("API response:", result);
+        console.log("Local fares API response:", result);
       } catch (error) {
-        console.error("Error with direct API call:", error);
-        throw error;
+        console.error("Error with local fares API call:", error);
+        
+        // Try the direct-fare-update.php endpoint as fallback
+        try {
+          const fallbackResponse = await fetch(`${baseUrl}/api/admin/direct-fare-update.php`, {
+            method: 'POST',
+            body: formData,
+            headers: {
+              'X-Force-Refresh': 'true',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            },
+            cache: 'no-store'
+          });
+          
+          if (!fallbackResponse.ok) {
+            throw new Error(`Fallback API call failed with status: ${fallbackResponse.status}`);
+          }
+          
+          const fallbackResult = await fallbackResponse.json();
+          console.log("Fallback API response:", fallbackResult);
+        } catch (fallbackError) {
+          console.error("Error with fallback API call:", fallbackError);
+          throw fallbackError;
+        }
       }
       
       // Force cache refresh to ensure new prices are used
       localStorage.setItem('forceCacheRefresh', 'true');
+      localStorage.removeItem('fareCache');
+      localStorage.removeItem('calculatedFares');
       fareService.clearCache();
       
       // Dispatch a custom event for other components to update
@@ -155,6 +192,7 @@ export function LocalFareManagement() {
       // Refetch the updated prices
       const updatedPrices = getAllLocalPackagePrices();
       setLocalFares(updatedPrices);
+      setLastUpdated(new Date());
       
       toast.success("Local fare updated successfully");
       
@@ -170,6 +208,7 @@ export function LocalFareManagement() {
       toast.error("Failed to update local fare");
     } finally {
       setIsLoading(false);
+      localStorage.removeItem('forceCacheRefresh');
     }
   };
   

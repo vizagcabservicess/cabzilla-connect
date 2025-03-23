@@ -138,6 +138,18 @@ if ($tripType == 'local') {
         'extraKmRate' => $extraKmRate,
         'extraHourRate' => $extraHourRate
     ];
+    
+    // Add this data to the main response for better clarity
+    $responseData['data'] = [
+        'packages' => [
+            '4hrs-40km' => $package4hr,
+            '8hrs-80km' => $package8hr,
+            '10hrs-100km' => $package10hr,
+            'extra-hour' => $extraHourRate,
+            'extra-km' => $extraKmRate
+        ],
+        'vehicleId' => $vehicleId
+    ];
 }
 
 // Echo the response data
