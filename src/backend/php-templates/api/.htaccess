@@ -27,16 +27,30 @@ RewriteEngine On
     Header always set Expires "0"
     
     # Add debugging headers
-    Header always set X-API-Debug "Processed by main API htaccess - v1.0.57"
-    Header always set X-API-Version "1.0.57"
+    Header always set X-API-Debug "Processed by main API htaccess - v1.0.58"
+    Header always set X-API-Version "1.0.58"
     Header always set X-Server-Time "%{TIME}e"
     Header always set X-Request-ID "%{UNIQUE_ID}e"
+    Header always set X-Response-Timestamp "%{TIME}e"
 </IfModule>
 
 # Handle OPTIONS requests for CORS preflight - immediately return 200
 # This is crucial for preflight requests to succeed
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
+
+# Throttle requests to prevent API overload
+# We'll use a simple rate limiting based on IP address
+# This requires mod_rewrite and access to server variables
+<IfModule mod_rewrite.c>
+    # Set a flag if this IP has made too many requests
+    RewriteMap throttle prg:/path/to/throttle.php
+    
+    # Check if the IP is making too many requests in a short time
+    # If it is, return a 429 status code
+    RewriteCond %{ENV:THROTTLED} =1
+    RewriteRule .* - [R=429,L]
+</IfModule>
 
 # ULTRA HIGH PRIORITY - Direct access to update endpoints
 # Skip all routing complexity for these critical endpoints

@@ -2,7 +2,7 @@
 <?php
 require_once '../../config.php';
 
-// Allow CORS for all domains
+// Allow CORS for all domains and add aggressive cache control
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh');
@@ -13,6 +13,7 @@ header('Expires: 0');
 
 // Add extra cache busting headers
 header('X-Cache-Timestamp: ' . time());
+header('X-Response-ID: ' . uniqid('resp_'));
 
 // Respond to preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -21,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // Log the request for debugging
-error_log("vehicles-data.php request. Method: " . $_SERVER['REQUEST_METHOD'] . ", Time: " . time());
+error_log("vehicles-data.php request. Method: " . $_SERVER['REQUEST_METHOD'] . ", Time: " . time() . ", Query: " . $_SERVER['QUERY_STRING']);
 
 // Global fallback vehicles to return in case of database issues
 $fallbackVehicles = [
@@ -30,8 +31,8 @@ $fallbackVehicles = [
         'name' => 'Sedan',
         'capacity' => 4,
         'luggageCapacity' => 2,
-        'price' => 4200,
-        'basePrice' => 4200,
+        'price' => 2500,
+        'basePrice' => 2500,
         'pricePerKm' => 14,
         'image' => '/cars/sedan.png',
         'amenities' => ['AC', 'Bottle Water', 'Music System'],
@@ -47,8 +48,8 @@ $fallbackVehicles = [
         'name' => 'Ertiga',
         'capacity' => 6,
         'luggageCapacity' => 3,
-        'price' => 5400,
-        'basePrice' => 5400,
+        'price' => 3200,
+        'basePrice' => 3200,
         'pricePerKm' => 18,
         'image' => '/cars/ertiga.png',
         'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
@@ -64,8 +65,8 @@ $fallbackVehicles = [
         'name' => 'Innova Crysta',
         'capacity' => 7,
         'luggageCapacity' => 4,
-        'price' => 6000,
-        'basePrice' => 6000,
+        'price' => 3800,
+        'basePrice' => 3800,
         'pricePerKm' => 20,
         'image' => '/cars/innova.png',
         'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
@@ -77,6 +78,26 @@ $fallbackVehicles = [
         'vehicleId' => 'innova_crysta'
     ]
 ];
+
+// If this is a repeated request in a short time frame, return the fallback vehicles
+// This helps prevent overwhelming the server with repeated requests
+$requestHash = md5($_SERVER['REMOTE_ADDR'] . $_SERVER['HTTP_USER_AGENT'] . date('YmdH'));
+$requestCount = isset($_SESSION['request_count_' . $requestHash]) ? $_SESSION['request_count_' . $requestHash] : 0;
+
+if ($requestCount > 10) {
+    error_log("Too many requests from same client, returning fallback vehicles");
+    echo json_encode([
+        'vehicles' => $fallbackVehicles,
+        'timestamp' => time(),
+        'cached' => true,
+        'throttled' => true,
+        'requestCount' => $requestCount
+    ]);
+    exit;
+}
+
+// Increment the request counter
+$_SESSION['request_count_' . $requestHash] = $requestCount + 1;
 
 // Handle requests
 try {
@@ -200,7 +221,8 @@ try {
     echo json_encode([
         'vehicles' => $vehicles,
         'timestamp' => time(),
-        'cached' => false
+        'cached' => false,
+        'responseId' => uniqid('veh_')
     ]);
     exit;
     
