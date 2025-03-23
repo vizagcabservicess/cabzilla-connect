@@ -74,7 +74,7 @@ if (isset($headers['Authorization']) || isset($headers['authorization'])) {
 logBookingsError("Authentication result", ['userId' => $userId, 'isAdmin' => $isAdmin]);
 
 // ALWAYS return sample bookings data for any user
-$status = rand(0, 1) ? 200 : 200; // Always return 200 but simulate different responses
+$status = 200; // Always return 200
 $sampleBookings = [];
 
 // Generate more realistic number of bookings
