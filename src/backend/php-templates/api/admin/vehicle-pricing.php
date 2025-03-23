@@ -1,3 +1,4 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -51,6 +52,13 @@ function cleanVehicleId($vehicleId) {
     return $vehicleId;
 }
 
+// Function to check if a column exists in a table
+function columnExists($conn, $table, $column) {
+    $query = "SHOW COLUMNS FROM `$table` LIKE '$column'";
+    $result = $conn->query($query);
+    return ($result && $result->num_rows > 0);
+}
+
 // Function to update or create outstation fares
 function updateOutstationFares($conn, $vehicleId, $fareData) {
     // Clean the vehicle ID
@@ -67,6 +75,10 @@ function updateOutstationFares($conn, $vehicleId, $fareData) {
     $pricePerKm = isset($fareData['pricePerKm']) ? floatval($fareData['pricePerKm']) : 0;
     $nightHaltCharge = isset($fareData['nightHaltCharge']) ? floatval($fareData['nightHaltCharge']) : 0;
     $driverAllowance = isset($fareData['driverAllowance']) ? floatval($fareData['driverAllowance']) : 0;
+    
+    // Check for round trip pricing if available
+    $roundtripBaseFare = isset($fareData['roundtripBasePrice']) ? floatval($fareData['roundtripBasePrice']) : 0;
+    $roundtripPricePerKm = isset($fareData['roundtripPricePerKm']) ? floatval($fareData['roundtripPricePerKm']) : 0;
     
     // First check if vehicle exists in vehicles table, if not create it
     $vehicleQuery = "SELECT id FROM vehicles WHERE id = ? OR vehicle_id = ?";
@@ -94,6 +106,78 @@ function updateOutstationFares($conn, $vehicleId, $fareData) {
         $insertVehicleStmt->bind_param("sssdd", $vehicleId, $vehicleId, $vehicleName, $baseFare, $pricePerKm);
         $insertVehicleStmt->execute();
         logError("Created new vehicle record", ['vehicleId' => $vehicleId]);
+    }
+    
+    // First, try to update vehicle_pricing table (with round trip columns)
+    try {
+        $updateQuery = "
+            UPDATE vehicle_pricing 
+            SET 
+                base_price = ?,
+                price_per_km = ?,
+                night_halt_charge = ?,
+                driver_allowance = ?,
+                roundtrip_base_price = ?,
+                roundtrip_price_per_km = ?,
+                updated_at = NOW() 
+            WHERE vehicle_type = ?
+        ";
+        $updateStmt = $conn->prepare($updateQuery);
+        if (!$updateStmt) {
+            throw new Exception($conn->error);
+        }
+        
+        $updateStmt->bind_param("dddddds", 
+            $baseFare, 
+            $pricePerKm, 
+            $nightHaltCharge, 
+            $driverAllowance,
+            $roundtripBaseFare,
+            $roundtripPricePerKm,
+            $vehicleId
+        );
+        
+        $success = $updateStmt->execute();
+        if ($updateStmt->affected_rows > 0) {
+            logError("Successfully updated vehicle_pricing with round trip data", ['vehicleId' => $vehicleId]);
+            return true;
+        }
+    } catch (Exception $e) {
+        logError("Failed to update vehicle_pricing with roundtrip columns. Trying without...", ['error' => $e->getMessage()]);
+    }
+    
+    // If vehicle_pricing table update with round trip columns failed, try without them
+    try {
+        $updateQuery = "
+            UPDATE vehicle_pricing 
+            SET 
+                base_price = ?,
+                price_per_km = ?,
+                night_halt_charge = ?,
+                driver_allowance = ?,
+                updated_at = NOW() 
+            WHERE vehicle_type = ?
+        ";
+        $updateStmt = $conn->prepare($updateQuery);
+        if (!$updateStmt) {
+            throw new Exception($conn->error);
+        }
+        
+        $updateStmt->bind_param("dddds", 
+            $baseFare, 
+            $pricePerKm, 
+            $nightHaltCharge, 
+            $driverAllowance,
+            $vehicleId
+        );
+        
+        $success = $updateStmt->execute();
+        if ($updateStmt->affected_rows > 0) {
+            logError("Successfully updated vehicle_pricing without round trip data", ['vehicleId' => $vehicleId]);
+            return true;
+        }
+    } catch (Exception $e) {
+        logError("Failed to update vehicle_pricing. Trying outstation_fares...", ['error' => $e->getMessage()]);
     }
     
     // Check if record exists in outstation_fares
@@ -176,20 +260,59 @@ function updateLocalFares($conn, $vehicleId, $fareData) {
         'data' => $fareData
     ]);
     
-    // Check required fields
-    if (!isset($fareData['price8hrs80km']) || !isset($fareData['price10hrs100km']) || !isset($fareData['priceExtraKm']) || !isset($fareData['priceExtraHour'])) {
-        logError("Missing required fields for local fares", $fareData);
-        sendJsonResponse(['status' => 'error', 'message' => 'Missing required fields for local fares'], 400);
-        return false;
+    // Get prices with multiple fallbacks
+    $price4hrs40km = isset($fareData['price4hrs40km']) ? floatval($fareData['price4hrs40km']) : 
+                   (isset($fareData['local_package_4hr']) ? floatval($fareData['local_package_4hr']) : 0);
+                   
+    $price8hrs80km = isset($fareData['price8hrs80km']) ? floatval($fareData['price8hrs80km']) : 
+                   (isset($fareData['local_package_8hr']) ? floatval($fareData['local_package_8hr']) : 0);
+                   
+    $price10hrs100km = isset($fareData['price10hrs100km']) ? floatval($fareData['price10hrs100km']) : 
+                     (isset($fareData['local_package_10hr']) ? floatval($fareData['local_package_10hr']) : 0);
+                     
+    $priceExtraKm = isset($fareData['priceExtraKm']) ? floatval($fareData['priceExtraKm']) : 
+                  (isset($fareData['extra_km_charge']) ? floatval($fareData['extra_km_charge']) : 0);
+                  
+    $priceExtraHour = isset($fareData['priceExtraHour']) ? floatval($fareData['priceExtraHour']) : 
+                    (isset($fareData['extra_hour_charge']) ? floatval($fareData['extra_hour_charge']) : 0);
+    
+    // First, try to update the vehicle_pricing table with all the local package fields
+    try {
+        $updateQuery = "
+            UPDATE vehicle_pricing 
+            SET 
+                local_package_4hr = ?,
+                local_package_8hr = ?,
+                local_package_10hr = ?,
+                extra_km_charge = ?,
+                extra_hour_charge = ?,
+                updated_at = NOW() 
+            WHERE vehicle_type = ?
+        ";
+        $updateStmt = $conn->prepare($updateQuery);
+        if (!$updateStmt) {
+            throw new Exception($conn->error);
+        }
+        
+        $updateStmt->bind_param("ddddds", 
+            $price4hrs40km, 
+            $price8hrs80km, 
+            $price10hrs100km, 
+            $priceExtraKm,
+            $priceExtraHour,
+            $vehicleId
+        );
+        
+        $success = $updateStmt->execute();
+        if ($updateStmt->affected_rows > 0) {
+            logError("Successfully updated vehicle_pricing with local package data", ['vehicleId' => $vehicleId]);
+            return true;
+        }
+    } catch (Exception $e) {
+        logError("Failed to update vehicle_pricing with local package columns", ['error' => $e->getMessage()]);
     }
     
-    // Convert to numeric values
-    $price8hrs80km = floatval($fareData['price8hrs80km']);
-    $price10hrs100km = floatval($fareData['price10hrs100km']);
-    $priceExtraKm = floatval($fareData['priceExtraKm']);
-    $priceExtraHour = floatval($fareData['priceExtraHour']);
-    
-    // Check if record exists
+    // Check if we have a record in local_package_fares table
     $stmt = $conn->prepare("SELECT id FROM local_package_fares WHERE vehicle_id = ?");
     if (!$stmt) {
         logError("Failed to prepare statement for local fare check", ['error' => $conn->error]);
@@ -202,26 +325,26 @@ function updateLocalFares($conn, $vehicleId, $fareData) {
     
     if ($result->num_rows > 0) {
         // Update existing record
-        $updateQuery = "UPDATE local_package_fares SET price_8hrs_80km = ?, price_10hrs_100km = ?, price_extra_km = ?, price_extra_hour = ?, updated_at = NOW() WHERE vehicle_id = ?";
+        $updateQuery = "UPDATE local_package_fares SET price_4hrs_40km = ?, price_8hrs_80km = ?, price_10hrs_100km = ?, price_extra_km = ?, price_extra_hour = ?, updated_at = NOW() WHERE vehicle_id = ?";
         $updateStmt = $conn->prepare($updateQuery);
         if (!$updateStmt) {
             logError("Failed to prepare statement for local fare update", ['error' => $conn->error]);
             return false;
         }
         
-        $updateStmt->bind_param("dddds", $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour, $vehicleId);
+        $updateStmt->bind_param("ddddds", $price4hrs40km, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour, $vehicleId);
         $success = $updateStmt->execute();
     } else {
         // Insert new record
-        $insertQuery = "INSERT INTO local_package_fares (vehicle_id, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour, created_at, updated_at) 
-                        VALUES (?, ?, ?, ?, ?, NOW(), NOW())";
+        $insertQuery = "INSERT INTO local_package_fares (vehicle_id, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour, created_at, updated_at) 
+                        VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())";
         $insertStmt = $conn->prepare($insertQuery);
         if (!$insertStmt) {
             logError("Failed to prepare statement for local fare insert", ['error' => $conn->error]);
             return false;
         }
         
-        $insertStmt->bind_param("sdddd", $vehicleId, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour);
+        $insertStmt->bind_param("sddddd", $vehicleId, $price4hrs40km, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour);
         $success = $insertStmt->execute();
     }
     
@@ -245,18 +368,54 @@ function updateAirportFares($conn, $vehicleId, $fareData) {
         'data' => $fareData
     ]);
     
-    // Check required fields
-    if (!isset($fareData['pickupFare']) || !isset($fareData['dropFare'])) {
-        logError("Missing required fields for airport fares", $fareData);
-        sendJsonResponse(['status' => 'error', 'message' => 'Missing required fields for airport fares'], 400);
-        return false;
+    // Get prices with multiple fallbacks
+    $pickupFare = isset($fareData['pickupFare']) ? floatval($fareData['pickupFare']) : 
+                (isset($fareData['airport_pickup_price']) ? floatval($fareData['airport_pickup_price']) : 0);
+                
+    $dropFare = isset($fareData['dropFare']) ? floatval($fareData['dropFare']) : 
+              (isset($fareData['airport_drop_price']) ? floatval($fareData['airport_drop_price']) : 0);
+              
+    $airportBasePrice = isset($fareData['airportBasePrice']) ? floatval($fareData['airportBasePrice']) : 
+                      (isset($fareData['airport_base_price']) ? floatval($fareData['airport_base_price']) : 0);
+                      
+    $airportPricePerKm = isset($fareData['airportPricePerKm']) ? floatval($fareData['airportPricePerKm']) : 
+                       (isset($fareData['airport_price_per_km']) ? floatval($fareData['airport_price_per_km']) : 0);
+    
+    // First, try to update the vehicle_pricing table with airport columns
+    try {
+        $updateQuery = "
+            UPDATE vehicle_pricing 
+            SET 
+                airport_base_price = ?,
+                airport_price_per_km = ?,
+                airport_pickup_price = ?,
+                airport_drop_price = ?,
+                updated_at = NOW() 
+            WHERE vehicle_type = ?
+        ";
+        $updateStmt = $conn->prepare($updateQuery);
+        if (!$updateStmt) {
+            throw new Exception($conn->error);
+        }
+        
+        $updateStmt->bind_param("dddds", 
+            $airportBasePrice, 
+            $airportPricePerKm, 
+            $pickupFare, 
+            $dropFare,
+            $vehicleId
+        );
+        
+        $success = $updateStmt->execute();
+        if ($updateStmt->affected_rows > 0) {
+            logError("Successfully updated vehicle_pricing with airport data", ['vehicleId' => $vehicleId]);
+            return true;
+        }
+    } catch (Exception $e) {
+        logError("Failed to update vehicle_pricing with airport columns", ['error' => $e->getMessage()]);
     }
     
-    // Convert to numeric values
-    $pickupFare = floatval($fareData['pickupFare']);
-    $dropFare = floatval($fareData['dropFare']);
-    
-    // Check if record exists
+    // Check if record exists in airport_transfer_fares table
     $stmt = $conn->prepare("SELECT id FROM airport_transfer_fares WHERE vehicle_id = ?");
     if (!$stmt) {
         logError("Failed to prepare statement for airport fare check", ['error' => $conn->error]);
@@ -401,6 +560,34 @@ if ($method === 'POST') {
                 logError("Database error updating base pricing", ['error' => $conn->error]);
                 sendJsonResponse(['status' => 'error', 'message' => 'Database error: ' . $conn->error], 500);
                 exit;
+            }
+            
+            // Also update in vehicle_pricing table for consistency
+            try {
+                $updateVehiclePricingQuery = "
+                    UPDATE vehicle_pricing 
+                    SET 
+                        base_price = ?,
+                        price_per_km = ?,
+                        night_halt_charge = ?,
+                        driver_allowance = ?,
+                        updated_at = NOW() 
+                    WHERE vehicle_type = ?
+                ";
+                $updateVehiclePricingStmt = $conn->prepare($updateVehiclePricingQuery);
+                if ($updateVehiclePricingStmt) {
+                    $updateVehiclePricingStmt->bind_param("dddds", 
+                        $basePrice, 
+                        $pricePerKm, 
+                        $nightHaltCharge, 
+                        $driverAllowance,
+                        $vehicleId
+                    );
+                    $updateVehiclePricingStmt->execute();
+                }
+            } catch (Exception $e) {
+                logError("Non-critical error updating vehicle_pricing table: " . $e->getMessage());
+                // Continue anyway since we updated the main vehicles table
             }
             
             // Also update outstation_fares for consistency

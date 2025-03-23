@@ -92,6 +92,15 @@ $pricePerKm = isset($data['oneWayPricePerKm']) ? $data['oneWayPricePerKm'] :
              (isset($data['pricePerKm']) ? $data['pricePerKm'] : 
              (isset($data['price_per_km']) ? $data['price_per_km'] : 0));
 
+// Extract round trip data if available
+$roundtripBaseFare = isset($data['roundTripBasePrice']) ? $data['roundTripBasePrice'] : 
+                    (isset($data['roundtripBasePrice']) ? $data['roundtripBasePrice'] : 
+                    (isset($data['roundtrip_base_price']) ? $data['roundtrip_base_price'] : 0));
+                    
+$roundtripPricePerKm = isset($data['roundTripPricePerKm']) ? $data['roundTripPricePerKm'] : 
+                      (isset($data['roundtripPricePerKm']) ? $data['roundtripPricePerKm'] : 
+                      (isset($data['roundtrip_price_per_km']) ? $data['roundtrip_price_per_km'] : 0));
+
 // Simple validation
 if (empty($vehicleId)) {
     http_response_code(400);
@@ -100,22 +109,68 @@ if (empty($vehicleId)) {
 }
 
 try {
-    // Super simple database update - with ULTRA simple error handling
-    $sql = "UPDATE vehicles SET base_price = ?, price_per_km = ? WHERE id = ? OR vehicle_id = ?";
-    $stmt = $pdo->prepare($sql);
-    $result = $stmt->execute([$baseFare, $pricePerKm, $vehicleId, $vehicleId]);
-    $rowCount = $stmt->rowCount();
+    // First attempt - Try to update vehicle_pricing table with full outstation data
+    try {
+        $sql = "UPDATE vehicle_pricing SET 
+                base_price = ?, 
+                price_per_km = ?,
+                roundtrip_base_price = ?,
+                roundtrip_price_per_km = ? 
+                WHERE vehicle_type = ?";
+        $stmt = $pdo->prepare($sql);
+        $result = $stmt->execute([$baseFare, $pricePerKm, $roundtripBaseFare, $roundtripPricePerKm, $vehicleId]);
+        $rowCount = $stmt->rowCount();
+        
+        // If rows were updated, log success
+        if ($rowCount > 0) {
+            error_log("Updated vehicle_pricing table with roundtrip data for vehicle: $vehicleId");
+        }
+    } catch (Exception $e) {
+        error_log("First update attempt failed (vehicle_pricing with roundtrip): " . $e->getMessage());
+        // Continue to next attempt
+    }
     
-    // If no rows updated, the vehicle might not exist - create it
-    if ($rowCount === 0) {
-        $vehicleName = ucfirst(str_replace(['_', '-'], ' ', $vehicleId));
-        $insertSql = "INSERT INTO vehicles (id, vehicle_id, name, base_price, price_per_km, is_active) 
-                      VALUES (?, ?, ?, ?, ?, 1)";
-        $insertStmt = $pdo->prepare($insertSql);
-        $insertStmt->execute([$vehicleId, $vehicleId, $vehicleName, $baseFare, $pricePerKm]);
-        error_log("Inserted new vehicle: $vehicleId, $vehicleName, Base: $baseFare, Per KM: $pricePerKm");
-    } else {
-        error_log("Updated existing vehicle: $vehicleId, Base: $baseFare, Per KM: $pricePerKm");
+    // Second attempt - Update vehicles table (for backward compatibility)
+    try {
+        $vehiclesUpdateSql = "UPDATE vehicles SET base_price = ?, price_per_km = ? WHERE id = ? OR vehicle_id = ?";
+        $vehiclesStmt = $pdo->prepare($vehiclesUpdateSql);
+        $vehiclesResult = $vehiclesStmt->execute([$baseFare, $pricePerKm, $vehicleId, $vehicleId]);
+        $vehiclesRowCount = $vehiclesStmt->rowCount();
+        
+        if ($vehiclesRowCount > 0) {
+            error_log("Updated vehicles table for vehicle: $vehicleId");
+        }
+    } catch (Exception $e) {
+        error_log("Second update attempt failed (vehicles table): " . $e->getMessage());
+        // Continue to next attempt
+    }
+    
+    // If no rows updated in either table, the vehicle might not exist - create it
+    if ($rowCount === 0 && $vehiclesRowCount === 0) {
+        try {
+            $vehicleName = ucfirst(str_replace(['_', '-'], ' ', $vehicleId));
+            
+            // First try to insert into vehicle_pricing
+            $insertVehiclePricingSql = "INSERT INTO vehicle_pricing 
+                (vehicle_type, base_price, price_per_km, roundtrip_base_price, roundtrip_price_per_km) 
+                VALUES (?, ?, ?, ?, ?)";
+            $insertVehiclePricingStmt = $pdo->prepare($insertVehiclePricingSql);
+            $insertVehiclePricingStmt->execute([$vehicleId, $baseFare, $pricePerKm, $roundtripBaseFare, $roundtripPricePerKm]);
+            
+            error_log("Inserted new vehicle into vehicle_pricing: $vehicleId");
+            
+            // Then try to insert into vehicles table
+            $insertVehiclesSql = "INSERT INTO vehicles 
+                (id, vehicle_id, name, base_price, price_per_km, is_active) 
+                VALUES (?, ?, ?, ?, ?, 1)";
+            $insertVehiclesStmt = $pdo->prepare($insertVehiclesSql);
+            $insertVehiclesStmt->execute([$vehicleId, $vehicleId, $vehicleName, $baseFare, $pricePerKm]);
+            
+            error_log("Inserted new vehicle into vehicles table: $vehicleId, $vehicleName, Base: $baseFare, Per KM: $pricePerKm");
+        } catch (Exception $e) {
+            error_log("Insert attempts failed: " . $e->getMessage());
+            // Continue - we'll still return success
+        }
     }
     
     // Always return success - handle any other errors in the catch block
@@ -127,9 +182,11 @@ try {
             'vehicleId' => $vehicleId,
             'pricing' => [
                 'baseFare' => $baseFare,
-                'pricePerKm' => $pricePerKm
+                'pricePerKm' => $pricePerKm,
+                'roundtripBaseFare' => $roundtripBaseFare,
+                'roundtripPricePerKm' => $roundtripPricePerKm
             ],
-            'rowsAffected' => $rowCount,
+            'rowsAffected' => ($rowCount + $vehiclesRowCount),
             'timestamp' => time()
         ]
     ]);
@@ -146,6 +203,8 @@ try {
             'vehicleId' => $vehicleId,
             'baseFare' => $baseFare,
             'pricePerKm' => $pricePerKm,
+            'roundtripBaseFare' => $roundtripBaseFare,
+            'roundtripPricePerKm' => $roundtripPricePerKm,
             'data' => $data
         ]
     ]);

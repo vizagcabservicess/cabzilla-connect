@@ -11,7 +11,7 @@ header('Content-Type: application/json');
 
 // Add debugging headers
 header('X-Debug-File: direct-fare-update.php');
-header('X-API-Version: 1.0.50');
+header('X-API-Version: 1.0.53');
 header('X-Timestamp: ' . time());
 header('X-Request-Method: ' . $_SERVER['REQUEST_METHOD']);
 
@@ -73,7 +73,7 @@ try {
         'message' => 'Fare update processed successfully',
         'requestData' => $data,
         'timestamp' => time(),
-        'version' => '1.0.50',
+        'version' => '1.0.53',
         'updateId' => $updateId,
         'cacheCleared' => true
     ];
@@ -96,7 +96,7 @@ try {
                 
                 // For outstation fare updates
                 if ($tripType == 'outstation') {
-                    $onewayBasePrice = $data['onewayBasePrice'] ?? ($data['oneWayBasePrice'] ?? ($data['baseFare'] ?? 0));
+                    $onewayBasePrice = $data['onewayBasePrice'] ?? ($data['oneWayBasePrice'] ?? ($data['baseFare'] ?? ($data['basePrice'] ?? 0)));
                     $onewayPricePerKm = $data['onewayPricePerKm'] ?? ($data['oneWayPricePerKm'] ?? ($data['pricePerKm'] ?? 0));
                     $roundtripBasePrice = $data['roundtripBasePrice'] ?? ($data['roundTripBasePrice'] ?? 0);
                     $roundtripPricePerKm = $data['roundtripPricePerKm'] ?? ($data['roundTripPricePerKm'] ?? 0);
@@ -109,7 +109,7 @@ try {
                             price_per_km = ?,
                             roundtrip_base_price = ?,
                             roundtrip_price_per_km = ?,
-                            last_updated = NOW()
+                            updated_at = NOW()
                         WHERE vehicle_type = ?
                     ";
                     
@@ -145,7 +145,7 @@ try {
                                         // Insert new record
                                         $insertQuery = "
                                             INSERT INTO vehicle_pricing 
-                                            (vehicle_type, base_price, price_per_km, roundtrip_base_price, roundtrip_price_per_km, last_updated)
+                                            (vehicle_type, base_price, price_per_km, roundtrip_base_price, roundtrip_price_per_km, updated_at)
                                             VALUES (?, ?, ?, ?, ?, NOW())
                                         ";
                                         
@@ -188,9 +188,20 @@ try {
                 
                 // For local fare updates
                 else if ($tripType == 'local') {
-                    $package4hrs = $data['package4hrs'] ?? 0;
-                    $package8hrs = $data['package8hrs'] ?? 0;
-                    $extraKmCharge = $data['extraKmCharge'] ?? 0;
+                    $package4hrs = $data['package4hrs'] ?? $data['price4hrs40km'] ?? $data['hr4km40Price'] ?? 
+                                ($data['local_package_4hr'] ?? $data['local_price_4hr'] ?? 0);
+                    
+                    $package8hrs = $data['package8hrs'] ?? $data['price8hrs80km'] ?? $data['hr8km80Price'] ?? 
+                                ($data['local_package_8hr'] ?? $data['local_price_8hr'] ?? 0);
+                    
+                    $package10hrs = $data['package10hrs'] ?? $data['price10hrs100km'] ?? $data['hr10km100Price'] ?? 
+                                 ($data['local_package_10hr'] ?? $data['local_price_10hr'] ?? 0);
+                    
+                    $extraKmCharge = $data['extraKmCharge'] ?? $data['priceExtraKm'] ?? $data['extraKmRate'] ?? 
+                                  ($data['extra_km_rate'] ?? 0);
+                    
+                    $extraHourCharge = $data['extraHourCharge'] ?? $data['priceExtraHour'] ?? $data['extraHourRate'] ?? 
+                                    ($data['extra_hour_rate'] ?? 0);
                     
                     // Update vehicle_pricing table
                     $updateQuery = "
@@ -198,16 +209,20 @@ try {
                         SET 
                             local_package_4hr = ?,
                             local_package_8hr = ?,
+                            local_package_10hr = ?,
                             extra_km_charge = ?,
-                            last_updated = NOW()
+                            extra_hour_charge = ?,
+                            updated_at = NOW()
                         WHERE vehicle_type = ?
                     ";
                     
                     if ($stmt = $conn->prepare($updateQuery)) {
-                        $stmt->bind_param("ddds", 
+                        $stmt->bind_param("ddddds", 
                             $package4hrs, 
                             $package8hrs, 
-                            $extraKmCharge, 
+                            $package10hrs,
+                            $extraKmCharge,
+                            $extraHourCharge, 
                             $vehicleId
                         );
                         
@@ -234,16 +249,18 @@ try {
                                         // Insert new record
                                         $insertQuery = "
                                             INSERT INTO vehicle_pricing 
-                                            (vehicle_type, local_package_4hr, local_package_8hr, extra_km_charge, last_updated)
-                                            VALUES (?, ?, ?, ?, NOW())
+                                            (vehicle_type, local_package_4hr, local_package_8hr, local_package_10hr, extra_km_charge, extra_hour_charge, updated_at)
+                                            VALUES (?, ?, ?, ?, ?, ?, NOW())
                                         ";
                                         
                                         if ($insertStmt = $conn->prepare($insertQuery)) {
-                                            $insertStmt->bind_param("sddd", 
+                                            $insertStmt->bind_param("sddddd", 
                                                 $vehicleId, 
                                                 $package4hrs, 
                                                 $package8hrs, 
-                                                $extraKmCharge
+                                                $package10hrs,
+                                                $extraKmCharge,
+                                                $extraHourCharge
                                             );
                                             
                                             if ($insertStmt->execute()) {
@@ -276,8 +293,10 @@ try {
                 
                 // For airport fare updates
                 else if ($tripType == 'airport') {
-                    $airportBasePrice = $data['airportBasePrice'] ?? 0;
-                    $airportPricePerKm = $data['airportPricePerKm'] ?? 0;
+                    $airportBasePrice = $data['airportBasePrice'] ?? $data['basePrice'] ?? $data['baseFare'] ?? 0;
+                    $airportPricePerKm = $data['airportPricePerKm'] ?? $data['pricePerKm'] ?? 0;
+                    $airportPickupPrice = $data['airportPickupPrice'] ?? $data['pickupFare'] ?? 0;
+                    $airportDropPrice = $data['airportDropPrice'] ?? $data['dropFare'] ?? 0;
                     
                     // Update vehicle_pricing table
                     $updateQuery = "
@@ -285,14 +304,18 @@ try {
                         SET 
                             airport_base_price = ?,
                             airport_price_per_km = ?,
-                            last_updated = NOW()
+                            airport_pickup_price = ?,
+                            airport_drop_price = ?,
+                            updated_at = NOW()
                         WHERE vehicle_type = ?
                     ";
                     
                     if ($stmt = $conn->prepare($updateQuery)) {
-                        $stmt->bind_param("dds", 
+                        $stmt->bind_param("dddds", 
                             $airportBasePrice, 
-                            $airportPricePerKm, 
+                            $airportPricePerKm,
+                            $airportPickupPrice,
+                            $airportDropPrice, 
                             $vehicleId
                         );
                         
@@ -319,15 +342,17 @@ try {
                                         // Insert new record
                                         $insertQuery = "
                                             INSERT INTO vehicle_pricing 
-                                            (vehicle_type, airport_base_price, airport_price_per_km, last_updated)
-                                            VALUES (?, ?, ?, NOW())
+                                            (vehicle_type, airport_base_price, airport_price_per_km, airport_pickup_price, airport_drop_price, updated_at)
+                                            VALUES (?, ?, ?, ?, ?, NOW())
                                         ";
                                         
                                         if ($insertStmt = $conn->prepare($insertQuery)) {
-                                            $insertStmt->bind_param("sdd", 
+                                            $insertStmt->bind_param("sdddd", 
                                                 $vehicleId, 
                                                 $airportBasePrice, 
-                                                $airportPricePerKm
+                                                $airportPricePerKm,
+                                                $airportPickupPrice,
+                                                $airportDropPrice
                                             );
                                             
                                             if ($insertStmt->execute()) {
@@ -401,6 +426,6 @@ try {
         'fallbackMode' => true,
         'warning' => $e->getMessage(),
         'timestamp' => time(),
-        'version' => '1.0.50'
+        'version' => '1.0.53'
     ]);
 }
