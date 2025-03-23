@@ -20,7 +20,7 @@ export function CabList({
   handleSelectCab,
   getFareDetails
 }: CabListProps) {
-  const [displayedFares, setDisplayedFares] = useState<Record<string, number>>(cabFares);
+  const [displayedFares, setDisplayedFares] = useState<Record<string, number>>({});
   const [fadeIn, setFadeIn] = useState<Record<string, boolean>>({});
   const [lastUpdateTimestamp, setLastUpdateTimestamp] = useState<number>(Date.now());
   const refreshCountRef = useRef(0);
@@ -28,9 +28,18 @@ export function CabList({
   const lastEventTimesRef = useRef<Record<string, number>>({});
   const maxRefreshesRef = useRef(3); // Limit total refreshes to 3 per page load
   
+  // Initialize displayed fares from cabFares on first render
+  useEffect(() => {
+    // Only set initial values when cabFares has data and displayedFares is empty
+    if (Object.keys(cabFares).length > 0 && Object.keys(displayedFares).length === 0) {
+      console.log('CabList: Setting initial fares', cabFares);
+      setDisplayedFares({...cabFares});
+    }
+  }, [cabFares]);
+  
   // Update displayed fares when cabFares changes with visual feedback and prevent infinite loops
   useEffect(() => {
-    if (isProcessingRef.current) return;
+    if (isProcessingRef.current || Object.keys(cabFares).length === 0) return;
     if (refreshCountRef.current >= maxRefreshesRef.current) {
       console.log(`CabList: Skipping update - reached maximum refresh count (${maxRefreshesRef.current})`);
       return;
@@ -43,7 +52,8 @@ export function CabList({
     
     // Check for updated fares with visual emphasis
     Object.keys(cabFares).forEach(cabId => {
-      if (cabFares[cabId] !== displayedFares[cabId]) {
+      // Only highlight changes if fare actually exists and has changed
+      if (cabFares[cabId] && cabFares[cabId] !== displayedFares[cabId]) {
         newFadeIn[cabId] = true;
         updatedCabs.push(cabId);
       }
@@ -81,7 +91,7 @@ export function CabList({
     }
   }, [cabFares, displayedFares]);
   
-  // Reset refresh counter periodically (every 5 minutes instead of 30 seconds)
+  // Reset refresh counter periodically (every 5 minutes)
   useEffect(() => {
     const resetInterval = setInterval(() => {
       refreshCountRef.current = Math.max(0, refreshCountRef.current - 1);
@@ -89,64 +99,6 @@ export function CabList({
     
     return () => clearInterval(resetInterval);
   }, []);
-  
-  // Enhanced event listener system for fare updates with strict throttling
-  useEffect(() => {
-    // Define throttling duration - 30 seconds between same events
-    const throttleDuration = 30000;
-    
-    const handleFareEvent = (event: Event) => {
-      const eventName = event.type;
-      const now = Date.now();
-      
-      // Strict throttling - reject events if we've seen this type within throttle period
-      if (lastEventTimesRef.current[eventName] && 
-          now - lastEventTimesRef.current[eventName] < throttleDuration) {
-        console.log(`CabList: Ignoring ${eventName} event (throttled)`);
-        return;
-      }
-      
-      // Check if we've reached the maximum refresh count
-      if (refreshCountRef.current >= maxRefreshesRef.current) {
-        console.log(`CabList: Ignoring ${eventName} event (max refreshes reached)`);
-        return;
-      }
-      
-      lastEventTimesRef.current[eventName] = now;
-      console.log(`CabList: Processing ${eventName} event`);
-      
-      // Force a refresh by clearing the fadeIn state
-      setFadeIn({});
-      
-      // Set a timestamp for this update
-      const updateTime = Date.now();
-      setLastUpdateTimestamp(updateTime);
-      
-      // Force update displayed fares with a delay to ensure we get fresh data
-      setTimeout(() => {
-        setDisplayedFares({...cabFares});
-        refreshCountRef.current += 1;
-      }, 200);
-    };
-    
-    // Setup event listeners for fare-related events with lower priority
-    const events = [
-      'fare-cache-cleared',
-      'local-fares-updated',
-      'trip-fares-updated',
-      'airport-fares-updated'
-    ];
-    
-    events.forEach(eventName => {
-      window.addEventListener(eventName, handleFareEvent, { passive: true });
-    });
-    
-    return () => {
-      events.forEach(eventName => {
-        window.removeEventListener(eventName, handleFareEvent);
-      });
-    };
-  }, [cabFares]);
   
   return (
     <div className="space-y-3">
@@ -157,7 +109,7 @@ export function CabList({
         </div>
       )}
       
-      {!cabTypes || cabTypes.length === 0 ? (
+      {(!cabTypes || cabTypes.length === 0) ? (
         <div className="bg-amber-50 p-4 rounded-md text-amber-800 text-center">
           <p className="font-medium">No cab options available</p>
           <p className="text-sm mt-1">Please try refreshing the page or contact support if the issue persists.</p>
@@ -171,7 +123,7 @@ export function CabList({
           >
             <CabOptionCard 
               cab={cab}
-              fare={displayedFares[cab.id] || 0}
+              fare={displayedFares[cab.id] || cabFares[cab.id] || 0}
               isSelected={selectedCabId === cab.id}
               onSelect={handleSelectCab}
               fareDetails={getFareDetails(cab)}

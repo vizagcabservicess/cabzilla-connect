@@ -1,3 +1,4 @@
+
 import { HourlyPackage, LocalPackagePriceMatrix } from '@/types/cab';
 
 // Define standard hourly packages
@@ -42,8 +43,8 @@ export const oneWayRates = {
   innova_crysta: 20
 };
 
-// Initialize local package price matrix
-let localPackagePriceMatrix: LocalPackagePriceMatrix = {
+// Default local package price matrix - will be overridden by localStorage if available
+const defaultPackageMatrix: LocalPackagePriceMatrix = {
   '4hrs-40km': {
     'sedan': 1200,
     'ertiga': 1800,
@@ -88,6 +89,9 @@ let localPackagePriceMatrix: LocalPackagePriceMatrix = {
   }
 };
 
+// Initialize local package price matrix from default
+let localPackagePriceMatrix: LocalPackagePriceMatrix = {...defaultPackageMatrix};
+
 let lastMatrixUpdateTime = Date.now();
 let matrixUpdateCount = 0;
 const MAX_UPDATES_PER_MINUTE = 3;
@@ -110,10 +114,14 @@ export function getLocalPackagePrice(packageId: string, cabType: string): number
   const lowerCabType = cabType.toLowerCase();
   console.log(`Looking for price with lowercase cab type: ${lowerCabType}`);
   
+  // Normalize packageId to make sure it matches our standard format
+  const normalizedPackageId = normalizePackageId(packageId);
+  
   // Check if we have a price in the matrix
-  if (localPackagePriceMatrix[packageId] && localPackagePriceMatrix[packageId][lowerCabType] !== undefined) {
-    console.log(`Found direct price match for ${packageId} and ${lowerCabType}: ${localPackagePriceMatrix[packageId][lowerCabType]}`);
-    return localPackagePriceMatrix[packageId][lowerCabType];
+  if (localPackagePriceMatrix[normalizedPackageId] && 
+      localPackagePriceMatrix[normalizedPackageId][lowerCabType] !== undefined) {
+    console.log(`Found direct price match for ${normalizedPackageId} and ${lowerCabType}: ${localPackagePriceMatrix[normalizedPackageId][lowerCabType]}`);
+    return localPackagePriceMatrix[normalizedPackageId][lowerCabType];
   }
   
   // If the exact cab type is not found, try to match with similar cab types
@@ -121,33 +129,36 @@ export function getLocalPackagePrice(packageId: string, cabType: string): number
   if ((lowerCabType.includes('sedan') || lowerCabType.includes('dzire') || 
        lowerCabType.includes('etios') || lowerCabType.includes('amaze') || 
        lowerCabType.includes('swift')) && 
-      localPackagePriceMatrix[packageId]['sedan']) {
-    console.log(`Using sedan price for ${lowerCabType}: ${localPackagePriceMatrix[packageId]['sedan']}`);
-    return localPackagePriceMatrix[packageId]['sedan'];
+      localPackagePriceMatrix[normalizedPackageId]['sedan']) {
+    console.log(`Using sedan price for ${lowerCabType}: ${localPackagePriceMatrix[normalizedPackageId]['sedan']}`);
+    return localPackagePriceMatrix[normalizedPackageId]['sedan'];
   }
   
-  // For dzire-like vehicles
-  if (lowerCabType.includes('dzire') && localPackagePriceMatrix[packageId]['dzire']) {
-    console.log(`Using dzire price for ${lowerCabType}: ${localPackagePriceMatrix[packageId]['dzire']}`);
-    return localPackagePriceMatrix[packageId]['dzire'];
-  }
-  
-  // For amaze-like vehicles
-  if (lowerCabType.includes('amaze') && localPackagePriceMatrix[packageId]['amaze']) {
-    console.log(`Using amaze price for ${lowerCabType}: ${localPackagePriceMatrix[packageId]['amaze']}`);
-    return localPackagePriceMatrix[packageId]['amaze'];
+  // For ertiga-like vehicles
+  if (lowerCabType.includes('ertiga') && 
+      localPackagePriceMatrix[normalizedPackageId]['ertiga']) {
+    console.log(`Using ertiga price for ${lowerCabType}: ${localPackagePriceMatrix[normalizedPackageId]['ertiga']}`);
+    return localPackagePriceMatrix[normalizedPackageId]['ertiga'];
   }
   
   // For innova-like vehicles
-  if (lowerCabType.includes('innova') && localPackagePriceMatrix[packageId]['innova']) {
-    console.log(`Using innova price for ${lowerCabType}: ${localPackagePriceMatrix[packageId]['innova']}`);
-    return localPackagePriceMatrix[packageId]['innova'];
+  if (lowerCabType.includes('innova') && 
+      localPackagePriceMatrix[normalizedPackageId]['innova']) {
+    console.log(`Using innova price for ${lowerCabType}: ${localPackagePriceMatrix[normalizedPackageId]['innova']}`);
+    return localPackagePriceMatrix[normalizedPackageId]['innova'];
+  }
+  
+  // For luxury vehicles
+  if (lowerCabType.includes('luxury') && 
+      localPackagePriceMatrix[normalizedPackageId]['luxury']) {
+    console.log(`Using luxury price for ${lowerCabType}: ${localPackagePriceMatrix[normalizedPackageId]['luxury']}`);
+    return localPackagePriceMatrix[normalizedPackageId]['luxury'];
   }
   
   // Fallback - calculate based on base package and apply multiplier for cab types
-  const basePackage = hourlyPackages.find(pkg => pkg.id === packageId);
+  const basePackage = hourlyPackages.find(pkg => pkg.id === normalizedPackageId);
   if (!basePackage || basePackage.basePrice === undefined) {
-    console.warn(`Package ${packageId} not found or has no basePrice, using default price`);
+    console.warn(`Package ${normalizedPackageId} not found or has no basePrice, using default price`);
     return 2500; // Default fallback
   }
   
@@ -158,9 +169,47 @@ export function getLocalPackagePrice(packageId: string, cabType: string): number
   if (lowerCabType.includes('luxury')) multiplier = 2.2;
   
   const calculatedPrice = Math.ceil(basePackage.basePrice * multiplier);
-  console.log(`Calculated fallback price for ${packageId} and ${lowerCabType}: ${calculatedPrice}`);
+  console.log(`Calculated fallback price for ${normalizedPackageId} and ${lowerCabType}: ${calculatedPrice}`);
   
   return calculatedPrice;
+}
+
+/**
+ * Normalize package ID to ensure it's in our standard format
+ */
+function normalizePackageId(packageId: string): string {
+  // Handle common variations of package IDs
+  if (packageId.includes('8hrs') || packageId.includes('8hr') || 
+      packageId.includes('8 hr') || packageId.includes('8 hrs') || 
+      packageId.includes('08hrs') || packageId.includes('08hr') || 
+      packageId.includes('08 hr') || packageId.includes('08 hrs') || 
+      packageId.includes('8hours') || packageId.includes('8 hours') || 
+      packageId === '8hrs-80km' || packageId === '08hrs-80km' || 
+      packageId === '8hrs80km' || packageId === '08hrs80km' ||
+      packageId === '8hrs_80km' || packageId === '08hrs_80km') {
+    return '8hrs-80km';
+  }
+  
+  if (packageId.includes('4hrs') || packageId.includes('4hr') || 
+      packageId.includes('4 hr') || packageId.includes('4 hrs') || 
+      packageId.includes('04hrs') || packageId.includes('04hr') || 
+      packageId.includes('04 hr') || packageId.includes('04 hrs') || 
+      packageId.includes('4hours') || packageId.includes('4 hours') || 
+      packageId === '4hrs-40km' || packageId === '04hrs-40km' || 
+      packageId === '4hrs40km' || packageId === '04hrs40km' ||
+      packageId === '4hrs_40km' || packageId === '04hrs_40km') {
+    return '4hrs-40km';
+  }
+  
+  if (packageId.includes('10hrs') || packageId.includes('10hr') || 
+      packageId.includes('10 hr') || packageId.includes('10 hrs') || 
+      packageId.includes('10hours') || packageId.includes('10 hours') || 
+      packageId === '10hrs-100km' || packageId === '10hrs100km' ||
+      packageId === '10hrs_100km') {
+    return '10hrs-100km';
+  }
+  
+  return packageId;
 }
 
 /**
@@ -178,9 +227,15 @@ function tryLoadFromLocalStorage(): void {
         localPackagePriceMatrix = parsed;
         console.log('Successfully loaded price matrix from localStorage');
       }
+    } else {
+      // If no saved data, initialize with defaults
+      console.log('No saved price matrix found, using defaults');
+      localPackagePriceMatrix = {...defaultPackageMatrix};
     }
   } catch (e) {
     console.error('Failed to load local package price matrix from localStorage:', e);
+    // Reset to defaults on error
+    localPackagePriceMatrix = {...defaultPackageMatrix};
   }
 }
 
@@ -196,6 +251,9 @@ export function updateLocalPackagePrice(packageId: string, cabType: string, pric
   
   console.log(`Updating local package price: package=${packageId}, cab=${lowerCabType}, price=${price}`);
   
+  // Normalize packageId
+  const normalizedPackageId = normalizePackageId(packageId);
+  
   // Throttle updates to prevent event cascade
   const now = Date.now();
   
@@ -209,8 +267,8 @@ export function updateLocalPackagePrice(packageId: string, cabType: string, pric
   matrixUpdateCount++;
   
   // Ensure the package exists in the matrix
-  if (!localPackagePriceMatrix[packageId]) {
-    localPackagePriceMatrix[packageId] = {};
+  if (!localPackagePriceMatrix[normalizedPackageId]) {
+    localPackagePriceMatrix[normalizedPackageId] = {};
   }
   
   // Normalize some common cab type variations to match what the frontend expects
@@ -220,11 +278,11 @@ export function updateLocalPackagePrice(packageId: string, cabType: string, pric
   if (normalizedCabType === 'innova_crysta') normalizedCabType = 'innova crysta';
   
   // Update the price for the specified cab type
-  localPackagePriceMatrix[packageId][lowerCabType] = price;
+  localPackagePriceMatrix[normalizedPackageId][lowerCabType] = price;
   
   // Also update normalized version if different
   if (normalizedCabType !== lowerCabType) {
-    localPackagePriceMatrix[packageId][normalizedCabType] = price;
+    localPackagePriceMatrix[normalizedPackageId][normalizedCabType] = price;
     console.log(`Also updated normalized cab type ${normalizedCabType} with the same price`);
   }
   
@@ -241,7 +299,7 @@ export function updateLocalPackagePrice(packageId: string, cabType: string, pric
       window.dispatchEvent(new CustomEvent('local-fares-updated', {
         detail: { 
           timestamp: Date.now(),
-          packageId,
+          packageId: normalizedPackageId,
           cabType: lowerCabType,
           price
         }
@@ -256,6 +314,8 @@ export function updateLocalPackagePrice(packageId: string, cabType: string, pric
     if (matrixUpdateCount <= 1) {
       // Only clear cache on the first update within a time window
       localStorage.setItem('forceCacheRefresh', 'true');
+      
+      // Remove specific caches but not everything
       localStorage.removeItem('fareCache');
       localStorage.removeItem('calculatedFares');
       
@@ -281,4 +341,3 @@ export function getAllLocalPackagePrices(): LocalPackagePriceMatrix {
 (function initializePackageData() {
   tryLoadFromLocalStorage();
 })();
-
