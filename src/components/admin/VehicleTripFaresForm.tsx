@@ -23,10 +23,15 @@ import { ApiErrorFallback } from "@/components/ApiErrorFallback";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
-export const VehicleTripFaresForm = () => {
+// Add a properly defined props interface for the component
+interface VehicleTripFaresFormProps {
+  vehicleId?: string;
+}
+
+export const VehicleTripFaresForm: React.FC<VehicleTripFaresFormProps> = ({ vehicleId }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [vehicles, setVehicles] = useState<{id: string, name: string}[]>([]);
-  const [selectedVehicle, setSelectedVehicle] = useState("");
+  const [selectedVehicle, setSelectedVehicle] = useState(vehicleId || "");
   const [activeTab, setActiveTab] = useState("outstation");
   const [error, setError] = useState<string | null>(null);
   const [addVehicleOpen, setAddVehicleOpen] = useState(false);
@@ -54,6 +59,14 @@ export const VehicleTripFaresForm = () => {
   const [airportPricePerKm, setAirportPricePerKm] = useState("");
   const [airportFee, setAirportFee] = useState("");
   
+  // Update selected vehicle when vehicleId prop changes
+  useEffect(() => {
+    if (vehicleId) {
+      setSelectedVehicle(vehicleId);
+    }
+  }, [vehicleId]);
+  
+
   const resetApiError = () => {
     setApiError(null);
     setRetryCount(prev => prev + 1);
@@ -639,21 +652,23 @@ export const VehicleTripFaresForm = () => {
           )}
           
           <div className="flex flex-col gap-4">
-            <div>
-              <label className="text-sm font-medium">Select Vehicle</label>
-              <Select value={selectedVehicle} onValueChange={handleVehicleChange}>
-                <SelectTrigger className="w-full mt-1">
-                  <SelectValue placeholder="Select a vehicle" />
-                </SelectTrigger>
-                <SelectContent>
-                  {vehicles.map((vehicle) => (
-                    <SelectItem key={vehicle.id} value={vehicle.id}>
-                      {vehicle.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {!vehicleId && (
+              <div>
+                <label className="text-sm font-medium">Select Vehicle</label>
+                <Select value={selectedVehicle} onValueChange={handleVehicleChange}>
+                  <SelectTrigger className="w-full mt-1">
+                    <SelectValue placeholder="Select a vehicle" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {vehicles.map((vehicle) => (
+                      <SelectItem key={vehicle.id} value={vehicle.id}>
+                        {vehicle.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             
             <Tabs defaultValue="outstation" value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="w-full">
