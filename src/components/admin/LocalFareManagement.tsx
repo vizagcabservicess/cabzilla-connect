@@ -76,35 +76,47 @@ export function LocalFareManagement() {
       // Now, try to update on the server
       const cabTypeId = values.cabType.toLowerCase();
       
-      // Define the data to send to the API
-      const updateData = {
+      // Define the data to send to the API - map our package IDs to the server's column names
+      const updateData: Record<string, any> = {
         vehicleId: cabTypeId,
         vehicle_id: cabTypeId,
         tripType: 'local',
         trip_type: 'local'
       };
       
-      // Add the specific package prices
+      // Add the specific package prices using the correct column names
       if (values.packageId === '8hrs-80km') {
         Object.assign(updateData, {
           priceRate: values.price,
           price8hrs80km: values.price,
           hr8km80Price: values.price,
-          local_package_8hr: values.price
+          local_package_8hr: values.price,  // Use this column name
+          local_price_8hr: values.price     // Add this variant too
         });
       } else if (values.packageId === '10hrs-100km') {
         Object.assign(updateData, {
           priceRate: values.price,
           price10hrs100km: values.price,
           hr10km100Price: values.price,
-          local_package_10hr: values.price
+          local_package_10hr: values.price, // Use this column name
+          local_price_10hr: values.price    // Add this variant too
+        });
+      } else if (values.packageId === '4hrs-40km') {
+        Object.assign(updateData, {
+          priceRate: values.price,
+          price4hrs40km: values.price,
+          hr4km40Price: values.price,
+          local_package_4hr: values.price,  // Use this column name
+          local_price_4hr: values.price     // Add this variant too
         });
       }
       
       // Add extra km rate (use default if not provided)
       Object.assign(updateData, {
         priceExtraKm: 14,
-        extraKmRate: 14
+        extraKmRate: 14,
+        extra_km_rate: 14,
+        extra_hour_rate: 250
       });
       
       console.log("Sending update data to server:", updateData);
@@ -116,16 +128,29 @@ export function LocalFareManagement() {
       localStorage.setItem('forceCacheRefresh', 'true');
       fareService.clearCache();
       
+      // Dispatch a custom event for other components to update
+      window.dispatchEvent(new CustomEvent('local-fares-updated', {
+        detail: { 
+          timestamp: Date.now(),
+          cabType: cabTypeId,
+          packageId: values.packageId,
+          price: values.price
+        }
+      }));
+      
       // Refetch the updated prices
       const updatedPrices = getAllLocalPackagePrices();
       setLocalFares(updatedPrices);
       
-      // Dispatch a custom event that other components can listen for
-      window.dispatchEvent(new CustomEvent('local-fares-updated', {
-        detail: { timestamp: Date.now() }
-      }));
-      
       toast.success("Local fare updated successfully");
+      
+      // Force another cache clear after a short delay to ensure all components update
+      setTimeout(() => {
+        fareService.clearCache();
+        localStorage.setItem('forceCacheRefresh', 'true');
+        window.dispatchEvent(new CustomEvent('fare-cache-cleared'));
+      }, 500);
+      
     } catch (error) {
       console.error("Error updating local fare:", error);
       toast.error("Failed to update local fare");

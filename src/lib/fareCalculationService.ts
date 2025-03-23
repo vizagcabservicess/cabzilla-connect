@@ -50,8 +50,9 @@ const generateCacheKey = (params: FareCalculationParams): string => {
   // Add timestamp to force fresh calculation after updates
   const forceRefresh = localStorage.getItem('forceCacheRefresh') === 'true' ? Date.now() : '';
   const cacheClearTime = localStorage.getItem('fareCacheLastCleared') || lastCacheClearTime;
+  const priceMatrixTime = localStorage.getItem('localPackagePriceMatrixUpdated') || '0';
   
-  return `${cabId}_${distance}_${tripType}_${tripMode}_${hourlyPackage || ''}_${pickupDate?.getTime() || 0}_${returnDate?.getTime() || 0}_${forceRefresh}_${cacheClearTime}`;
+  return `${cabId}_${distance}_${tripType}_${tripMode}_${hourlyPackage || ''}_${pickupDate?.getTime() || 0}_${returnDate?.getTime() || 0}_${forceRefresh}_${cacheClearTime}_${priceMatrixTime}`;
 };
 
 // Helper function to safely convert values to lowercase
@@ -75,7 +76,9 @@ const getDefaultCabPricing = (cabName: string = 'sedan') => {
   };
   
   // Adjust pricing based on cab type
-  if (cabNameLower.includes('sedan')) {
+  if (cabNameLower.includes('sedan') || cabNameLower.includes('dzire') || 
+      cabNameLower.includes('etios') || cabNameLower.includes('amaze') || 
+      cabNameLower.includes('swift')) {
     // Use default sedan pricing
   } else if (cabNameLower.includes('ertiga') || cabNameLower.includes('suv')) {
     pricing = {
@@ -131,7 +134,9 @@ export const calculateAirportFare = (cabName: string, distance: number): number 
   const cabNameLower = safeToLowerCase(cabName);
   
   // Adjust pricing based on cab type
-  if (cabNameLower.includes('sedan')) {
+  if (cabNameLower.includes('sedan') || cabNameLower.includes('dzire') || 
+      cabNameLower.includes('etios') || cabNameLower.includes('amaze') || 
+      cabNameLower.includes('swift')) {
     basePrice = 1200;
     pricePerKm = 14;
   } else if (cabNameLower.includes('ertiga') || cabNameLower.includes('suv')) {
@@ -188,9 +193,9 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
   // Log the parameters for debugging
   console.log(`Calculating fare for ${cabType.name}, forceRefresh: ${forceRefresh}`);
   
-  // Check if we have a valid cached result
+  // Check if we have a valid cached result - but for local package always calculate fresh fare
   const cachedFare = fareCache.get(cacheKey);
-  if (!forceRefresh && cachedFare && cachedFare.expire > Date.now()) {
+  if (!forceRefresh && tripType !== 'local' && cachedFare && cachedFare.expire > Date.now()) {
     console.log(`Using cached fare calculation for ${cabType.name}: ₹${cachedFare.price}`);
     return cachedFare.price;
   }
@@ -236,20 +241,25 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
       if (hourlyPackage) {
         // Safely handle string or non-string cab IDs 
         const cabId = cabType.id ? safeToLowerCase(cabType.id) : '';
+        console.log(`Getting local package price for ${hourlyPackage} with cab ID: ${cabId}`);
         fare = getLocalPackagePrice(hourlyPackage, cabId);
         
         console.log(`Local trip with ${hourlyPackage} for ${cabType.name}, base fare: ${fare}`);
         
         // For distance beyond package limit, add per km charge
-        const packageKm = hourlyPackage === '8hrs-80km' ? 80 : 100;
+        const packageKm = hourlyPackage === '8hrs-80km' ? 80 : 
+                          hourlyPackage === '10hrs-100km' ? 100 : 
+                          hourlyPackage === '4hrs-40km' ? 40 : 80;
+        
         if (distance > packageKm) {
           const extraKm = distance - packageKm;
-          fare += extraKm * cabType.pricePerKm;
-          console.log(`Added ${extraKm}km extra at ${cabType.pricePerKm}/km = ${extraKm * cabType.pricePerKm}`);
+          fare += extraKm * (cabType.pricePerKm || 14);
+          console.log(`Added ${extraKm}km extra at ${cabType.pricePerKm || 14}/km = ${extraKm * (cabType.pricePerKm || 14)}`);
         }
         
         // Add GST (5%)
         fare = Math.round(fare * 1.05);
+        console.log(`Final fare with GST: ${fare}`);
       } else {
         console.warn('Hourly package not specified for local trip');
         fare = cabType.price; // Fallback to base price
@@ -344,11 +354,13 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
       return calculateAirportFare(cabType.name, distance);
     }
     
-    // Store in cache (valid for 15 minutes)
-    fareCache.set(cacheKey, {
-      expire: Date.now() + 15 * 60 * 1000,
-      price: fare
-    });
+    // Store in cache (valid for 15 minutes), except for local which we'll always calculate fresh
+    if (tripType !== 'local') {
+      fareCache.set(cacheKey, {
+        expire: Date.now() + 15 * 60 * 1000,
+        price: fare
+      });
+    }
     
     console.log(`Calculated fare: ₹${fare} for ${tripType} trip with ${cabType.name}, cached with key ${cacheKey}`);
     

@@ -7,6 +7,7 @@ import { formatPrice } from '@/lib/cabData';
 import { format } from 'date-fns';
 import { Car, MapPin, Calendar, User, Info } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
+import { getLocalPackagePrice } from '@/lib/packageData';
 
 interface BookingSummaryProps {
   pickupLocation: Location | null;
@@ -31,6 +32,32 @@ export const BookingSummary = ({
   tripType,
   tripMode = 'one-way'
 }: BookingSummaryProps) => {
+  const [calculatedFare, setCalculatedFare] = useState<number>(totalPrice);
+  
+  // Watch for fare updates and recalculate
+  useEffect(() => {
+    setCalculatedFare(totalPrice);
+    
+    // Listen for local fare updates
+    const handleLocalFaresUpdated = () => {
+      console.log('BookingSummary: Detected local fares updated event');
+      // Force an update of the calculated fare based on the current cab if selected
+      if (selectedCab && tripType === 'local') {
+        // Recalculate the fare
+        setCalculatedFare(prevFare => {
+          // Reset to the new total price
+          return totalPrice;
+        });
+      }
+    };
+    
+    window.addEventListener('local-fares-updated', handleLocalFaresUpdated);
+    
+    return () => {
+      window.removeEventListener('local-fares-updated', handleLocalFaresUpdated);
+    };
+  }, [totalPrice, selectedCab, tripType]);
+
   // Ensure we have data to display
   if (!pickupLocation || (!dropLocation && tripType !== 'local' && tripType !== 'tour') || !pickupDate || !selectedCab) {
     return <div className="p-4 bg-gray-100 rounded-lg">Booking information not available</div>;
@@ -66,22 +93,23 @@ export const BookingSummary = ({
     }
   } else if (tripType === 'airport') {
     // For airport transfers, use a simplified structure
-    baseFare = Math.round(totalPrice * 0.8); // 80% of total as base fare
-    additionalCharges = Math.round(totalPrice * 0.1); // 10% as airport fee
+    baseFare = Math.round(calculatedFare * 0.8); // 80% of total as base fare
+    additionalCharges = Math.round(calculatedFare * 0.1); // 10% as airport fee
     additionalChargesLabel = 'Airport Fee';
-    driverAllowance = Math.round(totalPrice * 0.1); // 10% as driver allowance
+    driverAllowance = Math.round(calculatedFare * 0.1); // 10% as driver allowance
   } else if (tripType === 'local') {
     // For local trips, show the package details
-    baseFare = totalPrice;
+    baseFare = Math.round(calculatedFare / 1.05); // Reverse calculate base fare without GST
     additionalChargesLabel = '08hrs 80KM Package';
     // No extra charges breakdown for local packages
   } else if (tripType === 'tour') {
-    baseFare = Math.round(totalPrice * 0.7);
-    additionalCharges = Math.round(totalPrice * 0.3);
+    baseFare = Math.round(calculatedFare * 0.7);
+    additionalCharges = Math.round(calculatedFare * 0.3);
     additionalChargesLabel = 'Tour Package Fee';
   }
 
-  const gst = Math.round(totalPrice * 0.05); // 5% GST
+  const gst = Math.round(baseFare * 0.05); // 5% GST on base fare
+  const finalTotal = baseFare + gst; // Final total with GST
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
@@ -205,7 +233,7 @@ export const BookingSummary = ({
           <div className="border-t mt-4 pt-4">
             <div className="flex justify-between text-xl font-bold">
               <span>Total Amount</span>
-              <span>₹{totalPrice.toLocaleString()}</span>
+              <span>₹{finalTotal.toLocaleString()}</span>
             </div>
           </div>
           

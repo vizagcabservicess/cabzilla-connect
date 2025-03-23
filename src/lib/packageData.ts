@@ -18,6 +18,14 @@ export const hourlyPackages: HourlyPackage[] = [
     kilometers: 100,
     basePrice: 3000,
     multiplier: 1.2
+  },
+  {
+    id: '4hrs-40km',
+    name: '4 Hours / 40 KM',
+    hours: 4,
+    kilometers: 40,
+    basePrice: 1500,
+    multiplier: 0.6
   }
 ];
 
@@ -35,7 +43,7 @@ export const oneWayRates = {
   innova_crysta: 20
 };
 
-// Local package price matrix to store pricing data for different cab types
+// Initialize local package price matrix
 let localPackagePriceMatrix: LocalPackagePriceMatrix = {
   '8hrs-80km': {
     'sedan': 2500,
@@ -44,7 +52,10 @@ let localPackagePriceMatrix: LocalPackagePriceMatrix = {
     'innova': 3800,
     'tempo': 4500,
     'luxury': 5500,
-    'swift_02': 100  // Adding Swift_02 with sample price
+    'swift_02': 100,
+    'etios': 2500,
+    'dzire': 2500,
+    'amaze': 2500
   },
   '10hrs-100km': {
     'sedan': 3000,
@@ -53,7 +64,22 @@ let localPackagePriceMatrix: LocalPackagePriceMatrix = {
     'innova': 4500,
     'tempo': 5500,
     'luxury': 6500,
-    'swift_02': 200  // Adding Swift_02 with sample price
+    'swift_02': 200,
+    'etios': 3000,
+    'dzire': 3000,
+    'amaze': 3000
+  },
+  '4hrs-40km': {
+    'sedan': 1500,
+    'ertiga': 1800,
+    'innova crysta': 2300,
+    'innova': 2300,
+    'tempo': 3000,
+    'luxury': 3500,
+    'swift_02': 80,
+    'etios': 1500,
+    'dzire': 1500,
+    'amaze': 1500
   }
 };
 
@@ -63,6 +89,9 @@ let localPackagePriceMatrix: LocalPackagePriceMatrix = {
 export function getLocalPackagePrice(packageId: string, cabType: string): number {
   console.log(`Getting local package price for: package=${packageId}, cab=${cabType}`);
   
+  // Load most recent prices from localStorage
+  tryLoadFromLocalStorage();
+  
   // Handle undefined or null cabType
   if (!cabType) {
     console.warn('cabType is undefined or null, using default sedan');
@@ -70,21 +99,36 @@ export function getLocalPackagePrice(packageId: string, cabType: string): number
   }
   
   const lowerCabType = cabType.toLowerCase();
+  console.log(`Looking for price with lowercase cab type: ${lowerCabType}`);
   
   // Check if we have a price in the matrix
-  if (localPackagePriceMatrix[packageId] && localPackagePriceMatrix[packageId][lowerCabType]) {
-    console.log(`Found price for ${packageId} and ${lowerCabType}: ${localPackagePriceMatrix[packageId][lowerCabType]}`);
+  if (localPackagePriceMatrix[packageId] && localPackagePriceMatrix[packageId][lowerCabType] !== undefined) {
+    console.log(`Found direct price match for ${packageId} and ${lowerCabType}: ${localPackagePriceMatrix[packageId][lowerCabType]}`);
     return localPackagePriceMatrix[packageId][lowerCabType];
   }
   
   // If the exact cab type is not found, try to match with similar cab types
+  // For sedan-like vehicles
+  if ((lowerCabType.includes('sedan') || lowerCabType.includes('dzire') || 
+       lowerCabType.includes('etios') || lowerCabType.includes('amaze') || 
+       lowerCabType.includes('swift')) && 
+      localPackagePriceMatrix[packageId]['sedan']) {
+    console.log(`Using sedan price for ${lowerCabType}: ${localPackagePriceMatrix[packageId]['sedan']}`);
+    return localPackagePriceMatrix[packageId]['sedan'];
+  }
+  
+  // For innova-like vehicles
   if (lowerCabType.includes('innova') && localPackagePriceMatrix[packageId]['innova']) {
+    console.log(`Using innova price for ${lowerCabType}: ${localPackagePriceMatrix[packageId]['innova']}`);
     return localPackagePriceMatrix[packageId]['innova'];
   }
   
   // Fallback - calculate based on base package and apply multiplier for cab types
   const basePackage = hourlyPackages.find(pkg => pkg.id === packageId);
-  if (!basePackage) return 2500; // Default fallback
+  if (!basePackage) {
+    console.warn(`Package ${packageId} not found, using default price`);
+    return 2500; // Default fallback
+  }
   
   let multiplier = 1;
   if (lowerCabType.includes('ertiga')) multiplier = 1.2;
@@ -92,7 +136,31 @@ export function getLocalPackagePrice(packageId: string, cabType: string): number
   if (lowerCabType.includes('tempo')) multiplier = 1.8;
   if (lowerCabType.includes('luxury')) multiplier = 2.2;
   
-  return Math.ceil(basePackage.basePrice * multiplier);
+  const calculatedPrice = Math.ceil(basePackage.basePrice * multiplier);
+  console.log(`Calculated fallback price for ${packageId} and ${lowerCabType}: ${calculatedPrice}`);
+  
+  return calculatedPrice;
+}
+
+/**
+ * Try to load local package prices from localStorage
+ */
+function tryLoadFromLocalStorage(): void {
+  try {
+    const savedMatrix = localStorage.getItem('localPackagePriceMatrix');
+    if (savedMatrix) {
+      console.log('Loading local package price matrix from localStorage');
+      const parsed = JSON.parse(savedMatrix);
+      
+      // Only update if we have valid data
+      if (parsed && typeof parsed === 'object') {
+        localPackagePriceMatrix = parsed;
+        console.log('Successfully loaded price matrix from localStorage');
+      }
+    }
+  } catch (e) {
+    console.error('Failed to load local package price matrix from localStorage:', e);
+  }
 }
 
 // Function to update local package prices
@@ -120,6 +188,16 @@ export function updateLocalPackagePrice(packageId: string, cabType: string, pric
     const savedMatrix = JSON.stringify(localPackagePriceMatrix);
     localStorage.setItem('localPackagePriceMatrix', savedMatrix);
     console.log(`Updated and saved local price matrix to localStorage: ${savedMatrix.substring(0, 100)}...`);
+    
+    // Dispatch an event to notify other components
+    window.dispatchEvent(new CustomEvent('local-fares-updated', {
+      detail: { 
+        timestamp: Date.now(),
+        packageId,
+        cabType: lowerCabType,
+        price
+      }
+    }));
   } catch (e) {
     console.error('Failed to save local package price matrix to localStorage:', e);
   }
@@ -128,28 +206,12 @@ export function updateLocalPackagePrice(packageId: string, cabType: string, pric
 // Function to get all local package prices
 export function getAllLocalPackagePrices(): LocalPackagePriceMatrix {
   // Try to load from localStorage first
-  try {
-    const savedMatrix = localStorage.getItem('localPackagePriceMatrix');
-    if (savedMatrix) {
-      console.log('Loading local package price matrix from localStorage');
-      localPackagePriceMatrix = JSON.parse(savedMatrix);
-    }
-  } catch (e) {
-    console.error('Failed to load local package price matrix from localStorage:', e);
-  }
+  tryLoadFromLocalStorage();
   
   return localPackagePriceMatrix;
 }
 
 // Load any saved pricing data from localStorage when the module initializes
 (function initializePackageData() {
-  try {
-    const savedMatrix = localStorage.getItem('localPackagePriceMatrix');
-    if (savedMatrix) {
-      console.log('Initializing local package price matrix from localStorage');
-      localPackagePriceMatrix = JSON.parse(savedMatrix);
-    }
-  } catch (e) {
-    console.error('Failed to initialize local package price matrix from localStorage:', e);
-  }
+  tryLoadFromLocalStorage();
 })();
