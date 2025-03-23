@@ -7,6 +7,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Info } from "lucide-react";
 import { HourlyPackage } from '@/types/cab';
 import { hourlyPackages } from '@/lib/packageData';
+import { toast } from 'sonner';
 
 interface LocalTripSelectorProps {
   selectedPackage: string | undefined;
@@ -15,27 +16,45 @@ interface LocalTripSelectorProps {
 
 export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTripSelectorProps) {
   const [packages, setPackages] = useState<HourlyPackage[]>([]);
+  const [lastUpdateTime, setLastUpdateTime] = useState<number>(Date.now());
+  
+  // Ensure the standard package IDs are consistent
+  const standardPackageIds = {
+    "4hr_40km": "4hrs-40km",
+    "8hr_80km": "8hrs-80km",
+    "10hr_100km": "10hrs-100km"
+  };
+  
+  // Convert legacy package ID to standard format if needed
+  const normalizePackageId = (packageId: string): string => {
+    const normalized = packageId
+      .replace('hrs-', 'hr_')
+      .replace('hr-', 'hr_');
+    
+    // Map to standard IDs if possible
+    return standardPackageIds[normalized as keyof typeof standardPackageIds] || packageId;
+  };
   
   // Load packages on component mount
   useEffect(() => {
     // Create default packages - these will ALWAYS be shown even if not in hourlyPackages
     const defaultPackages: HourlyPackage[] = [
       {
-        id: '4hr_40km',
+        id: '4hrs-40km',
         name: '4 Hours Package',
         hours: 4,
         kilometers: 40,
         basePrice: 1000
       },
       {
-        id: '8hr_80km',
+        id: '8hrs-80km',
         name: '8 Hours Package',
         hours: 8,
         kilometers: 80,
         basePrice: 2000
       },
       {
-        id: '10hr_100km',
+        id: '10hrs-100km',
         name: '10 Hours Package',
         hours: 10,
         kilometers: 100,
@@ -49,9 +68,14 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
     // Add any packages from hourlyPackages that aren't already in our defaults
     if (Array.isArray(hourlyPackages) && hourlyPackages.length > 0) {
       hourlyPackages.forEach(pkg => {
+        // Normalize the package ID to ensure consistent format
+        const normalizedId = normalizePackageId(pkg.id);
         // Only add if not already in our mergedPackages array
-        if (!mergedPackages.some(p => p.id === pkg.id)) {
-          mergedPackages.push(pkg);
+        if (!mergedPackages.some(p => normalizePackageId(p.id) === normalizedId)) {
+          mergedPackages.push({
+            ...pkg,
+            id: normalizedId // Use the normalized ID for consistency
+          });
         }
       });
     }
@@ -66,31 +90,90 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
     
     // Select default package if none is selected
     if (!selectedPackage && sortedPackages.length > 0) {
-      onPackageSelect(sortedPackages[0].id);
+      const defaultPackage = sortedPackages[0].id;
+      console.log('Setting default package:', defaultPackage);
+      onPackageSelect(defaultPackage);
+      
+      // Announce the selection
+      window.dispatchEvent(new CustomEvent('hourly-package-selected', {
+        detail: { packageId: defaultPackage, timestamp: Date.now() }
+      }));
     }
+    
+    // Function to refresh packages and force UI update
+    const refreshPackages = () => {
+      console.log('LocalTripSelector: Refreshing package data');
+      const timestamp = Date.now();
+      setLastUpdateTime(timestamp);
+      
+      // Force a rerender to ensure we show fresh data
+      setPackages([...sortedPackages]);
+      
+      // If there's a selected package, re-announce it to trigger fare recalculation
+      if (selectedPackage) {
+        console.log('Re-announcing selected package:', selectedPackage);
+        window.dispatchEvent(new CustomEvent('hourly-package-selected', {
+          detail: { packageId: selectedPackage, timestamp }
+        }));
+      }
+    };
     
     // Listen for local fare updates event and refresh packages
     const handleLocalFaresUpdated = () => {
       console.log('LocalTripSelector detected local fares updated event, refreshing packages');
-      // Force a refresh of the component by triggering a re-render
-      setPackages([...sortedPackages]);
+      refreshPackages();
     };
     
+    // Listen for fare cache cleared event
+    const handleFareCacheCleared = () => {
+      console.log('LocalTripSelector detected fare cache cleared event, refreshing packages');
+      refreshPackages();
+    };
+    
+    // Listen for force recalculation event
+    const handleForceRecalculation = () => {
+      console.log('LocalTripSelector detected force recalculation event, refreshing packages');
+      refreshPackages();
+    };
+    
+    // Setup all event listeners
     window.addEventListener('local-fares-updated', handleLocalFaresUpdated);
+    window.addEventListener('fare-cache-cleared', handleFareCacheCleared);
+    window.addEventListener('force-fare-recalculation', handleForceRecalculation);
+    
+    // Set up periodic refresh (every 60 seconds)
+    const refreshInterval = setInterval(refreshPackages, 60000);
     
     return () => {
       window.removeEventListener('local-fares-updated', handleLocalFaresUpdated);
+      window.removeEventListener('fare-cache-cleared', handleFareCacheCleared);
+      window.removeEventListener('force-fare-recalculation', handleForceRecalculation);
+      clearInterval(refreshInterval);
     };
   }, [selectedPackage, onPackageSelect]);
   
   // Handle package selection
   const handlePackageSelect = (packageId: string) => {
+    console.log(`Selected package: ${packageId}`);
+    if (packageId === selectedPackage) {
+      console.log('Package already selected, forcing refresh anyway');
+    }
+    
+    // Always call onPackageSelect to update the parent component
     onPackageSelect(packageId);
     
     // Dispatch an event to notify other components about the package selection
     window.dispatchEvent(new CustomEvent('hourly-package-selected', {
       detail: { packageId, timestamp: Date.now() }
     }));
+    
+    // Also dispatch a global force refresh event
+    window.dispatchEvent(new CustomEvent('force-fare-recalculation', {
+      detail: { source: 'LocalTripSelector', timestamp: Date.now() }
+    }));
+    
+    // Show a toast notification
+    toast.success(`Selected ${packageId.replace(/-/g, ' ')} package`);
   };
   
   // Display a message if no packages are available
@@ -120,6 +203,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
           value={selectedPackage} 
           onValueChange={handlePackageSelect}
           className="space-y-3"
+          data-last-update={lastUpdateTime}
         >
           {packages.map((pkg) => (
             <div

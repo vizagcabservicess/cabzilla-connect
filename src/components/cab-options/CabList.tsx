@@ -22,13 +22,14 @@ export function CabList({
 }: CabListProps) {
   const [displayedFares, setDisplayedFares] = useState<Record<string, number>>(cabFares);
   const [fadeIn, setFadeIn] = useState<Record<string, boolean>>({});
+  const [lastUpdateTimestamp, setLastUpdateTimestamp] = useState<number>(Date.now());
   
-  // Update displayed fares when cabFares changes
+  // Update displayed fares when cabFares changes with visual feedback
   useEffect(() => {
     const newFadeIn: Record<string, boolean> = {};
     const updatedCabs: string[] = [];
     
-    // Check for updated fares
+    // Check for updated fares with visual emphasis
     Object.keys(cabFares).forEach(cabId => {
       if (cabFares[cabId] !== displayedFares[cabId]) {
         newFadeIn[cabId] = true;
@@ -36,47 +37,77 @@ export function CabList({
       }
     });
     
-    // Set fade-in effect for updated fares
+    // If any fares have changed, create visual effect and log
     if (Object.keys(newFadeIn).length > 0) {
+      console.log('CabList: Detected fare changes for vehicles:', updatedCabs);
       setFadeIn(newFadeIn);
+      
+      // Set a timestamp for this update
+      const updateTime = Date.now();
+      setLastUpdateTimestamp(updateTime);
+      localStorage.setItem('lastFareUpdateTimestamp', updateTime.toString());
       
       // After a short delay, update the displayed fares
       setTimeout(() => {
-        setDisplayedFares(cabFares);
+        setDisplayedFares({...cabFares});
         
         // After animation completes, remove the fade-in effect
         setTimeout(() => {
           setFadeIn({});
         }, 1000);
       }, 100);
-      
-      // Log the updated fares
-      console.log('Updated fares for cabs:', updatedCabs);
-    } else {
-      setDisplayedFares(cabFares);
+    } else if (JSON.stringify(displayedFares) !== JSON.stringify(cabFares)) {
+      // Even if individual fares haven't changed, ensure displayedFares matches cabFares
+      console.log('CabList: Syncing displayed fares with current fares');
+      setDisplayedFares({...cabFares});
     }
   }, [cabFares]);
   
-  // Listen for fare update events
+  // Enhanced event listener system for fare updates
   useEffect(() => {
-    const handleFareUpdated = () => {
-      console.log('CabList: Detected fare update event');
+    const handleFareEvent = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const eventName = event.type;
+      
+      console.log(`CabList: Detected ${eventName} event`, customEvent.detail);
+      
       // Force a refresh by clearing the fadeIn state
       setFadeIn({});
-      // Force update displayed fares
-      setDisplayedFares(cabFares);
+      
+      // Set a timestamp for this update
+      const updateTime = Date.now();
+      setLastUpdateTimestamp(updateTime);
+      
+      // Force update displayed fares with a delay to ensure we get fresh data
+      setTimeout(() => {
+        setDisplayedFares({...cabFares});
+        console.log('CabList: Forced update of displayed fares after event');
+      }, 200);
+      
+      // Dispatch a secondary event to ensure CabOptions recalculates
+      window.dispatchEvent(new CustomEvent('force-fare-recalculation', {
+        detail: { source: 'CabList', timestamp: updateTime }
+      }));
     };
     
-    window.addEventListener('fare-cache-cleared', handleFareUpdated);
-    window.addEventListener('local-fares-updated', handleFareUpdated);
-    window.addEventListener('trip-fares-updated', handleFareUpdated);
-    window.addEventListener('airport-fares-updated', handleFareUpdated);
+    // Setup event listeners for all fare-related events
+    const events = [
+      'fare-cache-cleared',
+      'local-fares-updated',
+      'trip-fares-updated',
+      'airport-fares-updated',
+      'cab-selected-for-local',
+      'hourly-package-selected'
+    ];
+    
+    events.forEach(eventName => {
+      window.addEventListener(eventName, handleFareEvent);
+    });
     
     return () => {
-      window.removeEventListener('fare-cache-cleared', handleFareUpdated);
-      window.removeEventListener('local-fares-updated', handleFareUpdated);
-      window.removeEventListener('trip-fares-updated', handleFareUpdated);
-      window.removeEventListener('airport-fares-updated', handleFareUpdated);
+      events.forEach(eventName => {
+        window.removeEventListener(eventName, handleFareEvent);
+      });
     };
   }, [cabFares]);
   
@@ -93,6 +124,7 @@ export function CabList({
         <div 
           key={cab.id || `cab-${Math.random()}`}
           className={`transition-all duration-500 ${fadeIn[cab.id] ? 'bg-yellow-50' : ''}`}
+          data-last-update={lastUpdateTimestamp}
         >
           <CabOptionCard 
             cab={cab}
