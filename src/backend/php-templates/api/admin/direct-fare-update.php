@@ -63,6 +63,10 @@ try {
     $data = getRequestData();
     error_log("Request data: " . json_encode($data));
     
+    // Add a unique identifier to help track updates
+    $updateId = uniqid('update_');
+    error_log("Update ID: $updateId - Starting fare update process");
+    
     // Acknowledge the request even if there's no database
     $responseData = [
         'status' => 'success',
@@ -70,12 +74,14 @@ try {
         'requestData' => $data,
         'timestamp' => time(),
         'version' => '1.0.50',
+        'updateId' => $updateId,
         'cacheCleared' => true
     ];
     
     // Try to connect to database
     $conn = null;
     $usedDatabase = false;
+    $dbSuccessDetails = [];
     
     try {
         $conn = getDbConnection();
@@ -86,7 +92,7 @@ try {
             
             if ($vehicleId && $tripType) {
                 // Log what we're trying to update
-                error_log("Attempting to update $tripType fares for vehicle $vehicleId");
+                error_log("[$updateId] Attempting to update $tripType fares for vehicle $vehicleId");
                 
                 // For outstation fare updates
                 if ($tripType == 'outstation') {
@@ -117,9 +123,63 @@ try {
                         );
                         
                         if ($stmt->execute()) {
-                            error_log("Successfully updated outstation pricing for $vehicleId");
+                            error_log("[$updateId] Successfully updated outstation pricing for $vehicleId");
+                            $dbSuccessDetails[] = "Updated outstation pricing for $vehicleId";
+                            
+                            if ($stmt->affected_rows > 0) {
+                                error_log("[$updateId] Database updated: " . $stmt->affected_rows . " rows affected");
+                                $responseData['rowsUpdated'] = $stmt->affected_rows;
+                            } else {
+                                // If no rows affected, check if the record needs to be inserted instead
+                                error_log("[$updateId] No rows updated. Checking if insert is needed.");
+                                
+                                // Check if record exists
+                                $checkQuery = "SELECT COUNT(*) as count FROM vehicle_pricing WHERE vehicle_type = ?";
+                                if ($checkStmt = $conn->prepare($checkQuery)) {
+                                    $checkStmt->bind_param("s", $vehicleId);
+                                    $checkStmt->execute();
+                                    $result = $checkStmt->get_result();
+                                    $row = $result->fetch_assoc();
+                                    
+                                    if ($row['count'] == 0) {
+                                        // Insert new record
+                                        $insertQuery = "
+                                            INSERT INTO vehicle_pricing 
+                                            (vehicle_type, base_price, price_per_km, roundtrip_base_price, roundtrip_price_per_km, last_updated)
+                                            VALUES (?, ?, ?, ?, ?, NOW())
+                                        ";
+                                        
+                                        if ($insertStmt = $conn->prepare($insertQuery)) {
+                                            $insertStmt->bind_param("sdddd", 
+                                                $vehicleId, 
+                                                $onewayBasePrice, 
+                                                $onewayPricePerKm, 
+                                                $roundtripBasePrice, 
+                                                $roundtripPricePerKm
+                                            );
+                                            
+                                            if ($insertStmt->execute()) {
+                                                error_log("[$updateId] Successfully inserted outstation pricing for $vehicleId");
+                                                $dbSuccessDetails[] = "Inserted new outstation pricing for $vehicleId";
+                                                $responseData['rowsInserted'] = $insertStmt->affected_rows;
+                                            } else {
+                                                error_log("[$updateId] Failed to insert outstation pricing: " . $insertStmt->error);
+                                                $dbSuccessDetails[] = "Error: " . $insertStmt->error;
+                                            }
+                                            
+                                            $insertStmt->close();
+                                        }
+                                    } else {
+                                        error_log("[$updateId] Record exists but no update occurred. Data might be unchanged.");
+                                        $dbSuccessDetails[] = "No changes needed for $vehicleId (data unchanged)";
+                                    }
+                                    
+                                    $checkStmt->close();
+                                }
+                            }
                         } else {
-                            error_log("Failed to update outstation pricing: " . $stmt->error);
+                            error_log("[$updateId] Failed to update outstation pricing: " . $stmt->error);
+                            $dbSuccessDetails[] = "Error: " . $stmt->error;
                         }
                         
                         $stmt->close();
@@ -152,9 +212,62 @@ try {
                         );
                         
                         if ($stmt->execute()) {
-                            error_log("Successfully updated local pricing for $vehicleId");
+                            error_log("[$updateId] Successfully updated local pricing for $vehicleId");
+                            $dbSuccessDetails[] = "Updated local pricing for $vehicleId";
+                            
+                            if ($stmt->affected_rows > 0) {
+                                error_log("[$updateId] Database updated: " . $stmt->affected_rows . " rows affected");
+                                $responseData['rowsUpdated'] = $stmt->affected_rows;
+                            } else {
+                                // If no rows affected, check if the record needs to be inserted instead
+                                error_log("[$updateId] No rows updated. Checking if insert is needed.");
+                                
+                                // Check if record exists
+                                $checkQuery = "SELECT COUNT(*) as count FROM vehicle_pricing WHERE vehicle_type = ?";
+                                if ($checkStmt = $conn->prepare($checkQuery)) {
+                                    $checkStmt->bind_param("s", $vehicleId);
+                                    $checkStmt->execute();
+                                    $result = $checkStmt->get_result();
+                                    $row = $result->fetch_assoc();
+                                    
+                                    if ($row['count'] == 0) {
+                                        // Insert new record
+                                        $insertQuery = "
+                                            INSERT INTO vehicle_pricing 
+                                            (vehicle_type, local_package_4hr, local_package_8hr, extra_km_charge, last_updated)
+                                            VALUES (?, ?, ?, ?, NOW())
+                                        ";
+                                        
+                                        if ($insertStmt = $conn->prepare($insertQuery)) {
+                                            $insertStmt->bind_param("sddd", 
+                                                $vehicleId, 
+                                                $package4hrs, 
+                                                $package8hrs, 
+                                                $extraKmCharge
+                                            );
+                                            
+                                            if ($insertStmt->execute()) {
+                                                error_log("[$updateId] Successfully inserted local pricing for $vehicleId");
+                                                $dbSuccessDetails[] = "Inserted new local pricing for $vehicleId";
+                                                $responseData['rowsInserted'] = $insertStmt->affected_rows;
+                                            } else {
+                                                error_log("[$updateId] Failed to insert local pricing: " . $insertStmt->error);
+                                                $dbSuccessDetails[] = "Error: " . $insertStmt->error;
+                                            }
+                                            
+                                            $insertStmt->close();
+                                        }
+                                    } else {
+                                        error_log("[$updateId] Record exists but no update occurred. Data might be unchanged.");
+                                        $dbSuccessDetails[] = "No changes needed for $vehicleId (data unchanged)";
+                                    }
+                                    
+                                    $checkStmt->close();
+                                }
+                            }
                         } else {
-                            error_log("Failed to update local pricing: " . $stmt->error);
+                            error_log("[$updateId] Failed to update local pricing: " . $stmt->error);
+                            $dbSuccessDetails[] = "Error: " . $stmt->error;
                         }
                         
                         $stmt->close();
@@ -184,9 +297,61 @@ try {
                         );
                         
                         if ($stmt->execute()) {
-                            error_log("Successfully updated airport pricing for $vehicleId");
+                            error_log("[$updateId] Successfully updated airport pricing for $vehicleId");
+                            $dbSuccessDetails[] = "Updated airport pricing for $vehicleId";
+                            
+                            if ($stmt->affected_rows > 0) {
+                                error_log("[$updateId] Database updated: " . $stmt->affected_rows . " rows affected");
+                                $responseData['rowsUpdated'] = $stmt->affected_rows;
+                            } else {
+                                // Similar insert logic as above if needed
+                                error_log("[$updateId] No rows updated. Checking if insert is needed.");
+                                
+                                // Check if record exists
+                                $checkQuery = "SELECT COUNT(*) as count FROM vehicle_pricing WHERE vehicle_type = ?";
+                                if ($checkStmt = $conn->prepare($checkQuery)) {
+                                    $checkStmt->bind_param("s", $vehicleId);
+                                    $checkStmt->execute();
+                                    $result = $checkStmt->get_result();
+                                    $row = $result->fetch_assoc();
+                                    
+                                    if ($row['count'] == 0) {
+                                        // Insert new record
+                                        $insertQuery = "
+                                            INSERT INTO vehicle_pricing 
+                                            (vehicle_type, airport_base_price, airport_price_per_km, last_updated)
+                                            VALUES (?, ?, ?, NOW())
+                                        ";
+                                        
+                                        if ($insertStmt = $conn->prepare($insertQuery)) {
+                                            $insertStmt->bind_param("sdd", 
+                                                $vehicleId, 
+                                                $airportBasePrice, 
+                                                $airportPricePerKm
+                                            );
+                                            
+                                            if ($insertStmt->execute()) {
+                                                error_log("[$updateId] Successfully inserted airport pricing for $vehicleId");
+                                                $dbSuccessDetails[] = "Inserted new airport pricing for $vehicleId";
+                                                $responseData['rowsInserted'] = $insertStmt->affected_rows;
+                                            } else {
+                                                error_log("[$updateId] Failed to insert airport pricing: " . $insertStmt->error);
+                                                $dbSuccessDetails[] = "Error: " . $insertStmt->error;
+                                            }
+                                            
+                                            $insertStmt->close();
+                                        }
+                                    } else {
+                                        error_log("[$updateId] Record exists but no update occurred. Data might be unchanged.");
+                                        $dbSuccessDetails[] = "No changes needed for $vehicleId (data unchanged)";
+                                    }
+                                    
+                                    $checkStmt->close();
+                                }
+                            }
                         } else {
-                            error_log("Failed to update airport pricing: " . $stmt->error);
+                            error_log("[$updateId] Failed to update airport pricing: " . $stmt->error);
+                            $dbSuccessDetails[] = "Error: " . $stmt->error;
                         }
                         
                         $stmt->close();
@@ -197,11 +362,12 @@ try {
                 $responseData['vehicleId'] = $vehicleId;
                 $responseData['tripType'] = $tripType;
                 $responseData['databaseUsed'] = true;
+                $responseData['dbDetails'] = $dbSuccessDetails;
                 $usedDatabase = true;
             }
         }
     } catch (Exception $e) {
-        error_log("Database operation failed: " . $e->getMessage());
+        error_log("[$updateId] Database operation failed: " . $e->getMessage());
         $responseData['dbError'] = $e->getMessage();
     }
     
@@ -211,7 +377,7 @@ try {
         $responseData['fallbackMode'] = true;
         
         // Still return success to let the client continue working
-        error_log("Using fallback response mode (no database operations performed)");
+        error_log("[$updateId] Using fallback response mode (no database operations performed)");
     }
     
     // Force cache-busting headers in response
@@ -219,6 +385,7 @@ try {
     header('Pragma: no-cache');
     header('Expires: 0');
     header('X-Cache-Busting: ' . time());
+    header('X-Update-ID: ' . $updateId);
     
     // Return success response
     echo json_encode($responseData);
