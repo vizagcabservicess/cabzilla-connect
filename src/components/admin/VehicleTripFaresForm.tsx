@@ -214,9 +214,10 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
       
       const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
       
+      // First, try the direct-fare-update.php endpoint which is designed for better compatibility
       try {
-        // Direct API call with FormData
-        const response = await fetch(`${baseUrl}/api/admin/local-fares-update.php`, {
+        console.log('Attempting to update fare via direct-fare-update.php');
+        const directResponse = await fetch(`${baseUrl}/api/direct-fare-update.php`, {
           method: 'POST',
           body: formData,
           headers: {
@@ -224,29 +225,89 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
           }
         });
         
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('Error response:', response.status, errorText);
-          throw new Error(`API error: ${response.status}`);
+        if (!directResponse.ok) {
+          console.warn('Direct fare update returned non-OK status:', directResponse.status);
+          throw new Error(`Direct API error: ${directResponse.status}`);
         }
         
-        const result = await response.json();
-        console.log('API response:', result);
-      } catch (error) {
-        console.error('Direct form submit failed:', error);
+        const directResult = await directResponse.json();
+        console.log('Direct API response:', directResult);
+      } catch (directError) {
+        console.warn('Direct fare update failed, trying fallback method:', directError);
         
-        // Try to use the fareService as a backup
+        // Try the local-fares-update endpoint
         try {
-          await fareService.directFareUpdate('local', selectedVehicleId, {
-            vehicleId: selectedVehicleId,
-            ...data
+          console.log('Attempting to update fare via local-fares-update.php');
+          const response = await fetch(`${baseUrl}/api/admin/local-fares-update.php`, {
+            method: 'POST',
+            body: formData,
+            headers: {
+              'X-Force-Refresh': 'true'
+            }
           });
-        } catch (fallbackError) {
-          console.error('Fallback method failed:', fallbackError);
           
-          // Last resort - try updateLocalFares
-          await updateLocalFares(selectedVehicleId, data);
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Error response:', response.status, errorText);
+            throw new Error(`API error: ${response.status}`);
+          }
+          
+          const result = await response.json();
+          console.log('API response:', result);
+        } catch (error) {
+          console.error('Local fares update failed:', error);
+          
+          // Try to use the fareService as a backup
+          try {
+            console.log('Attempting to update fare via fareService');
+            await fareService.directFareUpdate('local', selectedVehicleId, {
+              vehicleId: selectedVehicleId,
+              ...data
+            });
+          } catch (fallbackError) {
+            console.error('Fallback method failed:', fallbackError);
+            
+            // Last resort - try updateLocalFares
+            await updateLocalFares(selectedVehicleId, data);
+          }
         }
+      }
+      
+      // Also update local storage for immediate UI update
+      const packageMatrix = {
+        '4hrs-40km': parseFloat(package4hr40km) || 0,
+        '8hrs-80km': parseFloat(package8hr80km) || 0,
+        '10hrs-100km': parseFloat(package10hr100km) || 0
+      };
+      
+      // Update the localStorage directly - this ensures the frontend cache is updated immediately
+      try {
+        const localStorageMatrix = localStorage.getItem('localPackagePriceMatrix');
+        let matrix = localStorageMatrix ? JSON.parse(localStorageMatrix) : {};
+        
+        // Ensure the structure exists
+        if (!matrix) matrix = {};
+        if (!matrix['4hrs-40km']) matrix['4hrs-40km'] = {};
+        if (!matrix['8hrs-80km']) matrix['8hrs-80km'] = {};
+        if (!matrix['10hrs-100km']) matrix['10hrs-100km'] = {};
+        
+        // Update each price in the matrix
+        matrix['4hrs-40km'][selectedVehicleId.toLowerCase()] = parseFloat(package4hr40km) || 0;
+        matrix['8hrs-80km'][selectedVehicleId.toLowerCase()] = parseFloat(package8hr80km) || 0;
+        matrix['10hrs-100km'][selectedVehicleId.toLowerCase()] = parseFloat(package10hr100km) || 0;
+        
+        // If this is a luxury type, also update luxury_sedan for compatibility
+        if (selectedVehicleId.toLowerCase() === 'luxury') {
+          matrix['4hrs-40km']['luxury sedan'] = parseFloat(package4hr40km) || 0;
+          matrix['8hrs-80km']['luxury sedan'] = parseFloat(package8hr80km) || 0;
+          matrix['10hrs-100km']['luxury sedan'] = parseFloat(package10hr100km) || 0;
+        }
+        
+        // Save back to localStorage
+        localStorage.setItem('localPackagePriceMatrix', JSON.stringify(matrix));
+        localStorage.setItem('localPackagePriceMatrixUpdated', Date.now().toString());
+      } catch (localStorageError) {
+        console.error('Failed to update localStorage:', localStorageError);
       }
       
       toast.success('Local package fares updated successfully');
@@ -254,14 +315,39 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
       // Force a refresh of fare cache
       fareService.clearCache();
       
-      // Dispatch event for other components to update
+      // Dispatch custom event for local fare updates
       window.dispatchEvent(new CustomEvent('local-fares-updated', {
         detail: { 
           timestamp: Date.now(),
           packageId: 'all',
-          vehicleId: selectedVehicleId
+          cabType: selectedVehicleId.toLowerCase(),
+          vehicleId: selectedVehicleId,
+          prices: {
+            '4hrs-40km': parseFloat(package4hr40km) || 0,
+            '8hrs-80km': parseFloat(package8hr80km) || 0,
+            '10hrs-100km': parseFloat(package10hr100km) || 0,
+            'extra-km': parseFloat(extraKmRate) || 0,
+            'extra-hour': parseFloat(extraHourRate) || 0
+          }
         }
       }));
+      
+      // Dispatch a more generic fare cache cleared event to trigger all components to refresh
+      window.dispatchEvent(new CustomEvent('fare-cache-cleared', {
+        detail: { 
+          timestamp: Date.now()
+        }
+      }));
+      
+      // Remove any old cache data
+      localStorage.removeItem('fareCache');
+      localStorage.removeItem('calculatedFares');
+      
+      // Set force refresh flag temporarily
+      localStorage.setItem('forceCacheRefresh', 'true');
+      setTimeout(() => {
+        localStorage.removeItem('forceCacheRefresh');
+      }, 5000);
     } catch (error) {
       console.error('Error saving local fares:', error);
       toast.error('Failed to update local package fares');

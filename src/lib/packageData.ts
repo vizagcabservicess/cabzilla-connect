@@ -1,4 +1,3 @@
-
 import { HourlyPackage, LocalPackagePriceMatrix } from '@/types/cab';
 
 // Define standard hourly packages
@@ -52,6 +51,7 @@ const defaultPackageMatrix: LocalPackagePriceMatrix = {
     'innova': 2300,
     'tempo': 3000,
     'luxury': 3500,
+    'luxury sedan': 3500,
     'swift_02': 80,
     'etios': 1200,
     'dzire': 1200,
@@ -66,6 +66,7 @@ const defaultPackageMatrix: LocalPackagePriceMatrix = {
     'innova': 3800,
     'tempo': 4500,
     'luxury': 5500,
+    'luxury sedan': 5500,
     'swift_02': 100,
     'etios': 2500,
     'dzire': 2500,
@@ -80,6 +81,7 @@ const defaultPackageMatrix: LocalPackagePriceMatrix = {
     'innova': 4500,
     'tempo': 5500,
     'luxury': 6500,
+    'luxury sedan': 6500,
     'swift_02': 200,
     'etios': 3000,
     'dzire': 3000,
@@ -95,6 +97,57 @@ let localPackagePriceMatrix: LocalPackagePriceMatrix = {...defaultPackageMatrix}
 let lastMatrixUpdateTime = Date.now();
 let matrixUpdateCount = 0;
 const MAX_UPDATES_PER_MINUTE = 3;
+
+// Dictionary of similar cab types to aid in matching
+const cabTypeSynonyms: Record<string, string[]> = {
+  'sedan': ['sedan', 'dzire', 'etios', 'amaze', 'swift', 'dzire cng', 'swift_02'],
+  'ertiga': ['ertiga', 'maruti ertiga', 'ertiga ac'],
+  'innova': ['innova', 'innova crysta', 'innova_crysta', 'toyota innova'],
+  'luxury': ['luxury', 'luxury sedan', 'premium'],
+  'tempo': ['tempo', 'tempo traveller', 'traveller'],
+};
+
+// Normalized and lowercased version of the matrix for faster lookups
+let normalizedMatrix: Record<string, Record<string, number>> = {};
+
+/**
+ * Find the best matching cab type from our pricing matrix
+ */
+function findMatchingCabType(inputCabType: string): string | null {
+  if (!inputCabType) return null;
+  
+  const lowerCabType = inputCabType.toLowerCase();
+  
+  // Direct match
+  for (const packageId in localPackagePriceMatrix) {
+    if (localPackagePriceMatrix[packageId][lowerCabType] !== undefined) {
+      return lowerCabType;
+    }
+  }
+  
+  // Try to match using synonyms
+  for (const [baseCabType, synonyms] of Object.entries(cabTypeSynonyms)) {
+    if (synonyms.some(syn => lowerCabType.includes(syn))) {
+      // Return the base cab type if we have that
+      for (const packageId in localPackagePriceMatrix) {
+        if (localPackagePriceMatrix[packageId][baseCabType] !== undefined) {
+          return baseCabType;
+        }
+      }
+      
+      // Otherwise return the first synonym that exists in our matrix
+      for (const syn of synonyms) {
+        for (const packageId in localPackagePriceMatrix) {
+          if (localPackagePriceMatrix[packageId][syn] !== undefined) {
+            return syn;
+          }
+        }
+      }
+    }
+  }
+  
+  return null;
+}
 
 /**
  * Get local package price based on package ID and cab type
@@ -121,55 +174,41 @@ export function getLocalPackagePrice(packageId: string, cabType: string): number
   if (localPackagePriceMatrix[normalizedPackageId] && 
       localPackagePriceMatrix[normalizedPackageId][lowerCabType] !== undefined) {
     console.log(`Found direct price match for ${normalizedPackageId} and ${lowerCabType}: ${localPackagePriceMatrix[normalizedPackageId][lowerCabType]}`);
-    return localPackagePriceMatrix[normalizedPackageId][lowerCabType];
+    const price = localPackagePriceMatrix[normalizedPackageId][lowerCabType];
+    return price > 0 ? price : getFallbackPrice(normalizedPackageId, lowerCabType);
   }
   
-  // If the exact cab type is not found, try to match with similar cab types
-  // For sedan-like vehicles
-  if ((lowerCabType.includes('sedan') || lowerCabType.includes('dzire') || 
-       lowerCabType.includes('etios') || lowerCabType.includes('amaze') || 
-       lowerCabType.includes('swift')) && 
-      localPackagePriceMatrix[normalizedPackageId]['sedan']) {
-    console.log(`Using sedan price for ${lowerCabType}: ${localPackagePriceMatrix[normalizedPackageId]['sedan']}`);
-    return localPackagePriceMatrix[normalizedPackageId]['sedan'];
-  }
-  
-  // For ertiga-like vehicles
-  if (lowerCabType.includes('ertiga') && 
-      localPackagePriceMatrix[normalizedPackageId]['ertiga']) {
-    console.log(`Using ertiga price for ${lowerCabType}: ${localPackagePriceMatrix[normalizedPackageId]['ertiga']}`);
-    return localPackagePriceMatrix[normalizedPackageId]['ertiga'];
-  }
-  
-  // For innova-like vehicles
-  if (lowerCabType.includes('innova') && 
-      localPackagePriceMatrix[normalizedPackageId]['innova']) {
-    console.log(`Using innova price for ${lowerCabType}: ${localPackagePriceMatrix[normalizedPackageId]['innova']}`);
-    return localPackagePriceMatrix[normalizedPackageId]['innova'];
-  }
-  
-  // For luxury vehicles
-  if (lowerCabType.includes('luxury') && 
-      localPackagePriceMatrix[normalizedPackageId]['luxury']) {
-    console.log(`Using luxury price for ${lowerCabType}: ${localPackagePriceMatrix[normalizedPackageId]['luxury']}`);
-    return localPackagePriceMatrix[normalizedPackageId]['luxury'];
+  // Try to find a matching cab type
+  const matchedCabType = findMatchingCabType(lowerCabType);
+  if (matchedCabType && localPackagePriceMatrix[normalizedPackageId] && 
+      localPackagePriceMatrix[normalizedPackageId][matchedCabType] !== undefined) {
+    console.log(`Found price match using synonym lookup for ${normalizedPackageId} and ${matchedCabType}: ${localPackagePriceMatrix[normalizedPackageId][matchedCabType]}`);
+    const price = localPackagePriceMatrix[normalizedPackageId][matchedCabType];
+    return price > 0 ? price : getFallbackPrice(normalizedPackageId, lowerCabType);
   }
   
   // Fallback - calculate based on base package and apply multiplier for cab types
-  const basePackage = hourlyPackages.find(pkg => pkg.id === normalizedPackageId);
+  return getFallbackPrice(normalizedPackageId, lowerCabType);
+}
+
+/**
+ * Get fallback price when no direct match is found
+ */
+function getFallbackPrice(packageId: string, cabType: string): number {
+  const basePackage = hourlyPackages.find(pkg => pkg.id === packageId);
   if (!basePackage || basePackage.basePrice === undefined) {
-    console.warn(`Package ${normalizedPackageId} not found or has no basePrice, using default price`);
+    console.warn(`Package ${packageId} not found or has no basePrice, using default price`);
     return 2500; // Default fallback
   }
   
   let multiplier = 1;
-  if (lowerCabType.includes('ertiga')) multiplier = 1.2;
-  if (lowerCabType.includes('innova')) multiplier = 1.5;
-  if (lowerCabType.includes('tempo')) multiplier = 1.8;
-  if (lowerCabType.includes('luxury')) multiplier = 2.2;
+  if (cabType.includes('ertiga')) multiplier = 1.2;
+  if (cabType.includes('innova')) multiplier = 1.5;
+  if (cabType.includes('tempo')) multiplier = 1.8;
+  if (cabType.includes('luxury')) multiplier = 2.2;
   
   const calculatedPrice = Math.ceil(basePackage.basePrice * multiplier);
-  console.log(`Calculated fallback price for ${normalizedPackageId} and ${lowerCabType}: ${calculatedPrice}`);
+  console.log(`Calculated fallback price for ${packageId} and ${cabType}: ${calculatedPrice}`);
   
   return calculatedPrice;
 }
@@ -178,38 +217,49 @@ export function getLocalPackagePrice(packageId: string, cabType: string): number
  * Normalize package ID to ensure it's in our standard format
  */
 function normalizePackageId(packageId: string): string {
-  // Handle common variations of package IDs
-  if (packageId.includes('8hrs') || packageId.includes('8hr') || 
-      packageId.includes('8 hr') || packageId.includes('8 hrs') || 
-      packageId.includes('08hrs') || packageId.includes('08hr') || 
-      packageId.includes('08 hr') || packageId.includes('08 hrs') || 
-      packageId.includes('8hours') || packageId.includes('8 hours') || 
-      packageId === '8hrs-80km' || packageId === '08hrs-80km' || 
-      packageId === '8hrs80km' || packageId === '08hrs80km' ||
-      packageId === '8hrs_80km' || packageId === '08hrs_80km') {
+  // Default to 8hrs-80km if packageId is missing
+  if (!packageId) {
+    console.warn('Missing packageId, defaulting to 8hrs-80km');
     return '8hrs-80km';
   }
   
-  if (packageId.includes('4hrs') || packageId.includes('4hr') || 
-      packageId.includes('4 hr') || packageId.includes('4 hrs') || 
-      packageId.includes('04hrs') || packageId.includes('04hr') || 
-      packageId.includes('04 hr') || packageId.includes('04 hrs') || 
-      packageId.includes('4hours') || packageId.includes('4 hours') || 
-      packageId === '4hrs-40km' || packageId === '04hrs-40km' || 
-      packageId === '4hrs40km' || packageId === '04hrs40km' ||
-      packageId === '4hrs_40km' || packageId === '04hrs_40km') {
+  // Convert to lowercase for more reliable matching
+  const lowerPackageId = packageId.toLowerCase();
+  
+  // Handle common variations of package IDs
+  if (lowerPackageId.includes('8hrs') || lowerPackageId.includes('8hr') || 
+      lowerPackageId.includes('8 hr') || lowerPackageId.includes('8 hrs') || 
+      lowerPackageId.includes('08hrs') || lowerPackageId.includes('08hr') || 
+      lowerPackageId.includes('08 hr') || lowerPackageId.includes('08 hrs') || 
+      lowerPackageId.includes('8hours') || lowerPackageId.includes('8 hours') || 
+      lowerPackageId === '8hrs-80km' || lowerPackageId === '08hrs-80km' || 
+      lowerPackageId === '8hrs80km' || lowerPackageId === '08hrs80km' ||
+      lowerPackageId === '8hrs_80km' || lowerPackageId === '08hrs_80km') {
+    return '8hrs-80km';
+  }
+  
+  if (lowerPackageId.includes('4hrs') || lowerPackageId.includes('4hr') || 
+      lowerPackageId.includes('4 hr') || lowerPackageId.includes('4 hrs') || 
+      lowerPackageId.includes('04hrs') || lowerPackageId.includes('04hr') || 
+      lowerPackageId.includes('04 hr') || lowerPackageId.includes('04 hrs') || 
+      lowerPackageId.includes('4hours') || lowerPackageId.includes('4 hours') || 
+      lowerPackageId === '4hrs-40km' || lowerPackageId === '04hrs-40km' || 
+      lowerPackageId === '4hrs40km' || lowerPackageId === '04hrs40km' ||
+      lowerPackageId === '4hrs_40km' || lowerPackageId === '04hrs_40km') {
     return '4hrs-40km';
   }
   
-  if (packageId.includes('10hrs') || packageId.includes('10hr') || 
-      packageId.includes('10 hr') || packageId.includes('10 hrs') || 
-      packageId.includes('10hours') || packageId.includes('10 hours') || 
-      packageId === '10hrs-100km' || packageId === '10hrs100km' ||
-      packageId === '10hrs_100km') {
+  if (lowerPackageId.includes('10hrs') || lowerPackageId.includes('10hr') || 
+      lowerPackageId.includes('10 hr') || lowerPackageId.includes('10 hrs') || 
+      lowerPackageId.includes('10hours') || lowerPackageId.includes('10 hours') || 
+      lowerPackageId === '10hrs-100km' || lowerPackageId === '10hrs100km' ||
+      lowerPackageId === '10hrs_100km') {
     return '10hrs-100km';
   }
   
-  return packageId;
+  // If we can't determine the package, default to 8hrs-80km
+  console.warn(`Unrecognized package ID "${packageId}", defaulting to 8hrs-80km`);
+  return '8hrs-80km';
 }
 
 /**
@@ -226,16 +276,37 @@ function tryLoadFromLocalStorage(): void {
       if (parsed && typeof parsed === 'object') {
         localPackagePriceMatrix = parsed;
         console.log('Successfully loaded price matrix from localStorage');
+        
+        // Also update normalized matrix for quick lookups
+        updateNormalizedMatrix();
       }
     } else {
       // If no saved data, initialize with defaults
       console.log('No saved price matrix found, using defaults');
       localPackagePriceMatrix = {...defaultPackageMatrix};
+      updateNormalizedMatrix();
     }
   } catch (e) {
     console.error('Failed to load local package price matrix from localStorage:', e);
     // Reset to defaults on error
     localPackagePriceMatrix = {...defaultPackageMatrix};
+    updateNormalizedMatrix();
+  }
+}
+
+/**
+ * Create a normalized version of the matrix for faster lookups
+ */
+function updateNormalizedMatrix(): void {
+  normalizedMatrix = {};
+  
+  for (const packageId in localPackagePriceMatrix) {
+    normalizedMatrix[packageId.toLowerCase()] = {};
+    
+    for (const cabType in localPackagePriceMatrix[packageId]) {
+      normalizedMatrix[packageId.toLowerCase()][cabType.toLowerCase()] = 
+        localPackagePriceMatrix[packageId][cabType];
+    }
   }
 }
 
@@ -276,6 +347,7 @@ export function updateLocalPackagePrice(packageId: string, cabType: string, pric
   if (normalizedCabType === 'swift_02') normalizedCabType = 'swift';
   if (normalizedCabType === 'dzire_cng') normalizedCabType = 'dzire cng';
   if (normalizedCabType === 'innova_crysta') normalizedCabType = 'innova crysta';
+  if (normalizedCabType === 'luxury_sedan') normalizedCabType = 'luxury sedan';
   
   // Update the price for the specified cab type
   localPackagePriceMatrix[normalizedPackageId][lowerCabType] = price;
@@ -285,6 +357,17 @@ export function updateLocalPackagePrice(packageId: string, cabType: string, pric
     localPackagePriceMatrix[normalizedPackageId][normalizedCabType] = price;
     console.log(`Also updated normalized cab type ${normalizedCabType} with the same price`);
   }
+  
+  // Add price for similar cab types to improve matching
+  for (const [baseCabType, synonyms] of Object.entries(cabTypeSynonyms)) {
+    if (synonyms.includes(lowerCabType) || lowerCabType.includes(baseCabType)) {
+      localPackagePriceMatrix[normalizedPackageId][baseCabType] = price;
+      console.log(`Also updated base cab type ${baseCabType} with the same price`);
+    }
+  }
+  
+  // Update normalized matrix
+  updateNormalizedMatrix();
   
   // Save to localStorage for persistence
   try {

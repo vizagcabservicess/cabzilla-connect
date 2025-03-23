@@ -123,6 +123,47 @@ if (empty($vehicleId)) {
     exit;
 }
 
+// Normalize missing fares - if we have at least one value, assume others should be calculated proportionally
+if ($package8hr > 0 && $package4hr === 0) {
+    $package4hr = round($package8hr * 0.6); // 4hr package is typically 60% of 8hr
+}
+
+if ($package8hr > 0 && $package10hr === 0) {
+    $package10hr = round($package8hr * 1.2); // 10hr package is typically 120% of 8hr
+}
+
+if ($package4hr > 0 && $package8hr === 0) {
+    $package8hr = round($package4hr / 0.6); // Calculate 8hr from 4hr
+}
+
+if ($package10hr > 0 && $package8hr === 0) {
+    $package8hr = round($package10hr / 1.2); // Calculate 8hr from 10hr
+}
+
+// Ensure we have at least some extra rate values
+if ($extraKmRate === 0 && $package8hr > 0) {
+    // Default to a sensible value based on vehicle type
+    if (stripos($vehicleId, 'sedan') !== false || stripos($vehicleId, 'swift') !== false || stripos($vehicleId, 'dzire') !== false) {
+        $extraKmRate = 14;
+    } elseif (stripos($vehicleId, 'ertiga') !== false) {
+        $extraKmRate = 18;
+    } elseif (stripos($vehicleId, 'innova') !== false) {
+        $extraKmRate = 20;
+    } elseif (stripos($vehicleId, 'luxury') !== false) {
+        $extraKmRate = 25;
+    } else {
+        $extraKmRate = 15; // Default fallback
+    }
+}
+
+if ($extraHourRate === 0 && $package8hr > 0) {
+    // Extra hour is typically 1/8 of the 8hr package or about 250-350 rupees
+    $extraHourRate = round($package8hr / 8);
+    // Ensure it's within a reasonable range
+    if ($extraHourRate < 200) $extraHourRate = 200;
+    if ($extraHourRate > 500) $extraHourRate = 500;
+}
+
 // Log the received values
 error_log("Vehicle ID: $vehicleId", 3, __DIR__ . '/../logs/direct-fares.log');
 error_log("4hr Package: $package4hr", 3, __DIR__ . '/../logs/direct-fares.log');
@@ -152,7 +193,7 @@ if (!empty($vehicleId) && ($package4hr > 0 || $package8hr > 0 || $package10hr > 
         $pdo = new PDO("mysql:host=localhost;dbname=u644605165_new_bookingdb", "u644605165_new_bookingusr", "Vizag@1213");
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         
-        // Try the fare_prices table first
+        // Try the fare_prices table first (the most reliable and newest table schema)
         try {
             // 1. Update or insert 4hrs package
             if ($package4hr > 0) {

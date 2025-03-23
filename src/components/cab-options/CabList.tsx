@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useRef } from 'react';
 import { CabType } from '@/types/cab';
 import { CabOptionCard } from '@/components/CabOptionCard';
@@ -25,21 +24,32 @@ export function CabList({
   const [lastUpdateTimestamp, setLastUpdateTimestamp] = useState<number>(Date.now());
   const refreshCountRef = useRef(0);
   const isProcessingRef = useRef(false);
-  const lastEventTimesRef = useRef<Record<string, number>>({});
-  const maxRefreshesRef = useRef(3); // Limit total refreshes to 3 per page load
+  const maxRefreshesRef = useRef(3); // Limit total refreshes
+  const initializedRef = useRef(false);
+  const fareHistoryRef = useRef<Record<string, number[]>>({});
   
-  // Initialize displayed fares from cabFares on first render
+  // Initialize displayed fares from cabFares on first render or when cabTypes change
   useEffect(() => {
-    // Only set initial values when cabFares has data and displayedFares is empty
-    if (Object.keys(cabFares).length > 0 && Object.keys(displayedFares).length === 0) {
-      console.log('CabList: Setting initial fares', cabFares);
+    if (!initializedRef.current && Object.keys(cabFares).length > 0) {
+      console.log('CabList: Initial fare setup', cabFares);
       setDisplayedFares({...cabFares});
+      
+      // Initialize fare history for each cab
+      const newFareHistory: Record<string, number[]> = {};
+      Object.keys(cabFares).forEach(cabId => {
+        newFareHistory[cabId] = [cabFares[cabId]];
+      });
+      fareHistoryRef.current = newFareHistory;
+      
+      initializedRef.current = true;
     }
-  }, [cabFares]);
+  }, [cabFares, cabTypes]);
   
-  // Update displayed fares when cabFares changes with visual feedback and prevent infinite loops
+  // Update displayed fares when cabFares changes
   useEffect(() => {
-    if (isProcessingRef.current || Object.keys(cabFares).length === 0) return;
+    // Skip if still initializing or no fares are available
+    if (!initializedRef.current || Object.keys(cabFares).length === 0) return;
+    if (isProcessingRef.current) return;
     if (refreshCountRef.current >= maxRefreshesRef.current) {
       console.log(`CabList: Skipping update - reached maximum refresh count (${maxRefreshesRef.current})`);
       return;
@@ -49,18 +59,43 @@ export function CabList({
     
     const newFadeIn: Record<string, boolean> = {};
     const updatedCabs: string[] = [];
+    const updatedFares: Record<string, number> = {...displayedFares};
+    let hasChanges = false;
     
-    // Check for updated fares with visual emphasis
+    // Check each cab for fare updates
     Object.keys(cabFares).forEach(cabId => {
-      // Only highlight changes if fare actually exists and has changed
-      if (cabFares[cabId] && cabFares[cabId] !== displayedFares[cabId]) {
-        newFadeIn[cabId] = true;
-        updatedCabs.push(cabId);
+      // Only process valid fares
+      if (cabFares[cabId] === undefined || cabFares[cabId] === null) return;
+      
+      // Compare new fare with current displayed fare
+      if (cabFares[cabId] !== displayedFares[cabId]) {
+        // Validate fare - if zero and we had a non-zero value before, keep the old value
+        if (cabFares[cabId] === 0 && displayedFares[cabId] && displayedFares[cabId] > 0) {
+          console.log(`CabList: Ignoring zero fare for cab ${cabId}, keeping previous value ${displayedFares[cabId]}`);
+          // Still add to history for reference
+          if (!fareHistoryRef.current[cabId]) {
+            fareHistoryRef.current[cabId] = [];
+          }
+          fareHistoryRef.current[cabId].push(displayedFares[cabId]);
+        } else {
+          // Valid fare update, apply it
+          newFadeIn[cabId] = true;
+          updatedCabs.push(cabId);
+          updatedFares[cabId] = cabFares[cabId];
+          
+          // Update fare history
+          if (!fareHistoryRef.current[cabId]) {
+            fareHistoryRef.current[cabId] = [];
+          }
+          fareHistoryRef.current[cabId].push(cabFares[cabId]);
+          
+          hasChanges = true;
+        }
       }
     });
     
-    // If any fares have changed, create visual effect and log
-    if (Object.keys(newFadeIn).length > 0 && refreshCountRef.current < maxRefreshesRef.current) {
+    // Apply updates if any valid changes were detected
+    if (hasChanges && refreshCountRef.current < maxRefreshesRef.current) {
       console.log('CabList: Detected fare changes for vehicles:', updatedCabs);
       setFadeIn(newFadeIn);
       refreshCountRef.current += 1;
@@ -72,7 +107,7 @@ export function CabList({
       
       // After a short delay, update the displayed fares
       setTimeout(() => {
-        setDisplayedFares({...cabFares});
+        setDisplayedFares(updatedFares);
         
         // After animation completes, remove the fade-in effect
         setTimeout(() => {
@@ -80,12 +115,6 @@ export function CabList({
           isProcessingRef.current = false;
         }, 1000);
       }, 100);
-    } else if (JSON.stringify(displayedFares) !== JSON.stringify(cabFares) && refreshCountRef.current < maxRefreshesRef.current) {
-      // Even if individual fares haven't changed, ensure displayedFares matches cabFares
-      console.log('CabList: Syncing displayed fares with current fares');
-      setDisplayedFares({...cabFares});
-      refreshCountRef.current += 1;
-      isProcessingRef.current = false;
     } else {
       isProcessingRef.current = false;
     }
@@ -95,10 +124,64 @@ export function CabList({
   useEffect(() => {
     const resetInterval = setInterval(() => {
       refreshCountRef.current = Math.max(0, refreshCountRef.current - 1);
-    }, 5 * 60 * 1000); // Reset counter gradually every 5 minutes
+    }, 5 * 60 * 1000);
     
     return () => clearInterval(resetInterval);
   }, []);
+  
+  // Listen for direct fare update events from admin panel
+  useEffect(() => {
+    const handleDirectFareUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.log('CabList: Received direct fare update event', customEvent.detail);
+      
+      if (customEvent.detail && customEvent.detail.packageId && customEvent.detail.cabType) {
+        // Force reset processing flag in case it got stuck
+        isProcessingRef.current = false;
+        
+        // Reset refresh counter to allow this critical update
+        refreshCountRef.current = Math.max(0, refreshCountRef.current - 1);
+      }
+    };
+    
+    window.addEventListener('local-fares-updated', handleDirectFareUpdate);
+    window.addEventListener('fare-cache-cleared', () => {
+      console.log('CabList: Fare cache cleared, resetting update flags');
+      isProcessingRef.current = false;
+      refreshCountRef.current = 0;
+    });
+    
+    return () => {
+      window.removeEventListener('local-fares-updated', handleDirectFareUpdate);
+      window.removeEventListener('fare-cache-cleared', () => {});
+    };
+  }, []);
+  
+  // Helper to get the most reliable fare
+  const getDisplayFare = (cab: CabType): number => {
+    // First try the displayed fare
+    if (displayedFares[cab.id] && displayedFares[cab.id] > 0) {
+      return displayedFares[cab.id];
+    }
+    
+    // Then try the latest fare
+    if (cabFares[cab.id] && cabFares[cab.id] > 0) {
+      return cabFares[cab.id];
+    }
+    
+    // Finally try the fare history
+    if (fareHistoryRef.current[cab.id] && fareHistoryRef.current[cab.id].length > 0) {
+      // Get the most recent non-zero fare
+      for (let i = fareHistoryRef.current[cab.id].length - 1; i >= 0; i--) {
+        if (fareHistoryRef.current[cab.id][i] > 0) {
+          return fareHistoryRef.current[cab.id][i];
+        }
+      }
+    }
+    
+    // If all else fails, return the displayedFare (which might be 0)
+    return displayedFares[cab.id] || 0;
+  };
   
   return (
     <div className="space-y-3">
@@ -123,7 +206,7 @@ export function CabList({
           >
             <CabOptionCard 
               cab={cab}
-              fare={displayedFares[cab.id] || cabFares[cab.id] || 0}
+              fare={getDisplayFare(cab)}
               isSelected={selectedCabId === cab.id}
               onSelect={handleSelectCab}
               fareDetails={getFareDetails(cab)}
