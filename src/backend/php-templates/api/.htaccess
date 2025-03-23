@@ -26,8 +26,8 @@ RewriteEngine On
     Header always set Expires "0"
     
     # Add debugging headers
-    Header always set X-API-Debug "Processed by main API htaccess - v1.0.47"
-    Header always set X-API-Version "1.0.47"
+    Header always set X-API-Debug "Processed by main API htaccess - v1.0.48"
+    Header always set X-API-Version "1.0.48"
 </IfModule>
 
 # Handle OPTIONS requests for CORS preflight - immediately return 200
@@ -42,11 +42,11 @@ RewriteRule ^admin/direct-airport-fares$ admin/direct-airport-fares.php [L,QSA]
 RewriteRule ^admin/direct-local-fares$ admin/direct-local-fares.php [L,QSA]
 RewriteRule ^admin/direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^user/bookings$ user/bookings.php [L,QSA]
+RewriteRule ^admin/users$ admin/users.php [L,QSA]
 RewriteRule ^admin/metrics$ admin/metrics.php [L,QSA]
 
 # Secondary priority rules for frequently used endpoints
 RewriteRule ^user/dashboard$ user/dashboard.php [L,QSA]
-RewriteRule ^admin/users$ admin/users.php [L,QSA]
 RewriteRule ^admin/vehicle-pricing$ admin/vehicle-pricing.php [L,QSA]
 RewriteRule ^admin/fares-update$ admin/fares-update.php [L,QSA]
 

@@ -11,7 +11,7 @@ header('Access-Control-Allow-Headers: *');
 header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 header("Pragma: no-cache");
 header("Expires: 0");
-header("X-API-Version: 1.0.46");
+header("X-API-Version: 1.0.48");
 
 // Handle OPTIONS request immediately for CORS preflight
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -90,7 +90,7 @@ if (empty($vehicleId)) {
     $vehicleId = 1; // Default vehicle ID
 }
 
-// Always return success response with the received data to prevent UI errors
+// Always return success response immediately with the received data
 http_response_code(200);
 echo json_encode([
     'status' => 'success',
@@ -106,7 +106,12 @@ echo json_encode([
     ]
 ]);
 
-// Attempt database operation in the background without affecting the response
+// Close the connection to allow the response to be sent immediately
+if (function_exists('fastcgi_finish_request')) {
+    fastcgi_finish_request();
+}
+
+// Now attempt database operation in the background
 try {
     $pdo = new PDO("mysql:host=localhost;dbname=u644605165_new_bookingdb", "u644605165_new_bookingusr", "Vizag@1213");
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
