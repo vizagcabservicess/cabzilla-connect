@@ -1,4 +1,3 @@
-
 import { HourlyPackage, LocalPackagePriceMatrix } from '@/types/cab';
 
 // Define standard hourly packages
@@ -143,8 +142,8 @@ export function getLocalPackagePrice(packageId: string, cabType: string): number
   
   // Fallback - calculate based on base package and apply multiplier for cab types
   const basePackage = hourlyPackages.find(pkg => pkg.id === packageId);
-  if (!basePackage) {
-    console.warn(`Package ${packageId} not found, using default price`);
+  if (!basePackage || basePackage.basePrice === undefined) {
+    console.warn(`Package ${packageId} not found or has no basePrice, using default price`);
     return 2500; // Default fallback
   }
   

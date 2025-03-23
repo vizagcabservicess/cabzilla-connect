@@ -1,3 +1,4 @@
+
 import { hourlyPackages } from "@/lib/packageData";
 import { 
   Select,
@@ -66,7 +67,7 @@ export function LocalTripSelector({
           <SelectContent>
             {hourlyPackages.map((pkg) => (
               <SelectItem key={pkg.id} value={pkg.id}>
-                {pkg.name} - ₹{Math.round(pkg.basePrice)}+
+                {pkg.name} - ₹{pkg.basePrice ? Math.round(pkg.basePrice) : 0}+
               </SelectItem>
             ))}
           </SelectContent>

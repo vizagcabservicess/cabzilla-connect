@@ -7,18 +7,21 @@ export const availableTours: TourInfo[] = [
     id: 'araku_valley',
     name: 'Araku Valley Tour',
     distance: 120,
+    days: 1,
     image: '/tours/araku_valley.jpg'
   },
   {
     id: 'yarada_beach',
     name: 'Yarada Beach Tour',
     distance: 40,
+    days: 1,
     image: '/tours/yarada_beach.jpg'
   },
   {
     id: 'rushikonda',
     name: 'Rushikonda Beach Tour',
     distance: 25,
+    days: 1,
     image: '/tours/rushikonda.jpg'
   }
 ];

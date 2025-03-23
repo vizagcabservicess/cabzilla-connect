@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -34,7 +33,7 @@ const ToursPage = () => {
   const getTourFare = (tourId: string, cabId: string): number => {
     if (!tourId || !cabId) return 0;
     
-    const tourFareMatrix = tourFares[tourId as keyof typeof tourFares];
+    const tourFareMatrix = tourFares[tourId];
     if (tourFareMatrix) {
       return tourFareMatrix[cabId as keyof typeof tourFareMatrix] || 0;
     }

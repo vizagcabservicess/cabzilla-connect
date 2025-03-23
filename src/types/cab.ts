@@ -63,6 +63,8 @@ export interface HourlyPackage {
   hours: number;
   kilometers: number;
   description?: string;
+  basePrice?: number;
+  multiplier?: number;
 }
 
 export interface FareCache {
@@ -76,16 +78,17 @@ export interface TourInfo {
   distance: number;
   days: number;
   description?: string;
+  image?: string;
 }
 
 export interface TourFares {
-  tour_id: string;
-  tour_name: string;
-  sedan: number;
-  ertiga: number;
-  innova: number;
-  tempo: number;
-  luxury: number;
+  [tourId: string]: {
+    sedan: number;
+    ertiga: number;
+    innova: number;
+    tempo?: number;
+    luxury?: number;
+  };
 }
 
 export interface ExtraCharges {
@@ -98,12 +101,8 @@ export interface ExtraCharges {
 }
 
 export interface LocalPackagePriceMatrix {
-  [cabType: string]: {
-    package4hr40km: number;
-    package8hr80km: number;
-    package10hr100km: number;
-    extraKmRate: number;
-    extraHourRate: number;
+  [packageId: string]: {
+    [cabType: string]: number;
   };
 }
 
