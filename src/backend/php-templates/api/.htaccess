@@ -26,8 +26,8 @@ RewriteEngine On
     Header always set Expires "60"
     
     # Add debugging headers
-    Header always set X-API-Debug "Processed by main API htaccess - v1.0.60"
-    Header always set X-API-Version "1.0.60"
+    Header always set X-API-Debug "Processed by main API htaccess - v1.0.61"
+    Header always set X-API-Version "1.0.61"
     Header always set X-Server-Time "%{TIME}e"
     Header always set X-Request-ID "%{UNIQUE_ID}e"
     Header always set X-Response-Timestamp "%{TIME}e"
@@ -61,12 +61,19 @@ RewriteRule .* - [R=200,L]
     </FilesMatch>
     
     # No caching for direct fare update endpoints
-    <FilesMatch "(direct-fare-update|local-fares-update|direct-.*-fares)\.php$">
+    <FilesMatch "(direct-fare-update|local-fares-update|direct-.*-fares|init-database)\.php$">
         Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
         Header set Pragma "no-cache"
         Header set Expires "0"
     </FilesMatch>
 </IfModule>
+
+# DATABASE SETUP ENDPOINT - HIGH PRIORITY
+# Route to initialize the database tables
+RewriteRule ^init-database$ admin/init-database.php [L,QSA]
+RewriteRule ^init-database\.php$ admin/init-database.php [L,QSA]
+RewriteRule ^admin/init-database$ admin/init-database.php [L,QSA]
+RewriteRule ^admin/init-database\.php$ admin/init-database.php [L,QSA]
 
 # ULTRA HIGH PRIORITY - Direct access to update endpoints
 # Skip all routing complexity for these critical endpoints

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -5,11 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { RefreshCw, Save } from 'lucide-react';
+import { RefreshCw, Save, Database } from 'lucide-react';
 import { fareService } from '@/services/fareService';
 import { updateOutstationFares, updateLocalFares, updateAirportFares } from '@/services/vehicleDataService';
 import { getVehicleTypes } from '@/services/vehicleDataService';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { FareUpdateError } from '../cab-options/FareUpdateError';
 
 interface VehicleTripFaresFormProps {
   vehicleId?: string;
@@ -20,6 +22,8 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
   const [activeTab, setActiveTab] = useState('outstation');
   const [vehicleTypes, setVehicleTypes] = useState<{id: string, name: string}[]>([]);
   const [selectedVehicleId, setSelectedVehicleId] = useState(vehicleId || '');
+  const [error, setError] = useState<Error | null>(null);
+  const [isInitializing, setIsInitializing] = useState(false);
   
   // Outstation fare state
   const [basePrice, setBasePrice] = useState('0');
@@ -71,8 +75,99 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
     }
   }, [selectedVehicleId]);
 
+  // Initialize database tables
+  const initializeDatabase = async () => {
+    setIsInitializing(true);
+    toast.info('Initializing database tables...', {
+      id: 'init-database',
+      duration: 3000
+    });
+    
+    try {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+      const timestamp = Date.now();
+      
+      // Try multiple initialization methods
+      let initialized = false;
+      
+      // Method 1: Try the dedicated init-database endpoint
+      try {
+        const response = await fetch(`${baseUrl}/api/init-database.php?_t=${timestamp}`, {
+          method: 'GET',
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+            ...fareService.getBypassHeaders()
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Database initialization successful:', data);
+          toast.success('Database tables created successfully');
+          initialized = true;
+        } else {
+          console.warn('Database initialization failed with status:', response.status);
+          throw new Error('Primary initialization failed');
+        }
+      } catch (err) {
+        console.warn('Primary database initialization failed, trying fallback method');
+        
+        // Method 2: Try db_setup.php directly as fallback
+        try {
+          const fallbackResponse = await fetch(`${baseUrl}/api/admin/db_setup.php?_t=${timestamp}`, {
+            method: 'GET',
+            headers: {
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache',
+              ...fareService.getBypassHeaders()
+            }
+          });
+          
+          if (fallbackResponse.ok) {
+            console.log('Fallback database initialization successful');
+            toast.success('Database tables created (fallback method)');
+            initialized = true;
+          } else {
+            console.error('Fallback database initialization failed with status:', fallbackResponse.status);
+            throw new Error('Fallback initialization failed');
+          }
+        } catch (fallbackErr) {
+          console.error('All database initialization methods failed');
+          toast.error('Could not initialize database tables');
+          throw fallbackErr;
+        }
+      }
+      
+      if (initialized) {
+        // Clear all caches after successful initialization
+        fareService.clearCache();
+        
+        // Clear any previous errors
+        setError(null);
+        
+        // Display confirmation
+        toast.success('Database setup complete! Please try updating fares now.', {
+          duration: 5000
+        });
+        
+        // If we have a selected vehicle, reload its fares
+        if (selectedVehicleId) {
+          loadFares(selectedVehicleId);
+        }
+      }
+    } catch (error) {
+      console.error('Error during database initialization:', error);
+      toast.error('Failed to initialize database tables');
+    } finally {
+      setIsInitializing(false);
+    }
+  };
+
   const loadFares = async (vehicleId: string) => {
     setLoading(true);
+    setError(null);
+    
     try {
       // Load outstation fares
       const outstationData = await fareService.getOutstationFaresForVehicle(vehicleId);
@@ -106,6 +201,7 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
       console.log('Loaded fares for vehicle:', vehicleId);
     } catch (error) {
       console.error('Error loading fares:', error);
+      setError(error as Error);
       toast.error('Failed to load vehicle fares');
     } finally {
       setLoading(false);
@@ -119,6 +215,8 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
     }
     
     setLoading(true);
+    setError(null);
+    
     try {
       const data = {
         basePrice: parseFloat(basePrice) || 0,
@@ -158,6 +256,7 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
       }));
     } catch (error) {
       console.error('Error saving outstation fares:', error);
+      setError(error as Error);
       toast.error('Failed to update outstation fares');
     } finally {
       setLoading(false);
@@ -171,6 +270,8 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
     }
     
     setLoading(true);
+    setError(null);
+    
     try {
       const data = {
         package4hr40km: parseFloat(package4hr40km) || 0,
@@ -237,6 +338,13 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
         
         const directResult = await directResponse.json();
         console.log('Direct API response:', directResult);
+        
+        // If we got a database error about missing table, try to initialize
+        if (directResult.databaseError && directResult.databaseError.includes('not found')) {
+          console.warn('Database table not found, trying to initialize it');
+          await initializeDatabase();
+          throw new Error('Database table needed to be created, please try again');
+        }
       } catch (directError) {
         console.warn('Direct fare update failed, trying fallback method:', directError);
         
@@ -369,6 +477,7 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
       }, 5000);
     } catch (error) {
       console.error('Error saving local fares:', error);
+      setError(error as Error);
       toast.error('Failed to update local package fares');
     } finally {
       setLoading(false);
@@ -382,6 +491,8 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
     }
     
     setLoading(true);
+    setError(null);
+    
     try {
       const data = {
         basePrice: parseFloat(airportBasePrice) || 0,
@@ -441,6 +552,7 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
       }));
     } catch (error) {
       console.error('Error saving airport fares:', error);
+      setError(error as Error);
       toast.error('Failed to update airport transfer fares');
     } finally {
       setLoading(false);
@@ -469,6 +581,39 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
               </SelectContent>
             </Select>
           </div>
+        )}
+        
+        {/* Database initialization button */}
+        <Button 
+          onClick={initializeDatabase} 
+          variant="outline" 
+          className="mb-4 bg-yellow-50 border-yellow-200 text-yellow-800 hover:bg-yellow-100"
+          disabled={isInitializing}
+        >
+          {isInitializing ? (
+            <>
+              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+              Setting Up Database...
+            </>
+          ) : (
+            <>
+              <Database className="mr-2 h-4 w-4" />
+              Initialize DB Tables
+            </>
+          )}
+        </Button>
+        
+        {/* Error display */}
+        {error && (
+          <FareUpdateError 
+            error={error} 
+            onRetry={() => {
+              fareService.clearCache();
+              if (selectedVehicleId) {
+                loadFares(selectedVehicleId);
+              }
+            }}
+          />
         )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -788,4 +933,3 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
     </Card>
   );
 }
-

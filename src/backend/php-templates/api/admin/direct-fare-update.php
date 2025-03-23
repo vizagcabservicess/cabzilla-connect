@@ -16,12 +16,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+// Create logs directory if it doesn't exist
+$logsDir = __DIR__ . '/../logs';
+if (!file_exists($logsDir)) {
+    mkdir($logsDir, 0755, true);
+}
+
 // Log the request to a file
 $timestamp = date('Y-m-d H:i:s');
 $logMessage = "[$timestamp] Direct fare update request received" . PHP_EOL;
 $logMessage .= "Method: " . $_SERVER['REQUEST_METHOD'] . PHP_EOL;
 $logMessage .= "URL: " . $_SERVER['REQUEST_URI'] . PHP_EOL;
-error_log($logMessage, 3, __DIR__ . '/../logs/direct-fares.log');
+error_log($logMessage, 3, $logsDir . '/direct-fares.log');
 
 // Get data from ALL possible sources
 $data = [];
@@ -29,7 +35,7 @@ $data = [];
 // First try POST data which is most likely for form submissions
 if (!empty($_POST)) {
     $data = $_POST;
-    error_log("Using POST data: " . print_r($data, true), 3, __DIR__ . '/../logs/direct-fares.log');
+    error_log("Using POST data: " . print_r($data, true), 3, $logsDir . '/direct-fares.log');
 }
 
 // If no POST data, try JSON input
@@ -39,13 +45,13 @@ if (empty($data)) {
         $jsonData = json_decode($rawInput, true);
         if ($jsonData !== null) {
             $data = $jsonData;
-            error_log("Using JSON data: " . print_r($data, true), 3, __DIR__ . '/../logs/direct-fares.log');
+            error_log("Using JSON data: " . print_r($data, true), 3, $logsDir . '/direct-fares.log');
         } else {
             // Try parsing as form data
             parse_str($rawInput, $formData);
             if (!empty($formData)) {
                 $data = $formData;
-                error_log("Parsed raw input as form data: " . print_r($data, true), 3, __DIR__ . '/../logs/direct-fares.log');
+                error_log("Parsed raw input as form data: " . print_r($data, true), 3, $logsDir . '/direct-fares.log');
             }
         }
     }
@@ -54,7 +60,7 @@ if (empty($data)) {
 // Finally try GET parameters
 if (empty($data) && !empty($_GET)) {
     $data = $_GET;
-    error_log("Using GET data: " . print_r($data, true), 3, __DIR__ . '/../logs/direct-fares.log');
+    error_log("Using GET data: " . print_r($data, true), 3, $logsDir . '/direct-fares.log');
 }
 
 // Extract vehicle ID and normalize using any of the possible field names
@@ -143,10 +149,50 @@ if ($tripType == 'local') {
     if (!empty($vehicleId)) {
         // Try database connection
         try {
-            $pdo = new PDO("mysql:host=localhost;dbname=u644605165_new_bookingdb", "u644605165_new_bookingusr", "Vizag@1213");
-            $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            // Use config.php connection function if available
+            $pdo = null;
             
-            // Try updating the local_package_fares table instead (based on database schema)
+            if (function_exists('getDbPDO')) {
+                $pdo = getDbPDO();
+            } else {
+                // Fallback to direct connection if getDbPDO is not defined
+                $pdo = new PDO("mysql:host=localhost;dbname=u644605165_new_bookingdb", "u644605165_new_bookingusr", "Vizag@1213");
+                $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            }
+            
+            // FIRST: Check if the local_package_fares table exists, if not, create it
+            try {
+                $checkTableSql = "SHOW TABLES LIKE 'local_package_fares'";
+                $checkTableStmt = $pdo->prepare($checkTableSql);
+                $checkTableStmt->execute();
+                
+                if ($checkTableStmt->rowCount() == 0) {
+                    // Table doesn't exist, create it
+                    $createTableSql = "
+                    CREATE TABLE IF NOT EXISTS local_package_fares (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        vehicle_id VARCHAR(50) NOT NULL,
+                        price_4hrs_40km DECIMAL(10,2) NOT NULL DEFAULT 0,
+                        price_8hrs_80km DECIMAL(10,2) NOT NULL DEFAULT 0,
+                        price_10hrs_100km DECIMAL(10,2) NOT NULL DEFAULT 0,
+                        price_extra_km DECIMAL(5,2) NOT NULL DEFAULT 0,
+                        price_extra_hour DECIMAL(5,2) NOT NULL DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        UNIQUE KEY vehicle_id (vehicle_id)
+                    ) ENGINE=InnoDB;
+                    ";
+                    
+                    $pdo->exec($createTableSql);
+                    $responseData['tableCreated'] = 'Created missing local_package_fares table';
+                    error_log("Created missing local_package_fares table", 3, $logsDir . '/direct-fares.log');
+                }
+            } catch (Exception $tableError) {
+                $responseData['tableCheckError'] = $tableError->getMessage();
+                error_log("Error checking/creating table: " . $tableError->getMessage(), 3, $logsDir . '/direct-fares.log');
+            }
+            
+            // Try updating the local_package_fares table
             try {
                 // Check if entry exists for this vehicle
                 $checkSql = "SELECT id FROM local_package_fares WHERE vehicle_id = ?";
@@ -173,6 +219,8 @@ if ($tripType == 'local') {
                         $extraHourRate,
                         $vehicleId
                     ]);
+                    
+                    $responseData['databaseUpdate'] = 'Updated record in local_package_fares table';
                 } else {
                     // Insert new record
                     $insertSql = "INSERT INTO local_package_fares 
@@ -188,35 +236,44 @@ if ($tripType == 'local') {
                         $extraKmRate, 
                         $extraHourRate
                     ]);
+                    
+                    $responseData['databaseInsert'] = 'Inserted new record in local_package_fares table';
                 }
                 
                 // Also update the vehicle_pricing table for backward compatibility
-                $vpSql = "UPDATE vehicle_pricing 
-                          SET local_package_4hr = ?, 
-                              local_package_8hr = ?, 
-                              local_package_10hr = ?, 
-                              extra_km_charge = ?, 
-                              extra_hour_charge = ?,
-                              updated_at = NOW()
-                          WHERE vehicle_type = ?";
-                $vpStmt = $pdo->prepare($vpSql);
-                $vpStmt->execute([
-                    $package4hr, 
-                    $package8hr, 
-                    $package10hr, 
-                    $extraKmRate, 
-                    $extraHourRate,
-                    $vehicleId
-                ]);
+                try {
+                    $vpSql = "UPDATE vehicle_pricing 
+                              SET local_package_4hr = ?, 
+                                  local_package_8hr = ?, 
+                                  local_package_10hr = ?, 
+                                  extra_km_charge = ?, 
+                                  extra_hour_charge = ?,
+                                  updated_at = NOW()
+                              WHERE vehicle_type = ?";
+                    $vpStmt = $pdo->prepare($vpSql);
+                    $vpStmt->execute([
+                        $package4hr, 
+                        $package8hr, 
+                        $package10hr, 
+                        $extraKmRate, 
+                        $extraHourRate,
+                        $vehicleId
+                    ]);
+                    
+                    $responseData['vehiclePricingUpdate'] = 'Also updated vehicle_pricing table for backward compatibility';
+                } catch (Exception $vpError) {
+                    // This is not critical, so just log it
+                    $responseData['vehiclePricingError'] = $vpError->getMessage();
+                    error_log("Vehicle pricing update error: " . $vpError->getMessage(), 3, $logsDir . '/direct-fares.log');
+                }
                 
-                $responseData['database'] = 'Updated local_package_fares and vehicle_pricing tables successfully';
-            } catch (Exception $e) {
-                $responseData['databaseError'] = $e->getMessage();
-                error_log("Database error: " . $e->getMessage(), 3, __DIR__ . '/../logs/direct-fares.log');
+            } catch (Exception $dbError) {
+                $responseData['databaseError'] = $dbError->getMessage();
+                error_log("Database error: " . $dbError->getMessage(), 3, $logsDir . '/direct-fares.log');
             }
-        } catch (Exception $e) {
-            $responseData['databaseConnectionError'] = $e->getMessage();
-            error_log("Database connection error: " . $e->getMessage(), 3, __DIR__ . '/../logs/direct-fares.log');
+        } catch (Exception $connError) {
+            $responseData['databaseConnectionError'] = $connError->getMessage();
+            error_log("Database connection error: " . $connError->getMessage(), 3, $logsDir . '/direct-fares.log');
         }
     }
     

@@ -19,7 +19,8 @@ import {
   Hammer,
   Wrench,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  DatabaseBackup
 } from "lucide-react";
 import { fareService } from '@/services/fareService';
 import { toast } from 'sonner';
@@ -41,6 +42,7 @@ export function FareUpdateError({
 }: FareUpdateErrorProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [isFixing, setIsFixing] = useState(false);
+  const [isInitializingDb, setIsInitializingDb] = useState(false);
   const errorMessage = typeof error === "string" ? error : error.message;
   
   // Error classification
@@ -54,7 +56,7 @@ export function FareUpdateError({
     /network|connection|failed|ERR_NETWORK|ECONNABORTED|404|timeout/i.test(errorMessage);
   
   const isTableError =
-    /table.*not found|doesn't exist|database_error|SQLSTATE/i.test(errorMessage);
+    /table.*not found|doesn't exist|database_error|SQLSTATE|base table or view not found/i.test(errorMessage);
   
   const handleRetry = () => {
     console.log("Retrying fare update after error...");
@@ -179,6 +181,87 @@ export function FareUpdateError({
     }
   };
 
+  // Initialize database tables
+  const initializeDatabase = async () => {
+    setIsInitializingDb(true);
+    toast.info('Initializing database tables...', {
+      id: 'init-database',
+      duration: 3000
+    });
+    
+    try {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+      const timestamp = Date.now();
+      
+      // Try multiple initialization methods
+      let initialized = false;
+      
+      // Method 1: Try the dedicated init-database endpoint
+      try {
+        const response = await fetch(`${baseUrl}/api/init-database.php?_t=${timestamp}`, {
+          method: 'GET',
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+            ...fareService.getBypassHeaders()
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Database initialization successful:', data);
+          toast.success('Database tables created successfully');
+          initialized = true;
+        } else {
+          console.warn('Database initialization failed with status:', response.status);
+          throw new Error('Primary initialization failed');
+        }
+      } catch (err) {
+        console.warn('Primary database initialization failed, trying fallback method');
+        
+        // Method 2: Try db_setup.php directly as fallback
+        try {
+          const fallbackResponse = await fetch(`${baseUrl}/api/admin/db_setup.php?_t=${timestamp}`, {
+            method: 'GET',
+            headers: {
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache',
+              ...fareService.getBypassHeaders()
+            }
+          });
+          
+          if (fallbackResponse.ok) {
+            console.log('Fallback database initialization successful');
+            toast.success('Database tables created (fallback method)');
+            initialized = true;
+          } else {
+            console.error('Fallback database initialization failed with status:', fallbackResponse.status);
+            throw new Error('Fallback initialization failed');
+          }
+        } catch (fallbackErr) {
+          console.error('All database initialization methods failed');
+          toast.error('Could not initialize database tables');
+          throw fallbackErr;
+        }
+      }
+      
+      if (initialized) {
+        // Clear all caches after successful initialization
+        fareService.clearCache();
+        
+        // Display confirmation
+        toast.success('Database setup complete! Please try updating fares now.', {
+          duration: 5000
+        });
+      }
+    } catch (error) {
+      console.error('Error during database initialization:', error);
+      toast.error('Failed to initialize database tables');
+    } finally {
+      setIsInitializingDb(false);
+    }
+  };
+
   // Direct connection test
   const testDirectConnection = () => {
     toast.info('Testing direct server connection...');
@@ -253,7 +336,10 @@ export function FareUpdateError({
       
       // Specialized endpoints
       `${baseUrl}/api/admin/outstation-fares-update.php?_t=${timestamp}`,
-      `${baseUrl}/api/admin/vehicle-pricing.php?_t=${timestamp}`
+      `${baseUrl}/api/admin/vehicle-pricing.php?_t=${timestamp}`,
+      
+      // Database initialization endpoint
+      `${baseUrl}/api/init-database.php?_t=${timestamp}`
     ];
     
     // Open all endpoint URLs in new tabs
@@ -282,7 +368,7 @@ export function FareUpdateError({
     if (description) return description;
     
     if (isTableError) {
-      return "The database table required for this operation doesn't exist. This is likely a database schema issue.";
+      return "The database table required for this operation doesn't exist. Click the 'Initialize Database' button to create missing tables.";
     }
     if (isForbiddenError) {
       return "You don't have permission to update fares. This might be an authentication issue.";
@@ -328,8 +414,8 @@ export function FareUpdateError({
           <ul className="list-disc pl-5 space-y-1 text-gray-600">
             {isTableError && (
               <>
-                <li className="font-medium text-red-700">Database table is missing - use direct endpoints instead</li>
-                <li>The system will try to use alternate endpoints automatically</li>
+                <li className="font-medium text-red-700">Database table is missing - use 'Initialize Database' button below</li>
+                <li>This will create all required database tables</li>
               </>
             )}
             <li>Use the comprehensive fix button to solve common API connection issues</li>
@@ -362,6 +448,26 @@ export function FareUpdateError({
         )}
       </CardContent>
       <CardFooter className="pt-0 flex flex-wrap gap-3">
+        {isTableError && (
+          <Button 
+            onClick={initializeDatabase} 
+            className="gap-2 bg-amber-600 hover:bg-amber-700"
+            disabled={isInitializingDb}
+          >
+            {isInitializingDb ? (
+              <>
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                Setting Up...
+              </>
+            ) : (
+              <>
+                <DatabaseBackup className="h-4 w-4" />
+                Initialize Database
+              </>
+            )}
+          </Button>
+        )}
+        
         <Button 
           onClick={handleRetry} 
           className="gap-2 bg-blue-600 hover:bg-blue-700"
