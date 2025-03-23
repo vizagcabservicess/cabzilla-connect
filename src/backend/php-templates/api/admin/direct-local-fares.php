@@ -82,17 +82,16 @@ if (strpos($vehicleId, 'item-') === 0) {
 }
 
 // Extract pricing data with multiple fallbacks
-$price8hrs80km = isset($data['price8hrs80km']) ? $data['price8hrs80km'] : 
-                (isset($data['price_8hrs_80km']) ? $data['price_8hrs_80km'] : 0);
+$price8hrs80km = isset($data['hr8km80Price']) ? $data['hr8km80Price'] : 
+                (isset($data['price8hrs80km']) ? $data['price8hrs80km'] : 
+                (isset($data['hr8Km80']) ? $data['hr8Km80'] : 0));
 
-$price10hrs100km = isset($data['price10hrs100km']) ? $data['price10hrs100km'] : 
-                  (isset($data['price_10hrs_100km']) ? $data['price_10hrs_100km'] : 0);
+$price10hrs100km = isset($data['hr10km100Price']) ? $data['hr10km100Price'] : 
+                  (isset($data['price10hrs100km']) ? $data['price10hrs100km'] : 
+                  (isset($data['hr10Km100']) ? $data['hr10Km100'] : 0));
 
-$priceExtraKm = isset($data['priceExtraKm']) ? $data['priceExtraKm'] : 
-               (isset($data['price_extra_km']) ? $data['price_extra_km'] : 0);
-
-$priceExtraHour = isset($data['priceExtraHour']) ? $data['priceExtraHour'] : 
-                 (isset($data['price_extra_hour']) ? $data['price_extra_hour'] : 0);
+$priceExtraKm = isset($data['extraKmRate']) ? $data['extraKmRate'] : 
+               (isset($data['priceExtraKm']) ? $data['priceExtraKm'] : 0);
 
 // Simple validation
 if (empty($vehicleId)) {
@@ -102,22 +101,22 @@ if (empty($vehicleId)) {
 }
 
 try {
-    // First check if record exists in local_package_fares
-    $sql = "SELECT id FROM local_package_fares WHERE vehicle_id = ?";
+    // First check if record exists in local_trip_packages
+    $sql = "SELECT id FROM local_trip_packages WHERE vehicle_id = ?";
     $stmt = $pdo->prepare($sql);
     $stmt->execute([$vehicleId]);
     $exists = $stmt->fetchColumn();
     
     if ($exists) {
         // Update existing record
-        $sql = "UPDATE local_package_fares SET price_8hrs_80km = ?, price_10hrs_100km = ?, price_extra_km = ?, price_extra_hour = ? WHERE vehicle_id = ?";
+        $sql = "UPDATE local_trip_packages SET price_8hrs_80km = ?, price_10hrs_100km = ?, price_extra_km = ? WHERE vehicle_id = ?";
         $stmt = $pdo->prepare($sql);
-        $result = $stmt->execute([$price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour, $vehicleId]);
+        $result = $stmt->execute([$price8hrs80km, $price10hrs100km, $priceExtraKm, $vehicleId]);
     } else {
         // Insert new record
-        $sql = "INSERT INTO local_package_fares (vehicle_id, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour) VALUES (?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO local_trip_packages (vehicle_id, price_8hrs_80km, price_10hrs_100km, price_extra_km) VALUES (?, ?, ?, ?)";
         $stmt = $pdo->prepare($sql);
-        $result = $stmt->execute([$vehicleId, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour]);
+        $result = $stmt->execute([$vehicleId, $price8hrs80km, $price10hrs100km, $priceExtraKm]);
     }
     
     // Always return success - handle any other errors in the catch block
@@ -130,8 +129,7 @@ try {
             'pricing' => [
                 'price8hrs80km' => $price8hrs80km,
                 'price10hrs100km' => $price10hrs100km,
-                'priceExtraKm' => $priceExtraKm,
-                'priceExtraHour' => $priceExtraHour
+                'priceExtraKm' => $priceExtraKm
             ],
             'timestamp' => time()
         ]
