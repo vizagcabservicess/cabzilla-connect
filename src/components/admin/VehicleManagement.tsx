@@ -398,7 +398,15 @@ export const VehicleManagement = () => {
           
           {/* Trip Fares Tab */}
           <TabsContent value="fares">
-            <VehicleTripFaresForm vehicleId={selectedVehicle} />
+            {selectedVehicle ? (
+              <VehicleTripFaresForm vehicleId={selectedVehicle} />
+            ) : (
+              <Card className="bg-white shadow-md">
+                <CardContent className="pt-6">
+                  <p className="text-center text-muted-foreground">Please select a vehicle to manage trip fares</p>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
         </Tabs>
         
