@@ -1,7 +1,16 @@
+
 import { HourlyPackage, LocalPackagePriceMatrix } from '@/types/cab';
 
 // Define standard hourly packages
 export const hourlyPackages: HourlyPackage[] = [
+  {
+    id: '4hrs-40km',
+    name: '4 Hours / 40 KM',
+    hours: 4,
+    kilometers: 40,
+    basePrice: 1500,
+    multiplier: 0.6
+  },
   {
     id: '8hrs-80km',
     name: '8 Hours / 80 KM',
@@ -17,14 +26,6 @@ export const hourlyPackages: HourlyPackage[] = [
     kilometers: 100,
     basePrice: 3000,
     multiplier: 1.2
-  },
-  {
-    id: '4hrs-40km',
-    name: '4 Hours / 40 KM',
-    hours: 4,
-    kilometers: 40,
-    basePrice: 1500,
-    multiplier: 0.6
   }
 ];
 
@@ -44,6 +45,20 @@ export const oneWayRates = {
 
 // Initialize local package price matrix
 let localPackagePriceMatrix: LocalPackagePriceMatrix = {
+  '4hrs-40km': {
+    'sedan': 1500,
+    'ertiga': 1800,
+    'innova crysta': 2300,
+    'innova': 2300,
+    'tempo': 3000,
+    'luxury': 3500,
+    'swift_02': 80,
+    'etios': 1500,
+    'dzire': 1500,
+    'amaze': 1500,
+    'dzire cng': 1500,
+    'swift': 1500
+  },
   '8hrs-80km': {
     'sedan': 2500,
     'ertiga': 3000,
@@ -71,20 +86,6 @@ let localPackagePriceMatrix: LocalPackagePriceMatrix = {
     'amaze': 3000,
     'dzire cng': 3000,
     'swift': 3000
-  },
-  '4hrs-40km': {
-    'sedan': 1500,
-    'ertiga': 1800,
-    'innova crysta': 2300,
-    'innova': 2300,
-    'tempo': 3000,
-    'luxury': 3500,
-    'swift_02': 80,
-    'etios': 1500,
-    'dzire': 1500,
-    'amaze': 1500,
-    'dzire cng': 1500,
-    'swift': 1500
   }
 };
 

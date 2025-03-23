@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -74,77 +73,69 @@ export function LocalFareManagement() {
       // First, update the price locally using the function from packageData.ts
       updateLocalPackagePrice(values.packageId, values.cabType, values.price);
       
-      // Now, try to update on the server
+      // Now, try to update on the server using FormData which has better compatibility
       const cabTypeId = values.cabType.toLowerCase();
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
       
-      // Define the data to send to the API - map our package IDs to the server's column names
-      const updateData: Record<string, any> = {
-        vehicleId: cabTypeId,
-        tripType: 'local',
-        trip_type: 'local'
-      };
+      // Create a FormData object for better compatibility with server
+      const formData = new FormData();
+      formData.append('vehicleId', cabTypeId);
+      formData.append('vehicleType', cabTypeId);
+      formData.append('vehicle_id', cabTypeId);
+      formData.append('tripType', 'local');
+      formData.append('trip_type', 'local');
       
-      // Add the specific package prices using the correct column names
-      if (values.packageId === '8hrs-80km') {
-        Object.assign(updateData, {
-          local_package_8hr: values.price,
-          hr8km80Price: values.price,
-          price8hrs80km: values.price
-        });
-      } else if (values.packageId === '10hrs-100km') {
-        Object.assign(updateData, {
-          local_package_10hr: values.price,
-          hr10km100Price: values.price,
-          price10hrs100km: values.price
-        });
-      } else if (values.packageId === '4hrs-40km') {
-        Object.assign(updateData, {
-          local_package_4hr: values.price,
-          hr4km40Price: values.price,
-          price4hrs40km: values.price
-        });
+      // Add the specific package price, using multiple field names for compatibility
+      if (values.packageId === '4hrs-40km') {
+        formData.append('package4hr40km', values.price.toString());
+        formData.append('price4hrs40km', values.price.toString());
+        formData.append('hr4km40Price', values.price.toString());
+        formData.append('local_package_4hr', values.price.toString());
+      } 
+      else if (values.packageId === '8hrs-80km') {
+        formData.append('package8hr80km', values.price.toString());
+        formData.append('price8hrs80km', values.price.toString());
+        formData.append('hr8km80Price', values.price.toString());
+        formData.append('local_package_8hr', values.price.toString());
+      } 
+      else if (values.packageId === '10hrs-100km') {
+        formData.append('package10hr100km', values.price.toString());
+        formData.append('price10hrs100km', values.price.toString());
+        formData.append('hr10km100Price', values.price.toString());
+        formData.append('local_package_10hr', values.price.toString());
       }
       
-      // Add extra km rate
-      updateData.extra_km_charge = 14;
-      updateData.extraKmRate = 14;
-      updateData.extra_hour_charge = 250;
+      // Add extra rates with multiple field names for compatibility
+      formData.append('extraKmRate', '14');
+      formData.append('extra_km_charge', '14');
+      formData.append('extraKmCharge', '14');
+      formData.append('extraHourRate', '250');
+      formData.append('extra_hour_charge', '250');
+      formData.append('extraHourCharge', '250');
       
-      console.log("Sending update data to server:", updateData);
+      console.log("Sending update data to server via FormData");
       
-      // Try multiple approaches to update the server
-      
-      // Approach 1: Use the fareService.directFareUpdate
+      // Direct API call with FormData
       try {
-        await fareService.directFareUpdate('local', cabTypeId, updateData);
-      } catch (error) {
-        console.error("First update method failed:", error);
-        
-        // Approach 2: Try using updateTripFares from vehicleDataService
-        try {
-          await updateTripFares(cabTypeId, 'local', updateData);
-        } catch (innerError) {
-          console.error("Second update method failed:", innerError);
-          
-          // Approach 3: Call the endpoint directly as a last resort
-          const formData = new FormData();
-          Object.entries(updateData).forEach(([key, value]) => {
-            formData.append(key, String(value));
-          });
-          
-          const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
-          const response = await fetch(`${baseUrl}/api/admin/local-fares-update.php`, {
-            method: 'POST',
-            body: formData,
-            headers: {
-              'X-Force-Refresh': 'true'
-            }
-          });
-          
-          if (!response.ok) {
-            throw new Error(`Direct API call failed with status: ${response.status}`);
+        const response = await fetch(`${baseUrl}/api/admin/local-fares-update.php`, {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'X-Force-Refresh': 'true'
           }
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("API response not OK:", response.status, errorText);
+          throw new Error(`Direct API call failed with status: ${response.status}`);
         }
+        
+        const result = await response.json();
+        console.log("API response:", result);
+      } catch (error) {
+        console.error("Error with direct API call:", error);
+        throw error;
       }
       
       // Force cache refresh to ensure new prices are used

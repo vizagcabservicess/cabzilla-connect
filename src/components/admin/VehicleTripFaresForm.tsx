@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -181,33 +180,73 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
         extraHourRate: parseFloat(extraHourRate) || 0
       };
       
-      // Also include variations of field names to support different backend implementations
-      const requestData = {
-        vehicleId: selectedVehicleId,
-        ...data,
-        // Add alternative field names
-        price4hrs40km: parseFloat(package4hr40km) || 0,
-        price8hrs80km: parseFloat(package8hr80km) || 0,
-        price10hrs100km: parseFloat(package10hr100km) || 0,
-        priceExtraKm: parseFloat(extraKmRate) || 0,
-        priceExtraHour: parseFloat(extraHourRate) || 0,
-        // More alternative field names
-        local_package_4hr: parseFloat(package4hr40km) || 0,
-        local_package_8hr: parseFloat(package8hr80km) || 0,
-        local_package_10hr: parseFloat(package10hr100km) || 0,
-        extra_km_charge: parseFloat(extraKmRate) || 0,
-        extra_hour_charge: parseFloat(extraHourRate) || 0
-      };
+      // Create FormData for better compatibility with server
+      const formData = new FormData();
+      formData.append('vehicleId', selectedVehicleId);
+      formData.append('vehicleType', selectedVehicleId);
+      formData.append('vehicle_id', selectedVehicleId);
+      formData.append('tripType', 'local');
+      formData.append('trip_type', 'local');
       
-      // Try to use multiple update methods
+      // Add all data fields with multiple naming patterns for compatibility
+      formData.append('package4hr40km', package4hr40km);
+      formData.append('price4hrs40km', package4hr40km);
+      formData.append('hr4km40Price', package4hr40km);
+      formData.append('local_package_4hr', package4hr40km);
+      
+      formData.append('package8hr80km', package8hr80km);
+      formData.append('price8hrs80km', package8hr80km);
+      formData.append('hr8km80Price', package8hr80km);
+      formData.append('local_package_8hr', package8hr80km);
+      
+      formData.append('package10hr100km', package10hr100km);
+      formData.append('price10hrs100km', package10hr100km);
+      formData.append('hr10km100Price', package10hr100km);
+      formData.append('local_package_10hr', package10hr100km);
+      
+      formData.append('extraKmRate', extraKmRate);
+      formData.append('priceExtraKm', extraKmRate);
+      formData.append('extra_km_charge', extraKmRate);
+      
+      formData.append('extraHourRate', extraHourRate);
+      formData.append('priceExtraHour', extraHourRate);
+      formData.append('extra_hour_charge', extraHourRate);
+      
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+      
       try {
-        // First try the specialized API endpoint via fareService
-        await fareService.directFareUpdate('local', selectedVehicleId, requestData);
-      } catch (error) {
-        console.error('Direct update failed, trying vehicleDataService:', error);
+        // Direct API call with FormData
+        const response = await fetch(`${baseUrl}/api/admin/local-fares-update.php`, {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'X-Force-Refresh': 'true'
+          }
+        });
         
-        // Fall back to regular update method
-        await updateLocalFares(selectedVehicleId, data);
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Error response:', response.status, errorText);
+          throw new Error(`API error: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('API response:', result);
+      } catch (error) {
+        console.error('Direct form submit failed:', error);
+        
+        // Try to use the fareService as a backup
+        try {
+          await fareService.directFareUpdate('local', selectedVehicleId, {
+            vehicleId: selectedVehicleId,
+            ...data
+          });
+        } catch (fallbackError) {
+          console.error('Fallback method failed:', fallbackError);
+          
+          // Last resort - try updateLocalFares
+          await updateLocalFares(selectedVehicleId, data);
+        }
       }
       
       toast.success('Local package fares updated successfully');
@@ -431,7 +470,7 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
           </TabsContent>
           
           <TabsContent value="local">
-            <div className="space-y-4">
+            <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="package4hr40km">4 Hours / 40 KM Package (₹)</Label>
@@ -440,7 +479,7 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
                     type="number"
                     value={package4hr40km}
                     onChange={(e) => setPackage4hr40km(e.target.value)}
-                    placeholder="4hr/40km package price"
+                    placeholder="4 hrs / 40 km package price"
                   />
                 </div>
                 <div className="space-y-2">
@@ -450,7 +489,7 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
                     type="number"
                     value={package8hr80km}
                     onChange={(e) => setPackage8hr80km(e.target.value)}
-                    placeholder="8hr/80km package price"
+                    placeholder="8 hrs / 80 km package price"
                   />
                 </div>
                 <div className="space-y-2">
@@ -460,21 +499,20 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
                     type="number"
                     value={package10hr100km}
                     onChange={(e) => setPackage10hr100km(e.target.value)}
-                    placeholder="10hr/100km package price"
+                    placeholder="10 hrs / 100 km package price"
                   />
                 </div>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="extraKmRate">Extra KM Rate (₹)</Label>
                   <Input
                     id="extraKmRate"
                     type="number"
-                    step="0.01"
                     value={extraKmRate}
                     onChange={(e) => setExtraKmRate(e.target.value)}
-                    placeholder="Extra km rate"
+                    placeholder="Extra kilometer rate"
                   />
                 </div>
                 <div className="space-y-2">
@@ -490,8 +528,8 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
               </div>
               
               <Button 
-                className="w-full mt-6" 
-                onClick={handleSaveLocalFares}
+                onClick={handleSaveLocalFares} 
+                className="w-full" 
                 disabled={loading}
               >
                 {loading ? (
