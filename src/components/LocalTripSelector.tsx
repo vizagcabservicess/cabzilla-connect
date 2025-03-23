@@ -18,14 +18,57 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
   
   // Load packages on component mount
   useEffect(() => {
-    // Ensure packages are displayed in the correct order: 4hrs first, then 8hrs, then 10hrs
-    const sortedPackages = [...hourlyPackages].sort((a, b) => a.hours - b.hours);
+    // Create default packages in case hourlyPackages is empty
+    const defaultPackages: HourlyPackage[] = [
+      {
+        id: '4hr_40km',
+        name: '4 Hours Package',
+        hours: 4,
+        kilometers: 40,
+        basePrice: 1000
+      },
+      {
+        id: '8hr_80km',
+        name: '8 Hours Package',
+        hours: 8,
+        kilometers: 80,
+        basePrice: 2000
+      },
+      {
+        id: '10hr_100km',
+        name: '10 Hours Package',
+        hours: 10,
+        kilometers: 100,
+        basePrice: 2500
+      }
+    ];
     
-    // Verify that we have the 4hrs package, if not log an error
-    const has4HrsPackage = sortedPackages.some(pkg => pkg.hours === 4);
+    // Ensure packages are displayed in the correct order: 4hrs first, then 8hrs, then 10hrs
+    let packagesToUse = [...hourlyPackages];
+    
+    // Verify that we have the 4hrs package, if not add it from defaults
+    const has4HrsPackage = packagesToUse.some(pkg => pkg.hours === 4);
     if (!has4HrsPackage) {
-      console.error('4 hours package is missing from hourlyPackages data!');
+      console.warn('4 hours package is missing from hourlyPackages data! Adding default.');
+      packagesToUse.push(defaultPackages[0]);
     }
+    
+    // Verify that we have the 8hrs package, if not add it from defaults
+    const has8HrsPackage = packagesToUse.some(pkg => pkg.hours === 8);
+    if (!has8HrsPackage) {
+      console.warn('8 hours package is missing from hourlyPackages data! Adding default.');
+      packagesToUse.push(defaultPackages[1]);
+    }
+    
+    // Verify that we have the 10hrs package, if not add it from defaults
+    const has10HrsPackage = packagesToUse.some(pkg => pkg.hours === 10);
+    if (!has10HrsPackage) {
+      console.warn('10 hours package is missing from hourlyPackages data! Adding default.');
+      packagesToUse.push(defaultPackages[2]);
+    }
+    
+    // Sort packages by hours
+    const sortedPackages = [...packagesToUse].sort((a, b) => a.hours - b.hours);
     
     console.log('Available hourly packages:', sortedPackages);
     setPackages(sortedPackages);

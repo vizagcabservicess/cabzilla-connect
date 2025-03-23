@@ -15,6 +15,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+// Create a log directory if it doesn't exist
+if (!file_exists(__DIR__ . '/../logs')) {
+    mkdir(__DIR__ . '/../logs', 0755, true);
+}
+
 // Log request details to a separate file for debugging
 $timestamp = date('Y-m-d H:i:s');
 $requestData = file_get_contents('php://input');
@@ -33,6 +38,130 @@ try {
     echo json_encode(['status' => 'error', 'message' => 'Database connection failed: ' . $e->getMessage()]);
     exit;
 }
+
+// Function to ensure all required database tables exist
+function ensureTablesExist($pdo) {
+    try {
+        // Check if vehicle_pricing table exists
+        $stmt = $pdo->query("SHOW TABLES LIKE 'vehicle_pricing'");
+        if ($stmt->rowCount() == 0) {
+            error_log("Creating vehicle_pricing table", 3, __DIR__ . '/../logs/direct-fares.log');
+            $pdo->exec("CREATE TABLE vehicle_pricing (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                vehicle_type VARCHAR(100) NOT NULL,
+                base_price DECIMAL(10,2) DEFAULT 0,
+                price_per_km DECIMAL(10,2) DEFAULT 0,
+                driver_allowance DECIMAL(10,2) DEFAULT 0,
+                night_halt_charge DECIMAL(10,2) DEFAULT 0,
+                roundtrip_base_price DECIMAL(10,2) DEFAULT 0,
+                roundtrip_price_per_km DECIMAL(10,2) DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )");
+        }
+        
+        // Check if outstation_fares table exists
+        $stmt = $pdo->query("SHOW TABLES LIKE 'outstation_fares'");
+        if ($stmt->rowCount() == 0) {
+            error_log("Creating outstation_fares table", 3, __DIR__ . '/../logs/direct-fares.log');
+            $pdo->exec("CREATE TABLE outstation_fares (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                vehicle_id VARCHAR(100) NOT NULL,
+                base_fare DECIMAL(10,2) DEFAULT 0,
+                price_per_km DECIMAL(10,2) DEFAULT 0,
+                driver_allowance DECIMAL(10,2) DEFAULT 0,
+                night_halt_charge DECIMAL(10,2) DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )");
+        }
+        
+        // Check if vehicles table exists
+        $stmt = $pdo->query("SHOW TABLES LIKE 'vehicles'");
+        if ($stmt->rowCount() == 0) {
+            error_log("Creating vehicles table", 3, __DIR__ . '/../logs/direct-fares.log');
+            $pdo->exec("CREATE TABLE vehicles (
+                id VARCHAR(100) PRIMARY KEY,
+                vehicle_id VARCHAR(100) NOT NULL,
+                name VARCHAR(100) NOT NULL,
+                capacity INT DEFAULT 4,
+                luggage_capacity INT DEFAULT 2,
+                base_price DECIMAL(10,2) DEFAULT 0,
+                price_per_km DECIMAL(10,2) DEFAULT 0,
+                driver_allowance DECIMAL(10,2) DEFAULT 0,
+                night_halt_charge DECIMAL(10,2) DEFAULT 0,
+                image VARCHAR(255) DEFAULT '/cars/sedan.png',
+                description TEXT,
+                amenities TEXT,
+                ac TINYINT(1) DEFAULT 1,
+                is_active TINYINT(1) DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )");
+        }
+        
+        // Check if local_fare_prices table exists
+        $stmt = $pdo->query("SHOW TABLES LIKE 'local_fare_prices'");
+        if ($stmt->rowCount() == 0) {
+            error_log("Creating local_fare_prices table", 3, __DIR__ . '/../logs/direct-fares.log');
+            $pdo->exec("CREATE TABLE local_fare_prices (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                vehicle_id VARCHAR(100) NOT NULL,
+                package_4hr_40km DECIMAL(10,2) DEFAULT 0,
+                package_8hr_80km DECIMAL(10,2) DEFAULT 0,
+                package_10hr_100km DECIMAL(10,2) DEFAULT 0,
+                extra_km_rate DECIMAL(10,2) DEFAULT 0,
+                extra_hour_rate DECIMAL(10,2) DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )");
+        }
+        
+        // Check if airport_fares table exists
+        $stmt = $pdo->query("SHOW TABLES LIKE 'airport_fares'");
+        if ($stmt->rowCount() == 0) {
+            error_log("Creating airport_fares table", 3, __DIR__ . '/../logs/direct-fares.log');
+            $pdo->exec("CREATE TABLE airport_fares (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                vehicle_id VARCHAR(100) NOT NULL,
+                base_price DECIMAL(10,2) DEFAULT 0,
+                price_per_km DECIMAL(10,2) DEFAULT 0,
+                drop_price DECIMAL(10,2) DEFAULT 0,
+                pickup_price DECIMAL(10,2) DEFAULT 0,
+                tier1_price DECIMAL(10,2) DEFAULT 0,
+                tier2_price DECIMAL(10,2) DEFAULT 0,
+                tier3_price DECIMAL(10,2) DEFAULT 0,
+                tier4_price DECIMAL(10,2) DEFAULT 0,
+                extra_km_charge DECIMAL(10,2) DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )");
+        }
+        
+        // Check if fare_prices table exists (legacy)
+        $stmt = $pdo->query("SHOW TABLES LIKE 'fare_prices'");
+        if ($stmt->rowCount() == 0) {
+            error_log("Creating fare_prices table (legacy compatibility)", 3, __DIR__ . '/../logs/direct-fares.log');
+            $pdo->exec("CREATE TABLE fare_prices (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                vehicle_id VARCHAR(100) NOT NULL,
+                trip_type ENUM('local', 'outstation', 'airport') NOT NULL,
+                base_price DECIMAL(10,2) DEFAULT 0,
+                price_per_km DECIMAL(10,2) DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )");
+        }
+        
+        return true;
+    } catch (PDOException $e) {
+        error_log("Table creation error: " . $e->getMessage(), 3, __DIR__ . '/../logs/direct-fares.log');
+        return false;
+    }
+}
+
+// Ensure all required tables exist
+ensureTablesExist($pdo);
 
 // Extract data from all possible sources for maximum compatibility
 $data = [];
@@ -131,6 +260,9 @@ if (empty($vehicleId)) {
 error_log("Vehicle ID: $vehicleId, Base Fare: $baseFare, Per KM: $pricePerKm, Driver Allowance: $driverAllowance, Night Halt: $nightHalt, Round Base: $roundtripBaseFare, Round Per KM: $roundtripPricePerKm", 3, __DIR__ . '/../logs/direct-fares.log');
 
 try {
+    // Begin transaction for data consistency
+    $pdo->beginTransaction();
+    
     // First check if this vehicle exists
     $checkSql = "SELECT COUNT(*) FROM vehicles WHERE id = ? OR vehicle_id = ?";
     $checkStmt = $pdo->prepare($checkSql);
@@ -150,28 +282,31 @@ try {
     
     // First try updating the vehicle_pricing table (new schema)
     try {
-        $sql = "UPDATE vehicle_pricing SET 
-                base_price = ?, 
-                price_per_km = ?,
-                driver_allowance = ?,
-                night_halt_charge = ?,
-                roundtrip_base_price = ?,
-                roundtrip_price_per_km = ? 
-                WHERE vehicle_type = ?";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([$baseFare, $pricePerKm, $driverAllowance, $nightHalt, $roundtripBaseFare, $roundtripPricePerKm, $vehicleId]);
-        $rowCount = $stmt->rowCount();
+        // Check if entry exists first
+        $checkSql = "SELECT COUNT(*) FROM vehicle_pricing WHERE vehicle_type = ?";
+        $checkStmt = $pdo->prepare($checkSql);
+        $checkStmt->execute([$vehicleId]);
+        $entryExists = ($checkStmt->fetchColumn() > 0);
         
-        // If no rows updated, insert a new record
-        if ($rowCount === 0) {
+        if ($entryExists) {
+            $sql = "UPDATE vehicle_pricing SET 
+                    base_price = ?, 
+                    price_per_km = ?,
+                    driver_allowance = ?,
+                    night_halt_charge = ?,
+                    roundtrip_base_price = ?,
+                    roundtrip_price_per_km = ? 
+                    WHERE vehicle_type = ?";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([$baseFare, $pricePerKm, $driverAllowance, $nightHalt, $roundtripBaseFare, $roundtripPricePerKm, $vehicleId]);
+            error_log("Updated vehicle_pricing for $vehicleId", 3, __DIR__ . '/../logs/direct-fares.log');
+        } else {
             $insertSql = "INSERT INTO vehicle_pricing 
                 (vehicle_type, base_price, price_per_km, driver_allowance, night_halt_charge, roundtrip_base_price, roundtrip_price_per_km) 
                 VALUES (?, ?, ?, ?, ?, ?, ?)";
             $insertStmt = $pdo->prepare($insertSql);
             $insertStmt->execute([$vehicleId, $baseFare, $pricePerKm, $driverAllowance, $nightHalt, $roundtripBaseFare, $roundtripPricePerKm]);
             error_log("Inserted new vehicle into vehicle_pricing: $vehicleId", 3, __DIR__ . '/../logs/direct-fares.log');
-        } else {
-            error_log("Updated vehicle_pricing for $vehicleId", 3, __DIR__ . '/../logs/direct-fares.log');
         }
     } catch (PDOException $e) {
         error_log("Error updating vehicle_pricing: " . $e->getMessage(), 3, __DIR__ . '/../logs/direct-fares.log');
@@ -180,27 +315,28 @@ try {
     
     // Also try updating the outstation_fares table (legacy schema)
     try {
-        $checkOutstationSql = "SELECT id FROM outstation_fares WHERE vehicle_id = ?";
-        $checkOutstationStmt = $pdo->prepare($checkOutstationSql);
-        $checkOutstationStmt->execute([$vehicleId]);
-        $outstationExists = $checkOutstationStmt->fetch();
+        // Check if entry exists first
+        $checkSql = "SELECT COUNT(*) FROM outstation_fares WHERE vehicle_id = ?";
+        $checkStmt = $pdo->prepare($checkSql);
+        $checkStmt->execute([$vehicleId]);
+        $entryExists = ($checkStmt->fetchColumn() > 0);
         
-        if ($outstationExists) {
-            $updateOutstationSql = "UPDATE outstation_fares SET 
+        if ($entryExists) {
+            $updateSql = "UPDATE outstation_fares SET 
                 base_fare = ?, 
                 price_per_km = ?, 
                 driver_allowance = ?, 
                 night_halt_charge = ? 
                 WHERE vehicle_id = ?";
-            $updateOutstationStmt = $pdo->prepare($updateOutstationSql);
-            $updateOutstationStmt->execute([$baseFare, $pricePerKm, $driverAllowance, $nightHalt, $vehicleId]);
+            $updateStmt = $pdo->prepare($updateSql);
+            $updateStmt->execute([$baseFare, $pricePerKm, $driverAllowance, $nightHalt, $vehicleId]);
             error_log("Updated outstation_fares for $vehicleId", 3, __DIR__ . '/../logs/direct-fares.log');
         } else {
-            $insertOutstationSql = "INSERT INTO outstation_fares 
+            $insertSql = "INSERT INTO outstation_fares 
                 (vehicle_id, base_fare, price_per_km, driver_allowance, night_halt_charge) 
                 VALUES (?, ?, ?, ?, ?)";
-            $insertOutstationStmt = $pdo->prepare($insertOutstationSql);
-            $insertOutstationStmt->execute([$vehicleId, $baseFare, $pricePerKm, $driverAllowance, $nightHalt]);
+            $insertStmt = $pdo->prepare($insertSql);
+            $insertStmt->execute([$vehicleId, $baseFare, $pricePerKm, $driverAllowance, $nightHalt]);
             error_log("Inserted new record into outstation_fares for $vehicleId", 3, __DIR__ . '/../logs/direct-fares.log');
         }
     } catch (PDOException $e) {
@@ -210,21 +346,53 @@ try {
     
     // Also update the vehicles table (primary table)
     try {
-        $updateVehiclesSql = "UPDATE vehicles SET 
+        $updateSql = "UPDATE vehicles SET 
             base_price = ?, 
             price_per_km = ?, 
             driver_allowance = ?, 
             night_halt_charge = ? 
             WHERE id = ? OR vehicle_id = ?";
-        $updateVehiclesStmt = $pdo->prepare($updateVehiclesSql);
-        $updateVehiclesStmt->execute([$baseFare, $pricePerKm, $driverAllowance, $nightHalt, $vehicleId, $vehicleId]);
+        $updateStmt = $pdo->prepare($updateSql);
+        $updateStmt->execute([$baseFare, $pricePerKm, $driverAllowance, $nightHalt, $vehicleId, $vehicleId]);
         error_log("Updated vehicles table for $vehicleId", 3, __DIR__ . '/../logs/direct-fares.log');
     } catch (PDOException $e) {
         error_log("Error updating vehicles table: " . $e->getMessage(), 3, __DIR__ . '/../logs/direct-fares.log');
         // Continue anyway
     }
     
-    // If we got here, at least one operation succeeded
+    // Also update the fare_prices table for backward compatibility
+    try {
+        // Check if entry exists first
+        $checkSql = "SELECT COUNT(*) FROM fare_prices WHERE vehicle_id = ? AND trip_type = 'outstation'";
+        $checkStmt = $pdo->prepare($checkSql);
+        $checkStmt->execute([$vehicleId]);
+        $entryExists = ($checkStmt->fetchColumn() > 0);
+        
+        if ($entryExists) {
+            $updateSql = "UPDATE fare_prices SET 
+                base_price = ?, 
+                price_per_km = ?
+                WHERE vehicle_id = ? AND trip_type = 'outstation'";
+            $updateStmt = $pdo->prepare($updateSql);
+            $updateStmt->execute([$baseFare, $pricePerKm, $vehicleId]);
+            error_log("Updated fare_prices table for $vehicleId (outstation)", 3, __DIR__ . '/../logs/direct-fares.log');
+        } else {
+            $insertSql = "INSERT INTO fare_prices 
+                (vehicle_id, trip_type, base_price, price_per_km) 
+                VALUES (?, 'outstation', ?, ?)";
+            $insertStmt = $pdo->prepare($insertSql);
+            $insertStmt->execute([$vehicleId, $baseFare, $pricePerKm]);
+            error_log("Inserted new record into fare_prices for $vehicleId (outstation)", 3, __DIR__ . '/../logs/direct-fares.log');
+        }
+    } catch (PDOException $e) {
+        error_log("Error updating fare_prices table: " . $e->getMessage(), 3, __DIR__ . '/../logs/direct-fares.log');
+        // Continue anyway
+    }
+    
+    // Commit transaction
+    $pdo->commit();
+    
+    // Return success response
     http_response_code(200);
     echo json_encode([
         'status' => 'success',
@@ -243,6 +411,11 @@ try {
     ]);
     
 } catch (Exception $e) {
+    // Rollback transaction on error
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+    
     error_log("Critical error: " . $e->getMessage(), 3, __DIR__ . '/../logs/direct-fares.log');
     
     http_response_code(500);
