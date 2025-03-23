@@ -55,7 +55,9 @@ let localPackagePriceMatrix: LocalPackagePriceMatrix = {
     'swift_02': 100,
     'etios': 2500,
     'dzire': 2500,
-    'amaze': 2500
+    'amaze': 2500,
+    'dzire cng': 2500,
+    'swift': 2500
   },
   '10hrs-100km': {
     'sedan': 3000,
@@ -67,7 +69,9 @@ let localPackagePriceMatrix: LocalPackagePriceMatrix = {
     'swift_02': 200,
     'etios': 3000,
     'dzire': 3000,
-    'amaze': 3000
+    'amaze': 3000,
+    'dzire cng': 3000,
+    'swift': 3000
   },
   '4hrs-40km': {
     'sedan': 1500,
@@ -79,7 +83,9 @@ let localPackagePriceMatrix: LocalPackagePriceMatrix = {
     'swift_02': 80,
     'etios': 1500,
     'dzire': 1500,
-    'amaze': 1500
+    'amaze': 1500,
+    'dzire cng': 1500,
+    'swift': 1500
   }
 };
 
@@ -115,6 +121,18 @@ export function getLocalPackagePrice(packageId: string, cabType: string): number
       localPackagePriceMatrix[packageId]['sedan']) {
     console.log(`Using sedan price for ${lowerCabType}: ${localPackagePriceMatrix[packageId]['sedan']}`);
     return localPackagePriceMatrix[packageId]['sedan'];
+  }
+  
+  // For dzire-like vehicles
+  if (lowerCabType.includes('dzire') && localPackagePriceMatrix[packageId]['dzire']) {
+    console.log(`Using dzire price for ${lowerCabType}: ${localPackagePriceMatrix[packageId]['dzire']}`);
+    return localPackagePriceMatrix[packageId]['dzire'];
+  }
+  
+  // For amaze-like vehicles
+  if (lowerCabType.includes('amaze') && localPackagePriceMatrix[packageId]['amaze']) {
+    console.log(`Using amaze price for ${lowerCabType}: ${localPackagePriceMatrix[packageId]['amaze']}`);
+    return localPackagePriceMatrix[packageId]['amaze'];
   }
   
   // For innova-like vehicles
@@ -180,13 +198,26 @@ export function updateLocalPackagePrice(packageId: string, cabType: string, pric
     localPackagePriceMatrix[packageId] = {};
   }
   
+  // Normalize some common cab type variations to match what the frontend expects
+  let normalizedCabType = lowerCabType;
+  if (normalizedCabType === 'swift_02') normalizedCabType = 'swift';
+  if (normalizedCabType === 'dzire_cng') normalizedCabType = 'dzire cng';
+  if (normalizedCabType === 'innova_crysta') normalizedCabType = 'innova crysta';
+  
   // Update the price for the specified cab type
   localPackagePriceMatrix[packageId][lowerCabType] = price;
+  
+  // Also update normalized version if different
+  if (normalizedCabType !== lowerCabType) {
+    localPackagePriceMatrix[packageId][normalizedCabType] = price;
+    console.log(`Also updated normalized cab type ${normalizedCabType} with the same price`);
+  }
   
   // Save to localStorage for persistence
   try {
     const savedMatrix = JSON.stringify(localPackagePriceMatrix);
     localStorage.setItem('localPackagePriceMatrix', savedMatrix);
+    localStorage.setItem('localPackagePriceMatrixUpdated', Date.now().toString());
     console.log(`Updated and saved local price matrix to localStorage: ${savedMatrix.substring(0, 100)}...`);
     
     // Dispatch an event to notify other components
@@ -198,6 +229,13 @@ export function updateLocalPackagePrice(packageId: string, cabType: string, pric
         price
       }
     }));
+    
+    // Also clear the fare cache to force recalculation
+    window.dispatchEvent(new CustomEvent('fare-cache-cleared', {
+      detail: { timestamp: Date.now() }
+    }));
+    
+    console.log('Dispatched local-fares-updated and fare-cache-cleared events');
   } catch (e) {
     console.error('Failed to save local package price matrix to localStorage:', e);
   }

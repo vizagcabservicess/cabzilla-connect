@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Location } from '@/lib/locationData';
 import { CabType } from '@/types/cab';
@@ -51,12 +50,75 @@ export const BookingSummary = ({
       }
     };
     
+    // Listen for cab selection events specifically for local trips
+    const handleCabSelectedForLocal = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.log('BookingSummary: Detected cab-selected-for-local event', customEvent.detail);
+      
+      if (selectedCab && tripType === 'local' && customEvent.detail) {
+        // Update from the event data if available
+        if (customEvent.detail.fare && customEvent.detail.fare > 0) {
+          setCalculatedFare(customEvent.detail.fare);
+        } else {
+          // Otherwise use the current totalPrice
+          setCalculatedFare(totalPrice);
+        }
+      }
+    };
+    
+    // Listen for trip fares updated
+    const handleTripFaresUpdated = () => {
+      console.log('BookingSummary: Detected trip-fares-updated event');
+      // Force an update of the calculated fare for outstation trips
+      if (selectedCab && tripType === 'outstation') {
+        setCalculatedFare(totalPrice);
+      }
+    };
+    
+    // Listen for fare cache cleared events
+    const handleFareCacheCleared = () => {
+      console.log('BookingSummary: Detected fare-cache-cleared event');
+      // Update with the latest total price
+      setCalculatedFare(totalPrice);
+    };
+    
     window.addEventListener('local-fares-updated', handleLocalFaresUpdated);
+    window.addEventListener('cab-selected-for-local', handleCabSelectedForLocal);
+    window.addEventListener('trip-fares-updated', handleTripFaresUpdated);
+    window.addEventListener('fare-cache-cleared', handleFareCacheCleared);
     
     return () => {
       window.removeEventListener('local-fares-updated', handleLocalFaresUpdated);
+      window.removeEventListener('cab-selected-for-local', handleCabSelectedForLocal);
+      window.removeEventListener('trip-fares-updated', handleTripFaresUpdated);
+      window.removeEventListener('fare-cache-cleared', handleFareCacheCleared);
     };
   }, [totalPrice, selectedCab, tripType]);
+
+  // Force recalculation when selected cab changes
+  useEffect(() => {
+    if (selectedCab) {
+      // If tripType is local, get the price from local package price matrix
+      if (tripType === 'local' && selectedCab.id) {
+        try {
+          // Check if we have an explicit hourly package
+          const hourlyPackageId = '8hrs-80km'; // Default package
+          const localPrice = getLocalPackagePrice(hourlyPackageId, selectedCab.id);
+          console.log(`Retrieved local price for ${selectedCab.id}: ${localPrice}`);
+          
+          // Apply GST
+          const priceWithGST = Math.round(localPrice * 1.05);
+          setCalculatedFare(priceWithGST);
+        } catch (error) {
+          console.error('Error getting local package price:', error);
+          setCalculatedFare(totalPrice);
+        }
+      } else {
+        // For other trip types, just use the totalPrice
+        setCalculatedFare(totalPrice);
+      }
+    }
+  }, [selectedCab, tripType, totalPrice]);
 
   // Ensure we have data to display
   if (!pickupLocation || (!dropLocation && tripType !== 'local' && tripType !== 'tour') || !pickupDate || !selectedCab) {

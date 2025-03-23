@@ -45,6 +45,7 @@ export function CabOptions({
   const [lastUpdate, setLastUpdate] = useState<number>(Date.now());
   const [refreshCount, setRefreshCount] = useState(0);
   const [forceRecalculation, setForceRecalculation] = useState(0);
+  const [globalRefreshTrigger, setGlobalRefreshTrigger] = useState(0);
 
   // Use the hook to fetch cab options
   const { 
@@ -76,7 +77,8 @@ export function CabOptions({
       
       const keysToRemove = [
         'cachedFareData', 'cabPricing', 'fareCache', 'fares', 'cabData', 
-        'vehicles', 'calculatedFares', 'cabTypes', 'tourFares'
+        'vehicles', 'calculatedFares', 'cabTypes', 'tourFares',
+        'outstationFares', 'airportFares'
       ];
       
       keysToRemove.forEach(key => {
@@ -92,6 +94,7 @@ export function CabOptions({
       // Create a timestamp for reference
       const timestamp = Date.now();
       localStorage.setItem('fareDataLastRefreshed', timestamp.toString());
+      localStorage.setItem('forceTripFaresRefresh', 'true');
       
       // Reload cab types from server with force flag
       console.log('Reloading cab types from server...');
@@ -105,6 +108,7 @@ export function CabOptions({
       setLastUpdate(timestamp);
       setRefreshCount(prev => prev + 1);
       setForceRecalculation(prev => prev + 1);
+      setGlobalRefreshTrigger(prev => prev + 1);
       
       // Trigger recalculation of fares
       await calculateFares(cabOptions, true);
@@ -121,6 +125,11 @@ export function CabOptions({
       
       // Ensure the force refresh flag is cleared
       localStorage.removeItem('forceCacheRefresh');
+      
+      // After a short delay, remove the trip fares refresh flag
+      setTimeout(() => {
+        localStorage.removeItem('forceTripFaresRefresh');
+      }, 5000);
     }
   };
 
@@ -182,7 +191,7 @@ export function CabOptions({
       console.log(`Cab options changed, recalculating fares for ${cabOptions.length} cabs`);
       calculateFares(cabOptions);
     }
-  }, [cabOptions, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate, lastUpdate, refreshCount, forceRecalculation]);
+  }, [cabOptions, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate, lastUpdate, refreshCount, forceRecalculation, globalRefreshTrigger]);
 
   // Update selected cab ID when selectedCab changes from outside
   useEffect(() => {
@@ -198,6 +207,7 @@ export function CabOptions({
       // Force update the lastUpdate timestamp to trigger recalculation
       setLastUpdate(Date.now());
       setForceRecalculation(prev => prev + 1);
+      setGlobalRefreshTrigger(prev => prev + 1);
     };
     
     const handleLocalFaresUpdated = (event: Event) => {
@@ -208,6 +218,7 @@ export function CabOptions({
       setLastUpdate(Date.now());
       setRefreshCount(prev => prev + 1);
       setForceRecalculation(prev => prev + 1);
+      setGlobalRefreshTrigger(prev => prev + 1);
       
       // If we're in local trip mode and have the specific package that was updated
       if (tripType === 'local' && 
@@ -220,12 +231,28 @@ export function CabOptions({
       }
     };
     
+    // Listen for trip fares updated events
+    const handleTripFaresUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.log('Detected trip fares updated event, recalculating fares', customEvent.detail);
+      
+      // Trigger a global recalculation
+      setGlobalRefreshTrigger(prev => prev + 1);
+      
+      // Force recalculation with cache clearing for outstation fares
+      if (tripType === 'outstation') {
+        calculateFares(cabOptions, true);
+      }
+    };
+    
     window.addEventListener('fare-cache-cleared', handleCacheCleared);
     window.addEventListener('local-fares-updated', handleLocalFaresUpdated);
+    window.addEventListener('trip-fares-updated', handleTripFaresUpdated);
     
     return () => {
       window.removeEventListener('fare-cache-cleared', handleCacheCleared);
       window.removeEventListener('local-fares-updated', handleLocalFaresUpdated);
+      window.removeEventListener('trip-fares-updated', handleTripFaresUpdated);
     };
   }, [cabOptions, tripType, hourlyPackage]);
 
@@ -247,10 +274,23 @@ export function CabOptions({
     setSelectedCabId(cab.id);
     onSelectCab(cab);
     
-    // If it's a local trip, force a recalculation when the cab is selected
+    // Force a recalculation for any trip type when the cab is selected
+    setForceRecalculation(prev => prev + 1);
+    
+    // Special handling for local trips
     if (tripType === 'local' && hourlyPackage) {
       // Trigger a recalculation of fares with force flag
-      setForceRecalculation(prev => prev + 1);
+      calculateFares([cab], true);
+      
+      // Dispatch an event to notify BookingSummary of the cab selection
+      window.dispatchEvent(new CustomEvent('cab-selected-for-local', {
+        detail: { 
+          timestamp: Date.now(),
+          cabType: cab.id,
+          hourlyPackage,
+          fare: cabFares[cab.id] || 0
+        }
+      }));
     }
   };
 

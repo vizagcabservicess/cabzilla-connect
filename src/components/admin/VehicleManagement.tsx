@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { VehicleTripFaresForm } from './VehicleTripFaresForm';
+import { clearFareCache } from '@/lib/fareCalculationService';
 
 export const VehicleManagement = () => {
   const [vehicles, setVehicles] = useState<{id: string, name: string}[]>([]);
@@ -159,7 +161,24 @@ export const VehicleManagement = () => {
       console.log("Updating vehicle with data:", vehicleData);
       
       await updateVehicle(vehicleData);
+      
+      // Clear all fare caches
+      clearFareCache();
+      
+      // Notify about the trip fare update
+      window.dispatchEvent(new CustomEvent('trip-fares-updated', {
+        detail: { 
+          timestamp: Date.now(),
+          vehicleId: selectedVehicle,
+          basePrice: parseFloat(basePrice) || 0,
+          pricePerKm: parseFloat(pricePerKm) || 0
+        }
+      }));
+      
       toast.success("Vehicle updated successfully");
+      
+      // Set global flag to force trip fares refresh
+      localStorage.setItem('forceTripFaresRefresh', 'true');
       
       // Refresh the vehicles list
       setRefreshTrigger(prev => prev + 1);
@@ -204,6 +223,28 @@ export const VehicleManagement = () => {
     }
   };
   
+  // Handler for tab changes
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    
+    // If switching to Trip Fares tab, force refresh trip fares
+    if (value === "fares") {
+      // Set a flag to force trip fares refresh
+      localStorage.setItem('forceTripFaresRefresh', 'true');
+      
+      // Clear fare caches
+      clearFareCache();
+      
+      // Notify about the tab change
+      window.dispatchEvent(new CustomEvent('trip-fares-tab-activated', {
+        detail: { 
+          timestamp: Date.now(),
+          vehicleId: selectedVehicle
+        }
+      }));
+    }
+  };
+  
   return (
     <div className="grid gap-6">
       <div className="flex flex-col gap-4">
@@ -223,7 +264,7 @@ export const VehicleManagement = () => {
           </Select>
         </div>
         
-        <Tabs defaultValue="basic" value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <Tabs defaultValue="basic" value={activeTab} onValueChange={handleTabChange} className="w-full">
           <TabsList className="w-full">
             <TabsTrigger value="basic" className="flex-1">Basic Info</TabsTrigger>
             <TabsTrigger value="pricing" className="flex-1">Pricing</TabsTrigger>
@@ -357,7 +398,7 @@ export const VehicleManagement = () => {
           
           {/* Trip Fares Tab */}
           <TabsContent value="fares">
-            <VehicleTripFaresForm />
+            <VehicleTripFaresForm vehicleId={selectedVehicle} />
           </TabsContent>
         </Tabs>
         
