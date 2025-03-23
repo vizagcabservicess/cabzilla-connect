@@ -1,6 +1,6 @@
 
 <?php
-// airport-fares-update.php - Dedicated endpoint for updating airport transfer fares
+// airport-fares-update.php - Dedicated endpoint for updating airport trip fares
 
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -77,17 +77,26 @@ if (strpos($vehicleId, 'item-') === 0) {
     $vehicleId = substr($vehicleId, 5);
 }
 
-// Support multiple field name variations for easy integration
-$pickupFare = floatval($data['pickupFare'] ?? $data['basePrice'] ?? $data['baseFare'] ?? 0);
-$dropFare = floatval($data['dropFare'] ?? $data['pricePerKm'] ?? 0);
-$airportFee = floatval($data['airportFee'] ?? 0);
+// Extract pricing data with multiple possible field names
+$basePrice = floatval($data['basePrice'] ?? $data['base_price'] ?? $data['airport_base_price'] ?? 0);
+$pricePerKm = floatval($data['pricePerKm'] ?? $data['price_per_km'] ?? $data['airport_price_per_km'] ?? 0);
+$dropPrice = floatval($data['dropPrice'] ?? $data['drop_price'] ?? $data['airport_drop_price'] ?? 0);
+$pickupPrice = floatval($data['pickupPrice'] ?? $data['pickup_price'] ?? $data['airport_pickup_price'] ?? 0);
+
+// Extract tier pricing data
+$tier1Price = floatval($data['tier1Price'] ?? $data['tier_1_price'] ?? $data['airport_tier1_price'] ?? 0);
+$tier2Price = floatval($data['tier2Price'] ?? $data['tier_2_price'] ?? $data['airport_tier2_price'] ?? 0);
+$tier3Price = floatval($data['tier3Price'] ?? $data['tier_3_price'] ?? $data['airport_tier3_price'] ?? 0);
+$tier4Price = floatval($data['tier4Price'] ?? $data['tier_4_price'] ?? $data['airport_tier4_price'] ?? 0);
+$extraKmCharge = floatval($data['extraKmCharge'] ?? $data['extra_km_charge'] ?? $data['airport_extra_km_charge'] ?? 0);
 
 // Validate data
-if ($pickupFare <= 0 && $dropFare <= 0) {
+if ($basePrice <= 0 && $pickupPrice <= 0 && $dropPrice <= 0 && 
+    $tier1Price <= 0 && $tier2Price <= 0 && $tier3Price <= 0 && $tier4Price <= 0) {
     http_response_code(400);
     echo json_encode([
         'status' => 'error',
-        'message' => 'At least one price must be greater than zero',
+        'message' => 'At least one price value must be greater than zero',
         'receivedData' => $data
     ]);
     exit;
@@ -148,247 +157,159 @@ try {
     
     error_log("Database connection successful");
     
-    // Check if vehicle exists in vehicles table
-    $checkVehicleStmt = $pdo->prepare("SELECT id FROM vehicles WHERE id = ? OR vehicle_id = ?");
-    $checkVehicleStmt->execute([$vehicleId, $vehicleId]);
+    // Check if vehicle exists in vehicle_pricing table
+    $checkVehicleStmt = $pdo->prepare("SELECT id FROM vehicle_pricing WHERE vehicle_type = ?");
+    $checkVehicleStmt->execute([$vehicleId]);
     
-    if ($checkVehicleStmt->rowCount() === 0) {
-        // Vehicle doesn't exist, create it
-        $vehicleName = ucfirst(str_replace('_', ' ', $vehicleId));
-        $insertVehicleStmt = $pdo->prepare("
-            INSERT INTO vehicles 
-            (id, vehicle_id, name, is_active, created_at, updated_at) 
-            VALUES (?, ?, ?, 1, NOW(), NOW())
-            ON DUPLICATE KEY UPDATE updated_at = NOW()
-        ");
-        $insertVehicleStmt->execute([$vehicleId, $vehicleId, $vehicleName]);
-        error_log("Created new vehicle: $vehicleId");
+    // Use a transaction to ensure all operations succeed or fail together
+    $pdo->beginTransaction();
+    
+    if ($checkVehicleStmt->rowCount() > 0) {
+        // Update existing record with all the new pricing information
+        $updateSql = "
+            UPDATE vehicle_pricing 
+            SET 
+                airport_base_price = ?,
+                airport_price_per_km = ?,
+                airport_drop_price = ?,
+                airport_pickup_price = ?,
+                airport_tier1_price = ?,
+                airport_tier2_price = ?,
+                airport_tier3_price = ?,
+                airport_tier4_price = ?,
+                airport_extra_km_charge = ?,
+                updated_at = NOW() 
+            WHERE vehicle_type = ?
+        ";
+        
+        $updateStmt = $pdo->prepare($updateSql);
+        $updateStmt->execute([
+            $basePrice, 
+            $pricePerKm, 
+            $dropPrice, 
+            $pickupPrice,
+            $tier1Price,
+            $tier2Price,
+            $tier3Price,
+            $tier4Price,
+            $extraKmCharge,
+            $vehicleId
+        ]);
+        
+        error_log("Updated airport fares for vehicle: $vehicleId");
+    } else {
+        // Insert new record with all the pricing information
+        $insertSql = "
+            INSERT INTO vehicle_pricing (
+                vehicle_type, airport_base_price, airport_price_per_km, 
+                airport_drop_price, airport_pickup_price,
+                airport_tier1_price, airport_tier2_price, airport_tier3_price, airport_tier4_price,
+                airport_extra_km_charge,
+                base_price, price_per_km, night_halt_charge, driver_allowance,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NOW(), NOW())
+        ";
+        
+        $insertStmt = $pdo->prepare($insertSql);
+        $insertStmt->execute([
+            $vehicleId, 
+            $basePrice, 
+            $pricePerKm, 
+            $dropPrice, 
+            $pickupPrice,
+            $tier1Price,
+            $tier2Price,
+            $tier3Price,
+            $tier4Price,
+            $extraKmCharge,
+            $basePrice,  // Use airport base price as fallback for general base price
+            $pricePerKm  // Use airport km price as fallback for general per km price
+        ]);
+        
+        error_log("Inserted new airport fares for vehicle: $vehicleId");
     }
     
-    $success = false;
-    
-    // APPROACH 1: Try airport_transfer_fares table
+    // Try to also update the fare_prices table if it exists (for backward compatibility)
     try {
-        // First check if the table exists
-        $checkTableStmt = $pdo->query("SHOW TABLES LIKE 'airport_transfer_fares'");
-        if ($checkTableStmt->rowCount() === 0) {
-            // Table doesn't exist, create it
-            $createTableSql = "
-                CREATE TABLE IF NOT EXISTS airport_transfer_fares (
-                    id INT(11) NOT NULL AUTO_INCREMENT,
-                    vehicle_id VARCHAR(50) NOT NULL,
-                    pickup_fare DECIMAL(10,2) NOT NULL DEFAULT 0,
-                    drop_fare DECIMAL(10,2) NOT NULL DEFAULT 0,
-                    airport_fee DECIMAL(10,2) NOT NULL DEFAULT 0,
-                    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    PRIMARY KEY (id),
-                    UNIQUE KEY vehicle_id (vehicle_id)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-            ";
-            $pdo->exec($createTableSql);
-            error_log("Created airport_transfer_fares table");
-        }
+        // Check if the table exists
+        $tableExistsStmt = $pdo->query("SHOW TABLES LIKE 'fare_prices'");
         
-        // Check if record exists
-        $checkAirportStmt = $pdo->prepare("SELECT id FROM airport_transfer_fares WHERE vehicle_id = ?");
-        $checkAirportStmt->execute([$vehicleId]);
-        
-        if ($checkAirportStmt->rowCount() > 0) {
-            // Update existing record
-            $updateStmt = $pdo->prepare("
-                UPDATE airport_transfer_fares 
-                SET 
-                    pickup_fare = ?, 
-                    drop_fare = ?,
-                    airport_fee = ?,
-                    updated_at = NOW() 
-                WHERE vehicle_id = ?
-            ");
-            $updateStmt->execute([$pickupFare, $dropFare, $airportFee, $vehicleId]);
-        } else {
-            // Insert new record
-            $insertStmt = $pdo->prepare("
-                INSERT INTO airport_transfer_fares 
-                (vehicle_id, pickup_fare, drop_fare, airport_fee, created_at, updated_at) 
-                VALUES (?, ?, ?, ?, NOW(), NOW())
-            ");
-            $insertStmt->execute([$vehicleId, $pickupFare, $dropFare, $airportFee]);
-        }
-        
-        error_log("APPROACH 1 succeeded: Updated airport_transfer_fares");
-        $success = true;
-    } catch (Exception $e) {
-        error_log("APPROACH 1 failed: " . $e->getMessage());
-    }
-    
-    // APPROACH 2: Try vehicle_pricing table
-    if (!$success) {
-        try {
-            // Check if record exists
-            $checkVehiclePricingStmt = $pdo->prepare("
-                SELECT id FROM vehicle_pricing 
-                WHERE vehicle_id = ? AND trip_type = 'airport'
-            ");
-            $checkVehiclePricingStmt->execute([$vehicleId]);
-            
-            if ($checkVehiclePricingStmt->rowCount() > 0) {
-                // Update existing record
-                $updateStmt = $pdo->prepare("
-                    UPDATE vehicle_pricing 
-                    SET 
-                        base_fare = ?, 
-                        price_per_km = ?,
-                        airport_fee = ?,
-                        updated_at = NOW() 
-                    WHERE vehicle_id = ? AND trip_type = 'airport'
-                ");
-                $updateStmt->execute([$pickupFare, $dropFare, $airportFee, $vehicleId]);
-            } else {
-                // Insert new record
-                $insertStmt = $pdo->prepare("
-                    INSERT INTO vehicle_pricing 
-                    (vehicle_id, trip_type, base_fare, price_per_km, airport_fee, created_at, updated_at) 
-                    VALUES (?, 'airport', ?, ?, ?, NOW(), NOW())
-                ");
-                $insertStmt->execute([$vehicleId, $pickupFare, $dropFare, $airportFee]);
-            }
-            
-            error_log("APPROACH 2 succeeded: Updated vehicle_pricing for airport");
-            $success = true;
-        } catch (Exception $e) {
-            error_log("APPROACH 2 failed: " . $e->getMessage());
-        }
-    }
-    
-    // APPROACH 3: Try vehicle_trip_rates table
-    if (!$success) {
-        try {
-            // Check if the table exists
-            $checkTableStmt = $pdo->query("SHOW TABLES LIKE 'vehicle_trip_rates'");
-            if ($checkTableStmt->rowCount() === 0) {
-                // Table doesn't exist, create it
-                $createTableSql = "
-                    CREATE TABLE IF NOT EXISTS vehicle_trip_rates (
-                        id INT(11) NOT NULL AUTO_INCREMENT,
-                        vehicle_id VARCHAR(50) NOT NULL,
-                        trip_type VARCHAR(50) NOT NULL,
-                        pickup_fare DECIMAL(10,2) NOT NULL DEFAULT 0,
-                        drop_fare DECIMAL(10,2) NOT NULL DEFAULT 0,
-                        airport_fee DECIMAL(10,2) NOT NULL DEFAULT 0,
-                        created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                        PRIMARY KEY (id),
-                        UNIQUE KEY vehicle_trip (vehicle_id, trip_type)
-                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-                ";
-                $pdo->exec($createTableSql);
-                error_log("Created vehicle_trip_rates table");
-            }
-            
-            $alternateSql = "
-                INSERT INTO vehicle_trip_rates 
-                (vehicle_id, trip_type, pickup_fare, drop_fare, airport_fee, updated_at) 
-                VALUES (?, 'airport', ?, ?, ?, NOW()) 
-                ON DUPLICATE KEY UPDATE 
-                pickup_fare = VALUES(pickup_fare), 
-                drop_fare = VALUES(drop_fare),
-                airport_fee = VALUES(airport_fee),
-                updated_at = NOW()
-            ";
-            $alternateStmt = $pdo->prepare($alternateSql);
-            $alternateStmt->execute([$vehicleId, $pickupFare, $dropFare, $airportFee]);
-            
-            error_log("APPROACH 3 succeeded: Updated vehicle_trip_rates");
-            $success = true;
-        } catch (Exception $e) {
-            error_log("APPROACH 3 failed: " . $e->getMessage());
-        }
-    }
-    
-    // APPROACH 4: Try fare_prices table
-    if (!$success) {
-        try {
-            // Check if the table exists
-            $checkTableStmt = $pdo->query("SHOW TABLES LIKE 'fare_prices'");
-            if ($checkTableStmt->rowCount() === 0) {
-                // Table doesn't exist, create it
-                $createTableSql = "
-                    CREATE TABLE IF NOT EXISTS fare_prices (
-                        id INT(11) NOT NULL AUTO_INCREMENT,
-                        vehicle_id VARCHAR(50) NOT NULL,
-                        trip_type VARCHAR(50) NOT NULL,
-                        package_type VARCHAR(50) NOT NULL,
-                        base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                        price_per_km DECIMAL(10,2) NOT NULL DEFAULT 0,
-                        airport_fee DECIMAL(10,2) NOT NULL DEFAULT 0,
-                        created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                        PRIMARY KEY (id),
-                        UNIQUE KEY trip_vehicle_package (vehicle_id, trip_type, package_type)
-                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-                ";
-                $pdo->exec($createTableSql);
-                error_log("Created fare_prices table");
-            }
-            
-            // Use a transaction to ensure both inserts succeed or fail together
-            $pdo->beginTransaction();
-            
-            // Pickup
-            $pickupSql = "
+        if ($tableExistsStmt->rowCount() > 0) {
+            // Update or insert airport base fare
+            $farePricesSql = "
                 INSERT INTO fare_prices 
-                (vehicle_id, trip_type, package_type, base_price, price_per_km, airport_fee, created_at, updated_at)
-                VALUES (?, 'airport', 'pickup', ?, 0, ?, NOW(), NOW())
+                (vehicle_id, trip_type, package_type, base_price, price_per_km, created_at, updated_at)
+                VALUES (?, 'airport', 'base', ?, ?, NOW(), NOW())
                 ON DUPLICATE KEY UPDATE 
                 base_price = VALUES(base_price),
-                airport_fee = VALUES(airport_fee),
-                updated_at = NOW()
-            ";
-            $pickupStmt = $pdo->prepare($pickupSql);
-            $pickupStmt->execute([$vehicleId, $pickupFare, $airportFee]);
-            
-            // Drop
-            $dropSql = "
-                INSERT INTO fare_prices 
-                (vehicle_id, trip_type, package_type, base_price, price_per_km, airport_fee, created_at, updated_at)
-                VALUES (?, 'airport', 'drop', 0, ?, ?, NOW(), NOW())
-                ON DUPLICATE KEY UPDATE 
                 price_per_km = VALUES(price_per_km),
-                airport_fee = VALUES(airport_fee),
                 updated_at = NOW()
             ";
-            $dropStmt = $pdo->prepare($dropSql);
-            $dropStmt->execute([$vehicleId, $dropFare, $airportFee]);
             
-            $pdo->commit();
+            $farePricesStmt = $pdo->prepare($farePricesSql);
+            $farePricesStmt->execute([$vehicleId, $basePrice, $pricePerKm]);
             
-            error_log("APPROACH 4 succeeded: Updated fare_prices for airport");
-            $success = true;
-        } catch (Exception $e) {
-            $pdo->rollBack();
-            error_log("APPROACH 4 failed: " . $e->getMessage());
+            error_log("Updated fare_prices table for airport base fare");
+            
+            // Update or insert tier prices
+            $tierTypes = [
+                'tier1' => $tier1Price,
+                'tier2' => $tier2Price,
+                'tier3' => $tier3Price,
+                'tier4' => $tier4Price,
+                'extra-km' => $extraKmCharge
+            ];
+            
+            foreach ($tierTypes as $tierType => $price) {
+                $tierSql = "
+                    INSERT INTO fare_prices 
+                    (vehicle_id, trip_type, package_type, base_price, created_at, updated_at)
+                    VALUES (?, 'airport', ?, ?, NOW(), NOW())
+                    ON DUPLICATE KEY UPDATE 
+                    base_price = VALUES(base_price),
+                    updated_at = NOW()
+                ";
+                
+                $tierStmt = $pdo->prepare($tierSql);
+                $tierStmt->execute([$vehicleId, $tierType, $price]);
+            }
+            
+            error_log("Updated fare_prices table for airport tier prices");
         }
+    } catch (Exception $e) {
+        // Log but don't fail if fare_prices table update fails
+        error_log("Warning: Could not update fare_prices table: " . $e->getMessage());
     }
     
-    if (!$success) {
-        throw new Exception("All database approaches failed");
-    }
+    $pdo->commit();
     
     // Return success response
     http_response_code(200);
     echo json_encode([
         'status' => 'success',
-        'message' => 'Airport transfer fares updated successfully',
+        'message' => 'Airport fares updated successfully',
         'data' => [
             'vehicleId' => $vehicleId,
-            'pickupFare' => $pickupFare,
-            'dropFare' => $dropFare,
-            'airportFee' => $airportFee
+            'basePrice' => $basePrice,
+            'pricePerKm' => $pricePerKm,
+            'dropPrice' => $dropPrice,
+            'pickupPrice' => $pickupPrice,
+            'tierPrices' => [
+                'tier1' => $tier1Price,
+                'tier2' => $tier2Price,
+                'tier3' => $tier3Price,
+                'tier4' => $tier4Price,
+                'extraKmCharge' => $extraKmCharge
+            ]
         ]
     ]);
     
 } catch (Exception $e) {
+    // Rollback transaction on error
+    if ($pdo) {
+        $pdo->rollBack();
+    }
+    
     // Log the full error
     error_log('Database error: ' . $e->getMessage());
     

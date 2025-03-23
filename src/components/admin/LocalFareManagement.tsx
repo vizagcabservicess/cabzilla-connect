@@ -16,6 +16,7 @@ import { getAllLocalPackagePrices, updateLocalPackagePrice, hourlyPackages } fro
 import { loadCabTypes } from '@/lib/cabData';
 import { CabType } from '@/types/cab';
 import { fareService } from '@/services/fareService';
+import { updateTripFares } from '@/services/vehicleDataService';
 
 const formSchema = z.object({
   packageId: z.string().min(1, { message: "Package is required" }),
@@ -79,7 +80,6 @@ export function LocalFareManagement() {
       // Define the data to send to the API - map our package IDs to the server's column names
       const updateData: Record<string, any> = {
         vehicleId: cabTypeId,
-        vehicle_id: cabTypeId,
         tripType: 'local',
         trip_type: 'local'
       };
@@ -87,42 +87,65 @@ export function LocalFareManagement() {
       // Add the specific package prices using the correct column names
       if (values.packageId === '8hrs-80km') {
         Object.assign(updateData, {
-          priceRate: values.price,
-          price8hrs80km: values.price,
+          local_package_8hr: values.price,
           hr8km80Price: values.price,
-          local_package_8hr: values.price,  // Use this column name
-          local_price_8hr: values.price     // Add this variant too
+          price8hrs80km: values.price
         });
       } else if (values.packageId === '10hrs-100km') {
         Object.assign(updateData, {
-          priceRate: values.price,
-          price10hrs100km: values.price,
+          local_package_10hr: values.price,
           hr10km100Price: values.price,
-          local_package_10hr: values.price, // Use this column name
-          local_price_10hr: values.price    // Add this variant too
+          price10hrs100km: values.price
         });
       } else if (values.packageId === '4hrs-40km') {
         Object.assign(updateData, {
-          priceRate: values.price,
-          price4hrs40km: values.price,
+          local_package_4hr: values.price,
           hr4km40Price: values.price,
-          local_package_4hr: values.price,  // Use this column name
-          local_price_4hr: values.price     // Add this variant too
+          price4hrs40km: values.price
         });
       }
       
-      // Add extra km rate (use default if not provided)
-      Object.assign(updateData, {
-        priceExtraKm: 14,
-        extraKmRate: 14,
-        extra_km_rate: 14,
-        extra_hour_rate: 250
-      });
+      // Add extra km rate
+      updateData.extra_km_charge = 14;
+      updateData.extraKmRate = 14;
+      updateData.extra_hour_charge = 250;
       
       console.log("Sending update data to server:", updateData);
       
-      // Use the fareService to update the server
-      await fareService.directFareUpdate('local', cabTypeId, updateData);
+      // Try multiple approaches to update the server
+      
+      // Approach 1: Use the fareService.directFareUpdate
+      try {
+        await fareService.directFareUpdate('local', cabTypeId, updateData);
+      } catch (error) {
+        console.error("First update method failed:", error);
+        
+        // Approach 2: Try using updateTripFares from vehicleDataService
+        try {
+          await updateTripFares(cabTypeId, 'local', updateData);
+        } catch (innerError) {
+          console.error("Second update method failed:", innerError);
+          
+          // Approach 3: Call the endpoint directly as a last resort
+          const formData = new FormData();
+          Object.entries(updateData).forEach(([key, value]) => {
+            formData.append(key, String(value));
+          });
+          
+          const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+          const response = await fetch(`${baseUrl}/api/admin/local-fares-update.php`, {
+            method: 'POST',
+            body: formData,
+            headers: {
+              'X-Force-Refresh': 'true'
+            }
+          });
+          
+          if (!response.ok) {
+            throw new Error(`Direct API call failed with status: ${response.status}`);
+          }
+        }
+      }
       
       // Force cache refresh to ensure new prices are used
       localStorage.setItem('forceCacheRefresh', 'true');

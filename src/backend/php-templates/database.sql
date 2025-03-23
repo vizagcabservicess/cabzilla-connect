@@ -77,6 +77,12 @@ CREATE TABLE `vehicle_pricing` (
   `airport_price_per_km` decimal(5,2) DEFAULT NULL,
   `airport_drop_price` decimal(10,2) DEFAULT NULL,
   `airport_pickup_price` decimal(10,2) DEFAULT NULL,
+  -- Airport tier pricing
+  `airport_tier1_price` decimal(10,2) DEFAULT NULL,
+  `airport_tier2_price` decimal(10,2) DEFAULT NULL,
+  `airport_tier3_price` decimal(10,2) DEFAULT NULL,
+  `airport_tier4_price` decimal(10,2) DEFAULT NULL,
+  `airport_extra_km_charge` decimal(5,2) DEFAULT NULL,
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -121,12 +127,13 @@ INSERT INTO `tour_fares` (`tour_id`, `tour_name`, `sedan`, `ertiga`, `innova`, `
 INSERT INTO `vehicle_pricing` (`vehicle_type`, `base_price`, `price_per_km`, `night_halt_charge`, `driver_allowance`, 
                                `roundtrip_base_price`, `roundtrip_price_per_km`, 
                                `local_package_4hr`, `local_package_8hr`, `local_package_10hr`, `extra_km_charge`, `extra_hour_charge`,
-                               `airport_base_price`, `airport_price_per_km`, `airport_pickup_price`, `airport_drop_price`) VALUES
-('sedan', 4200, 14, 700, 250, 4000, 12, 1200, 2200, 2500, 14, 250, 3000, 12, 800, 800),
-('ertiga', 5400, 18, 1000, 250, 5000, 15, 1500, 2700, 3000, 18, 250, 3500, 15, 1000, 1000),
-('innova', 6000, 20, 1000, 250, 5600, 17, 1800, 3000, 3500, 20, 250, 4000, 17, 1200, 1200),
-('tempo', 9000, 22, 1500, 300, 8500, 19, 3000, 4500, 5500, 22, 300, 6000, 19, 2000, 2000),
-('luxury', 10500, 25, 1500, 300, 10000, 22, 3500, 5500, 6500, 25, 300, 7000, 22, 2500, 2500);
+                               `airport_base_price`, `airport_price_per_km`, `airport_pickup_price`, `airport_drop_price`,
+                               `airport_tier1_price`, `airport_tier2_price`, `airport_tier3_price`, `airport_tier4_price`, `airport_extra_km_charge`) VALUES
+('sedan', 4200, 14, 700, 250, 4000, 12, 1200, 2200, 2500, 14, 250, 3000, 12, 800, 800, 600, 800, 1000, 1200, 12),
+('ertiga', 5400, 18, 1000, 250, 5000, 15, 1500, 2700, 3000, 18, 250, 3500, 15, 1000, 1000, 800, 1000, 1200, 1400, 15),
+('innova', 6000, 20, 1000, 250, 5600, 17, 1800, 3000, 3500, 20, 250, 4000, 17, 1200, 1200, 1000, 1200, 1400, 1600, 17),
+('tempo', 9000, 22, 1500, 300, 8500, 19, 3000, 4500, 5500, 22, 300, 6000, 19, 2000, 2000, 1600, 1800, 2000, 2500, 19),
+('luxury', 10500, 25, 1500, 300, 10000, 22, 3500, 5500, 6500, 25, 300, 7000, 22, 2500, 2500, 2000, 2200, 2500, 3000, 22);
 
 -- Insert default vehicle types
 INSERT INTO `vehicle_types` (`vehicle_id`, `name`, `capacity`, `luggage_capacity`, `ac`, `image`, `amenities`, `description`) VALUES
