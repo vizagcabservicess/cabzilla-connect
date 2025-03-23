@@ -26,8 +26,8 @@ RewriteEngine On
     Header always set Expires "0"
     
     # Add debugging headers
-    Header always set X-API-Debug "Processed by main API htaccess - v1.0.31"
-    Header always set X-API-Version "1.0.31"
+    Header always set X-API-Debug "Processed by main API htaccess - v1.0.42"
+    Header always set X-API-Version "1.0.42"
 </IfModule>
 
 # Handle OPTIONS requests for CORS preflight - immediately return 200
@@ -66,6 +66,12 @@ RewriteRule ^vehicles-data$ fares/vehicles-data.php [L,QSA]
 RewriteRule ^admin/outstation-fares-update$ admin/outstation-fares-update.php [QSA,L]
 RewriteRule ^admin/local-fares-update$ admin/local-fares-update.php [QSA,L]
 RewriteRule ^admin/airport-fares-update$ admin/airport-fares-update.php [QSA,L]
+
+# Direct access to the new simplified endpoints with highest priority
+RewriteRule ^admin/direct-outstation-fares$ admin/direct-outstation-fares.php [QSA,L]
+RewriteRule ^admin/direct-local-fares$ admin/direct-local-fares.php [QSA,L]
+RewriteRule ^admin/direct-airport-fares$ admin/direct-airport-fares.php [QSA,L]
+RewriteRule ^admin/direct-base-pricing$ admin/direct-base-pricing.php [QSA,L]
 
 # Access the "raw" PHP endpoints for direct testing and debugging
 RewriteRule ^raw-vehicle-pricing$ admin/vehicle-pricing.php?raw=1 [QSA,L]

@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { CabType, OutstationFare, LocalFare, AirportFare } from '@/types/cab';
 import { toast } from 'sonner';
@@ -554,8 +553,34 @@ export const updateTripFares = async (
       ...fareData
     };
     
-    // Try multiple API endpoints in sequence - starting with our new direct endpoint
-    const endpoints = [
+    // Determine which direct endpoint to use based on trip type
+    let directEndpoints = [];
+    
+    // First, try our new ultra-simplified direct endpoints based on trip type
+    if (tripType === 'outstation' || tripType === 'outstation-one-way' || tripType === 'outstation-round-trip') {
+      directEndpoints = [
+        `${apiBaseUrl}/api/admin/direct-outstation-fares?_t=${timestamp}`,
+        `/api/admin/direct-outstation-fares?_t=${timestamp}`
+      ];
+    } else if (tripType === 'local') {
+      directEndpoints = [
+        `${apiBaseUrl}/api/admin/direct-local-fares?_t=${timestamp}`,
+        `/api/admin/direct-local-fares?_t=${timestamp}`
+      ];
+    } else if (tripType === 'airport') {
+      directEndpoints = [
+        `${apiBaseUrl}/api/admin/direct-airport-fares?_t=${timestamp}`,
+        `/api/admin/direct-airport-fares?_t=${timestamp}`
+      ];
+    } else if (tripType === 'base') {
+      directEndpoints = [
+        `${apiBaseUrl}/api/admin/direct-base-pricing?_t=${timestamp}`,
+        `/api/admin/direct-base-pricing?_t=${timestamp}`
+      ];
+    }
+    
+    // Add all the standard endpoints as fallbacks
+    const standardEndpoints = [
       // Try our new direct endpoint first
       `${apiBaseUrl}/api/admin/direct-vehicle-pricing.php?_t=${timestamp}`,
       `/api/admin/direct-vehicle-pricing.php?_t=${timestamp}`,
@@ -575,21 +600,25 @@ export const updateTripFares = async (
     
     // Add specialized endpoints for specific trip types
     if (tripType === 'outstation') {
-      endpoints.unshift(`${apiBaseUrl}/api/admin/outstation-fares-update.php?_t=${timestamp}`);
-      endpoints.unshift(`/api/admin/outstation-fares-update.php?_t=${timestamp}`);
+      standardEndpoints.unshift(`${apiBaseUrl}/api/admin/outstation-fares-update.php?_t=${timestamp}`);
+      standardEndpoints.unshift(`/api/admin/outstation-fares-update.php?_t=${timestamp}`);
     } else if (tripType === 'local') {
-      endpoints.unshift(`${apiBaseUrl}/api/admin/local-fares-update.php?_t=${timestamp}`);
-      endpoints.unshift(`/api/admin/local-fares-update.php?_t=${timestamp}`);
+      standardEndpoints.unshift(`${apiBaseUrl}/api/admin/local-fares-update.php?_t=${timestamp}`);
+      standardEndpoints.unshift(`/api/admin/local-fares-update.php?_t=${timestamp}`);
     } else if (tripType === 'airport') {
-      endpoints.unshift(`${apiBaseUrl}/api/admin/airport-fares-update.php?_t=${timestamp}`);
-      endpoints.unshift(`/api/admin/airport-fares-update.php?_t=${timestamp}`);
+      standardEndpoints.unshift(`${apiBaseUrl}/api/admin/airport-fares-update.php?_t=${timestamp}`);
+      standardEndpoints.unshift(`/api/admin/airport-fares-update.php?_t=${timestamp}`);
     }
+    
+    // Combine direct endpoints with standard endpoints, prioritizing direct ones
+    const endpoints = [...directEndpoints, ...standardEndpoints];
     
     // Try both fetch and axios
     let successful = false;
     let lastError: any = null;
     
     console.log(`Attempting to update ${tripType} fares using ${endpoints.length} different endpoints...`);
+    console.log(`Starting with direct endpoints: ${directEndpoints.join(', ')}`);
     
     // First try using axios with different content types
     const contentTypes = [
@@ -598,14 +627,15 @@ export const updateTripFares = async (
       'multipart/form-data'
     ];
     
-    for (const endpoint of endpoints) {
+    // Try direct endpoints with all content types first
+    for (const endpoint of directEndpoints) {
       if (successful) break;
       
       for (const contentType of contentTypes) {
         if (successful) break;
         
         try {
-          console.log(`Trying ${endpoint} with content type ${contentType}`);
+          console.log(`Trying direct endpoint ${endpoint} with content type ${contentType}`);
           
           let axiosConfig: any = {
             method: 'POST',
@@ -618,7 +648,7 @@ export const updateTripFares = async (
               'Pragma': 'no-cache',
               'Expires': '0'
             },
-            timeout: 15000
+            timeout: 30000 // 30 second timeout for direct endpoints
           };
           
           // Handle different content types
@@ -661,16 +691,92 @@ export const updateTripFares = async (
           }
         } catch (error: any) {
           lastError = error;
-          console.error(`Error updating ${tripType} fares at endpoint ${endpoint} with ${contentType}:`, error.response || error);
+          console.error(`Error updating ${tripType} fares at direct endpoint ${endpoint} with ${contentType}:`, error.response || error);
         }
       }
     }
     
-    // If axios methods all failed, try fetch as a last resort
+    // If direct endpoints failed, try standard endpoints
     if (!successful) {
-      for (const endpoint of endpoints) {
+      console.log("Direct endpoints failed, trying standard endpoints...");
+      
+      for (const endpoint of standardEndpoints) {
+        if (successful) break;
+        
+        for (const contentType of contentTypes) {
+          if (successful) break;
+          
+          try {
+            console.log(`Trying standard endpoint ${endpoint} with content type ${contentType}`);
+            
+            let axiosConfig: any = {
+              method: 'POST',
+              url: endpoint,
+              headers: {
+                ...authHeader,
+                'X-API-Version': apiVersion,
+                'X-Force-Refresh': 'true',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+              },
+              timeout: 15000 // 15 second timeout for standard endpoints
+            };
+            
+            // Handle different content types
+            if (contentType === 'application/json') {
+              axiosConfig.headers['Content-Type'] = contentType;
+              axiosConfig.data = payload;
+            } else if (contentType === 'application/x-www-form-urlencoded') {
+              axiosConfig.headers['Content-Type'] = contentType;
+              const params = new URLSearchParams();
+              for (const key in payload) {
+                params.append(key, String(payload[key]));
+              }
+              axiosConfig.data = params;
+            } else if (contentType === 'multipart/form-data') {
+              // For multipart/form-data, let axios set the content type with boundary
+              const formData = new FormData();
+              for (const key in payload) {
+                formData.append(key, String(payload[key]));
+              }
+              axiosConfig.data = formData;
+            }
+            
+            const response = await axios(axiosConfig);
+            
+            console.log(`Response from ${endpoint} (${contentType}):`, response.data);
+            
+            if (response.status >= 200 && response.status < 300) {
+              console.log(`${tripType} fares updated successfully via ${endpoint} with ${contentType}`);
+              successful = true;
+              toast.success(`${tripType} fares updated successfully`);
+              
+              // Clear all caches to ensure fresh data
+              localStorage.removeItem('cabFares');
+              localStorage.removeItem('tourFares');
+              sessionStorage.removeItem('cabFares');
+              sessionStorage.removeItem('tourFares');
+              sessionStorage.removeItem('calculatedFares');
+              
+              return true;
+            }
+          } catch (error: any) {
+            lastError = error;
+            console.error(`Error updating ${tripType} fares at standard endpoint ${endpoint} with ${contentType}:`, error.response || error);
+          }
+        }
+      }
+    }
+    
+    // If all axios methods failed, try fetch as a last resort
+    if (!successful) {
+      console.log("All axios methods failed, trying fetch as last resort...");
+      
+      // Try direct endpoints with fetch first
+      for (const endpoint of directEndpoints) {
         try {
-          console.log(`Trying fetch with ${endpoint}`);
+          console.log(`Trying fetch with direct endpoint ${endpoint}`);
           
           // Try with FormData
           const formData = new FormData();
@@ -689,7 +795,7 @@ export const updateTripFares = async (
           });
           
           if (response.ok) {
-            console.log(`${tripType} fares updated successfully via fetch to ${endpoint}`);
+            console.log(`${tripType} fares updated successfully via fetch to direct endpoint ${endpoint}`);
             toast.success(`${tripType} fares updated successfully`);
             
             // Clear all caches
@@ -702,7 +808,46 @@ export const updateTripFares = async (
             return true;
           }
         } catch (error) {
-          console.error(`Fetch error updating ${tripType} fares at endpoint ${endpoint}:`, error);
+          console.error(`Fetch error updating ${tripType} fares at direct endpoint ${endpoint}:`, error);
+        }
+      }
+      
+      // If direct endpoints with fetch failed, try standard endpoints
+      for (const endpoint of standardEndpoints) {
+        try {
+          console.log(`Trying fetch with standard endpoint ${endpoint}`);
+          
+          // Try with FormData
+          const formData = new FormData();
+          for (const key in payload) {
+            formData.append(key, String(payload[key]));
+          }
+          
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            body: formData,
+            headers: {
+              ...authHeader,
+              'X-API-Version': apiVersion,
+              'X-Force-Refresh': 'true',
+            }
+          });
+          
+          if (response.ok) {
+            console.log(`${tripType} fares updated successfully via fetch to standard endpoint ${endpoint}`);
+            toast.success(`${tripType} fares updated successfully`);
+            
+            // Clear all caches
+            localStorage.removeItem('cabFares');
+            localStorage.removeItem('tourFares');
+            sessionStorage.removeItem('cabFares');
+            sessionStorage.removeItem('tourFares');
+            sessionStorage.removeItem('calculatedFares');
+            
+            return true;
+          }
+        } catch (error) {
+          console.error(`Fetch error updating ${tripType} fares at standard endpoint ${endpoint}:`, error);
         }
       }
     }
