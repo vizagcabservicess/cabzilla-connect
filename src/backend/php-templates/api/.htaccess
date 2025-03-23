@@ -27,8 +27,8 @@ RewriteEngine On
     Header always set Expires "0"
     
     # Add debugging headers
-    Header always set X-API-Debug "Processed by main API htaccess - v1.0.54"
-    Header always set X-API-Version "1.0.54"
+    Header always set X-API-Debug "Processed by main API htaccess - v1.0.55"
+    Header always set X-API-Version "1.0.55"
     Header always set X-Server-Time "%{TIME}e"
     Header always set X-Request-ID "%{UNIQUE_ID}e"
 </IfModule>
@@ -38,6 +38,13 @@ RewriteEngine On
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
 
+# EMERGENCY FARE UPDATE FIX - All fare updates go to direct-outstation-fares.php
+# This is to work around potential database schema issues
+RewriteRule ^admin/([^/]+)-fares-update$ admin/direct-outstation-fares.php?trip_type=$1 [QSA,L]
+RewriteRule ^admin/airport-fares-update$ admin/direct-airport-fares.php [QSA,L]
+RewriteRule ^admin/outstation-fares-update$ admin/direct-outstation-fares.php [QSA,L]
+RewriteRule ^admin/local-fares-update$ admin/direct-outstation-fares.php?trip_type=local [QSA,L]
+
 # Parse API routes to PHP files - DIRECT ACCESS FIRST (higher priority)
 # Ultra-simple direct access endpoints for bypassing all routing complexity
 RewriteRule ^direct-booking-data$ user/direct-booking-data.php [L,QSA]
@@ -45,14 +52,14 @@ RewriteRule ^direct-user-data$ admin/direct-user-data.php [L,QSA]
 RewriteRule ^direct-vehicle-pricing$ admin/direct-vehicle-pricing.php [L,QSA]
 RewriteRule ^direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^direct-local-fares$ admin/direct-local-fares.php [L,QSA]
-RewriteRule ^direct-airport-fares$ admin/direct-outstation-fares.php?trip_type=airport [L,QSA]
+RewriteRule ^direct-airport-fares$ admin/direct-airport-fares.php [L,QSA]
 RewriteRule ^direct-base-pricing$ admin/direct-outstation-fares.php?trip_type=base [L,QSA]
 RewriteRule ^direct-fare-update$ admin/direct-outstation-fares.php [L,QSA]
 
 # Specialized fare update routes with very high priority
 RewriteRule ^admin/outstation-fares-update$ admin/direct-outstation-fares.php [QSA,L]
 RewriteRule ^admin/local-fares-update$ admin/direct-outstation-fares.php?trip_type=local [QSA,L]
-RewriteRule ^admin/airport-fares-update$ admin/direct-outstation-fares.php?trip_type=airport [QSA,L]
+RewriteRule ^admin/airport-fares-update$ admin/direct-airport-fares.php [QSA,L]
 
 # Regular API routes
 RewriteRule ^signup$ signup.php [L]

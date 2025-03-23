@@ -18,7 +18,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
   
   // Load packages on component mount
   useEffect(() => {
-    // Create default packages in case hourlyPackages is empty
+    // Create default packages - these will ALWAYS be shown even if not in hourlyPackages
     const defaultPackages: HourlyPackage[] = [
       {
         id: '4hr_40km',
@@ -43,34 +43,25 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
       }
     ];
     
-    // Ensure packages are displayed in the correct order: 4hrs first, then 8hrs, then 10hrs
-    let packagesToUse = [...hourlyPackages];
+    // Start with all default packages to ensure they're always available
+    const mergedPackages: HourlyPackage[] = [...defaultPackages];
     
-    // Verify that we have the 4hrs package, if not add it from defaults
-    const has4HrsPackage = packagesToUse.some(pkg => pkg.hours === 4);
-    if (!has4HrsPackage) {
-      console.warn('4 hours package is missing from hourlyPackages data! Adding default.');
-      packagesToUse.push(defaultPackages[0]);
+    // Add any packages from hourlyPackages that aren't already in our defaults
+    if (Array.isArray(hourlyPackages) && hourlyPackages.length > 0) {
+      hourlyPackages.forEach(pkg => {
+        // Only add if not already in our mergedPackages array
+        if (!mergedPackages.some(p => p.id === pkg.id)) {
+          mergedPackages.push(pkg);
+        }
+      });
     }
     
-    // Verify that we have the 8hrs package, if not add it from defaults
-    const has8HrsPackage = packagesToUse.some(pkg => pkg.hours === 8);
-    if (!has8HrsPackage) {
-      console.warn('8 hours package is missing from hourlyPackages data! Adding default.');
-      packagesToUse.push(defaultPackages[1]);
-    }
-    
-    // Verify that we have the 10hrs package, if not add it from defaults
-    const has10HrsPackage = packagesToUse.some(pkg => pkg.hours === 10);
-    if (!has10HrsPackage) {
-      console.warn('10 hours package is missing from hourlyPackages data! Adding default.');
-      packagesToUse.push(defaultPackages[2]);
-    }
+    console.log('Available hourly packages before sorting:', mergedPackages);
     
     // Sort packages by hours
-    const sortedPackages = [...packagesToUse].sort((a, b) => a.hours - b.hours);
+    const sortedPackages = mergedPackages.sort((a, b) => a.hours - b.hours);
     
-    console.log('Available hourly packages:', sortedPackages);
+    console.log('Final available hourly packages:', sortedPackages);
     setPackages(sortedPackages);
     
     // Select default package if none is selected
