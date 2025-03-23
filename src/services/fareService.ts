@@ -318,8 +318,19 @@ export const fareService = {
         duration: 5000
       });
       
-      // ALWAYS use the direct outstation fares endpoint - it's the most reliable
-      const directEndpoint = `${baseUrl}/api/admin/direct-outstation-fares.php`;
+      // Choose the direct endpoint based on trip type
+      let directEndpoint = `${baseUrl}/api/admin/direct-outstation-fares.php`;
+      
+      // Select the appropriate endpoint based on trip type
+      if (tripType === 'airport') {
+        directEndpoint = `${baseUrl}/api/admin/direct-airport-fares.php`;
+      } else if (tripType === 'local') {
+        directEndpoint = `${baseUrl}/api/admin/direct-local-fares.php`;
+      } else if (tripType === 'base' || tripType === 'pricing') {
+        directEndpoint = `${baseUrl}/api/admin/direct-base-pricing.php`;
+      }
+      
+      console.log(`Using direct endpoint for ${tripType}: ${directEndpoint}`);
       
       // Make the direct API call with multiple fallback methods
       const result = await directApiCall(directEndpoint, updateData);
