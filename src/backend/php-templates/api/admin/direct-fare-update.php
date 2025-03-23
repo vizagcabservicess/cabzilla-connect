@@ -146,64 +146,77 @@ if ($tripType == 'local') {
             $pdo = new PDO("mysql:host=localhost;dbname=u644605165_new_bookingdb", "u644605165_new_bookingusr", "Vizag@1213");
             $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
             
-            // First try updating the fare_prices table (which has package-based structure)
+            // Try updating the local_package_fares table instead (based on database schema)
             try {
-                // 1. Update or insert 4hrs package
-                $sql4hr = "INSERT INTO fare_prices 
-                    (vehicle_id, trip_type, package_type, base_price, created_at, updated_at)
-                    VALUES (?, 'local', '4hrs-40km', ?, NOW(), NOW())
-                    ON DUPLICATE KEY UPDATE 
-                    base_price = VALUES(base_price),
-                    updated_at = NOW()";
-                $stmt4hr = $pdo->prepare($sql4hr);
-                $stmt4hr->execute([$vehicleId, $package4hr]);
+                // Check if entry exists for this vehicle
+                $checkSql = "SELECT id FROM local_package_fares WHERE vehicle_id = ?";
+                $checkStmt = $pdo->prepare($checkSql);
+                $checkStmt->execute([$vehicleId]);
+                $exists = $checkStmt->fetch(PDO::FETCH_ASSOC);
                 
-                // 2. Update or insert 8hrs package
-                $sql8hr = "INSERT INTO fare_prices 
-                    (vehicle_id, trip_type, package_type, base_price, created_at, updated_at)
-                    VALUES (?, 'local', '8hrs-80km', ?, NOW(), NOW())
-                    ON DUPLICATE KEY UPDATE 
-                    base_price = VALUES(base_price),
-                    updated_at = NOW()";
-                $stmt8hr = $pdo->prepare($sql8hr);
-                $stmt8hr->execute([$vehicleId, $package8hr]);
+                if ($exists) {
+                    // Update existing record
+                    $updateSql = "UPDATE local_package_fares 
+                                  SET price_4hrs_40km = ?, 
+                                      price_8hrs_80km = ?, 
+                                      price_10hrs_100km = ?, 
+                                      price_extra_km = ?, 
+                                      price_extra_hour = ?,
+                                      updated_at = NOW()
+                                  WHERE vehicle_id = ?";
+                    $updateStmt = $pdo->prepare($updateSql);
+                    $updateStmt->execute([
+                        $package4hr, 
+                        $package8hr, 
+                        $package10hr, 
+                        $extraKmRate, 
+                        $extraHourRate,
+                        $vehicleId
+                    ]);
+                } else {
+                    // Insert new record
+                    $insertSql = "INSERT INTO local_package_fares 
+                                  (vehicle_id, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, 
+                                   price_extra_km, price_extra_hour, created_at, updated_at)
+                                  VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())";
+                    $insertStmt = $pdo->prepare($insertSql);
+                    $insertStmt->execute([
+                        $vehicleId,
+                        $package4hr, 
+                        $package8hr, 
+                        $package10hr, 
+                        $extraKmRate, 
+                        $extraHourRate
+                    ]);
+                }
                 
-                // 3. Update or insert 10hrs package
-                $sql10hr = "INSERT INTO fare_prices 
-                    (vehicle_id, trip_type, package_type, base_price, created_at, updated_at)
-                    VALUES (?, 'local', '10hrs-100km', ?, NOW(), NOW())
-                    ON DUPLICATE KEY UPDATE 
-                    base_price = VALUES(base_price),
-                    updated_at = NOW()";
-                $stmt10hr = $pdo->prepare($sql10hr);
-                $stmt10hr->execute([$vehicleId, $package10hr]);
+                // Also update the vehicle_pricing table for backward compatibility
+                $vpSql = "UPDATE vehicle_pricing 
+                          SET local_package_4hr = ?, 
+                              local_package_8hr = ?, 
+                              local_package_10hr = ?, 
+                              extra_km_charge = ?, 
+                              extra_hour_charge = ?,
+                              updated_at = NOW()
+                          WHERE vehicle_type = ?";
+                $vpStmt = $pdo->prepare($vpSql);
+                $vpStmt->execute([
+                    $package4hr, 
+                    $package8hr, 
+                    $package10hr, 
+                    $extraKmRate, 
+                    $extraHourRate,
+                    $vehicleId
+                ]);
                 
-                // 4. Update or insert extra km rate
-                $sqlKm = "INSERT INTO fare_prices 
-                    (vehicle_id, trip_type, package_type, base_price, created_at, updated_at)
-                    VALUES (?, 'local', 'extra-km', ?, NOW(), NOW())
-                    ON DUPLICATE KEY UPDATE 
-                    base_price = VALUES(base_price),
-                    updated_at = NOW()";
-                $stmtKm = $pdo->prepare($sqlKm);
-                $stmtKm->execute([$vehicleId, $extraKmRate]);
-                
-                // 5. Update or insert extra hour rate
-                $sqlHr = "INSERT INTO fare_prices 
-                    (vehicle_id, trip_type, package_type, base_price, created_at, updated_at)
-                    VALUES (?, 'local', 'extra-hour', ?, NOW(), NOW())
-                    ON DUPLICATE KEY UPDATE 
-                    base_price = VALUES(base_price),
-                    updated_at = NOW()";
-                $stmtHr = $pdo->prepare($sqlHr);
-                $stmtHr->execute([$vehicleId, $extraHourRate]);
-                
-                $responseData['database'] = 'Updated fare_prices table successfully';
+                $responseData['database'] = 'Updated local_package_fares and vehicle_pricing tables successfully';
             } catch (Exception $e) {
                 $responseData['databaseError'] = $e->getMessage();
+                error_log("Database error: " . $e->getMessage(), 3, __DIR__ . '/../logs/direct-fares.log');
             }
         } catch (Exception $e) {
             $responseData['databaseConnectionError'] = $e->getMessage();
+            error_log("Database connection error: " . $e->getMessage(), 3, __DIR__ . '/../logs/direct-fares.log');
         }
     }
     

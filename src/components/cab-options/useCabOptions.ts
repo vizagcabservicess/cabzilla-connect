@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { CabType } from '@/types/cab';
 import { getVehicleData } from '@/services/vehicleDataService';
@@ -240,8 +241,9 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
       lastEventTimes.set('fare-cache-cleared', now);
       console.log('useCabOptions: Detected fare cache cleared event');
       
-      // Just update the timestamp rather than doing a full refresh
-      setLastRefreshTime(now);
+      // Force a refresh rather than just updating timestamp
+      refreshCountRef.current = 0; // Reset the refresh counter for this important event
+      loadCabOptions(true);
     };
     
     const handleFareUpdated = (event: Event) => {
@@ -265,8 +267,62 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
       lastEventTimes.set(eventType, now);
       console.log(`useCabOptions: Detected ${eventType} event:`, customEvent.detail);
       
-      // Just update the timestamp to trigger recalculation
-      setLastRefreshTime(now);
+      // For local-fares-updated events, update the localPackagePriceMatrix in localStorage
+      if (eventType === 'local-fares-updated' && customEvent.detail && customEvent.detail.prices) {
+        try {
+          // Get the price matrix from localStorage
+          const storedMatrix = localStorage.getItem('localPackagePriceMatrix');
+          let matrix = storedMatrix ? JSON.parse(storedMatrix) : {};
+          
+          // Initialize the matrix structure if it doesn't exist
+          if (!matrix) matrix = {};
+          ['4hrs-40km', '8hrs-80km', '10hrs-100km'].forEach(pkg => {
+            if (!matrix[pkg]) matrix[pkg] = {};
+          });
+          
+          // Extract the vehicle ID and prices from the event
+          const { vehicleId, prices } = customEvent.detail;
+          if (vehicleId && prices) {
+            // Normalize vehicle ID to lowercase for consistency
+            const normalizedVehicleId = vehicleId.toLowerCase();
+            
+            // Update the prices in the matrix
+            Object.keys(prices).forEach(pkg => {
+              if (matrix[pkg]) {
+                matrix[pkg][normalizedVehicleId] = prices[pkg];
+              }
+            });
+            
+            // Handle vehicle ID variations - create aliases for common vehicle types
+            if (normalizedVehicleId === 'innova_crysta' || normalizedVehicleId === 'innova crysta') {
+              Object.keys(prices).forEach(pkg => {
+                if (matrix[pkg]) {
+                  matrix[pkg]['innova'] = prices[pkg];
+                }
+              });
+            }
+            
+            if (normalizedVehicleId === 'luxury') {
+              Object.keys(prices).forEach(pkg => {
+                if (matrix[pkg]) {
+                  matrix[pkg]['luxury sedan'] = prices[pkg];
+                }
+              });
+            }
+            
+            // Save the updated matrix back to localStorage
+            localStorage.setItem('localPackagePriceMatrix', JSON.stringify(matrix));
+            localStorage.setItem('localPackagePriceMatrixUpdated', now.toString());
+            
+            console.log('Updated localPackagePriceMatrix in localStorage:', matrix);
+          }
+        } catch (error) {
+          console.error('Error updating localPackagePriceMatrix:', error);
+        }
+      }
+      
+      // Force a refresh of cab options to get the latest data
+      loadCabOptions(true);
     };
     
     window.addEventListener('fare-cache-cleared', handleFareCacheCleared, { passive: true });

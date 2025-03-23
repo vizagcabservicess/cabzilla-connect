@@ -207,10 +207,12 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
       formData.append('extraKmRate', extraKmRate);
       formData.append('priceExtraKm', extraKmRate);
       formData.append('extra_km_charge', extraKmRate);
+      formData.append('extra_km_rate', extraKmRate);
       
       formData.append('extraHourRate', extraHourRate);
       formData.append('priceExtraHour', extraHourRate);
       formData.append('extra_hour_charge', extraHourRate);
+      formData.append('extra_hour_rate', extraHourRate);
       
       const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
       
@@ -221,7 +223,10 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
           method: 'POST',
           body: formData,
           headers: {
-            'X-Force-Refresh': 'true'
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-cache, no-store',
+            'Pragma': 'no-cache',
+            'Expires': '0'
           }
         });
         
@@ -242,7 +247,10 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
             method: 'POST',
             body: formData,
             headers: {
-              'X-Force-Refresh': 'true'
+              'X-Force-Refresh': 'true',
+              'Cache-Control': 'no-cache, no-store',
+              'Pragma': 'no-cache',
+              'Expires': '0'
             }
           });
           
@@ -277,7 +285,9 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
       const packageMatrix = {
         '4hrs-40km': parseFloat(package4hr40km) || 0,
         '8hrs-80km': parseFloat(package8hr80km) || 0,
-        '10hrs-100km': parseFloat(package10hr100km) || 0
+        '10hrs-100km': parseFloat(package10hr100km) || 0,
+        'extra-km': parseFloat(extraKmRate) || 0,
+        'extra-hour': parseFloat(extraHourRate) || 0
       };
       
       // Update the localStorage directly - this ensures the frontend cache is updated immediately
@@ -291,13 +301,22 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
         if (!matrix['8hrs-80km']) matrix['8hrs-80km'] = {};
         if (!matrix['10hrs-100km']) matrix['10hrs-100km'] = {};
         
-        // Update each price in the matrix
-        matrix['4hrs-40km'][selectedVehicleId.toLowerCase()] = parseFloat(package4hr40km) || 0;
-        matrix['8hrs-80km'][selectedVehicleId.toLowerCase()] = parseFloat(package8hr80km) || 0;
-        matrix['10hrs-100km'][selectedVehicleId.toLowerCase()] = parseFloat(package10hr100km) || 0;
+        // Normalize vehicle ID to lowercase for consistency
+        const normalizedVehicleId = selectedVehicleId.toLowerCase();
         
-        // If this is a luxury type, also update luxury_sedan for compatibility
-        if (selectedVehicleId.toLowerCase() === 'luxury') {
+        // Update each price in the matrix
+        matrix['4hrs-40km'][normalizedVehicleId] = parseFloat(package4hr40km) || 0;
+        matrix['8hrs-80km'][normalizedVehicleId] = parseFloat(package8hr80km) || 0;
+        matrix['10hrs-100km'][normalizedVehicleId] = parseFloat(package10hr100km) || 0;
+        
+        // Handle vehicle ID variations - create aliases for common vehicle types
+        if (normalizedVehicleId === 'innova_crysta' || normalizedVehicleId === 'innova crysta') {
+          matrix['4hrs-40km']['innova'] = parseFloat(package4hr40km) || 0;
+          matrix['8hrs-80km']['innova'] = parseFloat(package8hr80km) || 0;
+          matrix['10hrs-100km']['innova'] = parseFloat(package10hr100km) || 0;
+        }
+        
+        if (normalizedVehicleId === 'luxury') {
           matrix['4hrs-40km']['luxury sedan'] = parseFloat(package4hr40km) || 0;
           matrix['8hrs-80km']['luxury sedan'] = parseFloat(package8hr80km) || 0;
           matrix['10hrs-100km']['luxury sedan'] = parseFloat(package10hr100km) || 0;
@@ -315,7 +334,7 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
       // Force a refresh of fare cache
       fareService.clearCache();
       
-      // Dispatch custom event for local fare updates
+      // Dispatch custom event for local fare updates with detailed price information
       window.dispatchEvent(new CustomEvent('local-fares-updated', {
         detail: { 
           timestamp: Date.now(),
@@ -769,3 +788,4 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
     </Card>
   );
 }
+

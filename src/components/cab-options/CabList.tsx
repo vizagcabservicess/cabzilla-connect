@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import { CabType } from '@/types/cab';
 import { CabOptionCard } from '@/components/CabOptionCard';
@@ -135,12 +136,54 @@ export function CabList({
       const customEvent = event as CustomEvent;
       console.log('CabList: Received direct fare update event', customEvent.detail);
       
-      if (customEvent.detail && customEvent.detail.packageId && customEvent.detail.cabType) {
-        // Force reset processing flag in case it got stuck
-        isProcessingRef.current = false;
+      if (customEvent.detail && customEvent.detail.prices) {
+        // We have direct price updates! Apply them immediately
+        const { vehicleId, prices } = customEvent.detail;
         
-        // Reset refresh counter to allow this critical update
-        refreshCountRef.current = Math.max(0, refreshCountRef.current - 1);
+        if (vehicleId && prices) {
+          // Force reset processing flag in case it got stuck
+          isProcessingRef.current = false;
+          
+          // Apply the prices directly to displayedFares
+          setDisplayedFares(prev => {
+            const newFares = {...prev};
+            
+            // If we have a vehicleId, update that specific vehicle's fare
+            if (vehicleId) {
+              Object.keys(cabTypes).forEach(key => {
+                const cab = cabTypes[key];
+                if (cab.id.toLowerCase() === vehicleId.toLowerCase()) {
+                  // For this cab, use the direct price
+                  newFares[cab.id] = parseFloat(prices['8hrs-80km'] || 0);
+                  
+                  // Update fare history
+                  if (!fareHistoryRef.current[cab.id]) {
+                    fareHistoryRef.current[cab.id] = [];
+                  }
+                  fareHistoryRef.current[cab.id].push(newFares[cab.id]);
+                }
+              });
+            }
+            
+            return newFares;
+          });
+          
+          // Show visual feedback
+          setFadeIn(prev => {
+            const newFadeIn = {...prev};
+            cabTypes.forEach(cab => {
+              if (cab.id.toLowerCase() === vehicleId.toLowerCase()) {
+                newFadeIn[cab.id] = true;
+              }
+            });
+            return newFadeIn;
+          });
+          
+          // Remove fade after animation completes
+          setTimeout(() => {
+            setFadeIn({});
+          }, 1000);
+        }
       }
     };
     
@@ -155,7 +198,7 @@ export function CabList({
       window.removeEventListener('local-fares-updated', handleDirectFareUpdate);
       window.removeEventListener('fare-cache-cleared', () => {});
     };
-  }, []);
+  }, [cabTypes]);
   
   // Helper to get the most reliable fare
   const getDisplayFare = (cab: CabType): number => {
@@ -169,6 +212,11 @@ export function CabList({
       return cabFares[cab.id];
     }
     
+    // Then try the price from the cab object itself
+    if (cab.price && cab.price > 0) {
+      return cab.price;
+    }
+    
     // Finally try the fare history
     if (fareHistoryRef.current[cab.id] && fareHistoryRef.current[cab.id].length > 0) {
       // Get the most recent non-zero fare
@@ -179,8 +227,18 @@ export function CabList({
       }
     }
     
-    // If all else fails, return the displayedFare (which might be 0)
-    return displayedFares[cab.id] || 0;
+    // If all else fails, return a fallback value based on vehicle type
+    const fallbackPrices: Record<string, number> = {
+      'sedan': 1500,
+      'ertiga': 2000,
+      'innova': 2500,
+      'innova_crysta': 2500,
+      'luxury': 3500,
+      'tempo': 4000
+    };
+    
+    const vehicleType = cab.id.toLowerCase();
+    return fallbackPrices[vehicleType] || 2000;
   };
   
   return (
