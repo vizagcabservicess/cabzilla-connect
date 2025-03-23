@@ -69,7 +69,8 @@ try {
         'message' => 'Fare update processed successfully',
         'requestData' => $data,
         'timestamp' => time(),
-        'version' => '1.0.50'
+        'version' => '1.0.50',
+        'cacheCleared' => true
     ];
     
     // Try to connect to database
@@ -86,6 +87,111 @@ try {
             if ($vehicleId && $tripType) {
                 // Log what we're trying to update
                 error_log("Attempting to update $tripType fares for vehicle $vehicleId");
+                
+                // For outstation fare updates
+                if ($tripType == 'outstation') {
+                    $onewayBasePrice = $data['onewayBasePrice'] ?? ($data['oneWayBasePrice'] ?? ($data['baseFare'] ?? 0));
+                    $onewayPricePerKm = $data['onewayPricePerKm'] ?? ($data['oneWayPricePerKm'] ?? ($data['pricePerKm'] ?? 0));
+                    $roundtripBasePrice = $data['roundtripBasePrice'] ?? ($data['roundTripBasePrice'] ?? 0);
+                    $roundtripPricePerKm = $data['roundtripPricePerKm'] ?? ($data['roundTripPricePerKm'] ?? 0);
+                    
+                    // Update vehicle_pricing table
+                    $updateQuery = "
+                        UPDATE vehicle_pricing
+                        SET 
+                            base_price = ?,
+                            price_per_km = ?,
+                            roundtrip_base_price = ?,
+                            roundtrip_price_per_km = ?,
+                            last_updated = NOW()
+                        WHERE vehicle_type = ?
+                    ";
+                    
+                    if ($stmt = $conn->prepare($updateQuery)) {
+                        $stmt->bind_param("dddds", 
+                            $onewayBasePrice, 
+                            $onewayPricePerKm, 
+                            $roundtripBasePrice, 
+                            $roundtripPricePerKm, 
+                            $vehicleId
+                        );
+                        
+                        if ($stmt->execute()) {
+                            error_log("Successfully updated outstation pricing for $vehicleId");
+                        } else {
+                            error_log("Failed to update outstation pricing: " . $stmt->error);
+                        }
+                        
+                        $stmt->close();
+                    }
+                }
+                
+                // For local fare updates
+                else if ($tripType == 'local') {
+                    $package4hrs = $data['package4hrs'] ?? 0;
+                    $package8hrs = $data['package8hrs'] ?? 0;
+                    $extraKmCharge = $data['extraKmCharge'] ?? 0;
+                    
+                    // Update vehicle_pricing table
+                    $updateQuery = "
+                        UPDATE vehicle_pricing
+                        SET 
+                            local_package_4hr = ?,
+                            local_package_8hr = ?,
+                            extra_km_charge = ?,
+                            last_updated = NOW()
+                        WHERE vehicle_type = ?
+                    ";
+                    
+                    if ($stmt = $conn->prepare($updateQuery)) {
+                        $stmt->bind_param("ddds", 
+                            $package4hrs, 
+                            $package8hrs, 
+                            $extraKmCharge, 
+                            $vehicleId
+                        );
+                        
+                        if ($stmt->execute()) {
+                            error_log("Successfully updated local pricing for $vehicleId");
+                        } else {
+                            error_log("Failed to update local pricing: " . $stmt->error);
+                        }
+                        
+                        $stmt->close();
+                    }
+                }
+                
+                // For airport fare updates
+                else if ($tripType == 'airport') {
+                    $airportBasePrice = $data['airportBasePrice'] ?? 0;
+                    $airportPricePerKm = $data['airportPricePerKm'] ?? 0;
+                    
+                    // Update vehicle_pricing table
+                    $updateQuery = "
+                        UPDATE vehicle_pricing
+                        SET 
+                            airport_base_price = ?,
+                            airport_price_per_km = ?,
+                            last_updated = NOW()
+                        WHERE vehicle_type = ?
+                    ";
+                    
+                    if ($stmt = $conn->prepare($updateQuery)) {
+                        $stmt->bind_param("dds", 
+                            $airportBasePrice, 
+                            $airportPricePerKm, 
+                            $vehicleId
+                        );
+                        
+                        if ($stmt->execute()) {
+                            error_log("Successfully updated airport pricing for $vehicleId");
+                        } else {
+                            error_log("Failed to update airport pricing: " . $stmt->error);
+                        }
+                        
+                        $stmt->close();
+                    }
+                }
                 
                 // Store success flag
                 $responseData['vehicleId'] = $vehicleId;
@@ -107,6 +213,12 @@ try {
         // Still return success to let the client continue working
         error_log("Using fallback response mode (no database operations performed)");
     }
+    
+    // Force cache-busting headers in response
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+    header('X-Cache-Busting: ' . time());
     
     // Return success response
     echo json_encode($responseData);

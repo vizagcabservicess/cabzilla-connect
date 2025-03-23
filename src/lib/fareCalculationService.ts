@@ -38,7 +38,10 @@ const generateCacheKey = (params: FareCalculationParams): string => {
   const { cabType, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate } = params;
   const cabId = cabType && cabType.id ? cabType.id : 'unknown-cab';
   
-  return `${cabId}_${distance}_${tripType}_${tripMode}_${hourlyPackage || ''}_${pickupDate?.getTime() || 0}_${returnDate?.getTime() || 0}`;
+  // Add timestamp to force fresh calculation after updates
+  const forceRefresh = localStorage.getItem('forceCacheRefresh') === 'true' ? Date.now() : '';
+  
+  return `${cabId}_${distance}_${tripType}_${tripMode}_${hourlyPackage || ''}_${pickupDate?.getTime() || 0}_${returnDate?.getTime() || 0}_${forceRefresh}`;
 };
 
 // Helper function to safely convert values to lowercase
@@ -168,11 +171,20 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
   // Generate a cache key based on the parameters
   const cacheKey = generateCacheKey(params);
   
+  // Check for a force refresh flag
+  const forceRefresh = localStorage.getItem('forceCacheRefresh') === 'true';
+  
   // Check if we have a valid cached result
   const cachedFare = fareCache.get(cacheKey);
-  if (cachedFare && cachedFare.expire > Date.now()) {
+  if (!forceRefresh && cachedFare && cachedFare.expire > Date.now()) {
     console.log(`Using cached fare calculation for ${cabType.name}: ₹${cachedFare.price}`);
     return cachedFare.price;
+  }
+  
+  // If we're forcing a refresh, clear the force flag after one use
+  if (forceRefresh) {
+    localStorage.removeItem('forceCacheRefresh');
+    console.log('Cleared force refresh flag, using fresh calculation');
   }
   
   console.log(`Calculating fare for ${tripType} trip with ${cabType.name}, distance: ${distance}km`);
