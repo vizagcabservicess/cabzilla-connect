@@ -20,6 +20,14 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
   useEffect(() => {
     // Ensure packages are displayed in the correct order: 4hrs first, then 8hrs, then 10hrs
     const sortedPackages = [...hourlyPackages].sort((a, b) => a.hours - b.hours);
+    
+    // Verify that we have the 4hrs package, if not log an error
+    const has4HrsPackage = sortedPackages.some(pkg => pkg.hours === 4);
+    if (!has4HrsPackage) {
+      console.error('4 hours package is missing from hourlyPackages data!');
+    }
+    
+    console.log('Available hourly packages:', sortedPackages);
     setPackages(sortedPackages);
     
     // Select default package if none is selected

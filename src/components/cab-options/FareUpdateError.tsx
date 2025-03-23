@@ -53,6 +53,9 @@ export function FareUpdateError({
   const isNetworkError = 
     /network|connection|failed|ERR_NETWORK|ECONNABORTED|404|timeout/i.test(errorMessage);
   
+  const isTableError =
+    /table.*not found|doesn't exist|database_error|SQLSTATE/i.test(errorMessage);
+  
   const handleRetry = () => {
     console.log("Retrying fare update after error...");
     
@@ -113,7 +116,8 @@ export function FareUpdateError({
       const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
       
       try {
-        const response = await fetch(`${baseUrl}/api/direct-fare-update?_t=${timestamp}`, {
+        // Try to hit the ultra-simple direct-outstation-fares endpoint
+        const response = await fetch(`${baseUrl}/api/admin/direct-outstation-fares.php?_t=${timestamp}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -127,10 +131,38 @@ export function FareUpdateError({
         });
         
         if (response.ok) {
-          console.log('Direct fare endpoint is reachable');
+          console.log('Direct outstation fares endpoint is reachable');
+          toast.success('Server connection successful');
+        } else {
+          console.warn('Direct outstation fares endpoint returned:', response.status);
+          toast.warning(`Server returned status ${response.status}`);
         }
       } catch (err) {
-        console.warn('Could not reach direct fare endpoint');
+        console.warn('Could not reach direct outstation fares endpoint');
+        
+        // Try the direct-fare-update endpoint as fallback
+        try {
+          const fallbackResponse = await fetch(`${baseUrl}/api/admin/direct-fare-update.php?_t=${timestamp}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...fareService.getBypassHeaders()
+            },
+            body: JSON.stringify({ 
+              test: true, 
+              timestamp,
+              action: 'comprehensive-fix'
+            })
+          });
+          
+          if (fallbackResponse.ok) {
+            console.log('Direct fare update endpoint is reachable');
+            toast.success('Alternative server connection successful');
+          }
+        } catch (fallbackErr) {
+          console.error('All direct endpoints unreachable');
+          toast.error('All server endpoints unreachable');
+        }
       }
       
       // Success notification
@@ -154,25 +186,59 @@ export function FareUpdateError({
     const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
     const timestamp = Date.now();
     
-    // Test the ultra-simple endpoint directly
-    fetch(`${baseUrl}/api/direct-fare-update?test=true&_t=${timestamp}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...fareService.getBypassHeaders()
-      },
-      body: JSON.stringify({ test: 'connection', timestamp })
-    })
-    .then(async response => {
-      if (response.ok) {
-        toast.success(`Server test succeeded!`);
-      } else {
-        toast.error(`Server error: ${response.status}`);
+    // Test multiple endpoints for most reliability
+    const testEndpoints = [
+      `${baseUrl}/api/admin/direct-outstation-fares.php?test=true&_t=${timestamp}`,
+      `${baseUrl}/api/admin/direct-fare-update.php?test=true&_t=${timestamp}`
+    ];
+    
+    let successCount = 0;
+    let failCount = 0;
+    
+    const checkEndpoint = async (url: string) => {
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...fareService.getBypassHeaders()
+          },
+          body: JSON.stringify({ test: 'connection', timestamp })
+        });
+        
+        if (response.ok) {
+          successCount++;
+          console.log(`Endpoint test success: ${url}`);
+        } else {
+          failCount++;
+          console.error(`Endpoint test failed with status ${response.status}: ${url}`);
+        }
+        
+        // Check if we've tested all endpoints
+        if (successCount + failCount === testEndpoints.length) {
+          if (successCount > 0) {
+            toast.success(`${successCount}/${testEndpoints.length} server connections successful`);
+          } else {
+            toast.error('All server connections failed');
+          }
+        }
+      } catch (err) {
+        failCount++;
+        console.error(`Connection test failed: ${url}`, err);
+        
+        // Check if we've tested all endpoints
+        if (successCount + failCount === testEndpoints.length) {
+          if (successCount > 0) {
+            toast.success(`${successCount}/${testEndpoints.length} server connections successful`);
+          } else {
+            toast.error('All server connections failed');
+          }
+        }
       }
-    })
-    .catch(err => {
-      toast.error(`Connection test failed: ${err.message}`);
-    });
+    };
+    
+    // Test all endpoints simultaneously
+    testEndpoints.forEach(endpoint => checkEndpoint(endpoint));
   };
 
   // Open multiple direct API endpoints in new tabs to bypass potential issues
@@ -182,15 +248,12 @@ export function FareUpdateError({
     
     const endpoints = [
       // Try the direct endpoints first (most reliable)
-      `${baseUrl}/api/direct-fare-update?_t=${timestamp}`,
-      `${baseUrl}/api/direct-outstation-fares?_t=${timestamp}`,
-      `${baseUrl}/api/direct-local-fares?_t=${timestamp}`,
-      `${baseUrl}/api/direct-airport-fares?_t=${timestamp}`,
+      `${baseUrl}/api/admin/direct-outstation-fares.php?_t=${timestamp}`,
+      `${baseUrl}/api/admin/direct-fare-update.php?_t=${timestamp}`,
       
       // Specialized endpoints
       `${baseUrl}/api/admin/outstation-fares-update.php?_t=${timestamp}`,
-      `${baseUrl}/api/admin/local-fares-update.php?_t=${timestamp}`,
-      `${baseUrl}/api/admin/airport-fares-update.php?_t=${timestamp}`
+      `${baseUrl}/api/admin/vehicle-pricing.php?_t=${timestamp}`
     ];
     
     // Open all endpoint URLs in new tabs
@@ -205,41 +268,33 @@ export function FareUpdateError({
     toast.info('Opened direct API endpoints in new tabs');
   };
 
-  // Diagnose connection issues
-  const runDiagnostics = () => {
-    toast.info('Running connection diagnostics...');
-    
-    // Try ping to base URL
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
-    const timestamp = Date.now();
-    
-    console.log('Running connection diagnostics');
-    
-    // Test with basic fetch to avoid CORS
-    fetch(`${baseUrl}/api/?_t=${timestamp}`, { 
-      method: 'HEAD',
-      mode: 'no-cors',
-      cache: 'no-cache'
-    })
-    .then(() => {
-      console.log('Server reached with no-cors ping');
-      toast.success('Server is reachable');
-    })
-    .catch(err => {
-      console.error('Server ping failed:', err);
-      toast.error('Server is unreachable');
-    });
-    
-    // Clear all caches
-    fareService.clearCache();
-  };
-
   // Pick the most appropriate icon
-  const ErrorIcon = isForbiddenError
-    ? ShieldAlert 
-    : (isServerError 
-      ? Database 
-      : (isNetworkError ? Wifi : AlertCircle));
+  const ErrorIcon = isTableError
+    ? Database
+    : (isForbiddenError
+      ? ShieldAlert 
+      : (isServerError 
+        ? Server 
+        : (isNetworkError ? Wifi : AlertCircle)));
+
+  // Tailored error message based on type
+  const getErrorDescription = () => {
+    if (description) return description;
+    
+    if (isTableError) {
+      return "The database table required for this operation doesn't exist. This is likely a database schema issue.";
+    }
+    if (isForbiddenError) {
+      return "You don't have permission to update fares. This might be an authentication issue.";
+    }
+    if (isServerError) {
+      return "The server encountered an error while processing your request. This may be temporary.";
+    }
+    if (isNetworkError) {
+      return "Unable to connect to the fare update server. Please check your connection.";
+    }
+    return errorMessage;
+  };
 
   return (
     <Card className="w-full border-red-200 bg-red-50 mb-4">
@@ -253,33 +308,34 @@ export function FareUpdateError({
         <Alert variant="destructive" className="mb-1">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>
-            {isForbiddenError 
-              ? "Access Denied" 
-              : (isServerError 
-                ? "Server Error" 
-                : (isNetworkError 
-                  ? "Network Error" 
-                  : "Update Failed"))}
+            {isTableError 
+              ? "Database Table Error"
+              : (isForbiddenError 
+                ? "Access Denied" 
+                : (isServerError 
+                  ? "Server Error" 
+                  : (isNetworkError 
+                    ? "Network Error" 
+                    : "Update Failed")))}
           </AlertTitle>
           <AlertDescription className="text-sm">
-            {description || (isForbiddenError 
-              ? "You don't have permission to update fares. This might be an authentication issue."
-              : (isServerError 
-                ? "The server encountered an error while processing your request. This may be temporary."
-                : (isNetworkError
-                  ? "Unable to connect to the fare update server. Please check your connection."
-                  : errorMessage)))}
+            {getErrorDescription()}
           </AlertDescription>
         </Alert>
 
         <div className="text-sm space-y-2">
           <p className="font-medium text-gray-700">Try the following:</p>
           <ul className="list-disc pl-5 space-y-1 text-gray-600">
+            {isTableError && (
+              <>
+                <li className="font-medium text-red-700">Database table is missing - use direct endpoints instead</li>
+                <li>The system will try to use alternate endpoints automatically</li>
+              </>
+            )}
             <li>Use the comprehensive fix button to solve common API connection issues</li>
             <li>Try direct API access to bypass connection issues</li>
             <li>Clear browser cache and authentication tokens</li>
             <li>Try logging out and back in</li>
-            <li>Contact support if all solutions fail</li>
           </ul>
         </div>
         
@@ -294,7 +350,10 @@ export function FareUpdateError({
                     endpoint: error?.['config']?.url || 'Unknown',
                     status: error?.['response']?.status || 'Unknown',
                     message: errorMessage,
-                    apiVersion: import.meta.env.VITE_API_VERSION || 'Unknown'
+                    apiVersion: import.meta.env.VITE_API_VERSION || 'Unknown',
+                    isTableError: isTableError,
+                    isServerError: isServerError,
+                    isNetworkError: isNetworkError
                   }, null, 2)}
                 </pre>
               </div>
