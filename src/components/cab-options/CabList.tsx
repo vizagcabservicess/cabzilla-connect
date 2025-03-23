@@ -25,10 +25,17 @@ export function CabList({
   const [lastUpdateTimestamp, setLastUpdateTimestamp] = useState<number>(Date.now());
   const refreshCountRef = useRef(0);
   const isProcessingRef = useRef(false);
+  const lastEventTimesRef = useRef<Record<string, number>>({});
+  const maxRefreshesRef = useRef(3); // Limit total refreshes to 3 per page load
   
   // Update displayed fares when cabFares changes with visual feedback and prevent infinite loops
   useEffect(() => {
     if (isProcessingRef.current) return;
+    if (refreshCountRef.current >= maxRefreshesRef.current) {
+      console.log(`CabList: Skipping update - reached maximum refresh count (${maxRefreshesRef.current})`);
+      return;
+    }
+    
     isProcessingRef.current = true;
     
     const newFadeIn: Record<string, boolean> = {};
@@ -43,7 +50,7 @@ export function CabList({
     });
     
     // If any fares have changed, create visual effect and log
-    if (Object.keys(newFadeIn).length > 0 && refreshCountRef.current < 5) {
+    if (Object.keys(newFadeIn).length > 0 && refreshCountRef.current < maxRefreshesRef.current) {
       console.log('CabList: Detected fare changes for vehicles:', updatedCabs);
       setFadeIn(newFadeIn);
       refreshCountRef.current += 1;
@@ -63,7 +70,7 @@ export function CabList({
           isProcessingRef.current = false;
         }, 1000);
       }, 100);
-    } else if (JSON.stringify(displayedFares) !== JSON.stringify(cabFares) && refreshCountRef.current < 5) {
+    } else if (JSON.stringify(displayedFares) !== JSON.stringify(cabFares) && refreshCountRef.current < maxRefreshesRef.current) {
       // Even if individual fares haven't changed, ensure displayedFares matches cabFares
       console.log('CabList: Syncing displayed fares with current fares');
       setDisplayedFares({...cabFares});
@@ -74,32 +81,39 @@ export function CabList({
     }
   }, [cabFares, displayedFares]);
   
-  // Reset refresh counter periodically
+  // Reset refresh counter periodically (every 5 minutes instead of 30 seconds)
   useEffect(() => {
     const resetInterval = setInterval(() => {
-      refreshCountRef.current = 0;
-    }, 30000); // Reset every 30 seconds
+      refreshCountRef.current = Math.max(0, refreshCountRef.current - 1);
+    }, 5 * 60 * 1000); // Reset counter gradually every 5 minutes
     
     return () => clearInterval(resetInterval);
   }, []);
   
-  // Enhanced event listener system for fare updates with limited frequency
+  // Enhanced event listener system for fare updates with strict throttling
   useEffect(() => {
-    const lastEventTimes: Record<string, number> = {};
+    // Define throttling duration - 30 seconds between same events
+    const throttleDuration = 30000;
     
     const handleFareEvent = (event: Event) => {
-      const customEvent = event as CustomEvent;
       const eventName = event.type;
       const now = Date.now();
       
-      // Throttle events - only process if it's been at least 5 seconds since the last one of this type
-      if (lastEventTimes[eventName] && now - lastEventTimes[eventName] < 5000) {
+      // Strict throttling - reject events if we've seen this type within throttle period
+      if (lastEventTimesRef.current[eventName] && 
+          now - lastEventTimesRef.current[eventName] < throttleDuration) {
         console.log(`CabList: Ignoring ${eventName} event (throttled)`);
         return;
       }
       
-      lastEventTimes[eventName] = now;
-      console.log(`CabList: Detected ${eventName} event`, customEvent.detail);
+      // Check if we've reached the maximum refresh count
+      if (refreshCountRef.current >= maxRefreshesRef.current) {
+        console.log(`CabList: Ignoring ${eventName} event (max refreshes reached)`);
+        return;
+      }
+      
+      lastEventTimesRef.current[eventName] = now;
+      console.log(`CabList: Processing ${eventName} event`);
       
       // Force a refresh by clearing the fadeIn state
       setFadeIn({});
@@ -109,27 +123,22 @@ export function CabList({
       setLastUpdateTimestamp(updateTime);
       
       // Force update displayed fares with a delay to ensure we get fresh data
-      if (refreshCountRef.current < 5) {
-        setTimeout(() => {
-          setDisplayedFares({...cabFares});
-          refreshCountRef.current += 1;
-          console.log('CabList: Forced update of displayed fares after event');
-        }, 200);
-      }
+      setTimeout(() => {
+        setDisplayedFares({...cabFares});
+        refreshCountRef.current += 1;
+      }, 200);
     };
     
-    // Setup event listeners for all fare-related events
+    // Setup event listeners for fare-related events with lower priority
     const events = [
       'fare-cache-cleared',
       'local-fares-updated',
       'trip-fares-updated',
-      'airport-fares-updated',
-      'cab-selected-for-local',
-      'hourly-package-selected'
+      'airport-fares-updated'
     ];
     
     events.forEach(eventName => {
-      window.addEventListener(eventName, handleFareEvent);
+      window.addEventListener(eventName, handleFareEvent, { passive: true });
     });
     
     return () => {

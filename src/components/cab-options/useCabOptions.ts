@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { CabType } from '@/types/cab';
 import { getVehicleData } from '@/services/vehicleDataService';
@@ -21,83 +20,26 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
   const refreshCountRef = useRef<number>(0);
   const lastRefreshRef = useRef<number>(Date.now());
   const loadingRef = useRef<boolean>(false);
+  const maxRefreshesRef = useRef<number>(3); // Maximum 3 refreshes per session
   
   const loadCabOptions = async (forceRefresh = false) => {
     // Prevent multiple simultaneous loads and throttle forced refreshes
     if (loadingRef.current) {
       console.log('Already loading cab options, skipping');
-      return;
+      return cabOptions; // Return existing options
     }
     
-    // Throttle forced refreshes to once every 10 seconds maximum
+    // Skip if we've hit the maximum refresh count
+    if (refreshCountRef.current >= maxRefreshesRef.current && forceRefresh) {
+      console.log(`Reached maximum refresh count (${maxRefreshesRef.current}), not reloading`);
+      return cabOptions; // Return existing options
+    }
+    
+    // Throttle forced refreshes to once every 30 seconds maximum
     const now = Date.now();
-    if (forceRefresh && now - lastRefreshRef.current < 10000) {
+    if (forceRefresh && now - lastRefreshRef.current < 30000) {
       console.log('Throttling forced refresh - last refresh was too recent');
-      return;
-    }
-    
-    // Limit refreshes to 5 per page session to avoid infinite loops
-    if (refreshCountRef.current >= 5 && forceRefresh) {
-      console.log('Reached maximum refresh count, not reloading');
-      if (cabOptions.length === 0) {
-        // If we still don't have cab options after max attempts, try to load default vehicles
-        try {
-          const defaultVehicles = [
-            {
-              id: 'sedan',
-              name: 'Sedan',
-              capacity: 4,
-              luggageCapacity: 2,
-              price: 2500,
-              pricePerKm: 14,
-              image: '/cars/sedan.png',
-              amenities: ['AC', 'Bottle Water', 'Music System'],
-              description: 'Comfortable sedan suitable for 4 passengers.',
-              ac: true,
-              nightHaltCharge: 700,
-              driverAllowance: 250,
-              isActive: true
-            },
-            {
-              id: 'ertiga',
-              name: 'Ertiga',
-              capacity: 6,
-              luggageCapacity: 3,
-              price: 3200,
-              pricePerKm: 18,
-              image: '/cars/ertiga.png',
-              amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
-              description: 'Spacious SUV suitable for 6 passengers.',
-              ac: true,
-              nightHaltCharge: 1000,
-              driverAllowance: 250,
-              isActive: true
-            },
-            {
-              id: 'innova_crysta',
-              name: 'Innova Crysta',
-              capacity: 7,
-              luggageCapacity: 4,
-              price: 3800,
-              pricePerKm: 20,
-              image: '/cars/innova.png',
-              amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
-              description: 'Premium SUV with ample space for 7 passengers.',
-              ac: true,
-              nightHaltCharge: 1000,
-              driverAllowance: 250,
-              isActive: true
-            }
-          ];
-          
-          setCabOptions(defaultVehicles);
-          setIsLoading(false);
-          setError(null);
-        } catch (e) {
-          console.error('Failed to load default vehicles as fallback', e);
-        }
-      }
-      return;
+      return cabOptions; // Return existing options
     }
     
     try {
@@ -105,14 +47,12 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
       
       if (forceRefresh) {
         setIsLoading(true);
-        // Only clear fare cache if this is a user-initiated refresh, not an auto-refresh
-        fareService.clearCache();
-        // Update the refresh timestamp
-        const timestamp = Date.now();
-        setLastRefreshTime(timestamp);
-        lastRefreshRef.current = timestamp;
+        // Only increment refresh count for forced refreshes
         refreshCountRef.current += 1;
-        localStorage.setItem('cabOptionsLastRefreshed', timestamp.toString());
+        // Update the timestamp
+        lastRefreshRef.current = now;
+        setLastRefreshTime(now);
+        localStorage.setItem('cabOptionsLastRefreshed', now.toString());
       }
       
       setError(null);
@@ -135,7 +75,7 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
                 setCabOptions(vehicles);
                 setIsLoading(false);
                 loadingRef.current = false;
-                return;
+                return vehicles;
               }
             } catch (error) {
               console.error('Error parsing cached vehicles:', error);
@@ -144,7 +84,15 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
         }
       }
       
-      // Fetch vehicle data with different approaches
+      // If we have existing cab options and this isn't a forced refresh, use them
+      if (!forceRefresh && cabOptions.length > 0) {
+        console.log('Using existing cab options:', cabOptions.length);
+        setIsLoading(false);
+        loadingRef.current = false;
+        return cabOptions;
+      }
+      
+      // Fetch vehicle data
       let vehicles = await getVehicleData();
       
       // Filter active vehicles only
@@ -152,10 +100,64 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
       
       // Ensure we have at least one vehicle
       if (!vehicles || vehicles.length === 0) {
-        setError('No vehicles available. Please try again later.');
-        setIsLoading(false);
-        loadingRef.current = false;
-        return;
+        // If we already have cab options, keep using them
+        if (cabOptions.length > 0) {
+          console.log('No new vehicles available, keeping existing options');
+          setIsLoading(false);
+          loadingRef.current = false;
+          return cabOptions;
+        }
+        
+        // Otherwise use default vehicles
+        vehicles = [
+          {
+            id: 'sedan',
+            name: 'Sedan',
+            capacity: 4,
+            luggageCapacity: 2,
+            price: 2500,
+            pricePerKm: 14,
+            image: '/cars/sedan.png',
+            amenities: ['AC', 'Bottle Water', 'Music System'],
+            description: 'Comfortable sedan suitable for 4 passengers.',
+            ac: true,
+            nightHaltCharge: 700,
+            driverAllowance: 250,
+            isActive: true
+          },
+          {
+            id: 'ertiga',
+            name: 'Ertiga',
+            capacity: 6,
+            luggageCapacity: 3,
+            price: 3200,
+            pricePerKm: 18,
+            image: '/cars/ertiga.png',
+            amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
+            description: 'Spacious SUV suitable for 6 passengers.',
+            ac: true,
+            nightHaltCharge: 1000,
+            driverAllowance: 250,
+            isActive: true
+          },
+          {
+            id: 'innova_crysta',
+            name: 'Innova Crysta',
+            capacity: 7,
+            luggageCapacity: 4,
+            price: 3800,
+            pricePerKm: 20,
+            image: '/cars/innova.png',
+            amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
+            description: 'Premium SUV with ample space for 7 passengers.',
+            ac: true,
+            nightHaltCharge: 1000,
+            driverAllowance: 250,
+            isActive: true
+          }
+        ];
+        
+        console.log('Using default vehicles:', vehicles.length);
       }
       
       // For certain trip types like tours, we may want to filter vehicles
@@ -177,6 +179,8 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
           console.warn('Could not cache cab options:', cacheError);
         }
       }
+      
+      return vehicles;
     } catch (error) {
       console.error("Error loading cab options:", error);
       setError('Failed to load vehicle options. Please try again.');
@@ -190,11 +194,20 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
             console.log(`Using cached vehicles for ${tripType} trip:`, vehicles.length);
             setCabOptions(vehicles);
             setError(null);
+            return vehicles;
           }
         } catch (cacheError) {
           console.error('Error loading cached vehicles:', cacheError);
         }
       }
+      
+      // If we have existing cab options, keep using them
+      if (cabOptions.length > 0) {
+        return cabOptions;
+      }
+      
+      // Otherwise return default vehicles
+      return [];
     } finally {
       setIsLoading(false);
       loadingRef.current = false;
@@ -203,22 +216,32 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
   
   // Initial load
   useEffect(() => {
+    // Initial load should only happen once
     loadCabOptions();
     
-    // Set up event listeners for fare updates with throttling
+    // Set up event listeners for fare updates with strict throttling
     const lastEventTimes = new Map<string, number>();
+    const throttleDuration = 60000; // 60 seconds throttle period
     
     const handleFareCacheCleared = () => {
       const now = Date.now();
       if (lastEventTimes.get('fare-cache-cleared') && 
-          now - lastEventTimes.get('fare-cache-cleared')! < 10000) {
+          now - lastEventTimes.get('fare-cache-cleared')! < throttleDuration) {
         console.log('useCabOptions: Ignoring fare cache cleared event (throttled)');
+        return;
+      }
+      
+      // Only respond if we haven't reached max refreshes
+      if (refreshCountRef.current >= maxRefreshesRef.current) {
+        console.log('useCabOptions: Ignoring fare cache cleared event (max refreshes reached)');
         return;
       }
       
       lastEventTimes.set('fare-cache-cleared', now);
       console.log('useCabOptions: Detected fare cache cleared event');
-      loadCabOptions(true);
+      
+      // Just update the timestamp rather than doing a full refresh
+      setLastRefreshTime(now);
     };
     
     const handleFareUpdated = (event: Event) => {
@@ -226,29 +249,30 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
       const eventType = event.type;
       const now = Date.now();
       
-      // Throttle events of the same type
+      // Strict throttling - only one event of each type per minute
       if (lastEventTimes.get(eventType) && 
-          now - lastEventTimes.get(eventType)! < 10000) {
+          now - lastEventTimes.get(eventType)! < throttleDuration) {
         console.log(`useCabOptions: Ignoring ${eventType} event (throttled):`, customEvent.detail);
+        return;
+      }
+      
+      // Only respond if we haven't reached max refreshes
+      if (refreshCountRef.current >= maxRefreshesRef.current) {
+        console.log(`useCabOptions: Ignoring ${eventType} event (max refreshes reached)`);
         return;
       }
       
       lastEventTimes.set(eventType, now);
       console.log(`useCabOptions: Detected ${eventType} event:`, customEvent.detail);
       
-      // Only do a full refresh if we don't have cab options yet
-      if (cabOptions.length === 0) {
-        loadCabOptions(true);
-      } else {
-        // Just update the timestamp to trigger recalculation of fares
-        setLastRefreshTime(Date.now());
-      }
+      // Just update the timestamp to trigger recalculation
+      setLastRefreshTime(now);
     };
     
-    window.addEventListener('fare-cache-cleared', handleFareCacheCleared);
-    window.addEventListener('local-fares-updated', handleFareUpdated);
-    window.addEventListener('trip-fares-updated', handleFareUpdated);
-    window.addEventListener('airport-fares-updated', handleFareUpdated);
+    window.addEventListener('fare-cache-cleared', handleFareCacheCleared, { passive: true });
+    window.addEventListener('local-fares-updated', handleFareUpdated, { passive: true });
+    window.addEventListener('trip-fares-updated', handleFareUpdated, { passive: true });
+    window.addEventListener('airport-fares-updated', handleFareUpdated, { passive: true });
     
     return () => {
       window.removeEventListener('fare-cache-cleared', handleFareCacheCleared);
@@ -259,13 +283,14 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   
-  // Reload when trip type or mode changes
+  // Handle trip type/mode changes with minimal reloads
   useEffect(() => {
     const handleTripChange = async () => {
+      // Only show loading state for completely new trip types
       setFilterLoading(true);
       
       try {
-        // Check if we have cached data for this trip type
+        // Check if we have cached data for this trip type first
         if (tripType) {
           const cachedTimestamp = localStorage.getItem(`cabOptions_${tripType}_timestamp`);
           const cachedVehicles = localStorage.getItem(`cabOptions_${tripType}`);
@@ -290,11 +315,8 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
           }
         }
         
-        // We'll skip the fare cache clearing here to prevent loops
-        // fareService.clearCache();
-        
-        // Reload with filters based on trip type/mode
-        await loadCabOptions(false); // Use false to avoid triggering a full forced refresh
+        // Load with filters based on trip type/mode, but don't force refresh
+        await loadCabOptions(false);
       } catch (error) {
         console.error("Error updating cab options for trip change:", error);
         toast.error("Failed to update vehicle options");

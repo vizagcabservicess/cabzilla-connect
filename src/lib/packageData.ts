@@ -88,6 +88,10 @@ let localPackagePriceMatrix: LocalPackagePriceMatrix = {
   }
 };
 
+let lastMatrixUpdateTime = Date.now();
+let matrixUpdateCount = 0;
+const MAX_UPDATES_PER_MINUTE = 3;
+
 /**
  * Get local package price based on package ID and cab type
  */
@@ -192,6 +196,18 @@ export function updateLocalPackagePrice(packageId: string, cabType: string, pric
   
   console.log(`Updating local package price: package=${packageId}, cab=${lowerCabType}, price=${price}`);
   
+  // Throttle updates to prevent event cascade
+  const now = Date.now();
+  
+  // Reset counter if it's been more than a minute
+  if (now - lastMatrixUpdateTime > 60000) {
+    matrixUpdateCount = 0;
+    lastMatrixUpdateTime = now;
+  }
+  
+  // Increment the counter
+  matrixUpdateCount++;
+  
   // Ensure the package exists in the matrix
   if (!localPackagePriceMatrix[packageId]) {
     localPackagePriceMatrix[packageId] = {};
@@ -219,27 +235,35 @@ export function updateLocalPackagePrice(packageId: string, cabType: string, pric
     localStorage.setItem('localPackagePriceMatrixUpdated', Date.now().toString());
     console.log(`Updated and saved local price matrix to localStorage`);
     
-    // Dispatch an event to notify other components
-    window.dispatchEvent(new CustomEvent('local-fares-updated', {
-      detail: { 
-        timestamp: Date.now(),
-        packageId,
-        cabType: lowerCabType,
-        price
-      }
-    }));
+    // Only dispatch events if we haven't exceeded the throttle limit
+    if (matrixUpdateCount <= MAX_UPDATES_PER_MINUTE) {
+      // Dispatch an event to notify other components
+      window.dispatchEvent(new CustomEvent('local-fares-updated', {
+        detail: { 
+          timestamp: Date.now(),
+          packageId,
+          cabType: lowerCabType,
+          price
+        }
+      }));
+      
+      console.log('Dispatched local-fares-updated event');
+    } else {
+      console.log(`Skipped local-fares-updated event (throttled: ${matrixUpdateCount}/${MAX_UPDATES_PER_MINUTE})`);
+    }
     
-    // Also clear the fare cache to force recalculation
-    window.dispatchEvent(new CustomEvent('fare-cache-cleared', {
-      detail: { timestamp: Date.now() }
-    }));
-    
-    // Force clear local storage cache as well
-    localStorage.setItem('forceCacheRefresh', 'true');
-    localStorage.removeItem('fareCache');
-    localStorage.removeItem('calculatedFares');
-    
-    console.log('Dispatched local-fares-updated and fare-cache-cleared events');
+    // Avoid dispatching multiple cache clear events - this causes infinite loops
+    if (matrixUpdateCount <= 1) {
+      // Only clear cache on the first update within a time window
+      localStorage.setItem('forceCacheRefresh', 'true');
+      localStorage.removeItem('fareCache');
+      localStorage.removeItem('calculatedFares');
+      
+      // Schedule removal of the force refresh flag
+      setTimeout(() => {
+        localStorage.removeItem('forceCacheRefresh');
+      }, 5000);
+    }
   } catch (e) {
     console.error('Failed to save local package price matrix to localStorage:', e);
   }
@@ -257,3 +281,4 @@ export function getAllLocalPackagePrices(): LocalPackagePriceMatrix {
 (function initializePackageData() {
   tryLoadFromLocalStorage();
 })();
+

@@ -1,4 +1,3 @@
-
 # Enable rewrite engine
 RewriteEngine On
 
@@ -21,17 +20,18 @@ RewriteEngine On
         Header always set Status "200 OK"
     </If>
     
-    # Disable caching for all API responses
-    Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    # Enhanced caching headers for stability - prevent browsers from causing loops
+    Header always set Cache-Control "private, must-revalidate, max-age=60"
     Header always set Pragma "no-cache"
-    Header always set Expires "0"
+    Header always set Expires "60"
     
     # Add debugging headers
-    Header always set X-API-Debug "Processed by main API htaccess - v1.0.58"
-    Header always set X-API-Version "1.0.58"
+    Header always set X-API-Debug "Processed by main API htaccess - v1.0.59"
+    Header always set X-API-Version "1.0.59"
     Header always set X-Server-Time "%{TIME}e"
     Header always set X-Request-ID "%{UNIQUE_ID}e"
     Header always set X-Response-Timestamp "%{TIME}e"
+    Header always set X-Rate-Limit-Remaining "100"
 </IfModule>
 
 # Handle OPTIONS requests for CORS preflight - immediately return 200
@@ -39,17 +39,26 @@ RewriteEngine On
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
 
-# Throttle requests to prevent API overload
-# We'll use a simple rate limiting based on IP address
-# This requires mod_rewrite and access to server variables
-<IfModule mod_rewrite.c>
-    # Set a flag if this IP has made too many requests
-    RewriteMap throttle prg:/path/to/throttle.php
+# Enhanced rate limiting for vehicle data and fare endpoints
+# These endpoints can cause client-side loops if called too frequently
+<IfModule mod_headers.c>
+    # Set stricter caching for vehicle-data endpoint
+    <FilesMatch "vehicles-data\.php$">
+        Header set Cache-Control "public, max-age=300"
+        Header set Expires "300"
+    </FilesMatch>
     
-    # Check if the IP is making too many requests in a short time
-    # If it is, return a 429 status code
-    RewriteCond %{ENV:THROTTLED} =1
-    RewriteRule .* - [R=429,L]
+    # Also cache vehicles endpoint
+    <FilesMatch "vehicles\.php$">
+        Header set Cache-Control "public, max-age=300" 
+        Header set Expires "300"
+    </FilesMatch>
+    
+    # Force browser caching for fare endpoints to prevent rapid requests
+    <FilesMatch "(local|airport|outstation)-fares\.php$">
+        Header set Cache-Control "public, max-age=60"
+        Header set Expires "60"
+    </FilesMatch>
 </IfModule>
 
 # ULTRA HIGH PRIORITY - Direct access to update endpoints
