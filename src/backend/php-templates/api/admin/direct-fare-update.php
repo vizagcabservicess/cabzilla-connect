@@ -1,6 +1,6 @@
 
 <?php
-// direct-fare-update.php - Simple API endpoint for fare updates
+// direct-fare-update.php - Ultra simplified direct fare update endpoint
 
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -9,9 +9,6 @@ header('Expires: 0');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: *');
-header('X-Debug-File: direct-fare-update.php');
-header('X-API-Version: 1.0.55');
-header('X-Timestamp: ' . time());
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -19,16 +16,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Log the request
-error_log("Direct fare update request received at " . date('Y-m-d H:i:s'));
+// Log the request to a file
+$timestamp = date('Y-m-d H:i:s');
+$logMessage = "[$timestamp] Direct fare update request received" . PHP_EOL;
+$logMessage .= "Method: " . $_SERVER['REQUEST_METHOD'] . PHP_EOL;
+$logMessage .= "URL: " . $_SERVER['REQUEST_URI'] . PHP_EOL;
+error_log($logMessage, 3, __DIR__ . '/../logs/direct-fares.log');
 
-// Get data from various sources
+// Get data from ALL possible sources
 $data = [];
 
 // First try POST data which is most likely for form submissions
 if (!empty($_POST)) {
     $data = $_POST;
-    error_log("Using POST data: " . print_r($data, true));
+    error_log("Using POST data: " . print_r($data, true), 3, __DIR__ . '/../logs/direct-fares.log');
 }
 
 // If no POST data, try JSON input
@@ -38,13 +39,13 @@ if (empty($data)) {
         $jsonData = json_decode($rawInput, true);
         if ($jsonData !== null) {
             $data = $jsonData;
-            error_log("Using JSON data: " . print_r($data, true));
+            error_log("Using JSON data: " . print_r($data, true), 3, __DIR__ . '/../logs/direct-fares.log');
         } else {
             // Try parsing as form data
             parse_str($rawInput, $formData);
             if (!empty($formData)) {
                 $data = $formData;
-                error_log("Parsed raw input as form data: " . print_r($data, true));
+                error_log("Parsed raw input as form data: " . print_r($data, true), 3, __DIR__ . '/../logs/direct-fares.log');
             }
         }
     }
@@ -53,17 +54,8 @@ if (empty($data)) {
 // Finally try GET parameters
 if (empty($data) && !empty($_GET)) {
     $data = $_GET;
-    error_log("Using GET data: " . print_r($data, true));
+    error_log("Using GET data: " . print_r($data, true), 3, __DIR__ . '/../logs/direct-fares.log');
 }
-
-// Create a debug response with the data we received
-$responseData = [
-    'status' => 'success',
-    'message' => 'Fare update request received',
-    'timestamp' => time(),
-    'receivedData' => $data,
-    'dataSource' => !empty($_POST) ? 'POST' : (!empty($data) ? 'JSON/FormData' : 'GET')
-];
 
 // Extract vehicle ID and normalize using any of the possible field names
 $vehicleId = '';
@@ -83,11 +75,10 @@ foreach (['tripType', 'trip_type', 'type'] as $field) {
     }
 }
 
-// Add the extracted data to response
-$responseData['extractedData'] = [
-    'vehicleId' => $vehicleId,
-    'tripType' => $tripType
-];
+// Clean vehicleId - remove "item-" prefix if exists
+if (strpos($vehicleId, 'item-') === 0) {
+    $vehicleId = substr($vehicleId, 5);
+}
 
 // For local fare updates, extract all package prices
 if ($tripType == 'local') {
@@ -131,26 +122,102 @@ if ($tripType == 'local') {
         }
     }
     
-    $responseData['extractedData']['packages'] = [
-        '4hrs-40km' => $package4hr,
-        '8hrs-80km' => $package8hr,
-        '10hrs-100km' => $package10hr,
-        'extraKmRate' => $extraKmRate,
-        'extraHourRate' => $extraHourRate
+    // Create response with the compiled data
+    $responseData = [
+        'status' => 'success',
+        'message' => 'Local fare update request received',
+        'timestamp' => time(),
+        'data' => [
+            'packages' => [
+                '4hrs-40km' => $package4hr,
+                '8hrs-80km' => $package8hr,
+                '10hrs-100km' => $package10hr,
+                'extra-hour' => $extraHourRate,
+                'extra-km' => $extraKmRate
+            ],
+            'vehicleId' => $vehicleId
+        ]
     ];
     
-    // Add this data to the main response for better clarity
-    $responseData['data'] = [
-        'packages' => [
-            '4hrs-40km' => $package4hr,
-            '8hrs-80km' => $package8hr,
-            '10hrs-100km' => $package10hr,
-            'extra-hour' => $extraHourRate,
-            'extra-km' => $extraKmRate
-        ],
-        'vehicleId' => $vehicleId
-    ];
+    // Also save to database if we have a vehicle ID
+    if (!empty($vehicleId)) {
+        // Try database connection
+        try {
+            $pdo = new PDO("mysql:host=localhost;dbname=u644605165_new_bookingdb", "u644605165_new_bookingusr", "Vizag@1213");
+            $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            
+            // First try updating the fare_prices table (which has package-based structure)
+            try {
+                // 1. Update or insert 4hrs package
+                $sql4hr = "INSERT INTO fare_prices 
+                    (vehicle_id, trip_type, package_type, base_price, created_at, updated_at)
+                    VALUES (?, 'local', '4hrs-40km', ?, NOW(), NOW())
+                    ON DUPLICATE KEY UPDATE 
+                    base_price = VALUES(base_price),
+                    updated_at = NOW()";
+                $stmt4hr = $pdo->prepare($sql4hr);
+                $stmt4hr->execute([$vehicleId, $package4hr]);
+                
+                // 2. Update or insert 8hrs package
+                $sql8hr = "INSERT INTO fare_prices 
+                    (vehicle_id, trip_type, package_type, base_price, created_at, updated_at)
+                    VALUES (?, 'local', '8hrs-80km', ?, NOW(), NOW())
+                    ON DUPLICATE KEY UPDATE 
+                    base_price = VALUES(base_price),
+                    updated_at = NOW()";
+                $stmt8hr = $pdo->prepare($sql8hr);
+                $stmt8hr->execute([$vehicleId, $package8hr]);
+                
+                // 3. Update or insert 10hrs package
+                $sql10hr = "INSERT INTO fare_prices 
+                    (vehicle_id, trip_type, package_type, base_price, created_at, updated_at)
+                    VALUES (?, 'local', '10hrs-100km', ?, NOW(), NOW())
+                    ON DUPLICATE KEY UPDATE 
+                    base_price = VALUES(base_price),
+                    updated_at = NOW()";
+                $stmt10hr = $pdo->prepare($sql10hr);
+                $stmt10hr->execute([$vehicleId, $package10hr]);
+                
+                // 4. Update or insert extra km rate
+                $sqlKm = "INSERT INTO fare_prices 
+                    (vehicle_id, trip_type, package_type, base_price, created_at, updated_at)
+                    VALUES (?, 'local', 'extra-km', ?, NOW(), NOW())
+                    ON DUPLICATE KEY UPDATE 
+                    base_price = VALUES(base_price),
+                    updated_at = NOW()";
+                $stmtKm = $pdo->prepare($sqlKm);
+                $stmtKm->execute([$vehicleId, $extraKmRate]);
+                
+                // 5. Update or insert extra hour rate
+                $sqlHr = "INSERT INTO fare_prices 
+                    (vehicle_id, trip_type, package_type, base_price, created_at, updated_at)
+                    VALUES (?, 'local', 'extra-hour', ?, NOW(), NOW())
+                    ON DUPLICATE KEY UPDATE 
+                    base_price = VALUES(base_price),
+                    updated_at = NOW()";
+                $stmtHr = $pdo->prepare($sqlHr);
+                $stmtHr->execute([$vehicleId, $extraHourRate]);
+                
+                $responseData['database'] = 'Updated fare_prices table successfully';
+            } catch (Exception $e) {
+                $responseData['databaseError'] = $e->getMessage();
+            }
+        } catch (Exception $e) {
+            $responseData['databaseConnectionError'] = $e->getMessage();
+        }
+    }
+    
+    // Output the response
+    echo json_encode($responseData);
+    exit;
 }
 
-// Echo the response data
-echo json_encode($responseData);
+// If we get here, this is not a local fare update, just return the received data
+echo json_encode([
+    'status' => 'success',
+    'message' => 'Fare update request received',
+    'timestamp' => time(),
+    'receivedData' => $data,
+    'vehicleId' => $vehicleId,
+    'tripType' => $tripType
+]);

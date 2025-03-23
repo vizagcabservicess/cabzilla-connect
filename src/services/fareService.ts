@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { toast } from 'sonner';
 import { OutstationFare, LocalFare, AirportFare } from '@/types/cab';
@@ -245,16 +244,20 @@ class FareService {
   async directFareUpdate(tripType: string, vehicleId: string, data: any) {
     try {
       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
-      const apiVersion = import.meta.env.VITE_API_VERSION || '1.0.0';
       
-      // Prepare the endpoint based on trip type
-      let endpoint = `${apiBaseUrl}/api/admin/direct-fare-update.php`;
+      // Set the vehicle ID in the data object
+      data.vehicleId = vehicleId;
+      
+      // Prepare the endpoint based on trip type - use new direct endpoints
+      let endpoint = '';
       if (tripType === 'local') {
-        endpoint = `${apiBaseUrl}/api/admin/local-fares-update.php`;
+        endpoint = `${apiBaseUrl}/api/admin/direct-fare-update.php`;
       } else if (tripType === 'outstation') {
-        endpoint = `${apiBaseUrl}/api/admin/outstation-fares-update.php`;
+        endpoint = `${apiBaseUrl}/api/admin/direct-outstation-fares.php`;
       } else if (tripType === 'airport') {
-        endpoint = `${apiBaseUrl}/api/admin/airport-fares-update.php`;
+        endpoint = `${apiBaseUrl}/api/admin/direct-airport-fares.php`;
+      } else {
+        endpoint = `${apiBaseUrl}/api/admin/direct-fare-update.php`;
       }
       
       // Add timestamp for cache busting
@@ -264,43 +267,107 @@ class FareService {
       console.log(`Updating ${tripType} fares for vehicle ${vehicleId} at endpoint: ${endpoint}`);
       console.log("Data being sent:", data);
       
-      // First try with JSON
+      // Try multiple request formats to maximize chance of success
+      const attempts = [];
+      
+      // 1. First try with URL encoded form data
+      const formData = new FormData();
+      Object.entries(data).forEach(([key, value]) => {
+        formData.append(key, String(value));
+      });
+      
+      attempts.push(
+        axios.post(endpoint, formData, {
+          headers: {
+            ...this.getBypassHeaders(),
+            'Content-Type': 'application/x-www-form-urlencoded'
+          }
+        }).catch(e => {
+          console.log(`Form data attempt failed: ${e.message}`);
+          return null;
+        })
+      );
+      
+      // 2. Try with JSON
+      attempts.push(
+        axios.post(endpoint, data, {
+          headers: {
+            ...this.getBypassHeaders(),
+            'Content-Type': 'application/json'
+          }
+        }).catch(e => {
+          console.log(`JSON attempt failed: ${e.message}`);
+          return null;
+        })
+      );
+      
+      // 3. Try with URLSearchParams 
+      const params = new URLSearchParams();
+      Object.entries(data).forEach(([key, value]) => {
+        params.append(key, String(value));
+      });
+      
+      attempts.push(
+        axios.post(endpoint, params, {
+          headers: {
+            ...this.getBypassHeaders(),
+            'Content-Type': 'application/x-www-form-urlencoded'
+          }
+        }).catch(e => {
+          console.log(`URLSearchParams attempt failed: ${e.message}`);
+          return null;
+        })
+      );
+      
+      // 4. Try with direct GET request
+      const queryParams = new URLSearchParams();
+      Object.entries(data).forEach(([key, value]) => {
+        queryParams.append(key, String(value));
+      });
+      
+      attempts.push(
+        axios.get(`${endpoint}&${queryParams.toString()}`, {
+          headers: this.getBypassHeaders()
+        }).catch(e => {
+          console.log(`GET attempt failed: ${e.message}`);
+          return null;
+        })
+      );
+      
+      // Try all request formats and use the first successful one
+      const responses = await Promise.all(attempts);
+      const successResponse = responses.find(r => r && r.data && r.data.status === 'success');
+      
+      if (successResponse) {
+        // Clear cache to ensure fresh data is fetched
+        this.clearCache();
+        console.log(`Successfully updated ${tripType} fares:`, successResponse.data);
+        return successResponse.data;
+      }
+      
+      // If we get here, all attempts failed - try one more super simple approach
       try {
-        const response = await axios.post(endpoint, data, {
-          headers: this.getBypassHeaders()
+        // Direct fetch with minimal content
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          body: new URLSearchParams(data).toString()
         });
         
-        if (response.data && response.data.status === 'success') {
-          // Clear cache to ensure fresh data is fetched
+        const jsonResponse = await response.json();
+        if (jsonResponse.status === 'success') {
           this.clearCache();
-          console.log(`Successfully updated ${tripType} fares via JSON:`, response.data);
-          return response.data;
-        } else {
-          console.warn('API request successful but returned error status:', response.data);
-          throw new Error(response.data.message || `Failed to update ${tripType} fare via JSON`);
+          console.log(`Successfully updated ${tripType} fares using fetch API:`, jsonResponse);
+          return jsonResponse;
         }
-      } catch (error) {
-        console.error(`JSON request failed for ${tripType} update:`, error);
         
-        // Try with FormData as fallback
-        const formData = new FormData();
-        Object.entries(data).forEach(([key, value]) => {
-          formData.append(key, String(value));
-        });
-        
-        const response = await axios.post(endpoint, formData, {
-          headers: this.getBypassHeaders()
-        });
-        
-        if (response.data && response.data.status === 'success') {
-          // Clear cache to ensure fresh data is fetched
-          this.clearCache();
-          console.log(`Successfully updated ${tripType} fares via FormData:`, response.data);
-          return response.data;
-        } else {
-          console.error('FormData API request failed:', response.data);
-          throw new Error(response.data.message || `Failed to update ${tripType} fare via FormData`);
-        }
+        // If we reached here, everything failed
+        throw new Error('All update attempts failed');
+      } catch (fetchError) {
+        console.error(`Final attempt using fetch API also failed:`, fetchError);
+        throw new Error(`Could not update ${tripType} fares after multiple attempts`);
       }
     } catch (error) {
       console.error(`Error in directFareUpdate for ${tripType}:`, error);
@@ -322,3 +389,4 @@ class FareService {
 }
 
 export const fareService = new FareService();
+

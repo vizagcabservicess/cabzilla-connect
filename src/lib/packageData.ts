@@ -217,7 +217,7 @@ export function updateLocalPackagePrice(packageId: string, cabType: string, pric
     const savedMatrix = JSON.stringify(localPackagePriceMatrix);
     localStorage.setItem('localPackagePriceMatrix', savedMatrix);
     localStorage.setItem('localPackagePriceMatrixUpdated', Date.now().toString());
-    console.log(`Updated and saved local price matrix to localStorage: ${savedMatrix.substring(0, 100)}...`);
+    console.log(`Updated and saved local price matrix to localStorage`);
     
     // Dispatch an event to notify other components
     window.dispatchEvent(new CustomEvent('local-fares-updated', {

@@ -1,78 +1,105 @@
 
-import { hourlyPackages } from "@/lib/packageData";
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardTitle } from "@/components/ui/card";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { useEffect } from "react";
-import { LocalTripPurpose } from "@/lib/tripTypes";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Info } from "lucide-react";
+import { HourlyPackage } from '@/types/cab';
+import { hourlyPackages } from '@/lib/packageData';
 
 interface LocalTripSelectorProps {
-  tripPurpose: LocalTripPurpose;
-  onTripPurposeChange: (value: LocalTripPurpose) => void;
-  hourlyPackage: string;
-  onHourlyPackageChange: (value: string) => void;
+  selectedPackage: string | undefined;
+  onPackageSelect: (packageId: string) => void;
 }
 
-export function LocalTripSelector({ 
-  tripPurpose, 
-  onTripPurposeChange, 
-  hourlyPackage, 
-  onHourlyPackageChange 
-}: LocalTripSelectorProps) {
+export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTripSelectorProps) {
+  const [packages, setPackages] = useState<HourlyPackage[]>([]);
   
+  // Load packages on component mount
   useEffect(() => {
-    console.log("LocalTripSelector mounted with package:", hourlyPackage);
-    if (!hourlyPackage) {
-      console.log("Setting default hourly package");
-      onHourlyPackageChange(hourlyPackages[0].id);
+    // Ensure packages are displayed in the correct order: 4hrs first, then 8hrs, then 10hrs
+    const sortedPackages = [...hourlyPackages].sort((a, b) => a.hours - b.hours);
+    setPackages(sortedPackages);
+    
+    // Select default package if none is selected
+    if (!selectedPackage && sortedPackages.length > 0) {
+      onPackageSelect(sortedPackages[0].id);
     }
-  }, [hourlyPackage, onHourlyPackageChange]);
-
+  }, [selectedPackage, onPackageSelect]);
+  
+  // Handle package selection
+  const handlePackageSelect = (packageId: string) => {
+    onPackageSelect(packageId);
+  };
+  
+  // Display a message if no packages are available
+  if (packages.length === 0) {
+    return (
+      <Alert className="mb-4">
+        <Info className="h-4 w-4" />
+        <AlertDescription>
+          No hourly packages are currently available. Please try again later.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+  
+  // Format price for display
+  const formatPrice = (price?: number) => {
+    if (!price) return "Price unavailable";
+    return `₹${price.toLocaleString('en-IN')}`;
+  };
+  
   return (
-    <div className="space-y-4">
-      <div>
-        <Label htmlFor="trip-purpose" className="text-xs font-medium text-gray-700">TRIP PURPOSE</Label>
-        <Select 
-          value={tripPurpose} 
-          onValueChange={(val) => onTripPurposeChange(val as LocalTripPurpose)}
+    <Card className="mb-4">
+      <CardContent className="pt-4">
+        <CardTitle className="mb-4">Select Hourly Package</CardTitle>
+        
+        <RadioGroup 
+          value={selectedPackage} 
+          onValueChange={handlePackageSelect}
+          className="space-y-3"
         >
-          <SelectTrigger id="trip-purpose" className="w-full mt-1">
-            <SelectValue placeholder="Select trip purpose" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="business">Business Trip</SelectItem>
-            <SelectItem value="personal">Personal Trip</SelectItem>
-            <SelectItem value="city-tour">City Tour</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      
-      <div>
-        <Label htmlFor="hourly-package" className="text-xs font-medium text-gray-700">HOURLY PACKAGE</Label>
-        <Select 
-          value={hourlyPackage} 
-          onValueChange={(value) => {
-            console.log("Hourly package changed to:", value);
-            onHourlyPackageChange(value);
-          }}
-        >
-          <SelectTrigger id="hourly-package" className="w-full mt-1">
-            <SelectValue placeholder="Select hourly package" />
-          </SelectTrigger>
-          <SelectContent>
-            {hourlyPackages.map((pkg) => (
-              <SelectItem key={pkg.id} value={pkg.id}>
-                {pkg.name} - ₹{pkg.basePrice ? Math.round(pkg.basePrice) : 0}+
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-    </div>
+          {packages.map((pkg) => (
+            <div
+              key={pkg.id}
+              className={`flex items-center justify-between rounded-lg border p-3 cursor-pointer hover:bg-muted ${
+                selectedPackage === pkg.id ? "border-primary bg-primary/5" : ""
+              }`}
+              onClick={() => handlePackageSelect(pkg.id)}
+            >
+              <div className="flex items-center space-x-3">
+                <RadioGroupItem value={pkg.id} id={pkg.id} />
+                <Label htmlFor={pkg.id} className="flex flex-col cursor-pointer">
+                  <span className="font-medium">{pkg.name}</span>
+                  <span className="text-sm text-muted-foreground">
+                    {pkg.hours} hours, up to {pkg.kilometers} km
+                  </span>
+                </Label>
+              </div>
+              
+              <div className="text-right">
+                <span className="font-medium text-sm">
+                  {formatPrice(pkg.basePrice)}
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  Base price
+                </span>
+              </div>
+            </div>
+          ))}
+        </RadioGroup>
+        
+        <div className="mt-4 text-sm text-muted-foreground">
+          <p className="mb-1">Additional charges:</p>
+          <ul className="list-disc ml-5 space-y-1">
+            <li>Extra hours charged separately</li>
+            <li>Extra km beyond package limit will be charged</li>
+            <li>Toll and parking charges extra</li>
+          </ul>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
