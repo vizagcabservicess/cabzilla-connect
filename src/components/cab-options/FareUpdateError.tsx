@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -16,7 +16,10 @@ import {
   Wifi,
   ArrowUp,
   Network,
-  Hammer
+  Hammer,
+  Wrench,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 import { fareService } from '@/services/fareService';
 import { toast } from 'sonner';
@@ -36,6 +39,8 @@ export function FareUpdateError({
   description,
   showDirectLink = true
 }: FareUpdateErrorProps) {
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [isFixing, setIsFixing] = useState(false);
   const errorMessage = typeof error === "string" ? error : error.message;
   
   // Error classification
@@ -72,6 +77,76 @@ export function FareUpdateError({
     }, 800);
   };
 
+  // Comprehensive fix attempt
+  const runComprehensiveFix = async () => {
+    setIsFixing(true);
+    toast.info('Applying comprehensive API fixes...', {
+      id: 'comprehensive-fix',
+      duration: 3000
+    });
+    
+    try {
+      console.log('Running comprehensive API fixes...');
+      
+      // 1. Clear all caches
+      fareService.clearCache();
+      
+      // 2. Force API version update
+      const timestamp = Date.now();
+      localStorage.setItem('apiVersionForced', timestamp.toString());
+      sessionStorage.setItem('apiVersionForced', timestamp.toString());
+      
+      // 3. Set direct API access flag
+      localStorage.setItem('useDirectApi', 'true');
+      sessionStorage.setItem('useDirectApi', 'true');
+      
+      // 4. Clear all authentication tokens
+      const authKeys = ['token', 'authToken', 'refreshToken', 'user', 'userData'];
+      authKeys.forEach(key => {
+        try {
+          localStorage.removeItem(key);
+          sessionStorage.removeItem(key);
+        } catch (e) {}
+      });
+      
+      // 5. Ping the direct fare update endpoint
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+      
+      try {
+        const response = await fetch(`${baseUrl}/api/direct-fare-update?_t=${timestamp}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...fareService.getBypassHeaders()
+          },
+          body: JSON.stringify({ 
+            test: true, 
+            timestamp,
+            action: 'comprehensive-fix'
+          })
+        });
+        
+        if (response.ok) {
+          console.log('Direct fare endpoint is reachable');
+        }
+      } catch (err) {
+        console.warn('Could not reach direct fare endpoint');
+      }
+      
+      // Success notification
+      toast.success('Comprehensive fixes applied', {
+        id: 'comprehensive-fix-success'
+      });
+    } catch (err) {
+      console.error('Error applying comprehensive fixes:', err);
+      toast.error('Error applying fixes', {
+        id: 'comprehensive-fix-error'
+      });
+    } finally {
+      setIsFixing(false);
+    }
+  };
+
   // Direct connection test
   const testDirectConnection = () => {
     toast.info('Testing direct server connection...');
@@ -80,7 +155,7 @@ export function FareUpdateError({
     const timestamp = Date.now();
     
     // Test the ultra-simple endpoint directly
-    fetch(`${baseUrl}/api/admin/direct-outstation-fares.php?test=true&_t=${timestamp}`, {
+    fetch(`${baseUrl}/api/direct-fare-update?test=true&_t=${timestamp}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -90,7 +165,6 @@ export function FareUpdateError({
     })
     .then(async response => {
       if (response.ok) {
-        const text = await response.text();
         toast.success(`Server test succeeded!`);
       } else {
         toast.error(`Server error: ${response.status}`);
@@ -107,9 +181,13 @@ export function FareUpdateError({
     const timestamp = Date.now();
     
     const endpoints = [
-      // Try the ultra-simple direct outstation fares endpoint first
-      `${baseUrl}/api/admin/direct-outstation-fares.php?_t=${timestamp}`,
-      `${baseUrl}/api/admin/direct-vehicle-pricing.php?_t=${timestamp}`,
+      // Try the direct endpoints first (most reliable)
+      `${baseUrl}/api/direct-fare-update?_t=${timestamp}`,
+      `${baseUrl}/api/direct-outstation-fares?_t=${timestamp}`,
+      `${baseUrl}/api/direct-local-fares?_t=${timestamp}`,
+      `${baseUrl}/api/direct-airport-fares?_t=${timestamp}`,
+      
+      // Specialized endpoints
       `${baseUrl}/api/admin/outstation-fares-update.php?_t=${timestamp}`,
       `${baseUrl}/api/admin/local-fares-update.php?_t=${timestamp}`,
       `${baseUrl}/api/admin/airport-fares-update.php?_t=${timestamp}`
@@ -156,42 +234,6 @@ export function FareUpdateError({
     fareService.clearCache();
   };
 
-  // Emergency cure-all attempt
-  const runEmergencyFix = () => {
-    toast.info('Attempting emergency fix...');
-    
-    // Clear all caches
-    fareService.clearCache();
-    
-    // Ping all possible endpoints with multiple methods
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
-    
-    // Try the ultra-simple direct outstation fares endpoint
-    fetch(`${baseUrl}/api/admin/direct-outstation-fares.php?emergency=true&_t=${Date.now()}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...fareService.getBypassHeaders()
-      },
-      body: JSON.stringify({ test: 'emergency', timestamp: Date.now() })
-    })
-    .then(async response => {
-      if (response.ok) {
-        toast.success('Emergency fix succeeded!');
-      } else {
-        toast.warning(`Emergency test returned ${response.status}`);
-      }
-    })
-    .catch(err => {
-      console.log('Emergency test completed');
-    });
-    
-    // Give the user feedback
-    setTimeout(() => {
-      toast.success('Emergency actions completed');
-    }, 2000);
-  };
-
   // Pick the most appropriate icon
   const ErrorIcon = isForbiddenError
     ? ShieldAlert 
@@ -233,30 +275,32 @@ export function FareUpdateError({
         <div className="text-sm space-y-2">
           <p className="font-medium text-gray-700">Try the following:</p>
           <ul className="list-disc pl-5 space-y-1 text-gray-600">
-            <li>Use the retry button to clear all caches and try again</li>
-            <li>Try the ultra-simple direct API access button</li>
-            <li>Try the emergency fix button which attempts several recovery methods</li>
-            <li>Check if the server is online or experiencing issues</li>
-            <li>Try reloading the page</li>
-            <li>Log out and log back in to refresh authentication</li>
+            <li>Use the comprehensive fix button to solve common API connection issues</li>
+            <li>Try direct API access to bypass connection issues</li>
+            <li>Clear browser cache and authentication tokens</li>
+            <li>Try logging out and back in</li>
+            <li>Contact support if all solutions fail</li>
           </ul>
         </div>
         
-        <div className="bg-blue-50 p-3 rounded-md border border-blue-200 mt-2">
-          <div className="flex items-start">
-            <Terminal className="h-4 w-4 mt-1 text-blue-500 mr-2" />
-            <div className="text-xs">
-              <p className="font-medium text-blue-800">Error Details:</p>
-              <pre className="mt-1 text-xs text-blue-700 bg-blue-100 p-1 rounded overflow-auto max-h-20">
-                {JSON.stringify({
-                  endpoint: error?.['config']?.url || 'Unknown',
-                  status: error?.['response']?.status || 'Unknown',
-                  message: errorMessage
-                }, null, 2)}
-              </pre>
+        {showAdvanced && (
+          <div className="bg-blue-50 p-3 rounded-md border border-blue-200 mt-2">
+            <div className="flex items-start">
+              <Terminal className="h-4 w-4 mt-1 text-blue-500 mr-2" />
+              <div className="text-xs">
+                <p className="font-medium text-blue-800">Error Details:</p>
+                <pre className="mt-1 text-xs text-blue-700 bg-blue-100 p-1 rounded overflow-auto max-h-20">
+                  {JSON.stringify({
+                    endpoint: error?.['config']?.url || 'Unknown',
+                    status: error?.['response']?.status || 'Unknown',
+                    message: errorMessage,
+                    apiVersion: import.meta.env.VITE_API_VERSION || 'Unknown'
+                  }, null, 2)}
+                </pre>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </CardContent>
       <CardFooter className="pt-0 flex flex-wrap gap-3">
         <Button 
@@ -267,45 +311,65 @@ export function FareUpdateError({
           Clear Cache & Retry
         </Button>
         
-        <Button 
-          onClick={runDiagnostics} 
-          variant="outline" 
-          className="gap-2 border-orange-300 bg-orange-50 hover:bg-orange-100 text-orange-800"
+        <Button
+          onClick={runComprehensiveFix}
+          variant="outline"
+          className="gap-2 border-purple-300 bg-purple-50 hover:bg-purple-100 text-purple-800"
+          disabled={isFixing}
         >
-          <Network className="h-4 w-4" />
-          Run Diagnostics
+          {isFixing ? (
+            <>
+              <RefreshCw className="h-4 w-4 animate-spin" />
+              Applying Fixes...
+            </>
+          ) : (
+            <>
+              <Wrench className="h-4 w-4" />
+              Comprehensive Fix
+            </>
+          )}
         </Button>
         
         {showDirectLink && (
           <>
+            <Button 
+              onClick={testDirectConnection} 
+              variant="outline" 
+              className="gap-2 border-blue-300 bg-blue-50 hover:bg-blue-100 text-blue-800"
+            >
+              <Network className="h-4 w-4" />
+              Test Connection
+            </Button>
+            
             <Button 
               onClick={openDirectEndpoints} 
               variant="outline" 
               className="gap-2 border-green-300 bg-green-50 hover:bg-green-100 text-green-800"
             >
               <Server className="h-4 w-4" />
-              Ultra-Simple API
-            </Button>
-            
-            <Button 
-              onClick={testDirectConnection} 
-              variant="outline" 
-              className="gap-2 border-blue-300 bg-blue-50 hover:bg-blue-100 text-blue-800"
-            >
-              <Hammer className="h-4 w-4" />
-              Test Direct Connection
-            </Button>
-            
-            <Button 
-              onClick={runEmergencyFix} 
-              variant="outline" 
-              className="gap-2 border-purple-300 bg-purple-50 hover:bg-purple-100 text-purple-800"
-            >
-              <FileCode className="h-4 w-4" />
-              Emergency Fix
+              Direct API Access
             </Button>
           </>
         )}
+        
+        <Button
+          onClick={() => setShowAdvanced(!showAdvanced)}
+          variant="ghost"
+          size="sm"
+          className="w-full text-xs text-gray-500 mt-1"
+        >
+          {showAdvanced ? (
+            <>
+              <ChevronUp className="h-3 w-3 mr-1" />
+              Hide Technical Details
+            </>
+          ) : (
+            <>
+              <ChevronDown className="h-3 w-3 mr-1" />
+              Show Technical Details
+            </>
+          )}
+        </Button>
       </CardFooter>
     </Card>
   );

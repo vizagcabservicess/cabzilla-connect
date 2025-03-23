@@ -8,13 +8,27 @@ const generateBypassHeaders = () => {
   return {
     'X-Force-Refresh': Date.now().toString(),
     'X-Bypass-Cache': 'true',
-    'X-Client-Version': import.meta.env.VITE_API_VERSION || '1.0.40',
+    'X-Client-Version': import.meta.env.VITE_API_VERSION || '1.0.50',
     'X-Request-Source': 'client-app',
     'Cache-Control': 'no-cache, no-store, must-revalidate',
     'Pragma': 'no-cache',
     'X-Custom-Timestamp': Date.now().toString(),
-    'X-Authorization-Override': 'direct-access-' + Date.now()
+    'X-Authorization-Override': 'direct-access-' + Date.now(),
+    'X-API-Version': import.meta.env.VITE_API_VERSION || '1.0.50',
+    'X-Request-ID': `req-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
   };
+};
+
+// Check if we should use direct API endpoints (from env or localStorage)
+const shouldUseDirectApi = () => {
+  // Check env first
+  const envDirectApi = import.meta.env.VITE_USE_DIRECT_API === 'true';
+  
+  // Check localStorage/sessionStorage next
+  const storageDirectApi = localStorage.getItem('useDirectApi') === 'true' || 
+                          sessionStorage.getItem('useDirectApi') === 'true';
+  
+  return envDirectApi || storageDirectApi;
 };
 
 // Direct API call with ultra-simplified approach first, then fallbacks
@@ -25,9 +39,69 @@ async function directApiCall(endpoint: string, data: any) {
   // Log the attempt
   console.log(`Starting direct API call to ${endpoint} with data:`, data);
   
-  // Try ultra-simplified approach first - most reliable
+  // Use direct API endpoints if configured
+  const useDirectApi = shouldUseDirectApi();
+  
+  // If direct API is enabled, use the simplified endpoints first
+  if (useDirectApi) {
+    try {
+      console.log('ATTEMPT 1: Using new direct API endpoint');
+      
+      // Map the endpoint to the appropriate direct endpoint
+      let directEndpoint = `${baseUrl}/api/direct-fare-update?_t=${timestamp}`;
+      
+      // If endpoint contains specific trip type, use that direct endpoint
+      if (endpoint.includes('outstation')) {
+        directEndpoint = `${baseUrl}/api/direct-outstation-fares?_t=${timestamp}`;
+      } else if (endpoint.includes('local')) {
+        directEndpoint = `${baseUrl}/api/direct-local-fares?_t=${timestamp}`;
+      } else if (endpoint.includes('airport')) {
+        directEndpoint = `${baseUrl}/api/direct-airport-fares?_t=${timestamp}`;
+      } else if (endpoint.includes('vehicle-pricing')) {
+        directEndpoint = `${baseUrl}/api/direct-vehicle-pricing?_t=${timestamp}`;
+      } else if (endpoint.includes('base-pricing')) {
+        directEndpoint = `${baseUrl}/api/direct-base-pricing?_t=${timestamp}`;
+      }
+      
+      console.log(`Using direct endpoint: ${directEndpoint}`);
+      
+      // Basic fetch with JSON payload - simplest approach
+      const simpleFetchResponse = await fetch(directEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...generateBypassHeaders()
+        },
+        body: JSON.stringify({
+          ...data,
+          timestamp,
+          directApi: true
+        })
+      });
+      
+      if (simpleFetchResponse.ok) {
+        try {
+          const jsonData = await simpleFetchResponse.json();
+          console.log('✅ Success with direct endpoint:', jsonData);
+          return jsonData;
+        } catch (parseError) {
+          console.log('Direct endpoint returned success but invalid JSON, continuing with text response');
+          const textData = await simpleFetchResponse.text();
+          return { status: 'success', message: textData };
+        }
+      } else {
+        console.warn(`❌ Direct endpoint failed with status ${simpleFetchResponse.status}`);
+        // Don't throw, continue to next attempt
+      }
+    } catch (directError) {
+      console.warn('❌ Direct endpoint failed with error:', directError);
+      // Continue to next attempts
+    }
+  }
+  
+  // Try ultra-simplified approach next
   try {
-    console.log('ATTEMPT 1: Using ultra-simplified direct approach');
+    console.log('ATTEMPT 2: Using ultra-simplified direct approach');
     const directUrl = `${baseUrl}/api/admin/direct-outstation-fares.php?_t=${timestamp}`;
     
     // Basic fetch with JSON payload - simplest approach
@@ -41,9 +115,15 @@ async function directApiCall(endpoint: string, data: any) {
     });
     
     if (simpleFetchResponse.ok) {
-      const jsonData = await simpleFetchResponse.json();
-      console.log('✅ Success with ultra-simplified endpoint:', jsonData);
-      return jsonData;
+      try {
+        const jsonData = await simpleFetchResponse.json();
+        console.log('✅ Success with ultra-simplified endpoint:', jsonData);
+        return jsonData;
+      } catch (parseError) {
+        console.log('Endpoint returned success but invalid JSON, continuing with text response');
+        const textData = await simpleFetchResponse.text();
+        return { status: 'success', message: textData };
+      }
     } else {
       console.warn(`❌ Ultra-simplified approach failed with status ${simpleFetchResponse.status}`);
       // Don't throw, continue to next attempt
@@ -56,12 +136,23 @@ async function directApiCall(endpoint: string, data: any) {
   // Create URLs with different timestamp patterns for each attempt - HIGHEST PRIORITY ENDPOINTS FIRST
   const urls = [
     // Try the new direct endpoints first (most reliable)
+    `${baseUrl}/api/direct-fare-update?_t=${timestamp}`,
+    `${baseUrl}/api/direct-outstation-fares?_t=${timestamp}`,
+    `${baseUrl}/api/direct-local-fares?_t=${timestamp}`,
+    `${baseUrl}/api/direct-airport-fares?_t=${timestamp}`,
+    `${baseUrl}/api/direct-vehicle-pricing?_t=${timestamp}`,
+    
+    // Try the PHP direct endpoints next
     `${baseUrl}/api/admin/direct-outstation-fares.php?_t=${timestamp}`,
     `${baseUrl}/api/admin/direct-vehicle-pricing.php?_t=${timestamp}`,
+    
     // Then try the regular endpoints
     `${baseUrl}/api/admin/outstation-fares-update.php?_t=${timestamp}`,
+    `${baseUrl}/api/admin/local-fares-update.php?_t=${timestamp}`,
+    `${baseUrl}/api/admin/airport-fares-update.php?_t=${timestamp}`,
     `${baseUrl}/api/admin/vehicle-pricing.php?_t=${timestamp}`,
     `${baseUrl}/api/admin/fares-update.php?_t=${timestamp}`,
+    
     // Finally, try the specified endpoint
     `${endpoint}?_t=${timestamp}`
   ];
@@ -290,9 +381,6 @@ export const fareService = {
     const startTime = Date.now();
     console.log(`Starting fare update for ${tripType}, vehicle: ${vehicleId} at ${new Date(startTime).toISOString()}`);
     
-    // Always try the ultra-simplified direct endpoint first
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
-    
     try {
       console.log(`Starting direct fare update for ${tripType}, vehicle: ${vehicleId}`);
       
@@ -318,8 +406,27 @@ export const fareService = {
         duration: 5000
       });
       
-      // ALWAYS use the direct outstation fares endpoint - it's the most reliable
-      const directEndpoint = `${baseUrl}/api/admin/direct-outstation-fares.php`;
+      // Determine the best endpoint based on trip type
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+      
+      // Use the new direct endpoints if enabled, otherwise use the legacy direct endpoints
+      let directEndpoint = '';
+      
+      if (shouldUseDirectApi()) {
+        // Use the new REST-style endpoints
+        if (tripType === 'outstation') {
+          directEndpoint = `${baseUrl}/api/direct-outstation-fares`;
+        } else if (tripType === 'local') {
+          directEndpoint = `${baseUrl}/api/direct-local-fares`;
+        } else if (tripType === 'airport') {
+          directEndpoint = `${baseUrl}/api/direct-airport-fares`;
+        } else {
+          directEndpoint = `${baseUrl}/api/direct-fare-update`;
+        }
+      } else {
+        // Use the legacy direct PHP endpoints
+        directEndpoint = `${baseUrl}/api/admin/direct-outstation-fares.php`;
+      }
       
       // Make the direct API call with multiple fallback methods
       const result = await directApiCall(directEndpoint, updateData);

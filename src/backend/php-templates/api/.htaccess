@@ -7,8 +7,8 @@ RewriteEngine On
     # Set CORS headers unconditionally for all responses - high priority
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh"
-    Header always set Access-Control-Max-Age "3600"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, X-Custom-Timestamp, X-API-Version, X-Client-Version, X-Authorization-Override, X-Debug-Mode, X-Cache-Control, X-Request-ID, X-Request-Source"
+    Header always set Access-Control-Max-Age "7200"
     
     # Set CORS headers specifically for OPTIONS preflight requests - highest priority
     <If "%{REQUEST_METHOD} == 'OPTIONS'">
@@ -18,6 +18,7 @@ RewriteEngine On
         Header always set Access-Control-Max-Age "7200"
         Header always set Content-Type "text/plain"
         Header always set Content-Length "0"
+        Header always set Status "200 OK"
     </If>
     
     # Disable caching for all API responses
@@ -26,8 +27,10 @@ RewriteEngine On
     Header always set Expires "0"
     
     # Add debugging headers
-    Header always set X-API-Debug "Processed by main API htaccess - v1.0.31"
-    Header always set X-API-Version "1.0.31"
+    Header always set X-API-Debug "Processed by main API htaccess - v1.0.50"
+    Header always set X-API-Version "1.0.50"
+    Header always set X-Server-Time "%{TIME}e"
+    Header always set X-Request-ID "%{UNIQUE_ID}e"
 </IfModule>
 
 # Handle OPTIONS requests for CORS preflight - immediately return 200
@@ -35,7 +38,23 @@ RewriteEngine On
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
 
-# Parse API routes to PHP files
+# Parse API routes to PHP files - DIRECT ACCESS FIRST (higher priority)
+# Ultra-simple direct access endpoints for bypassing all routing complexity
+RewriteRule ^direct-booking-data$ user/direct-booking-data.php [L,QSA]
+RewriteRule ^direct-user-data$ admin/direct-user-data.php [L,QSA]
+RewriteRule ^direct-vehicle-pricing$ admin/direct-vehicle-pricing.php [L,QSA]
+RewriteRule ^direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^direct-local-fares$ admin/direct-local-fares.php [L,QSA]
+RewriteRule ^direct-airport-fares$ admin/direct-airport-fares.php [L,QSA]
+RewriteRule ^direct-base-pricing$ admin/direct-base-pricing.php [L,QSA]
+RewriteRule ^direct-fare-update$ admin/direct-fare-update.php [L,QSA]
+
+# Specialized fare update routes with very high priority
+RewriteRule ^admin/outstation-fares-update$ admin/outstation-fares-update.php [QSA,L]
+RewriteRule ^admin/local-fares-update$ admin/local-fares-update.php [QSA,L]
+RewriteRule ^admin/airport-fares-update$ admin/airport-fares-update.php [QSA,L]
+
+# Regular API routes
 RewriteRule ^signup$ signup.php [L]
 RewriteRule ^login$ login.php [L]
 RewriteRule ^user/dashboard$ user/dashboard.php [L,QSA]
@@ -61,11 +80,6 @@ RewriteRule ^admin/drivers$ admin/drivers.php [QSA,L]
 RewriteRule ^admin/drivers/([0-9]+)$ admin/drivers.php?id=$1 [QSA,L]
 RewriteRule ^receipt/([0-9]+)$ receipt.php?id=$1 [QSA,L]
 RewriteRule ^vehicles-data$ fares/vehicles-data.php [L,QSA]
-
-# Direct access routes for fare updates - top priority and simplified
-RewriteRule ^admin/outstation-fares-update$ admin/outstation-fares-update.php [QSA,L]
-RewriteRule ^admin/local-fares-update$ admin/local-fares-update.php [QSA,L]
-RewriteRule ^admin/airport-fares-update$ admin/airport-fares-update.php [QSA,L]
 
 # Access the "raw" PHP endpoints for direct testing and debugging
 RewriteRule ^raw-vehicle-pricing$ admin/vehicle-pricing.php?raw=1 [QSA,L]
