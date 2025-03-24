@@ -21,6 +21,8 @@ RewriteRule ^api/admin/direct-fare-update$ api/admin/direct-fare-update.php [L,Q
 RewriteRule ^api/admin/direct-fare-update\.php$ api/admin/direct-fare-update.php [L,QSA]
 RewriteRule ^api/admin/direct-outstation-fares$ api/admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^api/admin/direct-outstation-fares\.php$ api/admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^api/direct-outstation-fares$ api/admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^api/direct-outstation-fares\.php$ api/admin/direct-outstation-fares.php [L,QSA]
 
 # Direct endpoint for vehicle pricing
 RewriteRule ^api/admin/direct-vehicle-pricing$ api/admin/direct-vehicle-pricing.php [QSA,L]

@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { toast } from 'sonner';
 import { OutstationFare, LocalFare, AirportFare } from '@/types/cab';
@@ -32,7 +33,7 @@ class FareService {
     });
   }
 
-  // New method for forced request configuration
+  // Method for forced request configuration
   getForcedRequestConfig() {
     const timestamp = Date.now();
     
@@ -51,7 +52,7 @@ class FareService {
     };
   }
 
-  // New method for bypass headers
+  // Method for bypass headers
   getBypassHeaders() {
     const timestamp = Date.now();
     
@@ -86,18 +87,14 @@ class FareService {
     
     // If no cached data or cache disabled, fetch from API
     try {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
-      const apiVersion = import.meta.env.VITE_API_VERSION || '1.0.0';
-      
-      // Add cache busting parameter
       const timestamp = Date.now();
       
-      const response = await axios.get(`${apiBaseUrl}/api/fares/tours.php?_t=${timestamp}`, {
+      const response = await axios.get(`${this.apiBaseUrl}/api/fares/tours.php?_t=${timestamp}`, {
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache',
           'Expires': '0',
-          'X-API-Version': apiVersion
+          'X-API-Version': this.apiVersion
         }
       });
       
@@ -135,6 +132,40 @@ class FareService {
           localStorage.removeItem('cabFares');
         }
       }
+    }
+    
+    // Try to fetch from direct API endpoint
+    try {
+      const timestamp = Date.now();
+      const endpoint = `${this.apiBaseUrl}/api/direct-outstation-fares.php?vehicleId=${vehicleId}&_t=${timestamp}`;
+      
+      console.log(`Fetching outstation fares for ${vehicleId} from API: ${endpoint}`);
+      
+      const response = await axios.get(endpoint, this.getForcedRequestConfig());
+      
+      if (response.data && response.data.status === 'success' && response.data.data) {
+        console.log(`Successfully fetched outstation fares for ${vehicleId}:`, response.data.data);
+        
+        // Cache this new data
+        try {
+          const cabFaresStr = localStorage.getItem('cabFares');
+          let cabFares = cabFaresStr ? JSON.parse(cabFaresStr) : {};
+          
+          if (!cabFares.outstation) {
+            cabFares.outstation = {};
+          }
+          
+          cabFares.outstation[vehicleId] = response.data.data;
+          localStorage.setItem('cabFares', JSON.stringify(cabFares));
+          console.log(`Cached outstation fares for ${vehicleId}`);
+        } catch (e) {
+          console.error('Error caching outstation fares:', e);
+        }
+        
+        return response.data.data;
+      }
+    } catch (error) {
+      console.error(`Failed to fetch outstation fares for ${vehicleId} from API:`, error);
     }
     
     // Fallback to default values
@@ -250,6 +281,94 @@ class FareService {
       }
     } catch (error) {
       console.error('Error updating tour fare:', error);
+      throw error;
+    }
+  }
+  
+  // Enhanced outstation fare updater with multiple fallback approaches
+  async updateOutstationFares(vehicleId: string, data: any): Promise<any> {
+    console.log(`Starting updateOutstationFares for vehicle ID ${vehicleId}`, data);
+    
+    // Ensure consistent data format
+    const fareData = {
+      vehicleId: vehicleId,
+      basePrice: data.basePrice || 0,
+      pricePerKm: data.pricePerKm || 0,
+      driverAllowance: data.driverAllowance || 0, 
+      nightHalt: data.nightHalt || data.nightHaltCharge || 0,
+      roundTripBasePrice: data.roundTripBasePrice || 0,
+      roundTripPricePerKm: data.roundTripPricePerKm || 0,
+      timestamp: Date.now()
+    };
+    
+    try {
+      // Try direct endpoint first - most reliable
+      const directResponse = await this.updateDirectOutstationFares(vehicleId, fareData);
+      
+      if (directResponse && directResponse.status === 'success') {
+        console.log('Outstation fares updated successfully via direct endpoint');
+        this.clearCache();
+        
+        // Dispatch an event to notify of the update
+        window.dispatchEvent(new CustomEvent('outstation-fares-updated', {
+          detail: { vehicleId, success: true, data: fareData }
+        }));
+        
+        return directResponse;
+      }
+      
+      // If direct method failed, try the standard fare update endpoint
+      console.log('Direct outstation fare update failed, trying standard endpoint');
+      return await this.directFareUpdate('outstation', vehicleId, fareData);
+      
+    } catch (error) {
+      console.error('All outstation fare update attempts failed:', error);
+      
+      // Dispatch failure event
+      window.dispatchEvent(new CustomEvent('outstation-fares-updated', {
+        detail: { vehicleId, success: false, error }
+      }));
+      
+      throw error;
+    }
+  }
+  
+  // Direct call to the outstation fares endpoint
+  private async updateDirectOutstationFares(vehicleId: string, data: any): Promise<any> {
+    try {
+      const timestamp = Date.now();
+      const endpoint = `${this.apiBaseUrl}/api/direct-outstation-fares.php?_t=${timestamp}`;
+      
+      console.log(`Updating outstation fares at ${endpoint} for vehicle ${vehicleId}`);
+      
+      // Create a FormData object for more reliable form submission
+      const formData = new FormData();
+      Object.entries(data).forEach(([key, value]) => {
+        formData.append(key, String(value));
+      });
+      
+      // Append additional fields for better compatibility
+      formData.append('vehicle_id', vehicleId);
+      formData.append('trip_type', 'outstation');
+      formData.append('_timestamp', timestamp.toString());
+      
+      // Send the request
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        body: formData,
+        headers: this.getBypassHeaders()
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+      }
+      
+      const responseData = await response.json();
+      console.log('Direct outstation fare update response:', responseData);
+      
+      return responseData;
+    } catch (error) {
+      console.error('Error in updateDirectOutstationFares:', error);
       throw error;
     }
   }

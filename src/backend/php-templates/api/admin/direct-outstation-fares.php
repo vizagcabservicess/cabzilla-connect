@@ -43,6 +43,13 @@ function getRequestData() {
             error_log("Parsed JSON data: " . print_r($jsonData, true));
         } else {
             error_log("Failed to parse JSON: " . json_last_error_msg());
+            
+            // Try parsing as form data if JSON fails
+            parse_str($rawInput, $formData);
+            if (!empty($formData)) {
+                $data = array_merge($data, $formData);
+                error_log("Parsed as form data instead: " . print_r($formData, true));
+            }
         }
     }
     
@@ -213,25 +220,31 @@ try {
         if (isset($requestData['basePrice'])) $basePrice = floatval($requestData['basePrice']);
         else if (isset($requestData['oneWayBasePrice'])) $basePrice = floatval($requestData['oneWayBasePrice']);
         else if (isset($requestData['baseFare'])) $basePrice = floatval($requestData['baseFare']);
+        else if (isset($requestData['base_price'])) $basePrice = floatval($requestData['base_price']);
         
         $pricePerKm = 0;
         if (isset($requestData['pricePerKm'])) $pricePerKm = floatval($requestData['pricePerKm']);
         else if (isset($requestData['oneWayPricePerKm'])) $pricePerKm = floatval($requestData['oneWayPricePerKm']);
+        else if (isset($requestData['price_per_km'])) $pricePerKm = floatval($requestData['price_per_km']);
         
         $roundtripBasePrice = 0;
         if (isset($requestData['roundTripBasePrice'])) $roundtripBasePrice = floatval($requestData['roundTripBasePrice']);
         else if (isset($requestData['roundtripBasePrice'])) $roundtripBasePrice = floatval($requestData['roundtripBasePrice']);
+        else if (isset($requestData['round_trip_base_price'])) $roundtripBasePrice = floatval($requestData['round_trip_base_price']);
         
         $roundtripPricePerKm = 0;
         if (isset($requestData['roundTripPricePerKm'])) $roundtripPricePerKm = floatval($requestData['roundTripPricePerKm']);
         else if (isset($requestData['roundtripPricePerKm'])) $roundtripPricePerKm = floatval($requestData['roundtripPricePerKm']);
+        else if (isset($requestData['round_trip_price_per_km'])) $roundtripPricePerKm = floatval($requestData['round_trip_price_per_km']);
         
         $driverAllowance = 0;
         if (isset($requestData['driverAllowance'])) $driverAllowance = floatval($requestData['driverAllowance']);
+        else if (isset($requestData['driver_allowance'])) $driverAllowance = floatval($requestData['driver_allowance']);
         
         $nightHalt = 0;
         if (isset($requestData['nightHalt'])) $nightHalt = floatval($requestData['nightHalt']);
         else if (isset($requestData['nightHaltCharge'])) $nightHalt = floatval($requestData['nightHaltCharge']);
+        else if (isset($requestData['night_halt_charge'])) $nightHalt = floatval($requestData['night_halt_charge']);
         
         error_log("Extracted fare data: basePrice=$basePrice, pricePerKm=$pricePerKm, roundtripBasePrice=$roundtripBasePrice, roundtripPricePerKm=$roundtripPricePerKm, driverAllowance=$driverAllowance, nightHalt=$nightHalt");
         
@@ -341,7 +354,8 @@ try {
     echo json_encode([
         'status' => 'error',
         'message' => $e->getMessage(),
-        'file' => $e->getFile(),
+        'file' => basename(__FILE__),
         'line' => $e->getLine()
     ]);
 }
+?>

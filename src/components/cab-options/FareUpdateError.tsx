@@ -58,7 +58,7 @@ export function FareUpdateError({
       // Add a small delay before attempting fix
       const timer = setTimeout(() => {
         initializeDatabase(); 
-      }, 500);
+      }, 800);
       
       return () => clearTimeout(timer);
     }
@@ -221,6 +221,9 @@ export function FareUpdateError({
             )}
             <li>Use the comprehensive fix button to solve common API connection issues</li>
             <li>Clear browser cache and try again</li>
+            {isNetworkError && (
+              <li>Check your internet connection and try again later</li>
+            )}
           </ul>
         </div>
         
@@ -230,7 +233,7 @@ export function FareUpdateError({
               <Terminal className="h-4 w-4 mt-1 text-blue-500 mr-2" />
               <div className="text-xs">
                 <p className="font-medium text-blue-800">Error Details:</p>
-                <pre className="mt-1 text-xs text-blue-700 bg-blue-100 p-1 rounded overflow-auto max-h-20">
+                <pre className="mt-1 text-xs text-blue-700 bg-blue-100 p-1 rounded overflow-auto max-h-28">
                   {JSON.stringify({
                     endpoint: error?.['config']?.url || 'Unknown',
                     status: error?.['response']?.status || 'Unknown',
