@@ -22,13 +22,13 @@ RewriteEngine On
     </If>
     
     # Enhanced caching headers for stability - prevent browsers from causing loops
-    Header always set Cache-Control "private, must-revalidate, max-age=60"
+    Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
     Header always set Pragma "no-cache"
-    Header always set Expires "60"
+    Header always set Expires "0"
     
     # Add debugging headers
-    Header always set X-API-Debug "Processed by main API htaccess - v1.0.65"
-    Header always set X-API-Version "1.0.65"
+    Header always set X-API-Debug "Processed by main API htaccess - v1.0.66"
+    Header always set X-API-Version "1.0.66"
     Header always set X-Server-Time "%{TIME}e"
     Header always set X-Request-ID "%{UNIQUE_ID}e"
     Header always set X-Response-Timestamp "%{TIME}e"

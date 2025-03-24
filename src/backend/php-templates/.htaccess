@@ -8,6 +8,28 @@ RewriteEngine On
 # Ensure API requests go directly to PHP files
 RewriteRule ^api/ - [L]
 
+# IMPORTANT: Add cross-domain access control headers for all responses
+<IfModule mod_headers.c>
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh, X-Custom-Timestamp"
+    
+    # Handle preflight requests - CORS
+    <If "%{REQUEST_METHOD} == 'OPTIONS'">
+        Header always set Access-Control-Allow-Origin "*"
+        Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS" 
+        Header always set Access-Control-Allow-Headers "*"
+        Header always set Access-Control-Max-Age "3600"
+        Header always set Content-Length "0"
+        Header always set Content-Type "text/plain"
+        Header always set Status "200 OK"
+    </If>
+</IfModule>
+
+# Handle OPTIONS requests for CORS preflight more aggressively
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule ^api/ - [R=200,L]
+
 # Highest priority routes - database initialization and direct updates
 RewriteRule ^api/init-database$ api/admin/init-database.php [L,QSA] 
 RewriteRule ^api/init-database\.php$ api/admin/init-database.php [L,QSA]
