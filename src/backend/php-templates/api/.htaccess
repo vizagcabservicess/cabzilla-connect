@@ -27,8 +27,8 @@ RewriteEngine On
     Header always set Expires "60"
     
     # Add debugging headers
-    Header always set X-API-Debug "Processed by main API htaccess - v1.0.65"
-    Header always set X-API-Version "1.0.65"
+    Header always set X-API-Debug "Processed by main API htaccess - v1.0.66"
+    Header always set X-API-Version "1.0.66"
     Header always set X-Server-Time "%{TIME}e"
     Header always set X-Request-ID "%{UNIQUE_ID}e"
     Header always set X-Response-Timestamp "%{TIME}e"
@@ -42,7 +42,34 @@ RewriteEngine On
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
 
-# Enhanced rate limiting for vehicle data and fare endpoints
+# CRITICAL UPDATES - OUTSTATION FARES - direct to single handler for maximum reliability
+# All outstation fare endpoints point to outstation-fares-update.php
+RewriteRule ^admin/outstation-fares-update$ admin/outstation-fares-update.php [L,QSA]
+RewriteRule ^admin/outstation-fares-update\.php$ admin/outstation-fares-update.php [L,QSA]
+RewriteRule ^outstation-fares-update$ admin/outstation-fares-update.php [L,QSA]
+RewriteRule ^outstation-fares-update\.php$ admin/outstation-fares-update.php [L,QSA]
+
+# EMERGENCY FIX - Direct outstation endpoints also point to outstation-fares-update.php
+RewriteRule ^direct-outstation-fares$ admin/outstation-fares-update.php [L,QSA]
+RewriteRule ^direct-outstation-fares\.php$ admin/outstation-fares-update.php [L,QSA]
+RewriteRule ^admin/direct-outstation-fares$ admin/outstation-fares-update.php [L,QSA]
+RewriteRule ^admin/direct-outstation-fares\.php$ admin/outstation-fares-update.php [L,QSA]
+
+# ALSO REDIRECT all direct-fare-update requests with outstation tripType param
+RewriteCond %{QUERY_STRING} (?:^|&)tripType=outstation(?:&|$)
+RewriteRule ^direct-fare-update$ admin/outstation-fares-update.php [L,QSA]
+RewriteRule ^direct-fare-update\.php$ admin/outstation-fares-update.php [L,QSA]
+RewriteRule ^admin/direct-fare-update$ admin/outstation-fares-update.php [L,QSA]
+RewriteRule ^admin/direct-fare-update\.php$ admin/outstation-fares-update.php [L,QSA]
+
+# DATABASE SETUP ENDPOINT - HIGH PRIORITY
+# Route to initialize the database tables
+RewriteRule ^init-database$ admin/init-database.php [L,QSA]
+RewriteRule ^init-database\.php$ admin/init-database.php [L,QSA]
+RewriteRule ^admin/init-database$ admin/init-database.php [L,QSA]
+RewriteRule ^admin/init-database\.php$ admin/init-database.php [L,QSA]
+
+# Enhanced caching headers for stability - prevent browsers from causing loops
 <IfModule mod_headers.c>
     # ... keep existing code (caching headers for various endpoints)
     
@@ -53,38 +80,6 @@ RewriteRule .* - [R=200,L]
         Header set Expires "0"
     </FilesMatch>
 </IfModule>
-
-# OUTSTATION FARES UPDATE - HIGHEST PRIORITY ROUTE - DIRECT HANDLER
-# Make this route the absolute highest priority to guarantee it works
-RewriteRule ^admin/outstation-fares-update$ admin/outstation-fares-update.php [L,QSA]
-RewriteRule ^admin/outstation-fares-update\.php$ admin/outstation-fares-update.php [L,QSA]
-RewriteRule ^outstation-fares-update$ admin/outstation-fares-update.php [L,QSA]
-RewriteRule ^outstation-fares-update\.php$ admin/outstation-fares-update.php [L,QSA]
-
-# DATABASE SETUP ENDPOINT - HIGH PRIORITY
-# Route to initialize the database tables
-RewriteRule ^init-database$ admin/init-database.php [L,QSA]
-RewriteRule ^init-database\.php$ admin/init-database.php [L,QSA]
-RewriteRule ^admin/init-database$ admin/init-database.php [L,QSA]
-RewriteRule ^admin/init-database\.php$ admin/init-database.php [L,QSA]
-
-# ULTRA HIGH PRIORITY - Direct outstation fares endpoints
-# Make these routes have highest priority to guarantee they work
-RewriteRule ^direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^direct-outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^admin/direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^admin/direct-outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
-
-# Critical direct fare update - make this highest priority
-RewriteRule ^direct-fare-update$ admin/direct-fare-update.php [L,QSA]
-RewriteRule ^direct-fare-update\.php$ admin/direct-fare-update.php [L,QSA]
-RewriteRule ^admin/direct-fare-update$ admin/direct-fare-update.php [L,QSA]
-RewriteRule ^admin/direct-fare-update\.php$ admin/direct-fare-update.php [L,QSA]
-
-# Skip all routing complexity for these critical endpoints
-RewriteRule ^direct-airport-fares.php$ admin/direct-airport-fares.php [L,QSA]
-RewriteRule ^direct-local-fares.php$ admin/direct-local-fares.php?trip_type=local [L,QSA]
-RewriteRule ^direct-fare-update.php$ admin/direct-fare-update.php [L,QSA]
 
 # CRITICAL FARE UPDATE FIX - Route all fare updates to direct endpoints
 # This is essential to ensure fare updates work correctly
