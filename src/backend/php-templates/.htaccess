@@ -1,4 +1,3 @@
-
 # Enable rewrite engine
 RewriteEngine On
 
@@ -26,15 +25,16 @@ RewriteRule ^api/admin/direct-outstation-fares\.php$ api/admin/direct-outstation
 RewriteRule ^api/direct-outstation-fares$ api/admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^api/direct-outstation-fares\.php$ api/admin/direct-outstation-fares.php [L,QSA]
 
+# CRITICAL OUTSTATION ENDPOINT MAPPING - Both with and without .php extension
+RewriteRule ^api/admin/outstation-fares-update$ api/admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^api/admin/outstation-fares-update\.php$ api/admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^api/admin/outstation-fares-update/$ api/admin/direct-outstation-fares.php [L,QSA]
+
 # Direct endpoint for vehicle pricing
 RewriteRule ^api/admin/direct-vehicle-pricing$ api/admin/direct-vehicle-pricing.php [QSA,L]
 RewriteRule ^api/admin/direct-vehicle-pricing.php$ api/admin/direct-vehicle-pricing.php [QSA,L]
 
-# Map all fare update endpoints with high priority to direct endpoints
-RewriteRule ^api/admin/outstation-fares-update$ api/admin/direct-outstation-fares.php [QSA,L]
-RewriteRule ^api/admin/outstation-fares-update.php$ api/admin/direct-outstation-fares.php [QSA,L]
-RewriteRule ^api/admin/outstation-fares-update/$ api/admin/direct-outstation-fares.php [QSA,L]
-
+# Map all other fare update endpoints with high priority to direct endpoints
 RewriteRule ^api/admin/local-fares-update$ api/admin/direct-fare-update.php?tripType=local [QSA,L]
 RewriteRule ^api/admin/local-fares-update.php$ api/admin/direct-fare-update.php?tripType=local [QSA,L]
 RewriteRule ^api/admin/local-fares-update/$ api/admin/direct-fare-update.php?tripType=local [QSA,L]
@@ -46,9 +46,6 @@ RewriteRule ^api/admin/airport-fares-update/$ api/admin/direct-fare-update.php?t
 RewriteRule ^api/admin/fares-update$ api/admin/direct-fare-update.php [QSA,L]
 RewriteRule ^api/admin/fares-update.php$ api/admin/direct-fare-update.php [QSA,L]
 RewriteRule ^api/admin/fares-update/$ api/admin/direct-fare-update.php [QSA,L]
-
-# Regular API routes
-# ... keep existing code (regular API route definitions)
 
 # Add debug header for API paths
 <IfModule mod_headers.c>

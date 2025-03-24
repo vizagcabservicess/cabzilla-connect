@@ -289,7 +289,7 @@ class FareService {
     }
   }
   
-  // Enhanced outstation fare updater with multiple fallback approaches
+  // Enhanced outstation fare updater with a direct fetch approach
   async updateOutstationFares(vehicleId: string, data: any): Promise<any> {
     console.log(`Starting updateOutstationFares for vehicle ID ${vehicleId}`, data);
     
@@ -305,13 +305,9 @@ class FareService {
       timestamp: Date.now()
     };
     
-    // Initialize error tracking
-    let lastError = null;
-    let success = false;
-    
+    // Use new directOutstationFareUpdate method
     try {
-      // Try to directly use directFareUpdate method first
-      return await this.directFareUpdate('outstation', vehicleId, fareData);
+      return await this.directOutstationFareUpdate(vehicleId, fareData);
     } catch (error) {
       console.error('Error in updateOutstationFares:', error);
       this.clearCache(); // Clear cache even on error to prevent stale data
@@ -319,28 +315,207 @@ class FareService {
     }
   }
   
-  // Update local fares
-  async updateLocalFares(vehicleId: string, data: any): Promise<any> {
-    try {
-      return await this.directFareUpdate('local', vehicleId, data);
-    } catch (error) {
-      console.error('Error updating local fares:', error);
-      throw error;
+  // Direct outstation fare update method specifically for outstation fares
+  async directOutstationFareUpdate(vehicleId: string, data: any): Promise<any> {
+    console.log(`directOutstationFareUpdate for vehicle ID ${vehicleId}`, data);
+    
+    // Create a more reliable FormData payload
+    const formData = new FormData();
+    
+    // Add all data fields with multiple naming patterns for compatibility
+    formData.append('vehicleId', vehicleId);
+    formData.append('vehicle_id', vehicleId); 
+    
+    // Base price with multiple possible field names
+    formData.append('basePrice', data.basePrice.toString());
+    formData.append('base_price', data.basePrice.toString());
+    formData.append('oneway_base_price', data.basePrice.toString());
+    
+    // Price per km with multiple possible field names
+    formData.append('pricePerKm', data.pricePerKm.toString());
+    formData.append('price_per_km', data.pricePerKm.toString());
+    formData.append('oneway_price_per_km', data.pricePerKm.toString());
+    
+    // Driver allowance
+    formData.append('driverAllowance', data.driverAllowance.toString());
+    formData.append('driver_allowance', data.driverAllowance.toString());
+    
+    // Night halt
+    formData.append('nightHalt', data.nightHalt.toString());
+    formData.append('nightHaltCharge', data.nightHalt.toString());
+    formData.append('night_halt_charge', data.nightHalt.toString());
+    
+    // Round trip base price
+    formData.append('roundTripBasePrice', data.roundTripBasePrice.toString());
+    formData.append('roundtrip_base_price', data.roundTripBasePrice.toString());
+    formData.append('round_trip_base_price', data.roundTripBasePrice.toString());
+    
+    // Round trip price per km
+    formData.append('roundTripPricePerKm', data.roundTripPricePerKm.toString());
+    formData.append('roundtrip_price_per_km', data.roundTripPricePerKm.toString());
+    formData.append('round_trip_price_per_km', data.roundTripPricePerKm.toString());
+    
+    // Add trip type identifier
+    formData.append('tripType', 'outstation');
+    formData.append('trip_type', 'outstation');
+    formData.append('type', 'outstation');
+    
+    // Add timestamp
+    formData.append('timestamp', Date.now().toString());
+    
+    const timestamp = Date.now();
+    
+    // Define endpoints to try in order of preference
+    const endpoints = [
+      // Primary endpoint - direct PHP file access
+      `${this.apiBaseUrl}/api/direct-outstation-fares.php?_t=${timestamp}`,
+      
+      // Alternative endpoints
+      `${this.apiBaseUrl}/api/admin/direct-outstation-fares.php?_t=${timestamp}`,
+      `${this.apiBaseUrl}/api/direct-fare-update.php?tripType=outstation&_t=${timestamp}`,
+      `${this.apiBaseUrl}/api/admin/direct-fare-update.php?tripType=outstation&_t=${timestamp}`,
+      `${this.apiBaseUrl}/api/admin/outstation-fares-update.php?_t=${timestamp}`,
+      `${this.apiBaseUrl}/api/admin/vehicle-pricing.php?type=outstation&_t=${timestamp}`
+    ];
+    
+    // Track all errors for detailed reporting
+    const errors: Error[] = [];
+    
+    // Try each endpoint in sequence until one works
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Attempting to update outstation fares via: ${endpoint}`);
+        
+        // Use fetch with FormData for more reliable PHP handling
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          body: formData,
+          headers: {
+            ...this.getBypassHeaders()
+          }
+        });
+        
+        // Check for non-2xx responses and capture details
+        if (!response.ok) {
+          const statusCode = response.status;
+          const errorText = await response.text();
+          console.error(`Endpoint ${endpoint} failed with status: ${statusCode}`, errorText);
+          
+          // Try to parse JSON error if possible
+          try {
+            const errorJson = JSON.parse(errorText);
+            errors.push(new Error(`Server error (${statusCode}): ${errorJson.message || errorText}`));
+          } catch {
+            errors.push(new Error(`Server error (${statusCode}): ${errorText.substring(0, 100)}`));
+          }
+          
+          // Continue to next endpoint
+          continue;
+        }
+        
+        // Try to parse the response as JSON
+        let data;
+        try {
+          data = await response.json();
+        } catch (e) {
+          console.warn(`Response from ${endpoint} is not valid JSON.`);
+          // If not JSON, see if it contains success indicators
+          const text = await response.text();
+          if (text.toLowerCase().includes('success')) {
+            // Consider this a success
+            data = { status: 'success', message: 'Update successful', data: text };
+          } else {
+            throw new Error(`Invalid response format: ${text.substring(0, 100)}`);
+          }
+        }
+        
+        // Check if response indicates success
+        if (data.status === 'success') {
+          // Clear cache to ensure fresh data is fetched next time
+          this.clearCache();
+          
+          // Dispatch events to refresh UI components
+          window.dispatchEvent(new CustomEvent('fare-cache-cleared'));
+          window.dispatchEvent(new CustomEvent('trip-fares-updated', {
+            detail: { 
+              timestamp: Date.now(),
+              vehicleId: vehicleId
+            }
+          }));
+          
+          console.log(`Successfully updated outstation fares via ${endpoint}`);
+          return data;
+        } else {
+          // If we got here, the response was valid JSON but indicated an error
+          console.error(`API error from ${endpoint}:`, data);
+          errors.push(new Error(`API error: ${data.message || 'Unknown error'}`));
+        }
+      } catch (error) {
+        console.error(`Error with endpoint ${endpoint}:`, error);
+        errors.push(error instanceof Error ? error : new Error(String(error)));
+      }
     }
-  }
-  
-  // Update airport fares
-  async updateAirportFares(vehicleId: string, data: any): Promise<any> {
+    
+    // If we reach here, all endpoints failed
+    console.error(`All ${endpoints.length} attempts to update outstation fares failed`);
+    
+    // Try database initialization as last resort
     try {
-      return await this.directFareUpdate('airport', vehicleId, data);
-    } catch (error) {
-      console.error('Error updating airport fares:', error);
-      throw error;
+      await this.initializeDatabase();
+      
+      // After initialization, try the first endpoint one more time
+      console.log("Database initialized successfully, attempting update once more");
+      
+      const finalEndpoint = endpoints[0]; // Use the primary endpoint
+      
+      const finalResponse = await fetch(finalEndpoint, {
+        method: 'POST',
+        body: formData,
+        headers: this.getBypassHeaders()
+      });
+      
+      if (finalResponse.ok) {
+        try {
+          const finalData = await finalResponse.json();
+          
+          if (finalData.status === 'success') {
+            this.clearCache();
+            
+            // Dispatch events to refresh UI components
+            window.dispatchEvent(new CustomEvent('fare-cache-cleared'));
+            window.dispatchEvent(new CustomEvent('trip-fares-updated', {
+              detail: { 
+                timestamp: Date.now(),
+                vehicleId: vehicleId
+              }
+            }));
+            
+            console.log(`Successfully updated outstation fares after DB initialization`);
+            return finalData;
+          }
+        } catch (e) {
+          console.error("Error parsing final response:", e);
+        }
+      }
+    } catch (finalError) {
+      console.error("Final attempt after DB initialization also failed:", finalError);
+      errors.push(finalError instanceof Error ? finalError : new Error(String(finalError)));
     }
+    
+    // Compile all errors for detailed reporting
+    const errorMessage = errors.length > 0 
+      ? `Multiple errors occurred: ${errors.map(e => e.message).join('; ')}`
+      : 'All attempts to update outstation fares failed with unknown errors';
+    
+    throw new Error(errorMessage);
   }
   
   // Direct fare update method - for all types of fares
   async directFareUpdate(tripType: string, vehicleId: string, data: any): Promise<any> {
+    if (tripType === 'outstation') {
+      return this.directOutstationFareUpdate(vehicleId, data);
+    }
+    
     console.log(`directFareUpdate for ${tripType} with vehicle ID ${vehicleId}`, data);
     
     // Initialize error tracking
@@ -358,15 +533,9 @@ class FareService {
     };
     
     // Define endpoints to try in order of preference
-    if (tripType === 'outstation') {
+    if (tripType === 'local') {
       endpoints = [
-        // Try the outstation-specific endpoint first (most reliable)
-        {
-          url: `${this.apiBaseUrl}/api/direct-outstation-fares.php`,
-          method: 'post',
-          useFormData: true
-        },
-        // Then try the general fare update endpoint
+        // Try the general fare update endpoint
         {
           url: `${this.apiBaseUrl}/api/direct-fare-update.php`,
           method: 'post',
@@ -374,19 +543,34 @@ class FareService {
         },
         // Then try admin specific endpoints
         {
-          url: `${this.apiBaseUrl}/api/admin/outstation-fares-update.php`,
+          url: `${this.apiBaseUrl}/api/admin/local-fares-update.php`,
+          method: 'post', 
+          useFormData: true
+        }
+      ];
+    } else if (tripType === 'airport') {
+      endpoints = [
+        // Try the general fare update endpoint
+        {
+          url: `${this.apiBaseUrl}/api/direct-fare-update.php`,
+          method: 'post',
+          useFormData: true
+        },
+        // Then try admin specific endpoints
+        {
+          url: `${this.apiBaseUrl}/api/admin/airport-fares-update.php`,
           method: 'post', 
           useFormData: true
         },
         // Try direct PHP file access as last resort
         {
-          url: `${this.apiBaseUrl}/api/admin/direct-outstation-fares.php`,
+          url: `${this.apiBaseUrl}/api/admin/direct-airport-fares.php`,
           method: 'post',
           useFormData: true
         }
       ];
     } else {
-      // For local and airport, just use the direct-fare-update endpoint
+      // For other types, just use the direct-fare-update endpoint
       endpoints = [
         {
           url: `${this.apiBaseUrl}/api/direct-fare-update.php`,
