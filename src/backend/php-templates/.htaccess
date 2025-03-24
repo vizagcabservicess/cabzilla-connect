@@ -8,6 +8,14 @@ RewriteEngine On
 # Ensure API requests go directly to PHP files
 RewriteRule ^api/ - [L]
 
+# OUTSTATION FARES UPDATE - TOP PRIORITY ROUTE
+# Direct outstation fares update to its own handler (not a redirect)
+RewriteRule ^api/outstation-fares-update$ api/admin/outstation-fares-update.php [L,QSA]
+RewriteRule ^api/outstation-fares-update\.php$ api/admin/outstation-fares-update.php [L,QSA]
+RewriteRule ^api/admin/outstation-fares-update$ api/admin/outstation-fares-update.php [L,QSA]
+RewriteRule ^api/admin/outstation-fares-update\.php$ api/admin/outstation-fares-update.php [L,QSA]
+RewriteRule ^api/admin/outstation-fares-update/$ api/admin/outstation-fares-update.php [L,QSA]
+
 # Highest priority routes - database initialization and direct updates
 RewriteRule ^api/init-database$ api/admin/init-database.php [L,QSA] 
 RewriteRule ^api/init-database\.php$ api/admin/init-database.php [L,QSA]
@@ -26,13 +34,6 @@ RewriteRule ^api/direct-outstation-fares$ api/admin/direct-outstation-fares.php 
 RewriteRule ^api/direct-outstation-fares\.php$ api/admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^api/admin/direct-outstation-fares$ api/admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^api/admin/direct-outstation-fares\.php$ api/admin/direct-outstation-fares.php [L,QSA]
-
-# Ensure all outstation-fares-update paths go to the direct endpoint
-RewriteRule ^api/outstation-fares-update$ api/admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^api/outstation-fares-update\.php$ api/admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^api/admin/outstation-fares-update$ api/admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^api/admin/outstation-fares-update\.php$ api/admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^api/admin/outstation-fares-update/$ api/admin/direct-outstation-fares.php [L,QSA]
 
 # Direct endpoint for vehicle pricing
 RewriteRule ^api/admin/direct-vehicle-pricing$ api/admin/direct-vehicle-pricing.php [QSA,L]
