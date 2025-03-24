@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,7 +14,10 @@ import {
   DatabaseBackup,
   RotateCcw,
   FileJson,
-  Code
+  Code,
+  Zap,
+  FileWarning,
+  HardDrive
 } from "lucide-react";
 import { fareService } from '@/services/fareService';
 import { toast } from 'sonner';
@@ -37,6 +41,7 @@ export function FareUpdateError({
   const [isFixing, setIsFixing] = useState(false);
   const [isInitializingDb, setIsInitializingDb] = useState(false);
   const [attempted500Fix, setAttempted500Fix] = useState(false);
+  const [useEmergencyEndpoints, setUseEmergencyEndpoints] = useState(false);
   
   const errorMessage = typeof error === "string" ? error : error.message;
   
@@ -55,6 +60,15 @@ export function FareUpdateError({
   
   const isOutstationError = 
     /outstation|vehicle.*pricing|fare.*update/i.test(errorMessage);
+    
+  useEffect(() => {
+    // Check if emergency endpoints are enabled
+    const useEmergency = localStorage.getItem('useEmergencyEndpoints') === 'true' || 
+                         sessionStorage.getItem('useEmergencyEndpoints') === 'true' ||
+                         import.meta.env.VITE_USE_EMERGENCY_ENDPOINTS === 'true';
+    
+    setUseEmergencyEndpoints(useEmergency);
+  }, []);
   
   // Auto-attempt database initialization for 500 errors that happen immediately
   useEffect(() => {
@@ -90,6 +104,13 @@ export function FareUpdateError({
     // Set direct API access flag
     localStorage.setItem('useDirectApi', 'true');
     sessionStorage.setItem('useDirectApi', 'true');
+    
+    // Use emergency endpoints if error persists
+    if (isServerError || isTableError || isNetworkError) {
+      localStorage.setItem('useEmergencyEndpoints', 'true');
+      sessionStorage.setItem('useEmergencyEndpoints', 'true');
+      setUseEmergencyEndpoints(true);
+    }
     
     // Wait a moment before retrying
     setTimeout(() => {
@@ -129,18 +150,24 @@ export function FareUpdateError({
       localStorage.setItem('useUpdatedSchema', 'true');
       sessionStorage.setItem('useUpdatedSchema', 'true');
       
-      // 4. Initialize database with multiple attempts
+      // 4. Use emergency endpoints
+      localStorage.setItem('useEmergencyEndpoints', 'true');
+      sessionStorage.setItem('useEmergencyEndpoints', 'true');
+      setUseEmergencyEndpoints(true);
+      
+      // 5. Initialize database with multiple attempts
       await initializeDatabase();
       
-      // 5. Add small delay to let database initialize
+      // 6. Add small delay to let database initialize
       await new Promise(resolve => setTimeout(resolve, 1500));
       
-      // 6. Try to repair tables with explicit URL - try multiple endpoints
+      // 7. Try to repair tables using emergency endpoints
       try {
+        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
         const repairUrls = [
-          `${import.meta.env.VITE_API_BASE_URL}/api/init-database.php?repair=true&t=${Date.now()}`,
-          `${import.meta.env.VITE_API_BASE_URL}/init-database.php?repair=true&t=${Date.now()}`,
-          `${import.meta.env.VITE_API_BASE_URL}/api/admin/init-database.php?repair=true&t=${Date.now()}`
+          `${baseUrl}/api/emergency/init-database?repair=true&t=${Date.now()}`,
+          `${baseUrl}/api/init-database.php?repair=true&t=${Date.now()}`,
+          `${baseUrl}/api/admin/init-database.php?repair=true&t=${Date.now()}`
         ];
         
         for (let url of repairUrls) {
@@ -152,7 +179,7 @@ export function FareUpdateError({
                 'Cache-Control': 'no-cache, no-store, must-revalidate',
                 'Pragma': 'no-cache',
                 'X-Force-Refresh': 'true',
-                'X-API-Version': import.meta.env.VITE_API_VERSION || '1.0.69'
+                'X-API-Version': import.meta.env.VITE_API_VERSION || '1.0.70'
               }
             });
             
@@ -169,7 +196,7 @@ export function FareUpdateError({
         console.error('Error during table repair:', repairErr);
       }
       
-      // 7. Try alternative endpoints for outstation fares if needed
+      // 8. Try emergency endpoints for outstation fares if needed
       if (isOutstationError) {
         try {
           toast.info('Applying fixes for outstation fare tables...');
@@ -186,35 +213,25 @@ export function FareUpdateError({
             _t: Date.now()
           };
           
-          // Try multiple outstation endpoints
-          const outstationUrls = [
-            `${import.meta.env.VITE_API_BASE_URL}/api/direct-outstation-fares.php?t=${Date.now()}`,
-            `${import.meta.env.VITE_API_BASE_URL}/direct-outstation-fares.php?t=${Date.now()}`,
-            `${import.meta.env.VITE_API_BASE_URL}/api/admin/direct-outstation-fares.php?t=${Date.now()}`,
-            `${import.meta.env.VITE_API_BASE_URL}/api/outstation-fares-update.php?t=${Date.now()}`
-          ];
+          // Try emergency outstation endpoint
+          const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+          const outstationEmergencyUrl = `${baseUrl}/api/emergency/outstation-fares?t=${Date.now()}`;
           
-          for (let url of outstationUrls) {
-            try {
-              const response = await fetch(url, {
-                method: 'POST',
-                body: JSON.stringify(testData),
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Cache-Control': 'no-cache, no-store, must-revalidate',
-                  'Pragma': 'no-cache',
-                  'X-Force-Refresh': 'true'
-                }
-              });
-              
-              console.log(`Outstation test response from ${url}:`, await response.text());
-              
-              // If we got a 200, break the loop
-              if (response.ok) break;
-            } catch (err) {
-              console.log(`Error with outstation URL ${url}:`, err);
-              // Continue with next URL
-            }
+          try {
+            const response = await fetch(outstationEmergencyUrl, {
+              method: 'POST',
+              body: JSON.stringify(testData),
+              headers: {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'X-Force-Refresh': 'true'
+              }
+            });
+            
+            console.log(`Emergency outstation response:`, await response.text());
+          } catch (err) {
+            console.log(`Error with emergency outstation URL:`, err);
           }
           
           console.log('Test outstation fare update attempted');
@@ -223,7 +240,7 @@ export function FareUpdateError({
         }
       }
       
-      // 8. Try setting up airport fare tables
+      // 9. Try setting up airport fare tables
       try {
         const airportTestData = {
           vehicleId: 'sedan',
@@ -239,34 +256,25 @@ export function FareUpdateError({
           _t: Date.now()
         };
         
-        // Try multiple airport endpoints
-        const airportUrls = [
-          `${import.meta.env.VITE_API_BASE_URL}/api/direct-airport-fares.php?t=${Date.now()}`,
-          `${import.meta.env.VITE_API_BASE_URL}/direct-airport-fares.php?t=${Date.now()}`,
-          `${import.meta.env.VITE_API_BASE_URL}/api/admin/direct-airport-fares.php?t=${Date.now()}`
-        ];
+        // Try emergency airport endpoint
+        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+        const airportEmergencyUrl = `${baseUrl}/api/emergency/airport-fares?t=${Date.now()}`;
         
-        for (let url of airportUrls) {
-          try {
-            const response = await fetch(url, {
-              method: 'POST',
-              body: JSON.stringify(airportTestData),
-              headers: {
-                'Content-Type': 'application/json',
-                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'Pragma': 'no-cache',
-                'X-Force-Refresh': 'true'
-              }
-            });
-            
-            console.log(`Airport test response from ${url}:`, await response.text());
-            
-            // If we got a 200, break the loop
-            if (response.ok) break;
-          } catch (err) {
-            console.log(`Error with airport URL ${url}:`, err);
-            // Continue with next URL
-          }
+        try {
+          const response = await fetch(airportEmergencyUrl, {
+            method: 'POST',
+            body: JSON.stringify(airportTestData),
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'X-Force-Refresh': 'true'
+            }
+          });
+          
+          console.log(`Emergency airport response:`, await response.text());
+        } catch (err) {
+          console.log(`Error with emergency airport URL:`, err);
         }
       } catch (airportErr) {
         console.error('Error fixing airport tables:', airportErr);
@@ -287,6 +295,63 @@ export function FareUpdateError({
     }
   };
 
+  // Activate emergency mode for all endpoints
+  const activateEmergencyMode = () => {
+    localStorage.setItem('useEmergencyEndpoints', 'true');
+    sessionStorage.setItem('useEmergencyEndpoints', 'true');
+    
+    const timestamp = Date.now();
+    localStorage.setItem('apiVersionForced', timestamp.toString());
+    sessionStorage.setItem('apiVersionForced', timestamp.toString());
+    
+    setUseEmergencyEndpoints(true);
+    
+    toast.success('Emergency endpoints activated. This will use ultra-simplified database access.', {
+      duration: 5000
+    });
+    
+    // Try to initialize emergency endpoints
+    fetch(`${import.meta.env.VITE_API_BASE_URL}/api/emergency/init-database?t=${timestamp}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...fareService.getBypassHeaders()
+      }
+    }).catch(() => {
+      // Silently catch errors, we just want to ping the endpoint
+    });
+    
+    // Wait and reload
+    setTimeout(() => {
+      if (onRetry) {
+        onRetry();
+      } else {
+        window.location.reload();
+      }
+    }, 1000);
+  };
+  
+  // Force deactivate emergency mode
+  const deactivateEmergencyMode = () => {
+    localStorage.removeItem('useEmergencyEndpoints');
+    sessionStorage.removeItem('useEmergencyEndpoints');
+    
+    setUseEmergencyEndpoints(false);
+    
+    toast.info('Emergency endpoints deactivated. Using standard endpoints.', {
+      duration: 3000
+    });
+    
+    // Reload after a brief pause
+    setTimeout(() => {
+      if (onRetry) {
+        onRetry();
+      } else {
+        window.location.reload();
+      }
+    }, 1000);
+  };
+
   // Initialize database tables - with enhanced error handling and multiple attempts
   const initializeDatabase = async () => {
     setIsInitializingDb(true);
@@ -299,26 +364,71 @@ export function FareUpdateError({
       // Try multiple initialization methods
       let success = false;
       
-      // Method 1 - Using service
-      try {
-        console.log('Attempting to initialize database via service method...');
-        const result = await fareService.initializeDatabase();
-        
-        if (result) {
-          success = true;
-          console.log('Database initialization successful via service method');
+      // Try emergency endpoint first if enabled
+      if (useEmergencyEndpoints) {
+        try {
+          const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+          const timestamp = Date.now();
+          const emergencyInitUrl = `${baseUrl}/api/emergency/init-database?t=${timestamp}`;
+          
+          console.log('Attempting database initialization via emergency endpoint...');
+          const result = await fetch(emergencyInitUrl, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'X-Force-Refresh': 'true',
+              'X-API-Version': import.meta.env.VITE_API_VERSION || '1.0.70'
+            }
+          });
+          
+          if (result.ok) {
+            const text = await result.text();
+            console.log('Emergency initialization response:', text);
+            
+            try {
+              const data = JSON.parse(text);
+              if (data.status === 'success') {
+                success = true;
+                console.log('Database initialized successfully via emergency endpoint');
+              }
+            } catch {
+              if (text.includes('success')) {
+                success = true;
+                console.log('Database might be initialized successfully via emergency endpoint');
+              }
+            }
+          }
+        } catch (emergencyError) {
+          console.error('Error during emergency initialization:', emergencyError);
         }
-      } catch (error1) {
-        console.error('Error during database initialization via service:', error1);
+      }
+      
+      // Method 1 - Using service
+      if (!success) {
+        try {
+          console.log('Attempting to initialize database via service method...');
+          const result = await fareService.initializeDatabase();
+          
+          if (result) {
+            success = true;
+            console.log('Database initialization successful via service method');
+          }
+        } catch (error1) {
+          console.error('Error during database initialization via service:', error1);
+        }
       }
       
       // Method 2 - Direct URLs with full path - try multiple endpoints
       if (!success) {
         const timestamp = Date.now();
+        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+        
         const initUrls = [
-          `${import.meta.env.VITE_API_BASE_URL}/api/init-database.php?t=${timestamp}`,
-          `${import.meta.env.VITE_API_BASE_URL}/init-database.php?t=${timestamp}`,
-          `${import.meta.env.VITE_API_BASE_URL}/api/admin/init-database.php?t=${timestamp}`
+          `${baseUrl}/api/init-database.php?t=${timestamp}`,
+          `${baseUrl}/init-database.php?t=${timestamp}`,
+          `${baseUrl}/api/admin/init-database.php?t=${timestamp}`
         ];
         
         for (let url of initUrls) {
@@ -333,7 +443,7 @@ export function FareUpdateError({
                 'Cache-Control': 'no-cache, no-store, must-revalidate',
                 'Pragma': 'no-cache',
                 'X-Force-Refresh': 'true',
-                'X-API-Version': import.meta.env.VITE_API_VERSION || '1.0.69'
+                'X-API-Version': import.meta.env.VITE_API_VERSION || '1.0.70'
               }
             });
             
@@ -359,93 +469,6 @@ export function FareUpdateError({
         }
       }
       
-      // Method 3 - Specifically for outstation errors
-      if (!success && isOutstationError) {
-        try {
-          const timestamp = Date.now();
-          console.log('Attempting to initialize outstation tables specifically...');
-          
-          // Try multiple outstation table initialization endpoints
-          const outstationInitUrls = [
-            `${import.meta.env.VITE_API_BASE_URL}/api/direct-outstation-fares.php?createTables=1&t=${timestamp}`,
-            `${import.meta.env.VITE_API_BASE_URL}/direct-outstation-fares.php?createTables=1&t=${timestamp}`,
-            `${import.meta.env.VITE_API_BASE_URL}/api/admin/direct-outstation-fares.php?createTables=1&t=${timestamp}`
-          ];
-          
-          for (let url of outstationInitUrls) {
-            try {
-              const initOutstationResult = await fetch(url, {
-                method: 'GET',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Cache-Control': 'no-cache, no-store, must-revalidate',
-                  'Pragma': 'no-cache',
-                  'X-Force-Refresh': 'true'
-                }
-              });
-              
-              const text = await initOutstationResult.text();
-              console.log(`Outstation table initialization response from ${url}:`, text);
-              
-              if (initOutstationResult.ok) {
-                success = true;
-                console.log(`Outstation tables initialized successfully via ${url}`);
-                break;
-              }
-            } catch (err) {
-              console.log(`Error with outstation init URL ${url}:`, err);
-              // Continue with next URL
-            }
-          }
-        } catch (error4) {
-          console.error('Error initializing outstation tables:', error4);
-        }
-      }
-      
-      // Method 4 - Try airport fare table initialization
-      if (!success) {
-        try {
-          const timestamp = Date.now();
-          console.log('Attempting to initialize airport fare tables specifically...');
-          
-          // Try multiple airport table initialization endpoints
-          const airportInitUrls = [
-            `${import.meta.env.VITE_API_BASE_URL}/api/direct-airport-fares.php?createTables=1&t=${timestamp}`,
-            `${import.meta.env.VITE_API_BASE_URL}/direct-airport-fares.php?createTables=1&t=${timestamp}`,
-            `${import.meta.env.VITE_API_BASE_URL}/api/admin/direct-airport-fares.php?createTables=1&t=${timestamp}`,
-            `${import.meta.env.VITE_API_BASE_URL}/api/fares/airport.php?createTables=1&t=${timestamp}`
-          ];
-          
-          for (let url of airportInitUrls) {
-            try {
-              const initAirportResult = await fetch(url, {
-                method: 'GET',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Cache-Control': 'no-cache, no-store, must-revalidate',
-                  'Pragma': 'no-cache',
-                  'X-Force-Refresh': 'true'
-                }
-              });
-              
-              const text = await initAirportResult.text();
-              console.log(`Airport table initialization response from ${url}:`, text);
-              
-              if (initAirportResult.ok) {
-                success = true;
-                console.log(`Airport tables initialized successfully via ${url}`);
-                break;
-              }
-            } catch (err) {
-              console.log(`Error with airport init URL ${url}:`, err);
-              // Continue with next URL
-            }
-          }
-        } catch (error5) {
-          console.error('Error initializing airport tables:', error5);
-        }
-      }
-      
       if (success) {
         // Clear all caches after successful initialization
         fareService.clearCache();
@@ -456,6 +479,17 @@ export function FareUpdateError({
         });
       } else {
         toast.error('Failed to initialize database tables after multiple attempts');
+        
+        // If all fails, suggest using emergency endpoints
+        if (!useEmergencyEndpoints) {
+          toast.info('Try activating Emergency Mode for ultra-simple database access', {
+            duration: 8000,
+            action: {
+              label: 'Activate',
+              onClick: activateEmergencyMode
+            }
+          });
+        }
       }
     } catch (error) {
       console.error('Error during database initialization:', error);
@@ -525,23 +559,45 @@ export function FareUpdateError({
           </AlertDescription>
         </Alert>
 
+        {useEmergencyEndpoints && (
+          <Alert className="bg-purple-50 border-purple-200 text-purple-800">
+            <Zap className="h-4 w-4 text-purple-600" />
+            <AlertTitle className="text-purple-800">Emergency Mode Active</AlertTitle>
+            <AlertDescription className="text-purple-700 text-xs">
+              Using ultra-simple database access mode to bypass complex database operations.
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="ml-2 h-6 text-xs border-purple-300 text-purple-700"
+                onClick={deactivateEmergencyMode}
+              >
+                Deactivate
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
         <div className="text-sm space-y-2">
-          <p className="font-medium text-gray-700">Try the following solutions:</p>
+          <p className="font-medium text-gray-700">Try these solutions:</p>
           <ul className="list-disc pl-5 space-y-1 text-gray-600">
+            {!useEmergencyEndpoints && (isTableError || isServerError) && (
+              <>
+                <li className="font-medium text-red-700">Emergency Mode: Use the 'Activate Emergency Mode' button for direct database access</li>
+              </>
+            )}
             {(isTableError || isServerError) && (
               <>
                 <li className="font-medium text-red-700">Database tables may be missing - use 'Initialize Database' button below</li>
-                <li>This will create all required database tables</li>
               </>
             )}
             {isOutstationError && (
-              <li className="font-medium text-red-700">There may be field naming issues in the outstation fares table - use 'Comprehensive Fix'</li>
+              <li className="font-medium text-red-700">Field naming issues in outstation fares table - use 'Comprehensive Fix'</li>
             )}
             {isNetworkError && (
               <li className="font-medium text-red-700">API connection failed - use 'Clear Cache & Retry' to refresh connections</li>
             )}
-            <li>Use the 'Comprehensive Fix' button for a full system repair that addresses most common issues</li>
-            <li>Try clearing your browser cache completely and refreshing the page</li>
+            <li>Try the 'Comprehensive Fix' button for a full system repair</li>
+            <li>Clear your browser cache completely and refresh the page</li>
           </ul>
         </div>
         
@@ -557,10 +613,11 @@ export function FareUpdateError({
                     status: error?.['response']?.status || 'Unknown',
                     message: errorMessage,
                     apiVersion: import.meta.env.VITE_API_VERSION || 'Unknown',
-                    isTableError: isTableError,
-                    isServerError: isServerError,
-                    isNetworkError: isNetworkError,
-                    isOutstationError: isOutstationError
+                    emergencyMode: useEmergencyEndpoints ? 'active' : 'inactive',
+                    isTableError,
+                    isServerError,
+                    isNetworkError,
+                    isOutstationError
                   }, null, 2)}
                 </pre>
               </div>
@@ -569,6 +626,16 @@ export function FareUpdateError({
         )}
       </CardContent>
       <CardFooter className="pt-0 flex flex-wrap gap-3">
+        {!useEmergencyEndpoints && (isTableError || isServerError || isNetworkError) && (
+          <Button 
+            onClick={activateEmergencyMode} 
+            className="gap-2 bg-purple-600 hover:bg-purple-700"
+          >
+            <Zap className="h-4 w-4" />
+            Activate Emergency Mode
+          </Button>
+        )}
+        
         {(isTableError || isServerError || isOutstationError) && (
           <Button 
             onClick={initializeDatabase} 
@@ -610,7 +677,7 @@ export function FareUpdateError({
             </>
           ) : (
             <>
-              <Code className="h-4 w-4" />
+              <FileWarning className="h-4 w-4" />
               Comprehensive Fix
             </>
           )}
