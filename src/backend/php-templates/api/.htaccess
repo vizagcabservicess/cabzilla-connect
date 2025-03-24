@@ -28,8 +28,8 @@ RewriteEngine On
     Header always set Expires "0"
     
     # Add debugging headers
-    Header always set X-API-Debug "Processed by main API htaccess - v1.0.70"
-    Header always set X-API-Version "1.0.70"
+    Header always set X-API-Debug "Processed by main API htaccess - v1.0.71"
+    Header always set X-API-Version "1.0.71"
     Header always set X-Server-Time "%{TIME}e"
     Header always set X-Request-ID "%{UNIQUE_ID}e"
     Header always set X-Response-Timestamp "%{TIME}e"
@@ -42,6 +42,11 @@ RewriteEngine On
 # This is crucial for preflight requests to succeed
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
+
+# ULTRA-EMERGENCY ENDPOINT - HIGHEST PRIORITY
+# Direct database update with no dependencies
+RewriteRule ^ultra-emergency-outstation$ admin/ultra-emergency-outstation.php [L,QSA]
+RewriteRule ^ultra-emergency-outstation\.php$ admin/ultra-emergency-outstation.php [L,QSA]
 
 # DATABASE SETUP ENDPOINT - HIGH PRIORITY
 # Route to initialize the database tables

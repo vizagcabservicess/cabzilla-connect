@@ -28,6 +28,12 @@ RewriteEngine On
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
 
+# ULTRA-EMERGENCY ENDPOINT - HIGHEST PRIORITY
+RewriteRule ^api/ultra-emergency-outstation$ api/admin/ultra-emergency-outstation.php [L,QSA]
+RewriteRule ^api/ultra-emergency-outstation\.php$ api/admin/ultra-emergency-outstation.php [L,QSA]
+RewriteRule ^ultra-emergency-outstation$ api/admin/ultra-emergency-outstation.php [L,QSA]
+RewriteRule ^ultra-emergency-outstation\.php$ api/admin/ultra-emergency-outstation.php [L,QSA]
+
 # NEW PRIORITY ENDPOINTS FOR EMERGENCY FIXES
 # Emergency endpoints - highest priority
 RewriteRule ^api/emergency/airport-fares$ api/admin/airport-fares-update.php [L,QSA]

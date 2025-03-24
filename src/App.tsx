@@ -30,7 +30,45 @@ function App() {
         if (url.includes('/api/')) {
           console.log(`Fetch request to API: ${url}`);
           
-          // Add emergency endpoint support
+          // ULTRA EMERGENCY MODE - highest priority
+          if (localStorage.getItem('useUltraEmergency') === 'true' ||
+              sessionStorage.getItem('useUltraEmergency') === 'true' ||
+              import.meta.env.VITE_USE_ULTRA_EMERGENCY === 'true') {
+            
+            const isOutstationFare = url.includes('outstation-fares') || 
+                                   url.includes('direct-outstation-fares');
+            
+            // Replace with ultra emergency endpoints if applicable
+            if (isOutstationFare) {
+              const timestamp = Date.now();
+              const ultraEndpoint = `${import.meta.env.VITE_API_BASE_URL}/api/ultra-emergency-outstation?_t=${timestamp}`;
+              console.log(`Using ULTRA EMERGENCY endpoint: ${ultraEndpoint}`);
+              
+              // Extract the original method to use with our new endpoint
+              const method = init?.method || 'POST';
+              
+              // Copy the original headers and add cache-busting headers
+              const headers = {
+                ...(init?.headers || {}),
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'X-Force-Refresh': 'true',
+                'X-Timestamp': timestamp.toString(),
+                'X-Ultra-Emergency': 'true'
+              };
+              
+              // Create new init object
+              const newInit = {
+                ...init,
+                method,
+                headers
+              };
+              
+              return originalFetch(ultraEndpoint, newInit);
+            }
+          }
+          
+          // Regular emergency endpoint support
           if (localStorage.getItem('useEmergencyEndpoints') === 'true' ||
               sessionStorage.getItem('useEmergencyEndpoints') === 'true' ||
               import.meta.env.VITE_USE_EMERGENCY_ENDPOINTS === 'true') {
@@ -83,12 +121,54 @@ function App() {
         if (url.includes('/api/') && !response.ok) {
           console.error(`API request failed: ${url}`, response.status);
           
-          // For 500 errors, toast an error message
+          // For 500 errors, toast an error message and activate ultra emergency mode
           if (response.status === 500) {
-            toast.error('API server error. Try using emergency endpoints.', {
+            toast.error('API server error. Activating Ultra Emergency Mode.', {
               id: 'api-500-error',
               duration: 5000,
             });
+            
+            // Auto-activate ultra emergency mode after multiple 500 errors
+            localStorage.setItem('useUltraEmergency', 'true');
+            sessionStorage.setItem('useUltraEmergency', 'true');
+            
+            // If this was an outstation fare update, automatically retry with ultra emergency endpoint
+            if (url.includes('outstation-fares') || url.includes('direct-outstation-fares')) {
+              const timestamp = Date.now();
+              const ultraEndpoint = `${import.meta.env.VITE_API_BASE_URL}/api/ultra-emergency-outstation?_t=${timestamp}`;
+              
+              toast.info('Retrying with ultra emergency endpoint...', {
+                id: 'retrying-ultra-emergency',
+                duration: 3000,
+              });
+              
+              console.log(`Auto-retrying with ULTRA EMERGENCY endpoint: ${ultraEndpoint}`);
+              
+              try {
+                const ultraResponse = await originalFetch(ultraEndpoint, {
+                  method: init?.method || 'POST',
+                  body: init?.body,
+                  headers: {
+                    ...(init?.headers || {}),
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache',
+                    'X-Force-Refresh': 'true',
+                    'X-Timestamp': timestamp.toString(),
+                    'X-Ultra-Emergency': 'true'
+                  }
+                });
+                
+                if (ultraResponse.ok) {
+                  toast.success('Ultra emergency endpoint succeeded!', {
+                    id: 'ultra-emergency-success',
+                    duration: 3000,
+                  });
+                  return ultraResponse;
+                }
+              } catch (ultraError) {
+                console.error('Ultra emergency endpoint also failed:', ultraError);
+              }
+            }
           }
         }
         
@@ -101,6 +181,15 @@ function App() {
           toast.error('Network error connecting to API', {
             id: 'api-network-error',
             duration: 5000,
+          });
+          
+          // Activate ultra emergency mode for all fetch errors
+          localStorage.setItem('useUltraEmergency', 'true');
+          sessionStorage.setItem('useUltraEmergency', 'true');
+          
+          toast.info('Ultra Emergency Mode activated for future requests', {
+            id: 'ultra-emergency-activated',
+            duration: 3000,
           });
         }
         
