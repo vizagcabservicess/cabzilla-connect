@@ -9,6 +9,9 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Custom-Timestamp, X-API-Version, X-Client-Version, X-Authorization-Override, X-Debug-Mode, X-Cache-Control, X-Request-ID, X-Request-Source');
 header('Content-Type: application/json');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -42,7 +45,14 @@ function getRequestData() {
             $data = array_merge($data, $jsonData);
             error_log("Parsed JSON data: " . print_r($jsonData, true));
         } else {
-            error_log("Failed to parse JSON: " . json_last_error_msg());
+            // Try to parse as URL encoded
+            parse_str($rawInput, $formData);
+            if (!empty($formData)) {
+                $data = array_merge($data, $formData);
+                error_log("Parsed URL encoded data: " . print_r($formData, true));
+            } else {
+                error_log("Failed to parse JSON: " . json_last_error_msg());
+            }
         }
     }
     
@@ -101,37 +111,7 @@ function getDbConnection() {
 // Create or ensure outstation_fares table exists with correct fields
 function ensureOutstationFaresTableExists($conn) {
     try {
-        // Check if table exists first
-        $tableExistsQuery = "SHOW TABLES LIKE 'outstation_fares'";
-        $tableResult = $conn->query($tableExistsQuery);
-        $tableExists = ($tableResult->num_rows > 0);
-        
-        if ($tableExists) {
-            // Check for column roundtrip_base_price which seems to be causing issues
-            $checkColumnQuery = "SHOW COLUMNS FROM outstation_fares LIKE 'roundtrip_base_price'";
-            $columnResult = $conn->query($checkColumnQuery);
-            $hasRoundtripBasePrice = ($columnResult->num_rows > 0);
-            
-            if (!$hasRoundtripBasePrice) {
-                // Add the missing column
-                $alterTableSql = "ALTER TABLE outstation_fares ADD COLUMN roundtrip_base_price DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER price_per_km";
-                $conn->query($alterTableSql);
-                error_log("Added missing roundtrip_base_price column to outstation_fares table");
-                
-                // Add roundtrip_price_per_km column if missing
-                $checkColumnQuery = "SHOW COLUMNS FROM outstation_fares LIKE 'roundtrip_price_per_km'";
-                $columnResult = $conn->query($checkColumnQuery);
-                if ($columnResult->num_rows == 0) {
-                    $alterTableSql = "ALTER TABLE outstation_fares ADD COLUMN roundtrip_price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0 AFTER roundtrip_base_price";
-                    $conn->query($alterTableSql);
-                    error_log("Added missing roundtrip_price_per_km column to outstation_fares table");
-                }
-            }
-            
-            return true;
-        }
-        
-        // If table doesn't exist, create it with all needed columns
+        // Create the table if it doesn't exist
         $sql = "
         CREATE TABLE IF NOT EXISTS outstation_fares (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -151,7 +131,27 @@ function ensureOutstationFaresTableExists($conn) {
         if ($conn->query($sql) !== TRUE) {
             throw new Exception("Failed to create outstation_fares table: " . $conn->error);
         }
-        error_log("Created outstation_fares table with all required columns");
+        
+        // Check if the table exists and has all the required columns
+        $requiredColumns = [
+            'roundtrip_base_price' => 'DECIMAL(10,2) NOT NULL DEFAULT 0',
+            'roundtrip_price_per_km' => 'DECIMAL(5,2) NOT NULL DEFAULT 0'
+        ];
+        
+        foreach ($requiredColumns as $column => $definition) {
+            $checkColumnQuery = "SHOW COLUMNS FROM outstation_fares LIKE '$column'";
+            $columnResult = $conn->query($checkColumnQuery);
+            
+            if (!$columnResult || $columnResult->num_rows == 0) {
+                $alterTableSql = "ALTER TABLE outstation_fares ADD COLUMN $column $definition";
+                if ($conn->query($alterTableSql) !== TRUE) {
+                    throw new Exception("Failed to add column $column: " . $conn->error);
+                }
+                error_log("Added missing column $column to outstation_fares table");
+            }
+        }
+        
+        error_log("outstation_fares table is ready");
         return true;
     } catch (Exception $e) {
         error_log("Error ensuring table: " . $e->getMessage());
@@ -272,7 +272,29 @@ try {
         
         error_log("Extracted fare data: basePrice=$basePrice, pricePerKm=$pricePerKm, roundtripBasePrice=$roundtripBasePrice, roundtripPricePerKm=$roundtripPricePerKm, driverAllowance=$driverAllowance, nightHalt=$nightHalt");
         
-        // Check if record exists
+        // Write to vehicle table first if needed
+        $checkVehicleStmt = $conn->prepare("SELECT id FROM vehicle_types WHERE vehicle_id = ? LIMIT 1");
+        if ($checkVehicleStmt) {
+            $checkVehicleStmt->bind_param("s", $vehicleId);
+            $checkVehicleStmt->execute();
+            $vehicleResult = $checkVehicleStmt->get_result();
+            
+            if ($vehicleResult->num_rows == 0) {
+                // Vehicle doesn't exist, create it
+                $vehicleName = ucfirst(str_replace(['_', '-'], ' ', $vehicleId));
+                $insertVehicleStmt = $conn->prepare("
+                    INSERT INTO vehicle_types (vehicle_id, name, capacity, is_active) 
+                    VALUES (?, ?, 4, 1)
+                ");
+                if ($insertVehicleStmt) {
+                    $insertVehicleStmt->bind_param("ss", $vehicleId, $vehicleName);
+                    $insertVehicleStmt->execute();
+                    error_log("Created new vehicle type: " . $vehicleId);
+                }
+            }
+        }
+        
+        // Check if outstation fare record exists
         $checkStmt = $conn->prepare("SELECT COUNT(*) as count FROM outstation_fares WHERE vehicle_id = ?");
         $checkStmt->bind_param("s", $vehicleId);
         $checkStmt->execute();
@@ -370,6 +392,75 @@ try {
                 ]
             ]);
             error_log("Inserted new outstation fare record for vehicle: " . $vehicleId);
+        }
+        
+        // Also update vehicle_pricing table for compatibility
+        try {
+            $checkPricingStmt = $conn->prepare("SELECT COUNT(*) as count FROM vehicle_pricing WHERE vehicle_type = ? AND trip_type = 'outstation-one-way'");
+            if ($checkPricingStmt) {
+                $checkPricingStmt->bind_param("s", $vehicleId);
+                $checkPricingStmt->execute();
+                $pricingResult = $checkPricingStmt->get_result();
+                $pricingRow = $pricingResult->fetch_assoc();
+                
+                if ($pricingRow['count'] > 0) {
+                    // Update one-way pricing
+                    $updateOneWayStmt = $conn->prepare("
+                        UPDATE vehicle_pricing 
+                        SET base_price = ?, price_per_km = ?, updated_at = NOW()
+                        WHERE vehicle_type = ? AND trip_type = 'outstation-one-way'
+                    ");
+                    if ($updateOneWayStmt) {
+                        $updateOneWayStmt->bind_param("dds", $basePrice, $pricePerKm, $vehicleId);
+                        $updateOneWayStmt->execute();
+                    }
+                } else {
+                    // Insert one-way pricing
+                    $insertOneWayStmt = $conn->prepare("
+                        INSERT INTO vehicle_pricing 
+                        (vehicle_type, trip_type, base_price, price_per_km)
+                        VALUES (?, 'outstation-one-way', ?, ?)
+                    ");
+                    if ($insertOneWayStmt) {
+                        $insertOneWayStmt->bind_param("sdd", $vehicleId, $basePrice, $pricePerKm);
+                        $insertOneWayStmt->execute();
+                    }
+                }
+                
+                // Round trip pricing
+                $checkRoundTripStmt = $conn->prepare("SELECT COUNT(*) as count FROM vehicle_pricing WHERE vehicle_type = ? AND trip_type = 'outstation-round-trip'");
+                $checkRoundTripStmt->bind_param("s", $vehicleId);
+                $checkRoundTripStmt->execute();
+                $roundTripResult = $checkRoundTripStmt->get_result();
+                $roundTripRow = $roundTripResult->fetch_assoc();
+                
+                if ($roundTripRow['count'] > 0) {
+                    // Update round-trip pricing
+                    $updateRoundTripStmt = $conn->prepare("
+                        UPDATE vehicle_pricing 
+                        SET base_price = ?, price_per_km = ?, updated_at = NOW()
+                        WHERE vehicle_type = ? AND trip_type = 'outstation-round-trip'
+                    ");
+                    if ($updateRoundTripStmt) {
+                        $updateRoundTripStmt->bind_param("dds", $roundtripBasePrice, $roundtripPricePerKm, $vehicleId);
+                        $updateRoundTripStmt->execute();
+                    }
+                } else {
+                    // Insert round-trip pricing
+                    $insertRoundTripStmt = $conn->prepare("
+                        INSERT INTO vehicle_pricing 
+                        (vehicle_type, trip_type, base_price, price_per_km)
+                        VALUES (?, 'outstation-round-trip', ?, ?)
+                    ");
+                    if ($insertRoundTripStmt) {
+                        $insertRoundTripStmt->bind_param("sdd", $vehicleId, $roundtripBasePrice, $roundtripPricePerKm);
+                        $insertRoundTripStmt->execute();
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            error_log("Error updating vehicle_pricing table: " . $e->getMessage());
+            // Continue execution, this is just a backup update
         }
     }
 } catch (Exception $e) {

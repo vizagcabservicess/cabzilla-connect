@@ -276,111 +276,36 @@ class FareService {
       let successfulResponse = null;
       let fallbackAttempted = false;
       
-      // Try to update via the direct-fare-update.php endpoint first (preferred)
+      // Try to initialize the database first to ensure tables exist
+      console.log("First initializing database to ensure tables exist...");
       try {
-        console.log("Attempting to update fare via direct-fare-update.php");
-        
-        const directEndpoint = `${this.apiBaseUrl}/api/direct-fare-update.php?_t=${timestamp}`;
-        
-        const formData = new FormData();
-        Object.entries(data).forEach(([key, value]) => {
-          formData.append(key, String(value));
+        const initResponse = await fetch(`${this.apiBaseUrl}/api/init-database.php?_t=${timestamp}`, {
+          method: 'GET',
+          headers: this.getBypassHeaders()
         });
         
-        const response = await fetch(directEndpoint, {
-          method: 'POST',
-          body: formData,
-          headers: {
-            ...this.getBypassHeaders()
-          }
-        });
-        
-        if (response.ok) {
-          const responseData = await response.json();
-          console.log("Direct fare update response:", responseData);
-          
-          if (responseData.status === 'success') {
-            successfulResponse = responseData;
-          } else {
-            console.warn("Direct fare update returned non-success status:", responseData);
-          }
-        } else {
-          console.error(`Direct fare update returned non-OK status: ${response.status}`);
-          
-          // If server error, try to initialize the database
-          if (response.status === 500) {
-            console.log("Server error detected, trying to initialize database...");
-            
-            try {
-              const initResponse = await fetch(`${this.apiBaseUrl}/api/init-database.php?_t=${timestamp}`, {
-                method: 'GET',
-                headers: this.getBypassHeaders()
-              });
-              
-              if (initResponse.ok) {
-                const initData = await initResponse.json();
-                console.log("Database initialization response:", initData);
-                
-                if (initData.status === 'success') {
-                  console.log("Database successfully initialized, retrying fare update...");
-                  
-                  // Try the update again
-                  const retryResponse = await fetch(directEndpoint, {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                      ...this.getBypassHeaders()
-                    }
-                  });
-                  
-                  if (retryResponse.ok) {
-                    const retryData = await retryResponse.json();
-                    console.log("Retry fare update response:", retryData);
-                    
-                    if (retryData.status === 'success') {
-                      successfulResponse = retryData;
-                    }
-                  }
-                }
-              }
-            } catch (initError) {
-              console.error("Error initializing database:", initError);
-            }
-          }
+        if (initResponse.ok) {
+          const initData = await initResponse.json();
+          console.log("Database initialization response:", initData);
         }
-      } catch (directError) {
-        console.error("Error using direct fare update:", directError);
+      } catch (initError) {
+        console.error("Initial database initialization error (non-critical):", initError);
       }
       
-      // If direct endpoint failed, fall back to type-specific endpoints
-      if (!successfulResponse) {
-        fallbackAttempted = true;
-        console.log("Direct fare update failed, trying type-specific endpoint");
-        
-        let endpoint = '';
-        if (tripType === 'local') {
-          endpoint = `${this.apiBaseUrl}/api/admin/local-fares-update.php`;
-        } else if (tripType === 'outstation') {
-          endpoint = `${this.apiBaseUrl}/api/admin/outstation-fares-update.php`;
-        } else if (tripType === 'airport') {
-          endpoint = `${this.apiBaseUrl}/api/admin/airport-fares-update.php`;
-        } else {
-          endpoint = `${this.apiBaseUrl}/api/admin/fares-update.php`;
-        }
-        
-        // Add timestamp for cache busting
-        endpoint = `${endpoint}?_t=${timestamp}`;
-        
-        console.log(`Updating ${tripType} fares for vehicle ${vehicleId} at endpoint: ${endpoint}`);
-        console.log("Data being sent:", data);
-        
+      // Try different endpoints based on trip type
+      if (tripType === 'outstation') {
+        // For outstation fares, use dedicated endpoint
         try {
+          console.log("Using dedicated outstation endpoint");
+          
           const formData = new FormData();
           Object.entries(data).forEach(([key, value]) => {
             formData.append(key, String(value));
           });
           
-          const response = await fetch(endpoint, {
+          const outstationEndpoint = `${this.apiBaseUrl}/api/direct-outstation-fares.php?_t=${timestamp}`;
+          
+          const response = await fetch(outstationEndpoint, {
             method: 'POST',
             body: formData,
             headers: {
@@ -390,20 +315,59 @@ class FareService {
           
           if (response.ok) {
             const responseData = await response.json();
-            console.log(`Fallback ${tripType} fares update response:`, responseData);
+            console.log("Outstation fare update response:", responseData);
             
             if (responseData.status === 'success') {
               successfulResponse = responseData;
+            } else {
+              console.warn("Outstation fare update returned non-success status:", responseData);
             }
           } else {
-            console.error(`Fallback fare update failed with status: ${response.status}`);
+            console.error(`Outstation fare update returned non-OK status: ${response.status}`);
+            console.log("Response text:", await response.text());
           }
-        } catch (fallbackError) {
-          console.error(`Error in fallback ${tripType} fare update:`, fallbackError);
+        } catch (outstationError) {
+          console.error("Error using outstation endpoint:", outstationError);
+        }
+      } else {
+        // For other fare types, use the generic direct-fare-update.php endpoint
+        try {
+          console.log("Using generic direct-fare-update endpoint");
+          
+          const directEndpoint = `${this.apiBaseUrl}/api/direct-fare-update.php?_t=${timestamp}`;
+          
+          const formData = new FormData();
+          Object.entries(data).forEach(([key, value]) => {
+            formData.append(key, String(value));
+          });
+          
+          const response = await fetch(directEndpoint, {
+            method: 'POST',
+            body: formData,
+            headers: {
+              ...this.getBypassHeaders()
+            }
+          });
+          
+          if (response.ok) {
+            const responseData = await response.json();
+            console.log("Direct fare update response:", responseData);
+            
+            if (responseData.status === 'success') {
+              successfulResponse = responseData;
+            } else {
+              console.warn("Direct fare update returned non-success status:", responseData);
+            }
+          } else {
+            console.error(`Direct fare update returned non-OK status: ${response.status}`);
+            console.log("Response text:", await response.text());
+          }
+        } catch (directError) {
+          console.error("Error using direct fare update:", directError);
         }
       }
       
-      // If any request format was successful, clear cache and return the response
+      // If any request was successful, clear cache and return the response
       if (successfulResponse) {
         this.clearCache();
         console.log(`Successfully updated ${tripType} fares:`, successfulResponse);

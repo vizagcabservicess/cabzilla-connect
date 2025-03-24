@@ -122,8 +122,10 @@ RewriteRule ^direct-local-fares$ admin/direct-outstation-fares.php?trip_type=loc
 RewriteRule ^direct-airport-fares$ admin/direct-airport-fares.php [L,QSA]
 RewriteRule ^direct-base-pricing$ admin/direct-outstation-fares.php?trip_type=base [L,QSA]
 
-# Regular API routes
-# ... keep existing code (regular API route definitions)
+# Direct access to fare endpoints
+RewriteRule ^fares/airport$ fares/airport.php [QSA,L]
+RewriteRule ^fares/airport\.php$ fares/airport.php [QSA,L]
+RewriteRule ^fares/airport/$ fares/airport.php [QSA,L]
 
 # Debug headers to help troubleshoot routing
 Header set X-Requested-Path "%{REQUEST_URI}e"
