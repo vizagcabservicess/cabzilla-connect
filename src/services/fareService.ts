@@ -540,86 +540,105 @@ class FareService {
     }
   }
   
-  // Initialize database 
+  // Direct fare update method - for all types of fares
+  async directFareUpdate(tripType: string, vehicleId: string, data: any): Promise<any> {
+    console.log(`directFareUpdate for ${tripType} with vehicle ID ${vehicleId}`, data);
+    
+    try {
+      const timestamp = Date.now();
+      const endpoint = `${this.apiBaseUrl}/api/direct-fare-update.php`;
+      
+      // Include tripType to ensure it's processed correctly
+      const requestData = {
+        ...data,
+        vehicleId: vehicleId,
+        vehicle_id: vehicleId, // Add both formats for PHP
+        tripType: tripType,
+        trip_type: tripType, // Add both formats for PHP
+        timestamp: timestamp
+      };
+      
+      console.log('Sending direct fare update request:', requestData);
+      
+      // Try FormData approach (most reliable)
+      const formData = new FormData();
+      Object.entries(requestData).forEach(([key, value]) => {
+        formData.append(key, String(value));
+      });
+      
+      const response = await axios.post(endpoint, formData, {
+        headers: {
+          ...this.getBypassHeaders()
+        },
+        params: {
+          _t: timestamp
+        }
+      });
+      
+      if (response.data && response.data.status === 'success') {
+        console.log(`${tripType} fares updated successfully:`, response.data);
+        this.clearCache();
+        return response.data;
+      } else {
+        console.error(`Failed to update ${tripType} fares:`, response.data);
+        throw new Error(response.data?.message || `Failed to update ${tripType} fares`);
+      }
+    } catch (error) {
+      console.error(`Error in directFareUpdate for ${tripType}:`, error);
+      throw error;
+    }
+  }
+  
+  // Clear the fare cache
+  clearCache(): void {
+    try {
+      console.log('Clearing fare cache...');
+      
+      // Set a flag in localStorage to indicate cache should be refreshed
+      localStorage.setItem('forceCacheRefresh', 'true');
+      localStorage.setItem('fareCacheLastCleared', Date.now().toString());
+      
+      // Clear any cached fare data
+      localStorage.removeItem('cabFares');
+      localStorage.removeItem('tourFares');
+      
+      // Dispatch event for components to refresh
+      window.dispatchEvent(new CustomEvent('fare-cache-cleared', {
+        detail: { timestamp: Date.now() }
+      }));
+      
+      console.log('Fare cache cleared successfully');
+      
+      // Reset cache flag after short delay
+      setTimeout(() => {
+        this.cacheEnabled = true;
+      }, 5000);
+    } catch (error) {
+      console.error('Error clearing fare cache:', error);
+    }
+  }
+  
+  // Initialize database (helper method for recovery)
   async initializeDatabase(): Promise<any> {
     try {
-      console.log('Initializing database tables...');
-      
       const timestamp = Date.now();
       const endpoint = `${this.apiBaseUrl}/api/init-database`;
       
+      console.log('Attempting to initialize database...');
+      
       const response = await axios.get(endpoint, {
         headers: this.getBypassHeaders(),
-        params: {
-          _t: timestamp,
-          force: true
-        }
+        params: { _t: timestamp }
       });
       
       console.log('Database initialization response:', response.data);
       
-      if (response.data && response.data.status === 'success') {
-        // Clear the cache after successful initialization
-        this.clearCache();
-        return response.data;
-      } else {
-        throw new Error(response.data?.message || 'Failed to initialize database tables');
-      }
+      return response.data;
     } catch (error) {
       console.error('Error initializing database:', error);
       throw error;
     }
   }
-  
-  // Clear cache
-  clearCache() {
-    // Prevent excessive cache clearing
-    const now = Date.now();
-    const lastClear = parseInt(localStorage.getItem('fareCacheLastCleared') || '0');
-    
-    if (now - lastClear < 2000) {
-      console.log('Cache clear throttled - last clear was too recent');
-      return;
-    }
-    
-    console.log('Clearing all fare caches');
-    
-    // Clear all fares caches
-    localStorage.removeItem('cabFares');
-    localStorage.removeItem('localPackagePriceMatrix');
-    localStorage.removeItem('airportFareMatrix');
-    localStorage.removeItem('outstationFareMatrix');
-    localStorage.removeItem('tourFares');
-    
-    // Set force refresh flags
-    localStorage.setItem('forceCacheRefresh', 'true');
-    localStorage.setItem('fareCacheLastCleared', now.toString());
-    localStorage.setItem('globalFareRefreshToken', now.toString());
-    
-    // Dispatch event
-    try {
-      window.dispatchEvent(new CustomEvent('fare-cache-cleared', {
-        detail: { timestamp: now, forceRefresh: true }
-      }));
-      console.log('Dispatched fare-cache-cleared event');
-    } catch (e) {
-      console.error('Error dispatching fare-cache-cleared event:', e);
-    }
-    
-    // Clear force refresh flag after a delay to prevent loops
-    setTimeout(() => {
-      localStorage.removeItem('forceCacheRefresh');
-    }, 5000);
-    
-    toast.info('Cache cleared', {
-      id: 'cache-cleared',
-      duration: 2000
-    });
-  }
 }
 
-// Create a singleton instance
 export const fareService = new FareService();
-
-// Also export the class for testing purposes
-export { FareService };
