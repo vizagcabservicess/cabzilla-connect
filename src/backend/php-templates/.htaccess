@@ -33,19 +33,21 @@ RewriteRule ^api/admin/drivers$ api/admin/drivers.php [QSA,L]
 RewriteRule ^api/admin/drivers/([0-9]+)$ api/admin/drivers.php?id=$1 [QSA,L]
 RewriteRule ^api/vehicles-data$ api/fares/vehicles-data.php [L,QSA]
 
-# NEW DIRECT ENDPOINT - Database initialization
+# NEW DIRECT ENDPOINT - Database initialization - HIGHER PRIORITY
 RewriteRule ^api/init-database$ api/admin/init-database.php [L,QSA]
 RewriteRule ^api/init-database\.php$ api/admin/init-database.php [L,QSA]
 RewriteRule ^api/admin/init-database$ api/admin/init-database.php [L,QSA]
 RewriteRule ^api/admin/init-database\.php$ api/admin/init-database.php [L,QSA]
 
+# Direct access routes for fare updates - HIGHEST PRIORITY
+RewriteRule ^api/direct-fare-update$ api/admin/direct-fare-update.php [L,QSA]
+RewriteRule ^api/direct-fare-update\.php$ api/admin/direct-fare-update.php [L,QSA]
+RewriteRule ^api/admin/direct-fare-update$ api/admin/direct-fare-update.php [L,QSA]
+RewriteRule ^api/admin/direct-fare-update\.php$ api/admin/direct-fare-update.php [L,QSA]
+
 # Direct access routes for easier fare update API operation
 RewriteRule ^api/admin/direct-vehicle-pricing$ api/admin/direct-vehicle-pricing.php [QSA,L]
 RewriteRule ^api/admin/direct-vehicle-pricing.php$ api/admin/direct-vehicle-pricing.php [QSA,L]
-
-# New direct fare update endpoint
-RewriteRule ^api/admin/direct-fare-update$ api/admin/direct-fare-update.php [QSA,L]
-RewriteRule ^api/admin/direct-fare-update.php$ api/admin/direct-fare-update.php [QSA,L]
 
 # Map dedicated fare update endpoints with high priority
 RewriteRule ^api/admin/local-fares-update$ api/admin/local-fares-update.php [QSA,L]
@@ -69,6 +71,8 @@ RewriteRule ^api/admin/fares-update/$ api/admin/fares-update.php [QSA,L]
     <FilesMatch "^api/">
         Header set X-Debug-Path "%{REQUEST_URI}e"
         Header set X-PHP-Path "%{SCRIPT_FILENAME}e"
+        Header set X-PHP-Server-Name "%{SERVER_NAME}e"
+        Header set X-Real-Path "%{SCRIPT_FILENAME}e"
     </FilesMatch>
 </IfModule>
 
@@ -90,7 +94,7 @@ AddDefaultCharset UTF-8
     <FilesMatch "^api/">
         Header always set Access-Control-Allow-Origin "*"
         Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-        Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh"
+        Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh, X-Custom-Timestamp"
         Header always set Access-Control-Max-Age "3600"
     </FilesMatch>
 </IfModule>
@@ -118,7 +122,7 @@ RewriteRule ^api/ - [R=200,L]
     Header always set Status "200 OK"
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh"
+    Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh, X-Custom-Timestamp"
     Header always set Access-Control-Max-Age "3600"
 </If>
 
