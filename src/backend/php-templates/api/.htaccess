@@ -28,8 +28,8 @@ RewriteEngine On
     Header always set Expires "0"
     
     # Add debugging headers
-    Header always set X-API-Debug "Processed by main API htaccess - v1.0.71"
-    Header always set X-API-Version "1.0.71"
+    Header always set X-API-Debug "Processed by main API htaccess - v1.0.72"
+    Header always set X-API-Version "1.0.72"
     Header always set X-Server-Time "%{TIME}e"
     Header always set X-Request-ID "%{UNIQUE_ID}e"
     Header always set X-Response-Timestamp "%{TIME}e"
