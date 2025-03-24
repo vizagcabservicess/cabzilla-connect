@@ -2,36 +2,48 @@
 <?php
 // direct-outstation-fares.php - Dedicated endpoint for outstation fares
 
-require_once '../../config.php';
-
-// Set headers for CORS and content type
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Custom-Timestamp, X-API-Version, X-Client-Version, X-Authorization-Override, X-Debug-Mode, X-Cache-Control, X-Request-ID, X-Request-Source');
+// Set headers before any output
 header('Content-Type: application/json');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: *');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
-// Handle preflight OPTIONS request
+// For OPTIONS requests, return 200 immediately
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
 
-// Log incoming request for debugging
+// Log incoming request
+$timestamp = date('Y-m-d H:i:s');
 $requestMethod = $_SERVER['REQUEST_METHOD'];
 $requestUri = $_SERVER['REQUEST_URI'];
-$logMessage = "[" . date('Y-m-d H:i:s') . "] Direct outstation fares $requestMethod request to: $requestUri\n";
-error_log($logMessage, 3, __DIR__ . '/../access.log');
+$logMessage = "[$timestamp] Direct outstation fares request: Method=$requestMethod, URI=$requestUri" . PHP_EOL;
+error_log($logMessage, 3, __DIR__ . '/../error.log');
 
-// Debug output
-error_log("REQUEST_METHOD: " . $_SERVER['REQUEST_METHOD']);
-error_log("REQUEST_URI: " . $_SERVER['REQUEST_URI']);
-error_log("CONTENT_TYPE: " . (isset($_SERVER['CONTENT_TYPE']) ? $_SERVER['CONTENT_TYPE'] : 'not set'));
-error_log("RAW POST: " . file_get_contents('php://input'));
-error_log("POST DATA: " . print_r($_POST, true));
-error_log("GET DATA: " . print_r($_GET, true));
+// Load configuration if it exists
+if (file_exists('../../config.php')) {
+    require_once '../../config.php';
+} elseif (file_exists('../config.php')) {
+    require_once '../config.php';
+} else {
+    // Define fallback credentials if config not found
+    define('DB_HOST', 'localhost');
+    define('DB_USERNAME', 'u644605165_new_bookingusr');
+    define('DB_PASSWORD', 'Vizag@1213');
+    define('DB_DATABASE', 'u644605165_new_bookingdb');
+    
+    // Also set as variables for backward compatibility
+    $db_host = 'localhost';
+    $db_user = 'u644605165_new_bookingusr';
+    $db_pass = 'Vizag@1213';
+    $db_name = 'u644605165_new_bookingdb';
+    
+    error_log("Config file not found, using hardcoded credentials");
+}
 
 // Try to get data from multiple sources
 function getRequestData() {
@@ -272,7 +284,15 @@ try {
         
         error_log("Extracted fare data: basePrice=$basePrice, pricePerKm=$pricePerKm, roundtripBasePrice=$roundtripBasePrice, roundtripPricePerKm=$roundtripPricePerKm, driverAllowance=$driverAllowance, nightHalt=$nightHalt");
         
-        // Write to vehicle table first if needed
+        // Ensure values are not blank strings or null, set to 0 if so
+        if (empty($basePrice) && $basePrice !== 0) $basePrice = 0;
+        if (empty($pricePerKm) && $pricePerKm !== 0) $pricePerKm = 0;
+        if (empty($roundtripBasePrice) && $roundtripBasePrice !== 0) $roundtripBasePrice = 0;
+        if (empty($roundtripPricePerKm) && $roundtripPricePerKm !== 0) $roundtripPricePerKm = 0;
+        if (empty($driverAllowance) && $driverAllowance !== 0) $driverAllowance = 0;
+        if (empty($nightHalt) && $nightHalt !== 0) $nightHalt = 0;
+        
+        // Write to vehicle_types table first if needed
         $checkVehicleStmt = $conn->prepare("SELECT id FROM vehicle_types WHERE vehicle_id = ? LIMIT 1");
         if ($checkVehicleStmt) {
             $checkVehicleStmt->bind_param("s", $vehicleId);
@@ -470,6 +490,7 @@ try {
         'status' => 'error',
         'message' => $e->getMessage(),
         'file' => $e->getFile(),
-        'line' => $e->getLine()
+        'line' => $e->getLine(),
+        'trace' => $e->getTraceAsString()
     ]);
 }

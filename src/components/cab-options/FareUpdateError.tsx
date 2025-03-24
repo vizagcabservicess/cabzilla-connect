@@ -52,7 +52,7 @@ export function FareUpdateError({
   
   // Auto-attempt database initialization for 500 errors
   useEffect(() => {
-    if (isServerError && !attempted500Fix) {
+    if ((isServerError || isTableError) && !attempted500Fix) {
       setAttempted500Fix(true);
       
       // Add a small delay before attempting fix
@@ -62,7 +62,7 @@ export function FareUpdateError({
       
       return () => clearTimeout(timer);
     }
-  }, [isServerError]);
+  }, [isServerError, isTableError]);
 
   const handleRetry = () => {
     console.log("Retrying fare update after error...");
@@ -75,6 +75,15 @@ export function FareUpdateError({
     
     // Clear all caches
     fareService.clearCache();
+    
+    // Force API version update
+    const timestamp = Date.now();
+    localStorage.setItem('apiVersionForced', timestamp.toString());
+    sessionStorage.setItem('apiVersionForced', timestamp.toString());
+    
+    // Set direct API access flag
+    localStorage.setItem('useDirectApi', 'true');
+    sessionStorage.setItem('useDirectApi', 'true');
     
     // Wait a moment before retrying
     setTimeout(() => {
@@ -113,6 +122,27 @@ export function FareUpdateError({
       // 4. Initialize database
       await initializeDatabase();
       
+      // Add small delay to let database initialize
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // 5. Try to repair tables with explicit URL
+      try {
+        const repairResult = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/init-database.php?repair=true&t=${Date.now()}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'X-Force-Refresh': 'true',
+            'X-API-Version': '1.0.67'
+          }
+        });
+        
+        console.log('Repair database response:', await repairResult.text());
+      } catch (repairErr) {
+        console.error('Error during table repair:', repairErr);
+      }
+      
       // Success notification
       toast.success('Comprehensive fixes applied', {
         id: 'comprehensive-fix-success'
@@ -136,9 +166,69 @@ export function FareUpdateError({
     });
     
     try {
-      const result = await fareService.initializeDatabase();
+      // Try multiple initialization methods
+      let success = false;
       
-      if (result) {
+      // Method 1 - Using service
+      try {
+        const result = await fareService.initializeDatabase();
+        
+        if (result) {
+          success = true;
+          console.log('Database initialization successful via service method');
+        }
+      } catch (error1) {
+        console.error('Error during database initialization via service:', error1);
+      }
+      
+      // Method 2 - Direct URL with full path
+      if (!success) {
+        try {
+          const result = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/init-database.php?t=${Date.now()}`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'X-Force-Refresh': 'true',
+              'X-API-Version': '1.0.67'
+            }
+          });
+          
+          const data = await result.json();
+          if (data.status === 'success') {
+            success = true;
+            console.log('Database initialization successful via direct URL');
+          }
+        } catch (error2) {
+          console.error('Error during database initialization via direct URL:', error2);
+        }
+      }
+      
+      // Method 3 - Alternative URL pattern
+      if (!success) {
+        try {
+          const result = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/admin/init-database.php?t=${Date.now()}`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'X-Force-Refresh': 'true'
+            }
+          });
+          
+          const data = await result.json();
+          if (data.status === 'success') {
+            success = true;
+            console.log('Database initialization successful via alternative URL');
+          }
+        } catch (error3) {
+          console.error('Error during database initialization via alternative URL:', error3);
+        }
+      }
+      
+      if (success) {
         // Clear all caches after successful initialization
         fareService.clearCache();
         
@@ -146,6 +236,8 @@ export function FareUpdateError({
         toast.success('Database setup complete! Please try updating fares now.', {
           duration: 5000
         });
+      } else {
+        toast.error('Failed to initialize database tables after multiple attempts');
       }
     } catch (error) {
       console.error('Error during database initialization:', error);
