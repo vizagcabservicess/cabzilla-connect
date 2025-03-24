@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -33,6 +32,7 @@ export function OutstationFareManagement() {
   const [isInitializingDB, setIsInitializingDB] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [activeTab, setActiveTab] = useState("one-way");
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -137,7 +137,6 @@ export function OutstationFareManagement() {
         console.log('Attempting to update fare via direct-fare-update.php');
         // Try super-direct fetch approach with minimal headers and FormData
         try {
-          const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
           const endpoint = `${apiBaseUrl}/api/direct-fare-update.php?tripType=outstation&_t=${Date.now()}`;
           
           // Create form data
@@ -189,7 +188,6 @@ export function OutstationFareManagement() {
           // Last attempt - use direct-outstation-fares.php endpoint
           try {
             console.log('Trying to update vehicle using endpoint:', `${apiBaseUrl}/api/admin/direct-outstation-fares.php`);
-            const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
             const outstationEndpoint = `${apiBaseUrl}/api/admin/direct-outstation-fares.php?_t=${Date.now()}`;
             
             // Create form data
