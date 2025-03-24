@@ -28,39 +28,50 @@ RewriteEngine On
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
 
-# Highest priority routes - database initialization
+# Direct to database initialization endpoint (multiple routes)
 RewriteRule ^api/init-database$ api/admin/init-database.php [L,QSA] 
 RewriteRule ^api/init-database\.php$ api/admin/init-database.php [L,QSA]
+RewriteRule ^init-database$ api/admin/init-database.php [L,QSA]
+RewriteRule ^init-database\.php$ api/admin/init-database.php [L,QSA]
 
-# CRITICAL DIRECT FARE UPDATES
-RewriteRule ^api/direct-fare-update$ api/admin/direct-fare-update.php [L,QSA]
-RewriteRule ^api/direct-fare-update\.php$ api/admin/direct-fare-update.php [L,QSA]
-
-# OUTSTATION FARE ROUTES - critical path, numerous options
-RewriteRule ^api/direct-outstation-fares$ api/admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^api/direct-outstation-fares\.php$ api/admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^api/outstation-fares-update$ api/admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^api/outstation-fares-update\.php$ api/admin/direct-outstation-fares.php [L,QSA]
-
-# Admin routes for outstation fares
-RewriteRule ^api/admin/direct-outstation-fares$ api/admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^api/admin/direct-outstation-fares\.php$ api/admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^api/admin/outstation-fares-update$ api/admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^api/admin/outstation-fares-update\.php$ api/admin/direct-outstation-fares.php [L,QSA]
-
-# Additional backup routes
-RewriteRule ^api/vehicle-outstation-pricing$ api/admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^api/vehicle-outstation-pricing\.php$ api/admin/direct-outstation-fares.php [L,QSA]
-
-# Airport fares routes
+# Airport fare routes - create multiple aliases
 RewriteRule ^api/fares/airport$ api/fares/airport.php [L,QSA]
 RewriteRule ^api/fares/airport\.php$ api/fares/airport.php [L,QSA]
+RewriteRule ^api/direct-airport-fares$ api/admin/direct-airport-fares.php [L,QSA]
+RewriteRule ^api/direct-airport-fares\.php$ api/admin/direct-airport-fares.php [L,QSA]
+RewriteRule ^api/admin/direct-airport-fares$ api/admin/direct-airport-fares.php [L,QSA]
+RewriteRule ^api/admin/direct-airport-fares\.php$ api/admin/direct-airport-fares.php [L,QSA]
+
+# Direct fare update routes
+RewriteRule ^api/direct-fare-update$ api/admin/direct-fare-update.php [L,QSA]
+RewriteRule ^api/direct-fare-update\.php$ api/admin/direct-fare-update.php [L,QSA]
+RewriteRule ^api/admin/direct-fare-update$ api/admin/direct-fare-update.php [L,QSA]
+RewriteRule ^api/admin/direct-fare-update\.php$ api/admin/direct-fare-update.php [L,QSA]
+
+# OUTSTATION FARE ROUTES - multiple aliases for reliability
+RewriteRule ^api/direct-outstation-fares$ api/admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^api/direct-outstation-fares\.php$ api/admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^api/outstation-fares-update$ api/admin/outstation-fares-update.php [L,QSA]
+RewriteRule ^api/outstation-fares-update\.php$ api/admin/outstation-fares-update.php [L,QSA]
+RewriteRule ^api/admin/direct-outstation-fares$ api/admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^api/admin/direct-outstation-fares\.php$ api/admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^api/admin/outstation-fares-update$ api/admin/outstation-fares-update.php [L,QSA]
+RewriteRule ^api/admin/outstation-fares-update\.php$ api/admin/outstation-fares-update.php [L,QSA]
+RewriteRule ^direct-outstation-fares$ api/admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^outstation-fares-update$ api/admin/outstation-fares-update.php [L,QSA]
+
+# Vehicle pricing routes
+RewriteRule ^api/direct-vehicle-pricing$ api/admin/direct-vehicle-pricing.php [L,QSA]
+RewriteRule ^api/direct-vehicle-pricing\.php$ api/admin/direct-vehicle-pricing.php [L,QSA]
+RewriteRule ^api/admin/direct-vehicle-pricing$ api/admin/direct-vehicle-pricing.php [L,QSA]
+RewriteRule ^api/admin/direct-vehicle-pricing\.php$ api/admin/direct-vehicle-pricing.php [L,QSA]
 
 # Add debug headers for API paths
 <IfModule mod_headers.c>
     <FilesMatch "^api/">
         Header set X-Debug-Path "%{REQUEST_URI}e"
         Header set X-PHP-Path "%{SCRIPT_FILENAME}e"
+        Header set X-Server-Time "%{TIME}e"
     </FilesMatch>
 </IfModule>
 
