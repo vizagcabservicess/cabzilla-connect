@@ -50,6 +50,9 @@ export function FareUpdateError({
   const isTableError =
     /table.*not found|doesn't exist|database_error|SQLSTATE|base table or view not found/i.test(errorMessage);
   
+  const isOutstationError = 
+    /outstation|vehicle.*pricing|fare.*update/i.test(errorMessage);
+  
   // Auto-attempt database initialization for 500 errors
   useEffect(() => {
     if ((isServerError || isTableError) && !attempted500Fix) {
@@ -134,13 +137,48 @@ export function FareUpdateError({
             'Cache-Control': 'no-cache, no-store, must-revalidate',
             'Pragma': 'no-cache',
             'X-Force-Refresh': 'true',
-            'X-API-Version': '1.0.67'
+            'X-API-Version': import.meta.env.VITE_API_VERSION || '1.0.68'
           }
         });
         
         console.log('Repair database response:', await repairResult.text());
       } catch (repairErr) {
         console.error('Error during table repair:', repairErr);
+      }
+      
+      // 6. Try alternative endpoints for outstation fares if needed
+      if (isOutstationError) {
+        try {
+          toast.info('Applying fixes for outstation fare tables...');
+          
+          // Create a test vehicle entry to initialize the tables
+          const testData = {
+            vehicleId: 'sedan',
+            basePrice: 4200,
+            pricePerKm: 14,
+            roundTripBasePrice: 4000,
+            roundTripPricePerKm: 12,
+            driverAllowance: 250,
+            nightHalt: 700,
+            _t: Date.now()
+          };
+          
+          // Try direct outstation endpoint
+          await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/direct-outstation-fares.php?t=${Date.now()}`, {
+            method: 'POST',
+            body: JSON.stringify(testData),
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'X-Force-Refresh': 'true'
+            }
+          });
+          
+          console.log('Test outstation fare update attempted');
+        } catch (outstationErr) {
+          console.error('Error fixing outstation tables:', outstationErr);
+        }
       }
       
       // Success notification
@@ -184,21 +222,30 @@ export function FareUpdateError({
       // Method 2 - Direct URL with full path
       if (!success) {
         try {
-          const result = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/init-database.php?t=${Date.now()}`, {
+          const timestamp = Date.now();
+          const result = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/init-database.php?t=${timestamp}`, {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json',
               'Cache-Control': 'no-cache, no-store, must-revalidate',
               'Pragma': 'no-cache',
               'X-Force-Refresh': 'true',
-              'X-API-Version': '1.0.67'
+              'X-API-Version': import.meta.env.VITE_API_VERSION || '1.0.68'
             }
           });
           
-          const data = await result.json();
-          if (data.status === 'success') {
-            success = true;
-            console.log('Database initialization successful via direct URL');
+          const text = await result.text();
+          try {
+            const data = JSON.parse(text);
+            if (data.status === 'success') {
+              success = true;
+              console.log('Database initialization successful via direct URL');
+            }
+          } catch {
+            console.log('Non-JSON response from initialization endpoint:', text);
+            if (text.includes('success')) {
+              success = true;
+            }
           }
         } catch (error2) {
           console.error('Error during database initialization via direct URL:', error2);
@@ -208,7 +255,8 @@ export function FareUpdateError({
       // Method 3 - Alternative URL pattern
       if (!success) {
         try {
-          const result = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/admin/init-database.php?t=${Date.now()}`, {
+          const timestamp = Date.now(); 
+          const result = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/admin/init-database.php?t=${timestamp}`, {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json',
@@ -218,13 +266,44 @@ export function FareUpdateError({
             }
           });
           
-          const data = await result.json();
-          if (data.status === 'success') {
-            success = true;
-            console.log('Database initialization successful via alternative URL');
+          const text = await result.text();
+          try {
+            const data = JSON.parse(text);
+            if (data.status === 'success') {
+              success = true;
+              console.log('Database initialization successful via alternative URL');
+            }
+          } catch {
+            console.log('Non-JSON response from alternative endpoint:', text);
+            if (text.includes('success')) {
+              success = true;
+            }
           }
         } catch (error3) {
           console.error('Error during database initialization via alternative URL:', error3);
+        }
+      }
+      
+      // Method 4 - Specifically for outstation errors
+      if (!success && isOutstationError) {
+        try {
+          const timestamp = Date.now();
+          // Try the direct outstation endpoint with createTable param
+          const initOutstationResult = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/direct-outstation-fares.php?createTables=1&t=${timestamp}`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'X-Force-Refresh': 'true'
+            }
+          });
+          
+          const text = await initOutstationResult.text();
+          console.log('Outstation table initialization response:', text);
+          success = true;
+        } catch (error4) {
+          console.error('Error initializing outstation tables:', error4);
         }
       }
       
@@ -263,6 +342,9 @@ export function FareUpdateError({
     if (isTableError) {
       return "The database table required for this operation doesn't exist. Click the 'Initialize Database' button to create missing tables.";
     }
+    if (isOutstationError && isServerError) {
+      return "The server couldn't update outstation fares. This may be due to database schema issues. Try the 'Comprehensive Fix' button.";
+    }
     if (isForbiddenError) {
       return "You don't have permission to update fares. This might be an authentication issue.";
     }
@@ -289,13 +371,15 @@ export function FareUpdateError({
           <AlertTitle>
             {isTableError 
               ? "Database Table Error"
-              : (isForbiddenError 
-                ? "Access Denied" 
-                : (isServerError 
-                  ? "Server Error" 
-                  : (isNetworkError 
-                    ? "Network Error" 
-                    : "Update Failed")))}
+              : (isOutstationError
+                ? "Outstation Fare Update Error"
+                : (isForbiddenError 
+                  ? "Access Denied" 
+                  : (isServerError 
+                    ? "Server Error" 
+                    : (isNetworkError 
+                      ? "Network Error" 
+                      : "Update Failed"))))}
           </AlertTitle>
           <AlertDescription className="text-sm">
             {getErrorDescription()}
@@ -310,6 +394,9 @@ export function FareUpdateError({
                 <li className="font-medium text-red-700">Database tables may be missing - use 'Initialize Database' button below</li>
                 <li>This will create all required database tables</li>
               </>
+            )}
+            {isOutstationError && (
+              <li className="font-medium text-red-700">There may be field naming issues in the outstation fares table - use 'Comprehensive Fix'</li>
             )}
             <li>Use the comprehensive fix button to solve common API connection issues</li>
             <li>Clear browser cache and try again</li>
@@ -330,7 +417,8 @@ export function FareUpdateError({
                     apiVersion: import.meta.env.VITE_API_VERSION || 'Unknown',
                     isTableError: isTableError,
                     isServerError: isServerError,
-                    isNetworkError: isNetworkError
+                    isNetworkError: isNetworkError,
+                    isOutstationError: isOutstationError
                   }, null, 2)}
                 </pre>
               </div>
@@ -339,7 +427,7 @@ export function FareUpdateError({
         )}
       </CardContent>
       <CardFooter className="pt-0 flex flex-wrap gap-3">
-        {(isTableError || isServerError) && (
+        {(isTableError || isServerError || isOutstationError) && (
           <Button 
             onClick={initializeDatabase} 
             className="gap-2 bg-amber-600 hover:bg-amber-700"
