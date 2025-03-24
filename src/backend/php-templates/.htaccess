@@ -1,4 +1,3 @@
-
 # Enable rewrite engine
 RewriteEngine On
 
@@ -34,9 +33,19 @@ RewriteRule ^api/admin/drivers$ api/admin/drivers.php [QSA,L]
 RewriteRule ^api/admin/drivers/([0-9]+)$ api/admin/drivers.php?id=$1 [QSA,L]
 RewriteRule ^api/vehicles-data$ api/fares/vehicles-data.php [L,QSA]
 
+# NEW DIRECT ENDPOINT - Database initialization
+RewriteRule ^api/init-database$ api/admin/init-database.php [L,QSA]
+RewriteRule ^api/init-database\.php$ api/admin/init-database.php [L,QSA]
+RewriteRule ^api/admin/init-database$ api/admin/init-database.php [L,QSA]
+RewriteRule ^api/admin/init-database\.php$ api/admin/init-database.php [L,QSA]
+
 # Direct access routes for easier fare update API operation
 RewriteRule ^api/admin/direct-vehicle-pricing$ api/admin/direct-vehicle-pricing.php [QSA,L]
 RewriteRule ^api/admin/direct-vehicle-pricing.php$ api/admin/direct-vehicle-pricing.php [QSA,L]
+
+# New direct fare update endpoint
+RewriteRule ^api/admin/direct-fare-update$ api/admin/direct-fare-update.php [QSA,L]
+RewriteRule ^api/admin/direct-fare-update.php$ api/admin/direct-fare-update.php [QSA,L]
 
 # Map dedicated fare update endpoints with high priority
 RewriteRule ^api/admin/local-fares-update$ api/admin/local-fares-update.php [QSA,L]

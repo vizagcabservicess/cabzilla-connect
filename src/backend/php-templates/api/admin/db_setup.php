@@ -31,7 +31,7 @@ try {
     
     $conn->query($query);
     
-    // CREATE LOCAL PACKAGE FARES TABLE - THIS WAS MISSING
+    // CREATE LOCAL PACKAGE FARES TABLE WITH CORRECTED COLUMN NAMES
     $local_fares_query = "
     CREATE TABLE IF NOT EXISTS local_package_fares (
         id INT AUTO_INCREMENT PRIMARY KEY,

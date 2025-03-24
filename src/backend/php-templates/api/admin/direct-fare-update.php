@@ -1,293 +1,281 @@
 
 <?php
-// direct-fare-update.php - Ultra simplified direct fare update endpoint
+require_once '../../config.php';
 
-header('Content-Type: application/json');
-header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-header('Pragma: no-cache');
-header('Expires: 0');
+// Set headers for CORS and content type
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: *');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh');
+header('Content-Type: application/json');
 
-// Handle preflight OPTIONS request
+// For OPTIONS preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
 
-// Create logs directory if it doesn't exist
-$logsDir = __DIR__ . '/../logs';
-if (!file_exists($logsDir)) {
-    mkdir($logsDir, 0755, true);
+// Function to convert cases between different naming styles (camelCase, snake_case)
+function normalizeColumnName($name, $toSnakeCase = true) {
+    if ($toSnakeCase) {
+        // Convert camelCase to snake_case (e.g., price4Hrs40Km → price_4hrs_40km)
+        $name = preg_replace('/([a-z])([A-Z])/', '$1_$2', $name);
+        $name = strtolower($name);
+        
+        // Handle specific replacements for package columns
+        $name = str_replace('package_4hr', 'price_4hrs_40km', $name);
+        $name = str_replace('package_8hr', 'price_8hrs_80km', $name);
+        $name = str_replace('package_10hr', 'price_10hrs_100km', $name);
+        $name = str_replace('local_package_4hr', 'price_4hrs_40km', $name);
+        $name = str_replace('local_package_8hr', 'price_8hrs_80km', $name);
+        $name = str_replace('local_package_10hr', 'price_10hrs_100km', $name);
+        $name = str_replace('pkg4hr', 'price_4hrs_40km', $name);
+        $name = str_replace('pkg8hr', 'price_8hrs_80km', $name);
+        $name = str_replace('pkg10hr', 'price_10hrs_100km', $name);
+    } else {
+        // Convert snake_case to camelCase (not used in this script)
+        $name = lcfirst(str_replace('_', '', ucwords($name, '_')));
+    }
+    
+    return $name;
 }
 
-// Log the request to a file
-$timestamp = date('Y-m-d H:i:s');
-$logMessage = "[$timestamp] Direct fare update request received" . PHP_EOL;
-$logMessage .= "Method: " . $_SERVER['REQUEST_METHOD'] . PHP_EOL;
-$logMessage .= "URL: " . $_SERVER['REQUEST_URI'] . PHP_EOL;
-error_log($logMessage, 3, $logsDir . '/direct-fares.log');
-
-// Get data from ALL possible sources
-$data = [];
-
-// First try POST data which is most likely for form submissions
-if (!empty($_POST)) {
-    $data = $_POST;
-    error_log("Using POST data: " . print_r($data, true), 3, $logsDir . '/direct-fares.log');
-}
-
-// If no POST data, try JSON input
-if (empty($data)) {
+// Try to get data from different request methods/formats
+function getRequestData() {
+    $data = [];
+    
+    // For JSON payloads
     $rawInput = file_get_contents('php://input');
     if (!empty($rawInput)) {
         $jsonData = json_decode($rawInput, true);
         if ($jsonData !== null) {
-            $data = $jsonData;
-            error_log("Using JSON data: " . print_r($data, true), 3, $logsDir . '/direct-fares.log');
-        } else {
-            // Try parsing as form data
-            parse_str($rawInput, $formData);
-            if (!empty($formData)) {
-                $data = $formData;
-                error_log("Parsed raw input as form data: " . print_r($data, true), 3, $logsDir . '/direct-fares.log');
-            }
-        }
-    }
-}
-
-// Finally try GET parameters
-if (empty($data) && !empty($_GET)) {
-    $data = $_GET;
-    error_log("Using GET data: " . print_r($data, true), 3, $logsDir . '/direct-fares.log');
-}
-
-// Extract vehicle ID and normalize using any of the possible field names
-$vehicleId = '';
-foreach (['vehicleId', 'vehicle_id', 'vehicleType', 'vehicle_type', 'id'] as $field) {
-    if (!empty($data[$field])) {
-        $vehicleId = $data[$field];
-        break;
-    }
-}
-
-// Extract trip type using any of the possible field names
-$tripType = '';
-foreach (['tripType', 'trip_type', 'type'] as $field) {
-    if (!empty($data[$field])) {
-        $tripType = $data[$field];
-        break;
-    }
-}
-
-// Clean vehicleId - remove "item-" prefix if exists
-if (strpos($vehicleId, 'item-') === 0) {
-    $vehicleId = substr($vehicleId, 5);
-}
-
-// For local fare updates, extract all package prices
-if ($tripType == 'local') {
-    $package4hr = 0;
-    foreach (['package4hr40km', 'price4hrs40km', 'hr4km40Price', 'local_package_4hr'] as $field) {
-        if (isset($data[$field]) && is_numeric($data[$field])) {
-            $package4hr = floatval($data[$field]);
-            break;
+            $data = array_merge($data, $jsonData);
         }
     }
     
-    $package8hr = 0;
-    foreach (['package8hr80km', 'price8hrs80km', 'hr8km80Price', 'local_package_8hr'] as $field) {
-        if (isset($data[$field]) && is_numeric($data[$field])) {
-            $package8hr = floatval($data[$field]);
-            break;
-        }
+    // For POST form data
+    if (!empty($_POST)) {
+        $data = array_merge($data, $_POST);
     }
     
-    $package10hr = 0;
-    foreach (['package10hr100km', 'price10hrs100km', 'hr10km100Price', 'local_package_10hr'] as $field) {
-        if (isset($data[$field]) && is_numeric($data[$field])) {
-            $package10hr = floatval($data[$field]);
-            break;
-        }
+    // For GET parameters
+    if (!empty($_GET)) {
+        $data = array_merge($data, $_GET);
     }
     
-    $extraKmRate = 0;
-    foreach (['extraKmRate', 'priceExtraKm', 'extra_km_rate', 'extra_km_charge'] as $field) {
-        if (isset($data[$field]) && is_numeric($data[$field])) {
-            $extraKmRate = floatval($data[$field]);
-            break;
-        }
+    return $data;
+}
+
+try {
+    // Get request data from multiple sources
+    $requestData = getRequestData();
+    
+    // Get trip type from parameters or default to 'local'
+    $tripType = isset($requestData['tripType']) ? strtolower($requestData['tripType']) : 
+               (isset($requestData['trip_type']) ? strtolower($requestData['trip_type']) : 'local');
+    
+    // Get vehicle ID from parameters
+    $vehicleId = isset($requestData['vehicleId']) ? $requestData['vehicleId'] : 
+                (isset($requestData['vehicle_id']) ? $requestData['vehicle_id'] : null);
+    
+    if (!$vehicleId) {
+        throw new Exception("Vehicle ID is required");
     }
     
-    $extraHourRate = 0;
-    foreach (['extraHourRate', 'priceExtraHour', 'extra_hour_rate', 'extra_hour_charge'] as $field) {
-        if (isset($data[$field]) && is_numeric($data[$field])) {
-            $extraHourRate = floatval($data[$field]);
-            break;
-        }
+    // Connect to database
+    $conn = getDbConnection();
+    
+    if (!$conn) {
+        throw new Exception("Database connection failed");
     }
     
-    // Create response with the compiled data
-    $responseData = [
+    // Prepare response
+    $response = [
         'status' => 'success',
         'message' => 'Local fare update request received',
         'timestamp' => time(),
         'data' => [
-            'packages' => [
-                '4hrs-40km' => $package4hr,
-                '8hrs-80km' => $package8hr,
-                '10hrs-100km' => $package10hr,
-                'extra-hour' => $extraHourRate,
-                'extra-km' => $extraKmRate
-            ],
-            'vehicleId' => $vehicleId
-        ]
+            'vehicleId' => $vehicleId,
+            'packages' => []
+        ],
     ];
     
-    // Also save to database if we have a vehicle ID
-    if (!empty($vehicleId)) {
-        // Try database connection
-        try {
-            // Use config.php connection function if available
-            $pdo = null;
+    // Check if we need to create the table
+    $tableCreated = false;
+    if ($tripType === 'local') {
+        // Check if local_package_fares table exists
+        $result = $conn->query("SHOW TABLES LIKE 'local_package_fares'");
+        if ($result->num_rows == 0) {
+            // Create the table if it doesn't exist
+            $createTableQuery = "
+            CREATE TABLE IF NOT EXISTS local_package_fares (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                vehicle_id VARCHAR(50) NOT NULL,
+                price_4hrs_40km DECIMAL(10,2) NOT NULL DEFAULT 0,
+                price_8hrs_80km DECIMAL(10,2) NOT NULL DEFAULT 0,
+                price_10hrs_100km DECIMAL(10,2) NOT NULL DEFAULT 0,
+                price_extra_km DECIMAL(5,2) NOT NULL DEFAULT 0,
+                price_extra_hour DECIMAL(5,2) NOT NULL DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY vehicle_id (vehicle_id)
+            ) ENGINE=InnoDB;
+            ";
             
-            if (function_exists('getDbPDO')) {
-                $pdo = getDbPDO();
-            } else {
-                // Fallback to direct connection if getDbPDO is not defined
-                $pdo = new PDO("mysql:host=localhost;dbname=u644605165_new_bookingdb", "u644605165_new_bookingusr", "Vizag@1213");
-                $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-            }
-            
-            // FIRST: Check if the local_package_fares table exists, if not, create it
-            try {
-                $checkTableSql = "SHOW TABLES LIKE 'local_package_fares'";
-                $checkTableStmt = $pdo->prepare($checkTableSql);
-                $checkTableStmt->execute();
-                
-                if ($checkTableStmt->rowCount() == 0) {
-                    // Table doesn't exist, create it
-                    $createTableSql = "
-                    CREATE TABLE IF NOT EXISTS local_package_fares (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
-                        vehicle_id VARCHAR(50) NOT NULL,
-                        price_4hrs_40km DECIMAL(10,2) NOT NULL DEFAULT 0,
-                        price_8hrs_80km DECIMAL(10,2) NOT NULL DEFAULT 0,
-                        price_10hrs_100km DECIMAL(10,2) NOT NULL DEFAULT 0,
-                        price_extra_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-                        price_extra_hour DECIMAL(5,2) NOT NULL DEFAULT 0,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                        UNIQUE KEY vehicle_id (vehicle_id)
-                    ) ENGINE=InnoDB;
-                    ";
-                    
-                    $pdo->exec($createTableSql);
-                    $responseData['tableCreated'] = 'Created missing local_package_fares table';
-                    error_log("Created missing local_package_fares table", 3, $logsDir . '/direct-fares.log');
-                }
-            } catch (Exception $tableError) {
-                $responseData['tableCheckError'] = $tableError->getMessage();
-                error_log("Error checking/creating table: " . $tableError->getMessage(), 3, $logsDir . '/direct-fares.log');
-            }
-            
-            // Try updating the local_package_fares table
-            try {
-                // Check if entry exists for this vehicle
-                $checkSql = "SELECT id FROM local_package_fares WHERE vehicle_id = ?";
-                $checkStmt = $pdo->prepare($checkSql);
-                $checkStmt->execute([$vehicleId]);
-                $exists = $checkStmt->fetch(PDO::FETCH_ASSOC);
-                
-                if ($exists) {
-                    // Update existing record
-                    $updateSql = "UPDATE local_package_fares 
-                                  SET price_4hrs_40km = ?, 
-                                      price_8hrs_80km = ?, 
-                                      price_10hrs_100km = ?, 
-                                      price_extra_km = ?, 
-                                      price_extra_hour = ?,
-                                      updated_at = NOW()
-                                  WHERE vehicle_id = ?";
-                    $updateStmt = $pdo->prepare($updateSql);
-                    $updateStmt->execute([
-                        $package4hr, 
-                        $package8hr, 
-                        $package10hr, 
-                        $extraKmRate, 
-                        $extraHourRate,
-                        $vehicleId
-                    ]);
-                    
-                    $responseData['databaseUpdate'] = 'Updated record in local_package_fares table';
-                } else {
-                    // Insert new record
-                    $insertSql = "INSERT INTO local_package_fares 
-                                  (vehicle_id, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, 
-                                   price_extra_km, price_extra_hour, created_at, updated_at)
-                                  VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())";
-                    $insertStmt = $pdo->prepare($insertSql);
-                    $insertStmt->execute([
-                        $vehicleId,
-                        $package4hr, 
-                        $package8hr, 
-                        $package10hr, 
-                        $extraKmRate, 
-                        $extraHourRate
-                    ]);
-                    
-                    $responseData['databaseInsert'] = 'Inserted new record in local_package_fares table';
-                }
-                
-                // Also update the vehicle_pricing table for backward compatibility
-                try {
-                    $vpSql = "UPDATE vehicle_pricing 
-                              SET local_package_4hr = ?, 
-                                  local_package_8hr = ?, 
-                                  local_package_10hr = ?, 
-                                  extra_km_charge = ?, 
-                                  extra_hour_charge = ?,
-                                  updated_at = NOW()
-                              WHERE vehicle_type = ?";
-                    $vpStmt = $pdo->prepare($vpSql);
-                    $vpStmt->execute([
-                        $package4hr, 
-                        $package8hr, 
-                        $package10hr, 
-                        $extraKmRate, 
-                        $extraHourRate,
-                        $vehicleId
-                    ]);
-                    
-                    $responseData['vehiclePricingUpdate'] = 'Also updated vehicle_pricing table for backward compatibility';
-                } catch (Exception $vpError) {
-                    // This is not critical, so just log it
-                    $responseData['vehiclePricingError'] = $vpError->getMessage();
-                    error_log("Vehicle pricing update error: " . $vpError->getMessage(), 3, $logsDir . '/direct-fares.log');
-                }
-                
-            } catch (Exception $dbError) {
-                $responseData['databaseError'] = $dbError->getMessage();
-                error_log("Database error: " . $dbError->getMessage(), 3, $logsDir . '/direct-fares.log');
-            }
-        } catch (Exception $connError) {
-            $responseData['databaseConnectionError'] = $connError->getMessage();
-            error_log("Database connection error: " . $connError->getMessage(), 3, $logsDir . '/direct-fares.log');
+            $conn->query($createTableQuery);
+            $tableCreated = true;
+            $response['tableCreated'] = 'Created missing local_package_fares table';
         }
     }
     
-    // Output the response
-    echo json_encode($responseData);
-    exit;
+    // Handle local package fares update
+    if ($tripType === 'local') {
+        // Mapping of frontend field names to database column names
+        $columnMapping = [
+            '4hrs-40km' => 'price_4hrs_40km',
+            '8hrs-80km' => 'price_8hrs_80km',
+            '10hrs-100km' => 'price_10hrs_100km',
+            'extraKm' => 'price_extra_km',
+            'extraHour' => 'price_extra_hour',
+            'extra_km' => 'price_extra_km',
+            'extra_hour' => 'price_extra_hour',
+            // Add all possible variations that might come from the frontend
+            'package_4hr_40km' => 'price_4hrs_40km',
+            'package_8hr_80km' => 'price_8hrs_80km',
+            'package_10hr_100km' => 'price_10hrs_100km',
+            'price4hrs40km' => 'price_4hrs_40km',
+            'price8hrs80km' => 'price_8hrs_80km',
+            'price10hrs100km' => 'price_10hrs_100km',
+        ];
+        
+        // Extract and normalize package pricing from request data
+        $packageData = [];
+        
+        // Loop through request data to find package prices
+        foreach ($requestData as $key => $value) {
+            // Skip non-price fields
+            if (in_array($key, ['vehicleId', 'vehicle_id', 'tripType', 'trip_type'])) {
+                continue;
+            }
+            
+            // Try to map the key to a column name
+            $columnName = isset($columnMapping[$key]) ? $columnMapping[$key] : null;
+            
+            // If no direct mapping, try to normalize the key
+            if (!$columnName) {
+                $normalizedKey = normalizeColumnName($key);
+                $columnName = isset($columnMapping[$normalizedKey]) ? $columnMapping[$normalizedKey] : $normalizedKey;
+            }
+            
+            // If we have a valid column name and value, add to package data
+            if ($columnName && is_numeric($value)) {
+                $packageData[$columnName] = floatval($value);
+                $response['data']['packages'][$key] = floatval($value);
+            }
+        }
+        
+        // Check if we have any package data to update
+        if (!empty($packageData)) {
+            // First check if record exists
+            $checkStmt = $conn->prepare("SELECT COUNT(*) as count FROM local_package_fares WHERE vehicle_id = ?");
+            $checkStmt->bind_param("s", $vehicleId);
+            $checkStmt->execute();
+            $checkResult = $checkStmt->get_result();
+            $row = $checkResult->fetch_assoc();
+            
+            if ($row['count'] > 0) {
+                // Update existing record
+                $setClauses = [];
+                $bindParams = [];
+                $bindTypes = "";
+                
+                foreach ($packageData as $column => $value) {
+                    $setClauses[] = "$column = ?";
+                    $bindParams[] = $value;
+                    $bindTypes .= "d"; // d for double/decimal
+                }
+                
+                $bindParams[] = $vehicleId;
+                $bindTypes .= "s"; // s for string
+                
+                $sql = "UPDATE local_package_fares SET " . implode(", ", $setClauses) . " WHERE vehicle_id = ?";
+                
+                $stmt = $conn->prepare($sql);
+                if (!$stmt) {
+                    throw new Exception("Error preparing statement: " . $conn->error);
+                }
+                
+                // Create the bind_param arguments dynamically
+                $bindArgs = [$bindTypes];
+                foreach ($bindParams as $key => $value) {
+                    $bindArgs[] = &$bindParams[$key];
+                }
+                
+                call_user_func_array([$stmt, 'bind_param'], $bindArgs);
+                
+                if (!$stmt->execute()) {
+                    throw new Exception("Error executing update: " . $stmt->error);
+                }
+                
+                $response['databaseUpdate'] = "Updated existing record in local_package_fares table";
+            } else {
+                // Insert new record
+                $columns = array_keys($packageData);
+                $placeholders = array_fill(0, count($columns), "?");
+                
+                // Add vehicle_id to columns and placeholders
+                array_unshift($columns, "vehicle_id");
+                array_unshift($placeholders, "?");
+                
+                $sql = "INSERT INTO local_package_fares (" . implode(", ", $columns) . ") VALUES (" . implode(", ", $placeholders) . ")";
+                
+                $stmt = $conn->prepare($sql);
+                if (!$stmt) {
+                    throw new Exception("Error preparing statement: " . $conn->error);
+                }
+                
+                // Create bind types string (s for string, d for decimal)
+                $bindTypes = "s" . str_repeat("d", count($packageData));
+                
+                // Create the bind_param arguments dynamically
+                $bindArgs = [$bindTypes, $vehicleId];
+                foreach ($packageData as $value) {
+                    $bindArgs[] = $value;
+                }
+                
+                call_user_func_array([$stmt, 'bind_param'], $bindArgs);
+                
+                if (!$stmt->execute()) {
+                    throw new Exception("Error executing insert: " . $stmt->error);
+                }
+                
+                $response['databaseInsert'] = "Inserted new record in local_package_fares table";
+            }
+        } else {
+            $response['warning'] = "No valid package data found in request";
+        }
+    } else if ($tripType === 'outstation') {
+        // Handle outstation fares (redirect to appropriate endpoint)
+        $response['message'] = 'Outstation fare update request redirected';
+        $response['redirected'] = true;
+        include_once 'direct-outstation-fares.php';
+        exit;
+    } else if ($tripType === 'airport') {
+        // Handle airport fares (redirect to appropriate endpoint)
+        $response['message'] = 'Airport fare update request redirected';
+        $response['redirected'] = true;
+        include_once 'direct-airport-fares.php';
+        exit;
+    }
+    
+    // Send successful response
+    echo json_encode($response);
+    
+} catch (Exception $e) {
+    // Send error response
+    http_response_code(500);
+    echo json_encode([
+        'status' => 'error',
+        'message' => $e->getMessage(),
+        'timestamp' => time()
+    ]);
 }
-
-// If we get here, this is not a local fare update, just return the received data
-echo json_encode([
-    'status' => 'success',
-    'message' => 'Fare update request received',
-    'timestamp' => time(),
-    'receivedData' => $data,
-    'vehicleId' => $vehicleId,
-    'tripType' => $tripType
-]);

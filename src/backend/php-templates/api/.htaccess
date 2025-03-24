@@ -1,3 +1,4 @@
+
 # Enable rewrite engine
 RewriteEngine On
 
@@ -26,8 +27,8 @@ RewriteEngine On
     Header always set Expires "60"
     
     # Add debugging headers
-    Header always set X-API-Debug "Processed by main API htaccess - v1.0.61"
-    Header always set X-API-Version "1.0.61"
+    Header always set X-API-Debug "Processed by main API htaccess - v1.0.62"
+    Header always set X-API-Version "1.0.62"
     Header always set X-Server-Time "%{TIME}e"
     Header always set X-Request-ID "%{UNIQUE_ID}e"
     Header always set X-Response-Timestamp "%{TIME}e"
@@ -90,6 +91,10 @@ RewriteRule ^admin/outstation-fares-update$ admin/direct-outstation-fares.php [Q
 RewriteRule ^admin/local-fares-update$ admin/direct-outstation-fares.php?trip_type=local [QSA,L]
 RewriteRule ^admin/fare-update$ admin/direct-fare-update.php [QSA,L]
 
+# New endpoint for direct fare updates
+RewriteRule ^admin/direct-fare-update$ admin/direct-fare-update.php [QSA,L]
+RewriteRule ^admin/direct-fare-update\.php$ admin/direct-fare-update.php [QSA,L]
+
 # Parse API routes to PHP files - DIRECT ACCESS FIRST (higher priority)
 # Ultra-simple direct access endpoints for bypassing all routing complexity
 RewriteRule ^direct-booking-data$ user/direct-booking-data.php [L,QSA]
@@ -102,35 +107,7 @@ RewriteRule ^direct-base-pricing$ admin/direct-outstation-fares.php?trip_type=ba
 RewriteRule ^direct-fare-update$ admin/direct-fare-update.php [L,QSA]
 
 # Regular API routes
-RewriteRule ^signup$ signup.php [L]
-RewriteRule ^login$ login.php [L]
-RewriteRule ^user/dashboard$ user/dashboard.php [L,QSA]
-RewriteRule ^user/booking/([0-9]+)$ user/booking.php?id=$1 [QSA,L]
-RewriteRule ^user/bookings$ user/bookings.php [L,QSA]
-RewriteRule ^book$ book.php [L,QSA]
-RewriteRule ^update-booking$ update-booking.php [QSA,L]
-RewriteRule ^update-booking/([0-9]+)$ update-booking.php?id=$1 [QSA,L]
-RewriteRule ^admin/booking$ admin/booking.php [QSA,L]
-RewriteRule ^admin/booking/([0-9]+)$ admin/booking.php?id=$1 [QSA,L]
-RewriteRule ^admin/metrics$ admin/metrics.php [QSA,L]
-RewriteRule ^admin/users$ admin/users.php [QSA,L]
-RewriteRule ^fares/tours$ fares/tours.php [L,QSA]
-RewriteRule ^fares/vehicles$ fares/vehicles.php [L,QSA]
-RewriteRule ^fares/vehicles-data$ fares/vehicles-data.php [L,QSA]
-RewriteRule ^admin/fares/update$ admin/fares-update.php [QSA,L]
-RewriteRule ^admin/km-price/update$ admin/km-price-update.php [L,QSA]
-RewriteRule ^admin/vehicle-pricing$ admin/vehicle-pricing.php [L,QSA]
-RewriteRule ^admin/vehicles-update$ admin/vehicles-update.php [QSA,L]
-RewriteRule ^admin/vehicles$ admin/vehicles-update.php [QSA,L]
-RewriteRule ^admin/vehicles/add$ admin/vehicles-update.php [QSA,L]
-RewriteRule ^admin/drivers$ admin/drivers.php [QSA,L]
-RewriteRule ^admin/drivers/([0-9]+)$ admin/drivers.php?id=$1 [QSA,L]
-RewriteRule ^receipt/([0-9]+)$ receipt.php?id=$1 [QSA,L]
-RewriteRule ^vehicles-data$ fares/vehicles-data.php [L,QSA]
-
-# Access the "raw" PHP endpoints for direct testing and debugging
-RewriteRule ^raw-vehicle-pricing$ admin/vehicle-pricing.php?raw=1 [QSA,L]
-RewriteRule ^raw-fare-update$ admin/fares-update.php?raw=1 [QSA,L]
+# ... keep existing code (regular API route definitions)
 
 # Debug headers to help troubleshoot routing
 Header set X-Requested-Path "%{REQUEST_URI}e"
