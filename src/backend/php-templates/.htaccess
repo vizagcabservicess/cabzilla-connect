@@ -26,10 +26,10 @@ RewriteRule ^api/admin/direct-outstation-fares\.php$ api/admin/direct-outstation
 RewriteRule ^api/admin/direct-vehicle-pricing$ api/admin/direct-vehicle-pricing.php [QSA,L]
 RewriteRule ^api/admin/direct-vehicle-pricing.php$ api/admin/direct-vehicle-pricing.php [QSA,L]
 
-# Map all fare update endpoints with high priority
-RewriteRule ^api/admin/outstation-fares-update$ api/admin/direct-fare-update.php?tripType=outstation [QSA,L]
-RewriteRule ^api/admin/outstation-fares-update.php$ api/admin/direct-fare-update.php?tripType=outstation [QSA,L]
-RewriteRule ^api/admin/outstation-fares-update/$ api/admin/direct-fare-update.php?tripType=outstation [QSA,L]
+# Map all fare update endpoints with high priority to direct endpoints
+RewriteRule ^api/admin/outstation-fares-update$ api/admin/direct-outstation-fares.php [QSA,L]
+RewriteRule ^api/admin/outstation-fares-update.php$ api/admin/direct-outstation-fares.php [QSA,L]
+RewriteRule ^api/admin/outstation-fares-update/$ api/admin/direct-outstation-fares.php [QSA,L]
 
 RewriteRule ^api/admin/local-fares-update$ api/admin/direct-fare-update.php?tripType=local [QSA,L]
 RewriteRule ^api/admin/local-fares-update.php$ api/admin/direct-fare-update.php?tripType=local [QSA,L]

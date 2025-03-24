@@ -7,7 +7,7 @@ require_once '../../config.php';
 // Set headers for CORS and content type
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Custom-Timestamp, X-API-Version');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Custom-Timestamp, X-API-Version, X-Client-Version, X-Authorization-Override, X-Debug-Mode, X-Cache-Control, X-Request-ID, X-Request-Source');
 header('Content-Type: application/json');
 
 // Handle preflight OPTIONS request
@@ -22,6 +22,14 @@ $requestUri = $_SERVER['REQUEST_URI'];
 $logMessage = "[" . date('Y-m-d H:i:s') . "] Direct outstation fares $requestMethod request to: $requestUri\n";
 error_log($logMessage, 3, __DIR__ . '/../access.log');
 
+// Debug output
+error_log("REQUEST_METHOD: " . $_SERVER['REQUEST_METHOD']);
+error_log("REQUEST_URI: " . $_SERVER['REQUEST_URI']);
+error_log("CONTENT_TYPE: " . (isset($_SERVER['CONTENT_TYPE']) ? $_SERVER['CONTENT_TYPE'] : 'not set'));
+error_log("RAW POST: " . file_get_contents('php://input'));
+error_log("POST DATA: " . print_r($_POST, true));
+error_log("GET DATA: " . print_r($_GET, true));
+
 // Try to get data from multiple sources
 function getRequestData() {
     $data = [];
@@ -32,20 +40,62 @@ function getRequestData() {
         $jsonData = json_decode($rawInput, true);
         if ($jsonData !== null) {
             $data = array_merge($data, $jsonData);
+            error_log("Parsed JSON data: " . print_r($jsonData, true));
+        } else {
+            error_log("Failed to parse JSON: " . json_last_error_msg());
         }
     }
     
     // For POST form data
     if (!empty($_POST)) {
         $data = array_merge($data, $_POST);
+        error_log("Found POST data: " . print_r($_POST, true));
     }
     
     // For GET parameters
     if (!empty($_GET)) {
         $data = array_merge($data, $_GET);
+        error_log("Found GET data: " . print_r($_GET, true));
     }
     
     return $data;
+}
+
+// Database connection function with error handling
+function getDbConnection() {
+    try {
+        // Try using constants from config.php
+        if (defined('DB_HOST') && defined('DB_DATABASE') && defined('DB_USERNAME') && defined('DB_PASSWORD')) {
+            $conn = new mysqli(DB_HOST, DB_USERNAME, DB_PASSWORD, DB_DATABASE);
+            if ($conn->connect_error) {
+                throw new Exception("Connection failed using constants: " . $conn->connect_error);
+            }
+            error_log("Connected to database using constants");
+            return $conn;
+        }
+
+        // Try using global variables from config.php
+        global $db_host, $db_name, $db_user, $db_pass;
+        if (isset($db_host) && isset($db_name) && isset($db_user) && isset($db_pass)) {
+            $conn = new mysqli($db_host, $db_user, $db_pass, $db_name);
+            if ($conn->connect_error) {
+                throw new Exception("Connection failed using globals: " . $conn->connect_error);
+            }
+            error_log("Connected to database using globals");
+            return $conn;
+        }
+
+        // Fallback to hardcoded credentials as last resort (for development only)
+        $conn = new mysqli("localhost", "u644605165_new_bookingusr", "Vizag@1213", "u644605165_new_bookingdb");
+        if ($conn->connect_error) {
+            throw new Exception("Connection failed using hardcoded values: " . $conn->connect_error);
+        }
+        error_log("Connected to database using hardcoded values");
+        return $conn;
+    } catch (Exception $e) {
+        error_log("Database connection error: " . $e->getMessage());
+        throw $e; // Re-throw to be caught by the main try-catch
+    }
 }
 
 // Create or ensure outstation_fares table exists
@@ -63,20 +113,25 @@ function ensureOutstationFaresTableExists($conn) {
             night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            UNIQUE KEY vehicle_id (vehicle_id)
-        ) ENGINE=InnoDB;
+            UNIQUE KEY unique_vehicle_id (vehicle_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         ";
         
-        $conn->query($sql);
+        if ($conn->query($sql) !== TRUE) {
+            throw new Exception("Failed to create outstation_fares table: " . $conn->error);
+        }
+        error_log("Ensured outstation_fares table exists");
         return true;
     } catch (Exception $e) {
-        throw new Exception("Failed to create outstation_fares table: " . $e->getMessage());
+        error_log("Error ensuring table: " . $e->getMessage());
+        throw $e;
     }
 }
 
 try {
     // Get all request data
     $requestData = getRequestData();
+    error_log("Combined request data: " . print_r($requestData, true));
     
     // Extract vehicle ID - try multiple possible keys
     $vehicleId = null;
@@ -92,6 +147,8 @@ try {
     if (!$vehicleId) {
         throw new Exception("Vehicle ID is required");
     }
+    
+    error_log("Found vehicle ID: " . $vehicleId);
     
     // Clean vehicle ID - remove any prefix
     if (strpos($vehicleId, 'item-') === 0) {
@@ -109,7 +166,7 @@ try {
     ensureOutstationFaresTableExists($conn);
     
     // Handle GET and POST/PUT methods differently
-    if ($requestMethod === 'GET') {
+    if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         // GET request - retrieve fares for a vehicle
         $stmt = $conn->prepare("SELECT * FROM outstation_fares WHERE vehicle_id = ?");
         $stmt->bind_param("s", $vehicleId);
@@ -130,6 +187,7 @@ try {
                     'nightHalt' => (float)$fare['night_halt_charge']
                 ]
             ]);
+            error_log("Successfully retrieved outstation fares for vehicle: " . $vehicleId);
         } else {
             // No fare found - return default values
             echo json_encode([
@@ -145,6 +203,7 @@ try {
                     'nightHalt' => 0
                 ]
             ]);
+            error_log("No outstation fares found for vehicle: " . $vehicleId);
         }
     } else {
         // POST/PUT - update or insert fare data
@@ -174,6 +233,8 @@ try {
         if (isset($requestData['nightHalt'])) $nightHalt = floatval($requestData['nightHalt']);
         else if (isset($requestData['nightHaltCharge'])) $nightHalt = floatval($requestData['nightHaltCharge']);
         
+        error_log("Extracted fare data: basePrice=$basePrice, pricePerKm=$pricePerKm, roundtripBasePrice=$roundtripBasePrice, roundtripPricePerKm=$roundtripPricePerKm, driverAllowance=$driverAllowance, nightHalt=$nightHalt");
+        
         // Check if record exists
         $checkStmt = $conn->prepare("SELECT COUNT(*) as count FROM outstation_fares WHERE vehicle_id = ?");
         $checkStmt->bind_param("s", $vehicleId);
@@ -183,13 +244,18 @@ try {
         
         if ($row['count'] > 0) {
             // Update existing record
-            $updateStmt = $conn->prepare("
+            $updateSql = "
                 UPDATE outstation_fares 
                 SET base_price = ?, price_per_km = ?, roundtrip_base_price = ?, 
                     roundtrip_price_per_km = ?, driver_allowance = ?, night_halt_charge = ?,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE vehicle_id = ?
-            ");
+            ";
+            
+            $updateStmt = $conn->prepare($updateSql);
+            if (!$updateStmt) {
+                throw new Exception("Prepare failed for update: " . $conn->error);
+            }
             
             $updateStmt->bind_param(
                 "dddddds",
@@ -202,7 +268,9 @@ try {
                 $vehicleId
             );
             
-            $updateStmt->execute();
+            if (!$updateStmt->execute()) {
+                throw new Exception("Update execution failed: " . $updateStmt->error);
+            }
             
             echo json_encode([
                 'status' => 'success',
@@ -219,14 +287,20 @@ try {
                     ]
                 ]
             ]);
+            error_log("Updated existing outstation fare record for vehicle: " . $vehicleId);
         } else {
             // Insert new record
-            $insertStmt = $conn->prepare("
+            $insertSql = "
                 INSERT INTO outstation_fares 
                 (vehicle_id, base_price, price_per_km, roundtrip_base_price, 
                 roundtrip_price_per_km, driver_allowance, night_halt_charge)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
-            ");
+            ";
+            
+            $insertStmt = $conn->prepare($insertSql);
+            if (!$insertStmt) {
+                throw new Exception("Prepare failed for insert: " . $conn->error);
+            }
             
             $insertStmt->bind_param(
                 "sdddddd",
@@ -239,7 +313,9 @@ try {
                 $nightHalt
             );
             
-            $insertStmt->execute();
+            if (!$insertStmt->execute()) {
+                throw new Exception("Insert execution failed: " . $insertStmt->error);
+            }
             
             echo json_encode([
                 'status' => 'success',
@@ -256,9 +332,11 @@ try {
                     ]
                 ]
             ]);
+            error_log("Inserted new outstation fare record for vehicle: " . $vehicleId);
         }
     }
 } catch (Exception $e) {
+    error_log("Error in direct-outstation-fares.php: " . $e->getMessage());
     http_response_code(500);
     echo json_encode([
         'status' => 'error',

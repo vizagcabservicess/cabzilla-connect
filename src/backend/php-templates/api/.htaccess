@@ -27,8 +27,8 @@ RewriteEngine On
     Header always set Expires "60"
     
     # Add debugging headers
-    Header always set X-API-Debug "Processed by main API htaccess - v1.0.63"
-    Header always set X-API-Version "1.0.63"
+    Header always set X-API-Debug "Processed by main API htaccess - v1.0.64"
+    Header always set X-API-Version "1.0.64"
     Header always set X-Server-Time "%{TIME}e"
     Header always set X-Request-ID "%{UNIQUE_ID}e"
     Header always set X-Response-Timestamp "%{TIME}e"
@@ -99,8 +99,8 @@ RewriteRule ^direct-fare-update.php$ admin/direct-fare-update.php [L,QSA]
 
 # CRITICAL FARE UPDATE FIX - Route all fare updates to direct endpoints
 # This is essential to ensure fare updates work correctly
-RewriteRule ^admin/outstation-fares-update$ admin/direct-fare-update.php?tripType=outstation [QSA,L]
-RewriteRule ^admin/outstation-fares-update\.php$ admin/direct-fare-update.php?tripType=outstation [QSA,L]
+RewriteRule ^admin/outstation-fares-update$ admin/direct-outstation-fares.php [QSA,L]
+RewriteRule ^admin/outstation-fares-update\.php$ admin/direct-outstation-fares.php [QSA,L]
 RewriteRule ^admin/airport-fares-update$ admin/direct-fare-update.php?tripType=airport [QSA,L]
 RewriteRule ^admin/local-fares-update$ admin/direct-fare-update.php?tripType=local [QSA,L]
 RewriteRule ^admin/fare-update$ admin/direct-fare-update.php [QSA,L]
