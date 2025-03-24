@@ -27,8 +27,8 @@ RewriteEngine On
     Header always set Expires "60"
     
     # Add debugging headers
-    Header always set X-API-Debug "Processed by main API htaccess - v1.0.64"
-    Header always set X-API-Version "1.0.64"
+    Header always set X-API-Debug "Processed by main API htaccess - v1.0.65"
+    Header always set X-API-Version "1.0.65"
     Header always set X-Server-Time "%{TIME}e"
     Header always set X-Request-ID "%{UNIQUE_ID}e"
     Header always set X-Response-Timestamp "%{TIME}e"
@@ -85,11 +85,16 @@ RewriteRule ^direct-fare-update\.php$ admin/direct-fare-update.php [L,QSA]
 RewriteRule ^admin/direct-fare-update$ admin/direct-fare-update.php [L,QSA]
 RewriteRule ^admin/direct-fare-update\.php$ admin/direct-fare-update.php [L,QSA]
 
-# Outstation-specific direct fare update - HIGH PRIORITY
-RewriteRule ^admin/direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^admin/direct-outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
+# CRITICAL OUTSTATION FARES - HIGH PRIORITY
 RewriteRule ^direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^direct-outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^admin/direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^admin/direct-outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
+
+# Also map alternate URL patterns (potential frontend URL patterns)
+RewriteRule ^outstation-fares/update$ admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^outstation-fares/direct$ admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^outstation/update-fares$ admin/direct-outstation-fares.php [L,QSA]
 
 # Skip all routing complexity for these critical endpoints
 RewriteRule ^direct-outstation-fares.php$ admin/direct-outstation-fares.php [L,QSA]
@@ -101,6 +106,9 @@ RewriteRule ^direct-fare-update.php$ admin/direct-fare-update.php [L,QSA]
 # This is essential to ensure fare updates work correctly
 RewriteRule ^admin/outstation-fares-update$ admin/direct-outstation-fares.php [QSA,L]
 RewriteRule ^admin/outstation-fares-update\.php$ admin/direct-outstation-fares.php [QSA,L]
+RewriteRule ^outstation-fares-update$ admin/direct-outstation-fares.php [QSA,L]
+RewriteRule ^outstation-fares-update\.php$ admin/direct-outstation-fares.php [QSA,L]
+
 RewriteRule ^admin/airport-fares-update$ admin/direct-fare-update.php?tripType=airport [QSA,L]
 RewriteRule ^admin/local-fares-update$ admin/direct-fare-update.php?tripType=local [QSA,L]
 RewriteRule ^admin/fare-update$ admin/direct-fare-update.php [QSA,L]
@@ -110,11 +118,9 @@ RewriteRule ^admin/fare-update$ admin/direct-fare-update.php [QSA,L]
 RewriteRule ^direct-booking-data$ user/direct-booking-data.php [L,QSA]
 RewriteRule ^direct-user-data$ admin/direct-user-data.php [L,QSA]
 RewriteRule ^direct-vehicle-pricing$ admin/direct-vehicle-pricing.php [L,QSA]
-RewriteRule ^direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^direct-local-fares$ admin/direct-outstation-fares.php?trip_type=local [L,QSA]
 RewriteRule ^direct-airport-fares$ admin/direct-airport-fares.php [L,QSA]
 RewriteRule ^direct-base-pricing$ admin/direct-outstation-fares.php?trip_type=base [L,QSA]
-RewriteRule ^direct-fare-update$ admin/direct-fare-update.php [L,QSA]
 
 # Regular API routes
 # ... keep existing code (regular API route definitions)

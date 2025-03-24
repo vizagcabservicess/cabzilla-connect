@@ -98,9 +98,40 @@ function getDbConnection() {
     }
 }
 
-// Create or ensure outstation_fares table exists
+// Create or ensure outstation_fares table exists with correct fields
 function ensureOutstationFaresTableExists($conn) {
     try {
+        // Check if table exists first
+        $tableExistsQuery = "SHOW TABLES LIKE 'outstation_fares'";
+        $tableResult = $conn->query($tableExistsQuery);
+        $tableExists = ($tableResult->num_rows > 0);
+        
+        if ($tableExists) {
+            // Check for column roundtrip_base_price which seems to be causing issues
+            $checkColumnQuery = "SHOW COLUMNS FROM outstation_fares LIKE 'roundtrip_base_price'";
+            $columnResult = $conn->query($checkColumnQuery);
+            $hasRoundtripBasePrice = ($columnResult->num_rows > 0);
+            
+            if (!$hasRoundtripBasePrice) {
+                // Add the missing column
+                $alterTableSql = "ALTER TABLE outstation_fares ADD COLUMN roundtrip_base_price DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER price_per_km";
+                $conn->query($alterTableSql);
+                error_log("Added missing roundtrip_base_price column to outstation_fares table");
+                
+                // Add roundtrip_price_per_km column if missing
+                $checkColumnQuery = "SHOW COLUMNS FROM outstation_fares LIKE 'roundtrip_price_per_km'";
+                $columnResult = $conn->query($checkColumnQuery);
+                if ($columnResult->num_rows == 0) {
+                    $alterTableSql = "ALTER TABLE outstation_fares ADD COLUMN roundtrip_price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0 AFTER roundtrip_base_price";
+                    $conn->query($alterTableSql);
+                    error_log("Added missing roundtrip_price_per_km column to outstation_fares table");
+                }
+            }
+            
+            return true;
+        }
+        
+        // If table doesn't exist, create it with all needed columns
         $sql = "
         CREATE TABLE IF NOT EXISTS outstation_fares (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -120,7 +151,7 @@ function ensureOutstationFaresTableExists($conn) {
         if ($conn->query($sql) !== TRUE) {
             throw new Exception("Failed to create outstation_fares table: " . $conn->error);
         }
-        error_log("Ensured outstation_fares table exists");
+        error_log("Created outstation_fares table with all required columns");
         return true;
     } catch (Exception $e) {
         error_log("Error ensuring table: " . $e->getMessage());
@@ -162,7 +193,7 @@ try {
         throw new Exception("Database connection failed");
     }
     
-    // Ensure the outstation_fares table exists
+    // Ensure the outstation_fares table exists with all required columns
     ensureOutstationFaresTableExists($conn);
     
     // Handle GET and POST/PUT methods differently
@@ -213,25 +244,31 @@ try {
         if (isset($requestData['basePrice'])) $basePrice = floatval($requestData['basePrice']);
         else if (isset($requestData['oneWayBasePrice'])) $basePrice = floatval($requestData['oneWayBasePrice']);
         else if (isset($requestData['baseFare'])) $basePrice = floatval($requestData['baseFare']);
+        else if (isset($requestData['base_price'])) $basePrice = floatval($requestData['base_price']);
         
         $pricePerKm = 0;
         if (isset($requestData['pricePerKm'])) $pricePerKm = floatval($requestData['pricePerKm']);
         else if (isset($requestData['oneWayPricePerKm'])) $pricePerKm = floatval($requestData['oneWayPricePerKm']);
+        else if (isset($requestData['price_per_km'])) $pricePerKm = floatval($requestData['price_per_km']);
         
         $roundtripBasePrice = 0;
         if (isset($requestData['roundTripBasePrice'])) $roundtripBasePrice = floatval($requestData['roundTripBasePrice']);
         else if (isset($requestData['roundtripBasePrice'])) $roundtripBasePrice = floatval($requestData['roundtripBasePrice']);
+        else if (isset($requestData['roundtrip_base_price'])) $roundtripBasePrice = floatval($requestData['roundtrip_base_price']);
         
         $roundtripPricePerKm = 0;
         if (isset($requestData['roundTripPricePerKm'])) $roundtripPricePerKm = floatval($requestData['roundTripPricePerKm']);
         else if (isset($requestData['roundtripPricePerKm'])) $roundtripPricePerKm = floatval($requestData['roundtripPricePerKm']);
+        else if (isset($requestData['roundtrip_price_per_km'])) $roundtripPricePerKm = floatval($requestData['roundtrip_price_per_km']);
         
         $driverAllowance = 0;
         if (isset($requestData['driverAllowance'])) $driverAllowance = floatval($requestData['driverAllowance']);
+        else if (isset($requestData['driver_allowance'])) $driverAllowance = floatval($requestData['driver_allowance']);
         
         $nightHalt = 0;
         if (isset($requestData['nightHalt'])) $nightHalt = floatval($requestData['nightHalt']);
         else if (isset($requestData['nightHaltCharge'])) $nightHalt = floatval($requestData['nightHaltCharge']);
+        else if (isset($requestData['night_halt_charge'])) $nightHalt = floatval($requestData['night_halt_charge']);
         
         error_log("Extracted fare data: basePrice=$basePrice, pricePerKm=$pricePerKm, roundtripBasePrice=$roundtripBasePrice, roundtripPricePerKm=$roundtripPricePerKm, driverAllowance=$driverAllowance, nightHalt=$nightHalt");
         
