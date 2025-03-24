@@ -1,3 +1,4 @@
+
 # Enable rewrite engine
 RewriteEngine On
 
@@ -7,64 +8,43 @@ RewriteEngine On
 # Ensure API requests go directly to PHP files
 RewriteRule ^api/ - [L]
 
-# API routing rules
-RewriteRule ^api/signup$ api/signup.php [L,QSA]
-RewriteRule ^api/login$ api/login.php [L,QSA]
-RewriteRule ^api/user/dashboard$ api/user/dashboard.php [L,QSA]
-RewriteRule ^api/user/booking/([0-9]+)$ api/user/booking.php?id=$1 [QSA,L]
-RewriteRule ^api/user/bookings$ api/user/bookings.php [L,QSA]
-RewriteRule ^api/book$ api/book.php [L,QSA]
-RewriteRule ^api/update-booking/([0-9]+)$ api/update-booking.php?id=$1 [QSA,L]
-RewriteRule ^api/admin/booking/([0-9]+)$ api/admin/booking.php?id=$1 [QSA,L]
-RewriteRule ^api/admin/bookings$ api/admin/bookings.php [L,QSA]
-RewriteRule ^api/admin/metrics$ api/admin/metrics.php [QSA,L]
-RewriteRule ^api/admin/users$ api/admin/users.php [QSA,L]
-RewriteRule ^api/fares/tours$ api/fares/tours.php [L,QSA]
-RewriteRule ^api/fares/vehicles$ api/fares/vehicles.php [L,QSA]
-RewriteRule ^api/fares/vehicles-data$ api/fares/vehicles-data.php [L,QSA]
-RewriteRule ^api/admin/fares/update$ api/admin/fares-update.php [QSA,L]
-RewriteRule ^api/admin/km-price/update$ api/admin/km-price-update.php [L,QSA]
-RewriteRule ^api/admin/vehicle-pricing$ api/admin/vehicle-pricing.php [L,QSA]
-RewriteRule ^api/admin/vehicles-update$ api/admin/vehicles-update.php [QSA,L]
-RewriteRule ^api/admin/vehicles$ api/admin/vehicles-update.php [QSA,L]
-RewriteRule ^api/admin/vehicles/add$ api/admin/vehicles-update.php [QSA,L]
-RewriteRule ^api/receipt/([0-9]+)$ api/receipt.php?id=$1 [QSA,L]
-RewriteRule ^api/admin/drivers$ api/admin/drivers.php [QSA,L]
-RewriteRule ^api/admin/drivers/([0-9]+)$ api/admin/drivers.php?id=$1 [QSA,L]
-RewriteRule ^api/vehicles-data$ api/fares/vehicles-data.php [L,QSA]
-
-# NEW DIRECT ENDPOINT - Database initialization - HIGHER PRIORITY
-RewriteRule ^api/init-database$ api/admin/init-database.php [L,QSA]
+# Highest priority routes - database initialization and direct updates
+RewriteRule ^api/init-database$ api/admin/init-database.php [L,QSA] 
 RewriteRule ^api/init-database\.php$ api/admin/init-database.php [L,QSA]
 RewriteRule ^api/admin/init-database$ api/admin/init-database.php [L,QSA]
 RewriteRule ^api/admin/init-database\.php$ api/admin/init-database.php [L,QSA]
 
-# Direct access routes for fare updates - HIGHEST PRIORITY
+# Direct fare update endpoints - HIGHEST PRIORITY
 RewriteRule ^api/direct-fare-update$ api/admin/direct-fare-update.php [L,QSA]
 RewriteRule ^api/direct-fare-update\.php$ api/admin/direct-fare-update.php [L,QSA]
 RewriteRule ^api/admin/direct-fare-update$ api/admin/direct-fare-update.php [L,QSA]
 RewriteRule ^api/admin/direct-fare-update\.php$ api/admin/direct-fare-update.php [L,QSA]
+RewriteRule ^api/admin/direct-outstation-fares$ api/admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^api/admin/direct-outstation-fares\.php$ api/admin/direct-outstation-fares.php [L,QSA]
 
-# Direct access routes for easier fare update API operation
+# Direct endpoint for vehicle pricing
 RewriteRule ^api/admin/direct-vehicle-pricing$ api/admin/direct-vehicle-pricing.php [QSA,L]
 RewriteRule ^api/admin/direct-vehicle-pricing.php$ api/admin/direct-vehicle-pricing.php [QSA,L]
 
-# Map dedicated fare update endpoints with high priority
-RewriteRule ^api/admin/local-fares-update$ api/admin/local-fares-update.php [QSA,L]
-RewriteRule ^api/admin/local-fares-update.php$ api/admin/local-fares-update.php [QSA,L]
-RewriteRule ^api/admin/local-fares-update/$ api/admin/local-fares-update.php [QSA,L]
+# Map all fare update endpoints with high priority
+RewriteRule ^api/admin/outstation-fares-update$ api/admin/direct-fare-update.php?tripType=outstation [QSA,L]
+RewriteRule ^api/admin/outstation-fares-update.php$ api/admin/direct-fare-update.php?tripType=outstation [QSA,L]
+RewriteRule ^api/admin/outstation-fares-update/$ api/admin/direct-fare-update.php?tripType=outstation [QSA,L]
 
-RewriteRule ^api/admin/outstation-fares-update$ api/admin/outstation-fares-update.php [QSA,L]
-RewriteRule ^api/admin/outstation-fares-update.php$ api/admin/outstation-fares-update.php [QSA,L]
-RewriteRule ^api/admin/outstation-fares-update/$ api/admin/outstation-fares-update.php [QSA,L]
+RewriteRule ^api/admin/local-fares-update$ api/admin/direct-fare-update.php?tripType=local [QSA,L]
+RewriteRule ^api/admin/local-fares-update.php$ api/admin/direct-fare-update.php?tripType=local [QSA,L]
+RewriteRule ^api/admin/local-fares-update/$ api/admin/direct-fare-update.php?tripType=local [QSA,L]
 
-RewriteRule ^api/admin/airport-fares-update$ api/admin/airport-fares-update.php [QSA,L]
-RewriteRule ^api/admin/airport-fares-update.php$ api/admin/airport-fares-update.php [QSA,L]
-RewriteRule ^api/admin/airport-fares-update/$ api/admin/airport-fares-update.php [QSA,L]
+RewriteRule ^api/admin/airport-fares-update$ api/admin/direct-fare-update.php?tripType=airport [QSA,L]
+RewriteRule ^api/admin/airport-fares-update.php$ api/admin/direct-fare-update.php?tripType=airport [QSA,L]
+RewriteRule ^api/admin/airport-fares-update/$ api/admin/direct-fare-update.php?tripType=airport [QSA,L]
 
-RewriteRule ^api/admin/fares-update$ api/admin/fares-update.php [QSA,L]
-RewriteRule ^api/admin/fares-update.php$ api/admin/fares-update.php [QSA,L]
-RewriteRule ^api/admin/fares-update/$ api/admin/fares-update.php [QSA,L]
+RewriteRule ^api/admin/fares-update$ api/admin/direct-fare-update.php [QSA,L]
+RewriteRule ^api/admin/fares-update.php$ api/admin/direct-fare-update.php [QSA,L]
+RewriteRule ^api/admin/fares-update/$ api/admin/direct-fare-update.php [QSA,L]
+
+# Regular API routes
+# ... keep existing code (regular API route definitions)
 
 # Add debug header for API paths
 <IfModule mod_headers.c>
