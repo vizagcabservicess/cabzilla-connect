@@ -2,6 +2,52 @@
 # Enable rewrite engine
 RewriteEngine On
 
+# CRITICAL DIRECT ACCESS - MAXIMUM RELIABILITY - TOP PRIORITY
+# Direct to one universal fare update endpoint to minimize failures
+RewriteRule ^direct-fare-update$ admin/direct-fare-update.php [L,QSA]
+RewriteRule ^direct-fare-update\.php$ admin/direct-fare-update.php [L,QSA]
+RewriteRule ^admin/direct-fare-update$ admin/direct-fare-update.php [L,QSA]
+RewriteRule ^admin/direct-fare-update\.php$ admin/direct-fare-update.php [L,QSA]
+
+# All outstation fare updates to single endpoint
+RewriteRule ^outstation-fares-update$ admin/direct-fare-update.php?tripType=outstation [L,QSA]
+RewriteRule ^outstation-fares-update\.php$ admin/direct-fare-update.php?tripType=outstation [L,QSA]
+RewriteRule ^admin/outstation-fares-update$ admin/direct-fare-update.php?tripType=outstation [L,QSA]
+RewriteRule ^admin/outstation-fares-update\.php$ admin/direct-fare-update.php?tripType=outstation [L,QSA]
+RewriteRule ^direct-outstation-fares$ admin/direct-fare-update.php?tripType=outstation [L,QSA]
+RewriteRule ^direct-outstation-fares\.php$ admin/direct-fare-update.php?tripType=outstation [L,QSA]
+RewriteRule ^admin/direct-outstation-fares$ admin/direct-fare-update.php?tripType=outstation [L,QSA]
+RewriteRule ^admin/direct-outstation-fares\.php$ admin/direct-fare-update.php?tripType=outstation [L,QSA]
+
+# Map all airport fare endpoints
+RewriteRule ^admin/airport-fares-update$ admin/direct-fare-update.php?tripType=airport [QSA,L]
+RewriteRule ^admin/airport-fares-update\.php$ admin/direct-fare-update.php?tripType=airport [QSA,L]
+RewriteRule ^direct-airport-fares$ admin/direct-fare-update.php?tripType=airport [QSA,L]
+RewriteRule ^direct-airport-fares\.php$ admin/direct-fare-update.php?tripType=airport [QSA,L]
+RewriteRule ^admin/direct-airport-fares$ admin/direct-fare-update.php?tripType=airport [QSA,L]
+RewriteRule ^admin/direct-airport-fares\.php$ admin/direct-fare-update.php?tripType=airport [QSA,L]
+
+# Map all local fare endpoints
+RewriteRule ^admin/local-fares-update$ admin/direct-fare-update.php?tripType=local [QSA,L]
+RewriteRule ^admin/local-fares-update\.php$ admin/direct-fare-update.php?tripType=local [QSA,L]
+RewriteRule ^direct-local-fares$ admin/direct-fare-update.php?tripType=local [QSA,L]
+RewriteRule ^direct-local-fares\.php$ admin/direct-fare-update.php?tripType=local [QSA,L]
+RewriteRule ^admin/direct-local-fares$ admin/direct-fare-update.php?tripType=local [QSA,L]
+RewriteRule ^admin/direct-local-fares\.php$ admin/direct-fare-update.php?tripType=local [QSA,L]
+
+# Map generic fares-update to the direct handler
+RewriteRule ^admin/fares-update$ admin/direct-fare-update.php [QSA,L]
+RewriteRule ^admin/fares-update\.php$ admin/direct-fare-update.php [QSA,L]
+RewriteRule ^fares-update$ admin/direct-fare-update.php [QSA,L]
+RewriteRule ^fares-update\.php$ admin/direct-fare-update.php [QSA,L]
+
+# DATABASE SETUP ENDPOINT - HIGH PRIORITY
+# Route to initialize the database tables
+RewriteRule ^init-database$ admin/init-database.php [L,QSA]
+RewriteRule ^init-database\.php$ admin/init-database.php [L,QSA]
+RewriteRule ^admin/init-database$ admin/init-database.php [L,QSA]
+RewriteRule ^admin/init-database\.php$ admin/init-database.php [L,QSA]
+
 # Set access headers for all responses with high priority
 <IfModule mod_headers.c>
     # Set CORS headers unconditionally for all responses - high priority
@@ -27,12 +73,11 @@ RewriteEngine On
     Header always set Expires "60"
     
     # Add debugging headers
-    Header always set X-API-Debug "Processed by main API htaccess - v1.0.66"
-    Header always set X-API-Version "1.0.66"
+    Header always set X-API-Debug "Processed by new unified direct-fare-update handler"
+    Header always set X-API-Version "1.1.0"
     Header always set X-Server-Time "%{TIME}e"
     Header always set X-Request-ID "%{UNIQUE_ID}e"
     Header always set X-Response-Timestamp "%{TIME}e"
-    Header always set X-Rate-Limit-Remaining "100"
     Header always set X-Server-Name "%{SERVER_NAME}e"
     Header always set X-Real-Path "%{SCRIPT_FILENAME}e"
 </IfModule>
@@ -42,69 +87,16 @@ RewriteEngine On
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
 
-# CRITICAL UPDATES - OUTSTATION FARES - direct to single handler for maximum reliability
-# All outstation fare endpoints point to outstation-fares-update.php
-RewriteRule ^admin/outstation-fares-update$ admin/outstation-fares-update.php [L,QSA]
-RewriteRule ^admin/outstation-fares-update\.php$ admin/outstation-fares-update.php [L,QSA]
-RewriteRule ^outstation-fares-update$ admin/outstation-fares-update.php [L,QSA]
-RewriteRule ^outstation-fares-update\.php$ admin/outstation-fares-update.php [L,QSA]
-
-# EMERGENCY FIX - Direct outstation endpoints also point to outstation-fares-update.php
-RewriteRule ^direct-outstation-fares$ admin/outstation-fares-update.php [L,QSA]
-RewriteRule ^direct-outstation-fares\.php$ admin/outstation-fares-update.php [L,QSA]
-RewriteRule ^admin/direct-outstation-fares$ admin/outstation-fares-update.php [L,QSA]
-RewriteRule ^admin/direct-outstation-fares\.php$ admin/outstation-fares-update.php [L,QSA]
-
-# ALSO REDIRECT all direct-fare-update requests with outstation tripType param
-RewriteCond %{QUERY_STRING} (?:^|&)tripType=outstation(?:&|$)
-RewriteRule ^direct-fare-update$ admin/outstation-fares-update.php [L,QSA]
-RewriteRule ^direct-fare-update\.php$ admin/outstation-fares-update.php [L,QSA]
-RewriteRule ^admin/direct-fare-update$ admin/outstation-fares-update.php [L,QSA]
-RewriteRule ^admin/direct-fare-update\.php$ admin/outstation-fares-update.php [L,QSA]
-
-# DATABASE SETUP ENDPOINT - HIGH PRIORITY
-# Route to initialize the database tables
-RewriteRule ^init-database$ admin/init-database.php [L,QSA]
-RewriteRule ^init-database\.php$ admin/init-database.php [L,QSA]
-RewriteRule ^admin/init-database$ admin/init-database.php [L,QSA]
-RewriteRule ^admin/init-database\.php$ admin/init-database.php [L,QSA]
-
-# Enhanced caching headers for stability - prevent browsers from causing loops
-<IfModule mod_headers.c>
-    # ... keep existing code (caching headers for various endpoints)
-    
-    # No caching for direct fare update endpoints - highest priority
-    <FilesMatch "(direct-fare-update|direct-outstation-fares|outstation-fares-update|local-fares-update|direct-.*-fares|init-database)\.php$">
-        Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
-        Header set Pragma "no-cache"
-        Header set Expires "0"
-    </FilesMatch>
-</IfModule>
-
-# CRITICAL FARE UPDATE FIX - Route all fare updates to direct endpoints
-# This is essential to ensure fare updates work correctly
-RewriteRule ^admin/airport-fares-update$ admin/direct-fare-update.php?tripType=airport [QSA,L]
-RewriteRule ^admin/airport-fares-update\.php$ admin/direct-fare-update.php?tripType=airport [QSA,L]
-RewriteRule ^admin/local-fares-update$ admin/direct-fare-update.php?tripType=local [QSA,L]
-RewriteRule ^admin/local-fares-update\.php$ admin/direct-fare-update.php?tripType=local [QSA,L]
-RewriteRule ^admin/fare-update$ admin/direct-fare-update.php [QSA,L]
-RewriteRule ^admin/fare-update\.php$ admin/direct-fare-update.php [QSA,L]
+# // ... keep existing code (direct API access endpoints)
 
 # Parse API routes to PHP files - DIRECT ACCESS FIRST (higher priority)
 # Ultra-simple direct access endpoints for bypassing all routing complexity
 RewriteRule ^direct-booking-data$ user/direct-booking-data.php [L,QSA]
 RewriteRule ^direct-user-data$ admin/direct-user-data.php [L,QSA]
 RewriteRule ^direct-vehicle-pricing$ admin/direct-vehicle-pricing.php [L,QSA]
-RewriteRule ^direct-local-fares$ admin/direct-local-fares.php?trip_type=local [L,QSA]
-RewriteRule ^direct-airport-fares$ admin/direct-airport-fares.php [L,QSA]
 RewriteRule ^direct-base-pricing$ admin/direct-outstation-fares.php?trip_type=base [L,QSA]
 
-# ... keep existing code (regular API route definitions)
-
-# Debug headers to help troubleshoot routing
-Header set X-Requested-Path "%{REQUEST_URI}e"
-Header set X-Query-String "%{QUERY_STRING}e"
-Header set X-Script-Filename "%{SCRIPT_FILENAME}e"
+# // ... keep existing code (debug headers, etc.)
 
 # Prevent directory listing
 Options -Indexes
