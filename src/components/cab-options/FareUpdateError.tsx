@@ -11,7 +11,8 @@ import {
   Terminal, 
   Server,
   Wifi,
-  DatabaseBackup
+  DatabaseBackup,
+  ArrowDownToLine
 } from "lucide-react";
 import { fareService } from '@/services/fareService';
 import { toast } from 'sonner';
@@ -22,6 +23,8 @@ interface FareUpdateErrorProps {
   title?: string;
   description?: string;
   showDirectLink?: boolean;
+  vehicleId?: string;
+  tripType?: 'local' | 'airport' | 'outstation';
 }
 
 export function FareUpdateError({
@@ -29,7 +32,9 @@ export function FareUpdateError({
   onRetry,
   title = "Fare Update Failed",
   description,
-  showDirectLink = true
+  showDirectLink = true,
+  vehicleId,
+  tripType = 'outstation'
 }: FareUpdateErrorProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [isFixing, setIsFixing] = useState(false);
@@ -239,6 +244,8 @@ export function FareUpdateError({
                     status: error?.['response']?.status || 'Unknown',
                     message: errorMessage,
                     apiVersion: import.meta.env.VITE_API_VERSION || 'Unknown',
+                    tripType: tripType,
+                    vehicleId: vehicleId,
                     isTableError: isTableError,
                     isServerError: isServerError,
                     isNetworkError: isNetworkError

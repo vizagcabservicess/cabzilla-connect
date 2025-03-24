@@ -85,7 +85,7 @@ RewriteRule ^direct-fare-update\.php$ admin/direct-fare-update.php [L,QSA]
 RewriteRule ^admin/direct-fare-update$ admin/direct-fare-update.php [L,QSA]
 RewriteRule ^admin/direct-fare-update\.php$ admin/direct-fare-update.php [L,QSA]
 
-# Outstation-specific direct fare update - HIGH PRIORITY
+# CRITICAL FIX - Outstation-specific direct fare update - HIGH PRIORITY
 RewriteRule ^admin/direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^admin/direct-outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]

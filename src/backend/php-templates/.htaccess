@@ -19,6 +19,8 @@ RewriteRule ^api/direct-fare-update$ api/admin/direct-fare-update.php [L,QSA]
 RewriteRule ^api/direct-fare-update\.php$ api/admin/direct-fare-update.php [L,QSA]
 RewriteRule ^api/admin/direct-fare-update$ api/admin/direct-fare-update.php [L,QSA]
 RewriteRule ^api/admin/direct-fare-update\.php$ api/admin/direct-fare-update.php [L,QSA]
+
+# CRITICAL FIX - Properly map outstation fare endpoints
 RewriteRule ^api/admin/direct-outstation-fares$ api/admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^api/admin/direct-outstation-fares\.php$ api/admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^api/direct-outstation-fares$ api/admin/direct-outstation-fares.php [L,QSA]
