@@ -1,3 +1,4 @@
+
 # Enable rewrite engine
 RewriteEngine On
 
@@ -19,13 +20,16 @@ RewriteRule ^api/direct-fare-update\.php$ api/admin/direct-fare-update.php [L,QS
 RewriteRule ^api/admin/direct-fare-update$ api/admin/direct-fare-update.php [L,QSA]
 RewriteRule ^api/admin/direct-fare-update\.php$ api/admin/direct-fare-update.php [L,QSA]
 
-# CRITICAL FIX - Properly map outstation fare endpoints
-RewriteRule ^api/admin/direct-outstation-fares$ api/admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^api/admin/direct-outstation-fares\.php$ api/admin/direct-outstation-fares.php [L,QSA]
+# ULTRA HIGH PRIORITY - Outstation fare endpoints with both direct and update paths
+# Direct endpoint access with and without .php extension
 RewriteRule ^api/direct-outstation-fares$ api/admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^api/direct-outstation-fares\.php$ api/admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^api/admin/direct-outstation-fares$ api/admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^api/admin/direct-outstation-fares\.php$ api/admin/direct-outstation-fares.php [L,QSA]
 
-# CRITICAL OUTSTATION ENDPOINT MAPPING - Both with and without .php extension
+# Ensure all outstation-fares-update paths go to the direct endpoint
+RewriteRule ^api/outstation-fares-update$ api/admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^api/outstation-fares-update\.php$ api/admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^api/admin/outstation-fares-update$ api/admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^api/admin/outstation-fares-update\.php$ api/admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^api/admin/outstation-fares-update/$ api/admin/direct-outstation-fares.php [L,QSA]

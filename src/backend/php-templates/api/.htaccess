@@ -27,8 +27,8 @@ RewriteEngine On
     Header always set Expires "60"
     
     # Add debugging headers
-    Header always set X-API-Debug "Processed by main API htaccess - v1.0.64"
-    Header always set X-API-Version "1.0.64"
+    Header always set X-API-Debug "Processed by main API htaccess - v1.0.65"
+    Header always set X-API-Version "1.0.65"
     Header always set X-Server-Time "%{TIME}e"
     Header always set X-Request-ID "%{UNIQUE_ID}e"
     Header always set X-Response-Timestamp "%{TIME}e"
@@ -61,15 +61,18 @@ RewriteRule ^init-database\.php$ admin/init-database.php [L,QSA]
 RewriteRule ^admin/init-database$ admin/init-database.php [L,QSA]
 RewriteRule ^admin/init-database\.php$ admin/init-database.php [L,QSA]
 
-# ULTRA HIGH PRIORITY - Skip all routing complexity for direct outstation fares updates
-RewriteRule ^direct-outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
+# ULTRA HIGH PRIORITY - Direct outstation fares endpoints
+# Make these routes have highest priority to guarantee they work
 RewriteRule ^direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^admin/direct-outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^direct-outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^admin/direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^admin/direct-outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
 
-# Ensure that all fares-update endpoints route properly - highest priority
-RewriteRule ^admin/outstation-fares-update\.php$ admin/direct-outstation-fares.php [L,QSA]
+# Ensure that all outstation-fares-update endpoints route to direct-outstation-fares.php
 RewriteRule ^admin/outstation-fares-update$ admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^admin/outstation-fares-update\.php$ admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^outstation-fares-update$ admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^outstation-fares-update\.php$ admin/direct-outstation-fares.php [L,QSA]
 
 # Critical direct fare update - make this highest priority
 RewriteRule ^direct-fare-update$ admin/direct-fare-update.php [L,QSA]

@@ -1,3 +1,4 @@
+
 <?php
 // direct-outstation-fares.php - Dedicated endpoint for outstation fares
 
@@ -25,11 +26,14 @@ error_log($logMessage, 3, __DIR__ . '/../access.log');
 error_log("REQUEST_METHOD: " . $_SERVER['REQUEST_METHOD']);
 error_log("REQUEST_URI: " . $_SERVER['REQUEST_URI']);
 error_log("CONTENT_TYPE: " . (isset($_SERVER['CONTENT_TYPE']) ? $_SERVER['CONTENT_TYPE'] : 'not set'));
-error_log("RAW POST: " . file_get_contents('php://input'));
+
+// More detailed logging of request data
+$rawData = file_get_contents('php://input');
+error_log("RAW INPUT: " . $rawData);
 error_log("POST DATA: " . print_r($_POST, true));
 error_log("GET DATA: " . print_r($_GET, true));
 
-// Try to get data from multiple sources
+// Try to get data from multiple sources - enhanced to handle more formats
 function getRequestData() {
     $data = [];
     
@@ -134,6 +138,33 @@ function ensureOutstationFaresTableExists($conn) {
     }
 }
 
+// Fallback table creation for compatibility
+function ensureVehiclePricingTableExists($conn) {
+    try {
+        $sql = "
+        CREATE TABLE IF NOT EXISTS vehicle_pricing (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            vehicle_id VARCHAR(50) NOT NULL,
+            trip_type VARCHAR(50) NOT NULL,
+            base_fare DECIMAL(10,2) NOT NULL DEFAULT 0,
+            price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_vehicle_trip (vehicle_id, trip_type)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        
+        if ($conn->query($sql) !== TRUE) {
+            throw new Exception("Failed to create vehicle_pricing table: " . $conn->error);
+        }
+        error_log("Ensured vehicle_pricing table exists");
+        return true;
+    } catch (Exception $e) {
+        error_log("Error ensuring vehicle_pricing table: " . $e->getMessage());
+        throw $e;
+    }
+}
+
 try {
     // Get all request data
     $requestData = getRequestData();
@@ -170,6 +201,9 @@ try {
     
     // Ensure the outstation_fares table exists
     ensureOutstationFaresTableExists($conn);
+    
+    // Also ensure the vehicle_pricing table exists for compatibility
+    ensureVehiclePricingTableExists($conn);
     
     // Handle GET and POST/PUT methods differently
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
@@ -247,96 +281,122 @@ try {
         
         error_log("Extracted fare data: basePrice=$basePrice, pricePerKm=$pricePerKm, roundtripBasePrice=$roundtripBasePrice, roundtripPricePerKm=$roundtripPricePerKm, driverAllowance=$driverAllowance, nightHalt=$nightHalt");
         
-        // Check if record exists first - this is important to determine if we need to insert or update
-        $stmt = $conn->prepare("SELECT COUNT(*) as count FROM outstation_fares WHERE vehicle_id = ?");
-        if (!$stmt) {
-            throw new Exception("Prepare failed for count check: " . $conn->error);
-        }
-        
-        $stmt->bind_param("s", $vehicleId);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $row = $result->fetch_assoc();
-        $exists = $row['count'] > 0;
-        $stmt->close();
-        
-        if ($exists) {
-            // Update existing record
-            $sql = "UPDATE outstation_fares SET 
-                    base_price = ?, 
-                    price_per_km = ?, 
-                    roundtrip_base_price = ?, 
-                    roundtrip_price_per_km = ?, 
-                    driver_allowance = ?, 
-                    night_halt_charge = ?,
-                    updated_at = CURRENT_TIMESTAMP
-                    WHERE vehicle_id = ?";
-            
-            $stmt = $conn->prepare($sql);
+        // APPROACH 1: Update outstation_fares table (primary approach)
+        try {
+            // Check if record exists first - this is important to determine if we need to insert or update
+            $stmt = $conn->prepare("SELECT COUNT(*) as count FROM outstation_fares WHERE vehicle_id = ?");
             if (!$stmt) {
-                throw new Exception("Prepare failed for update: " . $conn->error);
+                throw new Exception("Prepare failed for count check: " . $conn->error);
             }
             
-            $stmt->bind_param("dddddds", 
-                $basePrice, 
-                $pricePerKm, 
-                $roundtripBasePrice, 
-                $roundtripPricePerKm, 
-                $driverAllowance, 
-                $nightHalt, 
-                $vehicleId
-            );
+            $stmt->bind_param("s", $vehicleId);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $row = $result->fetch_assoc();
+            $exists = $row['count'] > 0;
+            $stmt->close();
             
-            if (!$stmt->execute()) {
-                throw new Exception("Update failed: " . $stmt->error);
+            if ($exists) {
+                // Update existing record
+                $sql = "UPDATE outstation_fares SET 
+                        base_price = ?, 
+                        price_per_km = ?, 
+                        roundtrip_base_price = ?, 
+                        roundtrip_price_per_km = ?, 
+                        driver_allowance = ?, 
+                        night_halt_charge = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                        WHERE vehicle_id = ?";
+                
+                $stmt = $conn->prepare($sql);
+                if (!$stmt) {
+                    throw new Exception("Prepare failed for update: " . $conn->error);
+                }
+                
+                $stmt->bind_param("dddddds", 
+                    $basePrice, 
+                    $pricePerKm, 
+                    $roundtripBasePrice, 
+                    $roundtripPricePerKm, 
+                    $driverAllowance, 
+                    $nightHalt, 
+                    $vehicleId
+                );
+                
+                if (!$stmt->execute()) {
+                    throw new Exception("Update failed: " . $stmt->error);
+                }
+                
+                $message = "Outstation fares updated successfully";
+            } else {
+                // Insert new record
+                $sql = "INSERT INTO outstation_fares 
+                        (vehicle_id, base_price, price_per_km, roundtrip_base_price, roundtrip_price_per_km, 
+                        driver_allowance, night_halt_charge) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?)";
+                
+                $stmt = $conn->prepare($sql);
+                if (!$stmt) {
+                    throw new Exception("Prepare failed for insert: " . $conn->error);
+                }
+                
+                $stmt->bind_param("sdddddd", 
+                    $vehicleId, 
+                    $basePrice, 
+                    $pricePerKm, 
+                    $roundtripBasePrice, 
+                    $roundtripPricePerKm, 
+                    $driverAllowance, 
+                    $nightHalt
+                );
+                
+                if (!$stmt->execute()) {
+                    throw new Exception("Insert failed: " . $stmt->error);
+                }
+                
+                $message = "Outstation fares inserted successfully";
             }
             
-            $message = "Outstation fares updated successfully";
-        } else {
-            // Insert new record
-            $sql = "INSERT INTO outstation_fares 
-                    (vehicle_id, base_price, price_per_km, roundtrip_base_price, roundtrip_price_per_km, 
-                    driver_allowance, night_halt_charge) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?)";
+            $stmt->close();
+            error_log("APPROACH 1 SUCCESS: Updated outstation_fares table");
             
-            $stmt = $conn->prepare($sql);
-            if (!$stmt) {
-                throw new Exception("Prepare failed for insert: " . $conn->error);
+            // APPROACH 2: Also update vehicle_pricing table for compatibility
+            try {
+                // Update one-way record
+                $conn->query("DELETE FROM vehicle_pricing WHERE vehicle_id = '$vehicleId' AND trip_type = 'outstation-one-way'");
+                $conn->query("INSERT INTO vehicle_pricing (vehicle_id, trip_type, base_fare, price_per_km) 
+                        VALUES ('$vehicleId', 'outstation-one-way', $basePrice, $pricePerKm)");
+                
+                // Update round-trip record
+                $conn->query("DELETE FROM vehicle_pricing WHERE vehicle_id = '$vehicleId' AND trip_type = 'outstation-round-trip'");
+                $conn->query("INSERT INTO vehicle_pricing (vehicle_id, trip_type, base_fare, price_per_km) 
+                        VALUES ('$vehicleId', 'outstation-round-trip', $roundtripBasePrice, $roundtripPricePerKm)");
+                        
+                error_log("APPROACH 2 SUCCESS: Updated vehicle_pricing table for compatibility");
+            } catch (Exception $e) {
+                error_log("WARNING: Compatibility updates to vehicle_pricing failed: " . $e->getMessage());
+                // Continue anyway as we've already updated the main table
             }
             
-            $stmt->bind_param("sdddddd", 
-                $vehicleId, 
-                $basePrice, 
-                $pricePerKm, 
-                $roundtripBasePrice, 
-                $roundtripPricePerKm, 
-                $driverAllowance, 
-                $nightHalt
-            );
+            // Return success response
+            echo json_encode([
+                'status' => 'success',
+                'message' => $message,
+                'data' => [
+                    'vehicleId' => $vehicleId,
+                    'basePrice' => $basePrice,
+                    'pricePerKm' => $pricePerKm,
+                    'roundTripBasePrice' => $roundtripBasePrice,
+                    'roundTripPricePerKm' => $roundtripPricePerKm,
+                    'driverAllowance' => $driverAllowance,
+                    'nightHalt' => $nightHalt
+                ]
+            ]);
             
-            if (!$stmt->execute()) {
-                throw new Exception("Insert failed: " . $stmt->error);
-            }
-            
-            $message = "Outstation fares inserted successfully";
+        } catch (Exception $e) {
+            error_log("Error updating outstation_fares: " . $e->getMessage());
+            throw $e;
         }
-        
-        $stmt->close();
-        
-        // Return success response
-        echo json_encode([
-            'status' => 'success',
-            'message' => $message,
-            'data' => [
-                'vehicleId' => $vehicleId,
-                'basePrice' => $basePrice,
-                'pricePerKm' => $pricePerKm,
-                'roundTripBasePrice' => $roundtripBasePrice,
-                'roundTripPricePerKm' => $roundtripPricePerKm,
-                'driverAllowance' => $driverAllowance,
-                'nightHalt' => $nightHalt
-            ]
-        ]);
     }
 } catch (Exception $e) {
     error_log("Error in direct-outstation-fares.php: " . $e->getMessage());
