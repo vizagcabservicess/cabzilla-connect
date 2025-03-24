@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { CabType, OutstationFare, LocalFare, AirportFare } from '@/types/cab';
 import { toast } from 'sonner';
@@ -854,4 +855,52 @@ export const updateTripFares = async (
             // For multipart/form-data, let axios set the content type with boundary
             const formData = new FormData();
             for (const key in payload) {
-              formData.append
+              formData.append(key, String(payload[key]));
+            }
+            axiosConfig.data = formData;
+          }
+          
+          const response = await axios(axiosConfig);
+          
+          if (response.status === 200) {
+            console.log(`Successfully updated ${tripType} fares via ${endpoint} with ${contentType}`);
+            successful = true;
+            
+            // Clear any cached data for this trip type
+            localStorage.removeItem(`${tripType}Fares`);
+            sessionStorage.removeItem(`${tripType}Fares`);
+            
+            // Dispatch a custom event to notify other components
+            const updateEvent = new CustomEvent(`${tripType}-fares-updated`, {
+              detail: {
+                vehicleId: cleanedVehicleId,
+                tripType,
+                updatedAt: new Date().toISOString(),
+                prices: fareData
+              }
+            });
+            window.dispatchEvent(updateEvent);
+            
+            toast.success(`${tripType} fares updated successfully`);
+            return true;
+          }
+        } catch (error) {
+          console.error(`Error updating ${tripType} fares at ${endpoint} with ${contentType}:`, error);
+          lastError = error;
+        }
+      }
+    }
+    
+    // If all attempts fail
+    if (lastError) {
+      console.error(`All attempts to update ${tripType} fares failed. Last error:`, lastError);
+      toast.error(`Failed to update ${tripType} fares`);
+    }
+    
+    return false;
+  } catch (error) {
+    console.error(`Error in updateTripFares for ${tripType}:`, error);
+    toast.error(`Error updating ${tripType} fares: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    return false;
+  }
+};
