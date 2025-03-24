@@ -11,8 +11,7 @@ import {
   Terminal, 
   Server,
   Wifi,
-  DatabaseBackup,
-  ArrowDownToLine
+  DatabaseBackup
 } from "lucide-react";
 import { fareService } from '@/services/fareService';
 import { toast } from 'sonner';
@@ -23,8 +22,6 @@ interface FareUpdateErrorProps {
   title?: string;
   description?: string;
   showDirectLink?: boolean;
-  vehicleId?: string;
-  tripType?: 'local' | 'airport' | 'outstation';
 }
 
 export function FareUpdateError({
@@ -32,9 +29,7 @@ export function FareUpdateError({
   onRetry,
   title = "Fare Update Failed",
   description,
-  showDirectLink = true,
-  vehicleId,
-  tripType = 'outstation'
+  showDirectLink = true
 }: FareUpdateErrorProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [isFixing, setIsFixing] = useState(false);
@@ -63,7 +58,7 @@ export function FareUpdateError({
       // Add a small delay before attempting fix
       const timer = setTimeout(() => {
         initializeDatabase(); 
-      }, 800);
+      }, 500);
       
       return () => clearTimeout(timer);
     }
@@ -226,9 +221,6 @@ export function FareUpdateError({
             )}
             <li>Use the comprehensive fix button to solve common API connection issues</li>
             <li>Clear browser cache and try again</li>
-            {isNetworkError && (
-              <li>Check your internet connection and try again later</li>
-            )}
           </ul>
         </div>
         
@@ -238,14 +230,12 @@ export function FareUpdateError({
               <Terminal className="h-4 w-4 mt-1 text-blue-500 mr-2" />
               <div className="text-xs">
                 <p className="font-medium text-blue-800">Error Details:</p>
-                <pre className="mt-1 text-xs text-blue-700 bg-blue-100 p-1 rounded overflow-auto max-h-28">
+                <pre className="mt-1 text-xs text-blue-700 bg-blue-100 p-1 rounded overflow-auto max-h-20">
                   {JSON.stringify({
                     endpoint: error?.['config']?.url || 'Unknown',
                     status: error?.['response']?.status || 'Unknown',
                     message: errorMessage,
                     apiVersion: import.meta.env.VITE_API_VERSION || 'Unknown',
-                    tripType: tripType,
-                    vehicleId: vehicleId,
                     isTableError: isTableError,
                     isServerError: isServerError,
                     isNetworkError: isNetworkError

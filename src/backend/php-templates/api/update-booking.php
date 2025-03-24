@@ -21,11 +21,6 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' && $_SERVER['REQUEST_METHOD'] !== 'PUT
     exit;
 }
 
-// Log requests for debugging
-error_log("UPDATE BOOKING request: " . $_SERVER['REQUEST_METHOD'] . " to " . $_SERVER['REQUEST_URI']);
-error_log("Request headers: " . json_encode(getallheaders()));
-error_log("Raw input: " . file_get_contents('php://input'));
-
 // Get booking ID from URL or request body
 $bookingId = null;
 if (isset($_GET['id'])) {

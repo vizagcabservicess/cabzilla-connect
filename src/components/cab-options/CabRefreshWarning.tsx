@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { AlertCircle, RefreshCw, Globe, Server, Network, ExternalLink, FileCog, Hammer, Car } from 'lucide-react';
+import { AlertCircle, RefreshCw, Globe, Server, Network, ExternalLink, FileCog, Hammer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { fareService } from '@/services/fareService';
@@ -167,49 +167,6 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
     });
   };
   
-  const fixOutstationFares = () => {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
-    toast.info('Applying special fix for outstation fares...');
-    
-    // Try to initialize database tables first
-    fetch(`${baseUrl}/api/admin/init-database.php?_t=${Date.now()}`, {
-      method: 'GET',
-      headers: {
-        ...fareService.getBypassHeaders(),
-        'Accept': 'application/json'
-      }
-    })
-    .then(response => response.text())
-    .then(text => {
-      console.log('Database initialization response:', text);
-      toast.success('Database tables initialized');
-      
-      // Now try reaching the direct outstation fares endpoint
-      return fetch(`${baseUrl}/api/admin/direct-outstation-fares.php?test=1&_t=${Date.now()}`, {
-        method: 'GET',
-        headers: {
-          ...fareService.getBypassHeaders(),
-          'Accept': 'application/json'
-        }
-      });
-    })
-    .then(response => {
-      if (response.ok) {
-        return response.text();
-      } else {
-        throw new Error(`Status ${response.status}`);
-      }
-    })
-    .then(text => {
-      console.log('Outstation fares endpoint response:', text);
-      toast.success('Outstation fares endpoint is now accessible');
-    })
-    .catch(err => {
-      console.error('Outstation fares fix failed:', err);
-      toast.error(`Fix failed: ${err.message}`);
-    });
-  };
-  
   return (
     <Alert variant="destructive" className="bg-yellow-50 border-yellow-200 text-yellow-800 mb-4">
       <div className="flex flex-col w-full">
@@ -302,15 +259,6 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
                     >
                       <Hammer className="h-3.5 w-3.5 mr-1" />
                       Test Direct Connection
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="text-red-700"
-                      onClick={fixOutstationFares}
-                    >
-                      <Car className="h-3.5 w-3.5 mr-1" />
-                      Fix Outstation Fares
                     </Button>
                   </div>
                 </PopoverContent>

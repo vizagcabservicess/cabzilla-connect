@@ -1,474 +1,376 @@
 
 <?php
-// outstation-fares-update.php - DEDICATED DIRECT HANDLER FOR OUTSTATION FARES
-// SPECIAL ULTRA HIGH RELIABILITY VERSION - NO REDIRECTS
+// outstation-fares-update.php - Dedicated endpoint for updating outstation fares
 
-// Include configuration file
-require_once __DIR__ . '/../../config.php';
-
-// Essential debugging - write access log
-$timestamp = date('Y-m-d H:i:s');
-$debugLog = "$timestamp - OUTSTATION FARES UPDATE ACCESSED - Method: {$_SERVER['REQUEST_METHOD']} - URI: {$_SERVER['REQUEST_URI']}\n";
-file_put_contents(__DIR__ . '/../../debug.log', $debugLog, FILE_APPEND);
-
-// Set comprehensive CORS headers - TOP PRIORITY
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, X-Custom-Timestamp, X-API-Version, X-Client-Version, X-Authorization-Override, X-Debug-Mode, X-Cache-Control, X-Request-ID, X-Request-Source');
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh');
 
-// Handle preflight OPTIONS request immediately
+// Include database configuration
+require_once __DIR__ . '/../config.php';
+
+// Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
-    echo json_encode(['status' => 'success', 'message' => 'CORS preflight successful']);
     exit;
 }
 
-// DEBUG LOG - Log all information about the request
-$requestInfo = [
-    'method' => $_SERVER['REQUEST_METHOD'],
-    'uri' => $_SERVER['REQUEST_URI'],
-    'query' => $_SERVER['QUERY_STRING'] ?? '',
-    'contentType' => $_SERVER['CONTENT_TYPE'] ?? 'not set',
-    'rawInput' => file_get_contents('php://input'),
-    'post' => $_POST,
-    'get' => $_GET,
-    'timestamp' => date('Y-m-d H:i:s')
-];
-file_put_contents(__DIR__ . '/../../request_debug.log', print_r($requestInfo, true), FILE_APPEND);
+// Log incoming request
+$timestamp = date('Y-m-d H:i:s');
+$requestMethod = $_SERVER['REQUEST_METHOD'];
+$requestUri = $_SERVER['REQUEST_URI'];
+$logMessage = "[$timestamp] Outstation fares update request: Method=$requestMethod, URI=$requestUri" . PHP_EOL;
+error_log($logMessage, 3, __DIR__ . '/../error.log');
 
-// Enhanced data extraction from all possible sources
-function getRequestData() {
-    $data = [];
+// DEBUG: Log all request data
+error_log("REQUEST URI: " . $_SERVER['REQUEST_URI']);
+error_log("REQUEST METHOD: " . $_SERVER['REQUEST_METHOD']);
+error_log("CONTENT TYPE: " . $_SERVER['CONTENT_TYPE'] ?? 'not set');
+error_log("ALL HEADERS: " . json_encode(getallheaders()));
+
+// Get JSON data from request
+$rawInput = file_get_contents('php://input');
+error_log("Raw input: " . $rawInput);
+
+// Ensure we have valid JSON input
+$data = json_decode($rawInput, true);
+if (json_last_error() !== JSON_ERROR_NONE) {
+    error_log("JSON parse error: " . json_last_error_msg());
     
-    // For JSON payload
-    $rawInput = file_get_contents('php://input');
-    if (!empty($rawInput)) {
-        // Try parsing as JSON first
-        $jsonData = json_decode($rawInput, true);
-        if ($jsonData !== null) {
-            $data = array_merge($data, $jsonData);
+    // Try to decode as URL encoded form data if JSON fails
+    parse_str($rawInput, $formData);
+    if (!empty($formData)) {
+        $data = $formData;
+        error_log("Parsed as form data: " . print_r($data, true));
+    }
+}
+
+// If still no data, try $_POST directly
+if (empty($data) && !empty($_POST)) {
+    $data = $_POST;
+    error_log("Using _POST data: " . print_r($data, true));
+}
+
+// Log received data for debugging
+error_log('Received outstation fares update data: ' . print_r($data, true));
+
+// Check if data is valid
+if (!$data || (!isset($data['vehicleId']) && !isset($data['vehicle_id']) && !isset($data['vehicleType']))) {
+    http_response_code(400);
+    echo json_encode([
+        'status' => 'error',
+        'message' => 'Missing vehicle ID',
+        'receivedData' => $data
+    ]);
+    exit;
+}
+
+// Extract vehicle ID and normalize
+$vehicleId = $data['vehicleId'] ?? $data['vehicle_id'] ?? $data['vehicleType'] ?? '';
+
+// Normalize vehicle ID (remove any 'item-' prefix)
+if (strpos($vehicleId, 'item-') === 0) {
+    $vehicleId = substr($vehicleId, 5);
+}
+
+// Extract one-way pricing
+$oneWayBasePrice = floatval($data['oneWayBasePrice'] ?? $data['baseFare'] ?? 0);
+$oneWayPricePerKm = floatval($data['oneWayPricePerKm'] ?? $data['pricePerKm'] ?? 0);
+
+// Extract round-trip pricing
+$roundTripBasePrice = floatval($data['roundTripBasePrice'] ?? $data['roundTripBaseFare'] ?? 0);
+$roundTripPricePerKm = floatval($data['roundTripPricePerKm'] ?? $data['roundTripPricePerKm'] ?? 0);
+
+try {
+    // Connect to database - try multiple connection approaches
+    $pdo = null;
+    $connectionError = null;
+    
+    try {
+        // Try using constants first
+        $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_DATABASE, DB_USERNAME, DB_PASSWORD);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    } catch (PDOException $e) {
+        $connectionError = $e->getMessage();
+        error_log("First DB connection attempt failed: " . $connectionError);
+        
+        // Try with variables from config.php
+        try {
+            // Try accessing global variables from config.php
+            global $db_host, $db_name, $db_user, $db_pass;
             
-            // Log successful JSON parsing
-            file_put_contents(__DIR__ . '/../../debug.log', "Successfully parsed JSON input: " . print_r($jsonData, true) . "\n", FILE_APPEND);
-        } else {
-            // If JSON fails, try parsing as form data
-            parse_str($rawInput, $formData);
-            if (!empty($formData)) {
-                $data = array_merge($data, $formData);
-                
-                // Log successful form parsing
-                file_put_contents(__DIR__ . '/../../debug.log', "Parsed as form data: " . print_r($formData, true) . "\n", FILE_APPEND);
+            if (isset($db_host) && isset($db_name) && isset($db_user) && isset($db_pass)) {
+                $pdo = new PDO("mysql:host=$db_host;dbname=$db_name", $db_user, $db_pass);
+                $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+                $connectionError = null;
+                error_log("Connected using global variables");
             } else {
-                // Log parsing failure
-                file_put_contents(__DIR__ . '/../../debug.log', "Failed to parse input as JSON or form data: $rawInput\n", FILE_APPEND);
+                error_log("Global DB variables not set");
+                
+                // Try alternative file location
+                require_once __DIR__ . '/../../config.php';
+                
+                // Try again with global variables
+                if (isset($db_host) && isset($db_name) && isset($db_user) && isset($db_pass)) {
+                    $pdo = new PDO("mysql:host=$db_host;dbname=$db_name", $db_user, $db_pass);
+                    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+                    $connectionError = null;
+                    error_log("Connected using global variables from alternative location");
+                } else {
+                    // Last resort - hardcoded credentials (for testing only)
+                    $pdo = new PDO("mysql:host=localhost;dbname=u644605165_new_bookingdb", "u644605165_new_bookingusr", "Vizag@1213");
+                    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+                    $connectionError = null;
+                    error_log("Connected using hardcoded credentials");
+                }
             }
+        } catch (PDOException $e2) {
+            $connectionError .= "; Alternative connection also failed: " . $e2->getMessage();
+            error_log("All DB connection attempts failed: " . $connectionError);
         }
     }
     
-    // For POST form data
-    if (!empty($_POST)) {
-        $data = array_merge($data, $_POST);
-        
-        // Log POST data
-        file_put_contents(__DIR__ . '/../../debug.log', "Found POST data: " . print_r($_POST, true) . "\n", FILE_APPEND);
+    if (!$pdo) {
+        throw new Exception("Database connection failed: " . $connectionError);
     }
     
-    // For GET parameters
-    if (!empty($_GET)) {
-        $data = array_merge($data, $_GET);
-        
-        // Log GET data
-        file_put_contents(__DIR__ . '/../../debug.log', "Found GET data: " . print_r($_GET, true) . "\n", FILE_APPEND);
+    error_log("Database connection successful");
+    
+    // Check if vehicle exists in vehicles table
+    $checkVehicleStmt = $pdo->prepare("SELECT id FROM vehicles WHERE id = ? OR vehicle_id = ?");
+    $checkVehicleStmt->execute([$vehicleId, $vehicleId]);
+    
+    if ($checkVehicleStmt->rowCount() === 0) {
+        // Vehicle doesn't exist, create it
+        $vehicleName = ucfirst(str_replace('_', ' ', $vehicleId));
+        $insertVehicleStmt = $pdo->prepare("
+            INSERT INTO vehicles 
+            (id, vehicle_id, name, is_active, created_at, updated_at) 
+            VALUES (?, ?, ?, 1, NOW(), NOW())
+            ON DUPLICATE KEY UPDATE updated_at = NOW()
+        ");
+        $insertVehicleStmt->execute([$vehicleId, $vehicleId, $vehicleName]);
+        error_log("Created new vehicle: $vehicleId");
     }
     
-    // Final combined data
-    file_put_contents(__DIR__ . '/../../debug.log', "Combined request data: " . print_r($data, true) . "\n", FILE_APPEND);
+    $success = false;
     
-    return $data;
-}
-
-// Establish database connection with multiple fallback options
-function getDbConnection() {
+    // APPROACH 1: Update one-way pricing
     try {
-        // First try to use constants from config.php
-        if (defined('DB_HOST') && defined('DB_DATABASE') && defined('DB_USERNAME') && defined('DB_PASSWORD')) {
-            $conn = new mysqli(DB_HOST, DB_USERNAME, DB_PASSWORD, DB_DATABASE);
-            if (!$conn->connect_error) {
-                file_put_contents(__DIR__ . '/../../debug.log', "Connected to database using config constants\n", FILE_APPEND);
-                return $conn;
-            }
-            file_put_contents(__DIR__ . '/../../debug.log', "Failed to connect using config constants: {$conn->connect_error}\n", FILE_APPEND);
-        }
-
-        // Try global variables from config.php
-        global $db_host, $db_name, $db_user, $db_pass;
-        if (isset($db_host) && isset($db_name) && isset($db_user) && isset($db_pass)) {
-            $conn = new mysqli($db_host, $db_user, $db_pass, $db_name);
-            if (!$conn->connect_error) {
-                file_put_contents(__DIR__ . '/../../debug.log', "Connected to database using global variables\n", FILE_APPEND);
-                return $conn;
-            }
-            file_put_contents(__DIR__ . '/../../debug.log', "Failed to connect using global variables: {$conn->connect_error}\n", FILE_APPEND);
-        }
-
-        // Fallback to hardcoded credentials as absolute last resort
-        $hardcodedConn = new mysqli("localhost", "u644605165_new_bookingusr", "Vizag@1213", "u644605165_new_bookingdb");
-        if (!$hardcodedConn->connect_error) {
-            file_put_contents(__DIR__ . '/../../debug.log', "Connected to database using hardcoded values\n", FILE_APPEND);
-            return $hardcodedConn;
+        // Check if one-way record exists
+        $checkOneWayStmt = $pdo->prepare("
+            SELECT id FROM vehicle_pricing 
+            WHERE vehicle_id = ? AND trip_type = 'outstation-one-way'
+        ");
+        $checkOneWayStmt->execute([$vehicleId]);
+        
+        if ($checkOneWayStmt->rowCount() > 0) {
+            // Update existing record
+            $updateOneWayStmt = $pdo->prepare("
+                UPDATE vehicle_pricing 
+                SET base_fare = ?, price_per_km = ?, updated_at = NOW()
+                WHERE vehicle_id = ? AND trip_type = 'outstation-one-way'
+            ");
+            $updateOneWayStmt->execute([$oneWayBasePrice, $oneWayPricePerKm, $vehicleId]);
+            error_log("Updated one-way record");
+        } else {
+            // Insert new record
+            $insertOneWayStmt = $pdo->prepare("
+                INSERT INTO vehicle_pricing 
+                (vehicle_id, trip_type, base_fare, price_per_km, created_at, updated_at)
+                VALUES (?, 'outstation-one-way', ?, ?, NOW(), NOW())
+            ");
+            $insertOneWayStmt->execute([$vehicleId, $oneWayBasePrice, $oneWayPricePerKm]);
+            error_log("Inserted new one-way record");
         }
         
-        // If all connection attempts fail
-        file_put_contents(__DIR__ . '/../../debug.log', "All database connection attempts failed\n", FILE_APPEND);
-        throw new Exception("Could not connect to database after all attempts");
+        // Check if round-trip record exists
+        $checkRoundTripStmt = $pdo->prepare("
+            SELECT id FROM vehicle_pricing 
+            WHERE vehicle_id = ? AND trip_type = 'outstation-round-trip'
+        ");
+        $checkRoundTripStmt->execute([$vehicleId]);
+        
+        if ($checkRoundTripStmt->rowCount() > 0) {
+            // Update existing record
+            $updateRoundTripStmt = $pdo->prepare("
+                UPDATE vehicle_pricing 
+                SET base_fare = ?, price_per_km = ?, updated_at = NOW()
+                WHERE vehicle_id = ? AND trip_type = 'outstation-round-trip'
+            ");
+            $updateRoundTripStmt->execute([$roundTripBasePrice, $roundTripPricePerKm, $vehicleId]);
+            error_log("Updated round-trip record");
+        } else {
+            // Insert new record
+            $insertRoundTripStmt = $pdo->prepare("
+                INSERT INTO vehicle_pricing 
+                (vehicle_id, trip_type, base_fare, price_per_km, created_at, updated_at)
+                VALUES (?, 'outstation-round-trip', ?, ?, NOW(), NOW())
+            ");
+            $insertRoundTripStmt->execute([$vehicleId, $roundTripBasePrice, $roundTripPricePerKm]);
+            error_log("Inserted new round-trip record");
+        }
+        
+        error_log("APPROACH 1 succeeded: Updated vehicle_pricing for outstation");
+        $success = true;
     } catch (Exception $e) {
-        file_put_contents(__DIR__ . '/../../error.log', "Database connection error: " . $e->getMessage() . "\n", FILE_APPEND);
-        throw $e;
+        error_log("APPROACH 1 failed: " . $e->getMessage());
     }
-}
-
-// Create or ensure outstation_fares table exists with BOTH base_fare AND base_price column names
-function ensureOutstationFaresTableExists($conn) {
-    try {
-        // First check if the table exists and has the required columns
-        $tableExists = false;
-        $result = $conn->query("SHOW TABLES LIKE 'outstation_fares'");
-        if ($result && $result->num_rows > 0) {
-            $tableExists = true;
-            file_put_contents(__DIR__ . '/../../debug.log', "outstation_fares table exists\n", FILE_APPEND);
-            
-            // Check for column structure to see if we need to add either base_fare or base_price
-            $columnResult = $conn->query("SHOW COLUMNS FROM outstation_fares");
-            $columns = [];
-            while ($row = $columnResult->fetch_assoc()) {
-                $columns[] = $row['Field'];
+    
+    // APPROACH 2: Try outstation_fares table
+    if (!$success) {
+        try {
+            // First check if the table exists
+            $checkTableStmt = $pdo->query("SHOW TABLES LIKE 'outstation_fares'");
+            if ($checkTableStmt->rowCount() === 0) {
+                // Table doesn't exist, create it
+                $createTableSql = "
+                    CREATE TABLE IF NOT EXISTS outstation_fares (
+                        id INT(11) NOT NULL AUTO_INCREMENT,
+                        vehicle_id VARCHAR(50) NOT NULL,
+                        one_way_base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                        one_way_price_per_km DECIMAL(10,2) NOT NULL DEFAULT 0,
+                        round_trip_base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                        round_trip_price_per_km DECIMAL(10,2) NOT NULL DEFAULT 0,
+                        created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        PRIMARY KEY (id),
+                        UNIQUE KEY vehicle_id (vehicle_id)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+                ";
+                $pdo->exec($createTableSql);
+                error_log("Created outstation_fares table");
             }
             
-            // If base_fare doesn't exist but base_price does, add base_fare
-            if (!in_array('base_fare', $columns) && in_array('base_price', $columns)) {
-                $conn->query("ALTER TABLE outstation_fares ADD COLUMN base_fare DECIMAL(10,2) 
-                             GENERATED ALWAYS AS (base_price) STORED");
-                file_put_contents(__DIR__ . '/../../debug.log', "Added base_fare column as alias of base_price\n", FILE_APPEND);
-            }
-            
-            // If base_price doesn't exist but base_fare does, add base_price
-            if (!in_array('base_price', $columns) && in_array('base_fare', $columns)) {
-                $conn->query("ALTER TABLE outstation_fares ADD COLUMN base_price DECIMAL(10,2) 
-                             GENERATED ALWAYS AS (base_fare) STORED");
-                file_put_contents(__DIR__ . '/../../debug.log', "Added base_price column as alias of base_fare\n", FILE_APPEND);
-            }
-            
-            // Same for roundtrip columns
-            if (!in_array('roundtrip_base_fare', $columns) && in_array('roundtrip_base_price', $columns)) {
-                $conn->query("ALTER TABLE outstation_fares ADD COLUMN roundtrip_base_fare DECIMAL(10,2) 
-                             GENERATED ALWAYS AS (roundtrip_base_price) STORED");
-            }
-            
-            if (!in_array('roundtrip_base_price', $columns) && in_array('roundtrip_base_fare', $columns)) {
-                $conn->query("ALTER TABLE outstation_fares ADD COLUMN roundtrip_base_price DECIMAL(10,2) 
-                             GENERATED ALWAYS AS (roundtrip_base_fare) STORED");
-            }
-        }
-        
-        // If table doesn't exist, create it with both column naming conventions
-        if (!$tableExists) {
-            $sql = "
-            CREATE TABLE outstation_fares (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                vehicle_id VARCHAR(50) NOT NULL,
-                base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                base_fare DECIMAL(10,2) NOT NULL DEFAULT 0,
-                price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-                roundtrip_base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                roundtrip_base_fare DECIMAL(10,2) NOT NULL DEFAULT 0,
-                roundtrip_price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-                driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 0,
-                night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                UNIQUE KEY unique_vehicle_id (vehicle_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            $alternateSql = "
+                INSERT INTO outstation_fares 
+                (vehicle_id, one_way_base_price, one_way_price_per_km, 
+                round_trip_base_price, round_trip_price_per_km, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, NOW(), NOW())
+                ON DUPLICATE KEY UPDATE 
+                one_way_base_price = VALUES(one_way_base_price),
+                one_way_price_per_km = VALUES(one_way_price_per_km),
+                round_trip_base_price = VALUES(round_trip_base_price),
+                round_trip_price_per_km = VALUES(round_trip_price_per_km),
+                updated_at = NOW()
             ";
             
-            if ($conn->query($sql)) {
-                file_put_contents(__DIR__ . '/../../debug.log', "Created outstation_fares table successfully\n", FILE_APPEND);
-                return true;
-            } else {
-                file_put_contents(__DIR__ . '/../../error.log', "Failed to create outstation_fares table: " . $conn->error . "\n", FILE_APPEND);
-                throw new Exception("Failed to create outstation_fares table: " . $conn->error);
-            }
-        }
-        
-        return true;
-    } catch (Exception $e) {
-        file_put_contents(__DIR__ . '/../../error.log', "Error ensuring outstation_fares table: " . $e->getMessage() . "\n", FILE_APPEND);
-        throw $e;
-    }
-}
-
-// Main execution block
-try {
-    // Get request data from all sources
-    $requestData = getRequestData();
-    file_put_contents(__DIR__ . '/../../debug.log', "Processing outstation fares update with data: " . print_r($requestData, true) . "\n", FILE_APPEND);
-    
-    // Extract vehicle ID - try multiple possible keys
-    $vehicleId = null;
-    $possibleIdKeys = ['vehicleId', 'vehicle_id', 'id', 'cab_id', 'cabType', 'vehicle'];
-    
-    foreach ($possibleIdKeys as $key) {
-        if (isset($requestData[$key]) && !empty($requestData[$key])) {
-            $vehicleId = $requestData[$key];
-            break;
-        }
-    }
-    
-    if (!$vehicleId) {
-        throw new Exception("Vehicle ID is required");
-    }
-    
-    // Clean vehicle ID if it has a prefix
-    if (strpos($vehicleId, 'item-') === 0) {
-        $vehicleId = substr($vehicleId, 5);
-    }
-    
-    file_put_contents(__DIR__ . '/../../debug.log', "Using vehicle ID: $vehicleId\n", FILE_APPEND);
-    
-    // Connect to database
-    $conn = getDbConnection();
-    
-    if (!$conn) {
-        throw new Exception("Database connection failed");
-    }
-    
-    // Ensure the outstation_fares table exists with all required columns
-    ensureOutstationFaresTableExists($conn);
-    
-    // Handle GET and POST/PUT methods differently
-    if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-        // GET request - retrieve fares for a vehicle
-        $stmt = $conn->prepare("SELECT * FROM outstation_fares WHERE vehicle_id = ?");
-        if (!$stmt) {
-            throw new Exception("Prepare statement error: " . $conn->error);
-        }
-        
-        $stmt->bind_param("s", $vehicleId);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        
-        if ($result->num_rows > 0) {
-            $fare = $result->fetch_assoc();
-            
-            // Choose base_price or base_fare depending on which is non-zero
-            $basePrice = (float)($fare['base_price'] > 0 ? $fare['base_price'] : $fare['base_fare']);
-            $roundTripBasePrice = (float)($fare['roundtrip_base_price'] > 0 ? $fare['roundtrip_base_price'] : $fare['roundtrip_base_fare']);
-            
-            echo json_encode([
-                'status' => 'success',
-                'data' => [
-                    'vehicleId' => $vehicleId,
-                    'basePrice' => $basePrice,
-                    'pricePerKm' => (float)$fare['price_per_km'],
-                    'roundTripBasePrice' => $roundTripBasePrice,
-                    'roundTripPricePerKm' => (float)$fare['roundtrip_price_per_km'],
-                    'driverAllowance' => (float)$fare['driver_allowance'],
-                    'nightHalt' => (float)$fare['night_halt_charge']
-                ]
-            ]);
-            file_put_contents(__DIR__ . '/../../debug.log', "Successfully retrieved outstation fares for vehicle: $vehicleId\n", FILE_APPEND);
-        } else {
-            // No fare found - return default values
-            echo json_encode([
-                'status' => 'success',
-                'message' => 'No fare data found for this vehicle, using defaults',
-                'data' => [
-                    'vehicleId' => $vehicleId,
-                    'basePrice' => 0,
-                    'pricePerKm' => 0,
-                    'roundTripBasePrice' => 0,
-                    'roundTripPricePerKm' => 0,
-                    'driverAllowance' => 0,
-                    'nightHalt' => 0
-                ]
-            ]);
-            file_put_contents(__DIR__ . '/../../debug.log', "No outstation fares found for vehicle: $vehicleId\n", FILE_APPEND);
-        }
-    } else {
-        // POST/PUT - update or insert fare data
-        
-        // Extract fare data with multiple possible key names
-        $basePrice = 0;
-        if (isset($requestData['basePrice'])) $basePrice = floatval($requestData['basePrice']);
-        else if (isset($requestData['oneWayBasePrice'])) $basePrice = floatval($requestData['oneWayBasePrice']);
-        else if (isset($requestData['baseFare'])) $basePrice = floatval($requestData['baseFare']);
-        else if (isset($requestData['base_fare'])) $basePrice = floatval($requestData['base_fare']);
-        else if (isset($requestData['base_price'])) $basePrice = floatval($requestData['base_price']);
-        
-        $pricePerKm = 0;
-        if (isset($requestData['pricePerKm'])) $pricePerKm = floatval($requestData['pricePerKm']);
-        else if (isset($requestData['oneWayPricePerKm'])) $pricePerKm = floatval($requestData['oneWayPricePerKm']);
-        else if (isset($requestData['price_per_km'])) $pricePerKm = floatval($requestData['price_per_km']);
-        
-        $roundtripBasePrice = 0;
-        if (isset($requestData['roundTripBasePrice'])) $roundtripBasePrice = floatval($requestData['roundTripBasePrice']);
-        else if (isset($requestData['roundtripBasePrice'])) $roundtripBasePrice = floatval($requestData['roundtripBasePrice']);
-        else if (isset($requestData['roundtrip_base_fare'])) $roundtripBasePrice = floatval($requestData['roundtrip_base_fare']);
-        else if (isset($requestData['roundtrip_base_price'])) $roundtripBasePrice = floatval($requestData['roundtrip_base_price']);
-        else if (isset($requestData['round_trip_base_price'])) $roundtripBasePrice = floatval($requestData['round_trip_base_price']);
-        
-        $roundtripPricePerKm = 0;
-        if (isset($requestData['roundTripPricePerKm'])) $roundtripPricePerKm = floatval($requestData['roundTripPricePerKm']);
-        else if (isset($requestData['roundtripPricePerKm'])) $roundtripPricePerKm = floatval($requestData['roundtripPricePerKm']);
-        else if (isset($requestData['roundtrip_price_per_km'])) $roundtripPricePerKm = floatval($requestData['roundtrip_price_per_km']);
-        else if (isset($requestData['round_trip_price_per_km'])) $roundtripPricePerKm = floatval($requestData['round_trip_price_per_km']);
-        
-        $driverAllowance = 0;
-        if (isset($requestData['driverAllowance'])) $driverAllowance = floatval($requestData['driverAllowance']);
-        else if (isset($requestData['driver_allowance'])) $driverAllowance = floatval($requestData['driver_allowance']);
-        
-        $nightHalt = 0;
-        if (isset($requestData['nightHalt'])) $nightHalt = floatval($requestData['nightHalt']);
-        else if (isset($requestData['nightHaltCharge'])) $nightHalt = floatval($requestData['nightHaltCharge']);
-        else if (isset($requestData['night_halt_charge'])) $nightHalt = floatval($requestData['night_halt_charge']);
-        
-        file_put_contents(__DIR__ . '/../../debug.log', "Extracted fare data for $vehicleId: 
-            basePrice=$basePrice, 
-            pricePerKm=$pricePerKm, 
-            roundtripBasePrice=$roundtripBasePrice, 
-            roundtripPricePerKm=$roundtripPricePerKm, 
-            driverAllowance=$driverAllowance, 
-            nightHalt=$nightHalt\n", FILE_APPEND);
-        
-        // Check if record exists
-        $stmt = $conn->prepare("SELECT COUNT(*) as count FROM outstation_fares WHERE vehicle_id = ?");
-        if (!$stmt) {
-            throw new Exception("Prepare failed for count check: " . $conn->error);
-        }
-        
-        $stmt->bind_param("s", $vehicleId);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $row = $result->fetch_assoc();
-        $exists = $row['count'] > 0;
-        $stmt->close();
-        
-        // Use prepared statement with the correct columns
-        if ($exists) {
-            // Update existing record - handle both column naming conventions
-            $sql = "UPDATE outstation_fares SET 
-                    base_price = ?, 
-                    base_fare = ?, 
-                    price_per_km = ?, 
-                    roundtrip_base_price = ?,
-                    roundtrip_base_fare = ?, 
-                    roundtrip_price_per_km = ?, 
-                    driver_allowance = ?, 
-                    night_halt_charge = ?,
-                    updated_at = CURRENT_TIMESTAMP
-                    WHERE vehicle_id = ?";
-            
-            $stmt = $conn->prepare($sql);
-            if (!$stmt) {
-                throw new Exception("Prepare failed for update: " . $conn->error);
-            }
-            
-            $stmt->bind_param("dddddddds", 
-                $basePrice,  // base_price
-                $basePrice,  // base_fare - same value
-                $pricePerKm, 
-                $roundtripBasePrice,  // roundtrip_base_price
-                $roundtripBasePrice,  // roundtrip_base_fare - same value
-                $roundtripPricePerKm, 
-                $driverAllowance, 
-                $nightHalt, 
-                $vehicleId
-            );
-            
-            if (!$stmt->execute()) {
-                throw new Exception("Update failed: " . $stmt->error);
-            }
-            
-            $message = "Outstation fares updated successfully";
-            file_put_contents(__DIR__ . '/../../debug.log', "Updated outstation fares for vehicle: $vehicleId\n", FILE_APPEND);
-        } else {
-            // Insert new record with both column naming conventions
-            $sql = "INSERT INTO outstation_fares 
-                    (vehicle_id, base_price, base_fare, price_per_km, 
-                     roundtrip_base_price, roundtrip_base_fare, roundtrip_price_per_km, 
-                     driver_allowance, night_halt_charge) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            
-            $stmt = $conn->prepare($sql);
-            if (!$stmt) {
-                throw new Exception("Prepare failed for insert: " . $conn->error);
-            }
-            
-            $stmt->bind_param("sdddddddd", 
+            $alternateStmt = $pdo->prepare($alternateSql);
+            $alternateStmt->execute([
                 $vehicleId,
-                $basePrice,  // base_price
-                $basePrice,  // base_fare - same value
-                $pricePerKm,
-                $roundtripBasePrice,  // roundtrip_base_price
-                $roundtripBasePrice,  // roundtrip_base_fare - same value
-                $roundtripPricePerKm,
-                $driverAllowance,
-                $nightHalt
-            );
+                $oneWayBasePrice,
+                $oneWayPricePerKm,
+                $roundTripBasePrice,
+                $roundTripPricePerKm
+            ]);
             
-            if (!$stmt->execute()) {
-                throw new Exception("Insert failed: " . $stmt->error);
+            error_log("APPROACH 2 succeeded: Updated outstation_fares");
+            $success = true;
+        } catch (Exception $e) {
+            error_log("APPROACH 2 failed: " . $e->getMessage());
+        }
+    }
+    
+    // APPROACH 3: Try fare_prices table
+    if (!$success) {
+        try {
+            // Check if the table exists
+            $checkTableStmt = $pdo->query("SHOW TABLES LIKE 'fare_prices'");
+            if ($checkTableStmt->rowCount() === 0) {
+                // Table doesn't exist, create it
+                $createTableSql = "
+                    CREATE TABLE IF NOT EXISTS fare_prices (
+                        id INT(11) NOT NULL AUTO_INCREMENT,
+                        vehicle_id VARCHAR(50) NOT NULL,
+                        trip_type VARCHAR(50) NOT NULL,
+                        package_type VARCHAR(50) NOT NULL,
+                        base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                        price_per_km DECIMAL(10,2) NOT NULL DEFAULT 0,
+                        created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        PRIMARY KEY (id),
+                        UNIQUE KEY trip_vehicle_package (vehicle_id, trip_type, package_type)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+                ";
+                $pdo->exec($createTableSql);
+                error_log("Created fare_prices table");
             }
             
-            $message = "Outstation fares inserted successfully";
-            file_put_contents(__DIR__ . '/../../debug.log', "Inserted new outstation fares for vehicle: $vehicleId\n", FILE_APPEND);
-        }
-        
-        $stmt->close();
-        
-        // ALSO Update vehicle_pricing table for compatibility with other parts of the system
-        try {
-            // Delete any existing records for this vehicle and trip type
-            $conn->query("DELETE FROM vehicle_pricing WHERE vehicle_id = '$vehicleId' AND trip_type = 'outstation-one-way'");
-            $conn->query("DELETE FROM vehicle_pricing WHERE vehicle_id = '$vehicleId' AND trip_type = 'outstation-round-trip'");
+            // Use a transaction to ensure both inserts succeed or fail together
+            $pdo->beginTransaction();
             
-            // Insert new records
-            $conn->query("INSERT INTO vehicle_pricing (vehicle_id, trip_type, base_fare, price_per_km) 
-                        VALUES ('$vehicleId', 'outstation-one-way', $basePrice, $pricePerKm)");
-            $conn->query("INSERT INTO vehicle_pricing (vehicle_id, trip_type, base_fare, price_per_km) 
-                        VALUES ('$vehicleId', 'outstation-round-trip', $roundtripBasePrice, $roundtripPricePerKm)");
+            // One Way
+            $oneWaySql = "
+                INSERT INTO fare_prices 
+                (vehicle_id, trip_type, package_type, base_price, price_per_km, created_at, updated_at)
+                VALUES (?, 'outstation', 'one_way', ?, ?, NOW(), NOW())
+                ON DUPLICATE KEY UPDATE 
+                base_price = VALUES(base_price),
+                price_per_km = VALUES(price_per_km),
+                updated_at = NOW()
+            ";
+            $oneWayStmt = $pdo->prepare($oneWaySql);
+            $oneWayStmt->execute([$vehicleId, $oneWayBasePrice, $oneWayPricePerKm]);
             
-            file_put_contents(__DIR__ . '/../../debug.log', "Also updated vehicle_pricing table for compatibility\n", FILE_APPEND);
+            // Round Trip
+            $roundTripSql = "
+                INSERT INTO fare_prices 
+                (vehicle_id, trip_type, package_type, base_price, price_per_km, created_at, updated_at)
+                VALUES (?, 'outstation', 'round_trip', ?, ?, NOW(), NOW())
+                ON DUPLICATE KEY UPDATE 
+                base_price = VALUES(base_price),
+                price_per_km = VALUES(price_per_km),
+                updated_at = NOW()
+            ";
+            $roundTripStmt = $pdo->prepare($roundTripSql);
+            $roundTripStmt->execute([$vehicleId, $roundTripBasePrice, $roundTripPricePerKm]);
+            
+            $pdo->commit();
+            
+            error_log("APPROACH 3 succeeded: Updated fare_prices for outstation");
+            $success = true;
         } catch (Exception $e) {
-            // Log but don't fail if the compatibility update fails
-            file_put_contents(__DIR__ . '/../../debug.log', "Warning: vehicle_pricing update failed: " . $e->getMessage() . "\n", FILE_APPEND);
+            $pdo->rollBack();
+            error_log("APPROACH 3 failed: " . $e->getMessage());
         }
-        
-        // Return success response
-        echo json_encode([
-            'status' => 'success',
-            'message' => $message,
-            'data' => [
-                'vehicleId' => $vehicleId,
-                'basePrice' => $basePrice,
-                'pricePerKm' => $pricePerKm,
-                'roundTripBasePrice' => $roundtripBasePrice,
-                'roundTripPricePerKm' => $roundtripPricePerKm,
-                'driverAllowance' => $driverAllowance,
-                'nightHalt' => $nightHalt
-            ]
-        ]);
     }
+    
+    if (!$success) {
+        throw new Exception("All database approaches failed");
+    }
+    
+    // Return success response
+    http_response_code(200);
+    echo json_encode([
+        'status' => 'success',
+        'message' => 'Outstation fares updated successfully',
+        'data' => [
+            'vehicleId' => $vehicleId,
+            'oneWay' => [
+                'basePrice' => $oneWayBasePrice,
+                'pricePerKm' => $oneWayPricePerKm
+            ],
+            'roundTrip' => [
+                'basePrice' => $roundTripBasePrice,
+                'pricePerKm' => $roundTripPricePerKm
+            ]
+        ]
+    ]);
+    
 } catch (Exception $e) {
-    file_put_contents(__DIR__ . '/../../error.log', "Error in outstation-fares-update.php: " . $e->getMessage() . " at line " . $e->getLine() . "\n", FILE_APPEND);
+    // Log the full error
+    error_log('Database error: ' . $e->getMessage());
+    
+    // Return error response
     http_response_code(500);
     echo json_encode([
         'status' => 'error',
-        'message' => $e->getMessage(),
-        'file' => basename(__FILE__),
-        'line' => $e->getLine()
+        'message' => 'Database error: ' . $e->getMessage(),
+        'receivedData' => $data
     ]);
 }
+?>
