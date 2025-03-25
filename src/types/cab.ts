@@ -1,3 +1,4 @@
+
 export interface CabType {
   id: string;
   name: string;
@@ -27,6 +28,7 @@ export interface OutstationFare {
   oneWayBasePrice?: number;
   oneWayPricePerKm?: number;
   nightHaltCharge?: number;
+  id?: string; // Added to match backend database column
 }
 
 export interface LocalFare {
@@ -130,4 +132,5 @@ export interface VehiclePricing {
   airportTier3Price?: number;
   airportTier4Price?: number;
   airportExtraKmCharge?: number;
+  id?: string; // Added to match database column
 }
