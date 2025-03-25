@@ -52,10 +52,17 @@ export function useIsMobile() {
       }
       viewportMeta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
       
+      // Apply mobile font smoothing for better legibility
+      document.documentElement.style.webkitFontSmoothing = 'antialiased';
+      document.documentElement.style.mozOsxFontSmoothing = 'grayscale';
+      
       // Handle iOS status bar for PWA
-      if (navigator.standalone) {
+      if (window.navigator.standalone) {
         document.body.classList.add('pwa-standalone');
       }
+      
+      // Add touch action to make clicking feel more responsive
+      document.body.style.touchAction = 'manipulation';
     }
     
     // Clean up event listeners and body classes
@@ -63,6 +70,7 @@ export function useIsMobile() {
       window.removeEventListener('resize', handleResize);
       document.body.classList.remove('app-container');
       document.body.style.overscrollBehavior = '';
+      document.body.style.touchAction = '';
     };
   }, []);
 
@@ -137,9 +145,24 @@ export function useMobileKeyboard() {
     window.visualViewport?.addEventListener('resize', detectKeyboard);
     window.addEventListener('resize', detectKeyboard);
     
+    // Listen for input focus
+    const handleFocus = () => {
+      // Small delay to let the keyboard fully appear
+      setTimeout(detectKeyboard, 300);
+    };
+    
+    const inputElements = document.querySelectorAll('input, textarea');
+    inputElements.forEach(el => {
+      el.addEventListener('focus', handleFocus);
+    });
+    
     return () => {
       window.visualViewport?.removeEventListener('resize', detectKeyboard);
       window.removeEventListener('resize', detectKeyboard);
+      
+      inputElements.forEach(el => {
+        el.removeEventListener('focus', handleFocus);
+      });
     };
   }, [isMobile]);
   
@@ -147,4 +170,71 @@ export function useMobileKeyboard() {
     isKeyboardVisible,
     keyboardHeight: isKeyboardVisible ? (window.innerHeight - (window.visualViewport?.height || 0)) : 0
   };
+}
+
+// Hook for swipe gestures on mobile
+export function useSwipeGesture(
+  element: React.RefObject<HTMLElement>,
+  onSwipeLeft?: () => void,
+  onSwipeRight?: () => void,
+  onSwipeUp?: () => void,
+  onSwipeDown?: () => void
+) {
+  React.useEffect(() => {
+    if (!element.current) return;
+    
+    const el = element.current;
+    let startX: number;
+    let startY: number;
+    let startTime: number;
+    
+    const handleTouchStart = (e: TouchEvent) => {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      startTime = Date.now();
+    };
+    
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (!startX || !startY) return;
+      
+      const deltaX = e.changedTouches[0].clientX - startX;
+      const deltaY = e.changedTouches[0].clientY - startY;
+      const deltaTime = Date.now() - startTime;
+      
+      // Only consider swipes that took less than 500ms
+      if (deltaTime > 500) return;
+      
+      // Minimum swipe distance (px)
+      const minDistance = 50;
+      
+      // Determine swipe direction
+      if (Math.abs(deltaX) > Math.abs(deltaY)) {
+        // Horizontal swipe
+        if (Math.abs(deltaX) < minDistance) return;
+        
+        if (deltaX > 0 && onSwipeRight) {
+          onSwipeRight();
+        } else if (deltaX < 0 && onSwipeLeft) {
+          onSwipeLeft();
+        }
+      } else {
+        // Vertical swipe
+        if (Math.abs(deltaY) < minDistance) return;
+        
+        if (deltaY > 0 && onSwipeDown) {
+          onSwipeDown();
+        } else if (deltaY < 0 && onSwipeUp) {
+          onSwipeUp();
+        }
+      }
+    };
+    
+    el.addEventListener('touchstart', handleTouchStart);
+    el.addEventListener('touchend', handleTouchEnd);
+    
+    return () => {
+      el.removeEventListener('touchstart', handleTouchStart);
+      el.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [element, onSwipeLeft, onSwipeRight, onSwipeUp, onSwipeDown]);
 }

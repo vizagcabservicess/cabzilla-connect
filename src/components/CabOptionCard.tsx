@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { CabType } from '@/types/cab';
 import { formatPrice } from '@/lib/cabData';
@@ -48,7 +47,7 @@ export function CabOptionCard({
       <div 
         className={cn(
           "mobile-app-card mb-3 overflow-hidden",
-          isSelected ? "border border-blue-500" : ""
+          isSelected ? "border-2 border-blue-500" : ""
         )}
         onClick={handleCardClick}
       >
@@ -75,7 +74,7 @@ export function CabOptionCard({
                   <span className="text-xs text-gray-500 line-through mr-1.5">₹{originalPrice}</span>
                 )}
                 <span className="font-bold text-lg">
-                  {isCalculating ? "..." : formatPrice(fare)}
+                  {isCalculating ? "..." : `₹${fare}`}
                 </span>
               </div>
               <div className="text-xs text-gray-500">
