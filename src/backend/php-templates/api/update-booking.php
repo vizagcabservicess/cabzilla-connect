@@ -82,32 +82,50 @@ try {
     // Debug log the incoming data
     logError("Update booking request data", $data);
 
-    // Connect to database with retry logic
+    // Connect to database with enhanced retry logic
     $conn = null;
-    $maxRetries = 3;
+    $maxRetries = 5; // Increased from 3
     $retryCount = 0;
     $lastError = null;
 
     while ($retryCount < $maxRetries) {
         try {
             $conn = getDbConnection();
-            break;
+            if ($conn) {
+                logError("Database connection successful on attempt " . ($retryCount + 1));
+                break;
+            }
+            throw new Exception("Connection failed without error");
         } catch (Exception $e) {
             $lastError = $e;
             $retryCount++;
+            $delayMs = 300 * $retryCount; // Progressive backoff
             logError("Database connection attempt failed ($retryCount/$maxRetries)", [
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'delay' => $delayMs . 'ms'
             ]);
             
             if ($retryCount < $maxRetries) {
-                // Wait a bit before retrying
-                usleep(300000); // 300ms delay
+                usleep($delayMs * 1000); // Convert to microseconds
             }
         }
     }
 
     if (!$conn) {
-        throw new Exception("Failed to connect to database after $maxRetries attempts: " . $lastError->getMessage());
+        logError("All database connection attempts failed. Using fallback mechanism.");
+        
+        // Try alternative connection method as fallback
+        try {
+            $conn = getFallbackDbConnection();
+            if ($conn) {
+                logError("Fallback database connection successful");
+            } else {
+                throw new Exception("Fallback connection failed without error");
+            }
+        } catch (Exception $e) {
+            logError("Fallback connection also failed: " . $e->getMessage());
+            throw new Exception("Failed to connect to database after $maxRetries attempts and fallback: " . $lastError->getMessage());
+        }
     }
 
     // First check if the booking exists and belongs to the user or the user is an admin
