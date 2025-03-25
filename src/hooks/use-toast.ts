@@ -167,19 +167,21 @@ function toast({ ...props }: Toast) {
   }
 }
 
-// Create a React Context to properly manage toast state
+// Define the type for the toast context
 type ToastContextType = {
   toasts: ToasterToast[];
   toast: typeof toast;
   dismiss: (toastId?: string) => void;
 }
 
+// Create the context with default values
 const ToastContext = React.createContext<ToastContextType>({
   toasts: [],
   toast,
   dismiss: (toastId?: string) => dispatch({ type: "DISMISS_TOAST", toastId }),
 });
 
+// Create a provider component
 export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
   const [state, setState] = React.useState<State>(memoryState);
 
@@ -206,6 +208,7 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
+// Hook to use the toast context
 export const useToast = () => {
   const context = React.useContext(ToastContext);
   
