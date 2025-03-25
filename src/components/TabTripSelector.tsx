@@ -2,10 +2,11 @@
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useEffect, useCallback, useState } from "react";
-import { useToast } from "@/components/ui/use-toast";
-import { toast } from "sonner";
+import { useToast } from "@/hooks/use-toast";
 import { reloadCabTypes } from "@/lib/cabData";
 import { fareService } from "@/services/fareService";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { MobileTripSelector } from "./MobileTripSelector";
 
 interface TabTripSelectorProps {
   selectedTab: 'outstation' | 'local' | 'airport' | 'tour';
@@ -21,6 +22,7 @@ export function TabTripSelector({
   onTripModeChange 
 }: TabTripSelectorProps) {
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [prevTab, setPrevTab] = useState<string | null>(null);
   const [refreshTimer, setRefreshTimer] = useState<NodeJS.Timeout | null>(null);
 
@@ -249,6 +251,17 @@ export function TabTripSelector({
       onTabChange(value as 'outstation' | 'local' | 'airport' | 'tour');
     }, 50);
   };
+  
+  if (isMobile) {
+    return (
+      <MobileTripSelector
+        selectedTab={selectedTab}
+        tripMode={tripMode}
+        onTabChange={onTabChange}
+        onTripModeChange={onTripModeChange}
+      />
+    );
+  }
   
   return (
     <div className="space-y-4">

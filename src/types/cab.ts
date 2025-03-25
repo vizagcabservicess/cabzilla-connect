@@ -83,6 +83,31 @@ export interface TourInfo {
   days: number;
   description?: string;
   image?: string;
+  locations?: string[];
+  startingPrice?: number;
+}
+
+export interface TourPackage {
+  id: string;
+  tourId: string;
+  name: string;
+  description?: string;
+  days: number;
+  price: number;
+  cabType: string;
+  highlights?: string[];
+  inclusions?: string[];
+  exclusions?: string[];
+  itinerary?: TourItineraryDay[];
+}
+
+export interface TourItineraryDay {
+  day: number;
+  title: string;
+  description: string;
+  locations?: string[];
+  meals?: string[];
+  accommodation?: string;
 }
 
 export interface TourFares {
