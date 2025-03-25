@@ -168,11 +168,13 @@ function toast({ ...props }: Toast) {
 }
 
 // Create a React Context to properly manage toast state
-const ToastContext = React.createContext<{
+type ToastContextType = {
   toasts: ToasterToast[];
   toast: typeof toast;
   dismiss: (toastId?: string) => void;
-}>({
+}
+
+const ToastContext = React.createContext<ToastContextType>({
   toasts: [],
   toast,
   dismiss: (toastId?: string) => dispatch({ type: "DISMISS_TOAST", toastId }),
