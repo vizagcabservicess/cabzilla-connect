@@ -186,9 +186,15 @@ export interface VehiclePricingUpdateRequest {
   pricePerKm: number;
   nightHaltCharge?: number;
   driverAllowance?: number;
+  capacity?: number;
+  luggageCapacity?: number;
+  ac?: boolean;
+  image?: string;
+  isActive?: boolean;
+  name?: string;
+  vehicleId?: string;
 }
 
-// New interfaces for booking updates
 export interface BookingUpdateRequest {
   passengerName?: string;
   passengerPhone?: string;

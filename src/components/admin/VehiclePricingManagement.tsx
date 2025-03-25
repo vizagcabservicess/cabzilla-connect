@@ -166,10 +166,27 @@ export function VehiclePricingManagement() {
       let attempts = 0;
       const maxAttempts = 3;
       
+      // Prepare the data in the format expected by the API
+      const updateData = {
+        vehicleType: values.vehicleId, // Map vehicleId to vehicleType for the API
+        basePrice: values.basePrice,
+        pricePerKm: values.pricePerKm,
+        nightHaltCharge: values.nightHaltCharge,
+        driverAllowance: values.driverAllowance,
+        // Include other fields as needed by the API
+        capacity: values.capacity,
+        luggageCapacity: values.luggageCapacity,
+        ac: values.ac,
+        image: values.image,
+        isActive: values.isActive,
+        name: values.name,
+        vehicleId: values.vehicleId // Include both for compatibility
+      };
+      
       while (!success && attempts < maxAttempts) {
         try {
           attempts++;
-          const data = await fareAPI.updateVehiclePricing(values);
+          const data = await fareAPI.updateVehiclePricing(updateData);
           console.log("Vehicle update response:", data);
           success = true;
           toast.success("Vehicle pricing updated successfully");
@@ -220,7 +237,7 @@ export function VehiclePricingManagement() {
       while (!success && attempts < maxAttempts) {
         try {
           attempts++;
-          const data = await fareAPI.addNewVehicle(values);
+          const data = await fareAPI.addVehicle(values);
           console.log("New vehicle response:", data);
           success = true;
           toast.success("New vehicle added successfully");

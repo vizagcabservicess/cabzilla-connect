@@ -19,7 +19,6 @@ import {
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { useToast } from "@/hooks/use-toast";
 import { fareAPI } from '@/services/api';
 import { reloadCabTypes } from '@/lib/cabData';
 
@@ -38,7 +37,6 @@ export function OutstationFareManagement() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedTripMode, setSelectedTripMode] = useState<'one-way' | 'round-trip'>('one-way');
-  const { toast: uiToast } = useToast();
   
   const form = useForm<z.infer<typeof fareFormSchema>>({
     resolver: zodResolver(fareFormSchema),
