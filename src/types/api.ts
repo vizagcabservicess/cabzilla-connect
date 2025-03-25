@@ -204,3 +204,16 @@ export interface BookingUpdateRequest {
   pickupDate?: string;
   status?: BookingStatus;
 }
+
+export interface OutstationFare {
+  vehicleId: string;
+  basePrice?: number;
+  pricePerKm?: number;
+  oneWayBasePrice?: number;
+  oneWayPricePerKm?: number;
+  roundTripBasePrice?: number;
+  roundTripPricePerKm?: number;
+  driverAllowance: number;
+  nightHalt: number;
+  nightHaltCharge: number;
+}

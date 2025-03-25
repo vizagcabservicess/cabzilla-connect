@@ -1,5 +1,47 @@
 import { TourFare, FareUpdateRequest, VehiclePricingData, VehiclePricingUpdateRequest } from '@/types/api';
 import { getVehicleData, updateVehicle, addVehicle, deleteVehicle, getVehicleTypes, getOutstationFares as getOutstationFaresService, updateOutstationFares as updateOutstationFaresService } from '@/services/vehicleDataService';
+import axios from 'axios';
+
+// Create base API instance
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Error handler function
+const handleApiError = (error: any): never => {
+  console.error('API Error:', error);
+  if (error.response) {
+    console.error('Response data:', error.response.data);
+    console.error('Response status:', error.response.status);
+  }
+  throw error;
+};
+
+// Export additional APIs that were referenced in the build errors
+export const bookingAPI = {
+  getBooking: async (id: number) => {
+    // Placeholder - implement as needed
+    console.log(`Getting booking with ID: ${id}`);
+    return {};
+  },
+  updateBooking: async (id: number, data: any) => {
+    // Placeholder - implement as needed
+    console.log(`Updating booking with ID: ${id}`, data);
+    return {};
+  },
+  // Add other methods as needed
+};
+
+export const authAPI = {
+  isAuthenticated: () => {
+    // Placeholder - implement as needed
+    return !!localStorage.getItem('auth_token');
+  },
+  // Add other methods as needed
+};
 
 export const fareAPI = {
   // Tour fares methods
@@ -182,7 +224,7 @@ export const fareAPI = {
     }
   },
   
-  // New outstation fare methods
+  // Outstation fare methods
   getOutstationFares: async (vehicleId: string, tripMode: 'one-way' | 'round-trip'): Promise<any> => {
     const fareData = await getOutstationFaresService(vehicleId);
     
@@ -218,12 +260,26 @@ export const fareAPI = {
     // Get current outstation fares to maintain other values
     const currentFares = await getOutstationFaresService(vehicleId);
     
+    // Define OutstationFare type to satisfy TypeScript
+    type OutstationFare = {
+      vehicleId: string;
+      basePrice?: number;
+      pricePerKm?: number;
+      oneWayBasePrice?: number;
+      oneWayPricePerKm?: number;
+      roundTripBasePrice?: number;
+      roundTripPricePerKm?: number;
+      driverAllowance: number;
+      nightHalt: number;
+      nightHaltCharge: number;
+    };
+    
     // Prepare the update data
-    const updateData = {
+    const updateData: OutstationFare = {
       vehicleId,
       driverAllowance,
       nightHalt: nightHaltCharge,
-      nightHaltCharge, // Include both versions for compatibility
+      nightHaltCharge,
     };
     
     // Update the appropriate fields based on trip mode
