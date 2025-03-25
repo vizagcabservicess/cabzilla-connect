@@ -11,6 +11,34 @@ const api = axios.create({
   },
 });
 
+// Add request interceptor to add auth token to all requests
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Add response interceptor to handle common errors
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    console.error('API Error:', error);
+    // Log detailed information for debugging
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', error.response.data);
+    } else if (error.request) {
+      console.error('No response received:', error.request);
+    }
+    return Promise.reject(error);
+  }
+);
+
 // Error handler function
 const handleApiError = (error: any): never => {
   console.error('API Error:', error);
@@ -105,14 +133,14 @@ export const bookingAPI = {
 
 export const authAPI = {
   isAuthenticated: () => {
-    // Placeholder - implement as needed
     return !!localStorage.getItem('auth_token');
   },
+  
   getCurrentUser: () => {
-    // Implement to get current user data
     const userData = localStorage.getItem('user');
     return userData ? JSON.parse(userData) : null;
   },
+  
   getAllUsers: async () => {
     try {
       const response = await api.get('/admin/users.php');
@@ -121,6 +149,7 @@ export const authAPI = {
       return handleApiError(error);
     }
   },
+  
   updateUserRole: async (userId: number, role: 'admin' | 'user') => {
     try {
       const response = await api.post('/admin/users.php', { userId, role, action: 'updateRole' });
@@ -129,28 +158,84 @@ export const authAPI = {
       return handleApiError(error);
     }
   },
+  
   login: async (credentials: { email: string; password: string }) => {
     try {
-      const response = await api.post('/login.php', credentials);
+      console.log('Attempting login with credentials:', { email: credentials.email });
+      
+      // First clear any existing tokens to avoid conflicts
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('user');
+      
+      // Add cache-busting timestamp
+      const cacheBuster = new Date().getTime();
+      
+      // Use a more robust approach with detailed error handling
+      const response = await api.post(`/login.php?_t=${cacheBuster}`, credentials, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'X-Force-Refresh': 'true',
+          'X-Timestamp': cacheBuster.toString()
+        }
+      });
+      
+      console.log('Login response received:', {
+        status: response.status,
+        hasToken: !!response.data?.token,
+        hasUser: !!response.data?.user
+      });
+      
+      // Validate the response contains the expected data
+      if (!response.data) {
+        throw new Error('Empty response received from server');
+      }
+      
+      if (!response.data.token) {
+        throw new Error('Authentication failed: No token received');
+      }
       
       // Store token in localStorage
-      if (response.data && response.data.token) {
-        localStorage.setItem('auth_token', response.data.token);
-        
-        // Store user data if available
-        if (response.data.user) {
-          localStorage.setItem('user', JSON.stringify(response.data.user));
-        }
+      localStorage.setItem('auth_token', response.data.token);
+      
+      // Store user data if available
+      if (response.data.user) {
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+      } else {
+        throw new Error('User data missing from response');
       }
       
       return response.data;
     } catch (error) {
+      console.error('Login error details:', error);
+      
+      // Check if it's a network error
+      if (error.message === 'Network Error') {
+        throw new Error('Unable to connect to the server. Please check your internet connection.');
+      }
+      
+      // Extract more helpful error message from response when available
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      
       return handleApiError(error);
     }
   },
+  
   signup: async (userData: any) => {
     try {
-      const response = await api.post('/signup.php', userData);
+      // Add cache-busting timestamp
+      const cacheBuster = new Date().getTime();
+      
+      const response = await api.post(`/signup.php?_t=${cacheBuster}`, userData, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'X-Force-Refresh': 'true',
+          'X-Timestamp': cacheBuster.toString()
+        }
+      });
       
       // Store token in localStorage
       if (response.data && response.data.token) {
@@ -167,13 +252,13 @@ export const authAPI = {
       return handleApiError(error);
     }
   },
-  // Add the missing method
+  
   logout: () => {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('user');
     return true;
   },
-  // Add the missing property
+  
   isAdmin: () => {
     const userData = localStorage.getItem('user');
     if (!userData) return false;
