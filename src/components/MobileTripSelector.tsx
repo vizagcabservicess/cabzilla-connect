@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   ArrowLeft, Car, PlaneTakeoff, Clock, MapPin, Compass, 
   ChevronLeft, PenLine, Shield, User, Calendar, 
-  Check, CircleUser, AlertCircle
+  Check, CircleUser, AlertCircle, X
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -30,6 +30,7 @@ export function MobileTripSelector({
   const [prevTab, setPrevTab] = useState<string | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [statusBarTime, setStatusBarTime] = useState("10:09");
+  const [showStopsTooltip, setShowStopsTooltip] = useState(false);
   const [locations, setLocations] = useState({
     from: "14-263, Port Quarters Area, Ganesh Colony, Vi...",
     to: selectedTab === "airport" ? "Vishakhapatnam Airport" : "Enter drop location"
@@ -84,34 +85,26 @@ export function MobileTripSelector({
     return null;
   }
 
-  const renderFeatures = () => {
+  const renderHeader = () => {
     return (
-      <div className="bg-blue-900 text-white p-4">
-        <div className="text-xl font-bold mb-2">
-          Guaranteed On-time Cabs!
-        </div>
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex flex-col items-center">
-            <div className="bg-blue-800 bg-opacity-40 rounded-full w-14 h-14 flex items-center justify-center mb-1">
-              <CircleUser className="h-8 w-8 text-white" />
-            </div>
-            <div className="text-sm">Trusted Drivers</div>
+      <div className="bg-blue-900 text-white py-4 px-5">
+        <h2 className="text-xl font-bold mb-1">Guaranteed On-time Cabs!</h2>
+        <div className="flex items-center text-sm space-x-2 mb-3">
+          <div className="flex items-center">
+            <span className="mr-1">•</span>
+            <span>Trusted Drivers</span>
           </div>
-          <div className="flex flex-col items-center">
-            <div className="bg-blue-800 bg-opacity-40 rounded-full w-14 h-14 flex items-center justify-center mb-1">
-              <Shield className="h-8 w-8 text-white" />
-            </div>
-            <div className="text-sm">Clean cabs</div>
+          <div className="flex items-center">
+            <span className="mr-1">•</span>
+            <span>Clean cabs</span>
           </div>
-          <div className="flex flex-col items-center">
-            <div className="bg-blue-800 bg-opacity-40 rounded-full w-14 h-14 flex items-center justify-center mb-1">
-              <Clock className="h-8 w-8 text-white" />
-            </div>
-            <div className="text-sm">On-Time Pickup</div>
+          <div className="flex items-center">
+            <span className="mr-1">•</span>
+            <span>On-Time Pickup</span>
           </div>
         </div>
-        <div className="text-sm text-blue-200 underline text-center">
-          How do we ensure this? Learn more...
+        <div className="text-blue-300 text-sm">
+          How do we ensure this? <span className="underline">Learn more...</span>
         </div>
       </div>
     );
@@ -141,45 +134,6 @@ export function MobileTripSelector({
     );
   };
 
-  const renderPartnerBanner = () => {
-    return (
-      <div className="bg-blue-50 p-3 flex items-center justify-between">
-        <div>
-          <div className="text-sm font-semibold">Our Top Rated Partner</div>
-          <div className="text-xs text-gray-600">
-            India's Leading {selectedTab === 'outstation' ? 'Outstation' : selectedTab === 'airport' ? 'Airport' : 'Local'} Cab Rentals Since 2006
-          </div>
-        </div>
-        <div className="bg-white py-1 px-2 rounded border border-blue-100 flex items-center">
-          <strong className="text-blue-600 text-xl">SAVAARI</strong>
-          <span className="text-[10px] text-gray-600 ml-1">a make<strong>MY</strong>trip Group Company</span>
-        </div>
-      </div>
-    );
-  };
-
-  const renderStats = () => {
-    let count = '4,00,000+';
-    let tripType = 'Outstation Trips';
-    
-    if (selectedTab === 'airport') {
-      count = '6,40,000+';
-      tripType = 'Airport Trips';
-    } else if (selectedTab === 'local') {
-      count = '32,000+';
-      tripType = 'Hourly Rental Trips';
-    }
-    
-    return (
-      <div className="bg-blue-50 p-4">
-        <div className="flex items-center">
-          <div className="text-2xl font-bold text-blue-900">{count}</div>
-          <div className="ml-2 text-sm text-gray-600">Customers trusted us with their {tripType}</div>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="w-full pb-16">
       <div className="flex flex-col w-full">
@@ -198,38 +152,21 @@ export function MobileTripSelector({
         </div>
         
         {/* App Header */}
-        <div className="bg-white shadow-sm border-b border-gray-200 px-4 py-3 flex items-center">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => navigate('/')}
-            className="p-0 h-8 w-8 mr-2"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </Button>
-          <h1 className="text-lg font-semibold">
-            {selectedTab === 'outstation' ? 'Cab Search' : 
-             selectedTab === 'airport' ? 'Airport Transfer' :
-             selectedTab === 'local' ? 'Hourly Rentals' : 'Tour Packages'}
-          </h1>
-        </div>
-        
-        {/* Features Banner */}
-        {renderFeatures()}
+        {renderHeader()}
         
         {/* Service Badge */}
         {renderServiceBadge()}
         
         {/* Trip Type Tabs */}
-        <div className="bg-white p-3 border-b border-gray-200">
-          <div className="bg-gray-100 rounded-full flex">
+        <div className="bg-white p-4">
+          <div className="bg-gray-100 rounded-full p-1 flex">
             <Button 
               variant="ghost"
               onClick={() => handleTabChange('outstation')}
               className={cn(
                 "flex-1 rounded-full text-sm py-2 px-3",
                 selectedTab === 'outstation' 
-                  ? "bg-white text-blue-600 shadow-sm" 
+                  ? "bg-white shadow-sm text-blue-600" 
                   : "bg-transparent text-gray-700"
               )}
             >
@@ -242,7 +179,7 @@ export function MobileTripSelector({
               className={cn(
                 "flex-1 rounded-full text-sm py-2 px-3",
                 selectedTab === 'airport' 
-                  ? "bg-white text-blue-600 shadow-sm" 
+                  ? "bg-white shadow-sm text-blue-600" 
                   : "bg-transparent text-gray-700"
               )}
             >
@@ -255,7 +192,7 @@ export function MobileTripSelector({
               className={cn(
                 "flex-1 rounded-full text-sm py-2 px-3",
                 selectedTab === 'local' 
-                  ? "bg-white text-blue-600 shadow-sm" 
+                  ? "bg-white shadow-sm text-blue-600" 
                   : "bg-transparent text-gray-700"
               )}
             >
@@ -264,239 +201,227 @@ export function MobileTripSelector({
           </div>
         </div>
         
+        {/* Trip Mode Selection */}
         {selectedTab === 'outstation' && (
-          <>
-            <div className="bg-white p-4">
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4">
+          <div className="bg-white p-4">
+            <div className="bg-gray-100 rounded-lg border border-gray-200 p-2 flex items-center justify-between">
+              <button 
+                className={cn(
+                  "flex-1 flex items-center justify-center px-2 py-1.5 rounded-full text-sm font-medium",
+                  tripMode === 'one-way' 
+                    ? "bg-blue-500 text-white" 
+                    : "bg-white text-gray-700 border border-gray-300"
+                )}
+                onClick={() => onTripModeChange('one-way')}
+              >
                 <div className="flex items-center">
-                  <div className="flex-1 flex items-center mr-1">
-                    <div className={cn(
-                      "flex items-center justify-center rounded-full text-sm font-medium py-2 flex-1",
-                      tripMode === 'one-way' 
-                        ? "bg-blue-500 text-white" 
-                        : "bg-white text-gray-700 border border-gray-300"
-                    )}>
-                      <div className="h-3 w-3 mr-1.5 rounded-full border-2 border-current flex items-center justify-center">
-                        {tripMode === 'one-way' && <div className="h-1.5 w-1.5 bg-white rounded-full"></div>}
-                      </div>
-                      One Way
-                    </div>
+                  <div className="h-3 w-3 mr-1.5 rounded-full border-2 border-current flex items-center justify-center">
+                    {tripMode === 'one-way' && <div className="h-1.5 w-1.5 bg-white rounded-full"></div>}
                   </div>
-                  <div className="flex-1 flex items-center ml-1">
-                    <div 
-                      className={cn(
-                        "flex items-center justify-center rounded-full text-sm font-medium py-2 flex-1",
-                        tripMode === 'round-trip' 
-                          ? "bg-blue-500 text-white" 
-                          : "bg-white text-gray-700 border border-gray-300"
-                      )}
-                      onClick={() => onTripModeChange('round-trip')}
-                    >
-                      <div className="h-3 w-3 mr-1.5 rounded-full border-2 border-current flex items-center justify-center">
-                        {tripMode === 'round-trip' && <div className="h-1.5 w-1.5 bg-white rounded-full"></div>}
-                      </div>
-                      Round Trip
-                    </div>
+                  <span>One Way</span>
+                </div>
+              </button>
+              
+              <button 
+                className={cn(
+                  "flex-1 flex items-center justify-center px-2 py-1.5 rounded-full text-sm font-medium ml-2",
+                  tripMode === 'round-trip' 
+                    ? "bg-blue-500 text-white" 
+                    : "bg-white text-gray-700 border border-gray-300"
+                )}
+                onClick={() => onTripModeChange('round-trip')}
+              >
+                <div className="flex items-center">
+                  <div className="h-3 w-3 mr-1.5 rounded-full border-2 border-current flex items-center justify-center">
+                    {tripMode === 'round-trip' && <div className="h-1.5 w-1.5 bg-white rounded-full"></div>}
+                  </div>
+                  <span>Round Trip</span>
+                </div>
+              </button>
+            </div>
+            
+            {/* Location Inputs */}
+            <div className="bg-white rounded-lg border border-gray-200 mt-4">
+              <div className="p-3 border-b border-gray-100">
+                <div className="text-xs font-medium text-gray-500 mb-1">FROM</div>
+                <div className="flex items-center">
+                  <div className="w-8 flex items-center justify-center">
+                    <div className="h-3 w-3 rounded-full bg-gray-300 border-2 border-gray-400"></div>
+                  </div>
+                  <div className="text-base font-medium line-clamp-1">
+                    {locations.from}
                   </div>
                 </div>
               </div>
               
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm mb-4">
-                <div className="p-3 border-b border-gray-100">
-                  <div className="text-xs font-medium text-gray-500 mb-1">FROM</div>
-                  <div className="flex items-center">
-                    <div className="w-8 flex items-center justify-center">
-                      <div className="h-3 w-3 rounded-full bg-gray-300 border-2 border-gray-400"></div>
-                    </div>
-                    <div className="text-base font-medium line-clamp-1">
-                      {locations.from}
-                    </div>
+              <div className="p-3">
+                <div className="text-xs font-medium text-gray-500 mb-1">DROP ADDRESS</div>
+                <div className="flex items-center">
+                  <div className="w-8 flex items-center justify-center">
+                    <div className="h-3 w-3 rounded-full bg-gray-300 border-2 border-gray-400"></div>
                   </div>
-                </div>
-                
-                <div className="p-3">
-                  <div className="text-xs font-medium text-gray-500 mb-1">DROP ADDRESS</div>
-                  <div className="flex items-center">
-                    <div className="w-8 flex items-center justify-center">
-                      <div className="h-3 w-3 rounded-full bg-gray-300 border-2 border-gray-400"></div>
-                    </div>
-                    <div className="text-base text-gray-400">
-                      Enter drop location
-                    </div>
+                  <div className="text-base text-gray-400">
+                    Enter drop location
                   </div>
                 </div>
               </div>
-              
-              <button className="border border-blue-400 text-blue-600 rounded-md py-2.5 w-full text-sm font-medium flex items-center justify-center mb-4">
+            </div>
+            
+            {/* Add Stops Button */}
+            <div className="relative mt-4">
+              <button 
+                className="border border-blue-400 text-blue-600 rounded-md py-2.5 w-full text-sm font-medium flex items-center justify-center"
+                onClick={() => setShowStopsTooltip(true)}
+              >
                 <span className="mr-2">+</span> ADD STOPS
               </button>
               
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm mb-6">
-                <div className="p-3">
-                  <div className="text-xs font-medium text-gray-500 mb-1">TRIP START</div>
-                  <div className="flex items-center">
-                    <div className="w-8 flex items-center justify-center">
-                      <Calendar className="h-5 w-5 text-gray-500" />
+              {showStopsTooltip && (
+                <div className="absolute top-full left-0 right-0 bg-gray-800 text-white p-3 rounded-md mt-1 z-10 shadow-lg">
+                  <div className="flex justify-between items-start">
+                    <div className="text-sm">
+                      You can add one or multiple stops
                     </div>
-                    <div>
-                      <div className="text-base font-medium">
-                        Tue 25 Mar 2025
-                      </div>
-                      <div className="text-xs text-gray-500">10:15 PM</div>
+                    <button 
+                      className="text-white"
+                      onClick={() => setShowStopsTooltip(false)}
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {/* Trip Start */}
+            <div className="bg-white rounded-lg border border-gray-200 mt-4">
+              <div className="p-3">
+                <div className="text-xs font-medium text-gray-500 mb-1">TRIP START</div>
+                <div className="flex items-center">
+                  <div className="w-8 flex items-center justify-center">
+                    <Calendar className="h-5 w-5 text-gray-500" />
+                  </div>
+                  <div>
+                    <div className="text-base font-medium">
+                      Tue <span className="font-bold">25 Mar</span> 2025
                     </div>
+                    <div className="text-xs text-gray-500">10:15 PM</div>
                   </div>
                 </div>
               </div>
-              
-              <button className="bg-blue-500 text-white rounded-md py-3 w-full text-base font-medium">
-                SEARCH
-              </button>
             </div>
             
-            {renderPartnerBanner()}
-            {renderStats()}
-          </>
+            {/* Search Button */}
+            <button className="bg-blue-500 text-white rounded-md py-3 w-full text-base font-medium mt-6">
+              SEARCH
+            </button>
+          </div>
         )}
         
         {selectedTab === 'airport' && (
-          <>
-            <div className="bg-white p-4">              
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm mb-4">
-                <div className="p-3 border-b border-gray-100">
-                  <div className="text-xs font-medium text-gray-500 mb-1">FROM</div>
-                  <div className="flex items-center">
-                    <div className="w-8 flex items-center justify-center">
-                      <div className="h-3 w-3 rounded-full bg-gray-300 border-2 border-gray-400"></div>
-                    </div>
-                    <div className="text-base font-medium line-clamp-1">
-                      {locations.from}
-                    </div>
+          
+          <div className="bg-white p-4">              
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm mb-4">
+              <div className="p-3 border-b border-gray-100">
+                <div className="text-xs font-medium text-gray-500 mb-1">FROM</div>
+                <div className="flex items-center">
+                  <div className="w-8 flex items-center justify-center">
+                    <div className="h-3 w-3 rounded-full bg-gray-300 border-2 border-gray-400"></div>
                   </div>
-                </div>
-                
-                <div className="p-3">
-                  <div className="text-xs font-medium text-gray-500 mb-1">TO</div>
-                  <div className="flex items-center">
-                    <div className="w-8 flex items-center justify-center">
-                      <div className="h-3 w-3 rounded-full bg-gray-300 border-2 border-gray-400"></div>
-                    </div>
-                    <div className="text-base font-medium line-clamp-1">
-                      Vishakhapatnam Airport
-                    </div>
+                  <div className="text-base font-medium line-clamp-1">
+                    {locations.from}
                   </div>
                 </div>
               </div>
               
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm mb-6">
-                <div className="p-3">
-                  <div className="text-xs font-medium text-gray-500 mb-1">TRIP START</div>
-                  <div className="flex items-center">
-                    <div className="w-8 flex items-center justify-center">
-                      <Calendar className="h-5 w-5 text-gray-500" />
-                    </div>
-                    <div>
-                      <div className="text-base font-medium">
-                        Wed 26 Mar 2025
-                      </div>
-                      <div className="text-xs text-gray-500">10:00 AM</div>
-                    </div>
+              <div className="p-3">
+                <div className="text-xs font-medium text-gray-500 mb-1">TO</div>
+                <div className="flex items-center">
+                  <div className="w-8 flex items-center justify-center">
+                    <div className="h-3 w-3 rounded-full bg-gray-300 border-2 border-gray-400"></div>
                   </div>
-                </div>
-              </div>
-              
-              <button className="bg-blue-500 text-white rounded-md py-3 w-full text-base font-medium">
-                SEARCH
-              </button>
-            </div>
-            
-            {renderStats()}
-            
-            <div className="p-4">
-              <h2 className="text-lg font-bold mb-3">What's New</h2>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-white p-3 rounded-xl shadow">
-                  <div className="flex items-start gap-2">
-                    <div className="bg-orange-200 h-12 w-12 rounded-full flex items-center justify-center">
-                      <Car className="h-6 w-6 text-orange-600" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-semibold">Pre-book International Airport cabs</h3>
-                      <p className="text-xs text-gray-600 mt-1">Get guaranteed airport cabs outside India with meet & greet services</p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="bg-white p-3 rounded-xl shadow">
-                  <div className="flex items-start gap-2">
-                    <div className="bg-blue-200 h-12 w-12 rounded-full flex items-center justify-center">
-                      <Clock className="h-6 w-6 text-blue-600" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-semibold">Make Your Trip Affordable</h3>
-                      <p className="text-xs text-gray-600 mt-1">With Book Now Pay Later, Low Cost EMI & Amazing Offers.</p>
-                    </div>
+                  <div className="text-base font-medium line-clamp-1">
+                    Vishakhapatnam Airport
                   </div>
                 </div>
               </div>
             </div>
-          </>
+            
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm mb-6">
+              <div className="p-3">
+                <div className="text-xs font-medium text-gray-500 mb-1">TRIP START</div>
+                <div className="flex items-center">
+                  <div className="w-8 flex items-center justify-center">
+                    <Calendar className="h-5 w-5 text-gray-500" />
+                  </div>
+                  <div>
+                    <div className="text-base font-medium">
+                      Wed 26 Mar 2025
+                    </div>
+                    <div className="text-xs text-gray-500">10:00 AM</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <button className="bg-blue-500 text-white rounded-md py-3 w-full text-base font-medium">
+              SEARCH
+            </button>
+          </div>
         )}
         
         {selectedTab === 'local' && (
-          <>
-            <div className="bg-white p-4">              
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm mb-4">
-                <div className="p-3">
-                  <div className="text-xs font-medium text-gray-500 mb-1">FROM</div>
-                  <div className="flex items-center">
-                    <div className="w-8 flex items-center justify-center">
-                      <div className="h-3 w-3 rounded-full bg-gray-300 border-2 border-gray-400"></div>
-                    </div>
-                    <div className="text-base font-medium line-clamp-1">
-                      {locations.from}
-                    </div>
+          
+          <div className="bg-white p-4">              
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm mb-4">
+              <div className="p-3">
+                <div className="text-xs font-medium text-gray-500 mb-1">FROM</div>
+                <div className="flex items-center">
+                  <div className="w-8 flex items-center justify-center">
+                    <div className="h-3 w-3 rounded-full bg-gray-300 border-2 border-gray-400"></div>
+                  </div>
+                  <div className="text-base font-medium line-clamp-1">
+                    {locations.from}
                   </div>
                 </div>
               </div>
-              
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm mb-4">
-                <div className="p-3">
-                  <div className="text-xs font-medium text-gray-500 mb-1">TRIP START</div>
-                  <div className="flex items-center">
-                    <div className="w-8 flex items-center justify-center">
-                      <Calendar className="h-5 w-5 text-gray-500" />
-                    </div>
-                    <div>
-                      <div className="text-base font-medium">
-                        Wed 26 Mar 2025
-                      </div>
-                      <div className="text-xs text-gray-500">10:00 AM</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm mb-6">
-                <div className="p-3">
-                  <div className="text-xs font-medium text-gray-500 mb-1">SELECT PACKAGE</div>
-                  <div className="flex items-center">
-                    <div className="w-8 flex items-center justify-center">
-                      <Clock className="h-5 w-5 text-gray-500" />
-                    </div>
-                    <div className="text-base font-medium">
-                      1 Hrs 10 Kms
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <button className="bg-blue-500 text-white rounded-md py-3 w-full text-base font-medium">
-                SEARCH
-              </button>
             </div>
             
-            {renderStats()}
-          </>
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm mb-4">
+              <div className="p-3">
+                <div className="text-xs font-medium text-gray-500 mb-1">TRIP START</div>
+                <div className="flex items-center">
+                  <div className="w-8 flex items-center justify-center">
+                    <Calendar className="h-5 w-5 text-gray-500" />
+                  </div>
+                  <div>
+                    <div className="text-base font-medium">
+                      Wed 26 Mar 2025
+                    </div>
+                    <div className="text-xs text-gray-500">10:00 AM</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm mb-6">
+              <div className="p-3">
+                <div className="text-xs font-medium text-gray-500 mb-1">SELECT PACKAGE</div>
+                <div className="flex items-center">
+                  <div className="w-8 flex items-center justify-center">
+                    <Clock className="h-5 w-5 text-gray-500" />
+                  </div>
+                  <div className="text-base font-medium">
+                    1 Hrs 10 Kms
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <button className="bg-blue-500 text-white rounded-md py-3 w-full text-base font-medium">
+              SEARCH
+            </button>
+          </div>
         )}
       </div>
     </div>

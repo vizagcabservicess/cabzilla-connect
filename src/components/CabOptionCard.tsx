@@ -78,8 +78,8 @@ export function CabOptionCard({
     return (
       <div 
         className={cn(
-          "bg-white rounded-xl overflow-hidden mb-3 border border-gray-200",
-          isSelected ? "border-2 border-blue-500" : ""
+          "bg-white rounded-xl overflow-hidden mb-3 border",
+          isSelected ? "border-2 border-blue-500" : "border-gray-200"
         )}
         onClick={handleCardClick}
       >
