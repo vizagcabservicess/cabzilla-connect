@@ -7,6 +7,7 @@ import { Toaster as ToastUIToaster } from './components/ui/toaster';
 import { Toaster as SonnerToaster } from './components/ui/sonner';
 import { ThemeProvider } from './providers/ThemeProvider';
 import { toast } from 'sonner';
+import { useIsMobile } from './hooks/use-mobile';
 
 function App() {
   useEffect(() => {
@@ -206,9 +207,16 @@ function App() {
   return (
     <ThemeProvider defaultTheme="light" storageKey="vizag-cabs-theme">
       <GoogleMapsProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
-        <RouterProvider router={router} />
-        <ToastUIToaster />
-        <SonnerToaster position="top-right" closeButton richColors />
+        <div className="app-container">
+          <RouterProvider router={router} />
+          <ToastUIToaster />
+          <SonnerToaster 
+            position="top-right" 
+            closeButton 
+            richColors
+            className="sonner-mobile"
+          />
+        </div>
       </GoogleMapsProvider>
     </ThemeProvider>
   );

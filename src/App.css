@@ -1,8 +1,46 @@
+
 #root {
   max-width: 1280px;
   margin: 0 auto;
   padding: 2rem;
   text-align: center;
+}
+
+@media (max-width: 768px) {
+  #root {
+    max-width: 100%;
+    padding: 0;
+    margin: 0;
+    overflow-x: hidden;
+  }
+  
+  body {
+    overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
+  }
+  
+  /* App-like scrolling */
+  .app-container {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Remove browser highlight on tap */
+  button, a {
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* Custom scrollbar for app-like feel */
+  ::-webkit-scrollbar {
+    width: 0;
+    background: transparent;
+  }
+  
+  /* Position toasts better on mobile */
+  .sonner-mobile {
+    margin-top: 3rem;
+  }
 }
 
 .logo {
@@ -39,4 +77,35 @@
 
 .read-the-docs {
   color: #888;
+}
+
+/* Mobile app transitions and animations */
+.page-transition-enter {
+  opacity: 0;
+  transform: translateX(100%);
+}
+
+.page-transition-enter-active {
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 300ms, transform 300ms;
+}
+
+.page-transition-exit {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.page-transition-exit-active {
+  opacity: 0;
+  transform: translateX(-100%);
+  transition: opacity 300ms, transform 300ms;
+}
+
+/* Native-like button effects */
+@media (max-width: 768px) {
+  button:active {
+    transform: scale(0.98);
+    transition: transform 0.1s;
+  }
 }

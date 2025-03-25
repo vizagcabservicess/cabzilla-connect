@@ -3,9 +3,10 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Car, PlaneTakeoff, Clock, MapPin, Compass } from "lucide-react";
+import { ArrowLeft, Car, PlaneTakeoff, Clock, MapPin, Compass, ChevronLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { Drawer, DrawerContent, DrawerTrigger } from "@/components/ui/drawer";
 
 interface MobileTripSelectorProps {
   selectedTab: 'outstation' | 'local' | 'airport' | 'tour';
@@ -24,6 +25,7 @@ export function MobileTripSelector({
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [prevTab, setPrevTab] = useState<string | null>(null);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   // Clear cache data when tab changes
   useEffect(() => {
@@ -52,6 +54,7 @@ export function MobileTripSelector({
   // Function to handle tab change
   const handleTabChange = (value: 'outstation' | 'local' | 'airport' | 'tour') => {
     onTabChange(value);
+    setIsDrawerOpen(false);
   };
 
   if (!isMobile) {
@@ -61,27 +64,29 @@ export function MobileTripSelector({
   return (
     <div className="w-full">
       <div className="flex flex-col w-full">
-        <div className="bg-white shadow-sm border-b p-4 flex items-center justify-between">
+        <div className="bg-white shadow-sm fixed top-0 left-0 right-0 z-50 px-4 py-3 flex items-center justify-between">
           <Button 
             variant="ghost" 
             size="icon" 
             onClick={() => navigate('/')}
             className="p-0 h-8 w-8"
           >
-            <ArrowLeft className="h-5 w-5" />
+            <ChevronLeft className="h-5 w-5" />
           </Button>
-          <h1 className="text-lg font-semibold">Online Cab Booking</h1>
+          <h1 className="text-lg font-semibold">Vizag Cabs</h1>
           <div className="w-8"></div>
         </div>
         
-        <div className="p-2 bg-white">
-          <div className="grid grid-cols-4 gap-2">
+        <div className="pt-14 pb-2 px-3 bg-white">
+          <div className="grid grid-cols-4 gap-2 mb-2">
             <Button 
               variant="ghost"
               onClick={() => handleTabChange('outstation')}
               className={cn(
-                "flex flex-col items-center justify-center py-3 rounded-lg",
-                selectedTab === 'outstation' ? "bg-blue-500 text-white" : "bg-white text-gray-700 border"
+                "flex flex-col items-center justify-center py-3 rounded-xl",
+                selectedTab === 'outstation' 
+                  ? "bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-md" 
+                  : "bg-white text-gray-700 border shadow-sm"
               )}
             >
               <Car className={cn("h-5 w-5 mb-1", selectedTab === 'outstation' ? "text-white" : "text-blue-500")} />
@@ -92,8 +97,10 @@ export function MobileTripSelector({
               variant="ghost"
               onClick={() => handleTabChange('airport')}
               className={cn(
-                "flex flex-col items-center justify-center py-3 rounded-lg",
-                selectedTab === 'airport' ? "bg-blue-500 text-white" : "bg-white text-gray-700 border"
+                "flex flex-col items-center justify-center py-3 rounded-xl",
+                selectedTab === 'airport' 
+                  ? "bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-md" 
+                  : "bg-white text-gray-700 border shadow-sm"
               )}
             >
               <PlaneTakeoff className={cn("h-5 w-5 mb-1", selectedTab === 'airport' ? "text-white" : "text-blue-500")} />
@@ -104,8 +111,10 @@ export function MobileTripSelector({
               variant="ghost"
               onClick={() => handleTabChange('local')}
               className={cn(
-                "flex flex-col items-center justify-center py-3 rounded-lg",
-                selectedTab === 'local' ? "bg-blue-500 text-white" : "bg-white text-gray-700 border"
+                "flex flex-col items-center justify-center py-3 rounded-xl",
+                selectedTab === 'local' 
+                  ? "bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-md" 
+                  : "bg-white text-gray-700 border shadow-sm"
               )}
             >
               <Clock className={cn("h-5 w-5 mb-1", selectedTab === 'local' ? "text-white" : "text-blue-500")} />
@@ -116,8 +125,10 @@ export function MobileTripSelector({
               variant="ghost"
               onClick={() => handleTabChange('tour')}
               className={cn(
-                "flex flex-col items-center justify-center py-3 rounded-lg",
-                selectedTab === 'tour' ? "bg-blue-500 text-white" : "bg-white text-gray-700 border"
+                "flex flex-col items-center justify-center py-3 rounded-xl",
+                selectedTab === 'tour' 
+                  ? "bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-md" 
+                  : "bg-white text-gray-700 border shadow-sm"
               )}
             >
               <Compass className={cn("h-5 w-5 mb-1", selectedTab === 'tour' ? "text-white" : "text-blue-500")} />
@@ -133,14 +144,14 @@ export function MobileTripSelector({
               <p className="text-sm text-amber-700">Includes one pick up & drop</p>
             </div>
             <div className="p-3 flex items-center gap-2">
-              <div className="flex border rounded-md w-full">
+              <div className="flex border rounded-md w-full overflow-hidden shadow-sm">
                 <Button
                   type="button"
                   variant="ghost"
                   className={cn(
                     "flex-1 rounded-l-md py-2 px-4 text-sm",
                     tripMode === 'one-way' 
-                      ? "bg-blue-500 text-white" 
+                      ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white" 
                       : "bg-white text-gray-700"
                   )}
                   onClick={() => onTripModeChange('one-way')}
@@ -161,7 +172,7 @@ export function MobileTripSelector({
                   className={cn(
                     "flex-1 rounded-r-md py-2 px-4 text-sm",
                     tripMode === 'round-trip' 
-                      ? "bg-blue-500 text-white" 
+                      ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white" 
                       : "bg-white text-gray-700"
                   )}
                   onClick={() => onTripModeChange('round-trip')}
