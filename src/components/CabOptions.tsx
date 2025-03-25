@@ -1,346 +1,199 @@
+
+import React, { useState, useEffect, useMemo } from 'react';
+import { CabOptionCard } from '@/components/CabOptionCard';
 import { CabType } from '@/types/cab';
+import { calculateFare } from '@/lib/fareCalculationService';
 import { TripType, TripMode } from '@/lib/tripTypes';
-import { CabOptionCard } from './CabOptionCard';
-import { useCabOptions } from './cab-options/useCabOptions';
-import { CabLoading } from './cab-options/CabLoading';
-import { CabOptionsHeader } from './cab-options/CabOptionsHeader';
-import { CabRefreshWarning } from './cab-options/CabRefreshWarning';
-import { EmptyCabList } from './cab-options/EmptyCabList';
-import { CabList } from './cab-options/CabList';
-import { useState, useEffect } from 'react';
-import { calculateFare, clearFareCache } from '@/lib/fareCalculationService';
-import { fareService } from '@/services/fareService';
-import { toast } from 'sonner';
-import { reloadCabTypes } from '@/lib/cabData';
+import { Skeleton } from '@/components/ui/skeleton';
+import { AlertCircle, RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { useCabOptionsHook } from '@/hooks/useCabOptionsHook';
 
 interface CabOptionsProps {
   cabTypes: CabType[];
   selectedCab: CabType | null;
   onSelectCab: (cab: CabType) => void;
   distance: number;
-  tripType?: TripType;
-  tripMode?: TripMode;
+  tripType: TripType;
+  tripMode: TripMode;
   pickupDate?: Date;
   returnDate?: Date;
   hourlyPackage?: string;
 }
 
-export function CabOptions({
-  cabTypes: initialCabTypes,
+export const CabOptions = ({
+  cabTypes,
   selectedCab,
   onSelectCab,
   distance,
-  tripType = 'outstation',
-  tripMode = 'one-way',
+  tripType,
+  tripMode,
   pickupDate,
   returnDate,
   hourlyPackage
-}: CabOptionsProps) {
-  const [selectedCabId, setSelectedCabId] = useState<string | null>(selectedCab?.id || null);
-  const [cabFares, setCabFares] = useState<Record<string, number>>({});
-  const [isCalculatingFares, setIsCalculatingFares] = useState(false);
-  const [refreshSuccessful, setRefreshSuccessful] = useState<boolean | null>(null);
-  const [isRefreshingCabs, setIsRefreshingCabs] = useState(false);
-  const [lastUpdate, setLastUpdate] = useState<number>(Date.now());
-  const [refreshCount, setRefreshCount] = useState(0);
-  const [forceRecalculation, setForceRecalculation] = useState(0);
-  const [globalRefreshTrigger, setGlobalRefreshTrigger] = useState(0);
-
-  // Use the hook to fetch cab options
-  const { 
-    cabOptions, 
-    isLoading: isLoadingCabs, 
-    error, 
-    filterLoading,
-    refresh: refreshCabOptions 
-  } = useCabOptions({ 
-    tripType, 
-    tripMode, 
-    distance 
+}: CabOptionsProps) => {
+  const isMobile = useIsMobile();
+  const [isCalculating, setIsCalculating] = useState<boolean>(false);
+  const [calculatedFares, setCalculatedFares] = useState<Record<string, number>>({});
+  const [filterLoading, setFilterLoading] = useState<boolean>(false);
+  
+  // Use our custom hook to fetch cab options
+  const { cabOptions, isLoading, error, refresh } = useCabOptionsHook({
+    tripType,
+    tripMode,
+    distance
   });
+  
+  // Use actual cab options from the API first, fall back to passed-in cabTypes if API fails
+  const actualCabOptions = useMemo(() => {
+    return cabOptions.length > 0 ? cabOptions : cabTypes;
+  }, [cabOptions, cabTypes]);
 
-  // Function to force refresh everything
-  const forceRefreshAll = async () => {
-    console.log('Starting complete fare data refresh');
-    setIsRefreshingCabs(true);
-    try {
-      // Set flag to force cache refresh
-      localStorage.setItem('forceCacheRefresh', 'true');
-      
-      // Clear all fare caches
-      clearFareCache();
-      fareService.clearCache();
-      
-      // Clear session and local storage caches, but preserve the price matrix
-      const savedMatrix = localStorage.getItem('localPackagePriceMatrix');
-      
-      const keysToRemove = [
-        'cachedFareData', 'cabPricing', 'fareCache', 'fares', 'cabData', 
-        'vehicles', 'calculatedFares', 'cabTypes', 'tourFares',
-        'outstationFares', 'airportFares'
-      ];
-      
-      keysToRemove.forEach(key => {
-        localStorage.removeItem(key);
-        sessionStorage.removeItem(key);
-      });
-      
-      // Restore the saved matrix after clearing
-      if (savedMatrix) {
-        localStorage.setItem('localPackagePriceMatrix', savedMatrix);
-      }
-      
-      // Create a timestamp for reference
-      const timestamp = Date.now();
-      localStorage.setItem('fareDataLastRefreshed', timestamp.toString());
-      localStorage.setItem('forceTripFaresRefresh', 'true');
-      
-      // Reload cab types from server with force flag
-      console.log('Reloading cab types from server...');
-      await reloadCabTypes();
-      
-      // Refresh cab options with force parameter
-      console.log('Refreshing cab options...');
-      await refreshCabOptions();
-      
-      // Update last update timestamp and increment refresh count
-      setLastUpdate(timestamp);
-      setRefreshCount(prev => prev + 1);
-      setForceRecalculation(prev => prev + 1);
-      setGlobalRefreshTrigger(prev => prev + 1);
-      
-      // Trigger recalculation of fares
-      await calculateFares(cabOptions, true);
-      
-      toast.success("All fare data refreshed successfully!");
-      setRefreshSuccessful(true);
-      console.log('Complete fare data refresh successful');
-    } catch (error) {
-      console.error("Failed to refresh all data:", error);
-      toast.error("Failed to refresh fare data");
-      setRefreshSuccessful(false);
-    } finally {
-      setIsRefreshingCabs(false);
-      
-      // Ensure the force refresh flag is cleared
-      localStorage.removeItem('forceCacheRefresh');
-      
-      // After a short delay, remove the trip fares refresh flag
-      setTimeout(() => {
-        localStorage.removeItem('forceTripFaresRefresh');
-      }, 5000);
-    }
-  };
-
-  // Function to refresh cab types
-  const refreshCabTypes = async () => {
-    await forceRefreshAll();
-  };
-
-  // Calculate fares for cab options
-  const calculateFares = async (cabs: CabType[], forceRefresh: boolean = false) => {
-    if (cabs.length > 0 && distance > 0) {
-      setIsCalculatingFares(true);
-      console.log(`Calculating fares for ${cabs.length} cabs, force refresh: ${forceRefresh}, tripType: ${tripType}, hourlyPackage: ${hourlyPackage}`);
-      
-      // Clear the fare cache if force refresh is requested
-      if (forceRefresh) {
-        clearFareCache();
-        localStorage.setItem('forceCacheRefresh', 'true');
-        console.log('Force refresh flag set, fare cache cleared');
-      }
-      
-      const fares: Record<string, number> = {};
-      
-      for (const cab of cabs) {
+  // Calculate fares for all available cabs
+  useEffect(() => {
+    const calculateAllFares = async () => {
+      if (distance > 0 && actualCabOptions.length > 0) {
+        setIsCalculating(true);
+        const fares: Record<string, number> = {};
+        
         try {
-          console.log(`Calculating fare for ${cab.name} (${cab.id})`);
-          const fare = await calculateFare({
-            cabType: cab,
-            distance,
-            tripType,
-            tripMode,
-            hourlyPackage: tripType === 'local' ? hourlyPackage : undefined,
-            pickupDate,
-            returnDate
-          });
-          fares[cab.id] = fare;
-          console.log(`Calculated fare for ${cab.name}: ${fare}`);
+          for (const cab of actualCabOptions) {
+            const fare = await calculateFare({
+              cabType: cab,
+              distance,
+              tripType,
+              tripMode,
+              hourlyPackage,
+              pickupDate,
+              returnDate
+            });
+            fares[cab.id] = fare;
+          }
+          
+          setCalculatedFares(fares);
         } catch (error) {
-          console.error(`Error calculating fare for ${cab.name}:`, error);
-          fares[cab.id] = 0;
+          console.error('Error calculating fares:', error);
+        } finally {
+          setIsCalculating(false);
         }
       }
-      
-      // Remove force refresh flag
-      if (forceRefresh) {
-        localStorage.removeItem('forceCacheRefresh');
-        console.log('Force refresh flag removed after calculations');
-      }
-      
-      setCabFares(fares);
-      setIsCalculatingFares(false);
-      console.log('All fares calculated and set');
-    }
-  };
-
-  // Initial calculation of fares when cab options or distance changes
-  useEffect(() => {
-    if (cabOptions.length > 0) {
-      console.log(`Cab options changed, recalculating fares for ${cabOptions.length} cabs`);
-      calculateFares(cabOptions);
-    }
-  }, [cabOptions, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate, lastUpdate, refreshCount, forceRecalculation, globalRefreshTrigger]);
-
-  // Update selected cab ID when selectedCab changes from outside
-  useEffect(() => {
-    if (selectedCab) {
-      setSelectedCabId(selectedCab.id);
-    }
-  }, [selectedCab]);
-
-  // Listen for fare cache cleared events
-  useEffect(() => {
-    const handleCacheCleared = () => {
-      console.log('Detected fare cache cleared event, recalculating fares');
-      // Force update the lastUpdate timestamp to trigger recalculation
-      setLastUpdate(Date.now());
-      setForceRecalculation(prev => prev + 1);
-      setGlobalRefreshTrigger(prev => prev + 1);
-      
-      // Force recalculation with fresh data
-      if (cabOptions.length > 0) {
-        calculateFares(cabOptions, true);
-      }
     };
     
-    const handleLocalFaresUpdated = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      console.log('Detected local fares updated event, recalculating fares', customEvent.detail);
-      
-      // Force update the lastUpdate timestamp to trigger recalculation
-      setLastUpdate(Date.now());
-      setRefreshCount(prev => prev + 1);
-      setForceRecalculation(prev => prev + 1);
-      setGlobalRefreshTrigger(prev => prev + 1);
-      
-      // If we're in local trip mode and have the specific package that was updated
-      if (tripType === 'local' && 
-          hourlyPackage && 
-          customEvent.detail && 
-          customEvent.detail.packageId === hourlyPackage) {
-        console.log('Updated package matches current selection, forced recalculation');
-        // Force recalculation with cache clearing
-        calculateFares(cabOptions, true);
-      } else {
-        // Force recalculation for all cabs anyway to ensure fresh data
-        calculateFares(cabOptions, true);
-      }
-    };
-    
-    const handleTripFaresUpdated = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      console.log('Detected trip fares updated event, recalculating fares', customEvent.detail);
-      
-      // Trigger a global recalculation
-      setGlobalRefreshTrigger(prev => prev + 1);
-      
-      // Force recalculation with cache clearing for outstation fares
-      if (tripType === 'outstation') {
-        calculateFares(cabOptions, true);
-      }
-    };
-    
-    window.addEventListener('fare-cache-cleared', handleCacheCleared);
-    window.addEventListener('local-fares-updated', handleLocalFaresUpdated);
-    window.addEventListener('trip-fares-updated', handleTripFaresUpdated);
-    
-    return () => {
-      window.removeEventListener('fare-cache-cleared', handleCacheCleared);
-      window.removeEventListener('local-fares-updated', handleLocalFaresUpdated);
-      window.removeEventListener('trip-fares-updated', handleTripFaresUpdated);
-    };
-  }, [cabOptions, tripType, hourlyPackage]);
+    calculateAllFares();
+  }, [actualCabOptions, distance, tripType, tripMode, hourlyPackage, pickupDate, returnDate]);
 
-  // Refresh fares periodically in the background
-  useEffect(() => {
-    // Create a periodic background refresh - once every 5 minutes
-    const intervalId = setInterval(() => {
-      console.log('Performing background fare refresh');
-      setLastUpdate(Date.now());
-      setForceRecalculation(prev => prev + 1);
-    }, 5 * 60 * 1000);
-    
-    return () => clearInterval(intervalId);
-  }, []);
-
-  // Handle selecting a cab
-  const handleSelectCab = (cab: CabType) => {
-    console.log(`Selecting cab: ${cab.name} (${cab.id}), current fare: ${cabFares[cab.id] || 'not calculated'}`);
-    setSelectedCabId(cab.id);
-    onSelectCab(cab);
-    
-    // Force a recalculation for any trip type when the cab is selected
-    setForceRecalculation(prev => prev + 1);
-    
-    // Special handling for local trips
-    if (tripType === 'local' && hourlyPackage) {
-      // Trigger a recalculation of fares with force flag
-      calculateFares([cab], true);
-      
-      // Dispatch an event to notify BookingSummary of the cab selection
-      window.dispatchEvent(new CustomEvent('cab-selected-for-local', {
-        detail: { 
-          timestamp: Date.now(),
-          cabType: cab.id,
-          hourlyPackage,
-          fare: cabFares[cab.id] || 0
-        }
-      }));
-    }
-  };
-
-  // Function to get fare details for a cab
-  const getFareDetails = (cab: CabType): string => {
-    if (tripType === 'local') {
-      return `${hourlyPackage} package`;
-    }
+  // Generate descriptive fare details
+  const generateFareDetails = (cab: CabType): string => {
     if (tripType === 'outstation') {
-      return tripMode === 'one-way' ? 'One way trip' : 'Round trip';
+      if (tripMode === 'one-way') {
+        return 'One way trip';
+      } else {
+        return `Round trip (${returnDate ? Math.ceil((returnDate.getTime() - (pickupDate?.getTime() || 0)) / (1000 * 60 * 60 * 24)) : 1} days)`;
+      }
+    } else if (tripType === 'local') {
+      // Get package details from the hourlyPackage
+      if (hourlyPackage === '4hrs-40km') {
+        return '4 hours, 40 km package';
+      } else if (hourlyPackage === '8hrs-80km') {
+        return '8 hours, 80 km package';
+      } else {
+        return '10 hours, 100 km package';
+      }
+    } else if (tripType === 'airport') {
+      return 'Airport transfer';
     }
-    return '';
+    
+    return 'Base fare';
   };
 
-  if (isLoadingCabs) {
-    return <CabLoading />;
+  // When no cabs are available
+  if (actualCabOptions.length === 0 && !isLoading && !error) {
+    return (
+      <div className="bg-white p-6 rounded-md shadow-sm border my-4">
+        <div className="text-center">
+          <h3 className="text-lg font-medium">No vehicles available</h3>
+          <p className="text-gray-500 mt-2 mb-4">There are no vehicles available for your trip right now.</p>
+          <Button variant="outline" onClick={refresh} className="mt-2">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Loading state
+  if (isLoading || filterLoading) {
+    return (
+      <div className="space-y-4 mt-6">
+        <p className="text-gray-500 animate-pulse">Loading available vehicles...</p>
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="border rounded-lg p-4 space-y-3">
+            <div className="flex justify-between">
+              <Skeleton className="h-8 w-1/3" />
+              <Skeleton className="h-8 w-1/4" />
+            </div>
+            <div className="flex space-x-2">
+              <Skeleton className="h-6 w-20" />
+              <Skeleton className="h-6 w-24" />
+              <Skeleton className="h-6 w-16" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="bg-red-50 p-4 rounded-md border border-red-200 my-4">
+        <div className="flex">
+          <AlertCircle className="h-5 w-5 text-red-500 mr-2" />
+          <div>
+            <h3 className="text-red-800 font-medium">Error loading vehicles</h3>
+            <p className="text-red-600 text-sm mt-1">{error}</p>
+            <Button variant="outline" onClick={refresh} className="mt-3 text-red-600 border-red-300">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Retry
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-4 mt-6">
-      <CabOptionsHeader 
-        cabCount={cabOptions.length}
-        isRefreshing={isRefreshingCabs}
-        refreshSuccessful={refreshSuccessful}
-        onRefresh={refreshCabTypes}
-      />
+    <div className="mt-6 space-y-4">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-semibold">
+          {actualCabOptions.length} {actualCabOptions.length === 1 ? 'vehicle' : 'vehicles'} available
+        </h3>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={refresh}
+          className="text-blue-600 flex items-center"
+        >
+          <RefreshCw className="h-4 w-4 mr-1" />
+          Refresh
+        </Button>
+      </div>
       
-      {refreshSuccessful === false && <CabRefreshWarning />}
-      
-      {cabOptions.length === 0 ? (
-        <EmptyCabList 
-          onRefresh={refreshCabTypes}
-          isRefreshing={isRefreshingCabs}
-        />
-      ) : (
-        <CabList
-          cabTypes={cabOptions}
-          selectedCabId={selectedCabId}
-          cabFares={cabFares}
-          isCalculatingFares={isCalculatingFares}
-          handleSelectCab={handleSelectCab}
-          getFareDetails={getFareDetails}
-        />
-      )}
+      <div className="space-y-3">
+        {actualCabOptions.map((cab) => (
+          <CabOptionCard
+            key={cab.id}
+            cab={cab}
+            fare={calculatedFares[cab.id] || 0}
+            isSelected={selectedCab?.id === cab.id}
+            onSelect={onSelectCab}
+            fareDetails={generateFareDetails(cab)}
+            isCalculating={isCalculating}
+          />
+        ))}
+      </div>
     </div>
   );
-}
+};

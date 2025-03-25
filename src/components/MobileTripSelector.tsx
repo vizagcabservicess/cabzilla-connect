@@ -1,3 +1,4 @@
+
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
@@ -5,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   ArrowLeft, Car, PlaneTakeoff, Clock, MapPin, Compass, 
   ChevronLeft, PenLine, Shield, User, Calendar, 
-  Check, CircleUser, AlertCircle, X
+  Check, CircleUser, AlertCircle, X, Plus
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -16,13 +17,15 @@ interface MobileTripSelectorProps {
   tripMode: 'one-way' | 'round-trip';
   onTabChange: (tab: 'outstation' | 'local' | 'airport' | 'tour') => void;
   onTripModeChange: (mode: 'one-way' | 'round-trip') => void;
+  onSearch?: () => void;
 }
 
 export function MobileTripSelector({
   selectedTab,
   tripMode,
   onTabChange,
-  onTripModeChange
+  onTripModeChange,
+  onSearch
 }: MobileTripSelectorProps) {
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -273,7 +276,7 @@ export function MobileTripSelector({
                 className="border border-blue-400 text-blue-600 rounded-md py-2.5 w-full text-sm font-medium flex items-center justify-center"
                 onClick={() => setShowStopsTooltip(true)}
               >
-                <span className="mr-2">+</span> ADD STOPS
+                <Plus size={16} className="mr-1" /> ADD STOPS
               </button>
               
               {showStopsTooltip && (
@@ -312,7 +315,10 @@ export function MobileTripSelector({
             </div>
             
             {/* Search Button */}
-            <button className="bg-blue-500 text-white rounded-md py-3 w-full text-base font-medium mt-6">
+            <button 
+              className="bg-blue-500 text-white rounded-md py-3 w-full text-base font-medium mt-6"
+              onClick={onSearch}
+            >
               SEARCH
             </button>
           </div>
