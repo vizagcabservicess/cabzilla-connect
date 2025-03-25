@@ -18,6 +18,7 @@ export interface CabType {
 }
 
 export interface OutstationFare {
+  id?: string; // Added to match backend database column
   vehicleId?: string;
   basePrice: number;
   pricePerKm: number;
@@ -28,10 +29,11 @@ export interface OutstationFare {
   oneWayBasePrice?: number;
   oneWayPricePerKm?: number;
   nightHaltCharge?: number;
-  id?: string; // Added to match backend database column
 }
 
 export interface LocalFare {
+  id?: string; // Added to match backend database column
+  vehicleId?: string;
   package4hr40km: number;
   package8hr80km: number;
   package10hr100km: number;
@@ -40,6 +42,8 @@ export interface LocalFare {
 }
 
 export interface AirportFare {
+  id?: string; // Added to match backend database column
+  vehicleId?: string;
   basePrice: number;
   pricePerKm: number;
   dropPrice: number;
@@ -111,6 +115,7 @@ export interface LocalPackagePriceMatrix {
 }
 
 export interface VehiclePricing {
+  id?: string; // Added to match database column
   vehicleType: string;
   basePrice: number;
   pricePerKm: number;
@@ -132,5 +137,4 @@ export interface VehiclePricing {
   airportTier3Price?: number;
   airportTier4Price?: number;
   airportExtraKmCharge?: number;
-  id?: string; // Added to match database column
 }
