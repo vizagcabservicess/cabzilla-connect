@@ -6,7 +6,7 @@
 // Set aggressive CORS headers
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
+header("Access-Control-Allow-Headers: *");
 header("Content-Type: application/json");
 header("X-Emergency-Handler: ultra-emergency-outstation");
 header("Cache-Control: no-cache, no-store, must-revalidate");
@@ -53,26 +53,31 @@ $dbCredentials = [
 @include_once __DIR__ . '/../../../config.php';
 @include_once __DIR__ . '/../../../../config.php';
 
+// Debug log function
+function debugLog($message, $data = null) {
+    error_log("ULTRA-EMERGENCY: " . $message . ($data !== null ? ' ' . json_encode($data) : ''));
+}
+
 // Get data from various sources (POST, GET, JSON)
 function getRequestData() {
     $data = [];
     
     // Get raw input
     $rawInput = file_get_contents('php://input');
-    error_log("Raw input: " . $rawInput);
+    debugLog("Raw input: " . $rawInput);
     
     // Try to parse as JSON
     if (!empty($rawInput)) {
         $jsonData = json_decode($rawInput, true);
         if ($jsonData !== null) {
             $data = $jsonData;
-            error_log("Parsed JSON data: " . print_r($data, true));
+            debugLog("Parsed JSON data", $data);
         } else {
             // Try to parse as form data
             parse_str($rawInput, $formData);
             if (!empty($formData)) {
                 $data = $formData;
-                error_log("Parsed form data: " . print_r($data, true));
+                debugLog("Parsed form data", $data);
             }
         }
     }
@@ -81,7 +86,7 @@ function getRequestData() {
     $data = array_merge($data, $_POST, $_GET);
     
     // Debug
-    error_log("Final merged request data: " . print_r($data, true));
+    debugLog("Final merged request data", $data);
     
     return $data;
 }
@@ -98,10 +103,12 @@ function extractVehicleId($data) {
             if (strpos($id, 'item-') === 0) {
                 $id = substr($id, 5);
             }
+            debugLog("Extracted vehicle ID: $id from parameter $param");
             return $id;
         }
     }
     
+    debugLog("No vehicle ID found in request data");
     return null;
 }
 
@@ -109,16 +116,37 @@ function extractVehicleId($data) {
 function getDatabaseConnection() {
     global $dbCredentials;
     
+    debugLog("Attempting database connection...");
+    
     // Try using constants from config.php first
-    if (defined('DB_HOST') && defined('DB_NAME') && defined('DB_USER') && defined('DB_PASS')) {
+    if (defined('DB_HOST') && defined('DB_USERNAME') && defined('DB_PASSWORD') && defined('DB_DATABASE')) {
         try {
-            $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+            debugLog("Trying connection with DB_ constants");
+            $conn = new mysqli(DB_HOST, DB_USERNAME, DB_PASSWORD, DB_DATABASE);
             if (!$conn->connect_error) {
-                error_log("Connected to database using DB_ constants");
+                debugLog("Connected to database using DB_ constants");
                 return $conn;
+            } else {
+                debugLog("Failed to connect using DB_ constants: " . $conn->connect_error);
             }
         } catch (Exception $e) {
-            error_log("Failed to connect using DB_ constants: " . $e->getMessage());
+            debugLog("Exception connecting using DB_ constants: " . $e->getMessage());
+        }
+    }
+    
+    // Try using constants with different names
+    if (defined('DB_HOST') && defined('DB_USER') && defined('DB_PASS') && defined('DB_NAME')) {
+        try {
+            debugLog("Trying connection with alternative DB_ constants");
+            $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+            if (!$conn->connect_error) {
+                debugLog("Connected to database using alternative DB_ constants");
+                return $conn;
+            } else {
+                debugLog("Failed to connect using alternative DB_ constants: " . $conn->connect_error);
+            }
+        } catch (Exception $e) {
+            debugLog("Exception connecting using alternative DB_ constants: " . $e->getMessage());
         }
     }
     
@@ -126,34 +154,111 @@ function getDatabaseConnection() {
     global $db_host, $db_name, $db_user, $db_pass;
     if (isset($db_host) && isset($db_name) && isset($db_user) && isset($db_pass)) {
         try {
+            debugLog("Trying connection with global variables");
             $conn = new mysqli($db_host, $db_user, $db_pass, $db_name);
             if (!$conn->connect_error) {
-                error_log("Connected to database using global variables");
+                debugLog("Connected to database using global variables");
                 return $conn;
+            } else {
+                debugLog("Failed to connect using global variables: " . $conn->connect_error);
             }
         } catch (Exception $e) {
-            error_log("Failed to connect using global variables: " . $e->getMessage());
+            debugLog("Exception connecting using global variables: " . $e->getMessage());
         }
     }
     
     // Try fallback credentials
-    foreach ($dbCredentials as $creds) {
+    foreach ($dbCredentials as $index => $creds) {
         try {
+            debugLog("Trying connection with fallback credentials #" . ($index + 1));
             $conn = new mysqli($creds['host'], $creds['user'], $creds['pass'], $creds['name']);
             if (!$conn->connect_error) {
-                error_log("Connected to database using fallback credentials");
+                debugLog("Connected to database using fallback credentials #" . ($index + 1));
                 return $conn;
+            } else {
+                debugLog("Failed to connect using fallback credentials #" . ($index + 1) . ": " . $conn->connect_error);
             }
         } catch (Exception $e) {
-            error_log("Failed to connect using fallback credentials: " . $e->getMessage());
+            debugLog("Exception connecting using fallback credentials #" . ($index + 1) . ": " . $e->getMessage());
         }
     }
     
+    // Try connecting without specifying database
+    foreach ($dbCredentials as $index => $creds) {
+        try {
+            debugLog("Trying connection without database using credentials #" . ($index + 1));
+            $conn = new mysqli($creds['host'], $creds['user'], $creds['pass']);
+            if (!$conn->connect_error) {
+                debugLog("Connected without database using credentials #" . ($index + 1));
+                
+                // Try to create the database
+                if (!empty($creds['name'])) {
+                    debugLog("Attempting to create database: " . $creds['name']);
+                    if ($conn->query("CREATE DATABASE IF NOT EXISTS `" . $creds['name'] . "`")) {
+                        debugLog("Database created successfully: " . $creds['name']);
+                        
+                        // Select the database
+                        if ($conn->select_db($creds['name'])) {
+                            debugLog("Selected the database: " . $creds['name']);
+                            
+                            // Create the required tables
+                            createRequiredTables($conn);
+                            
+                            return $conn;
+                        } else {
+                            debugLog("Failed to select the created database: " . $conn->error);
+                        }
+                    } else {
+                        debugLog("Failed to create database: " . $conn->error);
+                    }
+                }
+                
+                return $conn;
+            } else {
+                debugLog("Failed to connect without database using credentials #" . ($index + 1) . ": " . $conn->connect_error);
+            }
+        } catch (Exception $e) {
+            debugLog("Exception connecting without database using credentials #" . ($index + 1) . ": " . $e->getMessage());
+        }
+    }
+    
+    debugLog("All database connection attempts failed");
     return null;
+}
+
+// Create required tables if they don't exist
+function createRequiredTables($conn) {
+    debugLog("Creating required tables...");
+    
+    // Create outstation_fares table
+    $createTableSql = "
+        CREATE TABLE IF NOT EXISTS outstation_fares (
+            id VARCHAR(50) NOT NULL,
+            vehicle_id VARCHAR(50) NOT NULL,
+            base_fare DECIMAL(10,2) NOT NULL DEFAULT 0,
+            price_per_km DECIMAL(10,2) NOT NULL DEFAULT 0,
+            driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 250,
+            night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 700,
+            roundtrip_base_fare DECIMAL(10,2) NOT NULL DEFAULT 0,
+            roundtrip_price_per_km DECIMAL(10,2) NOT NULL DEFAULT 0,
+            created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            INDEX (vehicle_id)
+        )
+    ";
+    
+    if (!$conn->query($createTableSql)) {
+        debugLog("Failed to create outstation_fares table: " . $conn->error);
+    } else {
+        debugLog("Table outstation_fares created or already exists");
+    }
 }
 
 // Main processing
 try {
+    debugLog("Starting ultra emergency outstation processing");
+    
     // Get the request data
     $data = getRequestData();
     
@@ -161,6 +266,7 @@ try {
     $vehicleId = extractVehicleId($data);
     
     if (!$vehicleId) {
+        debugLog("No vehicle ID found in request");
         http_response_code(400);
         echo json_encode([
             'status' => 'error',
@@ -172,6 +278,7 @@ try {
     
     // For testing purposes, just return the data if test parameter is provided
     if (isset($data['test'])) {
+        debugLog("Test mode activated, returning test response");
         echo json_encode([
             'status' => 'success',
             'message' => 'Test successful',
@@ -203,12 +310,24 @@ try {
     $roundtripPricePerKm = isset($data['roundTripPricePerKm']) ? floatval($data['roundTripPricePerKm']) : 
                          (isset($data['roundtrip_price_per_km']) ? floatval($data['roundtrip_price_per_km']) : $pricePerKm);
     
+    debugLog("Parsed parameters", [
+        'vehicleId' => $vehicleId,
+        'basePrice' => $basePrice,
+        'pricePerKm' => $pricePerKm,
+        'driverAllowance' => $driverAllowance,
+        'nightHalt' => $nightHalt,
+        'roundtripBasePrice' => $roundtripBasePrice,
+        'roundtripPricePerKm' => $roundtripPricePerKm
+    ]);
+    
     // Get a database connection
     $conn = getDatabaseConnection();
     
     if (!$conn) {
         throw new Exception("Could not connect to database after multiple attempts");
     }
+    
+    debugLog("Database connection successful");
     
     // Create a simple table for outstation fares if it doesn't exist
     $createTableSql = "
@@ -224,14 +343,14 @@ try {
             created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
-            UNIQUE KEY vehicle_id (vehicle_id)
+            INDEX (vehicle_id)
         )
     ";
     
     if (!$conn->query($createTableSql)) {
-        error_log("Failed to create table: " . $conn->error);
+        debugLog("Failed to create table: " . $conn->error);
     } else {
-        error_log("Table outstation_fares created or already exists");
+        debugLog("Table outstation_fares created or already exists");
     }
     
     // Check if the record exists in outstation_fares
@@ -239,7 +358,7 @@ try {
     $checkStmt = $conn->prepare($checkSql);
     
     if (!$checkStmt) {
-        error_log("Prepare statement failed: " . $conn->error);
+        debugLog("Prepare statement failed: " . $conn->error);
         throw new Exception("Database error: " . $conn->error);
     }
     
@@ -248,6 +367,8 @@ try {
     $result = $checkStmt->get_result();
     $exists = $result->num_rows > 0;
     $checkStmt->close();
+    
+    debugLog("Record exists check: " . ($exists ? "Yes" : "No"));
     
     if ($exists) {
         // Update existing record
@@ -269,7 +390,7 @@ try {
         $updateStmt = $conn->prepare($updateSql);
         
         if (!$updateStmt) {
-            error_log("Prepare update statement failed: " . $conn->error);
+            debugLog("Prepare update statement failed: " . $conn->error);
             throw new Exception("Database error: " . $conn->error);
         }
         
@@ -287,11 +408,13 @@ try {
         );
         
         if (!$updateStmt->execute()) {
-            error_log("Execute update statement failed: " . $updateStmt->error);
+            debugLog("Execute update statement failed: " . $updateStmt->error);
             throw new Exception("Database error: " . $updateStmt->error);
         }
         
         $updateStmt->close();
+        
+        debugLog("Record updated successfully");
         
         echo json_encode([
             'status' => 'success',
@@ -322,7 +445,7 @@ try {
         $insertStmt = $conn->prepare($insertSql);
         
         if (!$insertStmt) {
-            error_log("Prepare insert statement failed: " . $conn->error);
+            debugLog("Prepare insert statement failed: " . $conn->error);
             throw new Exception("Database error: " . $conn->error);
         }
         
@@ -338,11 +461,13 @@ try {
         );
         
         if (!$insertStmt->execute()) {
-            error_log("Execute insert statement failed: " . $insertStmt->error);
+            debugLog("Execute insert statement failed: " . $insertStmt->error);
             throw new Exception("Database error: " . $insertStmt->error);
         }
         
         $insertStmt->close();
+        
+        debugLog("New record inserted successfully");
         
         echo json_encode([
             'status' => 'success',
@@ -368,14 +493,15 @@ try {
     $conn->close();
     
 } catch (Exception $e) {
-    error_log("Ultra emergency endpoint error: " . $e->getMessage());
+    debugLog("Ultra emergency endpoint error: " . $e->getMessage() . "\n" . $e->getTraceAsString());
     
     http_response_code(500);
     echo json_encode([
         'status' => 'error',
         'message' => 'Server error occurred: ' . $e->getMessage(),
         'serverTime' => date('Y-m-d H:i:s'),
-        'apiVersion' => '1.0.77'
+        'apiVersion' => '1.0.77',
+        'debug' => true
     ]);
 }
 ?>
