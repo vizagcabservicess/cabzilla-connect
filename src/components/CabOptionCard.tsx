@@ -1,7 +1,8 @@
-import React from 'react';
+
+import React, { useState } from 'react';
 import { CabType } from '@/types/cab';
 import { formatPrice } from '@/lib/cabData';
-import { Users, Star } from 'lucide-react';
+import { Users, Star, Check, Briefcase, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 
@@ -23,10 +24,16 @@ export function CabOptionCard({
   isCalculating
 }: CabOptionCardProps) {
   const isMobile = useIsMobile();
+  const [expandedDetails, setExpandedDetails] = useState(false);
   
   const handleCardClick = () => {
     console.log('Card clicked, selecting cab:', cab.name);
     onSelect(cab);
+  };
+  
+  const toggleExpand = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedDetails(!expandedDetails);
   };
   
   // Generate a random rating between 4.0 and 5.0 for display purposes
