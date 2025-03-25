@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { TourInfo, TourPackage } from "@/types/cab";
 import { Button } from "@/components/ui/button";
@@ -7,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Car } from 'lucide-react';
 
 interface TourPackagesSectionProps {
   onPackageSelect: (tourId: string, packageId: string) => void;

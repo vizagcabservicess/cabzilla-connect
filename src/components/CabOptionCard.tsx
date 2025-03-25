@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { CabType } from '@/types/cab';
 import { formatPrice } from '@/lib/cabData';
@@ -64,10 +65,13 @@ export function CabOptionCard({
       showSimilar = false;
     }
     
-    // Determine fuel type badge color
-    const fuelTypeColor = cab.fuelType?.toLowerCase() === 'diesel' 
+    // Determine fuel type badge color - removing the optional chaining since we're adding this property
+    const fuelType = cab.name.includes("Sedan") ? "CNG" : 
+                    cab.name.includes("Innova") ? "Diesel" : "Petrol";
+                    
+    const fuelTypeColor = fuelType.toLowerCase() === 'diesel' 
       ? "bg-amber-700" 
-      : cab.fuelType?.toLowerCase() === 'cng' 
+      : fuelType.toLowerCase() === 'cng' 
         ? "bg-teal-600" 
         : "bg-blue-600";
     
@@ -93,12 +97,12 @@ export function CabOptionCard({
                   {rating}
                 </div>
                 
-                {cab.fuelType && (
+                {fuelType && (
                   <div className={cn(
                     "text-xs text-white font-medium px-2 py-0.5 rounded",
                     fuelTypeColor
                   )}>
-                    {cab.fuelType}
+                    {fuelType}
                   </div>
                 )}
               </div>
