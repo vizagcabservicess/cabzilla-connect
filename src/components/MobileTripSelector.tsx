@@ -3,7 +3,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Car, PlaneTakeoff, Clock, MapPin } from "lucide-react";
+import { ArrowLeft, Car, PlaneTakeoff, Clock, MapPin, Compass } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
@@ -75,41 +75,53 @@ export function MobileTripSelector({
         </div>
         
         <div className="p-2 bg-white">
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             <Button 
               variant="ghost"
               onClick={() => handleTabChange('outstation')}
               className={cn(
-                "flex flex-col items-center justify-center py-4 rounded-lg",
+                "flex flex-col items-center justify-center py-3 rounded-lg",
                 selectedTab === 'outstation' ? "bg-blue-500 text-white" : "bg-white text-gray-700 border"
               )}
             >
               <Car className={cn("h-5 w-5 mb-1", selectedTab === 'outstation' ? "text-white" : "text-blue-500")} />
-              <span className="text-xs font-medium">Outstation Cabs</span>
+              <span className="text-xs font-medium">Outstation</span>
             </Button>
             
             <Button 
               variant="ghost"
               onClick={() => handleTabChange('airport')}
               className={cn(
-                "flex flex-col items-center justify-center py-4 rounded-lg",
+                "flex flex-col items-center justify-center py-3 rounded-lg",
                 selectedTab === 'airport' ? "bg-blue-500 text-white" : "bg-white text-gray-700 border"
               )}
             >
               <PlaneTakeoff className={cn("h-5 w-5 mb-1", selectedTab === 'airport' ? "text-white" : "text-blue-500")} />
-              <span className="text-xs font-medium">Airport Cabs</span>
+              <span className="text-xs font-medium">Airport</span>
             </Button>
             
             <Button 
               variant="ghost"
               onClick={() => handleTabChange('local')}
               className={cn(
-                "flex flex-col items-center justify-center py-4 rounded-lg",
+                "flex flex-col items-center justify-center py-3 rounded-lg",
                 selectedTab === 'local' ? "bg-blue-500 text-white" : "bg-white text-gray-700 border"
               )}
             >
               <Clock className={cn("h-5 w-5 mb-1", selectedTab === 'local' ? "text-white" : "text-blue-500")} />
-              <span className="text-xs font-medium">Hourly Rentals</span>
+              <span className="text-xs font-medium">Hourly</span>
+            </Button>
+            
+            <Button 
+              variant="ghost"
+              onClick={() => handleTabChange('tour')}
+              className={cn(
+                "flex flex-col items-center justify-center py-3 rounded-lg",
+                selectedTab === 'tour' ? "bg-blue-500 text-white" : "bg-white text-gray-700 border"
+              )}
+            >
+              <Compass className={cn("h-5 w-5 mb-1", selectedTab === 'tour' ? "text-white" : "text-blue-500")} />
+              <span className="text-xs font-medium">Tours</span>
             </Button>
           </div>
         </div>
@@ -167,6 +179,13 @@ export function MobileTripSelector({
               </div>
             </div>
           </>
+        )}
+        
+        {selectedTab === 'tour' && (
+          <div className="bg-blue-50 p-3 border-y flex items-center">
+            <Compass className="text-blue-500 h-5 w-5 mr-2" />
+            <p className="text-sm text-blue-700">Explore curated tour packages with transportation</p>
+          </div>
         )}
       </div>
     </div>
