@@ -186,15 +186,9 @@ export interface VehiclePricingUpdateRequest {
   pricePerKm: number;
   nightHaltCharge?: number;
   driverAllowance?: number;
-  capacity?: number;
-  luggageCapacity?: number;
-  ac?: boolean;
-  image?: string;
-  isActive?: boolean;
-  name?: string;
-  vehicleId?: string;
 }
 
+// New interfaces for booking updates
 export interface BookingUpdateRequest {
   passengerName?: string;
   passengerPhone?: string;
@@ -203,17 +197,4 @@ export interface BookingUpdateRequest {
   dropLocation?: string;
   pickupDate?: string;
   status?: BookingStatus;
-}
-
-export interface OutstationFare {
-  vehicleId: string;
-  basePrice: number; // Changed from optional to required
-  pricePerKm: number; // Changed from optional to required
-  oneWayBasePrice?: number;
-  oneWayPricePerKm?: number;
-  roundTripBasePrice: number;
-  roundTripPricePerKm: number;
-  driverAllowance: number;
-  nightHalt: number;
-  nightHaltCharge: number;
 }

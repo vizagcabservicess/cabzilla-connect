@@ -54,9 +54,6 @@ export function ApiErrorFallback({
     
   const isDatabaseError = 
     /database|db|sql|query|table|column|record|not found/i.test(errorMessage);
-    
-  const isAuthError = 
-    /auth|token|authentication|login|password|credential|unauthorized|403|401/i.test(errorMessage);
 
   const handleRetry = () => {
     console.log("Retrying after error...");
@@ -68,9 +65,7 @@ export function ApiErrorFallback({
     });
     
     // Clear all caches
-    if (typeof fareService?.clearCache === 'function') {
-      fareService.clearCache();
-    }
+    fareService.clearCache();
     
     // Clear any cached data that might be causing issues
     const cacheKeys = [
@@ -80,7 +75,7 @@ export function ApiErrorFallback({
       'calculatedFares', 'fareData', 'vehicleData',
       'tripDetails', 'distance', 'duration',
       'apiCache', 'apiResponse', 'authToken',
-      'token', 'user', 'userData', 'auth_token'
+      'token', 'user', 'userData'
     ];
     
     cacheKeys.forEach(key => {
@@ -126,9 +121,7 @@ export function ApiErrorFallback({
       console.log("Running advanced automatic fixes...");
       
       // 1. Clear all caches first
-      if (typeof fareService?.clearCache === 'function') {
-        fareService.clearCache();
-      }
+      fareService.clearCache();
       
       // 2. Fetch API version from environment
       const apiVersion = import.meta.env.VITE_API_VERSION || '1.0.50';
@@ -138,36 +131,14 @@ export function ApiErrorFallback({
       // 3. Clear authentication tokens (JWT)
       localStorage.removeItem('token');
       localStorage.removeItem('authToken');
-      localStorage.removeItem('auth_token');
       localStorage.removeItem('refreshToken');
       sessionStorage.removeItem('token');
       sessionStorage.removeItem('authToken');
-      sessionStorage.removeItem('auth_token');
       sessionStorage.removeItem('user');
       
       // 4. Set "useDirectApi" flag to prefer direct API endpoints
       localStorage.setItem('useDirectApi', 'true');
       sessionStorage.setItem('useDirectApi', 'true');
-      
-      // 5. Test API connection
-      const apiUrl = import.meta.env.VITE_API_BASE_URL || '';
-      if (apiUrl) {
-        try {
-          const timestamp = Date.now();
-          await fetch(`${apiUrl}/api/admin/db-connection-test.php?_t=${timestamp}`, {
-            method: 'HEAD',
-            headers: {
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
-              'Pragma': 'no-cache',
-              'X-Force-Refresh': 'true',
-              'X-Timestamp': timestamp.toString()
-            }
-          });
-        } catch (e) {
-          console.log('API connection test during fixes failed:', e);
-          // Continue regardless of result
-        }
-      }
       
       // Show success toast on completion
       toast.success("Automatic fixes applied successfully", {
@@ -189,86 +160,63 @@ export function ApiErrorFallback({
   };
 
   // Pick the most appropriate icon
-  const ErrorIcon = isAuthError
-    ? ShieldAlert
-    : (isCorsError 
-      ? ShieldAlert 
-      : (isNetworkError 
-        ? WifiOff 
-        : (isServerError 
-          ? Server 
-          : (is404Error 
-            ? FileQuestion 
-            : (isDatabaseError 
-              ? Database 
-              : AlertTriangle)))));
-
-  // Generate appropriate title based on error type
-  const errorTitle = isAuthError
-    ? "Authentication Failed"
-    : (isCorsError 
-      ? "Server Access Blocked" 
-      : (isDatabaseError 
-        ? "Database Connection Error" 
-        : title));
-
-  // Generate appropriate alert title based on error type
-  const alertTitle = isAuthError
-    ? "Authentication Error"
-    : (isCorsError 
-      ? "CORS Policy Error" 
-      : (isNetworkError 
-        ? "Server Connection Failed" 
-        : (isServerError 
-          ? "Server Error" 
-          : (is404Error 
-            ? "Resource Not Found"
-            : (isDatabaseError
-              ? "Database Error"
-              : "Error")))));
+  const ErrorIcon = isCorsError 
+    ? ShieldAlert 
+    : (isNetworkError 
+      ? WifiOff 
+      : (isServerError 
+        ? Server 
+        : (is404Error 
+          ? FileQuestion 
+          : (isDatabaseError 
+            ? Database 
+            : AlertTriangle))));
 
   return (
     <Card className="w-full border-red-200 bg-red-50">
       <CardHeader>
         <CardTitle className="flex items-center text-red-700">
           <ErrorIcon className="h-5 w-5 mr-2" />
-          {errorTitle}
+          {isCorsError 
+            ? "Server Access Blocked" 
+            : (isDatabaseError 
+              ? "Database Connection Error" 
+              : title)}
         </CardTitle>
       </CardHeader>
       <CardContent>
         <Alert variant="destructive" className="mb-4">
           <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>{alertTitle}</AlertTitle>
+          <AlertTitle>
+            {isCorsError 
+              ? "CORS Policy Error" 
+              : (isNetworkError 
+                ? "Server Connection Failed" 
+                : (isServerError 
+                  ? "Server Error" 
+                  : (is404Error 
+                    ? "Resource Not Found"
+                    : (isDatabaseError
+                      ? "Database Error"
+                      : "Error"))))}
+          </AlertTitle>
           <AlertDescription>
-            {description || (isAuthError
-              ? "Login failed. Please check your credentials and try again."
-              : (isCorsError 
-                ? "The browser blocked access to the server due to security policy (CORS). This usually requires changes on the server side."
-                : (isNetworkError 
-                  ? "Unable to connect to the server. Please check your internet connection or try again later."
-                  : (isDatabaseError
-                    ? "There was a problem with the database connection or query. The application will use fallback data."
-                    : errorMessage))))}
+            {description || (isCorsError 
+              ? "The browser blocked access to the server due to security policy (CORS). This usually requires changes on the server side."
+              : (isNetworkError 
+                ? "Unable to connect to the server. Please check your internet connection or try again later."
+                : (isDatabaseError
+                  ? "There was a problem with the database connection or query. The application will use fallback data."
+                  : errorMessage)))}
           </AlertDescription>
         </Alert>
-        
-        {isAuthError && (
-          <div className="text-sm text-gray-700 mt-4">
-            <p className="font-medium">What you can try:</p>
-            <ul className="list-disc pl-5 mt-2 space-y-1">
-              <li>Double-check your email address and password</li>
-              <li>Clear your browser cache and cookies</li>
-              <li>Try the "Clear Cache &amp; Retry" button below</li>
-              <li>Contact support if you continue having trouble</li>
-            </ul>
-          </div>
-        )}
         
         {isCorsError && (
           <div className="text-sm text-gray-700 mt-4">
             <p className="font-medium">What you can try:</p>
             <ul className="list-disc pl-5 mt-2 space-y-1">
               <li>Clear your browser cache and cookies</li>
+              <li>Log out and log back in to refresh your authentication tokens</li>
               <li>Try from a different browser or internet connection</li>
               <li>Use the "Apply Automatic Fixes" button below</li>
               <li>Contact support if the problem persists</li>
@@ -276,7 +224,7 @@ export function ApiErrorFallback({
           </div>
         )}
         
-        {isNetworkError && !isAuthError && (
+        {isNetworkError && (
           <div className="text-sm text-gray-700 mt-4">
             <p className="font-medium">Possible reasons:</p>
             <ul className="list-disc pl-5 mt-2 space-y-1">
@@ -288,7 +236,7 @@ export function ApiErrorFallback({
           </div>
         )}
         
-        {isServerError && !isAuthError && (
+        {isServerError && (
           <div className="text-sm text-gray-700 mt-4">
             <p className="font-medium">What you can try:</p>
             <ul className="list-disc pl-5 mt-2 space-y-1">
@@ -296,6 +244,18 @@ export function ApiErrorFallback({
               <li>Clear your browser cache and cookies</li>
               <li>Use the "Apply Automatic Fixes" button below</li>
               <li>Contact support if the problem persists</li>
+            </ul>
+          </div>
+        )}
+        
+        {isDatabaseError && (
+          <div className="text-sm text-gray-700 mt-4">
+            <p className="font-medium">What you can try:</p>
+            <ul className="list-disc pl-5 mt-2 space-y-1">
+              <li>The application will use fallback sample data</li>
+              <li>You can still continue using most features</li>
+              <li>Try the "Apply Automatic Fixes" button below</li>
+              <li>Contact support if you need to access actual database records</li>
             </ul>
           </div>
         )}
