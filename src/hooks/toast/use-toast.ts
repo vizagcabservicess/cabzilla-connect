@@ -2,6 +2,7 @@
 import * as React from "react";
 import { ToastContext, ToastContextType } from "./toast-context";
 import { toast } from "./toast";
+import { dispatch } from "./toast-reducer";
 
 // Hook to use the toast context
 export const useToast = (): ToastContextType => {
@@ -19,6 +20,3 @@ export const useToast = (): ToastContextType => {
   
   return context;
 };
-
-// Import dispatch for fallback case
-import { dispatch } from "./toast-reducer";

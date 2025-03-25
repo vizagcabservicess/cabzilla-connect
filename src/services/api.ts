@@ -1,4 +1,5 @@
-import { TourFare, FareUpdateRequest, VehiclePricingData, VehiclePricingUpdateRequest, OutstationFare } from '@/types/api';
+
+import { TourFare, FareUpdateRequest, VehiclePricingData, VehiclePricingUpdateRequest, OutstationFare, BookingRequest, BookingUpdateRequest, BookingStatus } from '@/types/api';
 import { getVehicleData, updateVehicle, addVehicle, deleteVehicle, getVehicleTypes, getOutstationFares as getOutstationFaresService, updateOutstationFares as updateOutstationFaresService } from '@/services/vehicleDataService';
 import axios from 'axios';
 
@@ -27,11 +28,78 @@ export const bookingAPI = {
     console.log(`Getting booking with ID: ${id}`);
     return {};
   },
+  
   updateBooking: async (id: number, data: any) => {
     // Placeholder - implement as needed
     console.log(`Updating booking with ID: ${id}`, data);
     return {};
   },
+  
+  // Add the missing methods
+  createBooking: async (data: BookingRequest) => {
+    try {
+      const response = await api.post('/bookings.php', data);
+      return response.data;
+    } catch (error) {
+      return handleApiError(error);
+    }
+  },
+  
+  getUserBookings: async () => {
+    try {
+      const response = await api.get('/user/bookings.php');
+      return response.data || [];
+    } catch (error) {
+      return handleApiError(error);
+    }
+  },
+  
+  getAllBookings: async (status?: string) => {
+    try {
+      const url = status ? `/admin/bookings.php?status=${status}` : '/admin/bookings.php';
+      const response = await api.get(url);
+      return response.data?.bookings || [];
+    } catch (error) {
+      return handleApiError(error);
+    }
+  },
+  
+  getBookingById: async (id: number) => {
+    try {
+      const response = await api.get(`/bookings/${id}.php`);
+      return response.data || {};
+    } catch (error) {
+      return handleApiError(error);
+    }
+  },
+  
+  updateBookingStatus: async (id: number, status: BookingStatus) => {
+    try {
+      const response = await api.post(`/admin/booking.php?id=${id}`, { status });
+      return response.data;
+    } catch (error) {
+      return handleApiError(error);
+    }
+  },
+  
+  deleteBooking: async (id: number) => {
+    try {
+      const response = await api.delete(`/admin/booking.php?id=${id}`);
+      return response.data;
+    } catch (error) {
+      return handleApiError(error);
+    }
+  },
+  
+  getAdminDashboardMetrics: async (period: string = 'week') => {
+    try {
+      const response = await api.get(`/admin/dashboard-metrics.php?period=${period}`);
+      return response.data;
+    } catch (error) {
+      return handleApiError(error);
+    }
+  },
+  
   // Add other methods as needed
 };
 
@@ -97,6 +165,25 @@ export const authAPI = {
       return response.data;
     } catch (error) {
       return handleApiError(error);
+    }
+  },
+  // Add the missing method
+  logout: () => {
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('user');
+    return true;
+  },
+  // Add the missing property
+  isAdmin: () => {
+    const userData = localStorage.getItem('user');
+    if (!userData) return false;
+    
+    try {
+      const user = JSON.parse(userData);
+      return user.role === 'admin';
+    } catch (error) {
+      console.error('Error checking admin status:', error);
+      return false;
     }
   }
 };
