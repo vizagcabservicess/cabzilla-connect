@@ -1,4 +1,3 @@
-
 // src/types/api.ts
 export type BookingStatus =
   | 'pending'
@@ -212,8 +211,8 @@ export interface OutstationFare {
   pricePerKm: number; // Changed from optional to required
   oneWayBasePrice?: number;
   oneWayPricePerKm?: number;
-  roundTripBasePrice?: number;
-  roundTripPricePerKm?: number;
+  roundTripBasePrice: number;
+  roundTripPricePerKm: number;
   driverAllowance: number;
   nightHalt: number;
   nightHaltCharge: number;

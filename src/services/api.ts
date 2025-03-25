@@ -494,36 +494,34 @@ export const fareAPI = {
     // Get current outstation fares to maintain other values
     const currentFares = await getOutstationFaresService(vehicleId);
     
-    // Create the update data with required fields (not optional)
-    const updateData = {
+    // Create the update data that satisfies the OutstationFare interface
+    const updateData: OutstationFare = {
       vehicleId,
-      basePrice: basePrice, // Ensure this is not optional
-      pricePerKm: pricePerKm, // Ensure this is not optional
+      basePrice: basePrice,
+      pricePerKm: pricePerKm,
       driverAllowance,
       nightHalt: nightHaltCharge,
       nightHaltCharge,
+      // These are required properties in OutstationFare interface
+      roundTripBasePrice: 0, 
+      roundTripPricePerKm: 0
     };
     
     // Add trip mode specific properties
     if (tripMode === 'one-way') {
-      Object.assign(updateData, {
-        oneWayBasePrice: basePrice,
-        oneWayPricePerKm: pricePerKm,
-        // Preserve round trip values
-        roundTripBasePrice: currentFares?.roundTripBasePrice || 0,
-        roundTripPricePerKm: currentFares?.roundTripPricePerKm || 0
-      });
+      updateData.oneWayBasePrice = basePrice;
+      updateData.oneWayPricePerKm = pricePerKm;
+      // Preserve round trip values or set defaults
+      updateData.roundTripBasePrice = currentFares?.roundTripBasePrice || 0;
+      updateData.roundTripPricePerKm = currentFares?.roundTripPricePerKm || 0;
     } else {
-      Object.assign(updateData, {
-        roundTripBasePrice: basePrice,
-        roundTripPricePerKm: pricePerKm,
-        // Preserve one way values
-        oneWayBasePrice: currentFares?.basePrice || currentFares?.oneWayBasePrice || 0,
-        oneWayPricePerKm: currentFares?.pricePerKm || currentFares?.oneWayPricePerKm || 0
-      });
+      updateData.roundTripBasePrice = basePrice;
+      updateData.roundTripPricePerKm = pricePerKm;
+      // Preserve one way values or set defaults
+      updateData.oneWayBasePrice = currentFares?.basePrice || currentFares?.oneWayBasePrice || 0;
+      updateData.oneWayPricePerKm = currentFares?.pricePerKm || currentFares?.oneWayPricePerKm || 0;
     }
     
     return updateOutstationFaresService(vehicleId, updateData);
   }
 };
-
