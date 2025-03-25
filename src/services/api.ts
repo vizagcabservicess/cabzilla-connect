@@ -1,4 +1,3 @@
-
 import { TourFare, FareUpdateRequest, VehiclePricingData, VehiclePricingUpdateRequest, OutstationFare, BookingRequest, BookingUpdateRequest, BookingStatus } from '@/types/api';
 import { getVehicleData, updateVehicle, addVehicle, deleteVehicle, getVehicleTypes, getOutstationFares as getOutstationFaresService, updateOutstationFares as updateOutstationFaresService } from '@/services/vehicleDataService';
 import axios from 'axios';
@@ -119,9 +118,14 @@ export const bookingAPI = {
     }
   },
   
-  getAdminDashboardMetrics: async (period: string = 'week') => {
+  getAdminDashboardMetrics: async (period: string = 'week', status?: string) => {
     try {
-      const response = await api.get(`/admin/dashboard-metrics.php?period=${period}`);
+      // Use only the period parameter in the URL since status is optional
+      const url = status 
+        ? `/admin/dashboard-metrics.php?period=${period}&status=${status}`
+        : `/admin/dashboard-metrics.php?period=${period}`;
+      
+      const response = await api.get(url);
       return response.data;
     } catch (error) {
       return handleApiError(error);
@@ -490,33 +494,19 @@ export const fareAPI = {
     // Get current outstation fares to maintain other values
     const currentFares = await getOutstationFaresService(vehicleId);
     
-    // Define OutstationFare type to satisfy TypeScript
-    type OutstationFare = {
-      vehicleId: string;
-      basePrice?: number;
-      pricePerKm?: number;
-      oneWayBasePrice?: number;
-      oneWayPricePerKm?: number;
-      roundTripBasePrice?: number;
-      roundTripPricePerKm?: number;
-      driverAllowance: number;
-      nightHalt: number;
-      nightHaltCharge: number;
-    };
-    
-    // Prepare the update data
-    const updateData: OutstationFare = {
+    // Create the update data with required fields (not optional)
+    const updateData = {
       vehicleId,
+      basePrice: basePrice, // Ensure this is not optional
+      pricePerKm: pricePerKm, // Ensure this is not optional
       driverAllowance,
       nightHalt: nightHaltCharge,
       nightHaltCharge,
     };
     
-    // Update the appropriate fields based on trip mode
+    // Add trip mode specific properties
     if (tripMode === 'one-way') {
       Object.assign(updateData, {
-        basePrice,
-        pricePerKm,
         oneWayBasePrice: basePrice,
         oneWayPricePerKm: pricePerKm,
         // Preserve round trip values
@@ -528,8 +518,6 @@ export const fareAPI = {
         roundTripBasePrice: basePrice,
         roundTripPricePerKm: pricePerKm,
         // Preserve one way values
-        basePrice: currentFares?.basePrice || currentFares?.oneWayBasePrice || 0,
-        pricePerKm: currentFares?.pricePerKm || currentFares?.oneWayPricePerKm || 0,
         oneWayBasePrice: currentFares?.basePrice || currentFares?.oneWayBasePrice || 0,
         oneWayPricePerKm: currentFares?.pricePerKm || currentFares?.oneWayPricePerKm || 0
       });
@@ -538,3 +526,4 @@ export const fareAPI = {
     return updateOutstationFaresService(vehicleId, updateData);
   }
 };
+

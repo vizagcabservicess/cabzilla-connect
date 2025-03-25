@@ -36,3 +36,13 @@ export function toast({ ...props }: Toast) {
     update,
   };
 }
+
+// Add dismiss method to toast object
+toast.dismiss = (toastId?: string) => {
+  dispatch({ type: "DISMISS_TOAST", toastId });
+};
+
+// Add dismissAll method to toast object
+toast.dismissAll = () => {
+  dispatch({ type: "DISMISS_TOAST" });
+};
