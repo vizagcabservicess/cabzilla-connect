@@ -40,8 +40,8 @@ export function useIsMobile() {
         
         // Disable user selection on mobile for app-like feel
         document.body.style.userSelect = 'none';
-        document.body.style.webkitUserSelect = 'none';
-        document.body.style.webkitTapHighlightColor = 'transparent';
+        document.body.style.setProperty('webkit-user-select', 'none');
+        (document.body.style as any).webkitTapHighlightColor = 'transparent';
         
         // Prevent bounce effect on iOS
         document.body.style.overscrollBehavior = 'none';

@@ -1,8 +1,7 @@
-
-import React, { useState } from 'react';
+import React from 'react';
 import { CabType } from '@/types/cab';
 import { formatPrice } from '@/lib/cabData';
-import { Users, Briefcase, Info, Check, Star, X } from 'lucide-react';
+import { Users, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 
@@ -23,14 +22,8 @@ export function CabOptionCard({
   fareDetails,
   isCalculating
 }: CabOptionCardProps) {
-  const [expandedDetails, setExpandedDetails] = useState(false);
   const isMobile = useIsMobile();
   
-  const toggleExpand = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setExpandedDetails(!expandedDetails);
-  };
-
   const handleCardClick = () => {
     console.log('Card clicked, selecting cab:', cab.name);
     onSelect(cab);
@@ -65,7 +58,7 @@ export function CabOptionCard({
       showSimilar = false;
     }
     
-    // Determine fuel type badge color - removing the optional chaining since we're adding this property
+    // Determine fuel type badge color
     const fuelType = cab.name.includes("Sedan") ? "CNG" : 
                     cab.name.includes("Innova") ? "Diesel" : "Petrol";
                     

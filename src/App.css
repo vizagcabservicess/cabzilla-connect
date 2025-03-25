@@ -1,3 +1,4 @@
+
 #root {
   max-width: 1280px;
   margin: 0 auto;
@@ -44,7 +45,7 @@
     margin-top: 3rem;
   }
   
-  /* Mobile native header - updated to match reference design */
+  /* Mobile native header - matches reference design */
   .mobile-header {
     position: fixed;
     top: 0;
@@ -82,32 +83,7 @@
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
   
-  /* App-like pill toggle for trip mode - updated to match reference */
-  .trip-mode-toggle {
-    background: #f0f0f5;
-    border-radius: 50px;
-    padding: 4px;
-    display: flex;
-    margin: 12px 0;
-  }
-  
-  .trip-mode-toggle button {
-    flex: 1;
-    border-radius: 50px;
-    padding: 8px 16px;
-    border: none;
-    font-size: 14px;
-    font-weight: 500;
-    transition: all 0.2s;
-  }
-  
-  .trip-mode-toggle button.active {
-    background: white;
-    box-shadow: 0 2px 4px rgba(33, 150, 243, 0.1);
-    color: #2196f3;
-  }
-
-  /* Status bar styling - updated to match reference */
+  /* Status bar styling - matches reference */
   .mobile-status-bar {
     display: flex;
     justify-content: space-between;
@@ -130,17 +106,6 @@
     height: 4px;
     background-color: #333;
     border-radius: 50%;
-  }
-  
-  .mobile-battery {
-    display: flex;
-    align-items: center;
-    padding: 2px 6px;
-    background-color: #4caf50;
-    color: white;
-    border-radius: 3px;
-    font-size: 10px;
-    font-weight: bold;
   }
   
   /* Features highlight on mobile - matches reference */
@@ -312,333 +277,22 @@
     font-weight: 500;
   }
   
-  /* Traveller details form */
-  .traveller-details {
-    background: white;
-    border-radius: 12px;
-    padding: 16px;
-    margin: 16px;
+  /* Native-like button effects */
+  button:active {
+    transform: scale(0.98);
+    transition: transform 0.1s;
   }
   
-  .traveller-details-title {
-    font-size: 18px;
-    font-weight: bold;
-    margin-bottom: 16px;
-  }
-  
-  .form-field {
-    margin-bottom: 16px;
-  }
-  
-  .form-field label {
-    display: block;
-    font-size: 14px;
-    color: #6b7280;
-    margin-bottom: 4px;
-  }
-  
-  .form-field input {
-    width: 100%;
-    padding: 10px 12px;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
-    font-size: 16px;
-  }
-  
-  .form-field.error input {
-    border-color: #ef4444;
-  }
-  
-  .error-message {
-    color: #ef4444;
-    font-size: 12px;
-    margin-top: 4px;
-  }
-  
-  /* Radio controls */
-  .radio-control {
-    display: flex;
-    gap: 16px;
-    margin: 8px 0;
-  }
-  
-  .radio-option {
-    display: flex;
-    align-items: center;
-  }
-  
-  .radio-option input[type="radio"] {
-    margin-right: 8px;
-  }
-  
-  /* Payment options */
-  .payment-options {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    padding: 16px;
-    background: #333;
+  /* Fixed bottom button */
+  .fixed-bottom-button {
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
+    padding: 12px 16px;
+    background: white;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
     z-index: 40;
-  }
-  
-  .payment-option {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  
-  .payment-option-radio {
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    border: 2px solid white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  
-  .payment-option-radio.selected {
-    border-color: #3b82f6;
-  }
-  
-  .payment-option-radio.selected::after {
-    content: "";
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: #3b82f6;
-  }
-  
-  .pay-button {
-    background: #3b82f6;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    padding: 12px 20px;
-    font-weight: 600;
-    font-size: 16px;
-    flex: 1;
-  }
-  
-  /* Fare breakdown */
-  .fare-breakdown {
-    background: white;
-    border-radius: 12px 12px 0 0;
-    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
-    padding: 16px;
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 50;
-  }
-  
-  .fare-breakdown-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 16px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid #f0f0f0;
-  }
-  
-  .fare-breakdown-item {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 10px;
-    font-size: 14px;
-  }
-  
-  .fare-breakdown-total {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px solid #f0f0f0;
-    font-weight: 600;
-    font-size: 16px;
-  }
-  
-  /* Inclusions section */
-  .inclusions-section {
-    margin: 16px;
-    padding: 16px;
-    background: white;
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  }
-  
-  .inclusions-title {
-    font-size: 16px;
-    font-weight: 600;
-    margin-bottom: 12px;
-    color: #333;
-  }
-  
-  /* Coupon section */
-  .coupon-section {
-    padding: 16px;
-  }
-  
-  .coupon-section-title {
-    font-size: 18px;
-    font-weight: 600;
-    margin-bottom: 12px;
-  }
-  
-  .coupon-options {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-  
-  .coupon-option {
-    border: 1px dashed #d1d5db;
-    border-radius: 8px;
-    padding: 12px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  
-  .coupon-option.selected {
-    border-color: #2563eb;
-    background-color: #eff6ff;
-  }
-  
-  .coupon-radio {
-    width: 20px;
-    height: 20px;
-  }
-  
-  .coupon-details {
-    flex: 1;
-  }
-  
-  .coupon-code {
-    font-weight: 600;
-    font-size: 16px;
-    color: #2563eb;
-  }
-  
-  .coupon-discount {
-    font-size: 12px;
-    color: #10b981;
-  }
-  
-  /* Review ride section */
-  .review-ride-header {
-    background-color: #f3f4f6;
-    padding: 16px;
-  }
-  
-  .review-tabs {
-    display: flex;
-    gap: 8px;
-    margin-top: 12px;
-  }
-  
-  .review-tab {
-    background: white;
-    border: 1px solid #d1d5db;
-    border-radius: 50px;
-    padding: 8px 16px;
-    font-size: 14px;
-  }
-  
-  .trip-summary {
-    background: #f0f9ff;
-    padding: 16px;
-    border-radius: 8px;
-    margin: 16px;
-  }
-  
-  .trip-path {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 8px;
-  }
-  
-  .trip-location {
-    font-weight: 500;
-  }
-  
-  .trip-details {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 8px;
-    font-size: 14px;
-    color: #6b7280;
-  }
-  
-  /* Cab details card in review */
-  .cab-details-card {
-    background: white;
-    border-radius: 12px;
-    overflow: hidden;
-    margin: 16px;
-    border: 1px solid #e5e7eb;
-  }
-  
-  .cab-details-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px;
-    border-bottom: 1px solid #f3f4f6;
-  }
-  
-  .cab-details-body {
-    padding: 12px 16px;
-  }
-  
-  .cab-stats {
-    display: flex;
-    border-top: 1px dashed #e5e7eb;
-    margin-top: 12px;
-    padding-top: 12px;
-  }
-  
-  .cab-stat {
-    flex: 1;
-    text-align: center;
-    font-size: 14px;
-  }
-  
-  .cab-stat-value {
-    font-weight: 600;
-    font-size: 16px;
-    margin-bottom: 4px;
-  }
-  
-  .cab-stat-label {
-    color: #6b7280;
-    font-size: 12px;
-  }
-  
-  /* Cab assignment note */
-  .cab-assignment-note {
-    background: #fff8e1;
-    border: 1px solid #ffe082;
-    padding: 12px 16px;
-    margin: 16px;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  
-  .dotted-separator {
-    height: 4px;
-    background-image: linear-gradient(to right, #e5e7eb 50%, transparent 50%);
-    background-size: 8px 2px;
-    margin: 12px 0;
   }
 }
 
@@ -699,24 +353,4 @@
   opacity: 0;
   transform: translateX(-100%);
   transition: opacity 300ms, transform 300ms;
-}
-
-/* Native-like button effects */
-@media (max-width: 768px) {
-  button:active {
-    transform: scale(0.98);
-    transition: transform 0.1s;
-  }
-  
-  /* Fixed bottom button */
-  .fixed-bottom-button {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    padding: 12px 16px;
-    background: white;
-    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
-    z-index: 40;
-  }
 }
