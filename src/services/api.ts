@@ -1,4 +1,4 @@
-import { TourFare, FareUpdateRequest, VehiclePricingData, VehiclePricingUpdateRequest } from '@/types/api';
+import { TourFare, FareUpdateRequest, VehiclePricingData, VehiclePricingUpdateRequest, OutstationFare } from '@/types/api';
 import { getVehicleData, updateVehicle, addVehicle, deleteVehicle, getVehicleTypes, getOutstationFares as getOutstationFaresService, updateOutstationFares as updateOutstationFaresService } from '@/services/vehicleDataService';
 import axios from 'axios';
 
@@ -20,7 +20,7 @@ const handleApiError = (error: any): never => {
   throw error;
 };
 
-// Export additional APIs that were referenced in the build errors
+// Export the API service objects
 export const bookingAPI = {
   getBooking: async (id: number) => {
     // Placeholder - implement as needed
@@ -40,7 +40,65 @@ export const authAPI = {
     // Placeholder - implement as needed
     return !!localStorage.getItem('auth_token');
   },
-  // Add other methods as needed
+  getCurrentUser: () => {
+    // Implement to get current user data
+    const userData = localStorage.getItem('user');
+    return userData ? JSON.parse(userData) : null;
+  },
+  getAllUsers: async () => {
+    try {
+      const response = await api.get('/admin/users.php');
+      return response.data || [];
+    } catch (error) {
+      return handleApiError(error);
+    }
+  },
+  updateUserRole: async (userId: number, role: 'admin' | 'user') => {
+    try {
+      const response = await api.post('/admin/users.php', { userId, role, action: 'updateRole' });
+      return response.data;
+    } catch (error) {
+      return handleApiError(error);
+    }
+  },
+  login: async (credentials: { email: string; password: string }) => {
+    try {
+      const response = await api.post('/login.php', credentials);
+      
+      // Store token in localStorage
+      if (response.data && response.data.token) {
+        localStorage.setItem('auth_token', response.data.token);
+        
+        // Store user data if available
+        if (response.data.user) {
+          localStorage.setItem('user', JSON.stringify(response.data.user));
+        }
+      }
+      
+      return response.data;
+    } catch (error) {
+      return handleApiError(error);
+    }
+  },
+  signup: async (userData: any) => {
+    try {
+      const response = await api.post('/signup.php', userData);
+      
+      // Store token in localStorage
+      if (response.data && response.data.token) {
+        localStorage.setItem('auth_token', response.data.token);
+        
+        // Store user data if available
+        if (response.data.user) {
+          localStorage.setItem('user', JSON.stringify(response.data.user));
+        }
+      }
+      
+      return response.data;
+    } catch (error) {
+      return handleApiError(error);
+    }
+  }
 };
 
 export const fareAPI = {
