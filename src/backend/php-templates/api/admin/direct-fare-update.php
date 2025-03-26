@@ -2,16 +2,13 @@
 <?php
 // direct-fare-update.php - Universal endpoint for all fare updates with database creation fallbacks
 
-// Set headers to prevent caching if not already set
-if (!headers_sent()) {
-    header('Content-Type: application/json');
-    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-    header('Pragma: no-cache');
-    header('Expires: 0');
-    header('Access-Control-Allow-Origin: *');
-    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh');
-}
+header('Content-Type: application/json');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh');
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -253,7 +250,7 @@ function handleOutstationFares($conn, $data, $vehicleId) {
     $conn->begin_transaction();
     
     try {
-        // Only update outstation_fares table (not vehicle_pricing anymore)
+        // 1. Update outstation_fares table
         $stmt = $conn->prepare("
             INSERT INTO outstation_fares 
             (vehicle_id, base_price, price_per_km, night_halt_charge, driver_allowance, roundtrip_base_price, roundtrip_price_per_km, updated_at)
@@ -276,6 +273,58 @@ function handleOutstationFares($conn, $data, $vehicleId) {
             $driverAllowance,
             $roundTripBasePrice,
             $roundTripPricePerKm
+        );
+        
+        $stmt->execute();
+        $stmt->close();
+        
+        // 2. Update vehicle_pricing table for ONE-WAY trips (for backward compatibility)
+        $tripTypeOneWay = 'outstation-one-way';
+        $stmt = $conn->prepare("
+            INSERT INTO vehicle_pricing 
+            (vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, NOW())
+            ON DUPLICATE KEY UPDATE 
+            base_fare = VALUES(base_fare),
+            price_per_km = VALUES(price_per_km),
+            night_halt_charge = VALUES(night_halt_charge),
+            driver_allowance = VALUES(driver_allowance),
+            updated_at = NOW()
+        ");
+        
+        $stmt->bind_param("ssdddd", 
+            $vehicleId,
+            $tripTypeOneWay,
+            $basePrice,
+            $pricePerKm,
+            $nightHaltCharge,
+            $driverAllowance
+        );
+        
+        $stmt->execute();
+        $stmt->close();
+        
+        // 3. Update vehicle_pricing table for ROUND-TRIP trips (for backward compatibility)
+        $tripTypeRoundTrip = 'outstation-round-trip';
+        $stmt = $conn->prepare("
+            INSERT INTO vehicle_pricing 
+            (vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, NOW())
+            ON DUPLICATE KEY UPDATE 
+            base_fare = VALUES(base_fare),
+            price_per_km = VALUES(price_per_km),
+            night_halt_charge = VALUES(night_halt_charge),
+            driver_allowance = VALUES(driver_allowance),
+            updated_at = NOW()
+        ");
+        
+        $stmt->bind_param("ssdddd", 
+            $vehicleId,
+            $tripTypeRoundTrip,
+            $roundTripBasePrice,
+            $roundTripPricePerKm,
+            $nightHaltCharge,
+            $driverAllowance
         );
         
         $stmt->execute();
@@ -307,7 +356,7 @@ function handleLocalFares($conn, $data, $vehicleId) {
     $conn->begin_transaction();
     
     try {
-        // Only update local_package_fares table (not vehicle_pricing anymore)
+        // 1. Update local_package_fares table
         $stmt = $conn->prepare("
             INSERT INTO local_package_fares 
             (vehicle_id, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour, updated_at)
@@ -328,6 +377,33 @@ function handleLocalFares($conn, $data, $vehicleId) {
             $package10hr100km,
             $extraKmRate,
             $extraHourRate
+        );
+        
+        $stmt->execute();
+        $stmt->close();
+        
+        // 2. Update vehicle_pricing table for LOCAL trips (for backward compatibility)
+        $tripType = 'local';
+        $stmt = $conn->prepare("
+            INSERT INTO vehicle_pricing 
+            (vehicle_id, trip_type, local_package_4hr, local_package_8hr, local_package_10hr,
+             price_per_km, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, NOW())
+            ON DUPLICATE KEY UPDATE 
+            local_package_4hr = VALUES(local_package_4hr),
+            local_package_8hr = VALUES(local_package_8hr),
+            local_package_10hr = VALUES(local_package_10hr),
+            price_per_km = VALUES(price_per_km),
+            updated_at = NOW()
+        ");
+        
+        $stmt->bind_param("ssdddd", 
+            $vehicleId,
+            $tripType,
+            $package4hr40km,
+            $package8hr80km,
+            $package10hr100km,
+            $extraKmRate
         );
         
         $stmt->execute();
@@ -363,10 +439,11 @@ function handleAirportFares($conn, $data, $vehicleId) {
     $conn->begin_transaction();
     
     try {
-        // Only update airport_transfer_fares table (not vehicle_pricing anymore)
+        // 1. Update airport_transfer_fares table
         $stmt = $conn->prepare("
             INSERT INTO airport_transfer_fares 
-            (vehicle_id, base_price, price_per_km, pickup_price, drop_price, tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge, updated_at)
+            (vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
+             tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
             ON DUPLICATE KEY UPDATE 
             base_price = VALUES(base_price),
@@ -392,6 +469,28 @@ function handleAirportFares($conn, $data, $vehicleId) {
             $tier3Price,
             $tier4Price,
             $extraKmCharge
+        );
+        
+        $stmt->execute();
+        $stmt->close();
+        
+        // 2. Update vehicle_pricing table for AIRPORT trips (for backward compatibility)
+        $tripType = 'airport';
+        $stmt = $conn->prepare("
+            INSERT INTO vehicle_pricing 
+            (vehicle_id, trip_type, base_fare, price_per_km, updated_at)
+            VALUES (?, ?, ?, ?, NOW())
+            ON DUPLICATE KEY UPDATE 
+            base_fare = VALUES(base_fare),
+            price_per_km = VALUES(price_per_km),
+            updated_at = NOW()
+        ");
+        
+        $stmt->bind_param("ssdd", 
+            $vehicleId,
+            $tripType,
+            $basePrice,
+            $pricePerKm
         );
         
         $stmt->execute();
