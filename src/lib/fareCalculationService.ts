@@ -1,4 +1,3 @@
-
 import { differenceInHours, differenceInDays, differenceInMinutes, addDays, subDays, isAfter } from 'date-fns';
 import { CabType, FareCalculationParams } from '@/types/cab';
 import { TripType, TripMode } from './tripTypes';
@@ -170,6 +169,7 @@ export const calculateAirportFare = (cabName: string, distance: number): number 
         // Try partial matches
         else {
           for (const key in parsedFares.airport) {
+            if (!key) continue;
             const keyLower = safeToLowerCase(key);
             if ((cabNameLower.includes(keyLower) || keyLower.includes(cabNameLower))) {
               airportFare = parsedFares.airport[key];
@@ -203,22 +203,28 @@ export const calculateAirportFare = (cabName: string, distance: number): number 
   if (airportFare) {
     console.log(`Using database airport fare for ${cabName}:`, airportFare);
     
-    // Calculate based on distance tier
+    // SAFETY CHECK: Ensure airportFare is not null or undefined and has properties
+    if (typeof airportFare !== 'object' || airportFare === null) {
+      console.error(`Invalid airportFare object for ${cabName}, using defaults`);
+      airportFare = defaultFare;
+    }
+    
+    // Calculate based on distance tier with safer property access
     if (distance <= 10) {
-      fare = airportFare.tier1Price || defaultFare.tier1Price;
+      fare = airportFare.tier1Price ?? defaultFare.tier1Price;
     } else if (distance <= 20) {
-      fare = airportFare.tier2Price || defaultFare.tier2Price;
+      fare = airportFare.tier2Price ?? defaultFare.tier2Price;
     } else if (distance <= 30) {
-      fare = airportFare.tier3Price || defaultFare.tier3Price;
+      fare = airportFare.tier3Price ?? defaultFare.tier3Price;
     } else {
-      fare = airportFare.tier4Price || defaultFare.tier4Price;
+      fare = airportFare.tier4Price ?? defaultFare.tier4Price;
       
       // Add extra km charge for distances over 30km
       if (distance > 30) {
         const extraKm = distance - 30;
-        const extraCharge = extraKm * (airportFare.extraKmCharge || defaultFare.extraKmCharge);
+        const extraCharge = extraKm * (airportFare.extraKmCharge ?? defaultFare.extraKmCharge);
         fare += extraCharge;
-        console.log(`Added ${extraKm}km extra at ${airportFare.extraKmCharge || defaultFare.extraKmCharge}/km = ${extraCharge}`);
+        console.log(`Added ${extraKm}km extra at ${airportFare.extraKmCharge ?? defaultFare.extraKmCharge}/km = ${extraCharge}`);
       }
     }
     

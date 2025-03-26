@@ -202,33 +202,52 @@ class FareService {
       
       const response = await axios.get(endpoint, this.getForcedRequestConfig());
       
-      if (response.data && response.data.status === 'success' && response.data.data) {
-        console.log(`Successfully fetched airport fares for ${vehicleId}:`, response.data.data);
+      // More robust handling of API response
+      if (response.data) {
+        console.log(`Successfully fetched airport fares for ${vehicleId}:`, response.data);
         
-        // Update local cache
-        try {
-          const cachedData = localStorage.getItem('cabFares');
-          const parsedData = cachedData ? JSON.parse(cachedData) : {};
-          
-          if (!parsedData.airport) {
-            parsedData.airport = {};
+        let fareData: AirportFare | null = null;
+        
+        // Handle multiple possible response formats
+        if (response.data.status === 'success' && response.data.data && typeof response.data.data === 'object') {
+          fareData = response.data.data;
+        } else if (response.data.pricing && typeof response.data.pricing === 'object') {
+          fareData = response.data.pricing;
+        } else if (typeof response.data === 'object' && 
+                 (response.data.basePrice !== undefined || 
+                  response.data.pricePerKm !== undefined || 
+                  response.data.dropPrice !== undefined)) {
+          fareData = response.data;
+        }
+        
+        // If we have valid fare data, cache it
+        if (fareData) {
+          try {
+            const cachedData = localStorage.getItem('cabFares');
+            const parsedData = cachedData ? JSON.parse(cachedData) : {};
+            
+            if (!parsedData.airport) {
+              parsedData.airport = {};
+            }
+            
+            parsedData.airport[vehicleId] = fareData;
+            localStorage.setItem('cabFares', JSON.stringify(parsedData));
+            
+            // Set a timestamp for the update
+            localStorage.setItem('airportFaresLastUpdated', Date.now().toString());
+          } catch (cacheError) {
+            console.error('Error caching airport fares:', cacheError);
           }
           
-          parsedData.airport[vehicleId] = response.data.data;
-          localStorage.setItem('cabFares', JSON.stringify(parsedData));
+          // Force a fare calculation refresh by clearing cache
+          if (response.data.force_refresh) {
+            clearFareCache(true);
+          }
           
-          // Set a timestamp for the update
-          localStorage.setItem('airportFaresLastUpdated', Date.now().toString());
-        } catch (cacheError) {
-          console.error('Error caching airport fares:', cacheError);
+          return fareData;
+        } else {
+          console.warn(`No valid fare data found in API response for ${vehicleId}`);
         }
-        
-        // Force a fare calculation refresh by clearing cache
-        if (response.data.force_refresh) {
-          clearFareCache(true);
-        }
-        
-        return response.data.data;
       }
     } catch (error) {
       console.error(`Failed to fetch airport fares for ${vehicleId} from API:`, error);
@@ -537,4 +556,3 @@ class FareService {
 }
 
 export const fareService = new FareService();
-
