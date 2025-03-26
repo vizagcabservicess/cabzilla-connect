@@ -11,15 +11,7 @@ import {
   Terminal, 
   Server,
   Wifi,
-  DatabaseBackup,
-  RotateCcw,
-  FileJson,
-  Code,
-  Zap,
-  FileWarning,
-  HardDrive,
-  Bolt,
-  AlertTriangle
+  DatabaseBackup
 } from "lucide-react";
 import { fareService } from '@/services/fareService';
 import { toast } from 'sonner';
@@ -43,12 +35,9 @@ export function FareUpdateError({
   const [isFixing, setIsFixing] = useState(false);
   const [isInitializingDb, setIsInitializingDb] = useState(false);
   const [attempted500Fix, setAttempted500Fix] = useState(false);
-  const [useEmergencyEndpoints, setUseEmergencyEndpoints] = useState(false);
-  const [useUltraEmergency, setUseUltraEmergency] = useState(false);
-  
   const errorMessage = typeof error === "string" ? error : error.message;
   
-  // Error classification with more specific patterns
+  // Error classification
   const isServerError = 
     /500|503|Internal Server Error|unavailable/i.test(errorMessage);
   
@@ -56,48 +45,24 @@ export function FareUpdateError({
     /403|401|forbidden|unauthorized|permission|access denied/i.test(errorMessage);
   
   const isNetworkError = 
-    /network|connection|failed|ERR_NETWORK|ECONNABORTED|404|timeout|ERR_BAD_RESPONSE/i.test(errorMessage);
+    /network|connection|failed|ERR_NETWORK|ECONNABORTED|404|timeout/i.test(errorMessage);
   
   const isTableError =
     /table.*not found|doesn't exist|database_error|SQLSTATE|base table or view not found/i.test(errorMessage);
   
-  const isOutstationError = 
-    /outstation|vehicle.*pricing|fare.*update/i.test(errorMessage);
-    
+  // Auto-attempt database initialization for 500 errors
   useEffect(() => {
-    // Check if emergency endpoints are enabled
-    const useEmergency = localStorage.getItem('useEmergencyEndpoints') === 'true' || 
-                         sessionStorage.getItem('useEmergencyEndpoints') === 'true' ||
-                         import.meta.env.VITE_USE_EMERGENCY_ENDPOINTS === 'true';
-    
-    setUseEmergencyEndpoints(useEmergency);
-    
-    // Check if ultra emergency is enabled
-    const useUltra = localStorage.getItem('useUltraEmergency') === 'true' || 
-                    sessionStorage.getItem('useUltraEmergency') === 'true' ||
-                    import.meta.env.VITE_USE_ULTRA_EMERGENCY === 'true';
-    
-    setUseUltraEmergency(useUltra);
-  }, []);
-  
-  // Auto-attempt database initialization for 500 errors that happen immediately
-  useEffect(() => {
-    if ((isServerError || isTableError) && !attempted500Fix) {
+    if (isServerError && !attempted500Fix) {
       setAttempted500Fix(true);
       
-      // For severe errors, automatically activate ultra emergency mode
-      if (isServerError && isOutstationError) {
-        activateUltraEmergencyMode();
-      } else {
-        // Add a small delay before attempting fix
-        const timer = setTimeout(() => {
-          initializeDatabase(); 
-        }, 500);
-        
-        return () => clearTimeout(timer);
-      }
+      // Add a small delay before attempting fix
+      const timer = setTimeout(() => {
+        initializeDatabase(); 
+      }, 500);
+      
+      return () => clearTimeout(timer);
     }
-  }, [isServerError, isTableError]);
+  }, [isServerError]);
 
   const handleRetry = () => {
     console.log("Retrying fare update after error...");
@@ -111,30 +76,6 @@ export function FareUpdateError({
     // Clear all caches
     fareService.clearCache();
     
-    // Force API version update
-    const timestamp = Date.now();
-    localStorage.setItem('apiVersionForced', timestamp.toString());
-    sessionStorage.setItem('apiVersionForced', timestamp.toString());
-    
-    // Set direct API access flag
-    localStorage.setItem('useDirectApi', 'true');
-    sessionStorage.setItem('useDirectApi', 'true');
-    
-    // Use emergency endpoints if error persists
-    if (isServerError || isTableError || isNetworkError) {
-      if (isOutstationError) {
-        // For outstation errors, use ultra emergency mode
-        localStorage.setItem('useUltraEmergency', 'true');
-        sessionStorage.setItem('useUltraEmergency', 'true');
-        setUseUltraEmergency(true);
-      } else {
-        // For other errors, use regular emergency endpoints
-        localStorage.setItem('useEmergencyEndpoints', 'true');
-        sessionStorage.setItem('useEmergencyEndpoints', 'true');
-        setUseEmergencyEndpoints(true);
-      }
-    }
-    
     // Wait a moment before retrying
     setTimeout(() => {
       if (onRetry) {
@@ -146,7 +87,7 @@ export function FareUpdateError({
     }, 800);
   };
 
-  // Comprehensive fix attempt - enhanced with full error logging
+  // Comprehensive fix attempt
   const runComprehensiveFix = async () => {
     setIsFixing(true);
     toast.info('Applying comprehensive API fixes...', {
@@ -157,7 +98,7 @@ export function FareUpdateError({
     try {
       console.log('Running comprehensive API fixes...');
       
-      // 1. Clear all caches and force flags
+      // 1. Clear all caches
       fareService.clearCache();
       
       // 2. Force API version update
@@ -165,113 +106,16 @@ export function FareUpdateError({
       localStorage.setItem('apiVersionForced', timestamp.toString());
       sessionStorage.setItem('apiVersionForced', timestamp.toString());
       
-      // 3. Set direct API access flag and other flags
+      // 3. Set direct API access flag
       localStorage.setItem('useDirectApi', 'true');
       sessionStorage.setItem('useDirectApi', 'true');
-      localStorage.setItem('forceDirectFare', 'true');
-      sessionStorage.setItem('forceDirectFare', 'true');
-      localStorage.setItem('useUpdatedSchema', 'true');
-      sessionStorage.setItem('useUpdatedSchema', 'true');
       
-      // 4. Use emergency endpoints
-      localStorage.setItem('useEmergencyEndpoints', 'true');
-      sessionStorage.setItem('useEmergencyEndpoints', 'true');
-      setUseEmergencyEndpoints(true);
-      
-      // 5. Use ultra emergency mode for outstation fares
-      if (isOutstationError) {
-        localStorage.setItem('useUltraEmergency', 'true');
-        sessionStorage.setItem('useUltraEmergency', 'true');
-        setUseUltraEmergency(true);
-      }
-      
-      // 6. Initialize database with multiple attempts
+      // 4. Initialize database
       await initializeDatabase();
       
-      // 7. Add small delay to let database initialize
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // 8. Try to repair tables using emergency endpoints
-      try {
-        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
-        const repairUrls = [
-          `${baseUrl}/api/emergency/init-database?repair=true&t=${Date.now()}`,
-          `${baseUrl}/api/init-database.php?repair=true&t=${Date.now()}`,
-          `${baseUrl}/api/admin/init-database.php?repair=true&t=${Date.now()}`
-        ];
-        
-        for (let url of repairUrls) {
-          try {
-            const repairResult = await fetch(url, {
-              method: 'GET',
-              headers: {
-                'Content-Type': 'application/json',
-                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'Pragma': 'no-cache',
-                'X-Force-Refresh': 'true',
-                'X-API-Version': import.meta.env.VITE_API_VERSION || '1.0.71'
-              }
-            });
-            
-            console.log(`Repair database response from ${url}:`, await repairResult.text());
-            
-            // If we got a 200, break the loop
-            if (repairResult.ok) break;
-          } catch (err) {
-            console.log(`Error with repair URL ${url}:`, err);
-            // Continue with next URL
-          }
-        }
-      } catch (repairErr) {
-        console.error('Error during table repair:', repairErr);
-      }
-      
-      // 9. Try ultra-emergency endpoint for outstation fares if needed
-      if (isOutstationError) {
-        try {
-          toast.info('Applying fixes for outstation fare tables...');
-          
-          // Create a test vehicle entry to initialize the tables
-          const testData = {
-            vehicleId: 'sedan',
-            oneWayBasePrice: 4200,
-            oneWayPricePerKm: 14,
-            roundTripBasePrice: 4000,
-            roundTripPricePerKm: 12,
-            driverAllowance: 250,
-            nightHalt: 700,
-            _t: Date.now()
-          };
-          
-          // Try ultra emergency outstation endpoint
-          const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
-          const ultraEndpoint = `${baseUrl}/api/ultra-emergency-outstation?t=${Date.now()}`;
-          
-          try {
-            const response = await fetch(ultraEndpoint, {
-              method: 'POST',
-              body: JSON.stringify(testData),
-              headers: {
-                'Content-Type': 'application/json',
-                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'Pragma': 'no-cache',
-                'X-Force-Refresh': 'true'
-              }
-            });
-            
-            console.log(`Ultra emergency outstation response:`, await response.text());
-          } catch (err) {
-            console.log(`Error with ultra emergency outstation URL:`, err);
-          }
-        } catch (outstationErr) {
-          console.error('Error fixing outstation tables:', outstationErr);
-        }
-      }
-      
       // Success notification
-      toast.success('Comprehensive fixes applied! Please try updating fares now.', {
-        id: 'comprehensive-fix-success',
-        duration: 5000
+      toast.success('Comprehensive fixes applied', {
+        id: 'comprehensive-fix-success'
       });
     } catch (err) {
       console.error('Error applying comprehensive fixes:', err);
@@ -283,103 +127,7 @@ export function FareUpdateError({
     }
   };
 
-  // Activate emergency mode for all endpoints
-  const activateEmergencyMode = () => {
-    localStorage.setItem('useEmergencyEndpoints', 'true');
-    sessionStorage.setItem('useEmergencyEndpoints', 'true');
-    
-    const timestamp = Date.now();
-    localStorage.setItem('apiVersionForced', timestamp.toString());
-    sessionStorage.setItem('apiVersionForced', timestamp.toString());
-    
-    setUseEmergencyEndpoints(true);
-    
-    toast.success('Emergency endpoints activated. This will use simplified database access.', {
-      duration: 5000
-    });
-    
-    // Try to initialize emergency endpoints
-    fetch(`${import.meta.env.VITE_API_BASE_URL}/api/emergency/init-database?t=${timestamp}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        ...fareService.getBypassHeaders()
-      }
-    }).catch(() => {
-      // Silently catch errors, we just want to ping the endpoint
-    });
-    
-    // Wait and reload
-    setTimeout(() => {
-      if (onRetry) {
-        onRetry();
-      } else {
-        window.location.reload();
-      }
-    }, 1000);
-  };
-  
-  // Activate ultra emergency mode for direct database access
-  const activateUltraEmergencyMode = () => {
-    localStorage.setItem('useUltraEmergency', 'true');
-    sessionStorage.setItem('useUltraEmergency', 'true');
-    
-    const timestamp = Date.now();
-    localStorage.setItem('apiVersionForced', timestamp.toString());
-    sessionStorage.setItem('apiVersionForced', timestamp.toString());
-    
-    setUseUltraEmergency(true);
-    
-    toast.success('ULTRA EMERGENCY MODE activated. Using direct standalone database access.', {
-      duration: 5000
-    });
-    
-    // Ping the ultra emergency endpoint to ensure it's loaded
-    fetch(`${import.meta.env.VITE_API_BASE_URL}/api/ultra-emergency-outstation?t=${timestamp}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        ...fareService.getBypassHeaders()
-      }
-    }).catch(() => {
-      // Silently catch errors, we just want to ping the endpoint
-    });
-    
-    // Wait and reload
-    setTimeout(() => {
-      if (onRetry) {
-        onRetry();
-      } else {
-        window.location.reload();
-      }
-    }, 1000);
-  };
-  
-  // Force deactivate all emergency modes
-  const deactivateEmergencyMode = () => {
-    localStorage.removeItem('useEmergencyEndpoints');
-    sessionStorage.removeItem('useEmergencyEndpoints');
-    localStorage.removeItem('useUltraEmergency');
-    sessionStorage.removeItem('useUltraEmergency');
-    
-    setUseEmergencyEndpoints(false);
-    setUseUltraEmergency(false);
-    
-    toast.info('All emergency modes deactivated. Using standard endpoints.', {
-      duration: 3000
-    });
-    
-    // Reload after a brief pause
-    setTimeout(() => {
-      if (onRetry) {
-        onRetry();
-      } else {
-        window.location.reload();
-      }
-    }, 1000);
-  };
-
-  // Initialize database tables - with enhanced error handling and multiple attempts
+  // Initialize database tables
   const initializeDatabase = async () => {
     setIsInitializingDb(true);
     toast.info('Initializing database tables...', {
@@ -388,115 +136,9 @@ export function FareUpdateError({
     });
     
     try {
-      // Try multiple initialization methods
-      let success = false;
+      const result = await fareService.initializeDatabase();
       
-      // Try emergency endpoint first if enabled
-      if (useEmergencyEndpoints) {
-        try {
-          const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
-          const timestamp = Date.now();
-          const emergencyInitUrl = `${baseUrl}/api/emergency/init-database?t=${timestamp}`;
-          
-          console.log('Attempting database initialization via emergency endpoint...');
-          const result = await fetch(emergencyInitUrl, {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
-              'Pragma': 'no-cache',
-              'X-Force-Refresh': 'true',
-              'X-API-Version': import.meta.env.VITE_API_VERSION || '1.0.71'
-            }
-          });
-          
-          if (result.ok) {
-            const text = await result.text();
-            console.log('Emergency initialization response:', text);
-            
-            try {
-              const data = JSON.parse(text);
-              if (data.status === 'success') {
-                success = true;
-                console.log('Database initialized successfully via emergency endpoint');
-              }
-            } catch {
-              if (text.includes('success')) {
-                success = true;
-                console.log('Database might be initialized successfully via emergency endpoint');
-              }
-            }
-          }
-        } catch (emergencyError) {
-          console.error('Error during emergency initialization:', emergencyError);
-        }
-      }
-      
-      // Method 1 - Using service
-      if (!success) {
-        try {
-          console.log('Attempting to initialize database via service method...');
-          const result = await fareService.initializeDatabase();
-          
-          if (result) {
-            success = true;
-            console.log('Database initialization successful via service method');
-          }
-        } catch (error1) {
-          console.error('Error during database initialization via service:', error1);
-        }
-      }
-      
-      // Method 2 - Direct URLs with full path - try multiple endpoints
-      if (!success) {
-        const timestamp = Date.now();
-        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
-        
-        const initUrls = [
-          `${baseUrl}/api/init-database.php?t=${timestamp}`,
-          `${baseUrl}/init-database.php?t=${timestamp}`,
-          `${baseUrl}/api/admin/init-database.php?t=${timestamp}`
-        ];
-        
-        for (let url of initUrls) {
-          if (success) break;
-          
-          try {
-            console.log(`Attempting database initialization via URL: ${url}`);
-            const result = await fetch(url, {
-              method: 'GET',
-              headers: {
-                'Content-Type': 'application/json',
-                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'Pragma': 'no-cache',
-                'X-Force-Refresh': 'true',
-                'X-API-Version': import.meta.env.VITE_API_VERSION || '1.0.71'
-              }
-            });
-            
-            const text = await result.text();
-            console.log(`Response from ${url}:`, text);
-            
-            try {
-              const data = JSON.parse(text);
-              if (data.status === 'success') {
-                success = true;
-                console.log(`Database initialization successful via URL: ${url}`);
-              }
-            } catch {
-              console.log('Non-JSON response from initialization endpoint:', text);
-              if (text.includes('success')) {
-                success = true;
-                console.log(`Database initialization might be successful via URL: ${url}`);
-              }
-            }
-          } catch (error2) {
-            console.error(`Error during database initialization via URL ${url}:`, error2);
-          }
-        }
-      }
-      
-      if (success) {
+      if (result) {
         // Clear all caches after successful initialization
         fareService.clearCache();
         
@@ -504,19 +146,6 @@ export function FareUpdateError({
         toast.success('Database setup complete! Please try updating fares now.', {
           duration: 5000
         });
-      } else {
-        toast.error('Failed to initialize database tables after multiple attempts');
-        
-        // If all fails, suggest using ultra emergency mode
-        if (!useUltraEmergency) {
-          toast.info('Try activating Ultra Emergency Mode for direct database access', {
-            duration: 8000,
-            action: {
-              label: 'Activate',
-              onClick: activateUltraEmergencyMode
-            }
-          });
-        }
       }
     } catch (error) {
       console.error('Error during database initialization:', error);
@@ -542,14 +171,11 @@ export function FareUpdateError({
     if (isTableError) {
       return "The database table required for this operation doesn't exist. Click the 'Initialize Database' button to create missing tables.";
     }
-    if (isOutstationError && isServerError) {
-      return "The server couldn't update outstation fares. This may be due to database schema issues. Try activating 'Ultra Emergency Mode'.";
-    }
     if (isForbiddenError) {
       return "You don't have permission to update fares. This might be an authentication issue.";
     }
     if (isServerError) {
-      return "The server encountered an error (500) while processing your request. Try 'Ultra Emergency Mode' for direct database access.";
+      return "The server encountered an error while processing your request. Click 'Initialize Database' to fix missing tables.";
     }
     if (isNetworkError) {
       return "Unable to connect to the fare update server. Please check your connection.";
@@ -571,83 +197,30 @@ export function FareUpdateError({
           <AlertTitle>
             {isTableError 
               ? "Database Table Error"
-              : (isOutstationError
-                ? "Outstation Fare Update Error"
-                : (isForbiddenError 
-                  ? "Access Denied" 
-                  : (isServerError 
-                    ? "Server Error (500)" 
-                    : (isNetworkError 
-                      ? "Network Error" 
-                      : "Update Failed"))))}
+              : (isForbiddenError 
+                ? "Access Denied" 
+                : (isServerError 
+                  ? "Server Error" 
+                  : (isNetworkError 
+                    ? "Network Error" 
+                    : "Update Failed")))}
           </AlertTitle>
           <AlertDescription className="text-sm">
             {getErrorDescription()}
           </AlertDescription>
         </Alert>
 
-        {useUltraEmergency && (
-          <Alert className="bg-yellow-50 border-yellow-300 text-yellow-900">
-            <Bolt className="h-4 w-4 text-yellow-600" />
-            <AlertTitle className="text-yellow-900">Ultra Emergency Mode Active</AlertTitle>
-            <AlertDescription className="text-yellow-800 text-xs">
-              Using direct standalone database access method
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="ml-2 h-6 text-xs border-yellow-300 text-yellow-800"
-                onClick={deactivateEmergencyMode}
-              >
-                Deactivate
-              </Button>
-            </AlertDescription>
-          </Alert>
-        )}
-        
-        {!useUltraEmergency && useEmergencyEndpoints && (
-          <Alert className="bg-purple-50 border-purple-200 text-purple-800">
-            <Zap className="h-4 w-4 text-purple-600" />
-            <AlertTitle className="text-purple-800">Emergency Mode Active</AlertTitle>
-            <AlertDescription className="text-purple-700 text-xs">
-              Using simplified database access mode
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="ml-2 h-6 text-xs border-purple-300 text-purple-700"
-                onClick={deactivateEmergencyMode}
-              >
-                Deactivate
-              </Button>
-            </AlertDescription>
-          </Alert>
-        )}
-
         <div className="text-sm space-y-2">
-          <p className="font-medium text-gray-700">Try these solutions:</p>
+          <p className="font-medium text-gray-700">Try the following:</p>
           <ul className="list-disc pl-5 space-y-1 text-gray-600">
-            {!useUltraEmergency && (isTableError || isServerError) && (
-              <>
-                <li className="font-medium text-red-700">Ultra Emergency Mode: Use 'Activate Ultra Emergency Mode' for direct standalone database access</li>
-              </>
-            )}
-            {!useEmergencyEndpoints && !useUltraEmergency && (isTableError || isServerError) && (
-              <>
-                <li className="font-medium text-red-700">Emergency Mode: Use 'Activate Emergency Mode' for simplified database access</li>
-              </>
-            )}
             {(isTableError || isServerError) && (
               <>
                 <li className="font-medium text-red-700">Database tables may be missing - use 'Initialize Database' button below</li>
+                <li>This will create all required database tables</li>
               </>
             )}
-            {isOutstationError && (
-              <li className="font-medium text-red-700">Field naming issues in outstation fares table - use 'Ultra Emergency Mode'</li>
-            )}
-            {isNetworkError && (
-              <li className="font-medium text-red-700">API connection failed - use 'Clear Cache & Retry' to refresh connections</li>
-            )}
-            <li>Try the 'Comprehensive Fix' button for a full system repair</li>
-            <li>Clear your browser cache completely and refresh the page</li>
+            <li>Use the comprehensive fix button to solve common API connection issues</li>
+            <li>Clear browser cache and try again</li>
           </ul>
         </div>
         
@@ -663,12 +236,9 @@ export function FareUpdateError({
                     status: error?.['response']?.status || 'Unknown',
                     message: errorMessage,
                     apiVersion: import.meta.env.VITE_API_VERSION || 'Unknown',
-                    emergencyMode: useEmergencyEndpoints ? 'active' : 'inactive',
-                    ultraEmergencyMode: useUltraEmergency ? 'active' : 'inactive',
-                    isTableError,
-                    isServerError,
-                    isNetworkError,
-                    isOutstationError
+                    isTableError: isTableError,
+                    isServerError: isServerError,
+                    isNetworkError: isNetworkError
                   }, null, 2)}
                 </pre>
               </div>
@@ -677,27 +247,7 @@ export function FareUpdateError({
         )}
       </CardContent>
       <CardFooter className="pt-0 flex flex-wrap gap-3">
-        {!useUltraEmergency && (isServerError || isOutstationError) && (
-          <Button 
-            onClick={activateUltraEmergencyMode} 
-            className="gap-2 bg-yellow-600 hover:bg-yellow-700"
-          >
-            <Bolt className="h-4 w-4" />
-            Ultra Emergency Mode
-          </Button>
-        )}
-        
-        {!useEmergencyEndpoints && !useUltraEmergency && (isTableError || isServerError || isNetworkError) && (
-          <Button 
-            onClick={activateEmergencyMode} 
-            className="gap-2 bg-purple-600 hover:bg-purple-700"
-          >
-            <Zap className="h-4 w-4" />
-            Activate Emergency Mode
-          </Button>
-        )}
-        
-        {(isTableError || isServerError || isOutstationError) && (
+        {(isTableError || isServerError) && (
           <Button 
             onClick={initializeDatabase} 
             className="gap-2 bg-amber-600 hover:bg-amber-700"
@@ -721,7 +271,7 @@ export function FareUpdateError({
           onClick={handleRetry} 
           className="gap-2 bg-blue-600 hover:bg-blue-700"
         >
-          <RotateCcw className="h-4 w-4" />
+          <RefreshCw className="h-4 w-4" />
           Clear Cache & Retry
         </Button>
         
@@ -738,7 +288,7 @@ export function FareUpdateError({
             </>
           ) : (
             <>
-              <FileWarning className="h-4 w-4" />
+              <Server className="h-4 w-4" />
               Comprehensive Fix
             </>
           )}

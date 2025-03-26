@@ -2,41 +2,16 @@
 <?php
 // init-database.php - Initialize database tables
 
-// Set headers before any output
+require_once '../../config.php';
+
+// Set headers
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: *');
-
-// For OPTIONS requests, return 200 immediately
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit;
-}
+header('Access-Control-Allow-Headers: Content-Type');
 
 // Log the request
 error_log("Database initialization requested at " . date('Y-m-d H:i:s'));
-
-// Load configuration if it exists
-if (file_exists('../../config.php')) {
-    require_once '../../config.php';
-} elseif (file_exists('../config.php')) {
-    require_once '../config.php';
-} else {
-    // Define fallback credentials if config not found
-    define('DB_HOST', 'localhost');
-    define('DB_USERNAME', 'u644605165_new_bookingusr');
-    define('DB_PASSWORD', 'Vizag@1213');
-    define('DB_DATABASE', 'u644605165_new_bookingdb');
-    
-    // Also set as variables for backward compatibility
-    $db_host = 'localhost';
-    $db_user = 'u644605165_new_bookingusr';
-    $db_pass = 'Vizag@1213';
-    $db_name = 'u644605165_new_bookingdb';
-    
-    error_log("Config file not found, using hardcoded credentials");
-}
 
 // Connect to database - try multiple connection methods
 function getDbConnection() {
@@ -214,8 +189,7 @@ try {
         $defaultVehicles = [
             ['sedan', 'Sedan', 4, 2, 1, '/cars/sedan.png', 'Comfortable sedan suitable for 4 passengers', '["AC","Bottle Water","Music System"]', 1],
             ['ertiga', 'Ertiga', 6, 3, 1, '/cars/ertiga.png', 'Spacious SUV suitable for 6 passengers', '["AC","Bottle Water","Music System","Extra Legroom"]', 1],
-            ['innova_crysta', 'Innova Crysta', 7, 4, 1, '/cars/innova.png', 'Premium SUV with ample space for 7 passengers', '["AC","Bottle Water","Music System","Extra Legroom","Charging Point"]', 1],
-            ['luxury', 'Luxury Sedan', 4, 2, 1, '/cars/luxury.png', 'Premium luxury sedan for executive travel', '["AC","Bottle Water","Music System","Premium Leather Seats","Charging Point"]', 1]
+            ['innova_crysta', 'Innova Crysta', 7, 4, 1, '/cars/innova.png', 'Premium SUV with ample space for 7 passengers', '["AC","Bottle Water","Music System","Extra Legroom","Charging Point"]', 1]
         ];
         
         $insertVehicleStmt = $conn->prepare("
@@ -242,22 +216,13 @@ try {
             ['innova_crysta', 'outstation-one-way', 6000, 20, 250, 1000],
             ['innova_crysta', 'outstation-round-trip', 6000, 20, 250, 1000],
             ['innova_crysta', 'local', 4500, 20, 0, 0],
-            ['innova_crysta', 'airport', 1800, 18, 0, 0],
-            ['luxury', 'outstation-one-way', 7000, 22, 300, 1200],
-            ['luxury', 'outstation-round-trip', 7000, 22, 300, 1200],
-            ['luxury', 'local', 5500, 22, 0, 0],
-            ['luxury', 'airport', 2200, 20, 0, 0]
+            ['innova_crysta', 'airport', 1800, 18, 0, 0]
         ];
         
         $insertPricingStmt = $conn->prepare("
             INSERT INTO vehicle_pricing 
             (vehicle_type, trip_type, base_price, price_per_km, driver_allowance, night_halt_charge)
             VALUES (?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE
-            base_price = VALUES(base_price),
-            price_per_km = VALUES(price_per_km),
-            driver_allowance = VALUES(driver_allowance),
-            night_halt_charge = VALUES(night_halt_charge)
         ");
         
         foreach ($pricing as $price) {
@@ -269,81 +234,18 @@ try {
         $outstationFares = [
             ['sedan', 4200, 14, 4200, 14, 250, 700],
             ['ertiga', 5400, 18, 5400, 18, 250, 1000],
-            ['innova_crysta', 6000, 20, 6000, 20, 250, 1000],
-            ['luxury', 7000, 22, 7000, 22, 300, 1200]
+            ['innova_crysta', 6000, 20, 6000, 20, 250, 1000]
         ];
         
         $insertOutstationStmt = $conn->prepare("
             INSERT INTO outstation_fares 
             (vehicle_id, base_price, price_per_km, roundtrip_base_price, roundtrip_price_per_km, driver_allowance, night_halt_charge)
             VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE
-            base_price = VALUES(base_price),
-            price_per_km = VALUES(price_per_km),
-            roundtrip_base_price = VALUES(roundtrip_base_price),
-            roundtrip_price_per_km = VALUES(roundtrip_price_per_km),
-            driver_allowance = VALUES(driver_allowance),
-            night_halt_charge = VALUES(night_halt_charge)
         ");
         
         foreach ($outstationFares as $fare) {
             $insertOutstationStmt->bind_param("sdddddd", $fare[0], $fare[1], $fare[2], $fare[3], $fare[4], $fare[5], $fare[6]);
             $insertOutstationStmt->execute();
-        }
-    } else {
-        // Update luxury vehicle if it doesn't exist
-        $checkLuxuryStmt = $conn->prepare("SELECT COUNT(*) as count FROM vehicle_types WHERE vehicle_id = 'luxury'");
-        $checkLuxuryStmt->execute();
-        $luxuryResult = $checkLuxuryStmt->get_result();
-        $luxuryRow = $luxuryResult->fetch_assoc();
-        
-        if ($luxuryRow['count'] == 0) {
-            // Insert luxury vehicle
-            $insertLuxuryStmt = $conn->prepare("
-                INSERT INTO vehicle_types 
-                (vehicle_id, name, capacity, luggage_capacity, ac, image, description, amenities, is_active)
-                VALUES ('luxury', 'Luxury Sedan', 4, 2, 1, '/cars/luxury.png', 'Premium luxury sedan for executive travel', '[\"AC\",\"Bottle Water\",\"Music System\",\"Premium Leather Seats\",\"Charging Point\"]', 1)
-            ");
-            $insertLuxuryStmt->execute();
-            
-            // Insert pricing for luxury
-            $luxuryPricing = [
-                ['luxury', 'outstation-one-way', 7000, 22, 300, 1200],
-                ['luxury', 'outstation-round-trip', 7000, 22, 300, 1200],
-                ['luxury', 'local', 5500, 22, 0, 0],
-                ['luxury', 'airport', 2200, 20, 0, 0]
-            ];
-            
-            $insertLuxuryPricingStmt = $conn->prepare("
-                INSERT INTO vehicle_pricing 
-                (vehicle_type, trip_type, base_price, price_per_km, driver_allowance, night_halt_charge)
-                VALUES (?, ?, ?, ?, ?, ?)
-                ON DUPLICATE KEY UPDATE
-                base_price = VALUES(base_price),
-                price_per_km = VALUES(price_per_km),
-                driver_allowance = VALUES(driver_allowance),
-                night_halt_charge = VALUES(night_halt_charge)
-            ");
-            
-            foreach ($luxuryPricing as $price) {
-                $insertLuxuryPricingStmt->bind_param("ssdddd", $price[0], $price[1], $price[2], $price[3], $price[4], $price[5]);
-                $insertLuxuryPricingStmt->execute();
-            }
-            
-            // Add outstation fare for luxury
-            $insertLuxuryOutstationStmt = $conn->prepare("
-                INSERT INTO outstation_fares 
-                (vehicle_id, base_price, price_per_km, roundtrip_base_price, roundtrip_price_per_km, driver_allowance, night_halt_charge)
-                VALUES ('luxury', 7000, 22, 7000, 22, 300, 1200)
-                ON DUPLICATE KEY UPDATE
-                base_price = VALUES(base_price),
-                price_per_km = VALUES(price_per_km),
-                roundtrip_base_price = VALUES(roundtrip_base_price),
-                roundtrip_price_per_km = VALUES(roundtrip_price_per_km),
-                driver_allowance = VALUES(driver_allowance),
-                night_halt_charge = VALUES(night_halt_charge)
-            ");
-            $insertLuxuryOutstationStmt->execute();
         }
     }
     
@@ -365,7 +267,6 @@ try {
     http_response_code(500);
     echo json_encode([
         'status' => 'error',
-        'message' => 'Database initialization failed: ' . $e->getMessage(),
-        'trace' => $e->getTraceAsString()
+        'message' => 'Database initialization failed: ' . $e->getMessage()
     ]);
 }
