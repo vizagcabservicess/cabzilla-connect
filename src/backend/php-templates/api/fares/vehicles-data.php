@@ -1,3 +1,4 @@
+
 <?php
 require_once '../../config.php';
 
@@ -401,64 +402,84 @@ try {
             $stmt->close();
         }
         
-        // Fallback to vehicle_pricing table only if specialized tables have no data
-        // This is to handle cases where the dedicated tables don't have data yet
-        $query = "
-            SELECT vp.vehicle_id, vp.trip_type, vp.base_fare, vp.price_per_km, 
-                   vp.night_halt_charge, vp.driver_allowance, 
-                   vp.local_package_4hr, vp.local_package_8hr, vp.local_package_10hr
-            FROM vehicle_pricing vp
-            WHERE vp.vehicle_id IN ($placeholders)
-        ";
-        
+        // Try to get data from vehicle_pricing table for any missing fares
+        $query = "SELECT * FROM vehicle_pricing WHERE vehicle_id IN ($placeholders) OR vehicle_type IN ($placeholders)";
         $stmt = $conn->prepare($query);
         if ($stmt) {
-            $stmt->bind_param($types, ...$vehicleIds);
+            // We need to duplicate the vehicle IDs since we're using them twice in the query
+            $combinedIds = array_merge($vehicleIds, $vehicleIds);
+            $types = str_repeat('s', count($combinedIds));
+            $stmt->bind_param($types, ...$combinedIds);
             $stmt->execute();
             $result = $stmt->get_result();
             
             while ($row = $result->fetch_assoc()) {
-                $vehicleId = $row['vehicle_id'];
-                $tripType = $row['trip_type'] ?? '';
+                // Determine which vehicle ID to use (vehicle_id column is preferred)
+                $vehicleId = $row['vehicle_id'] ?? $row['vehicle_type'];
                 
                 if (isset($vehicles[$vehicleId])) {
-                    // Only use vehicle_pricing data if the specialized tables don't have this data
-                    if (strpos($tripType, 'outstation') === 0) {
-                        // Outstation
-                        if ($vehicles[$vehicleId]['outstationFares']['basePrice'] == 0) {
-                            if ($tripType === 'outstation-one-way') {
-                                $vehicles[$vehicleId]['outstationFares']['basePrice'] = floatval($row['base_fare'] ?? 0);
-                                $vehicles[$vehicleId]['outstationFares']['pricePerKm'] = floatval($row['price_per_km'] ?? 0);
-                                $vehicles[$vehicleId]['price'] = floatval($row['base_fare'] ?? 0);
-                                $vehicles[$vehicleId]['basePrice'] = floatval($row['base_fare'] ?? 0);
-                                $vehicles[$vehicleId]['pricePerKm'] = floatval($row['price_per_km'] ?? 0);
-                            } else if ($tripType === 'outstation-round-trip') {
-                                $vehicles[$vehicleId]['outstationFares']['roundTripBasePrice'] = floatval($row['base_fare'] ?? 0);
-                                $vehicles[$vehicleId]['outstationFares']['roundTripPricePerKm'] = floatval($row['price_per_km'] ?? 0);
-                            }
-                            
-                            // Set these regardless of one-way/round-trip
-                            $vehicles[$vehicleId]['outstationFares']['nightHaltCharge'] = floatval($row['night_halt_charge'] ?? 0);
-                            $vehicles[$vehicleId]['outstationFares']['driverAllowance'] = floatval($row['driver_allowance'] ?? 0);
-                            $vehicles[$vehicleId]['nightHaltCharge'] = floatval($row['night_halt_charge'] ?? 0);
-                            $vehicles[$vehicleId]['driverAllowance'] = floatval($row['driver_allowance'] ?? 0);
-                        }
-                    } else if ($tripType === 'local') {
-                        // Local
-                        if ($vehicles[$vehicleId]['localPackageFares']['price8hrs80km'] == 0) {
-                            $vehicles[$vehicleId]['localPackageFares']['price4hrs40km'] = floatval($row['local_package_4hr'] ?? 0);
-                            $vehicles[$vehicleId]['localPackageFares']['price8hrs80km'] = floatval($row['local_package_8hr'] ?? 0);
-                            $vehicles[$vehicleId]['localPackageFares']['price10hrs100km'] = floatval($row['local_package_10hr'] ?? 0);
-                            $vehicles[$vehicleId]['localPackageFares']['priceExtraKm'] = floatval($row['price_per_km'] ?? 0);
-                            $vehicles[$vehicleId]['localPackageFares']['priceExtraHour'] = 150; // Default
-                        }
-                    } else if ($tripType === 'airport') {
-                        // Airport
-                        if ($vehicles[$vehicleId]['airportFares']['basePrice'] == 0) {
-                            $vehicles[$vehicleId]['airportFares']['basePrice'] = floatval($row['base_fare'] ?? 0);
-                            $vehicles[$vehicleId]['airportFares']['pricePerKm'] = floatval($row['price_per_km'] ?? 0);
-                            // Other airport fields would remain 0 in this fallback
-                        }
+                    // Only use for outstation fares if the specialized table didn't have data
+                    if ($vehicles[$vehicleId]['outstationFares']['basePrice'] == 0) {
+                        $vehicles[$vehicleId]['outstationFares']['basePrice'] = floatval($row['base_fare'] ?? 0); 
+                        $vehicles[$vehicleId]['outstationFares']['pricePerKm'] = floatval($row['price_per_km'] ?? 0);
+                        $vehicles[$vehicleId]['outstationFares']['nightHaltCharge'] = floatval($row['night_halt_charge'] ?? 0);
+                        $vehicles[$vehicleId]['outstationFares']['driverAllowance'] = floatval($row['driver_allowance'] ?? 0);
+                        
+                        // Set main pricing fields too for backwards compatibility
+                        $vehicles[$vehicleId]['price'] = floatval($row['base_fare'] ?? 0);
+                        $vehicles[$vehicleId]['basePrice'] = floatval($row['base_fare'] ?? 0);
+                        $vehicles[$vehicleId]['pricePerKm'] = floatval($row['price_per_km'] ?? 0);
+                        $vehicles[$vehicleId]['nightHaltCharge'] = floatval($row['night_halt_charge'] ?? 0);
+                        $vehicles[$vehicleId]['driverAllowance'] = floatval($row['driver_allowance'] ?? 0);
+                    }
+                    
+                    // Only use for airport fares if specialized table didn't have data
+                    if ($vehicles[$vehicleId]['airportFares']['basePrice'] == 0) {
+                        $vehicles[$vehicleId]['airportFares']['basePrice'] = floatval($row['airport_base_price'] ?? 0);
+                        $vehicles[$vehicleId]['airportFares']['pricePerKm'] = floatval($row['airport_price_per_km'] ?? 0);
+                        $vehicles[$vehicleId]['airportFares']['pickupPrice'] = floatval($row['airport_pickup_price'] ?? 0);
+                        $vehicles[$vehicleId]['airportFares']['dropPrice'] = floatval($row['airport_drop_price'] ?? 0);
+                        $vehicles[$vehicleId]['airportFares']['tier1Price'] = floatval($row['airport_tier1_price'] ?? 0);
+                        $vehicles[$vehicleId]['airportFares']['tier2Price'] = floatval($row['airport_tier2_price'] ?? 0);
+                        $vehicles[$vehicleId]['airportFares']['tier3Price'] = floatval($row['airport_tier3_price'] ?? 0);
+                        $vehicles[$vehicleId]['airportFares']['tier4Price'] = floatval($row['airport_tier4_price'] ?? 0);
+                        $vehicles[$vehicleId]['airportFares']['extraKmCharge'] = floatval($row['airport_extra_km_charge'] ?? 0);
+                    }
+                    
+                    // For any fare object with all zeros, set some reasonable defaults
+                    if (array_sum(array_map('floatval', $vehicles[$vehicleId]['outstationFares'])) == 0) {
+                        $vehicles[$vehicleId]['outstationFares'] = [
+                            'basePrice' => 2500,
+                            'pricePerKm' => 14,
+                            'nightHaltCharge' => 700,
+                            'driverAllowance' => 250,
+                            'roundTripBasePrice' => 2000,
+                            'roundTripPricePerKm' => 12
+                        ];
+                    }
+                    
+                    if (array_sum(array_map('floatval', $vehicles[$vehicleId]['localPackageFares'])) == 0) {
+                        $vehicles[$vehicleId]['localPackageFares'] = [
+                            'price4hrs40km' => 1600,
+                            'price8hrs80km' => 2800,
+                            'price10hrs100km' => 3400,
+                            'priceExtraKm' => 14,
+                            'priceExtraHour' => 150
+                        ];
+                    }
+                    
+                    if (array_sum(array_map('floatval', $vehicles[$vehicleId]['airportFares'])) == 0) {
+                        $vehicles[$vehicleId]['airportFares'] = [
+                            'basePrice' => 1500,
+                            'pricePerKm' => 14,
+                            'pickupPrice' => 1600,
+                            'dropPrice' => 1500,
+                            'tier1Price' => 1600,
+                            'tier2Price' => 1800,
+                            'tier3Price' => 2200,
+                            'tier4Price' => 2600,
+                            'extraKmCharge' => 14
+                        ];
                     }
                 }
             }

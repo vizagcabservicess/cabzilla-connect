@@ -43,7 +43,7 @@ else if (!empty($_POST)) {
 // Then try GET data
 else if (!empty($_GET)) {
     $data = $_GET;
-}
+} 
 // Finally try parsing raw input as form data
 else {
     parse_str($requestData, $form_data);
@@ -111,6 +111,37 @@ try {
         exit;
     }
     
+    // Check if airport_transfer_fares table exists
+    try {
+        $checkTable = $pdo->query("SHOW TABLES LIKE 'airport_transfer_fares'");
+        if ($checkTable->rowCount() === 0) {
+            // Table doesn't exist, so create it
+            $createTableSQL = "CREATE TABLE `airport_transfer_fares` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `vehicle_id` varchar(50) NOT NULL,
+                `base_price` decimal(10,2) NOT NULL DEFAULT 0.00,
+                `price_per_km` decimal(10,2) NOT NULL DEFAULT 0.00,
+                `pickup_price` decimal(10,2) NOT NULL DEFAULT 0.00,
+                `drop_price` decimal(10,2) NOT NULL DEFAULT 0.00,
+                `tier1_price` decimal(10,2) NOT NULL DEFAULT 0.00,
+                `tier2_price` decimal(10,2) NOT NULL DEFAULT 0.00,
+                `tier3_price` decimal(10,2) NOT NULL DEFAULT 0.00,
+                `tier4_price` decimal(10,2) NOT NULL DEFAULT 0.00,
+                `extra_km_charge` decimal(10,2) NOT NULL DEFAULT 0.00,
+                `created_at` timestamp NULL DEFAULT current_timestamp(),
+                `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `vehicle_id` (`vehicle_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;";
+            
+            $pdo->exec($createTableSQL);
+            error_log("Created airport_transfer_fares table", 3, $logsDir . '/direct-fares.log');
+        }
+    } catch (PDOException $e) {
+        error_log("Error checking/creating airport_transfer_fares table: " . $e->getMessage(), 3, $logsDir . '/direct-fares.log');
+        // Continue anyway - table might already exist
+    }
+    
     // Check if vehicle_pricing table exists
     try {
         $checkTable = $pdo->query("SHOW TABLES LIKE 'vehicle_pricing'");
@@ -120,7 +151,8 @@ try {
                 `id` int(11) NOT NULL AUTO_INCREMENT,
                 `vehicle_id` varchar(50) DEFAULT NULL,
                 `vehicle_type` varchar(50) DEFAULT NULL,
-                `base_price` decimal(10,2) DEFAULT 0.00,
+                `trip_type` varchar(20) DEFAULT NULL,
+                `base_fare` decimal(10,2) DEFAULT 0.00,
                 `price_per_km` decimal(10,2) DEFAULT 0.00,
                 `night_halt_charge` decimal(10,2) DEFAULT 0.00,
                 `driver_allowance` decimal(10,2) DEFAULT 0.00,
@@ -136,129 +168,184 @@ try {
                 `created_at` timestamp NULL DEFAULT current_timestamp(),
                 `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
                 PRIMARY KEY (`id`),
-                UNIQUE KEY `vehicle_type` (`vehicle_type`),
-                UNIQUE KEY `vehicle_id` (`vehicle_id`)
+                KEY `vehicle_id_index` (`vehicle_id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;";
             
             $pdo->exec($createTableSQL);
             error_log("Created vehicle_pricing table", 3, $logsDir . '/direct-fares.log');
         }
     } catch (PDOException $e) {
-        error_log("Error checking/creating table: " . $e->getMessage(), 3, $logsDir . '/direct-fares.log');
+        error_log("Error checking/creating vehicle_pricing table: " . $e->getMessage(), 3, $logsDir . '/direct-fares.log');
         // Continue anyway - table might already exist
     }
     
-    // First try updating using vehicle_type
-    $updateSuccess = false;
+    // Check if vehicle_types table exists and add vehicle if it doesn't exist
+    try {
+        $checkTable = $pdo->query("SHOW TABLES LIKE 'vehicle_types'");
+        if ($checkTable->rowCount() > 0) {
+            // Check if vehicle exists
+            $checkVehicleSQL = "SELECT id FROM vehicle_types WHERE vehicle_id = ?";
+            $stmt = $pdo->prepare($checkVehicleSQL);
+            $stmt->execute([$vehicleId]);
+            
+            if ($stmt->rowCount() === 0) {
+                // Vehicle doesn't exist, add it
+                $vehicleName = ucfirst(str_replace('_', ' ', $vehicleId));
+                $insertVehicleSQL = "INSERT INTO vehicle_types (vehicle_id, name, capacity, luggage_capacity, is_active, ac)
+                                    VALUES (?, ?, 4, 2, 1, 1)";
+                $pdo->prepare($insertVehicleSQL)->execute([$vehicleId, $vehicleName]);
+                error_log("Created vehicle type: $vehicleId", 3, $logsDir . '/direct-fares.log');
+            }
+        }
+    } catch (PDOException $e) {
+        error_log("Error checking/creating vehicle: " . $e->getMessage(), 3, $logsDir . '/direct-fares.log');
+        // Continue anyway
+    }
     
-    if (!empty($vehicleId)) {
-        try {
-            $sql = "UPDATE vehicle_pricing SET 
-                    airport_base_price = ?, 
-                    airport_price_per_km = ?,
-                    airport_drop_price = ?,
-                    airport_pickup_price = ?,
-                    airport_tier1_price = ?,
-                    airport_tier2_price = ?,
-                    airport_tier3_price = ?,
-                    airport_tier4_price = ?,
-                    airport_extra_km_charge = ?
-                    WHERE vehicle_type = ?";
-            $stmt = $pdo->prepare($sql);
+    // STEP 1: Update airport_transfer_fares table
+    $airportUpdateSuccess = false;
+    
+    try {
+        // Check if record exists
+        $checkSQL = "SELECT id FROM airport_transfer_fares WHERE vehicle_id = ?";
+        $stmt = $pdo->prepare($checkSQL);
+        $stmt->execute([$vehicleId]);
+        
+        if ($stmt->rowCount() > 0) {
+            // Update existing record
+            $updateSQL = "UPDATE airport_transfer_fares SET 
+                        base_price = ?,
+                        price_per_km = ?,
+                        pickup_price = ?,
+                        drop_price = ?,
+                        tier1_price = ?,
+                        tier2_price = ?,
+                        tier3_price = ?,
+                        tier4_price = ?,
+                        extra_km_charge = ?
+                        WHERE vehicle_id = ?";
+            $stmt = $pdo->prepare($updateSQL);
             $stmt->execute([
-                $basePrice, 
-                $pricePerKm, 
-                $dropPrice, 
-                $pickupPrice, 
-                $tier1Price, 
-                $tier2Price, 
-                $tier3Price, 
-                $tier4Price, 
-                $extraKmCharge, 
+                $basePrice,
+                $pricePerKm,
+                $pickupPrice,
+                $dropPrice,
+                $tier1Price,
+                $tier2Price,
+                $tier3Price,
+                $tier4Price,
+                $extraKmCharge,
                 $vehicleId
             ]);
             
-            if ($stmt->rowCount() > 0) {
-                $updateSuccess = true;
-                error_log("Updated vehicle_pricing using vehicle_type: $vehicleId", 3, $logsDir . '/direct-fares.log');
-            } else {
-                // Try using vehicle_id
-                $sql = "UPDATE vehicle_pricing SET 
-                        airport_base_price = ?, 
+            $airportUpdateSuccess = true;
+            error_log("Updated airport_transfer_fares for $vehicleId", 3, $logsDir . '/direct-fares.log');
+        } else {
+            // Insert new record
+            $insertSQL = "INSERT INTO airport_transfer_fares (
+                        vehicle_id, base_price, price_per_km, pickup_price, drop_price,
+                        tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            $stmt = $pdo->prepare($insertSQL);
+            $stmt->execute([
+                $vehicleId,
+                $basePrice,
+                $pricePerKm,
+                $pickupPrice,
+                $dropPrice,
+                $tier1Price,
+                $tier2Price,
+                $tier3Price,
+                $tier4Price,
+                $extraKmCharge
+            ]);
+            
+            $airportUpdateSuccess = true;
+            error_log("Inserted into airport_transfer_fares for $vehicleId", 3, $logsDir . '/direct-fares.log');
+        }
+    } catch (PDOException $e) {
+        error_log("Error updating airport_transfer_fares: " . $e->getMessage(), 3, $logsDir . '/direct-fares.log');
+    }
+    
+    // STEP 2: Update vehicle_pricing table for full compatibility
+    $vehiclePricingSuccess = false;
+    
+    try {
+        // Check if record exists for this vehicle
+        $checkSQL = "SELECT id FROM vehicle_pricing WHERE vehicle_id = ? OR vehicle_type = ?";
+        $stmt = $pdo->prepare($checkSQL);
+        $stmt->execute([$vehicleId, $vehicleId]);
+        
+        if ($stmt->rowCount() > 0) {
+            // Update existing record
+            $updateSQL = "UPDATE vehicle_pricing SET 
+                        airport_base_price = ?,
                         airport_price_per_km = ?,
-                        airport_drop_price = ?,
                         airport_pickup_price = ?,
+                        airport_drop_price = ?,
                         airport_tier1_price = ?,
                         airport_tier2_price = ?,
                         airport_tier3_price = ?,
                         airport_tier4_price = ?,
-                        airport_extra_km_charge = ?
-                        WHERE vehicle_id = ?";
-                $stmt = $pdo->prepare($sql);
-                $stmt->execute([
-                    $basePrice, 
-                    $pricePerKm, 
-                    $dropPrice, 
-                    $pickupPrice, 
-                    $tier1Price, 
-                    $tier2Price, 
-                    $tier3Price, 
-                    $tier4Price, 
-                    $extraKmCharge, 
-                    $vehicleId
-                ]);
-                
-                if ($stmt->rowCount() > 0) {
-                    $updateSuccess = true;
-                    error_log("Updated vehicle_pricing using vehicle_id: $vehicleId", 3, $logsDir . '/direct-fares.log');
-                }
-            }
-        } catch (PDOException $e) {
-            error_log("Error updating vehicle_pricing: " . $e->getMessage(), 3, $logsDir . '/direct-fares.log');
-        }
-    }
-    
-    // If update didn't work, try insertion
-    if (!$updateSuccess) {
-        try {
-            $insertSql = "INSERT INTO vehicle_pricing 
-                (vehicle_type, vehicle_id, airport_base_price, airport_price_per_km, airport_drop_price, 
-                 airport_pickup_price, airport_tier1_price, airport_tier2_price, airport_tier3_price, 
-                 airport_tier4_price, airport_extra_km_charge, created_at, updated_at) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
-            $insertStmt = $pdo->prepare($insertSql);
-            $insertStmt->execute([
+                        airport_extra_km_charge = ?,
+                        trip_type = 'airport'
+                        WHERE vehicle_id = ? OR vehicle_type = ?";
+            $stmt = $pdo->prepare($updateSQL);
+            $stmt->execute([
+                $basePrice,
+                $pricePerKm,
+                $pickupPrice,
+                $dropPrice,
+                $tier1Price,
+                $tier2Price,
+                $tier3Price,
+                $tier4Price,
+                $extraKmCharge,
+                $vehicleId,
+                $vehicleId
+            ]);
+            
+            $vehiclePricingSuccess = true;
+            error_log("Updated vehicle_pricing table for $vehicleId", 3, $logsDir . '/direct-fares.log');
+        } else {
+            // Insert new record
+            $insertSQL = "INSERT INTO vehicle_pricing (
+                        vehicle_id, vehicle_type, trip_type,
+                        airport_base_price, airport_price_per_km, airport_pickup_price, airport_drop_price,
+                        airport_tier1_price, airport_tier2_price, airport_tier3_price, airport_tier4_price, 
+                        airport_extra_km_charge)
+                        VALUES (?, ?, 'airport', ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            $stmt = $pdo->prepare($insertSQL);
+            $stmt->execute([
                 $vehicleId,
                 $vehicleId,
-                $basePrice, 
-                $pricePerKm, 
-                $dropPrice, 
-                $pickupPrice, 
-                $tier1Price, 
-                $tier2Price, 
-                $tier3Price, 
-                $tier4Price, 
+                $basePrice,
+                $pricePerKm,
+                $pickupPrice,
+                $dropPrice,
+                $tier1Price,
+                $tier2Price,
+                $tier3Price,
+                $tier4Price,
                 $extraKmCharge
             ]);
             
-            $insertId = $pdo->lastInsertId();
-            if ($insertId) {
-                $updateSuccess = true;
-                error_log("Inserted new vehicle into vehicle_pricing for airport: $vehicleId (ID: $insertId)", 3, $logsDir . '/direct-fares.log');
-            }
-        } catch (PDOException $e) {
-            error_log("Error inserting into vehicle_pricing: " . $e->getMessage(), 3, $logsDir . '/direct-fares.log');
+            $vehiclePricingSuccess = true;
+            error_log("Inserted into vehicle_pricing for $vehicleId", 3, $logsDir . '/direct-fares.log');
         }
+    } catch (PDOException $e) {
+        error_log("Error updating vehicle_pricing: " . $e->getMessage(), 3, $logsDir . '/direct-fares.log');
     }
     
-    // Always return success - even if DB operations failed
-    // This helps the frontend continue its operation
+    // Return success response with details about what was updated
     http_response_code(200);
     echo json_encode([
         'status' => 'success',
         'message' => 'Airport pricing updated successfully',
         'data' => [
             'vehicleId' => $vehicleId,
+            'airportTableUpdated' => $airportUpdateSuccess,
+            'vehiclePricingUpdated' => $vehiclePricingSuccess,
             'pricing' => [
                 'basePrice' => $basePrice,
                 'pricePerKm' => $pricePerKm,
@@ -288,9 +375,13 @@ try {
                 'basePrice' => $basePrice,
                 'pricePerKm' => $pricePerKm,
                 'dropPrice' => $dropPrice,
-                'pickupPrice' => $pickupPrice
+                'pickupPrice' => $pickupPrice,
+                'tier1Price' => $tier1Price,
+                'tier2Price' => $tier2Price,
+                'tier3Price' => $tier3Price,
+                'tier4Price' => $tier4Price,
+                'extraKmCharge' => $extraKmCharge
             ]
         ]
     ]);
 }
-?>
