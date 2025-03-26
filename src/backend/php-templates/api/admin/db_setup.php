@@ -76,11 +76,11 @@ try {
     CREATE TABLE IF NOT EXISTS outstation_fares (
         id INT AUTO_INCREMENT PRIMARY KEY,
         vehicle_id VARCHAR(50) NOT NULL,
-        base_fare DECIMAL(10,2) NOT NULL DEFAULT 0,
+        base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
         price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
         night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 0,
         driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 0,
-        roundtrip_base_fare DECIMAL(10,2) DEFAULT NULL,
+        roundtrip_base_price DECIMAL(10,2) DEFAULT NULL,
         roundtrip_price_per_km DECIMAL(5,2) DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -152,8 +152,8 @@ try {
     if ($outstation_row['count'] == 0) {
         // Insert default outstation fares
         $conn->query("
-            INSERT INTO outstation_fares (vehicle_id, base_fare, price_per_km, night_halt_charge, driver_allowance, 
-                                        roundtrip_base_fare, roundtrip_price_per_km) VALUES
+            INSERT INTO outstation_fares (vehicle_id, base_price, price_per_km, night_halt_charge, driver_allowance, 
+                                        roundtrip_base_price, roundtrip_price_per_km) VALUES
             ('sedan', 4200, 14, 700, 250, 4000, 12),
             ('ertiga', 5400, 18, 1000, 250, 5000, 15),
             ('innova_crysta', 6000, 20, 1000, 250, 5600, 17),
