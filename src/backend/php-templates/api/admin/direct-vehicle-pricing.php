@@ -77,20 +77,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Log the data we've parsed
     error_log("DIRECT VEHICLE PRICING: Parsed data: " . print_r($data, true));
     
-    // Basic validation - need at least vehicleId
-    if (empty($data['vehicleId'])) {
-        error_log("DIRECT VEHICLE PRICING: Missing vehicleId in request");
+    // Basic validation - need at least vehicleId or id
+    if (empty($data['vehicleId']) && empty($data['id'])) {
+        error_log("DIRECT VEHICLE PRICING: Missing vehicleId/id in request");
         header('Content-Type: application/json');
         echo json_encode([
             'status' => 'error',
-            'message' => 'Missing vehicleId in request',
+            'message' => 'Missing vehicleId/id in request',
             'data' => $data
         ]);
         exit;
     }
     
     // Clean the vehicle ID to ensure consistency
-    $vehicleId = $data['vehicleId'];
+    $vehicleId = $data['id'] ?? $data['vehicleId'];
     
     // Remove 'item-' prefix if it exists
     if (strpos($vehicleId, 'item-') === 0) {
@@ -150,14 +150,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $nightHaltCharge = isset($data['nightHaltCharge']) ? floatval($data['nightHaltCharge']) : 0;
                     $driverAllowance = isset($data['driverAllowance']) ? floatval($data['driverAllowance']) : 0;
                     
-                    $fareStmt = $conn->prepare("INSERT INTO outstation_fares (vehicle_id, base_fare, price_per_km, night_halt_charge, driver_allowance, created_at, updated_at) 
-                                               VALUES (?, ?, ?, ?, ?, NOW(), NOW())
+                    $fareStmt = $conn->prepare("INSERT INTO outstation_fares (id, vehicle_id, base_fare, price_per_km, night_halt_charge, driver_allowance, created_at, updated_at) 
+                                               VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
                                                ON DUPLICATE KEY UPDATE base_fare = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?, updated_at = NOW()");
                     
                     if (!$fareStmt) {
                         error_log("DIRECT VEHICLE PRICING: Outstation fare prepare failed: " . $conn->error);
                     } else {
-                        $fareStmt->bind_param("sdddddddd", $vehicleId, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, 
+                        $fareStmt->bind_param("ssdddddddd", $vehicleId, $vehicleId, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, 
                                                        $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
                         $fareSuccess = $fareStmt->execute();
                         
@@ -174,15 +174,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $priceExtraKm = isset($data['priceExtraKm']) ? floatval($data['priceExtraKm']) : 0;
                     $priceExtraHour = isset($data['priceExtraHour']) ? floatval($data['priceExtraHour']) : 0;
                     
-                    $fareStmt = $conn->prepare("INSERT INTO local_package_fares (vehicle_id, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour, created_at, updated_at) 
-                                               VALUES (?, ?, ?, ?, ?, NOW(), NOW()) 
+                    $fareStmt = $conn->prepare("INSERT INTO local_package_fares (id, vehicle_id, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour, created_at, updated_at) 
+                                               VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW()) 
                                                ON DUPLICATE KEY UPDATE price_8hrs_80km = ?, price_10hrs_100km = ?, price_extra_km = ?, price_extra_hour = ?, updated_at = NOW()");
                     
                     if (!$fareStmt) {
                         error_log("DIRECT VEHICLE PRICING: Local fare prepare failed: " . $conn->error);
                     } else {
-                        $fareStmt->bind_param("sddddddd", $vehicleId, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour,
-                                                         $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour);
+                        $fareStmt->bind_param("ssdddddddd", $vehicleId, $vehicleId, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour,
+                                                       $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour);
                         $fareSuccess = $fareStmt->execute();
                         
                         if (!$fareSuccess) {
@@ -196,14 +196,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $pickupFare = isset($data['pickupFare']) ? floatval($data['pickupFare']) : 0;
                     $dropFare = isset($data['dropFare']) ? floatval($data['dropFare']) : 0;
                     
-                    $fareStmt = $conn->prepare("INSERT INTO airport_transfer_fares (vehicle_id, pickup_fare, drop_fare, created_at, updated_at) 
-                                               VALUES (?, ?, ?, NOW(), NOW()) 
+                    $fareStmt = $conn->prepare("INSERT INTO airport_transfer_fares (id, vehicle_id, pickup_fare, drop_fare, created_at, updated_at) 
+                                               VALUES (?, ?, ?, ?, NOW(), NOW()) 
                                                ON DUPLICATE KEY UPDATE pickup_fare = ?, drop_fare = ?, updated_at = NOW()");
                     
                     if (!$fareStmt) {
                         error_log("DIRECT VEHICLE PRICING: Airport fare prepare failed: " . $conn->error);
                     } else {
-                        $fareStmt->bind_param("sdddd", $vehicleId, $pickupFare, $dropFare, $pickupFare, $dropFare);
+                        $fareStmt->bind_param("ssdddd", $vehicleId, $vehicleId, $pickupFare, $dropFare, $pickupFare, $dropFare);
                         $fareSuccess = $fareStmt->execute();
                         
                         if (!$fareSuccess) {

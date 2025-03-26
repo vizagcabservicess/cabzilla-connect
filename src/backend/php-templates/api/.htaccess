@@ -28,8 +28,8 @@ RewriteEngine On
     Header always set Expires "0"
     
     # Add debugging headers
-    Header always set X-API-Debug "Processed by main API htaccess - v1.0.67"
-    Header always set X-API-Version "1.0.67"
+    Header always set X-API-Debug "Processed by main API htaccess - v1.0.73"
+    Header always set X-API-Version "1.0.73"
     Header always set X-Server-Time "%{TIME}e"
     Header always set X-Request-ID "%{UNIQUE_ID}e"
     Header always set X-Response-Timestamp "%{TIME}e"
@@ -43,6 +43,11 @@ RewriteEngine On
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
 
+# ULTRA-EMERGENCY ENDPOINT - HIGHEST PRIORITY
+# Direct database update with no dependencies
+RewriteRule ^ultra-emergency-outstation$ admin/ultra-emergency-outstation.php [L,QSA]
+RewriteRule ^ultra-emergency-outstation\.php$ admin/ultra-emergency-outstation.php [L,QSA]
+
 # DATABASE SETUP ENDPOINT - HIGH PRIORITY
 # Route to initialize the database tables
 RewriteRule ^init-database$ admin/init-database.php [L,QSA]
@@ -52,6 +57,11 @@ RewriteRule ^init-database\.php$ admin/init-database.php [L,QSA]
 # Critical direct fare update - make this highest priority
 RewriteRule ^direct-fare-update$ admin/direct-fare-update.php [L,QSA]
 RewriteRule ^direct-fare-update\.php$ admin/direct-fare-update.php [L,QSA]
+
+# EMERGENCY ENDPOINTS - HIGHEST PRIORITY
+RewriteRule ^emergency/airport-fares$ admin/airport-fares-update.php [L,QSA]
+RewriteRule ^emergency/outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^emergency/init-database$ admin/init-database.php [L,QSA]
 
 # CRITICAL OUTSTATION FARES - HIGH PRIORITY
 RewriteRule ^direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
@@ -67,10 +77,8 @@ RewriteRule ^admin/outstation-fares-update\.php$ admin/direct-outstation-fares.p
 RewriteRule ^outstation-fares/update$ admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^outstation-fares/direct$ admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^outstation/update-fares$ admin/direct-outstation-fares.php [L,QSA]
-
-# Direct endpoint for vehicle pricing
-RewriteRule ^admin/direct-vehicle-pricing$ admin/direct-vehicle-pricing.php [L,QSA]
-RewriteRule ^admin/vehicles-update$ admin/vehicles-update.php [L,QSA]
+RewriteRule ^outstation-fares/get$ admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^outstation-fares/fetch$ admin/direct-outstation-fares.php [L,QSA]
 
 # Direct access to fare endpoints
 RewriteRule ^fares/airport$ fares/airport.php [QSA,L]

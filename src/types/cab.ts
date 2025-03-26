@@ -18,12 +18,17 @@ export interface CabType {
 }
 
 export interface OutstationFare {
+  vehicleId?: string;
   basePrice: number;
   pricePerKm: number;
   driverAllowance: number;
   nightHalt: number;
   roundTripBasePrice: number;
   roundTripPricePerKm: number;
+  oneWayBasePrice?: number;
+  oneWayPricePerKm?: number;
+  nightHaltCharge?: number;
+  id?: string; // Added to match backend database column
 }
 
 export interface LocalFare {
@@ -46,7 +51,6 @@ export interface AirportFare {
   extraKmCharge: number;
 }
 
-// Additional interfaces needed for the application
 export interface FareCalculationParams {
   cabType: CabType;
   distance: number;
@@ -128,4 +132,5 @@ export interface VehiclePricing {
   airportTier3Price?: number;
   airportTier4Price?: number;
   airportExtraKmCharge?: number;
+  id?: string; // Added to match database column
 }

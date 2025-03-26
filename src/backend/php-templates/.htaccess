@@ -28,6 +28,18 @@ RewriteEngine On
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
 
+# ULTRA-EMERGENCY ENDPOINT - HIGHEST PRIORITY
+RewriteRule ^api/ultra-emergency-outstation$ api/admin/ultra-emergency-outstation.php [L,QSA]
+RewriteRule ^api/ultra-emergency-outstation\.php$ api/admin/ultra-emergency-outstation.php [L,QSA]
+RewriteRule ^ultra-emergency-outstation$ api/admin/ultra-emergency-outstation.php [L,QSA]
+RewriteRule ^ultra-emergency-outstation\.php$ api/admin/ultra-emergency-outstation.php [L,QSA]
+
+# NEW PRIORITY ENDPOINTS FOR EMERGENCY FIXES
+# Emergency endpoints - highest priority
+RewriteRule ^api/emergency/airport-fares$ api/admin/airport-fares-update.php [L,QSA]
+RewriteRule ^api/emergency/outstation-fares$ api/admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^api/emergency/init-database$ api/admin/init-database.php [L,QSA]
+
 # Direct to database initialization endpoint (multiple routes)
 RewriteRule ^api/init-database$ api/admin/init-database.php [L,QSA] 
 RewriteRule ^api/init-database\.php$ api/admin/init-database.php [L,QSA]
@@ -41,6 +53,8 @@ RewriteRule ^api/direct-airport-fares$ api/admin/direct-airport-fares.php [L,QSA
 RewriteRule ^api/direct-airport-fares\.php$ api/admin/direct-airport-fares.php [L,QSA]
 RewriteRule ^api/admin/direct-airport-fares$ api/admin/direct-airport-fares.php [L,QSA]
 RewriteRule ^api/admin/direct-airport-fares\.php$ api/admin/direct-airport-fares.php [L,QSA]
+RewriteRule ^api/admin/airport-fares-update$ api/admin/airport-fares-update.php [L,QSA]
+RewriteRule ^api/admin/airport-fares-update\.php$ api/admin/airport-fares-update.php [L,QSA]
 
 # Direct fare update routes
 RewriteRule ^api/direct-fare-update$ api/admin/direct-fare-update.php [L,QSA]
