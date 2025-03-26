@@ -11,6 +11,7 @@ import CabsPage from './pages/CabsPage';
 import ToursPage from './pages/ToursPage';
 import BookingEditPage from './pages/BookingEditPage';
 import ReceiptPage from './pages/ReceiptPage';
+import AdminDatabasePage from './pages/AdminDatabasePage';
 
 export const router = createBrowserRouter([
   {
@@ -32,6 +33,10 @@ export const router = createBrowserRouter([
   {
     path: '/admin',
     element: <AdminDashboardPage />,
+  },
+  {
+    path: '/admin/database',
+    element: <AdminDatabasePage />,
   },
   {
     path: '/booking/:bookingId/confirmation',
