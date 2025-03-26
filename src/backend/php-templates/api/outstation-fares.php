@@ -60,6 +60,14 @@ try {
                 FROM 
                     outstation_fares of
             ";
+            
+            // If vehicle_id parameter is provided, filter by it
+            if (isset($_GET['vehicle_id'])) {
+                $vehicleId = $_GET['vehicle_id'];
+                $query .= " WHERE of.vehicle_id = '$vehicleId'";
+            }
+            
+            error_log("Using outstation_fares table with query: $query");
         } else {
             error_log("outstation_fares table exists but is empty, falling back to vehicle_pricing");
             $outstationTableExists = false; // Force fallback
@@ -71,7 +79,7 @@ try {
         // FALLBACK TO vehicle_pricing TABLE
         $query = "
             SELECT 
-                vp1.vehicle_type AS id,
+                vp1.vehicle_id AS id,
                 vp1.base_fare AS basePrice,
                 vp1.price_per_km AS pricePerKm,
                 vp1.night_halt_charge AS nightHaltCharge,
@@ -81,10 +89,34 @@ try {
             FROM 
                 vehicle_pricing vp1
             LEFT JOIN 
-                vehicle_pricing vp2 ON vp1.vehicle_type = vp2.vehicle_type AND vp2.trip_type = 'outstation-round-trip'
+                vehicle_pricing vp2 ON vp1.vehicle_id = vp2.vehicle_id AND vp2.trip_type = 'outstation-round-trip'
             WHERE 
                 vp1.trip_type = 'outstation-one-way' OR vp1.trip_type = 'outstation'
         ";
+        
+        // If vehicle_id parameter is provided, filter by it
+        if (isset($_GET['vehicle_id'])) {
+            $vehicleId = $_GET['vehicle_id'];
+            $query = "
+                SELECT 
+                    vp1.vehicle_id AS id,
+                    vp1.base_fare AS basePrice,
+                    vp1.price_per_km AS pricePerKm,
+                    vp1.night_halt_charge AS nightHaltCharge,
+                    vp1.driver_allowance AS driverAllowance,
+                    vp2.base_fare AS roundTripBasePrice,
+                    vp2.price_per_km AS roundTripPricePerKm
+                FROM 
+                    vehicle_pricing vp1
+                LEFT JOIN 
+                    vehicle_pricing vp2 ON vp1.vehicle_id = vp2.vehicle_id AND vp2.trip_type = 'outstation-round-trip'
+                WHERE 
+                    (vp1.trip_type = 'outstation-one-way' OR vp1.trip_type = 'outstation')
+                    AND vp1.vehicle_id = '$vehicleId'
+            ";
+        }
+        
+        error_log("Using vehicle_pricing table with query: $query");
     }
     
     // Execute the query

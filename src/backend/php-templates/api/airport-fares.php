@@ -25,6 +25,9 @@ try {
         throw new Exception("Database connection failed");
     }
     
+    // Get vehicle_id parameter if present
+    $vehicleId = isset($_GET['vehicle_id']) ? $_GET['vehicle_id'] : null;
+    
     // Check if airport_transfer_fares table exists
     $checkTableQuery = "SHOW TABLES LIKE 'airport_transfer_fares'";
     $checkResult = $conn->query($checkTableQuery);
@@ -43,7 +46,7 @@ try {
         $hasData = $row['count'] > 0;
         
         if ($hasData) {
-            // QUERY SPECIALIZED AIRPORT FARES TABLE DIRECTLY (without joining to vehicle_types)
+            // QUERY SPECIALIZED AIRPORT FARES TABLE
             $query = "
                 SELECT 
                     atf.vehicle_id AS id,
@@ -59,6 +62,13 @@ try {
                 FROM 
                     airport_transfer_fares atf
             ";
+            
+            // If vehicle_id parameter is provided, filter by it
+            if ($vehicleId) {
+                $query .= " WHERE atf.vehicle_id = '$vehicleId'";
+            }
+            
+            error_log("Using airport_transfer_fares table with query: $query");
         } else {
             error_log("airport_transfer_fares table exists but is empty, falling back to vehicle_pricing");
             $airportTableExists = false; // Force fallback
@@ -70,7 +80,7 @@ try {
         // FALLBACK TO vehicle_pricing TABLE
         $query = "
             SELECT 
-                vp.vehicle_type AS id,
+                vp.vehicle_id AS id,
                 vp.airport_base_price AS basePrice,
                 vp.airport_price_per_km AS pricePerKm,
                 vp.airport_pickup_price AS pickupPrice,
@@ -85,6 +95,13 @@ try {
             WHERE 
                 vp.trip_type = 'airport'
         ";
+        
+        // If vehicle_id parameter is provided, filter by it
+        if ($vehicleId) {
+            $query .= " AND vp.vehicle_id = '$vehicleId'";
+        }
+        
+        error_log("Using vehicle_pricing table with query: $query");
     }
     
     // Execute the query
@@ -133,7 +150,8 @@ try {
         'fares' => $fares,
         'timestamp' => time(),
         'sourceTable' => $airportTableExists ? 'airport_transfer_fares' : 'vehicle_pricing',
-        'fareCount' => count($fares)
+        'fareCount' => count($fares),
+        'vehicleId' => $vehicleId
     ]);
     
 } catch (Exception $e) {

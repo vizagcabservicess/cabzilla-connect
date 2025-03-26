@@ -190,6 +190,7 @@ try {
         );
         
         $upsertFaresStmt->execute();
+        error_log("Updated outstation_fares table for vehicle: $vehicleId");
         
         // Also update vehicle_pricing table for compatibility
         $oneWayTripType = 'outstation-one-way';
@@ -218,6 +219,7 @@ try {
         );
         
         $upsertOneWayStmt->execute();
+        error_log("Updated vehicle_pricing table for one-way trips: $vehicleId");
         
         // Update round-trip pricing
         $upsertRoundTripStmt = $conn->prepare("
@@ -242,6 +244,33 @@ try {
         );
         
         $upsertRoundTripStmt->execute();
+        error_log("Updated vehicle_pricing table for round-trip: $vehicleId");
+        
+        // Also update the generic outstation type in vehicle_pricing
+        $outstationTripType = 'outstation';
+        $upsertOutstationStmt = $conn->prepare("
+            INSERT INTO vehicle_pricing 
+            (vehicle_id, trip_type, base_fare, price_per_km, driver_allowance, night_halt_charge, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, NOW())
+            ON DUPLICATE KEY UPDATE 
+            base_fare = VALUES(base_fare),
+            price_per_km = VALUES(price_per_km),
+            driver_allowance = VALUES(driver_allowance),
+            night_halt_charge = VALUES(night_halt_charge),
+            updated_at = NOW()
+        ");
+        
+        $upsertOutstationStmt->bind_param("ssdddd", 
+            $vehicleId, 
+            $outstationTripType, 
+            $oneWayBasePrice, 
+            $oneWayPricePerKm,
+            $driverAllowance,
+            $nightHaltCharge
+        );
+        
+        $upsertOutstationStmt->execute();
+        error_log("Updated vehicle_pricing table for generic outstation: $vehicleId");
         
         // Commit transaction
         $conn->commit();
