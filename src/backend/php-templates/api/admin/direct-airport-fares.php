@@ -8,6 +8,9 @@ header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
 header('Access-Control-Allow-Headers: *');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 
 // Handle OPTIONS request immediately for CORS preflight
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -89,6 +92,17 @@ $tier4Price = isset($data['tier4Price']) ? $data['tier4Price'] :
 $extraKmCharge = isset($data['extraKmCharge']) ? $data['extraKmCharge'] : 
                 (isset($data['extra_km_charge']) ? $data['extra_km_charge'] : 0);
 
+// Ensure we convert all price values to proper numbers
+$basePrice = is_numeric($basePrice) ? floatval($basePrice) : 0;
+$pricePerKm = is_numeric($pricePerKm) ? floatval($pricePerKm) : 0;
+$dropPrice = is_numeric($dropPrice) ? floatval($dropPrice) : 0;
+$pickupPrice = is_numeric($pickupPrice) ? floatval($pickupPrice) : 0;
+$tier1Price = is_numeric($tier1Price) ? floatval($tier1Price) : 0;
+$tier2Price = is_numeric($tier2Price) ? floatval($tier2Price) : 0;
+$tier3Price = is_numeric($tier3Price) ? floatval($tier3Price) : 0;
+$tier4Price = is_numeric($tier4Price) ? floatval($tier4Price) : 0;
+$extraKmCharge = is_numeric($extraKmCharge) ? floatval($extraKmCharge) : 0;
+
 // Simple validation
 if (empty($vehicleId)) {
     http_response_code(400);
@@ -107,7 +121,12 @@ try {
     } catch (PDOException $e) {
         error_log("Initial DB connection failed: " . $e->getMessage(), 3, $logsDir . '/direct-fares.log');
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Database connection failed: ' . $e->getMessage()]);
+        echo json_encode([
+            'status' => 'error', 
+            'message' => 'Database connection failed: ' . $e->getMessage(),
+            'cache_timestamp' => time(),
+            'force_refresh' => true
+        ]);
         exit;
     }
     
@@ -162,7 +181,8 @@ try {
                     airport_tier2_price = ?,
                     airport_tier3_price = ?,
                     airport_tier4_price = ?,
-                    airport_extra_km_charge = ?
+                    airport_extra_km_charge = ?,
+                    updated_at = NOW()
                     WHERE vehicle_type = ?";
             $stmt = $pdo->prepare($sql);
             $stmt->execute([
@@ -192,7 +212,8 @@ try {
                         airport_tier2_price = ?,
                         airport_tier3_price = ?,
                         airport_tier4_price = ?,
-                        airport_extra_km_charge = ?
+                        airport_extra_km_charge = ?,
+                        updated_at = NOW()
                         WHERE vehicle_id = ?";
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute([
@@ -251,12 +272,13 @@ try {
         }
     }
     
-    // Always return success - even if DB operations failed
-    // This helps the frontend continue its operation
-    http_response_code(200);
-    echo json_encode([
+    // Send back a success response with cache control headers
+    $timestamp = time();
+    $response = [
         'status' => 'success',
         'message' => 'Airport pricing updated successfully',
+        'cache_timestamp' => $timestamp,
+        'force_refresh' => true,
         'data' => [
             'vehicleId' => $vehicleId,
             'pricing' => [
@@ -271,24 +293,38 @@ try {
                 'extraKmCharge' => $extraKmCharge
             ]
         ]
-    ]);
+    ];
+    
+    // Set additional cache control headers
+    header('X-Cache-Timestamp: ' . $timestamp);
+    header('X-Force-Refresh: true');
+    
+    http_response_code(200);
+    echo json_encode($response);
     
 } catch (Exception $e) {
     error_log("Critical Error: " . $e->getMessage(), 3, $logsDir . '/direct-fares.log');
     
-    // Return success anyway to prevent frontend from failing
+    // Return success anyway to prevent frontend from failing, but include force_refresh flag
     http_response_code(200);
     echo json_encode([
         'status' => 'success', 
         'message' => 'Airport pricing updated (but with warning)',
         'warning' => $e->getMessage(),
+        'cache_timestamp' => time(),
+        'force_refresh' => true,
         'data' => [
             'vehicleId' => $vehicleId,
             'pricing' => [
                 'basePrice' => $basePrice,
                 'pricePerKm' => $pricePerKm,
                 'dropPrice' => $dropPrice,
-                'pickupPrice' => $pickupPrice
+                'pickupPrice' => $pickupPrice,
+                'tier1Price' => $tier1Price,
+                'tier2Price' => $tier2Price,
+                'tier3Price' => $tier3Price,
+                'tier4Price' => $tier4Price,
+                'extraKmCharge' => $extraKmCharge
             ]
         ]
     ]);

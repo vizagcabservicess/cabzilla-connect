@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { toast } from 'sonner';
 import { OutstationFare, LocalFare, AirportFare } from '@/types/cab';
+import { clearFareCache } from '@/lib/fareCalculationService';
 
 class FareService {
   private cacheEnabled = true;
@@ -16,7 +17,7 @@ class FareService {
     }
   }
 
-  // New method for forced request configuration
+  // Get request configuration with improved cache busting
   getForcedRequestConfig() {
     const apiVersion = import.meta.env.VITE_API_VERSION || '1.0.0';
     const timestamp = Date.now();
@@ -27,7 +28,8 @@ class FareService {
         'Pragma': 'no-cache',
         'Expires': '0',
         'X-API-Version': apiVersion,
-        'X-Force-Refresh': 'true'
+        'X-Force-Refresh': 'true',
+        'X-Timestamp': timestamp.toString()
       },
       params: {
         _t: timestamp
@@ -35,9 +37,10 @@ class FareService {
     };
   }
 
-  // New method for bypass headers
+  // Headers for bypassing all caches
   getBypassHeaders() {
     const apiVersion = import.meta.env.VITE_API_VERSION || '1.0.0';
+    const timestamp = Date.now();
     
     return {
       'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -45,7 +48,8 @@ class FareService {
       'Expires': '0',
       'X-API-Version': apiVersion,
       'X-Force-Refresh': 'true',
-      'X-Bypass-Cache': 'true'
+      'X-Bypass-Cache': 'true',
+      'X-Timestamp': timestamp.toString()
     };
   }
   
@@ -160,7 +164,13 @@ class FareService {
   }
   
   async getAirportFaresForVehicle(vehicleId: string): Promise<AirportFare> {
-    // Load from localStorage if available
+    // Aggressive cache clearing on fetch
+    if (localStorage.getItem('forceCacheRefresh') === 'true') {
+      console.log('Clearing cache before fetching airport fares due to force refresh flag');
+      this.clearCache();
+    }
+    
+    // Load from localStorage if available and cache is enabled
     if (this.cacheEnabled) {
       const cachedData = localStorage.getItem('cabFares');
       if (cachedData) {
@@ -181,7 +191,12 @@ class FareService {
     try {
       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
       const timestamp = Date.now();
-      const endpoint = `${apiBaseUrl}/api/fares/airport.php?vehicleId=${vehicleId}&_t=${timestamp}`;
+      const useDirectApi = import.meta.env.VITE_USE_DIRECT_API === 'true';
+      
+      // Use the direct API if configured
+      const endpoint = useDirectApi 
+        ? `${apiBaseUrl}/api/direct-airport-fares?vehicleId=${vehicleId}&_t=${timestamp}`
+        : `${apiBaseUrl}/api/fares/airport.php?vehicleId=${vehicleId}&_t=${timestamp}`;
       
       console.log(`Fetching airport fares for ${vehicleId} from API: ${endpoint}`);
       
@@ -189,6 +204,30 @@ class FareService {
       
       if (response.data && response.data.status === 'success' && response.data.data) {
         console.log(`Successfully fetched airport fares for ${vehicleId}:`, response.data.data);
+        
+        // Update local cache
+        try {
+          const cachedData = localStorage.getItem('cabFares');
+          const parsedData = cachedData ? JSON.parse(cachedData) : {};
+          
+          if (!parsedData.airport) {
+            parsedData.airport = {};
+          }
+          
+          parsedData.airport[vehicleId] = response.data.data;
+          localStorage.setItem('cabFares', JSON.stringify(parsedData));
+          
+          // Set a timestamp for the update
+          localStorage.setItem('airportFaresLastUpdated', Date.now().toString());
+        } catch (cacheError) {
+          console.error('Error caching airport fares:', cacheError);
+        }
+        
+        // Force a fare calculation refresh by clearing cache
+        if (response.data.force_refresh) {
+          clearFareCache(true);
+        }
+        
         return response.data.data;
       }
     } catch (error) {
@@ -268,6 +307,9 @@ class FareService {
       
       console.log(`Updating ${tripType} fares for vehicle ${vehicleId} at endpoint: ${endpoint}`);
       console.log("Data being sent:", data);
+      
+      // Clear cache before making the request
+      this.clearCache();
       
       // Try multiple request formats to maximize chance of success
       let successfulResponse = null;
@@ -377,10 +419,50 @@ class FareService {
         }
       }
       
-      // If any request format was successful, clear cache and return the response
+      // If any request format was successful, trigger fare refresh and return the response
       if (successfulResponse) {
+        // Double clear the cache for maximum effect
         this.clearCache();
+        
+        // Dispatch fare-specific event
+        try {
+          // Include price data in the event
+          const priceData = data;
+          if (successfulResponse.data && successfulResponse.data.pricing) {
+            Object.assign(priceData, successfulResponse.data.pricing);
+          }
+          
+          window.dispatchEvent(new CustomEvent(`${tripType}-fares-updated`, {
+            detail: {
+              vehicleId: vehicleId,
+              timestamp: Date.now(),
+              force: true,
+              prices: priceData
+            }
+          }));
+          
+          console.log(`Dispatched ${tripType}-fares-updated event with data:`, priceData);
+        } catch (eventError) {
+          console.error(`Error dispatching ${tripType}-fares-updated event:`, eventError);
+        }
+        
         console.log(`Successfully updated ${tripType} fares:`, successfulResponse);
+        
+        // Force a global fare refresh with a small delay to ensure all systems update
+        setTimeout(() => {
+          clearFareCache(true);
+          
+          // Also dispatch the generic fare-cache-cleared event
+          window.dispatchEvent(new CustomEvent('fare-cache-cleared', {
+            detail: { 
+              timestamp: Date.now(),
+              forceRefresh: true,
+              tripType: tripType,
+              vehicleId: vehicleId
+            }
+          }));
+        }, 500);
+        
         return successfulResponse;
       }
       
@@ -417,6 +499,11 @@ class FareService {
           tripType: tripType
         }
       };
+    } finally {
+      // Clear cache one more time in finally block to ensure it happens
+      setTimeout(() => {
+        clearFareCache(true);
+      }, 1000);
     }
   }
   
@@ -427,10 +514,27 @@ class FareService {
     sessionStorage.removeItem('calculatedFares');
     this.cacheEnabled = false; // Disable cache for this session
     localStorage.setItem('forceCacheRefresh', 'true'); // Set flag to force refresh for other components
+    localStorage.setItem('fareDataLastRefreshed', Date.now().toString());
     
     // Dispatch an event to notify other components
-    window.dispatchEvent(new CustomEvent('fare-cache-cleared'));
+    try {
+      window.dispatchEvent(new CustomEvent('fare-cache-cleared', {
+        detail: { 
+          timestamp: Date.now(),
+          forceRefresh: true 
+        }
+      }));
+      console.log('Dispatched fare-cache-cleared event');
+    } catch (error) {
+      console.error('Error dispatching fare-cache-cleared event:', error);
+    }
+    
+    // Clear the force refresh flag after a delay
+    setTimeout(() => {
+      localStorage.removeItem('forceCacheRefresh');
+    }, 5000);
   }
 }
 
 export const fareService = new FareService();
+

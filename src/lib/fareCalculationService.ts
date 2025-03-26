@@ -1,3 +1,4 @@
+
 import { differenceInHours, differenceInDays, differenceInMinutes, addDays, subDays, isAfter } from 'date-fns';
 import { CabType, FareCalculationParams } from '@/types/cab';
 import { TripType, TripMode } from './tripTypes';
@@ -8,12 +9,12 @@ const fareCache = new Map<string, { expire: number, price: number }>();
 let lastCacheClearTime = Date.now();
 let lastEventDispatchTime = Date.now();
 let eventDispatchCount = 0;
-const MAX_EVENTS_PER_MINUTE = 5;
+const MAX_EVENTS_PER_MINUTE = 10; // Increased from 5 to 10
 
-export const clearFareCache = () => {
-  // Prevent multiple cache clears within 30 seconds
+export const clearFareCache = (forceDispatch = false) => {
+  // Always allow cache clear when force dispatch is requested
   const now = Date.now();
-  if (now - lastCacheClearTime < 30000) {
+  if (!forceDispatch && now - lastCacheClearTime < 5000) { // Reduced from 30s to 5s
     console.log('Fare cache clear throttled - last clear was too recent');
     return;
   }
@@ -23,25 +24,39 @@ export const clearFareCache = () => {
   lastCacheClearTime = now;
   console.log('Fare calculation cache cleared at', new Date().toISOString());
   
+  // Update localStorage
   localStorage.setItem('fareCacheLastCleared', lastCacheClearTime.toString());
   localStorage.setItem('forceCacheRefresh', 'true');
+  localStorage.setItem('fareDataLastRefreshed', now.toString());
   
-  // Increment and throttle event dispatch
+  // Dispatch event with minimal throttling
   eventDispatchCount++;
   
-  // Reset counter every minute
-  if (now - lastEventDispatchTime > 60000) {
+  // Reset counter every 30 seconds (rather than every minute)
+  if (now - lastEventDispatchTime > 30000) {
     eventDispatchCount = 1;
     lastEventDispatchTime = now;
   }
   
-  // Only dispatch events if we haven't exceeded the limit
-  if (eventDispatchCount <= MAX_EVENTS_PER_MINUTE) {
+  // Always dispatch if forceDispatch is true or if we haven't exceeded the limit
+  if (forceDispatch || eventDispatchCount <= MAX_EVENTS_PER_MINUTE) {
     try {
+      // Dispatch with force refresh flag
       window.dispatchEvent(new CustomEvent('fare-cache-cleared', {
         detail: { timestamp: lastCacheClearTime, forceRefresh: true }
       }));
-      console.log('Dispatched fare-cache-cleared event');
+      console.log('Dispatched fare-cache-cleared event with forceRefresh flag');
+      
+      // Also dispatch specific fare type events
+      window.dispatchEvent(new CustomEvent('airport-fares-updated', {
+        detail: { timestamp: lastCacheClearTime, forceRefresh: true }
+      }));
+      window.dispatchEvent(new CustomEvent('local-fares-updated', {
+        detail: { timestamp: lastCacheClearTime, forceRefresh: true }
+      }));
+      window.dispatchEvent(new CustomEvent('trip-fares-updated', {
+        detail: { timestamp: lastCacheClearTime, forceRefresh: true }
+      }));
     } catch (e) {
       console.error('Error dispatching fare-cache-cleared event:', e);
     }
@@ -57,6 +72,7 @@ export const clearFareCache = () => {
 
 export const fareService = {
   clearCache: clearFareCache,
+  forceRefresh: () => clearFareCache(true),
   getLastCacheClearTime: () => lastCacheClearTime
 };
 
@@ -124,8 +140,11 @@ const getDefaultCabPricing = (cabName: string = 'sedan') => {
 };
 
 export const calculateAirportFare = (cabName: string, distance: number): number => {
-  const cacheKey = `airport_${cabName}_${distance}_${lastCacheClearTime}`;
+  // Always get a fresh token for cache busting
   const forceRefresh = localStorage.getItem('forceCacheRefresh') === 'true';
+  const refreshToken = localStorage.getItem('fareDataLastRefreshed') || lastCacheClearTime.toString();
+  
+  const cacheKey = `airport_${cabName}_${distance}_${refreshToken}`;
   
   const cachedFare = fareCache.get(cacheKey);
   if (!forceRefresh && cachedFare && cachedFare.expire > Date.now()) {
@@ -158,6 +177,9 @@ export const calculateAirportFare = (cabName: string, distance: number): number 
   } else if (cabNameLower.includes('tempo') || cabNameLower.includes('traveller')) {
     basePrice = 2500;
     pricePerKm = 22;
+  } else if (cabNameLower.includes('luxury')) {
+    basePrice = 1800; // Set similar to Innova
+    pricePerKm = 18;
   }
   
   let fare = Math.round(basePrice * 0.7);
@@ -165,8 +187,9 @@ export const calculateAirportFare = (cabName: string, distance: number): number 
   fare += defaultFare.airportFee;
   fare = Math.round(fare * 1.05);
   
+  // Shorter expiration - 5 minutes instead of 15
   fareCache.set(cacheKey, {
-    expire: Date.now() + 15 * 60 * 1000,
+    expire: Date.now() + 5 * 60 * 1000,
     price: fare
   });
   
@@ -189,10 +212,13 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
 
   const cacheKey = generateCacheKey(params);
   
-  const forceRefresh = localStorage.getItem('forceCacheRefresh') === 'true';
+  // Check for force refresh flags with higher priority
+  const forceRefresh = localStorage.getItem('forceCacheRefresh') === 'true' || 
+                       localStorage.getItem('forceTripFaresRefresh') === 'true';
   
   console.log(`Calculating fare for ${cabType.name}, forceRefresh: ${forceRefresh}`);
   
+  // Only use cache for non-local trip types and when not forcing refresh
   const cachedFare = fareCache.get(cacheKey);
   if (!forceRefresh && tripType !== 'local' && cachedFare && cachedFare.expire > Date.now()) {
     console.log(`Using cached fare calculation for ${cabType.name}: ₹${cachedFare.price}`);
@@ -328,26 +354,27 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
       return calculateAirportFare(cabType.name, distance);
     }
     
-    // Store in cache if not local type (local fares are more dynamic)
-    if (tripType !== 'local') {
-      fareCache.set(cacheKey, {
-        expire: Date.now() + 15 * 60 * 1000,
-        price: fare
-      });
-    }
+    // Shorter expiration time for all cached fares - 5 minutes instead of 15
+    fareCache.set(cacheKey, {
+      expire: Date.now() + 5 * 60 * 1000,
+      price: fare
+    });
     
-    // Throttle event dispatching to prevent cascading recalculations
+    // More aggressive event dispatching
     const now = Date.now();
     eventDispatchCount++;
     
-    // Reset counter every minute
-    if (now - lastEventDispatchTime > 60000) {
+    // Reset counter every 30 seconds
+    if (now - lastEventDispatchTime > 30000) {
       eventDispatchCount = 1;
       lastEventDispatchTime = now;
     }
     
-    // Only dispatch if we haven't exceeded the limit
-    if (eventDispatchCount <= MAX_EVENTS_PER_MINUTE) {
+    // Higher limit and special handling for airport fares
+    const maxEvents = tripType === 'airport' ? MAX_EVENTS_PER_MINUTE * 2 : MAX_EVENTS_PER_MINUTE;
+    
+    // Allow more events for certain trip types
+    if (eventDispatchCount <= maxEvents) {
       const eventName = tripType === 'local' ? 'local-fares-updated' :
                         tripType === 'outstation' ? 'trip-fares-updated' :
                         tripType === 'airport' ? 'airport-fares-updated' : 'fare-cache-cleared';
@@ -361,16 +388,29 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
             tripType,
             fare,
             updateId,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            forceRefresh: true
           }
         }));
         
         console.log(`Dispatched ${eventName} event for ${cabType.id} with fare ${fare}`);
+        
+        // For airport fares, also dispatch a generic fare update event
+        if (tripType === 'airport') {
+          window.dispatchEvent(new CustomEvent('fare-cache-cleared', {
+            detail: {
+              timestamp: Date.now(),
+              forceRefresh: true,
+              tripType: 'airport',
+              cabId: cabType.id
+            }
+          }));
+        }
       } catch (e) {
         console.error(`Error dispatching ${eventName} event:`, e);
       }
     } else {
-      console.log(`Skipped event dispatch for ${tripType} fare update (throttled: ${eventDispatchCount}/${MAX_EVENTS_PER_MINUTE})`);
+      console.log(`Skipped event dispatch for ${tripType} fare update (throttled: ${eventDispatchCount}/${maxEvents})`);
     }
     
     return fare;

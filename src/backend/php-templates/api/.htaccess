@@ -22,13 +22,13 @@ RewriteEngine On
     </If>
     
     # Enhanced caching headers for stability - prevent browsers from causing loops
-    Header always set Cache-Control "private, must-revalidate, max-age=60"
+    Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
     Header always set Pragma "no-cache"
-    Header always set Expires "60"
+    Header always set Expires "0"
     
     # Add debugging headers
-    Header always set X-API-Debug "Processed by main API htaccess - v1.0.62"
-    Header always set X-API-Version "1.0.62"
+    Header always set X-API-Debug "Processed by main API htaccess - v1.0.63"
+    Header always set X-API-Version "1.0.63"
     Header always set X-Server-Time "%{TIME}e"
     Header always set X-Request-ID "%{UNIQUE_ID}e"
     Header always set X-Response-Timestamp "%{TIME}e"
@@ -45,20 +45,20 @@ RewriteRule .* - [R=200,L]
 <IfModule mod_headers.c>
     # Set stricter caching for vehicle-data endpoint
     <FilesMatch "vehicles-data\.php$">
-        Header set Cache-Control "public, max-age=300"
-        Header set Expires "300"
+        Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+        Header set Expires "0"
     </FilesMatch>
     
     # Also cache vehicles endpoint
     <FilesMatch "vehicles\.php$">
-        Header set Cache-Control "public, max-age=300" 
-        Header set Expires "300"
+        Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+        Header set Expires "0"
     </FilesMatch>
     
     # Force browser caching for fare endpoints to prevent rapid requests
     <FilesMatch "(local|airport|outstation)-fares\.php$">
-        Header set Cache-Control "public, max-age=60"
-        Header set Expires "60"
+        Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+        Header set Expires "0"
     </FilesMatch>
     
     # No caching for direct fare update endpoints
