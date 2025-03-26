@@ -9,12 +9,12 @@ const fareCache = new Map<string, { expire: number, price: number }>();
 let lastCacheClearTime = Date.now();
 let lastEventDispatchTime = Date.now();
 let eventDispatchCount = 0;
-const MAX_EVENTS_PER_MINUTE = 10; // Increased from 5 to 10
+const MAX_EVENTS_PER_MINUTE = 10;
 
 export const clearFareCache = (forceDispatch = false) => {
   // Always allow cache clear when force dispatch is requested
   const now = Date.now();
-  if (!forceDispatch && now - lastCacheClearTime < 5000) { // Reduced from 30s to 5s
+  if (!forceDispatch && now - lastCacheClearTime < 5000) {
     console.log('Fare cache clear throttled - last clear was too recent');
     return;
   }
@@ -32,7 +32,7 @@ export const clearFareCache = (forceDispatch = false) => {
   // Dispatch event with minimal throttling
   eventDispatchCount++;
   
-  // Reset counter every 30 seconds (rather than every minute)
+  // Reset counter every 30 seconds
   if (now - lastEventDispatchTime > 30000) {
     eventDispatchCount = 1;
     lastEventDispatchTime = now;
@@ -139,6 +139,7 @@ const getDefaultCabPricing = (cabName: string = 'sedan') => {
   return pricing;
 };
 
+// Modified to use correct airport pricing from database
 export const calculateAirportFare = (cabName: string, distance: number): number => {
   // Always get a fresh token for cache busting
   const forceRefresh = localStorage.getItem('forceCacheRefresh') === 'true';
@@ -152,48 +153,123 @@ export const calculateAirportFare = (cabName: string, distance: number): number 
     return cachedFare.price;
   }
   
+  // Attempt to get stored airport fares from localStorage
+  const cabFares = localStorage.getItem('cabFares');
+  let airportFare = null;
+  
+  if (cabFares) {
+    try {
+      const parsedFares = JSON.parse(cabFares);
+      if (parsedFares && parsedFares.airport) {
+        const cabNameLower = safeToLowerCase(cabName);
+        
+        // Try exact match first
+        if (parsedFares.airport[cabNameLower]) {
+          airportFare = parsedFares.airport[cabNameLower];
+        } 
+        // Try partial matches
+        else {
+          for (const key in parsedFares.airport) {
+            const keyLower = safeToLowerCase(key);
+            if ((cabNameLower.includes(keyLower) || keyLower.includes(cabNameLower))) {
+              airportFare = parsedFares.airport[key];
+              console.log(`Using partial match airport fare for ${cabName} using ${key}`);
+              break;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error parsing stored cab fares:', error);
+    }
+  }
+  
+  // Determine fare based on tier distance
   const defaultFare = {
     basePrice: 1000,
     pricePerKm: 14,
+    dropPrice: 800,
+    pickupPrice: 800,
+    tier1Price: 600,
+    tier2Price: 800,
+    tier3Price: 1000,
+    tier4Price: 1200,
+    extraKmCharge: 12,
     airportFee: 150
   };
   
-  let basePrice = defaultFare.basePrice;
-  let pricePerKm = defaultFare.pricePerKm;
-  
-  const cabNameLower = safeToLowerCase(cabName);
-  
-  if (cabNameLower.includes('sedan') || cabNameLower.includes('dzire') || 
-      cabNameLower.includes('etios') || cabNameLower.includes('amaze') || 
-      cabNameLower.includes('swift')) {
-    basePrice = 1200;
-    pricePerKm = 14;
-  } else if (cabNameLower.includes('ertiga') || cabNameLower.includes('suv')) {
-    basePrice = 1500;
-    pricePerKm = 16;
-  } else if (cabNameLower.includes('innova')) {
-    basePrice = 1800;
-    pricePerKm = 18;
-  } else if (cabNameLower.includes('tempo') || cabNameLower.includes('traveller')) {
-    basePrice = 2500;
-    pricePerKm = 22;
-  } else if (cabNameLower.includes('luxury')) {
-    basePrice = 1800; // Set similar to Innova
-    pricePerKm = 18;
+  // If we found airport fares in localStorage, use them
+  let fare = 0;
+  if (airportFare) {
+    console.log(`Using database airport fare for ${cabName}:`, airportFare);
+    
+    // Calculate based on distance tier
+    if (distance <= 10) {
+      fare = airportFare.tier1Price || defaultFare.tier1Price;
+    } else if (distance <= 20) {
+      fare = airportFare.tier2Price || defaultFare.tier2Price;
+    } else if (distance <= 30) {
+      fare = airportFare.tier3Price || defaultFare.tier3Price;
+    } else {
+      fare = airportFare.tier4Price || defaultFare.tier4Price;
+      
+      // Add extra km charge for distances over 30km
+      if (distance > 30) {
+        const extraKm = distance - 30;
+        const extraCharge = extraKm * (airportFare.extraKmCharge || defaultFare.extraKmCharge);
+        fare += extraCharge;
+        console.log(`Added ${extraKm}km extra at ${airportFare.extraKmCharge || defaultFare.extraKmCharge}/km = ${extraCharge}`);
+      }
+    }
+    
+    // Add airport fee (typically included in pricing but add as safety)
+    fare += defaultFare.airportFee;
+    
+    console.log(`Final airport fare from database for ${cabName}: ₹${fare}`);
+  } else {
+    // Fallback to default calculation if no stored prices
+    console.log(`No stored airport fare found for ${cabName}, using default calculation`);
+    
+    const cabNameLower = safeToLowerCase(cabName);
+    let basePrice = defaultFare.basePrice;
+    let pricePerKm = defaultFare.pricePerKm;
+    
+    if (cabNameLower.includes('sedan') || cabNameLower.includes('dzire') || 
+        cabNameLower.includes('etios') || cabNameLower.includes('amaze') || 
+        cabNameLower.includes('swift')) {
+      basePrice = 1200;
+      pricePerKm = 14;
+    } else if (cabNameLower.includes('ertiga') || cabNameLower.includes('suv')) {
+      basePrice = 1500;
+      pricePerKm = 16;
+    } else if (cabNameLower.includes('innova')) {
+      basePrice = 1800;
+      pricePerKm = 18;
+    } else if (cabNameLower.includes('tempo') || cabNameLower.includes('traveller')) {
+      basePrice = 2500;
+      pricePerKm = 22;
+    } else if (cabNameLower.includes('luxury')) {
+      basePrice = 7000;
+      pricePerKm = 22;
+    }
+    
+    fare = Math.round(basePrice * 0.7);
+    fare += Math.round(distance * pricePerKm);
+    fare += defaultFare.airportFee;
+    
+    console.log(`Calculated default airport fare for ${cabName}: ₹${fare}`);
   }
   
-  let fare = Math.round(basePrice * 0.7);
-  fare += Math.round(distance * pricePerKm);
-  fare += defaultFare.airportFee;
+  // Apply GST
   fare = Math.round(fare * 1.05);
   
-  // Shorter expiration - 5 minutes instead of 15
+  // Shorter expiration - 5 minutes
   fareCache.set(cacheKey, {
     expire: Date.now() + 5 * 60 * 1000,
     price: fare
   });
   
-  console.log(`Calculated airport fare for ${cabName}: ₹${fare}`);
+  console.log(`Final airport fare (with GST) for ${cabName}: ₹${fare}`);
   return fare;
 };
 
