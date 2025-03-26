@@ -1,4 +1,3 @@
-
 export interface CabType {
   id: string;
   name: string;
@@ -67,6 +66,7 @@ export interface FareCalculationParams {
   hourlyPackage?: string;
   pickupDate?: Date;
   returnDate?: Date;
+  forceRefresh?: boolean;  // Added this property to fix the TypeScript error
 }
 
 export interface HourlyPackage {

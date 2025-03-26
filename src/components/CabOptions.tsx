@@ -79,11 +79,11 @@ export function CabOptions({
       
       // Reload cab types from server with force flag
       console.log('Reloading cab types from server...');
-      await reloadCabTypes(true); // Added true to force refresh
+      await reloadCabTypes();  // Fixed: Remove the argument
       
       // Refresh cab options with force parameter
       console.log('Refreshing cab options...');
-      await refreshCabOptions(true); // Added true to force refresh
+      await refreshCabOptions();  // Fixed: Remove the argument
       
       // Update last update timestamp and increment refresh count
       setLastUpdate(timestamp);
@@ -92,7 +92,7 @@ export function CabOptions({
       setGlobalRefreshTrigger(prev => prev + 1);
       
       // Trigger recalculation of fares with force flag
-      await calculateFares(cabOptions, true);
+      await calculateFares(cabOptions);
       
       toast.success("All fare data refreshed successfully!");
       setRefreshSuccessful(true);
@@ -120,13 +120,13 @@ export function CabOptions({
   };
 
   // Calculate fares for cab options
-  const calculateFares = async (cabs: CabType[], forceRefresh: boolean = false) => {
+  const calculateFares = async (cabs: CabType[], shouldForceRefresh: boolean = false) => {
     if (cabs.length > 0 && distance > 0) {
       setIsCalculatingFares(true);
-      console.log(`Calculating fares for ${cabs.length} cabs, force refresh: ${forceRefresh}, tripType: ${tripType}, hourlyPackage: ${hourlyPackage}`);
+      console.log(`Calculating fares for ${cabs.length} cabs, force refresh: ${shouldForceRefresh}, tripType: ${tripType}, hourlyPackage: ${hourlyPackage}`);
       
       // Clear the fare cache if force refresh is requested
-      if (forceRefresh) {
+      if (shouldForceRefresh) {
         clearFareCache();
         fareService.clearCache();
         localStorage.setItem('forceCacheRefresh', 'true');
@@ -145,8 +145,7 @@ export function CabOptions({
             tripMode,
             hourlyPackage: tripType === 'local' ? hourlyPackage : undefined,
             pickupDate,
-            returnDate,
-            forceRefresh  // Added forceRefresh parameter
+            returnDate
           });
           fares[cab.id] = fare;
           console.log(`Calculated fare for ${cab.name}: ${fare}`);
@@ -157,7 +156,7 @@ export function CabOptions({
       }
       
       // Remove force refresh flag
-      if (forceRefresh) {
+      if (shouldForceRefresh) {
         localStorage.removeItem('forceCacheRefresh');
         console.log('Force refresh flag removed after calculations');
       }
