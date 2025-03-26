@@ -2,10 +2,10 @@
 <?php
 require_once '../../config.php';
 
-// Allow CORS for all domains and add aggressive cache control
+// Allow CORS for all domains
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Force-Refresh, X-Requested-With');
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
@@ -13,7 +13,6 @@ header('Expires: 0');
 
 // Add extra cache busting headers
 header('X-Cache-Timestamp: ' . time());
-header('X-Response-ID: ' . uniqid('resp_'));
 
 // Respond to preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -22,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // Log the request for debugging
-error_log("vehicles-data.php request. Method: " . $_SERVER['REQUEST_METHOD'] . ", Time: " . time() . ", Query: " . $_SERVER['QUERY_STRING']);
+error_log("vehicles-data.php request. Method: " . $_SERVER['REQUEST_METHOD'] . ", Time: " . time());
 
 // Global fallback vehicles to return in case of database issues
 $fallbackVehicles = [
@@ -31,8 +30,8 @@ $fallbackVehicles = [
         'name' => 'Sedan',
         'capacity' => 4,
         'luggageCapacity' => 2,
-        'price' => 2500,
-        'basePrice' => 2500,
+        'price' => 4200,
+        'basePrice' => 4200,
         'pricePerKm' => 14,
         'image' => '/cars/sedan.png',
         'amenities' => ['AC', 'Bottle Water', 'Music System'],
@@ -41,41 +40,15 @@ $fallbackVehicles = [
         'nightHaltCharge' => 700,
         'driverAllowance' => 250,
         'isActive' => true,
-        'vehicleId' => 'sedan',
-        'outstationFares' => [
-            'basePrice' => 2500,
-            'pricePerKm' => 14,
-            'nightHaltCharge' => 700,
-            'driverAllowance' => 250,
-            'roundTripBasePrice' => 2000,
-            'roundTripPricePerKm' => 12
-        ],
-        'localPackageFares' => [
-            'price4hrs40km' => 1600,
-            'price8hrs80km' => 2800,
-            'price10hrs100km' => 3400,
-            'priceExtraKm' => 14,
-            'priceExtraHour' => 150
-        ],
-        'airportFares' => [
-            'basePrice' => 1500,
-            'pricePerKm' => 14,
-            'pickupPrice' => 1600,
-            'dropPrice' => 1500,
-            'tier1Price' => 1600,
-            'tier2Price' => 1800,
-            'tier3Price' => 2200,
-            'tier4Price' => 2600,
-            'extraKmCharge' => 14
-        ]
+        'vehicleId' => 'sedan'
     ],
     [
         'id' => 'ertiga',
         'name' => 'Ertiga',
         'capacity' => 6,
         'luggageCapacity' => 3,
-        'price' => 3200,
-        'basePrice' => 3200,
+        'price' => 5400,
+        'basePrice' => 5400,
         'pricePerKm' => 18,
         'image' => '/cars/ertiga.png',
         'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
@@ -84,41 +57,15 @@ $fallbackVehicles = [
         'nightHaltCharge' => 1000,
         'driverAllowance' => 250,
         'isActive' => true,
-        'vehicleId' => 'ertiga',
-        'outstationFares' => [
-            'basePrice' => 3200,
-            'pricePerKm' => 18,
-            'nightHaltCharge' => 1000,
-            'driverAllowance' => 250,
-            'roundTripBasePrice' => 2800,
-            'roundTripPricePerKm' => 16
-        ],
-        'localPackageFares' => [
-            'price4hrs40km' => 2200,
-            'price8hrs80km' => 3800,
-            'price10hrs100km' => 4400,
-            'priceExtraKm' => 18,
-            'priceExtraHour' => 200
-        ],
-        'airportFares' => [
-            'basePrice' => 2000,
-            'pricePerKm' => 18,
-            'pickupPrice' => 2000,
-            'dropPrice' => 1900,
-            'tier1Price' => 2000,
-            'tier2Price' => 2200,
-            'tier3Price' => 2600,
-            'tier4Price' => 3000,
-            'extraKmCharge' => 18
-        ]
+        'vehicleId' => 'ertiga'
     ],
     [
         'id' => 'innova_crysta',
         'name' => 'Innova Crysta',
         'capacity' => 7,
         'luggageCapacity' => 4,
-        'price' => 3800,
-        'basePrice' => 3800,
+        'price' => 6000,
+        'basePrice' => 6000,
         'pricePerKm' => 20,
         'image' => '/cars/innova.png',
         'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
@@ -127,55 +74,91 @@ $fallbackVehicles = [
         'nightHaltCharge' => 1000,
         'driverAllowance' => 250,
         'isActive' => true,
-        'vehicleId' => 'innova_crysta',
-        'outstationFares' => [
-            'basePrice' => 3800,
-            'pricePerKm' => 20,
-            'nightHaltCharge' => 1000,
-            'driverAllowance' => 250,
-            'roundTripBasePrice' => 3400,
-            'roundTripPricePerKm' => 18
-        ],
-        'localPackageFares' => [
-            'price4hrs40km' => 2600,
-            'price8hrs80km' => 4400,
-            'price10hrs100km' => 5000,
-            'priceExtraKm' => 20,
-            'priceExtraHour' => 250
-        ],
-        'airportFares' => [
-            'basePrice' => 2500,
-            'pricePerKm' => 20,
-            'pickupPrice' => 2400,
-            'dropPrice' => 2300,
-            'tier1Price' => 2400,
-            'tier2Price' => 2600,
-            'tier3Price' => 3000,
-            'tier4Price' => 3400,
-            'extraKmCharge' => 20
-        ]
+        'vehicleId' => 'innova_crysta'
     ]
 ];
 
-// If this is a repeated request in a short time frame, return the fallback vehicles
-// This helps prevent overwhelming the server with repeated requests
-$requestHash = md5($_SERVER['REMOTE_ADDR'] . $_SERVER['HTTP_USER_AGENT'] . date('YmdH'));
-$requestCount = isset($_SESSION['request_count_' . $requestHash]) ? $_SESSION['request_count_' . $requestHash] : 0;
-
-if ($requestCount > 10) {
-    error_log("Too many requests from same client, returning fallback vehicles");
-    echo json_encode([
-        'vehicles' => $fallbackVehicles,
-        'timestamp' => time(),
-        'cached' => true,
-        'throttled' => true,
-        'requestCount' => $requestCount
-    ]);
-    exit;
+// Function to get data from specific fare tables
+function getSpecializedFareData($conn, $vehicleId) {
+    $fareData = [
+        'outstation' => null,
+        'local' => null,
+        'airport' => null
+    ];
+    
+    // Try to get outstation fares
+    try {
+        $outstationQuery = $conn->prepare("
+            SELECT base_price as basePrice, price_per_km as pricePerKm, 
+                   night_halt_charge as nightHaltCharge, driver_allowance as driverAllowance,
+                   roundtrip_base_price as roundTripBasePrice, roundtrip_price_per_km as roundTripPricePerKm
+            FROM outstation_fares 
+            WHERE vehicle_id = ?
+        ");
+        
+        if ($outstationQuery) {
+            $outstationQuery->bind_param("s", $vehicleId);
+            $outstationQuery->execute();
+            $result = $outstationQuery->get_result();
+            
+            if ($result && $result->num_rows > 0) {
+                $fareData['outstation'] = $result->fetch_assoc();
+            }
+        }
+    } catch (Exception $e) {
+        error_log("Error fetching outstation fares: " . $e->getMessage());
+    }
+    
+    // Try to get local fares
+    try {
+        $localQuery = $conn->prepare("
+            SELECT price_4hrs_40km as price4hrs40km, price_8hrs_80km as price8hrs80km,
+                   price_10hrs_100km as price10hrs100km, price_extra_km as priceExtraKm,
+                   price_extra_hour as priceExtraHour
+            FROM local_package_fares 
+            WHERE vehicle_id = ?
+        ");
+        
+        if ($localQuery) {
+            $localQuery->bind_param("s", $vehicleId);
+            $localQuery->execute();
+            $result = $localQuery->get_result();
+            
+            if ($result && $result->num_rows > 0) {
+                $fareData['local'] = $result->fetch_assoc();
+            }
+        }
+    } catch (Exception $e) {
+        error_log("Error fetching local fares: " . $e->getMessage());
+    }
+    
+    // Try to get airport fares
+    try {
+        $airportQuery = $conn->prepare("
+            SELECT base_price as basePrice, price_per_km as pricePerKm,
+                   pickup_price as pickupPrice, drop_price as dropPrice,
+                   tier1_price as tier1Price, tier2_price as tier2Price,
+                   tier3_price as tier3Price, tier4_price as tier4Price,
+                   extra_km_charge as extraKmCharge
+            FROM airport_transfer_fares 
+            WHERE vehicle_id = ?
+        ");
+        
+        if ($airportQuery) {
+            $airportQuery->bind_param("s", $vehicleId);
+            $airportQuery->execute();
+            $result = $airportQuery->get_result();
+            
+            if ($result && $result->num_rows > 0) {
+                $fareData['airport'] = $result->fetch_assoc();
+            }
+        }
+    } catch (Exception $e) {
+        error_log("Error fetching airport fares: " . $e->getMessage());
+    }
+    
+    return $fareData;
 }
-
-// Increment the request counter
-$_SESSION['request_count_' . $requestHash] = $requestCount + 1;
 
 // Handle requests
 try {
@@ -192,35 +175,44 @@ try {
         ]);
         exit;
     }
-
-    // Get information about whether to include inactive vehicles
+    
+    // Check if we should include inactive vehicles (admin only)
     $includeInactive = isset($_GET['includeInactive']) && $_GET['includeInactive'] === 'true';
     
-    // Build query to get all vehicle types
+    // Add cache busting parameter
+    $cacheBuster = isset($_GET['_t']) ? $_GET['_t'] : time();
+    $forceRefresh = isset($_GET['force']) && $_GET['force'] === 'true';
+    
+    error_log("vehicles-data.php GET request params: " . json_encode([
+        'includeInactive' => $includeInactive, 
+        'cacheBuster' => $cacheBuster,
+        'forceRefresh' => $forceRefresh
+    ]));
+    
+    // Build query to get vehicle types
     $query = "
         SELECT 
-            vt.id as db_id,
-            vt.vehicle_id, 
-            vt.name, 
-            vt.capacity, 
-            vt.luggage_capacity,
-            vt.ac, 
-            vt.image, 
-            vt.amenities, 
-            vt.description, 
-            vt.is_active
+            v.vehicle_id, 
+            v.name, 
+            v.capacity, 
+            v.luggage_capacity,
+            v.ac, 
+            v.image, 
+            v.amenities, 
+            v.description, 
+            v.is_active
         FROM 
-            vehicle_types vt
+            vehicle_types v
     ";
     
     // Only add the WHERE clause if we're not including inactive vehicles
     if (!$includeInactive) {
-        $query .= " WHERE vt.is_active = 1";
+        $query .= " WHERE v.is_active = 1";
     }
     
-    $query .= " ORDER BY vt.name";
+    $query .= " ORDER BY v.name";
     
-    error_log("vehicles-data.php vehicle query: " . $query);
+    error_log("vehicles-data.php query: " . $query);
     
     $result = $conn->query($query);
     
@@ -229,14 +221,11 @@ try {
     }
 
     $vehicles = [];
-    $vehicleIds = [];
-    
     while ($row = $result->fetch_assoc()) {
-        // Store vehicle IDs to fetch the fares later
-        $vehicleId = $row['vehicle_id'] ?? null;
-        if (!empty($vehicleId)) {
-            $vehicleIds[] = $vehicleId;
-        }
+        $vehicleId = $row['vehicle_id'];
+        
+        // Get specialized fare data for this vehicle
+        $fareData = getSpecializedFareData($conn, $vehicleId);
         
         // Parse amenities from JSON string or comma-separated list
         $amenities = [];
@@ -255,263 +244,67 @@ try {
             $name = "Vehicle ID: " . $vehicleId;
         }
         
-        // Use vehicle_id as the primary identifier for consistency
-        if (empty($vehicleId)) {
-            // Skip vehicles with no proper ID
-            continue;
-        }
-        
         // Format vehicle data with consistent property names for frontend
         $vehicle = [
             'id' => (string)$vehicleId,
-            'vehicleId' => (string)$vehicleId,
             'name' => $name,
             'capacity' => intval($row['capacity'] ?? 0),
             'luggageCapacity' => intval($row['luggage_capacity'] ?? 0),
-            'price' => 0, // Will be populated from specific fare tables
-            'basePrice' => 0, // Will be populated from specific fare tables
-            'pricePerKm' => 0, // Will be populated from specific fare tables
-            'nightHaltCharge' => 0, // Will be populated from specific fare tables
-            'driverAllowance' => 0, // Will be populated from specific fare tables
-            'image' => $row['image'] ?? '/cars/sedan.png',
+            'image' => $row['image'] ?? '',
             'amenities' => $amenities,
             'description' => $row['description'] ?? '',
             'ac' => (bool)($row['ac'] ?? 0),
             'isActive' => (bool)($row['is_active'] ?? 0),
-            'db_id' => $row['db_id'] ?? null,
-            // Initialize fare objects
-            'outstationFares' => [
-                'basePrice' => 0,
-                'pricePerKm' => 0,
-                'nightHaltCharge' => 0,
-                'driverAllowance' => 0,
-                'roundTripBasePrice' => 0,
-                'roundTripPricePerKm' => 0
-            ],
-            'localPackageFares' => [
-                'price4hrs40km' => 0,
-                'price8hrs80km' => 0, 
-                'price10hrs100km' => 0,
-                'priceExtraKm' => 0,
-                'priceExtraHour' => 0
-            ],
-            'airportFares' => [
-                'basePrice' => 0,
-                'pricePerKm' => 0,
-                'pickupPrice' => 0,
-                'dropPrice' => 0,
-                'tier1Price' => 0,
-                'tier2Price' => 0,
-                'tier3Price' => 0,
-                'tier4Price' => 0,
-                'extraKmCharge' => 0
-            ]
+            'vehicleId' => (string)$vehicleId
         ];
+        
+        // Include outstation fare data if available
+        if ($fareData['outstation']) {
+            $vehicle['outstationFares'] = $fareData['outstation'];
+            $vehicle['basePrice'] = floatval($fareData['outstation']['basePrice']);
+            $vehicle['price'] = floatval($fareData['outstation']['basePrice']);
+            $vehicle['pricePerKm'] = floatval($fareData['outstation']['pricePerKm']);
+            $vehicle['nightHaltCharge'] = floatval($fareData['outstation']['nightHaltCharge']);
+            $vehicle['driverAllowance'] = floatval($fareData['outstation']['driverAllowance']);
+        }
+        
+        // Include local package fares if available
+        if ($fareData['local']) {
+            $vehicle['localPackageFares'] = $fareData['local'];
+        }
+        
+        // Include airport transfer fares if available
+        if ($fareData['airport']) {
+            $vehicle['airportFares'] = $fareData['airport'];
+        }
         
         // Only add active vehicles for non-admin requests or if specifically including inactive
         if ($includeInactive || $vehicle['isActive']) {
-            $vehicles[$vehicleId] = $vehicle;
+            $vehicles[] = $vehicle;
         }
     }
-    
-    // Now fetch outstation fares for these vehicles
-    if (!empty($vehicleIds)) {
-        $placeholders = implode(',', array_fill(0, count($vehicleIds), '?'));
-        $query = "SELECT * FROM outstation_fares WHERE vehicle_id IN ($placeholders)";
-        
-        $stmt = $conn->prepare($query);
-        if ($stmt) {
-            $types = str_repeat('s', count($vehicleIds));
-            $stmt->bind_param($types, ...$vehicleIds);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            
-            while ($row = $result->fetch_assoc()) {
-                $vehicleId = $row['vehicle_id'];
-                if (isset($vehicles[$vehicleId])) {
-                    // Set the primary pricing fields (for backward compatibility)
-                    $vehicles[$vehicleId]['price'] = floatval($row['base_price'] ?? 0);
-                    $vehicles[$vehicleId]['basePrice'] = floatval($row['base_price'] ?? 0);
-                    $vehicles[$vehicleId]['pricePerKm'] = floatval($row['price_per_km'] ?? 0);
-                    $vehicles[$vehicleId]['nightHaltCharge'] = floatval($row['night_halt_charge'] ?? 0);
-                    $vehicles[$vehicleId]['driverAllowance'] = floatval($row['driver_allowance'] ?? 0);
-                    
-                    // Create the outstationFares object
-                    $vehicles[$vehicleId]['outstationFares'] = [
-                        'basePrice' => floatval($row['base_price'] ?? 0),
-                        'pricePerKm' => floatval($row['price_per_km'] ?? 0),
-                        'nightHaltCharge' => floatval($row['night_halt_charge'] ?? 0),
-                        'driverAllowance' => floatval($row['driver_allowance'] ?? 0),
-                        'roundTripBasePrice' => floatval($row['roundtrip_base_price'] ?? 0),
-                        'roundTripPricePerKm' => floatval($row['roundtrip_price_per_km'] ?? 0)
-                    ];
-                }
-            }
-            $stmt->close();
-        }
-        
-        // Fetch local package fares
-        $query = "SELECT * FROM local_package_fares WHERE vehicle_id IN ($placeholders)";
-        $stmt = $conn->prepare($query);
-        if ($stmt) {
-            $stmt->bind_param($types, ...$vehicleIds);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            
-            while ($row = $result->fetch_assoc()) {
-                $vehicleId = $row['vehicle_id'];
-                if (isset($vehicles[$vehicleId])) {
-                    // Create the localPackageFares object
-                    $vehicles[$vehicleId]['localPackageFares'] = [
-                        'price4hrs40km' => floatval($row['price_4hrs_40km'] ?? 0),
-                        'price8hrs80km' => floatval($row['price_8hrs_80km'] ?? 0),
-                        'price10hrs100km' => floatval($row['price_10hrs_100km'] ?? 0),
-                        'priceExtraKm' => floatval($row['price_extra_km'] ?? 0),
-                        'priceExtraHour' => floatval($row['price_extra_hour'] ?? 0)
-                    ];
-                }
-            }
-            $stmt->close();
-        }
-        
-        // Fetch airport transfer fares
-        $query = "SELECT * FROM airport_transfer_fares WHERE vehicle_id IN ($placeholders)";
-        $stmt = $conn->prepare($query);
-        if ($stmt) {
-            $stmt->bind_param($types, ...$vehicleIds);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            
-            while ($row = $result->fetch_assoc()) {
-                $vehicleId = $row['vehicle_id'];
-                if (isset($vehicles[$vehicleId])) {
-                    // Create the airportFares object
-                    $vehicles[$vehicleId]['airportFares'] = [
-                        'basePrice' => floatval($row['base_price'] ?? 0),
-                        'pricePerKm' => floatval($row['price_per_km'] ?? 0),
-                        'pickupPrice' => floatval($row['pickup_price'] ?? 0),
-                        'dropPrice' => floatval($row['drop_price'] ?? 0),
-                        'tier1Price' => floatval($row['tier1_price'] ?? 0),
-                        'tier2Price' => floatval($row['tier2_price'] ?? 0),
-                        'tier3Price' => floatval($row['tier3_price'] ?? 0),
-                        'tier4Price' => floatval($row['tier4_price'] ?? 0),
-                        'extraKmCharge' => floatval($row['extra_km_charge'] ?? 0)
-                    ];
-                }
-            }
-            $stmt->close();
-        }
-        
-        // Try to get data from vehicle_pricing table for any missing fares
-        $query = "SELECT * FROM vehicle_pricing WHERE vehicle_id IN ($placeholders) OR vehicle_type IN ($placeholders)";
-        $stmt = $conn->prepare($query);
-        if ($stmt) {
-            // We need to duplicate the vehicle IDs since we're using them twice in the query
-            $combinedIds = array_merge($vehicleIds, $vehicleIds);
-            $types = str_repeat('s', count($combinedIds));
-            $stmt->bind_param($types, ...$combinedIds);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            
-            while ($row = $result->fetch_assoc()) {
-                // Determine which vehicle ID to use (vehicle_id column is preferred)
-                $vehicleId = $row['vehicle_id'] ?? $row['vehicle_type'];
-                
-                if (isset($vehicles[$vehicleId])) {
-                    // Only use for outstation fares if the specialized table didn't have data
-                    if ($vehicles[$vehicleId]['outstationFares']['basePrice'] == 0) {
-                        $vehicles[$vehicleId]['outstationFares']['basePrice'] = floatval($row['base_fare'] ?? 0); 
-                        $vehicles[$vehicleId]['outstationFares']['pricePerKm'] = floatval($row['price_per_km'] ?? 0);
-                        $vehicles[$vehicleId]['outstationFares']['nightHaltCharge'] = floatval($row['night_halt_charge'] ?? 0);
-                        $vehicles[$vehicleId]['outstationFares']['driverAllowance'] = floatval($row['driver_allowance'] ?? 0);
-                        
-                        // Set main pricing fields too for backwards compatibility
-                        $vehicles[$vehicleId]['price'] = floatval($row['base_fare'] ?? 0);
-                        $vehicles[$vehicleId]['basePrice'] = floatval($row['base_fare'] ?? 0);
-                        $vehicles[$vehicleId]['pricePerKm'] = floatval($row['price_per_km'] ?? 0);
-                        $vehicles[$vehicleId]['nightHaltCharge'] = floatval($row['night_halt_charge'] ?? 0);
-                        $vehicles[$vehicleId]['driverAllowance'] = floatval($row['driver_allowance'] ?? 0);
-                    }
-                    
-                    // Only use for airport fares if specialized table didn't have data
-                    if ($vehicles[$vehicleId]['airportFares']['basePrice'] == 0) {
-                        $vehicles[$vehicleId]['airportFares']['basePrice'] = floatval($row['airport_base_price'] ?? 0);
-                        $vehicles[$vehicleId]['airportFares']['pricePerKm'] = floatval($row['airport_price_per_km'] ?? 0);
-                        $vehicles[$vehicleId]['airportFares']['pickupPrice'] = floatval($row['airport_pickup_price'] ?? 0);
-                        $vehicles[$vehicleId]['airportFares']['dropPrice'] = floatval($row['airport_drop_price'] ?? 0);
-                        $vehicles[$vehicleId]['airportFares']['tier1Price'] = floatval($row['airport_tier1_price'] ?? 0);
-                        $vehicles[$vehicleId]['airportFares']['tier2Price'] = floatval($row['airport_tier2_price'] ?? 0);
-                        $vehicles[$vehicleId]['airportFares']['tier3Price'] = floatval($row['airport_tier3_price'] ?? 0);
-                        $vehicles[$vehicleId]['airportFares']['tier4Price'] = floatval($row['airport_tier4_price'] ?? 0);
-                        $vehicles[$vehicleId]['airportFares']['extraKmCharge'] = floatval($row['airport_extra_km_charge'] ?? 0);
-                    }
-                    
-                    // For any fare object with all zeros, set some reasonable defaults
-                    if (array_sum(array_map('floatval', $vehicles[$vehicleId]['outstationFares'])) == 0) {
-                        $vehicles[$vehicleId]['outstationFares'] = [
-                            'basePrice' => 2500,
-                            'pricePerKm' => 14,
-                            'nightHaltCharge' => 700,
-                            'driverAllowance' => 250,
-                            'roundTripBasePrice' => 2000,
-                            'roundTripPricePerKm' => 12
-                        ];
-                    }
-                    
-                    if (array_sum(array_map('floatval', $vehicles[$vehicleId]['localPackageFares'])) == 0) {
-                        $vehicles[$vehicleId]['localPackageFares'] = [
-                            'price4hrs40km' => 1600,
-                            'price8hrs80km' => 2800,
-                            'price10hrs100km' => 3400,
-                            'priceExtraKm' => 14,
-                            'priceExtraHour' => 150
-                        ];
-                    }
-                    
-                    if (array_sum(array_map('floatval', $vehicles[$vehicleId]['airportFares'])) == 0) {
-                        $vehicles[$vehicleId]['airportFares'] = [
-                            'basePrice' => 1500,
-                            'pricePerKm' => 14,
-                            'pickupPrice' => 1600,
-                            'dropPrice' => 1500,
-                            'tier1Price' => 1600,
-                            'tier2Price' => 1800,
-                            'tier3Price' => 2200,
-                            'tier4Price' => 2600,
-                            'extraKmCharge' => 14
-                        ];
-                    }
-                }
-            }
-            $stmt->close();
-        }
-    }
-    
-    // Convert associative array to indexed array
-    $vehicleList = array_values($vehicles);
 
     // If no vehicles found in database, use fallback
-    if (empty($vehicleList)) {
+    if (empty($vehicles)) {
         error_log("No vehicles found in database, using fallback vehicles");
-        $vehicleList = $fallbackVehicles;
+        $vehicles = $fallbackVehicles;
     }
 
     // Log success
-    error_log("Vehicles-data GET response: found " . count($vehicleList) . " vehicles");
+    error_log("Vehicles data GET response: found " . count($vehicles) . " vehicles");
     
     // Send response with cache busting timestamp
     echo json_encode([
-        'vehicles' => $vehicleList,
+        'vehicles' => $vehicles,
         'timestamp' => time(),
-        'cached' => false,
-        'responseId' => uniqid('veh_')
+        'cached' => false
     ]);
     exit;
     
 } catch (Exception $e) {
     error_log("Error in vehicles-data.php: " . $e->getMessage());
     
-    // Return fallback vehicles instead of an error
+    // Return fallback vehicles
     echo json_encode([
         'vehicles' => $fallbackVehicles,
         'timestamp' => time(),
@@ -521,3 +314,5 @@ try {
     ]);
     exit;
 }
+
+?>

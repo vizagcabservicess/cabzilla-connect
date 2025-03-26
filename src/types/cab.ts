@@ -28,6 +28,8 @@ export interface OutstationFare {
   nightHaltCharge: number;
   roundTripBasePrice: number;
   roundTripPricePerKm: number;
+  // Alias properties for compatibility with different component usages
+  nightHalt?: number;  // Alias for nightHaltCharge
 }
 
 export interface LocalFare {
@@ -36,6 +38,12 @@ export interface LocalFare {
   price10hrs100km: number; 
   priceExtraKm: number;
   priceExtraHour: number;
+  // Alias properties for compatibility with different component usages
+  package4hr40km?: number;  // Alias for price4hrs40km
+  package8hr80km?: number;  // Alias for price8hrs80km
+  package10hr100km?: number;  // Alias for price10hrs100km
+  extraKmRate?: number;  // Alias for priceExtraKm
+  extraHourRate?: number;  // Alias for priceExtraHour
 }
 
 export interface AirportFare {
