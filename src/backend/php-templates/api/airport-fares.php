@@ -25,35 +25,48 @@ try {
         throw new Exception("Database connection failed");
     }
     
-    // Check if airport_transfer_fares exists
+    // Check if airport_transfer_fares table exists
     $checkTableQuery = "SHOW TABLES LIKE 'airport_transfer_fares'";
     $checkResult = $conn->query($checkTableQuery);
     
     $airportTableExists = $checkResult && $checkResult->num_rows > 0;
     $query = "";
     
+    // Log which table we're using
+    error_log("Fetching airport fares, airport_transfer_fares table exists: " . ($airportTableExists ? 'yes' : 'no'));
+    
     if ($airportTableExists) {
-        // QUERY SPECIALIZED AIRPORT FARES TABLE
-        $query = "
-            SELECT 
-                v.vehicle_id AS id,
-                atf.base_price AS basePrice,
-                atf.price_per_km AS pricePerKm,
-                atf.pickup_price AS pickupPrice,
-                atf.drop_price AS dropPrice,
-                atf.tier1_price AS tier1Price,
-                atf.tier2_price AS tier2Price,
-                atf.tier3_price AS tier3Price,
-                atf.tier4_price AS tier4Price,
-                atf.extra_km_charge AS extraKmCharge
-            FROM 
-                vehicle_types v
-            LEFT JOIN 
-                airport_transfer_fares atf ON v.vehicle_id = atf.vehicle_id
-            WHERE 
-                v.is_active = 1
-        ";
-    } else {
+        // First check if the airport_transfer_fares table has data
+        $countQuery = "SELECT COUNT(*) as count FROM airport_transfer_fares";
+        $countResult = $conn->query($countQuery);
+        $row = $countResult->fetch_assoc();
+        $hasData = $row['count'] > 0;
+        
+        if ($hasData) {
+            // QUERY SPECIALIZED AIRPORT FARES TABLE DIRECTLY (without joining to vehicle_types)
+            $query = "
+                SELECT 
+                    atf.vehicle_id AS id,
+                    atf.base_price AS basePrice,
+                    atf.price_per_km AS pricePerKm,
+                    atf.pickup_price AS pickupPrice,
+                    atf.drop_price AS dropPrice,
+                    atf.tier1_price AS tier1Price,
+                    atf.tier2_price AS tier2Price,
+                    atf.tier3_price AS tier3Price,
+                    atf.tier4_price AS tier4Price,
+                    atf.extra_km_charge AS extraKmCharge
+                FROM 
+                    airport_transfer_fares atf
+            ";
+        } else {
+            error_log("airport_transfer_fares table exists but is empty, falling back to vehicle_pricing");
+            $airportTableExists = false; // Force fallback
+        }
+    }
+    
+    // Fallback to vehicle_pricing table if needed
+    if (!$airportTableExists) {
         // FALLBACK TO vehicle_pricing TABLE
         $query = "
             SELECT 
@@ -75,6 +88,7 @@ try {
     }
     
     // Execute the query
+    error_log("Executing airport query: " . $query);
     $result = $conn->query($query);
     
     if (!$result) {

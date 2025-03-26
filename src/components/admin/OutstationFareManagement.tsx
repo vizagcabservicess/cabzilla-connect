@@ -56,10 +56,8 @@ export function OutstationFareManagement() {
       setIsLoading(true);
       setError(null);
       
-      // Force clear caches to ensure we get fresh data
       fareService.clearCache();
       
-      // Load cab types
       const types = await loadCabTypes();
       setCabTypes(types);
       
@@ -102,7 +100,6 @@ export function OutstationFareManagement() {
       
       if (data.status === 'success') {
         toast.success("Database tables initialized successfully");
-        // Reload cab types after successful initialization
         await loadData();
       } else {
         throw new Error(data.message || "Failed to initialize database");
@@ -124,11 +121,32 @@ export function OutstationFareManagement() {
       toast.info(`Updating fares for ${values.cabType}...`);
       console.log('Starting fare update for outstation with vehicle ID', values.cabType);
       
-      // First attempt - use the fare-update.php endpoint
       try {
+        await fareService.directFareUpdate('outstation', values.cabType, {
+          basePrice: values.oneWayBasePrice,
+          pricePerKm: values.oneWayPricePerKm,
+          roundTripBasePrice: values.roundTripBasePrice,
+          roundTripPricePerKm: values.roundTripPricePerKm,
+          driverAllowance: values.driverAllowance,
+          nightHaltCharge: values.nightHalt,
+        });
+        
+        fareService.clearCache();
+        
+        window.dispatchEvent(new CustomEvent('fare-cache-cleared'));
+        window.dispatchEvent(new CustomEvent('trip-fares-updated', {
+          detail: { 
+            timestamp: Date.now(),
+            vehicleId: values.cabType
+          }
+        }));
+        
+        toast.success(`Fares updated for ${values.cabType}`);
+      } catch (fetchError) {
+        console.error('Error with fare update:', fetchError);
+        
         const endpoint = `${apiBaseUrl}/api/admin/fare-update.php`;
         
-        // Create form data
         const formData = new FormData();
         formData.append('vehicleId', values.cabType);
         formData.append('tripType', 'outstation');
@@ -139,7 +157,7 @@ export function OutstationFareManagement() {
         formData.append('driverAllowance', values.driverAllowance.toString());
         formData.append('nightHaltCharge', values.nightHalt.toString());
         
-        console.log('Submitting form data:', Object.fromEntries(formData));
+        console.log('Submitting form data to legacy endpoint:', Object.fromEntries(formData));
         
         const response = await fetch(endpoint, {
           method: 'POST',
@@ -160,10 +178,8 @@ export function OutstationFareManagement() {
         console.log('Fare update response:', data);
         
         if (data.status === 'success') {
-          // Clear cache and trigger refresh events
           fareService.clearCache();
           
-          // Dispatch events to refresh UI
           window.dispatchEvent(new CustomEvent('fare-cache-cleared'));
           window.dispatchEvent(new CustomEvent('trip-fares-updated', {
             detail: { 
@@ -176,9 +192,6 @@ export function OutstationFareManagement() {
         } else {
           throw new Error(data.message || 'Update failed');
         }
-      } catch (fetchError) {
-        console.error('Error with fare update:', fetchError);
-        throw fetchError;
       }
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to update fares'));
@@ -194,7 +207,6 @@ export function OutstationFareManagement() {
     try {
       setIsLoading(true);
       
-      // Fetch all vehicle data - fixing the error by removing the boolean argument
       const vehicles = await loadCabTypes();
       const vehicle = vehicles.find(v => v.id === vehicleId);
       
@@ -208,7 +220,6 @@ export function OutstationFareManagement() {
         form.setValue("nightHalt", vehicle.outstationFares.nightHaltCharge || 0);
       } else {
         console.log('No existing fares found for vehicle, using defaults');
-        // Set default values based on vehicle type
         if (vehicleId === 'sedan') {
           form.setValue("oneWayBasePrice", 4200);
           form.setValue("oneWayPricePerKm", 14);
@@ -245,7 +256,6 @@ export function OutstationFareManagement() {
           form.setValue("driverAllowance", 300);
           form.setValue("nightHalt", 1500);
         } else {
-          // Default values for any other vehicle
           form.setValue("oneWayBasePrice", 4200);
           form.setValue("oneWayPricePerKm", 14);
           form.setValue("roundTripBasePrice", 4000);
@@ -309,7 +319,6 @@ export function OutstationFareManagement() {
                     <Select 
                       onValueChange={(value) => {
                         field.onChange(value);
-                        // Load existing fare data for this cab type
                         loadFaresForVehicle(value);
                       }}
                       defaultValue={field.value}

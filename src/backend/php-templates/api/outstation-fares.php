@@ -29,32 +29,45 @@ try {
     $origin = isset($_GET['origin']) ? $_GET['origin'] : null;
     $destination = isset($_GET['destination']) ? $_GET['destination'] : null;
     
-    // Check if outstation_fares exists
+    // Check if outstation_fares table exists
     $checkTableQuery = "SHOW TABLES LIKE 'outstation_fares'";
     $checkResult = $conn->query($checkTableQuery);
     
     $outstationTableExists = $checkResult && $checkResult->num_rows > 0;
     $query = "";
     
+    // Log which table we're using
+    error_log("Fetching outstation fares, outstation_fares table exists: " . ($outstationTableExists ? 'yes' : 'no'));
+    
     if ($outstationTableExists) {
-        // QUERY SPECIALIZED OUTSTATION FARES TABLE
-        $query = "
-            SELECT 
-                v.vehicle_id AS id,
-                of.base_price AS basePrice,
-                of.price_per_km AS pricePerKm,
-                of.night_halt_charge AS nightHaltCharge,
-                of.driver_allowance AS driverAllowance,
-                of.roundtrip_base_price AS roundTripBasePrice,
-                of.roundtrip_price_per_km AS roundTripPricePerKm
-            FROM 
-                vehicle_types v
-            LEFT JOIN 
-                outstation_fares of ON v.vehicle_id = of.vehicle_id
-            WHERE 
-                v.is_active = 1
-        ";
-    } else {
+        // First check if the outstation_fares table has data
+        $countQuery = "SELECT COUNT(*) as count FROM outstation_fares";
+        $countResult = $conn->query($countQuery);
+        $row = $countResult->fetch_assoc();
+        $hasData = $row['count'] > 0;
+        
+        if ($hasData) {
+            // QUERY SPECIALIZED OUTSTATION FARES TABLE
+            $query = "
+                SELECT 
+                    of.vehicle_id AS id,
+                    of.base_price AS basePrice,
+                    of.price_per_km AS pricePerKm,
+                    of.night_halt_charge AS nightHaltCharge,
+                    of.driver_allowance AS driverAllowance,
+                    of.roundtrip_base_price AS roundTripBasePrice,
+                    of.roundtrip_price_per_km AS roundTripPricePerKm
+                FROM 
+                    outstation_fares of
+            ";
+        } else {
+            error_log("outstation_fares table exists but is empty, falling back to vehicle_pricing");
+            $outstationTableExists = false; // Force fallback
+        }
+    }
+    
+    // Fallback to vehicle_pricing table if needed
+    if (!$outstationTableExists) {
         // FALLBACK TO vehicle_pricing TABLE
         $query = "
             SELECT 
@@ -75,6 +88,7 @@ try {
     }
     
     // Execute the query
+    error_log("Executing outstation query: " . $query);
     $result = $conn->query($query);
     
     if (!$result) {
@@ -105,13 +119,14 @@ try {
         ];
     }
     
-    // Return response
+    // Return response with debug information
     echo json_encode([
         'fares' => $fares,
         'origin' => $origin,
         'destination' => $destination,
         'timestamp' => time(),
-        'sourceTable' => $outstationTableExists ? 'outstation_fares' : 'vehicle_pricing'
+        'sourceTable' => $outstationTableExists ? 'outstation_fares' : 'vehicle_pricing',
+        'fareCount' => count($fares)
     ]);
     
 } catch (Exception $e) {
