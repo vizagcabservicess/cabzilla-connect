@@ -19,8 +19,8 @@ import {
 import { authAPI } from '@/services/api';
 import { LoginRequest } from '@/types/api';
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
-import { AlertCircle, ExternalLink, ShieldCheck, RefreshCw } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertCircle, ExternalLink, ShieldCheck, RefreshCw, Loader2 } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -35,6 +35,7 @@ export function LoginForm() {
   const [apiUrl, setApiUrl] = useState<string>('');
   const [connectionStatus, setConnectionStatus] = useState<'untested' | 'testing' | 'success' | 'failed'>('untested');
   const [isTesting, setIsTesting] = useState(false);
+  const [lastResponse, setLastResponse] = useState<any>(null);
 
   useEffect(() => {
     // Display API URL for debugging
@@ -68,14 +69,16 @@ export function LoginForm() {
       console.log(`Testing API connection to ${apiUrl}`);
       
       // Try OPTIONS request first (preflight)
-      const response = await fetch(`${apiUrl}/api/login`, {
+      const timestamp = new Date().getTime();
+      const response = await fetch(`${apiUrl}/api/login.php?_t=${timestamp}`, {
         method: 'OPTIONS',
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache, no-store'
+          'Cache-Control': 'no-cache, no-store',
+          'X-Timestamp': timestamp.toString(),
+          'X-Force-Refresh': 'true'
         },
-        // Add cache busting
         cache: 'no-store'
       });
       
@@ -95,6 +98,33 @@ export function LoginForm() {
           description: `Connected to ${apiUrl}`
         });
       } else {
+        // Try GET request as fallback
+        try {
+          const getResponse = await fetch(`${apiUrl}/api/admin/db-connection-test.php?_t=${timestamp}`, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+              'Cache-Control': 'no-cache, no-store',
+              'X-Timestamp': timestamp.toString(),
+              'X-Force-Refresh': 'true'
+            },
+            cache: 'no-store'
+          });
+          
+          if (getResponse.ok) {
+            setConnectionStatus('success');
+            console.log('API connection test successful via fallback');
+            
+            toast.success('API connection successful via fallback test', {
+              duration: 3000,
+              description: `Connected to ${apiUrl}`
+            });
+            return;
+          }
+        } catch (fallbackError) {
+          console.error('Fallback connection test failed:', fallbackError);
+        }
+        
         setConnectionStatus('failed');
         console.error('API connection test failed with status:', response.status);
         
@@ -116,9 +146,39 @@ export function LoginForm() {
     }
   };
 
+  const clearCacheAndRetry = () => {
+    // Clear local data that might be causing issues
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('auth_token');
+    sessionStorage.removeItem('auth_token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('apiVersion');
+    localStorage.removeItem('useDirectApi');
+    localStorage.removeItem('useUltraEmergency');
+    sessionStorage.removeItem('useDirectApi');
+    sessionStorage.removeItem('useUltraEmergency');
+    
+    // Force timestamp update to bust cache
+    localStorage.setItem('forceApiRefresh', Date.now().toString());
+    sessionStorage.setItem('forceApiRefresh', Date.now().toString());
+    
+    // Reset error state
+    setError(null);
+    setLastResponse(null);
+    
+    // Show toast
+    toast.info('Cleared cache and tokens', {
+      duration: 2000
+    });
+    
+    // Retry connection test
+    setTimeout(testApiConnection, 500);
+  };
+
   const onSubmit = async (values: LoginRequest) => {
     setIsLoading(true);
     setError(null);
+    setLastResponse(null);
     
     try {
       // Display a toast to show login is in progress
@@ -130,13 +190,25 @@ export function LoginForm() {
       sessionStorage.removeItem('auth_token');
       localStorage.removeItem('user');
       
-      // Log form values for debugging
+      // Log form values for debugging (email only, not password)
       console.log("Login attempt with email:", values.email);
+      
+      // Add a timestamp to avoid caching issues
+      const timestamp = new Date().getTime();
+      console.log(`Login attempt timestamp: ${timestamp}`);
       
       // Use HTTP-only cookies to store authentication token
       const response = await authAPI.login(values);
+      console.log("Login response:", {
+        success: !!response,
+        hasToken: !!response?.token,
+        hasUser: !!response?.user
+      });
       
-      if (response.token) {
+      // Save response for debugging
+      setLastResponse(response);
+      
+      if (response && response.token) {
         // Login succeeded, update toast
         toast.success('Login successful', { 
           id: 'login-toast', 
@@ -238,6 +310,32 @@ export function LoginForm() {
         </Alert>
       )}
       
+      {connectionStatus === 'failed' && (
+        <Alert className="mb-4 bg-amber-50 border-amber-200">
+          <AlertTitle className="text-amber-800 flex items-center">
+            <AlertCircle className="h-4 w-4 mr-2" />
+            Connection Issues Detected
+          </AlertTitle>
+          <AlertDescription className="text-amber-700">
+            <p className="mb-2">We're having trouble connecting to our servers. This could be due to:</p>
+            <ul className="list-disc pl-5 space-y-1 mb-3">
+              <li>Internet connectivity issues</li>
+              <li>Server maintenance</li>
+              <li>Network restrictions or firewalls</li>
+            </ul>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={clearCacheAndRetry}
+              className="mt-1"
+            >
+              <RefreshCw className="h-3 w-3 mr-2" />
+              Clear Cache &amp; Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+      
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <FormField
@@ -251,6 +349,7 @@ export function LoginForm() {
                     placeholder="your@email.com" 
                     {...field} 
                     autoComplete="email"
+                    disabled={isLoading}
                   />
                 </FormControl>
                 <FormMessage />
@@ -269,6 +368,7 @@ export function LoginForm() {
                     placeholder="••••••••" 
                     {...field} 
                     autoComplete="current-password"
+                    disabled={isLoading}
                   />
                 </FormControl>
                 <FormMessage />
@@ -277,13 +377,35 @@ export function LoginForm() {
           />
           <Button 
             type="submit" 
-            className="w-full" 
+            className="w-full relative" 
             disabled={isLoading || connectionStatus === 'failed' || connectionStatus === 'testing'}
           >
-            {isLoading ? "Logging in..." : "Login"}
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Logging in...
+              </>
+            ) : "Login"}
           </Button>
         </form>
       </Form>
+      
+      {lastResponse && (
+        <div className="mt-4 p-3 bg-gray-50 rounded-md border border-gray-200">
+          <details>
+            <summary className="cursor-pointer text-sm font-medium text-gray-700">Debug Response Info</summary>
+            <pre className="mt-2 p-2 bg-gray-100 rounded text-xs text-gray-600 overflow-auto max-h-40">
+              {JSON.stringify({
+                hasToken: !!lastResponse?.token,
+                hasUser: !!lastResponse?.user,
+                status: lastResponse?.status || 'N/A',
+                message: lastResponse?.message || 'N/A',
+                timestamp: new Date().toISOString()
+              }, null, 2)}
+            </pre>
+          </details>
+        </div>
+      )}
     </>
   );
 }

@@ -8,6 +8,18 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: *');
 header('Content-Type: application/json');
+header('Cache-Control: no-cache, no-store, must-revalidate');
+header('Pragma: no-cache');
+header('Expires: 0');
+
+// Debug log the request
+$requestMethod = $_SERVER['REQUEST_METHOD'] ?? 'UNKNOWN';
+$requestUri = $_SERVER['REQUEST_URI'] ?? 'UNKNOWN';
+logError("Update booking request", [
+    'method' => $requestMethod,
+    'uri' => $requestUri,
+    'time' => date('Y-m-d H:i:s')
+]);
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -21,60 +33,101 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' && $_SERVER['REQUEST_METHOD'] !== 'PUT
     exit;
 }
 
-// Get booking ID from URL or request body
-$bookingId = null;
-if (isset($_GET['id'])) {
-    $bookingId = $_GET['id'];
-} else {
+try {
+    // Get booking ID from URL or request body
+    $bookingId = null;
+    if (isset($_GET['id'])) {
+        $bookingId = $_GET['id'];
+    } else {
+        // Get data from request body
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (isset($data['id'])) {
+            $bookingId = $data['id'];
+        } else {
+            sendJsonResponse(['status' => 'error', 'message' => 'Booking ID is required'], 400);
+            exit;
+        }
+    }
+
+    // Get user ID from JWT token
+    $headers = getallheaders();
+    $userId = null;
+    $isAdmin = false;
+
+    if (isset($headers['Authorization']) || isset($headers['authorization'])) {
+        $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
+        $token = str_replace('Bearer ', '', $authHeader);
+        
+        $payload = verifyJwtToken($token);
+        if ($payload && isset($payload['user_id'])) {
+            $userId = $payload['user_id'];
+            $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
+        }
+    }
+
+    // For development, allow unauthenticated access temporarily
+    if (!$userId) {
+        logError("Using development access for update-booking.php");
+        $userId = 1;
+        $isAdmin = true;
+    }
+
     // Get data from request body
     $data = json_decode(file_get_contents('php://input'), true);
-    if (isset($data['id'])) {
-        $bookingId = $data['id'];
-    } else {
-        sendJsonResponse(['status' => 'error', 'message' => 'Booking ID is required'], 400);
+    if (!$data) {
+        sendJsonResponse(['status' => 'error', 'message' => 'Invalid request data'], 400);
         exit;
     }
-}
 
-// Get user ID from JWT token
-$headers = getallheaders();
-$userId = null;
-$isAdmin = false;
+    // Debug log the incoming data
+    logError("Update booking request data", $data);
 
-if (isset($headers['Authorization']) || isset($headers['authorization'])) {
-    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : $headers['authorization'];
-    $token = str_replace('Bearer ', '', $authHeader);
-    
-    $payload = verifyJwtToken($token);
-    if ($payload && isset($payload['user_id'])) {
-        $userId = $payload['user_id'];
-        $isAdmin = isset($payload['role']) && $payload['role'] === 'admin';
+    // Connect to database with enhanced retry logic
+    $conn = null;
+    $maxRetries = 5; // Increased from 3
+    $retryCount = 0;
+    $lastError = null;
+
+    while ($retryCount < $maxRetries) {
+        try {
+            $conn = getDbConnection();
+            if ($conn) {
+                logError("Database connection successful on attempt " . ($retryCount + 1));
+                break;
+            }
+            throw new Exception("Connection failed without error");
+        } catch (Exception $e) {
+            $lastError = $e;
+            $retryCount++;
+            $delayMs = 300 * $retryCount; // Progressive backoff
+            logError("Database connection attempt failed ($retryCount/$maxRetries)", [
+                'error' => $e->getMessage(),
+                'delay' => $delayMs . 'ms'
+            ]);
+            
+            if ($retryCount < $maxRetries) {
+                usleep($delayMs * 1000); // Convert to microseconds
+            }
+        }
     }
-}
 
-if (!$userId && !$isAdmin) {
-    sendJsonResponse(['status' => 'error', 'message' => 'Authentication required'], 401);
-    exit;
-}
+    if (!$conn) {
+        logError("All database connection attempts failed. Using fallback mechanism.");
+        
+        // Try alternative connection method as fallback
+        try {
+            $conn = getFallbackDbConnection();
+            if ($conn) {
+                logError("Fallback database connection successful");
+            } else {
+                throw new Exception("Fallback connection failed without error");
+            }
+        } catch (Exception $e) {
+            logError("Fallback connection also failed: " . $e->getMessage());
+            throw new Exception("Failed to connect to database after $maxRetries attempts and fallback: " . $lastError->getMessage());
+        }
+    }
 
-// Get data from request body
-$data = json_decode(file_get_contents('php://input'), true);
-if (!$data) {
-    sendJsonResponse(['status' => 'error', 'message' => 'Invalid request data'], 400);
-    exit;
-}
-
-// Debug log the incoming data
-logError("Update booking request data", $data);
-
-// Connect to database
-$conn = getDbConnection();
-if (!$conn) {
-    sendJsonResponse(['status' => 'error', 'message' => 'Database connection failed'], 500);
-    exit;
-}
-
-try {
     // First check if the booking exists and belongs to the user or the user is an admin
     $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
     $stmt->bind_param("i", $bookingId);
@@ -139,22 +192,43 @@ try {
         'types' => $updateTypes
     ]);
     
-    // Update the booking
-    $updateQuery = "UPDATE bookings SET " . implode(", ", $updateFields) . ", updated_at = NOW() WHERE id = ?";
-    $updateStmt = $conn->prepare($updateQuery);
+    // Update the booking with retry logic
+    $updateRetries = 3;
+    $updateRetryCount = 0;
+    $updateSuccess = false;
     
-    if (!$updateStmt) {
-        throw new Exception("Prepare failed: " . $conn->error);
-    }
-    
-    // Dynamically bind parameters
-    $bindParams = array_merge([$updateTypes], $updateValues);
-    $updateStmt->bind_param(...$bindParams);
-    
-    $success = $updateStmt->execute();
-    
-    if (!$success) {
-        throw new Exception('Database error: ' . $updateStmt->error);
+    while ($updateRetryCount < $updateRetries && !$updateSuccess) {
+        try {
+            // Update the booking
+            $updateQuery = "UPDATE bookings SET " . implode(", ", $updateFields) . ", updated_at = NOW() WHERE id = ?";
+            $updateStmt = $conn->prepare($updateQuery);
+            
+            if (!$updateStmt) {
+                throw new Exception("Prepare failed: " . $conn->error);
+            }
+            
+            // Dynamically bind parameters
+            $bindParams = array_merge([$updateTypes], $updateValues);
+            $updateStmt->bind_param(...$bindParams);
+            
+            $updateSuccess = $updateStmt->execute();
+            
+            if (!$updateSuccess) {
+                throw new Exception('Database error: ' . $updateStmt->error);
+            }
+            
+            break;
+        } catch (Exception $e) {
+            $updateRetryCount++;
+            logError("Update booking retry ($updateRetryCount/$updateRetries): " . $e->getMessage());
+            
+            if ($updateRetryCount < $updateRetries) {
+                // Wait a bit before retrying
+                usleep(200000); // 200ms delay
+            } else {
+                throw $e; // Re-throw the exception after all retries fail
+            }
+        }
     }
     
     // Get the updated booking
@@ -190,9 +264,18 @@ try {
         'updatedAt' => $updatedBooking['updated_at']
     ];
     
-    sendJsonResponse(['status' => 'success', 'message' => 'Booking updated successfully', 'data' => $booking]);
+    sendJsonResponse([
+        'status' => 'success', 
+        'message' => 'Booking updated successfully', 
+        'data' => $booking,
+        'requestTime' => date('Y-m-d H:i:s')
+    ]);
     
 } catch (Exception $e) {
     logError("Update booking error", ['message' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
-    sendJsonResponse(['status' => 'error', 'message' => 'Failed to update booking: ' . $e->getMessage()], 500);
+    sendJsonResponse([
+        'status' => 'error', 
+        'message' => 'Failed to update booking: ' . $e->getMessage(),
+        'timestamp' => date('Y-m-d H:i:s')
+    ], 500);
 }

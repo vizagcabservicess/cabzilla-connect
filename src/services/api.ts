@@ -1,378 +1,284 @@
+import { TourFare, FareUpdateRequest, VehiclePricingData, VehiclePricingUpdateRequest, OutstationFare, BookingRequest, BookingUpdateRequest, BookingStatus } from '@/types/api';
+import { getVehicleData, updateVehicle, addVehicle, deleteVehicle, getVehicleTypes, getOutstationFares as getOutstationFaresService, updateOutstationFares as updateOutstationFaresService } from '@/services/vehicleDataService';
 import axios from 'axios';
-import { toast } from 'sonner';
-import { 
-  Booking, User, DashboardData, AuthResponse, LoginRequest, 
-  SignupRequest, BookingRequest, FareData, TourFare, FareUpdateRequest,
-  DashboardMetrics, AuthUser, VehiclePricing, VehiclePricingUpdateRequest,
-  BookingUpdateRequest
-} from '@/types/api';
 
-const API_BASE_URL = '/api';
-
-// Axios instance with base settings
+// Create base API instance
 const api = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 30000,
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Intercept requests to add auth token
+// Add request interceptor to add auth token to all requests
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('authToken');
+    const token = localStorage.getItem('auth_token');
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+      config.headers['Authorization'] = `Bearer ${token}`;
     }
-    
-    // Add cache-busting timestamp to all GET requests
-    if (config.method?.toLowerCase() === 'get') {
-      config.params = { ...config.params, _t: Date.now() };
-    }
-    
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-// Process API errors consistently
+// Add response interceptor to handle common errors
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    console.error('API Error:', error);
+    // Log detailed information for debugging
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', error.response.data);
+    } else if (error.request) {
+      console.error('No response received:', error.request);
+    }
+    return Promise.reject(error);
+  }
+);
+
+// Error handler function
 const handleApiError = (error: any): never => {
   console.error('API Error:', error);
-  
-  // Extract meaningful error message
-  let errorMessage = 'An unexpected error occurred';
-  
   if (error.response) {
-    // The request was made and the server responded with an error status
-    const serverError = error.response.data?.message || error.response.data?.error || error.response.statusText;
-    errorMessage = serverError || `Server error: ${error.response.status}`;
-    
-    // Handle common status codes
-    if (error.response.status === 401) {
-      errorMessage = 'Authentication failed. Please log in again.';
-      // Clear auth token and redirect to login
-      localStorage.removeItem('authToken');
-      //window.location.href = '/login';
-    } else if (error.response.status === 403) {
-      errorMessage = 'You do not have permission to perform this action.';
-    } else if (error.response.status === 404) {
-      errorMessage = 'The requested resource was not found.';
-    } else if (error.response.status === 422) {
-      // Validation errors
-      const validationErrors = error.response.data?.errors;
-      if (validationErrors) {
-        const firstError = Object.values(validationErrors)[0];
-        errorMessage = Array.isArray(firstError) ? firstError[0] : String(firstError);
-      }
-    } else if (error.response.status === 500) {
-      errorMessage = 'Server error: The operation could not be completed due to an internal server error.';
-    }
-  } else if (error.request) {
-    // The request was made but no response was received
-    errorMessage = 'No response from server. Please check your internet connection.';
-  } else {
-    // Something happened in setting up the request that triggered an Error
-    errorMessage = error.message || errorMessage;
+    console.error('Response data:', error.response.data);
+    console.error('Response status:', error.response.status);
   }
-  
-  // Show toast notification for errors
-  toast.error(errorMessage);
-  
-  throw new Error(errorMessage);
+  throw error;
 };
 
-// Auth API functions
-export const authAPI = {
-  login: async (credentials: LoginRequest): Promise<AuthResponse> => {
-    try {
-      const response = await api.post('/login.php', credentials);
-      const data = response.data;
-      
-      if (data.token) {
-        localStorage.setItem('authToken', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
-      }
-      
-      return data;
-    } catch (error) {
-      return handleApiError(error);
-    }
-  },
-  
-  signup: async (userData: SignupRequest): Promise<AuthResponse> => {
-    try {
-      const response = await api.post('/signup.php', userData);
-      const data = response.data;
-      
-      if (data.token) {
-        localStorage.setItem('authToken', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
-      }
-      
-      return data;
-    } catch (error) {
-      return handleApiError(error);
-    }
-  },
-  
-  logout: (): void => {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('user');
-    toast.success('You have been logged out successfully');
-  },
-  
-  isAuthenticated: (): boolean => {
-    return !!localStorage.getItem('authToken');
-  },
-  
-  getCurrentUser: (): AuthUser | null => {
-    const userJson = localStorage.getItem('user');
-    return userJson ? JSON.parse(userJson) : null;
-  },
-  
-  isAdmin: (): boolean => {
-    const user = authAPI.getCurrentUser();
-    return user?.role === 'admin';
-  },
-  
-  // Get all users (admin only)
-  getAllUsers: async (): Promise<User[]> => {
-    try {
-      const response = await api.get('/admin/users.php');
-      
-      // Ensure we have an array of users, handling various response formats
-      if (response.data && Array.isArray(response.data)) {
-        return response.data;
-      } else if (response.data && response.data.users && Array.isArray(response.data.users)) {
-        return response.data.users;
-      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
-        return response.data.data;
-      }
-      
-      // If the response doesn't contain an array we can use, return an empty array
-      console.warn('Unexpected users response format:', response.data);
-      return [];
-    } catch (error) {
-      return handleApiError(error);
-    }
-  },
-  
-  // Update user role (admin only)
-  updateUserRole: async (userId: number, role: 'user' | 'admin'): Promise<any> => {
-    try {
-      const response = await api.post('/admin/users.php', { userId, role });
-      return response.data;
-    } catch (error) {
-      return handleApiError(error);
-    }
-  }
-};
-
-// Booking API functions
+// Export the API service objects
 export const bookingAPI = {
-  createBooking: async (bookingData: BookingRequest): Promise<Booking> => {
+  getBooking: async (id: number) => {
+    // Placeholder - implement as needed
+    console.log(`Getting booking with ID: ${id}`);
+    return {};
+  },
+  
+  updateBooking: async (id: number, data: any) => {
+    // Placeholder - implement as needed
+    console.log(`Updating booking with ID: ${id}`, data);
+    return {};
+  },
+  
+  // Add the missing methods
+  createBooking: async (data: BookingRequest) => {
     try {
-      const response = await api.post('/book.php', bookingData);
+      const response = await api.post('/bookings.php', data);
       return response.data;
     } catch (error) {
       return handleApiError(error);
     }
   },
   
-  getUserDashboard: async (): Promise<DashboardData> => {
-    try {
-      const response = await api.get('/user/dashboard.php');
-      return response.data;
-    } catch (error) {
-      return handleApiError(error);
-    }
-  },
-  
-  getUserBookings: async (): Promise<Booking[]> => {
+  getUserBookings: async () => {
     try {
       const response = await api.get('/user/bookings.php');
-      // Check if the response has the bookings array directly or inside a data property
-      if (response.data && response.data.bookings) {
-        return response.data.bookings;
-      } else if (Array.isArray(response.data)) {
-        return response.data;
-      }
-      return [];
+      return response.data || [];
     } catch (error) {
       return handleApiError(error);
     }
   },
   
-  // Get specific booking by ID
-  getBookingById: async (bookingId: number): Promise<Booking> => {
+  getAllBookings: async (status?: string) => {
     try {
-      const response = await api.get(`/user/booking.php?id=${bookingId}`);
-      // Check if the response has the booking data directly or inside a data property
-      if (response.data && response.data.data) {
-        return response.data.data;
-      }
+      const url = status ? `/admin/bookings.php?status=${status}` : '/admin/bookings.php';
+      const response = await api.get(url);
+      return response.data?.bookings || [];
+    } catch (error) {
+      return handleApiError(error);
+    }
+  },
+  
+  getBookingById: async (id: number) => {
+    try {
+      const response = await api.get(`/bookings/${id}.php`);
+      return response.data || {};
+    } catch (error) {
+      return handleApiError(error);
+    }
+  },
+  
+  updateBookingStatus: async (id: number, status: BookingStatus) => {
+    try {
+      const response = await api.post(`/admin/booking.php?id=${id}`, { status });
       return response.data;
     } catch (error) {
       return handleApiError(error);
     }
   },
   
-  // Update booking details
-  updateBooking: async (bookingId: number, updateData: BookingUpdateRequest): Promise<Booking> => {
+  deleteBooking: async (id: number) => {
     try {
-      const response = await api.post(`/update-booking.php`, { 
-        id: bookingId,
-        ...updateData
+      const response = await api.delete(`/admin/booking.php?id=${id}`);
+      return response.data;
+    } catch (error) {
+      return handleApiError(error);
+    }
+  },
+  
+  getAdminDashboardMetrics: async (period: string = 'week', status?: string) => {
+    try {
+      // Use only the period parameter in the URL since status is optional
+      const url = status 
+        ? `/admin/dashboard-metrics.php?period=${period}&status=${status}`
+        : `/admin/dashboard-metrics.php?period=${period}`;
+      
+      const response = await api.get(url);
+      return response.data;
+    } catch (error) {
+      return handleApiError(error);
+    }
+  },
+  
+  // Add other methods as needed
+};
+
+export const authAPI = {
+  isAuthenticated: () => {
+    return !!localStorage.getItem('auth_token');
+  },
+  
+  getCurrentUser: () => {
+    const userData = localStorage.getItem('user');
+    return userData ? JSON.parse(userData) : null;
+  },
+  
+  getAllUsers: async () => {
+    try {
+      const response = await api.get('/admin/users.php');
+      return response.data || [];
+    } catch (error) {
+      return handleApiError(error);
+    }
+  },
+  
+  updateUserRole: async (userId: number, role: 'admin' | 'user') => {
+    try {
+      const response = await api.post('/admin/users.php', { userId, role, action: 'updateRole' });
+      return response.data;
+    } catch (error) {
+      return handleApiError(error);
+    }
+  },
+  
+  login: async (credentials: { email: string; password: string }) => {
+    try {
+      console.log('Attempting login with credentials:', { email: credentials.email });
+      
+      // First clear any existing tokens to avoid conflicts
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('user');
+      
+      // Add cache-busting timestamp
+      const cacheBuster = new Date().getTime();
+      
+      // Use a more robust approach with detailed error handling
+      const response = await api.post(`/login.php?_t=${cacheBuster}`, credentials, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'X-Force-Refresh': 'true',
+          'X-Timestamp': cacheBuster.toString()
+        }
       });
-      // Check if the response has the booking data directly or inside a data property
-      if (response.data && response.data.data) {
-        return response.data.data;
+      
+      console.log('Login response received:', {
+        status: response.status,
+        hasToken: !!response.data?.token,
+        hasUser: !!response.data?.user
+      });
+      
+      // Validate the response contains the expected data
+      if (!response.data) {
+        throw new Error('Empty response received from server');
       }
+      
+      if (!response.data.token) {
+        throw new Error('Authentication failed: No token received');
+      }
+      
+      // Store token in localStorage
+      localStorage.setItem('auth_token', response.data.token);
+      
+      // Store user data if available
+      if (response.data.user) {
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+      } else {
+        throw new Error('User data missing from response');
+      }
+      
       return response.data;
     } catch (error) {
+      console.error('Login error details:', error);
+      
+      // Check if it's a network error
+      if (error.message === 'Network Error') {
+        throw new Error('Unable to connect to the server. Please check your internet connection.');
+      }
+      
+      // Extract more helpful error message from response when available
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      
       return handleApiError(error);
     }
   },
   
-  // Cancel booking
-  cancelBooking: async (bookingId: number): Promise<any> => {
+  signup: async (userData: any) => {
     try {
-      const response = await api.post(`/update-booking.php`, { id: bookingId, status: 'cancelled' });
-      return response.data;
-    } catch (error) {
-      return handleApiError(error);
-    }
-  },
-  
-  // Delete booking (admin only)
-  deleteBooking: async (bookingId: number): Promise<any> => {
-    try {
-      const response = await api.delete(`/admin/booking.php?id=${bookingId}`);
-      return response.data;
-    } catch (error) {
-      return handleApiError(error);
-    }
-  },
-  
-  // Admin functions
-  getAllBookings: async (status?: string): Promise<Booking[]> => {
-    try {
-      const url = status && status !== 'all' 
-        ? `/admin/booking.php?status=${status}`
-        : '/admin/booking.php';
+      // Add cache-busting timestamp
+      const cacheBuster = new Date().getTime();
       
-      const response = await api.get(url);
+      const response = await api.post(`/signup.php?_t=${cacheBuster}`, userData, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'X-Force-Refresh': 'true',
+          'X-Timestamp': cacheBuster.toString()
+        }
+      });
       
-      // Handle different response formats
-      if (response.data && Array.isArray(response.data)) {
-        return response.data;
-      } else if (response.data && response.data.bookings && Array.isArray(response.data.bookings)) {
-        return response.data.bookings;
-      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
-        return response.data.data;
-      }
-      
-      console.warn('Unexpected bookings response format:', response.data);
-      return [];
-    } catch (error) {
-      console.warn('Failed to get all bookings, falling back to user bookings');
-      try {
-        return await bookingAPI.getUserBookings();
-      } catch (fallbackError) {
-        console.error('Fallback also failed:', fallbackError);
-        return [];
-      }
-    }
-  },
-  
-  updateBookingStatus: async (bookingId: number, status: string): Promise<any> => {
-    try {
-      // Use POST method instead of PUT to ensure compatibility
-      const response = await api.post(`/admin/booking.php?id=${bookingId}`, { status });
-      console.log("Status update response:", response.data);
-      return response.data;
-    } catch (error) {
-      console.error("Error updating booking status:", error);
-      return handleApiError(error);
-    }
-  },
-  
-  getAdminDashboardMetrics: async (period: 'today' | 'week' | 'month' = 'week', status?: string): Promise<DashboardMetrics> => {
-    try {
-      // Use the admin/metrics.php endpoint
-      let url = `/admin/metrics.php?period=${period}`;
-      if (status && status !== 'all') {
-        url += `&status=${status}`;
-      }
-      
-      // Add cache-busting timestamp to prevent caching issues
-      url += `&_t=${Date.now()}`;
-      
-      console.log(`Admin: Fetching metrics from ${url}`);
-      const response = await api.get(url);
-      
-      // Handle different response formats
-      if (response.data && response.data.data) {
-        console.log('Admin: Metrics data received successfully', response.data.data);
-        return response.data.data;
-      } else if (response.data && typeof response.data === 'object' && response.data.totalBookings !== undefined) {
-        console.log('Admin: Metrics data in root of response', response.data);
-        return response.data;
-      }
-      
-      console.warn('Admin: Metrics response format unexpected', response.data);
-      
-      // Try to extract data from the response
-      let extractedData: DashboardMetrics | null = null;
-      
-      if (response.data && typeof response.data === 'object') {
-        // Look for metrics data in the response
-        const possibleMetrics = {
-          totalBookings: response.data.totalBookings || 0,
-          activeRides: response.data.activeRides || 0,
-          totalRevenue: response.data.totalRevenue || 0,
-          availableDrivers: response.data.availableDrivers || 0,
-          busyDrivers: response.data.busyDrivers || 0,
-          avgRating: response.data.avgRating || 0,
-          upcomingRides: response.data.upcomingRides || 0
-        };
+      // Store token in localStorage
+      if (response.data && response.data.token) {
+        localStorage.setItem('auth_token', response.data.token);
         
-        if (possibleMetrics.totalBookings !== undefined || possibleMetrics.activeRides !== undefined) {
-          extractedData = possibleMetrics;
+        // Store user data if available
+        if (response.data.user) {
+          localStorage.setItem('user', JSON.stringify(response.data.user));
         }
       }
       
-      // Return the extracted data or a default object
-      return extractedData || {
-        totalBookings: 0,
-        activeRides: 0,
-        totalRevenue: 0,
-        availableDrivers: 0,
-        busyDrivers: 0,
-        avgRating: 0,
-        upcomingRides: 0
-      };
+      return response.data;
     } catch (error) {
-      console.error('Error fetching admin metrics:', error);
-      
-      // Return default values in case of error to prevent UI crashes
-      return {
-        totalBookings: 0,
-        activeRides: 0,
-        totalRevenue: 0,
-        availableDrivers: 0,
-        busyDrivers: 0,
-        avgRating: 0,
-        upcomingRides: 0
-      };
+      return handleApiError(error);
+    }
+  },
+  
+  logout: () => {
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('user');
+    return true;
+  },
+  
+  isAdmin: () => {
+    const userData = localStorage.getItem('user');
+    if (!userData) return false;
+    
+    try {
+      const user = JSON.parse(userData);
+      return user.role === 'admin';
+    } catch (error) {
+      console.error('Error checking admin status:', error);
+      return false;
     }
   }
 };
 
-// Fare API functions
 export const fareAPI = {
-  // Get tour fares
+  // Tour fares methods
   getTourFares: async (): Promise<TourFare[]> => {
     try {
       console.log("Getting tour fares...");
@@ -413,124 +319,6 @@ export const fareAPI = {
     }
   },
   
-  // Get vehicle pricing
-  getVehiclePricing: async (): Promise<VehiclePricing[]> => {
-    try {
-      const cacheBuster = new Date().getTime();
-      console.log(`Fetching vehicle pricing with cache busting...${cacheBuster}`);
-      const response = await api.get(`/fares/vehicles.php?_t=${cacheBuster}`);
-      console.log("Vehicle pricing raw response:", response.data);
-      
-      // Handle different response formats
-      if (response.data && Array.isArray(response.data)) {
-        return response.data as VehiclePricing[];
-      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
-        return response.data.data as VehiclePricing[];
-      } else if (response.data && response.data.vehicles && Array.isArray(response.data.vehicles)) {
-        return response.data.vehicles as VehiclePricing[];
-      }
-      
-      // If the data is an object with numbered keys, convert it to an array
-      if (response.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
-        // Filter out status, serverTime, apiVersion or other non-pricing data
-        const nonPricingKeys = ['status', 'serverTime', 'apiVersion', 'message', 'error', 'timestamp', 'cached', 'fallback'];
-        const pricingArray = Object.entries(response.data)
-          .filter(([key, value]) => 
-            !nonPricingKeys.includes(key) && 
-            value && 
-            typeof value === 'object'
-          )
-          .map(([_, value]) => value as VehiclePricing);
-        
-        if (pricingArray.length > 0) {
-          return pricingArray;
-        }
-      }
-      
-      console.warn('Unexpected vehicle pricing response format:', response.data);
-      return [] as VehiclePricing[];
-    } catch (error) {
-      return handleApiError(error);
-    }
-  },
-  
-  // Get vehicle data (includes both types and pricing)
-  getVehicles: async (): Promise<any[]> => {
-    try {
-      console.log("Fetching vehicle data with cache busting...");
-      const timestamp = Date.now();
-      // Use a direct URL to bypass any caching issues
-      const response = await api.get(`/api/admin/vehicles-update.php?_t=${timestamp}`, {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'X-Force-Refresh': 'true'
-        }
-      });
-      
-      console.log("Raw vehicles API response:", response.data);
-      
-      // Handle different response formats and ensure we return an array
-      if (response.data) {
-        // If it's already an array, return it
-        if (Array.isArray(response.data)) {
-          return response.data;
-        }
-        
-        // Check various nested properties that might contain the vehicle array
-        if (response.data.data && Array.isArray(response.data.data)) {
-          return response.data.data;
-        }
-        
-        if (response.data.vehicles && Array.isArray(response.data.vehicles)) {
-          return response.data.vehicles;
-        }
-        
-        // If response.data is an object but not an array, try to extract vehicle objects
-        if (typeof response.data === 'object') {
-          // Filter out any potential non-object values or arrays
-          const vehiclesArray = Object.values(response.data).filter(item => 
-            item && typeof item === 'object' && !Array.isArray(item)
-          );
-          
-          if (vehiclesArray.length > 0) {
-            return vehiclesArray;
-          }
-        }
-      }
-      
-      // If we couldn't find an array or extract objects, log a warning and return empty array
-      console.warn('Unexpected vehicles response format:', response.data);
-      return [];
-    } catch (error) {
-      console.error("Error fetching vehicles:", error);
-      // Try the alternative endpoint
-      try {
-        console.log("Trying alternative vehicles endpoint...");
-        const timestamp = Date.now();
-        const response = await api.get(`/api/fares/vehicles-data.php?_t=${timestamp}&includeInactive=true`, {
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'X-Force-Refresh': 'true'
-          }
-        });
-        
-        console.log("Alternative endpoint response:", response.data);
-        
-        if (response.data && response.data.vehicles && Array.isArray(response.data.vehicles)) {
-          return response.data.vehicles;
-        }
-        
-        return [];
-      } catch (fallbackError) {
-        console.error("Fallback endpoint also failed:", fallbackError);
-        return [];
-      }
-    }
-  },
-  
-  // Update tour fares (admin only)
   updateTourFares: async (fareData: FareUpdateRequest): Promise<any> => {
     try {
       const response = await api.post('/admin/fares-update.php', fareData);
@@ -547,17 +335,15 @@ export const fareAPI = {
     }
   },
   
-  // Add new tour fare (admin only)
-  addTourFare: async (fareData: TourFare): Promise<any> => {
+  addTourFare: async (tourFare: TourFare): Promise<any> => {
     try {
-      const response = await api.put('/admin/fares-update.php', fareData);
+      const response = await api.put('/admin/fares-update.php', tourFare);
       return response.data;
     } catch (error) {
       return handleApiError(error);
     }
   },
   
-  // Delete tour fare (admin only)
   deleteTourFare: async (tourId: string): Promise<any> => {
     try {
       const response = await api.delete(`/admin/fares-update.php?tourId=${tourId}`);
@@ -567,131 +353,63 @@ export const fareAPI = {
     }
   },
   
-  // Update vehicle pricing (admin only)
-  updateVehiclePricing: async (pricingData: VehiclePricingUpdateRequest): Promise<any> => {
+  // Vehicle pricing methods
+  getVehiclePricing: async (): Promise<VehiclePricingData[]> => {
     try {
-      console.log("Vehicle pricing update request:", pricingData);
+      const cacheBuster = new Date().getTime();
+      console.log(`Fetching vehicle pricing with cache busting...${cacheBuster}`);
+      const response = await api.get(`/fares/vehicles.php?_t=${cacheBuster}`);
+      console.log("Vehicle pricing raw response:", response.data);
       
-      // Try both endpoints one after another for redundancy
-      try {
-        // First try the dedicated vehicle pricing endpoint
-        const timestamp = Date.now();
-        const response = await api.post(`/admin/vehicle-pricing.php?_t=${timestamp}`, pricingData, {
-          headers: {
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache',
-            'X-Force-Refresh': 'true'
-          }
-        });
-        
-        console.log("Vehicle pricing update response:", response.data);
-        return response.data;
-      } catch (firstError) {
-        console.error("First endpoint failed, trying fallback:", firstError);
-        
-        // If that fails, try the vehicles-update endpoint
-        const timestamp = Date.now();
-        const response = await api.post(`/admin/vehicles-update.php?_t=${timestamp}`, pricingData, {
-          headers: {
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache',
-            'X-Force-Refresh': 'true'
-          }
-        });
-        
-        console.log("Fallback vehicle pricing update response:", response.data);
-        return response.data;
+      // Handle different response formats
+      if (response.data && Array.isArray(response.data)) {
+        return response.data as VehiclePricingData[];
+      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        return response.data.data as VehiclePricingData[];
+      } else if (response.data && response.data.vehicles && Array.isArray(response.data.vehicles)) {
+        return response.data.vehicles as VehiclePricingData[];
       }
+      
+      // If the data is an object with numbered keys, convert it to an array
+      if (response.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
+        // Filter out status, serverTime, apiVersion or other non-pricing data
+        const nonPricingKeys = ['status', 'serverTime', 'apiVersion', 'message', 'error', 'timestamp', 'cached', 'fallback'];
+        const pricingArray = Object.entries(response.data)
+          .filter(([key, value]) => 
+            !nonPricingKeys.includes(key) && 
+            value && 
+            typeof value === 'object'
+          )
+          .map(([_, value]) => value as VehiclePricingData);
+        
+        if (pricingArray.length > 0) {
+          return pricingArray;
+        }
+      }
+      
+      console.warn('Unexpected vehicle pricing response format:', response.data);
+      return [] as VehiclePricingData[];
     } catch (error) {
       return handleApiError(error);
     }
   },
   
-  // Update vehicle (admin only)
-  updateVehicle: async (vehicleData: any): Promise<any> => {
-    try {
-      console.log(`Updating vehicle ${vehicleData.name} (${vehicleData.vehicleId})...`);
-      
-      // Add cache busting parameter and additional debug info
-      const timestamp = Date.now();
-      const debugData = {
-        ...vehicleData,
-        _timestamp: timestamp,
-        _requestTime: new Date().toISOString()
-      };
-      
-      // Use direct endpoint with cache busting
-      const response = await api.post(`/admin/vehicles-update.php?_t=${timestamp}`, debugData, {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'X-Force-Refresh': 'true'
-        }
-      });
-      
-      console.log("Vehicle update response:", response.data);
-      
-      // Force a refresh cache after update
-      setTimeout(async () => {
-        try {
-          // Clear any browser caches with force flag
-          await fetch('/api/fares/vehicles.php?force=true&_t=' + Date.now(), { 
-            method: 'GET',
-            headers: { 
-              'Cache-Control': 'no-cache, no-store, must-revalidate', 
-              'Pragma': 'no-cache',
-              'X-Force-Refresh': 'true'
-            }
-          });
-          
-          console.log("Forced refresh of vehicle data after update");
-        } catch (error) {
-          console.error("Error forcing refresh:", error);
-        }
-      }, 300);
-      
-      return response.data;
-    } catch (error) {
-      console.error("Error in updateVehicle API call:", error);
-      return handleApiError(error);
-    }
+  getVehicles: async (includeInactive: boolean = false): Promise<any[]> => {
+    return getVehicleData(includeInactive);
   },
   
-  // Add new vehicle (admin only)
+  updateVehiclePricing: async (vehicleData: VehiclePricingUpdateRequest): Promise<any> => {
+    return updateVehicle(vehicleData);
+  },
+  
   addVehicle: async (vehicleData: any): Promise<any> => {
-    try {
-      const timestamp = Date.now();
-      const response = await api.put(`/admin/vehicles-update.php?_t=${timestamp}`, vehicleData, {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'X-Force-Refresh': 'true'
-        }
-      });
-      return response.data;
-    } catch (error) {
-      return handleApiError(error);
-    }
+    return addVehicle(vehicleData);
   },
   
-  // Delete vehicle (admin only)
-  deleteVehicle: async (vehicleId: string): Promise<any> => {
-    try {
-      const timestamp = Date.now();
-      const response = await api.delete(`/admin/vehicles-update.php?vehicleId=${vehicleId}&_t=${timestamp}`, {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'X-Force-Refresh': 'true'
-        }
-      });
-      return response.data;
-    } catch (error) {
-      return handleApiError(error);
-    }
+  deleteVehicle: async (vehicleId: string): Promise<boolean> => {
+    return deleteVehicle(vehicleId);
   },
   
-  // Get all vehicle data for booking
   getAllVehicleData: async (): Promise<any[]> => {
     try {
       const cacheBuster = new Date().getTime();
@@ -738,5 +456,72 @@ export const fareAPI = {
     } catch (error) {
       return handleApiError(error);
     }
+  },
+  
+  // Outstation fare methods
+  getOutstationFares: async (vehicleId: string, tripMode: 'one-way' | 'round-trip'): Promise<any> => {
+    const fareData = await getOutstationFaresService(vehicleId);
+    
+    if (tripMode === 'one-way') {
+      return {
+        vehicleId,
+        basePrice: fareData?.basePrice || fareData?.oneWayBasePrice || 0,
+        pricePerKm: fareData?.pricePerKm || fareData?.oneWayPricePerKm || 0,
+        nightHaltCharge: fareData?.nightHaltCharge || fareData?.nightHalt || 0,
+        driverAllowance: fareData?.driverAllowance || 0
+      };
+    } else {
+      return {
+        vehicleId,
+        basePrice: fareData?.roundTripBasePrice || 0,
+        pricePerKm: fareData?.roundTripPricePerKm || 0,
+        nightHaltCharge: fareData?.nightHaltCharge || fareData?.nightHalt || 0,
+        driverAllowance: fareData?.driverAllowance || 0
+      };
+    }
+  },
+  
+  updateOutstationFares: async (fareData: {
+    vehicleId: string;
+    basePrice: number;
+    pricePerKm: number;
+    nightHaltCharge: number;
+    driverAllowance: number;
+    tripMode: 'one-way' | 'round-trip';
+  }): Promise<any> => {
+    const { vehicleId, basePrice, pricePerKm, nightHaltCharge, driverAllowance, tripMode } = fareData;
+    
+    // Get current outstation fares to maintain other values
+    const currentFares = await getOutstationFaresService(vehicleId);
+    
+    // Create the update data that satisfies the OutstationFare interface
+    const updateData: OutstationFare = {
+      vehicleId,
+      basePrice: basePrice,
+      pricePerKm: pricePerKm,
+      driverAllowance,
+      nightHalt: nightHaltCharge,
+      nightHaltCharge,
+      // These are required properties in OutstationFare interface
+      roundTripBasePrice: 0, 
+      roundTripPricePerKm: 0
+    };
+    
+    // Add trip mode specific properties
+    if (tripMode === 'one-way') {
+      updateData.oneWayBasePrice = basePrice;
+      updateData.oneWayPricePerKm = pricePerKm;
+      // Preserve round trip values or set defaults
+      updateData.roundTripBasePrice = currentFares?.roundTripBasePrice || 0;
+      updateData.roundTripPricePerKm = currentFares?.roundTripPricePerKm || 0;
+    } else {
+      updateData.roundTripBasePrice = basePrice;
+      updateData.roundTripPricePerKm = pricePerKm;
+      // Preserve one way values or set defaults
+      updateData.oneWayBasePrice = currentFares?.basePrice || currentFares?.oneWayBasePrice || 0;
+      updateData.oneWayPricePerKm = currentFares?.pricePerKm || currentFares?.oneWayPricePerKm || 0;
+    }
+    
+    return updateOutstationFaresService(vehicleId, updateData);
   }
 };

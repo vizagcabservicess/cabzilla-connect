@@ -1,708 +1,352 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+
+import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { toast } from "sonner";
-import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { 
+  Form, 
+  FormControl, 
+  FormDescription, 
+  FormField, 
+  FormItem, 
+  FormLabel, 
+  FormMessage 
+} from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   AlertCircle, 
   RefreshCw, 
+  PlusCircle, 
   Save, 
-  Car,
-  DollarSign,
-  PlaneTakeoff,
-  MapPin,
-  Navigation,
-  RepeatIcon,
-  Warehouse,
-  RotateCw,
-  AlertTriangle
+  Trash2,
+  Check
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ApiErrorFallback } from '@/components/ApiErrorFallback';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { fareAPI } from '@/services/api';
-import { reloadCabTypes } from '@/lib/cabData';
-import axios from 'axios';
 
-interface VehiclePricing {
-  vehicleId: string;
-  vehicleType: string;
-  basePrice: number;
-  pricePerKm: number;
-  nightHaltCharge: number;
-  driverAllowance: number;
-}
-
-const DEFAULT_VEHICLES: VehiclePricing[] = [
-  {
-    vehicleId: 'sedan',
-    vehicleType: 'Sedan',
-    basePrice: 1000,
-    pricePerKm: 12,
-    nightHaltCharge: 300,
-    driverAllowance: 300
-  },
-  {
-    vehicleId: 'ertiga',
-    vehicleType: 'Ertiga',
-    basePrice: 1200,
-    pricePerKm: 14,
-    nightHaltCharge: 350,
-    driverAllowance: 350
-  },
-  {
-    vehicleId: 'innova_crysta',
-    vehicleType: 'Innova Crysta',
-    basePrice: 1500,
-    pricePerKm: 16,
-    nightHaltCharge: 400,
-    driverAllowance: 400
-  }
-];
-
-const basePricingSchema = z.object({
-  vehicleType: z.string().min(1, { message: "Vehicle type is required" }),
-  basePrice: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  pricePerKm: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  nightHaltCharge: z.coerce.number().min(0, { message: "Charge cannot be negative" }),
-  driverAllowance: z.coerce.number().min(0, { message: "Allowance cannot be negative" }),
+const vechicleFormSchema = z.object({
+  vehicleId: z.string().min(1, { message: "Vehicle ID is required" }),
+  name: z.string().min(1, { message: "Vehicle name is required" }),
+  basePrice: z.coerce.number().min(0, { message: "Base price cannot be negative" }),
+  pricePerKm: z.coerce.number().min(0, { message: "Price per km cannot be negative" }),
+  nightHaltCharge: z.coerce.number().min(0, { message: "Night halt charge cannot be negative" }),
+  driverAllowance: z.coerce.number().min(0, { message: "Driver allowance cannot be negative" }),
+  capacity: z.coerce.number().min(1, { message: "Capacity must be at least 1" }),
+  luggageCapacity: z.coerce.number().min(0, { message: "Luggage capacity cannot be negative" }),
+  ac: z.boolean().default(true),
+  image: z.string().optional(),
+  isActive: z.boolean().default(true),
 });
 
-const localFareSchema = z.object({
-  vehicleType: z.string().min(1, { message: "Vehicle type is required" }),
-  package8hrs: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  package10hrs: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  extraHourCharge: z.coerce.number().min(0, { message: "Charge cannot be negative" }),
-  extraKmCharge: z.coerce.number().min(0, { message: "Charge cannot be negative" }),
-});
-
-const airportFareSchema = z.object({
-  vehicleType: z.string().min(1, { message: "Vehicle type is required" }),
-  tier1: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  tier2: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  tier3: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  tier4: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  extraKmCharge: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-});
-
-const outstationFormSchema = z.object({
-  vehicleType: z.string().min(1, { message: "Vehicle type is required" }),
-  oneWayBasePrice: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  oneWayPerKm: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  roundTripBasePrice: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  roundTripPerKm: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  nightHaltCharge: z.coerce.number().min(0, { message: "Charge cannot be negative" }),
-  driverAllowance: z.coerce.number().min(0, { message: "Allowance cannot be negative" }),
+const newVehicleFormSchema = vechicleFormSchema.extend({
+  vehicleId: z.string().min(1, { message: "Vehicle ID is required" }).regex(/^[a-z0-9_]+$/, {
+    message: "Vehicle ID must be lowercase with only letters, numbers and underscores",
+  })
 });
 
 export function VehiclePricingManagement() {
-  const [vehiclePricing, setVehiclePricing] = useState<VehiclePricing[]>(DEFAULT_VEHICLES);
+  const [vehicles, setVehicles] = useState<Array<any>>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const { toast: uiToast } = useToast();
-  const [apiEndpoint, setApiEndpoint] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [addVehicleDialogOpen, setAddVehicleDialogOpen] = useState(false);
+  const [deleteConfirmVehicle, setDeleteConfirmVehicle] = useState<string | null>(null);
   
-  useEffect(() => {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
-    setApiEndpoint(`${baseUrl}/api/admin/vehicle-pricing.php`);
-    console.log('API Endpoint:', `${baseUrl}/api/admin/vehicle-pricing.php`);
-  }, []);
-  
-  const baseForm = useForm<z.infer<typeof basePricingSchema>>({
-    resolver: zodResolver(basePricingSchema),
+  const form = useForm<z.infer<typeof vechicleFormSchema>>({
+    resolver: zodResolver(vechicleFormSchema),
     defaultValues: {
-      vehicleType: "",
+      vehicleId: "",
+      name: "",
       basePrice: 0,
       pricePerKm: 0,
       nightHaltCharge: 0,
       driverAllowance: 0,
+      capacity: 4,
+      luggageCapacity: 2,
+      ac: true,
+      image: "",
+      isActive: true,
     },
   });
   
-  const localForm = useForm<z.infer<typeof localFareSchema>>({
-    resolver: zodResolver(localFareSchema),
+  const newVehicleForm = useForm<z.infer<typeof newVehicleFormSchema>>({
+    resolver: zodResolver(newVehicleFormSchema),
     defaultValues: {
-      vehicleType: "",
-      package8hrs: 0,
-      package10hrs: 0,
-      extraHourCharge: 0,
-      extraKmCharge: 0,
+      vehicleId: "",
+      name: "",
+      basePrice: 4000,
+      pricePerKm: 15,
+      nightHaltCharge: 500,
+      driverAllowance: 250,
+      capacity: 4,
+      luggageCapacity: 2,
+      ac: true,
+      image: "/cars/sedan.png",
+      isActive: true,
     },
   });
   
-  const airportForm = useForm<z.infer<typeof airportFareSchema>>({
-    resolver: zodResolver(airportFareSchema),
-    defaultValues: {
-      vehicleType: "",
-      tier1: 0,
-      tier2: 0,
-      tier3: 0,
-      tier4: 0,
-      extraKmCharge: 0,
-    },
-  });
-  
-  const outstationForm = useForm<z.infer<typeof outstationFormSchema>>({
-    resolver: zodResolver(outstationFormSchema),
-    defaultValues: {
-      vehicleType: "",
-      oneWayBasePrice: 0,
-      oneWayPerKm: 0,
-      roundTripBasePrice: 0,
-      roundTripPerKm: 0,
-      nightHaltCharge: 0,
-      driverAllowance: 0,
-    },
-  });
-  
-  const clearAllCaches = useCallback(() => {
-    console.log("Clearing all vehicle pricing caches");
-    
-    localStorage.removeItem('cabFares');
-    localStorage.removeItem('tourFares');
-    localStorage.removeItem('lastFareUpdate');
-    localStorage.removeItem('vehiclePricing');
-    localStorage.removeItem('cabTypes');
-    
-    sessionStorage.removeItem('cabFares');
-    sessionStorage.removeItem('tourFares');
-    sessionStorage.removeItem('calculatedFares');
-    sessionStorage.removeItem('vehiclePricing');
-    sessionStorage.removeItem('cabTypes');
-    
-    const cachePrefixes = ['fare-', 'price-', 'cab-', 'vehicle-'];
-    
-    Object.keys(sessionStorage).forEach(key => {
-      for (const prefix of cachePrefixes) {
-        if (key.startsWith(prefix)) {
-          console.log(`Removing session cache item: ${key}`);
-          sessionStorage.removeItem(key);
-          break;
-        }
-      }
-    });
-    
-    Object.keys(localStorage).forEach(key => {
-      for (const prefix of cachePrefixes) {
-        if (key.startsWith(prefix)) {
-          console.log(`Removing local cache item: ${key}`);
-          localStorage.removeItem(key);
-          break;
-        }
-      }
-    });
-    
-    sessionStorage.setItem('lastCacheClear', Date.now().toString());
+  useEffect(() => {
+    fetchVehicles();
   }, []);
   
-  const fetchVehiclePricing = useCallback(async () => {
-    if (!apiEndpoint) {
-      console.log("API endpoint not set yet, skipping fetch");
-      return;
-    }
-    
+  const fetchVehicles = async () => {
     try {
       setIsRefreshing(true);
       setError(null);
       
-      clearAllCaches();
+      // Get all vehicles, including inactive ones
+      const data = await fareAPI.getVehicles(true);
       
-      const timestamp = Date.now();
-      console.log(`Refreshing vehicle pricing with timestamp: ${timestamp}`);
-      console.log(`API endpoint: ${apiEndpoint}?_t=${timestamp}`);
-      
-      const response = await axios.get(`${apiEndpoint}?_t=${timestamp}`, {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-          'X-API-Version': import.meta.env.VITE_API_VERSION || '1.0.29',
-          'X-Force-Refresh': 'true'
-        },
-        timeout: 8000
-      });
-      
-      console.log('Vehicle pricing API response:', response.data);
-      
-      if (Array.isArray(response.data) && response.data.length > 0) {
-        console.log("✅ Fetched vehicle pricing:", response.data);
-        
-        const normalizedData = response.data.map((item: any) => ({
-          vehicleId: item.vehicleId || item.id || `vehicle-${Math.random().toString(36).substring(2, 10)}`,
-          vehicleType: item.vehicleType || item.name || 'Unknown Vehicle',
-          basePrice: parseFloat(item.basePrice) || 0,
-          pricePerKm: parseFloat(item.pricePerKm) || 0,
-          nightHaltCharge: parseFloat(item.nightHaltCharge) || 0,
-          driverAllowance: parseFloat(item.driverAllowance) || 0
-        }));
-        
-        setVehiclePricing(normalizedData);
-        
-        sessionStorage.setItem('vehiclePricing', JSON.stringify({
-          data: normalizedData,
-          timestamp: Date.now()
-        }));
-        
-        toast.success("Vehicle pricing refreshed");
-        
-        await reloadCabTypes();
+      if (Array.isArray(data) && data.length > 0) {
+        console.log("Fetched vehicles:", data);
+        setVehicles(data);
+        toast.success("Vehicles refreshed");
       } else {
-        console.warn("❌ Empty or invalid vehicle pricing data:", response.data);
-        setError("No vehicle pricing data available. Using default vehicles.");
-        setVehiclePricing(DEFAULT_VEHICLES);
-        toast.warning("Using default vehicle pricing");
+        console.warn("Empty or invalid vehicle data:", data);
+        setError("No vehicle data available. The API may be down or returned an empty result.");
       }
     } catch (error) {
-      console.error("Error refreshing vehicle pricing:", error);
-      setError("Failed to refresh vehicle pricing. Using default vehicles.");
-      setVehiclePricing(DEFAULT_VEHICLES);
-      toast.error("Failed to refresh vehicle pricing");
+      console.error("Error fetching vehicles:", error);
+      setError("Failed to refresh vehicles. Please try again.");
+      toast.error("Failed to refresh vehicles");
     } finally {
       setIsRefreshing(false);
     }
-  }, [apiEndpoint, clearAllCaches]);
+  };
   
-  useEffect(() => {
-    if (apiEndpoint) {
-      fetchVehiclePricing();
-    }
-  }, [fetchVehiclePricing, apiEndpoint]);
-  
-  const onBasePricingSubmit = async (values: z.infer<typeof basePricingSchema>) => {
-    if (!apiEndpoint) {
-      toast.error("API endpoint not configured");
-      return;
-    }
+  const handleVehicleSelect = (vehicleId: string) => {
+    const selectedVehicle = vehicles.find(v => v.id === vehicleId || v.vehicleId === vehicleId);
     
+    if (selectedVehicle) {
+      form.reset({
+        vehicleId: selectedVehicle.vehicleId || selectedVehicle.id,
+        name: selectedVehicle.name,
+        basePrice: selectedVehicle.basePrice || 0,
+        pricePerKm: selectedVehicle.pricePerKm || 0,
+        nightHaltCharge: selectedVehicle.nightHaltCharge || 0,
+        driverAllowance: selectedVehicle.driverAllowance || 0,
+        capacity: selectedVehicle.capacity || 4,
+        luggageCapacity: selectedVehicle.luggageCapacity || 2,
+        ac: selectedVehicle.ac ?? true,
+        image: selectedVehicle.image || "",
+        isActive: selectedVehicle.isActive ?? true,
+      });
+    }
+  };
+  
+  const onSubmit = async (values: z.infer<typeof vechicleFormSchema>) => {
     try {
       setIsLoading(true);
-      clearAllCaches();
+      console.log("Submitting vehicle update:", values);
       
-      console.log("Submitting base pricing update:", values);
+      // Clear caches
+      localStorage.removeItem('cabTypes');
+      localStorage.removeItem('cabFares');
+      sessionStorage.removeItem('cabTypes');
+      sessionStorage.removeItem('cabFares');
       
-      const selectedVehicle = vehiclePricing.find(v => v.vehicleType === values.vehicleType);
-      const vehicleId = selectedVehicle?.vehicleId || values.vehicleType.toLowerCase().replace(/\s+/g, '_');
+      // Add retries for reliability
+      let success = false;
+      let attempts = 0;
+      const maxAttempts = 3;
       
-      const requestData = {
-        vehicleId: vehicleId,
-        tripType: 'base',
+      // Prepare the data in the format expected by the API
+      const updateData = {
+        vehicleType: values.vehicleId, // Map vehicleId to vehicleType for the API
         basePrice: values.basePrice,
         pricePerKm: values.pricePerKm,
         nightHaltCharge: values.nightHaltCharge,
-        driverAllowance: values.driverAllowance
+        driverAllowance: values.driverAllowance,
+        // Include other fields as needed by the API
+        capacity: values.capacity,
+        luggageCapacity: values.luggageCapacity,
+        ac: values.ac,
+        image: values.image,
+        isActive: values.isActive,
+        name: values.name,
+        vehicleId: values.vehicleId // Include both for compatibility
       };
       
-      console.log("API endpoint:", apiEndpoint);
-      console.log("Request data:", requestData);
-      
-      let retries = 0;
-      const maxRetries = 3;
-      let success = false;
-      
-      while (retries < maxRetries && !success) {
+      while (!success && attempts < maxAttempts) {
         try {
-          const response = await axios.post(apiEndpoint, requestData, {
-            headers: {
-              'Content-Type': 'application/json',
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
-              'X-API-Version': import.meta.env.VITE_API_VERSION || '1.0.29',
-              'X-Force-Refresh': 'true'
-            },
-            timeout: 10000
-          });
-          
-          console.log("Vehicle pricing update response:", response.data);
-          
-          if (response.data && response.data.status === 'success') {
-            success = true;
-            toast.success("Vehicle pricing updated successfully");
-            
-            setVehiclePricing(prev => prev.map(v => 
-              v.vehicleType === values.vehicleType 
-                ? { ...v, basePrice: values.basePrice, pricePerKm: values.pricePerKm, 
-                    nightHaltCharge: values.nightHaltCharge, driverAllowance: values.driverAllowance }
-                : v
-            ));
-            
-            await reloadCabTypes();
-          } else {
-            throw new Error(response.data?.message || "Unknown error");
-          }
+          attempts++;
+          const data = await fareAPI.updateVehiclePricing(updateData);
+          console.log("Vehicle update response:", data);
+          success = true;
+          toast.success("Vehicle pricing updated successfully");
         } catch (error) {
-          console.error(`Attempt ${retries + 1} failed:`, error);
-          retries++;
-          
-          if (retries >= maxRetries) {
-            throw error;
-          }
-          
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          console.error(`Vehicle update attempt ${attempts} failed:`, error);
+          if (attempts >= maxAttempts) throw error;
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait before retry
         }
       }
+      
+      // Refresh the vehicle list
+      await fetchVehicles();
     } catch (error) {
       console.error("Error updating vehicle pricing:", error);
-      toast.error("Failed to update vehicle pricing. Please try again.");
+      toast.error("Failed to update vehicle pricing");
     } finally {
       setIsLoading(false);
     }
   };
   
-  const onLocalFareSubmit = async (values: z.infer<typeof localFareSchema>) => {
-    if (!apiEndpoint) {
-      toast.error("API endpoint not configured");
-      return;
+  const onAddVehicleSubmit = async (values: z.infer<typeof newVehicleFormSchema>) => {
+    try {
+      setIsLoading(true);
+      console.log("Adding new vehicle:", values);
+      
+      // Clear caches
+      localStorage.removeItem('cabTypes');
+      localStorage.removeItem('cabFares');
+      sessionStorage.removeItem('cabTypes');
+      sessionStorage.removeItem('cabFares');
+      
+      // First check if vehicle with this ID already exists
+      const existingVehicle = vehicles.find(v => 
+        v.id === values.vehicleId || 
+        v.vehicleId === values.vehicleId
+      );
+      
+      if (existingVehicle) {
+        toast.error(`Vehicle with ID "${values.vehicleId}" already exists`);
+        return;
+      }
+      
+      // Add retries for reliability
+      let success = false;
+      let attempts = 0;
+      const maxAttempts = 3;
+      
+      while (!success && attempts < maxAttempts) {
+        try {
+          attempts++;
+          const data = await fareAPI.addVehicle(values);
+          console.log("New vehicle response:", data);
+          success = true;
+          toast.success("New vehicle added successfully");
+          setAddVehicleDialogOpen(false);
+          newVehicleForm.reset({
+            vehicleId: "",
+            name: "",
+            basePrice: 4000,
+            pricePerKm: 15,
+            nightHaltCharge: 500,
+            driverAllowance: 250,
+            capacity: 4,
+            luggageCapacity: 2,
+            ac: true,
+            image: "/cars/sedan.png",
+            isActive: true,
+          });
+        } catch (error) {
+          console.error(`New vehicle attempt ${attempts} failed:`, error);
+          if (attempts >= maxAttempts) throw error;
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait before retry
+        }
+      }
+      
+      // Refresh the vehicle list
+      await fetchVehicles();
+    } catch (error) {
+      console.error("Error adding new vehicle:", error);
+      toast.error("Failed to add new vehicle");
+    } finally {
+      setIsLoading(false);
     }
+  };
+  
+  const handleDeleteVehicle = async () => {
+    if (!deleteConfirmVehicle) return;
     
     try {
       setIsLoading(true);
-      clearAllCaches();
       
-      console.log("Submitting local fare update:", values);
+      // Clear caches
+      localStorage.removeItem('cabTypes');
+      localStorage.removeItem('cabFares');
+      sessionStorage.removeItem('cabTypes');
+      sessionStorage.removeItem('cabFares');
       
-      const selectedVehicle = vehiclePricing.find(v => v.vehicleType === values.vehicleType);
-      const vehicleId = selectedVehicle?.vehicleId || values.vehicleType.toLowerCase().replace(/\s+/g, '_');
+      console.log(`Deleting vehicle with ID: ${deleteConfirmVehicle}`);
       
-      const requestData = {
-        vehicleId: vehicleId,
-        tripType: 'local',
-        price8hrs80km: values.package8hrs,
-        price10hrs100km: values.package10hrs,
-        priceExtraKm: values.extraKmCharge,
-        priceExtraHour: values.extraHourCharge
-      };
-      
-      console.log("API endpoint:", apiEndpoint);
-      console.log("Request data:", requestData);
-      
-      let retries = 0;
-      const maxRetries = 3;
+      // Add retries for reliability
       let success = false;
+      let attempts = 0;
+      const maxAttempts = 3;
       
-      while (retries < maxRetries && !success) {
+      while (!success && attempts < maxAttempts) {
         try {
-          const response = await axios.post(apiEndpoint, requestData, {
-            headers: {
-              'Content-Type': 'application/json',
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
-              'X-API-Version': import.meta.env.VITE_API_VERSION || '1.0.29',
-              'X-Force-Refresh': 'true'
-            },
-            timeout: 10000
-          });
-          
-          console.log("Local fare update response:", response.data);
-          
-          if (response.data && response.data.status === 'success') {
-            success = true;
-            toast.success("Local fare settings updated successfully");
-            
-            await reloadCabTypes();
-          } else {
-            throw new Error(response.data?.message || "Unknown error");
-          }
+          attempts++;
+          const data = await fareAPI.deleteVehicle(deleteConfirmVehicle);
+          console.log("Vehicle delete response:", data);
+          success = true;
+          toast.success("Vehicle deleted successfully");
+          setDeleteConfirmVehicle(null);
         } catch (error) {
-          console.error(`Attempt ${retries + 1} failed:`, error);
-          retries++;
-          
-          if (retries >= maxRetries) {
-            throw error;
-          }
-          
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          console.error(`Vehicle delete attempt ${attempts} failed:`, error);
+          if (attempts >= maxAttempts) throw error;
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait before retry
         }
       }
+      
+      // Refresh the vehicle list
+      await fetchVehicles();
     } catch (error) {
-      console.error("Error updating local fares:", error);
-      toast.error("Failed to update local fares. Please try again.");
+      console.error("Error deleting vehicle:", error);
+      toast.error("Failed to delete vehicle");
     } finally {
       setIsLoading(false);
     }
   };
-  
-  const onAirportFareSubmit = async (values: z.infer<typeof airportFareSchema>) => {
-    if (!apiEndpoint) {
-      toast.error("API endpoint not configured");
-      return;
-    }
-    
-    try {
-      setIsLoading(true);
-      clearAllCaches();
-      
-      console.log("Submitting airport fare update:", values);
-      
-      const selectedVehicle = vehiclePricing.find(v => v.vehicleType === values.vehicleType);
-      const vehicleId = selectedVehicle?.vehicleId || values.vehicleType.toLowerCase().replace(/\s+/g, '_');
-      
-      const requestData = {
-        vehicleId: vehicleId,
-        tripType: 'airport',
-        pickupFare: values.tier2,
-        dropFare: values.tier3,
-        extraZones: {
-          tier1: values.tier1,
-          tier4: values.tier4
-        },
-        extraKmCharge: values.extraKmCharge
-      };
-      
-      console.log("API endpoint:", apiEndpoint);
-      console.log("Request data:", requestData);
-      
-      let retries = 0;
-      const maxRetries = 3;
-      let success = false;
-      
-      while (retries < maxRetries && !success) {
-        try {
-          const response = await axios.post(apiEndpoint, requestData, {
-            headers: {
-              'Content-Type': 'application/json',
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
-              'X-API-Version': import.meta.env.VITE_API_VERSION || '1.0.29',
-              'X-Force-Refresh': 'true'
-            },
-            timeout: 10000
-          });
-          
-          console.log("Airport fare update response:", response.data);
-          
-          if (response.data && response.data.status === 'success') {
-            success = true;
-            toast.success("Airport fare settings updated successfully");
-            
-            await reloadCabTypes();
-          } else {
-            throw new Error(response.data?.message || "Unknown error");
-          }
-        } catch (error) {
-          console.error(`Attempt ${retries + 1} failed:`, error);
-          retries++;
-          
-          if (retries >= maxRetries) {
-            throw error;
-          }
-          
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      }
-    } catch (error) {
-      console.error("Error updating airport fares:", error);
-      toast.error("Failed to update airport fares. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  const onOutstationFareSubmit = async (values: z.infer<typeof outstationFormSchema>) => {
-    if (!apiEndpoint) {
-      toast.error("API endpoint not configured");
-      return;
-    }
-    
-    try {
-      setIsLoading(true);
-      clearAllCaches();
-      
-      console.log("Submitting outstation fare update:", values);
-      
-      const selectedVehicle = vehiclePricing.find(v => v.vehicleType === values.vehicleType);
-      const vehicleId = selectedVehicle?.vehicleId || values.vehicleType.toLowerCase().replace(/\s+/g, '_');
-      
-      const oneWayRequest = {
-        vehicleId: vehicleId,
-        tripType: 'outstation',
-        tripMode: 'one-way',
-        baseFare: values.oneWayBasePrice,
-        pricePerKm: values.oneWayPerKm,
-        nightHaltCharge: values.nightHaltCharge,
-        driverAllowance: values.driverAllowance
-      };
-      
-      console.log("API endpoint for one-way:", apiEndpoint);
-      console.log("One-way request data:", oneWayRequest);
-      
-      let retries = 0;
-      const maxRetries = 3;
-      let success = false;
-      
-      while (retries < maxRetries && !success) {
-        try {
-          const response = await axios.post(apiEndpoint, oneWayRequest, {
-            headers: {
-              'Content-Type': 'application/json',
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
-              'X-API-Version': import.meta.env.VITE_API_VERSION || '1.0.29',
-              'X-Force-Refresh': 'true'
-            },
-            timeout: 10000
-          });
-          
-          console.log("One-way fare update response:", response.data);
-          
-          if (response.data && response.data.status === 'success') {
-            success = true;
-            toast.success("Outstation fare settings updated successfully");
-            
-            setVehiclePricing(prev => prev.map(v => 
-              v.vehicleType === values.vehicleType 
-                ? { ...v, basePrice: values.oneWayBasePrice, pricePerKm: values.oneWayPerKm, 
-                    nightHaltCharge: values.nightHaltCharge, driverAllowance: values.driverAllowance }
-                : v
-            ));
-            
-            await reloadCabTypes();
-          } else {
-            throw new Error(response.data?.message || "Unknown error");
-          }
-        } catch (error) {
-          console.error(`Attempt ${retries + 1} failed:`, error);
-          retries++;
-          
-          if (retries >= maxRetries) {
-            throw error;
-          }
-          
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      }
-    } catch (error) {
-      console.error("Error updating outstation fares:", error);
-      toast.error("Failed to update outstation fares. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  const handleBaseVehicleSelect = (vehicleType: string) => {
-    const selectedVehicle = vehiclePricing.find(pricing => pricing.vehicleType === vehicleType);
-    if (selectedVehicle) {
-      baseForm.setValue("vehicleType", selectedVehicle.vehicleType);
-      baseForm.setValue("basePrice", selectedVehicle.basePrice);
-      baseForm.setValue("pricePerKm", selectedVehicle.pricePerKm);
-      baseForm.setValue("nightHaltCharge", selectedVehicle.nightHaltCharge || 0);
-      baseForm.setValue("driverAllowance", selectedVehicle.driverAllowance || 0);
-    }
-  };
-  
-  const handleLocalVehicleSelect = (vehicleType: string) => {
-    const selectedVehicle = vehiclePricing.find(pricing => pricing.vehicleType === vehicleType);
-    if (selectedVehicle) {
-      localForm.setValue("vehicleType", selectedVehicle.vehicleType);
-      
-      if (vehicleType.toLowerCase().includes('sedan')) {
-        localForm.setValue("package8hrs", 2500);
-        localForm.setValue("package10hrs", 3000);
-        localForm.setValue("extraHourCharge", 250);
-        localForm.setValue("extraKmCharge", 14);
-      } else if (vehicleType.toLowerCase().includes('ertiga')) {
-        localForm.setValue("package8hrs", 3000);
-        localForm.setValue("package10hrs", 3600);
-        localForm.setValue("extraHourCharge", 300);
-        localForm.setValue("extraKmCharge", 18);
-      } else if (vehicleType.toLowerCase().includes('innova')) {
-        localForm.setValue("package8hrs", 3800);
-        localForm.setValue("package10hrs", 4500);
-        localForm.setValue("extraHourCharge", 350);
-        localForm.setValue("extraKmCharge", 20);
-      }
-    }
-  };
-  
-  const handleAirportVehicleSelect = (vehicleType: string) => {
-    const selectedVehicle = vehiclePricing.find(pricing => pricing.vehicleType === vehicleType);
-    if (selectedVehicle) {
-      airportForm.setValue("vehicleType", selectedVehicle.vehicleType);
-      
-      if (vehicleType.toLowerCase().includes('sedan')) {
-        airportForm.setValue("tier1", 840);
-        airportForm.setValue("tier2", 1000);
-        airportForm.setValue("tier3", 1200);
-        airportForm.setValue("tier4", 1500);
-        airportForm.setValue("extraKmCharge", 14);
-      } else if (vehicleType.toLowerCase().includes('ertiga')) {
-        airportForm.setValue("tier1", 1200);
-        airportForm.setValue("tier2", 1500);
-        airportForm.setValue("tier3", 1800);
-        airportForm.setValue("tier4", 2100);
-        airportForm.setValue("extraKmCharge", 18);
-      } else if (vehicleType.toLowerCase().includes('innova')) {
-        airportForm.setValue("tier1", 1500);
-        airportForm.setValue("tier2", 1800);
-        airportForm.setValue("tier3", 2100);
-        airportForm.setValue("tier4", 2500);
-        airportForm.setValue("extraKmCharge", 20);
-      }
-    }
-  };
-  
-  const handleOutstationVehicleSelect = (vehicleType: string) => {
-    const selectedVehicle = vehiclePricing.find(pricing => pricing.vehicleType === vehicleType);
-    if (selectedVehicle) {
-      outstationForm.setValue("vehicleType", selectedVehicle.vehicleType);
-      outstationForm.setValue("oneWayBasePrice", selectedVehicle.basePrice);
-      outstationForm.setValue("oneWayPerKm", selectedVehicle.pricePerKm);
-      outstationForm.setValue("roundTripBasePrice", selectedVehicle.basePrice * 0.9);
-      outstationForm.setValue("roundTripPerKm", selectedVehicle.pricePerKm * 0.9);
-      outstationForm.setValue("nightHaltCharge", selectedVehicle.nightHaltCharge || 0);
-      outstationForm.setValue("driverAllowance", selectedVehicle.driverAllowance || 0);
-    }
-  };
-
-  if (error && !vehiclePricing.length) {
-    return (
-      <ApiErrorFallback 
-        error={error} 
-        onRetry={fetchVehiclePricing} 
-        title="Vehicle Pricing Error" 
-        description="Unable to load vehicle pricing data. This may be due to a network issue or server problem."
-      />
-    );
-  }
 
   return (
-    <Tabs defaultValue="base">
-      <TabsList className="w-full flex">
-        <TabsTrigger value="base" className="flex-1 flex items-center justify-center gap-1">
-          <Car className="h-4 w-4" /> Base Pricing
-        </TabsTrigger>
-        <TabsTrigger value="outstation" className="flex-1 flex items-center justify-center gap-1">
-          <Navigation className="h-4 w-4" /> Outstation
-        </TabsTrigger>
-        <TabsTrigger value="local" className="flex-1 flex items-center justify-center gap-1">
-          <MapPin className="h-4 w-4" /> Local
-        </TabsTrigger>
-        <TabsTrigger value="airport" className="flex-1 flex items-center justify-center gap-1">
-          <PlaneTakeoff className="h-4 w-4" /> Airport
-        </TabsTrigger>
-        <TabsTrigger value="all" className="flex-1 flex items-center justify-center gap-1">
-          <Warehouse className="h-4 w-4" /> All Pricing
-        </TabsTrigger>
+    <Tabs defaultValue="update">
+      <TabsList>
+        <TabsTrigger value="update">Update Vehicle Pricing</TabsTrigger>
+        <TabsTrigger value="add">Add New Vehicle</TabsTrigger>
+        <TabsTrigger value="list">All Vehicles</TabsTrigger>
       </TabsList>
       
-      <TabsContent value="base">
+      <TabsContent value="update">
         <Card>
           <CardHeader>
             <div className="flex justify-between items-center">
-              <CardTitle className="flex items-center gap-2">
-                <Car className="h-5 w-5" /> Base Vehicle Pricing
-              </CardTitle>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={fetchVehiclePricing} 
-                disabled={isRefreshing}
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                Refresh
-              </Button>
+              <CardTitle>Vehicle Pricing</CardTitle>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={fetchVehicles} 
+                  disabled={isRefreshing}
+                >
+                  <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+                <Button 
+                  size="sm" 
+                  onClick={() => setAddVehicleDialogOpen(true)}
+                >
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  New Vehicle
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -713,30 +357,33 @@ export function VehiclePricingManagement() {
               </Alert>
             )}
             
-            <Form {...baseForm}>
-              <form onSubmit={baseForm.handleSubmit(onBasePricingSubmit)} className="space-y-6">
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                 <FormField
-                  control={baseForm.control}
-                  name="vehicleType"
+                  control={form.control}
+                  name="vehicleId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Select Vehicle Type</FormLabel>
+                      <FormLabel>Select Vehicle</FormLabel>
                       <Select 
                         onValueChange={(value) => {
                           field.onChange(value);
-                          handleBaseVehicleSelect(value);
+                          handleVehicleSelect(value);
                         }}
                         value={field.value}
                       >
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select a vehicle type" />
+                            <SelectValue placeholder="Select a vehicle" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {vehiclePricing.map((pricing) => (
-                            <SelectItem key={pricing.vehicleType} value={pricing.vehicleType}>
-                              {pricing.vehicleType}
+                          {vehicles.map((vehicle) => (
+                            <SelectItem 
+                              key={vehicle.id || vehicle.vehicleId} 
+                              value={vehicle.vehicleId || vehicle.id}
+                            >
+                              {vehicle.name} {!vehicle.isActive && "(Inactive)"}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -746,13 +393,27 @@ export function VehiclePricingManagement() {
                   )}
                 />
                 
-                <div className="grid gap-4 grid-cols-2">
+                <div className="grid gap-4 grid-cols-2 md:grid-cols-3">
                   <FormField
-                    control={baseForm.control}
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Vehicle Name</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
                     name="basePrice"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Base Price</FormLabel>
+                        <FormLabel>Base Price (₹)</FormLabel>
                         <FormControl>
                           <Input type="number" {...field} />
                         </FormControl>
@@ -762,11 +423,11 @@ export function VehiclePricingManagement() {
                   />
                   
                   <FormField
-                    control={baseForm.control}
+                    control={form.control}
                     name="pricePerKm"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Price Per KM</FormLabel>
+                        <FormLabel>Price per KM (₹)</FormLabel>
                         <FormControl>
                           <Input type="number" {...field} />
                         </FormControl>
@@ -776,11 +437,11 @@ export function VehiclePricingManagement() {
                   />
                   
                   <FormField
-                    control={baseForm.control}
+                    control={form.control}
                     name="nightHaltCharge"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Night Halt Charge</FormLabel>
+                        <FormLabel>Night Halt Charge (₹)</FormLabel>
                         <FormControl>
                           <Input type="number" {...field} />
                         </FormControl>
@@ -790,15 +451,349 @@ export function VehiclePricingManagement() {
                   />
                   
                   <FormField
-                    control={baseForm.control}
+                    control={form.control}
                     name="driverAllowance"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Driver Allowance</FormLabel>
+                        <FormLabel>Driver Allowance (₹)</FormLabel>
                         <FormControl>
                           <Input type="number" {...field} />
                         </FormControl>
                         <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="capacity"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Passenger Capacity</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="luggageCapacity"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Luggage Capacity</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="image"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Image Path</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="ac"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                        <div className="space-y-0.5">
+                          <FormLabel>AC Available</FormLabel>
+                          <FormDescription>
+                            Does this vehicle have air conditioning?
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="isActive"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                        <div className="space-y-0.5">
+                          <FormLabel>Vehicle Active</FormLabel>
+                          <FormDescription>
+                            Is this vehicle available for booking?
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                
+                <div className="flex gap-4">
+                  <Button type="submit" className="flex-1" disabled={isLoading}>
+                    {isLoading ? (
+                      <>
+                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                        Updating...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="mr-2 h-4 w-4" />
+                        Update Vehicle
+                      </>
+                    )}
+                  </Button>
+                  
+                  <Button 
+                    type="button" 
+                    variant="destructive"
+                    onClick={() => setDeleteConfirmVehicle(form.getValues().vehicleId)}
+                    disabled={isLoading || !form.getValues().vehicleId}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete Vehicle
+                  </Button>
+                </div>
+              </form>
+            </Form>
+            
+            {/* Delete Confirmation Dialog */}
+            {deleteConfirmVehicle && (
+              <Dialog open={!!deleteConfirmVehicle} onOpenChange={(open) => !open && setDeleteConfirmVehicle(null)}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Confirm Vehicle Deletion</DialogTitle>
+                    <DialogDescription>
+                      Are you sure you want to delete this vehicle? This action cannot be undone.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setDeleteConfirmVehicle(null)}>Cancel</Button>
+                    <Button 
+                      variant="destructive" 
+                      onClick={handleDeleteVehicle}
+                      disabled={isLoading}
+                    >
+                      {isLoading ? (
+                        <>
+                          <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                          Deleting...
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete Vehicle
+                        </>
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            )}
+          </CardContent>
+        </Card>
+      </TabsContent>
+      
+      <TabsContent value="add">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <PlusCircle className="h-5 w-5" /> Add New Vehicle
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Form {...newVehicleForm}>
+              <form onSubmit={newVehicleForm.handleSubmit(onAddVehicleSubmit)} className="space-y-6">
+                <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+                  <FormField
+                    control={newVehicleForm.control}
+                    name="vehicleId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Vehicle ID (unique identifier)</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g., sedan_premium" {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          Lowercase with only letters, numbers and underscores
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={newVehicleForm.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Vehicle Name (display name)</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g., Premium Sedan" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                
+                <div className="grid gap-4 grid-cols-2 md:grid-cols-3">
+                  <FormField
+                    control={newVehicleForm.control}
+                    name="basePrice"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Base Price (₹)</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={newVehicleForm.control}
+                    name="pricePerKm"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Price per KM (₹)</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={newVehicleForm.control}
+                    name="nightHaltCharge"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Night Halt Charge (₹)</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={newVehicleForm.control}
+                    name="driverAllowance"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Driver Allowance (₹)</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={newVehicleForm.control}
+                    name="capacity"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Passenger Capacity</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={newVehicleForm.control}
+                    name="luggageCapacity"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Luggage Capacity</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={newVehicleForm.control}
+                    name="image"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Image Path</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="/cars/sedan.png" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={newVehicleForm.control}
+                    name="ac"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                        <div className="space-y-0.5">
+                          <FormLabel>AC Available</FormLabel>
+                          <FormDescription>
+                            Does this vehicle have air conditioning?
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={newVehicleForm.control}
+                    name="isActive"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                        <div className="space-y-0.5">
+                          <FormLabel>Vehicle Active</FormLabel>
+                          <FormDescription>
+                            Is this vehicle available for booking?
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
                       </FormItem>
                     )}
                   />
@@ -808,12 +803,12 @@ export function VehiclePricingManagement() {
                   {isLoading ? (
                     <>
                       <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                      Updating...
+                      Adding Vehicle...
                     </>
                   ) : (
                     <>
-                      <Save className="mr-2 h-4 w-4" />
-                      Update Base Pricing
+                      <PlusCircle className="mr-2 h-4 w-4" />
+                      Add New Vehicle
                     </>
                   )}
                 </Button>
@@ -823,17 +818,15 @@ export function VehiclePricingManagement() {
         </Card>
       </TabsContent>
       
-      <TabsContent value="outstation">
+      <TabsContent value="list">
         <Card>
           <CardHeader>
             <div className="flex justify-between items-center">
-              <CardTitle className="flex items-center gap-2">
-                <Navigation className="h-5 w-5" /> Outstation Fare Settings
-              </CardTitle>
+              <CardTitle>All Vehicles</CardTitle>
               <Button 
                 variant="outline" 
                 size="sm" 
-                onClick={fetchVehiclePricing} 
+                onClick={fetchVehicles} 
                 disabled={isRefreshing}
               >
                 <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -842,509 +835,163 @@ export function VehiclePricingManagement() {
             </div>
           </CardHeader>
           <CardContent>
-            <Form {...outstationForm}>
-              <form onSubmit={outstationForm.handleSubmit(onOutstationFareSubmit)} className="space-y-6">
-                <FormField
-                  control={outstationForm.control}
-                  name="vehicleType"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Select Vehicle Type</FormLabel>
-                      <Select 
-                        onValueChange={(value) => {
-                          field.onChange(value);
-                          handleOutstationVehicleSelect(value);
-                        }}
-                        value={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a vehicle type" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {vehiclePricing.map((pricing) => (
-                            <SelectItem key={pricing.vehicleType} value={pricing.vehicleType}>
-                              {pricing.vehicleType}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <div className="bg-gray-50 p-4 rounded-lg mb-4">
-                  <h3 className="text-sm font-medium flex items-center mb-3">
-                    <Navigation className="h-4 w-4 mr-1" /> One Way Trip Pricing
-                  </h3>
-                  <div className="grid gap-4 grid-cols-2">
-                    <FormField
-                      control={outstationForm.control}
-                      name="oneWayBasePrice"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Base Price</FormLabel>
-                          <FormControl>
-                            <Input type="number" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={outstationForm.control}
-                      name="oneWayPerKm"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Price Per KM</FormLabel>
-                          <FormControl>
-                            <Input type="number" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-                
-                <div className="bg-gray-50 p-4 rounded-lg mb-4">
-                  <h3 className="text-sm font-medium flex items-center mb-3">
-                    <RotateCw className="h-4 w-4 mr-1" /> Round Trip Pricing
-                  </h3>
-                  <div className="grid gap-4 grid-cols-2">
-                    <FormField
-                      control={outstationForm.control}
-                      name="roundTripBasePrice"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Base Price</FormLabel>
-                          <FormControl>
-                            <Input type="number" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={outstationForm.control}
-                      name="roundTripPerKm"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Price Per KM</FormLabel>
-                          <FormControl>
-                            <Input type="number" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-                
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="text-sm font-medium flex items-center mb-3">
-                    <DollarSign className="h-4 w-4 mr-1" /> Additional Charges
-                  </h3>
-                  <div className="grid gap-4 grid-cols-2">
-                    <FormField
-                      control={outstationForm.control}
-                      name="nightHaltCharge"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Night Halt Charge</FormLabel>
-                          <FormControl>
-                            <Input type="number" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={outstationForm.control}
-                      name="driverAllowance"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Driver Allowance</FormLabel>
-                          <FormControl>
-                            <Input type="number" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-                
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? (
-                    <>
-                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                      Updating...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="mr-2 h-4 w-4" />
-                      Update Outstation Pricing
-                    </>
-                  )}
-                </Button>
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
-      </TabsContent>
-      
-      <TabsContent value="local">
-        <Card>
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <CardTitle className="flex items-center gap-2">
-                <MapPin className="h-5 w-5" /> Local Package Pricing
-              </CardTitle>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={fetchVehiclePricing} 
-                disabled={isRefreshing}
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                Refresh
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <Form {...localForm}>
-              <form onSubmit={localForm.handleSubmit(onLocalFareSubmit)} className="space-y-6">
-                <FormField
-                  control={localForm.control}
-                  name="vehicleType"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Select Vehicle Type</FormLabel>
-                      <Select 
-                        onValueChange={(value) => {
-                          field.onChange(value);
-                          handleLocalVehicleSelect(value);
-                        }}
-                        value={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a vehicle type" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {vehiclePricing.map((pricing) => (
-                            <SelectItem key={pricing.vehicleType} value={pricing.vehicleType}>
-                              {pricing.vehicleType}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <div className="bg-gray-50 p-4 rounded-lg mb-4">
-                  <h3 className="text-sm font-medium flex items-center mb-3">
-                    <MapPin className="h-4 w-4 mr-1" /> Package Pricing
-                  </h3>
-                  <div className="grid gap-4 grid-cols-2">
-                    <FormField
-                      control={localForm.control}
-                      name="package8hrs"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>8 Hrs / 80 KM Package</FormLabel>
-                          <FormControl>
-                            <Input type="number" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={localForm.control}
-                      name="package10hrs"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>10 Hrs / 100 KM Package</FormLabel>
-                          <FormControl>
-                            <Input type="number" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-                
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="text-sm font-medium flex items-center mb-3">
-                    <DollarSign className="h-4 w-4 mr-1" /> Extra Charges
-                  </h3>
-                  <div className="grid gap-4 grid-cols-2">
-                    <FormField
-                      control={localForm.control}
-                      name="extraHourCharge"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Extra Hour Charge</FormLabel>
-                          <FormControl>
-                            <Input type="number" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={localForm.control}
-                      name="extraKmCharge"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Extra KM Charge</FormLabel>
-                          <FormControl>
-                            <Input type="number" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-                
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? (
-                    <>
-                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                      Updating...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="mr-2 h-4 w-4" />
-                      Update Local Pricing
-                    </>
-                  )}
-                </Button>
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
-      </TabsContent>
-      
-      <TabsContent value="airport">
-        <Card>
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <CardTitle className="flex items-center gap-2">
-                <PlaneTakeoff className="h-5 w-5" /> Airport Transfer Pricing
-              </CardTitle>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={fetchVehiclePricing} 
-                disabled={isRefreshing}
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                Refresh
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <Form {...airportForm}>
-              <form onSubmit={airportForm.handleSubmit(onAirportFareSubmit)} className="space-y-6">
-                <FormField
-                  control={airportForm.control}
-                  name="vehicleType"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Select Vehicle Type</FormLabel>
-                      <Select 
-                        onValueChange={(value) => {
-                          field.onChange(value);
-                          handleAirportVehicleSelect(value);
-                        }}
-                        value={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a vehicle type" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {vehiclePricing.map((pricing) => (
-                            <SelectItem key={pricing.vehicleType} value={pricing.vehicleType}>
-                              {pricing.vehicleType}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="text-sm font-medium flex items-center mb-3">
-                    <PlaneTakeoff className="h-4 w-4 mr-1" /> Airport Transfer Rates
-                  </h3>
-                  <div className="grid gap-4 grid-cols-2">
-                    <FormField
-                      control={airportForm.control}
-                      name="tier1"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Tier 1 (0-10 KM)</FormLabel>
-                          <FormControl>
-                            <Input type="number" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={airportForm.control}
-                      name="tier2"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Tier 2 (11-20 KM)</FormLabel>
-                          <FormControl>
-                            <Input type="number" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={airportForm.control}
-                      name="tier3"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Tier 3 (21-30 KM)</FormLabel>
-                          <FormControl>
-                            <Input type="number" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={airportForm.control}
-                      name="tier4"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Tier 4 (31+ KM)</FormLabel>
-                          <FormControl>
-                            <Input type="number" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={airportForm.control}
-                      name="extraKmCharge"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Extra KM Charge</FormLabel>
-                          <FormControl>
-                            <Input type="number" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-                
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? (
-                    <>
-                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                      Updating...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="mr-2 h-4 w-4" />
-                      Update Airport Pricing
-                    </>
-                  )}
-                </Button>
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
-      </TabsContent>
-      
-      <TabsContent value="all">
-        <Card>
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <CardTitle className="flex items-center gap-2">
-                <Warehouse className="h-5 w-5" /> All Vehicle Pricing
-              </CardTitle>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={fetchVehiclePricing} 
-                disabled={isRefreshing}
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                Refresh
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-gray-100 text-left">
-                    <th className="p-2 border">Vehicle Type</th>
-                    <th className="p-2 border">Base Price</th>
-                    <th className="p-2 border">Price/KM</th>
-                    <th className="p-2 border">Night Halt</th>
-                    <th className="p-2 border">Driver Allowance</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {vehiclePricing.map((pricing) => (
-                    <tr key={pricing.vehicleType} className="border-b hover:bg-gray-50">
-                      <td className="p-2 border font-medium">{pricing.vehicleType}</td>
-                      <td className="p-2 border">₹{pricing.basePrice}</td>
-                      <td className="p-2 border">₹{pricing.pricePerKm}</td>
-                      <td className="p-2 border">₹{pricing.nightHaltCharge || 0}</td>
-                      <td className="p-2 border">₹{pricing.driverAllowance || 0}</td>
+            {vehicles.length === 0 ? (
+              <p className="text-muted-foreground">No vehicles available.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-2 px-2">ID</th>
+                      <th className="text-left py-2 px-2">Name</th>
+                      <th className="text-right py-2 px-2">Base Price</th>
+                      <th className="text-right py-2 px-2">Price/KM</th>
+                      <th className="text-center py-2 px-2">Capacity</th>
+                      <th className="text-center py-2 px-2">AC</th>
+                      <th className="text-center py-2 px-2">Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            
-            <div className="mt-4">
-              <Button 
-                variant="outline" 
-                className="w-full" 
-                onClick={clearAllCaches}
-              >
-                <RepeatIcon className="mr-2 h-4 w-4" />
-                Clear All Fare Caches
-              </Button>
-            </div>
+                  </thead>
+                  <tbody>
+                    {vehicles.map((vehicle) => (
+                      <tr key={vehicle.vehicleId || vehicle.id} className="border-b hover:bg-muted/50">
+                        <td className="py-2 px-2">{vehicle.vehicleId || vehicle.id}</td>
+                        <td className="py-2 px-2">{vehicle.name}</td>
+                        <td className="text-right py-2 px-2">₹{(vehicle.basePrice || 0).toLocaleString()}</td>
+                        <td className="text-right py-2 px-2">₹{(vehicle.pricePerKm || 0).toLocaleString()}</td>
+                        <td className="text-center py-2 px-2">{vehicle.capacity || 4}</td>
+                        <td className="text-center py-2 px-2">
+                          {vehicle.ac ? <Check className="h-4 w-4 mx-auto text-green-600" /> : '-'}
+                        </td>
+                        <td className="text-center py-2 px-2">
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                            vehicle.isActive 
+                              ? "bg-green-100 text-green-800" 
+                              : "bg-red-100 text-red-800"
+                          }`}>
+                            {vehicle.isActive ? "Active" : "Inactive"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </CardContent>
         </Card>
       </TabsContent>
+      
+      {/* Add Vehicle Dialog */}
+      <Dialog open={addVehicleDialogOpen} onOpenChange={setAddVehicleDialogOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Add New Vehicle</DialogTitle>
+            <DialogDescription>
+              Enter the details for the new vehicle. After saving, the vehicle will be available for bookings.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <Form {...newVehicleForm}>
+            <form onSubmit={newVehicleForm.handleSubmit(onAddVehicleSubmit)} className="space-y-6">
+              <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+                <FormField
+                  control={newVehicleForm.control}
+                  name="vehicleId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Vehicle ID (unique identifier)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., sedan_premium" {...field} />
+                      </FormControl>
+                      <FormDescription>
+                        Lowercase with only letters, numbers and underscores
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={newVehicleForm.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Vehicle Name (display name)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., Premium Sedan" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              
+              <div className="grid gap-4 grid-cols-2 md:grid-cols-3">
+                <FormField
+                  control={newVehicleForm.control}
+                  name="basePrice"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Base Price (₹)</FormLabel>
+                      <FormControl>
+                        <Input type="number" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={newVehicleForm.control}
+                  name="pricePerKm"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Price per KM (₹)</FormLabel>
+                      <FormControl>
+                        <Input type="number" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={newVehicleForm.control}
+                  name="capacity"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Passenger Capacity</FormLabel>
+                      <FormControl>
+                        <Input type="number" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              
+              <DialogFooter>
+                <Button variant="outline" type="button" onClick={() => setAddVehicleDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading ? (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      Adding...
+                    </>
+                  ) : (
+                    <>
+                      <PlusCircle className="mr-2 h-4 w-4" />
+                      Add Vehicle
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </Tabs>
   );
 }

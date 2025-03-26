@@ -18,6 +18,7 @@ export interface CabType {
 }
 
 export interface OutstationFare {
+  id?: string; // Added to match backend database column
   vehicleId?: string;
   basePrice: number;
   pricePerKm: number;
@@ -28,10 +29,11 @@ export interface OutstationFare {
   oneWayBasePrice?: number;
   oneWayPricePerKm?: number;
   nightHaltCharge?: number;
-  id?: string; // Added to match backend database column
 }
 
 export interface LocalFare {
+  id?: string; // Added to match backend database column
+  vehicleId?: string;
   package4hr40km: number;
   package8hr80km: number;
   package10hr100km: number;
@@ -40,6 +42,8 @@ export interface LocalFare {
 }
 
 export interface AirportFare {
+  id?: string; // Added to match backend database column
+  vehicleId?: string;
   basePrice: number;
   pricePerKm: number;
   dropPrice: number;
@@ -83,31 +87,6 @@ export interface TourInfo {
   days: number;
   description?: string;
   image?: string;
-  locations?: string[];
-  startingPrice?: number;
-}
-
-export interface TourPackage {
-  id: string;
-  tourId: string;
-  name: string;
-  description?: string;
-  days: number;
-  price: number;
-  cabType: string;
-  highlights?: string[];
-  inclusions?: string[];
-  exclusions?: string[];
-  itinerary?: TourItineraryDay[];
-}
-
-export interface TourItineraryDay {
-  day: number;
-  title: string;
-  description: string;
-  locations?: string[];
-  meals?: string[];
-  accommodation?: string;
 }
 
 export interface TourFares {
@@ -136,6 +115,7 @@ export interface LocalPackagePriceMatrix {
 }
 
 export interface VehiclePricing {
+  id?: string; // Added to match database column
   vehicleType: string;
   basePrice: number;
   pricePerKm: number;
@@ -157,5 +137,4 @@ export interface VehiclePricing {
   airportTier3Price?: number;
   airportTier4Price?: number;
   airportExtraKmCharge?: number;
-  id?: string; // Added to match database column
 }

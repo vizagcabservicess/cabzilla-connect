@@ -150,19 +150,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $nightHaltCharge = isset($data['nightHaltCharge']) ? floatval($data['nightHaltCharge']) : 0;
                     $driverAllowance = isset($data['driverAllowance']) ? floatval($data['driverAllowance']) : 0;
                     
-                    $fareStmt = $conn->prepare("INSERT INTO outstation_fares (id, vehicle_id, base_fare, price_per_km, night_halt_charge, driver_allowance, created_at, updated_at) 
-                                               VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
-                                               ON DUPLICATE KEY UPDATE base_fare = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?, updated_at = NOW()");
+                    // Check if record exists in outstation_fares to determine update or insert
+                    $checkOutstationStmt = $conn->prepare("SELECT id FROM outstation_fares WHERE id = ? OR vehicle_id = ?");
+                    $checkOutstationStmt->bind_param("ss", $vehicleId, $vehicleId);
+                    $checkOutstationStmt->execute();
+                    $checkOutstationResult = $checkOutstationStmt->get_result();
                     
-                    if (!$fareStmt) {
-                        error_log("DIRECT VEHICLE PRICING: Outstation fare prepare failed: " . $conn->error);
-                    } else {
-                        $fareStmt->bind_param("ssdddddddd", $vehicleId, $vehicleId, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, 
-                                                       $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
-                        $fareSuccess = $fareStmt->execute();
+                    if ($checkOutstationResult->num_rows > 0) {
+                        // Update existing record
+                        $fareStmt = $conn->prepare("UPDATE outstation_fares SET 
+                                                  id = ?, 
+                                                  vehicle_id = ?, 
+                                                  base_fare = ?, 
+                                                  price_per_km = ?, 
+                                                  night_halt_charge = ?, 
+                                                  driver_allowance = ?, 
+                                                  updated_at = NOW() 
+                                                  WHERE id = ? OR vehicle_id = ?");
                         
-                        if (!$fareSuccess) {
-                            error_log("DIRECT VEHICLE PRICING: Outstation fare update failed: " . $fareStmt->error);
+                        if (!$fareStmt) {
+                            error_log("DIRECT VEHICLE PRICING: Outstation fare update prepare failed: " . $conn->error);
+                        } else {
+                            $fareStmt->bind_param("ssddddss", 
+                                                $vehicleId, 
+                                                $vehicleId, 
+                                                $basePrice, 
+                                                $pricePerKm, 
+                                                $nightHaltCharge, 
+                                                $driverAllowance,
+                                                $vehicleId,
+                                                $vehicleId);
+                            $fareSuccess = $fareStmt->execute();
+                            
+                            if (!$fareSuccess) {
+                                error_log("DIRECT VEHICLE PRICING: Outstation fare update failed: " . $fareStmt->error);
+                            }
+                        }
+                    } else {
+                        // Insert new record
+                        $fareStmt = $conn->prepare("INSERT INTO outstation_fares 
+                                                  (id, vehicle_id, base_fare, price_per_km, night_halt_charge, driver_allowance, created_at, updated_at) 
+                                                  VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())");
+                        
+                        if (!$fareStmt) {
+                            error_log("DIRECT VEHICLE PRICING: Outstation fare insert prepare failed: " . $conn->error);
+                        } else {
+                            $fareStmt->bind_param("ssdddd", 
+                                                $vehicleId, 
+                                                $vehicleId, 
+                                                $basePrice, 
+                                                $pricePerKm, 
+                                                $nightHaltCharge, 
+                                                $driverAllowance);
+                            $fareSuccess = $fareStmt->execute();
+                            
+                            if (!$fareSuccess) {
+                                error_log("DIRECT VEHICLE PRICING: Outstation fare insert failed: " . $fareStmt->error);
+                            }
                         }
                     }
                     break;
@@ -174,19 +218,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $priceExtraKm = isset($data['priceExtraKm']) ? floatval($data['priceExtraKm']) : 0;
                     $priceExtraHour = isset($data['priceExtraHour']) ? floatval($data['priceExtraHour']) : 0;
                     
-                    $fareStmt = $conn->prepare("INSERT INTO local_package_fares (id, vehicle_id, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour, created_at, updated_at) 
-                                               VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW()) 
-                                               ON DUPLICATE KEY UPDATE price_8hrs_80km = ?, price_10hrs_100km = ?, price_extra_km = ?, price_extra_hour = ?, updated_at = NOW()");
+                    // Check if record exists
+                    $checkLocalStmt = $conn->prepare("SELECT id FROM local_package_fares WHERE id = ? OR vehicle_id = ?");
+                    $checkLocalStmt->bind_param("ss", $vehicleId, $vehicleId);
+                    $checkLocalStmt->execute();
+                    $checkLocalResult = $checkLocalStmt->get_result();
                     
-                    if (!$fareStmt) {
-                        error_log("DIRECT VEHICLE PRICING: Local fare prepare failed: " . $conn->error);
-                    } else {
-                        $fareStmt->bind_param("ssdddddddd", $vehicleId, $vehicleId, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour,
-                                                       $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour);
-                        $fareSuccess = $fareStmt->execute();
+                    if ($checkLocalResult->num_rows > 0) {
+                        // Update existing record
+                        $fareStmt = $conn->prepare("UPDATE local_package_fares SET 
+                                                  id = ?, 
+                                                  vehicle_id = ?, 
+                                                  price_8hrs_80km = ?, 
+                                                  price_10hrs_100km = ?, 
+                                                  price_extra_km = ?, 
+                                                  price_extra_hour = ?, 
+                                                  updated_at = NOW() 
+                                                  WHERE id = ? OR vehicle_id = ?");
                         
-                        if (!$fareSuccess) {
-                            error_log("DIRECT VEHICLE PRICING: Local fare update failed: " . $fareStmt->error);
+                        if (!$fareStmt) {
+                            error_log("DIRECT VEHICLE PRICING: Local fare update prepare failed: " . $conn->error);
+                        } else {
+                            $fareStmt->bind_param("ssddddss", 
+                                                $vehicleId,
+                                                $vehicleId,
+                                                $price8hrs80km, 
+                                                $price10hrs100km, 
+                                                $priceExtraKm, 
+                                                $priceExtraHour,
+                                                $vehicleId,
+                                                $vehicleId);
+                            $fareSuccess = $fareStmt->execute();
+                            
+                            if (!$fareSuccess) {
+                                error_log("DIRECT VEHICLE PRICING: Local fare update failed: " . $fareStmt->error);
+                            }
+                        }
+                    } else {
+                        // Insert new record
+                        $fareStmt = $conn->prepare("INSERT INTO local_package_fares 
+                                                  (id, vehicle_id, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour, created_at, updated_at) 
+                                                  VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())");
+                        
+                        if (!$fareStmt) {
+                            error_log("DIRECT VEHICLE PRICING: Local fare insert prepare failed: " . $conn->error);
+                        } else {
+                            $fareStmt->bind_param("ssdddd", 
+                                                $vehicleId,
+                                                $vehicleId,
+                                                $price8hrs80km, 
+                                                $price10hrs100km, 
+                                                $priceExtraKm, 
+                                                $priceExtraHour);
+                            $fareSuccess = $fareStmt->execute();
+                            
+                            if (!$fareSuccess) {
+                                error_log("DIRECT VEHICLE PRICING: Local fare insert failed: " . $fareStmt->error);
+                            }
                         }
                     }
                     break;
@@ -196,18 +284,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $pickupFare = isset($data['pickupFare']) ? floatval($data['pickupFare']) : 0;
                     $dropFare = isset($data['dropFare']) ? floatval($data['dropFare']) : 0;
                     
-                    $fareStmt = $conn->prepare("INSERT INTO airport_transfer_fares (id, vehicle_id, pickup_fare, drop_fare, created_at, updated_at) 
-                                               VALUES (?, ?, ?, ?, NOW(), NOW()) 
-                                               ON DUPLICATE KEY UPDATE pickup_fare = ?, drop_fare = ?, updated_at = NOW()");
+                    // Check if record exists
+                    $checkAirportStmt = $conn->prepare("SELECT id FROM airport_transfer_fares WHERE id = ? OR vehicle_id = ?");
+                    $checkAirportStmt->bind_param("ss", $vehicleId, $vehicleId);
+                    $checkAirportStmt->execute();
+                    $checkAirportResult = $checkAirportStmt->get_result();
                     
-                    if (!$fareStmt) {
-                        error_log("DIRECT VEHICLE PRICING: Airport fare prepare failed: " . $conn->error);
-                    } else {
-                        $fareStmt->bind_param("ssdddd", $vehicleId, $vehicleId, $pickupFare, $dropFare, $pickupFare, $dropFare);
-                        $fareSuccess = $fareStmt->execute();
+                    if ($checkAirportResult->num_rows > 0) {
+                        // Update existing record
+                        $fareStmt = $conn->prepare("UPDATE airport_transfer_fares SET 
+                                                  id = ?, 
+                                                  vehicle_id = ?, 
+                                                  pickup_fare = ?, 
+                                                  drop_fare = ?, 
+                                                  updated_at = NOW() 
+                                                  WHERE id = ? OR vehicle_id = ?");
                         
-                        if (!$fareSuccess) {
-                            error_log("DIRECT VEHICLE PRICING: Airport fare update failed: " . $fareStmt->error);
+                        if (!$fareStmt) {
+                            error_log("DIRECT VEHICLE PRICING: Airport fare update prepare failed: " . $conn->error);
+                        } else {
+                            $fareStmt->bind_param("ssddss", 
+                                                $vehicleId, 
+                                                $vehicleId,
+                                                $pickupFare, 
+                                                $dropFare,
+                                                $vehicleId,
+                                                $vehicleId);
+                            $fareSuccess = $fareStmt->execute();
+                            
+                            if (!$fareSuccess) {
+                                error_log("DIRECT VEHICLE PRICING: Airport fare update failed: " . $fareStmt->error);
+                            }
+                        }
+                    } else {
+                        // Insert new record
+                        $fareStmt = $conn->prepare("INSERT INTO airport_transfer_fares 
+                                                  (id, vehicle_id, pickup_fare, drop_fare, created_at, updated_at) 
+                                                  VALUES (?, ?, ?, ?, NOW(), NOW())");
+                        
+                        if (!$fareStmt) {
+                            error_log("DIRECT VEHICLE PRICING: Airport fare insert prepare failed: " . $conn->error);
+                        } else {
+                            $fareStmt->bind_param("ssdd", 
+                                                $vehicleId, 
+                                                $vehicleId,
+                                                $pickupFare, 
+                                                $dropFare);
+                            $fareSuccess = $fareStmt->execute();
+                            
+                            if (!$fareSuccess) {
+                                error_log("DIRECT VEHICLE PRICING: Airport fare insert failed: " . $fareStmt->error);
+                            }
                         }
                     }
                     break;
