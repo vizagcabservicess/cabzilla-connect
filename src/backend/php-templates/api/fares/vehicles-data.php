@@ -1,3 +1,4 @@
+
 <?php
 require_once '../../config.php';
 
@@ -40,7 +41,33 @@ $fallbackVehicles = [
         'nightHaltCharge' => 700,
         'driverAllowance' => 250,
         'isActive' => true,
-        'vehicleId' => 'sedan'
+        'vehicleId' => 'sedan',
+        'outstationFares' => [
+            'basePrice' => 2500,
+            'pricePerKm' => 14,
+            'nightHaltCharge' => 700,
+            'driverAllowance' => 250,
+            'roundTripBasePrice' => 2000,
+            'roundTripPricePerKm' => 12
+        ],
+        'localPackageFares' => [
+            'price4hrs40km' => 1600,
+            'price8hrs80km' => 2800,
+            'price10hrs100km' => 3400,
+            'priceExtraKm' => 14,
+            'priceExtraHour' => 150
+        ],
+        'airportFares' => [
+            'basePrice' => 1500,
+            'pricePerKm' => 14,
+            'pickupPrice' => 1600,
+            'dropPrice' => 1500,
+            'tier1Price' => 1600,
+            'tier2Price' => 1800,
+            'tier3Price' => 2200,
+            'tier4Price' => 2600,
+            'extraKmCharge' => 14
+        ]
     ],
     [
         'id' => 'ertiga',
@@ -57,7 +84,33 @@ $fallbackVehicles = [
         'nightHaltCharge' => 1000,
         'driverAllowance' => 250,
         'isActive' => true,
-        'vehicleId' => 'ertiga'
+        'vehicleId' => 'ertiga',
+        'outstationFares' => [
+            'basePrice' => 3200,
+            'pricePerKm' => 18,
+            'nightHaltCharge' => 1000,
+            'driverAllowance' => 250,
+            'roundTripBasePrice' => 2800,
+            'roundTripPricePerKm' => 16
+        ],
+        'localPackageFares' => [
+            'price4hrs40km' => 2200,
+            'price8hrs80km' => 3800,
+            'price10hrs100km' => 4400,
+            'priceExtraKm' => 18,
+            'priceExtraHour' => 200
+        ],
+        'airportFares' => [
+            'basePrice' => 2000,
+            'pricePerKm' => 18,
+            'pickupPrice' => 2000,
+            'dropPrice' => 1900,
+            'tier1Price' => 2000,
+            'tier2Price' => 2200,
+            'tier3Price' => 2600,
+            'tier4Price' => 3000,
+            'extraKmCharge' => 18
+        ]
     ],
     [
         'id' => 'innova_crysta',
@@ -74,7 +127,33 @@ $fallbackVehicles = [
         'nightHaltCharge' => 1000,
         'driverAllowance' => 250,
         'isActive' => true,
-        'vehicleId' => 'innova_crysta'
+        'vehicleId' => 'innova_crysta',
+        'outstationFares' => [
+            'basePrice' => 3800,
+            'pricePerKm' => 20,
+            'nightHaltCharge' => 1000,
+            'driverAllowance' => 250,
+            'roundTripBasePrice' => 3400,
+            'roundTripPricePerKm' => 18
+        ],
+        'localPackageFares' => [
+            'price4hrs40km' => 2600,
+            'price8hrs80km' => 4400,
+            'price10hrs100km' => 5000,
+            'priceExtraKm' => 20,
+            'priceExtraHour' => 250
+        ],
+        'airportFares' => [
+            'basePrice' => 2500,
+            'pricePerKm' => 20,
+            'pickupPrice' => 2400,
+            'dropPrice' => 2300,
+            'tier1Price' => 2400,
+            'tier2Price' => 2600,
+            'tier3Price' => 3000,
+            'tier4Price' => 3400,
+            'extraKmCharge' => 20
+        ]
     ]
 ];
 
@@ -227,6 +306,7 @@ try {
             while ($row = $result->fetch_assoc()) {
                 $vehicleId = $row['vehicle_id'];
                 if (isset($vehicles[$vehicleId])) {
+                    // Set the primary pricing fields (for backward compatibility)
                     $vehicles[$vehicleId]['price'] = floatval($row['base_price'] ?? 0);
                     $vehicles[$vehicleId]['basePrice'] = floatval($row['base_price'] ?? 0);
                     $vehicles[$vehicleId]['pricePerKm'] = floatval($row['price_per_km'] ?? 0);
