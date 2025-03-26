@@ -76,8 +76,8 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
       setDiagnosticsRunning(false);
     });
     
-    // Try direct endpoints
-    const directEndpoint = `${baseUrl}/api/admin/direct-outstation-fares.php?test=1&_t=${timestamp}`;
+    // Try unified direct endpoint
+    const directEndpoint = `${baseUrl}/api/admin/direct-fare-update.php?test=1&_t=${timestamp}`;
     fetch(directEndpoint, {
       method: 'GET',
       headers: {
@@ -112,41 +112,43 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
   const runEmergencyFix = () => {
     // This is a last-resort function to try to reestablish database connection
     const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
-    const endpoints = [
-      'direct-outstation-fares.php',
-      'direct-vehicle-pricing.php',
-      'outstation-fares-update.php',
-      'vehicle-pricing.php',
-      'fares-update.php'
-    ];
     
-    toast.info('Attempting emergency reconnection to all API endpoints...');
+    toast.info('Attempting emergency reconnection to API endpoint...');
     
     // Clear all caches first
     fareService.clearCache();
     
-    // Try a HEAD request to each endpoint
-    endpoints.forEach(endpoint => {
-      const url = `${baseUrl}/api/admin/${endpoint}?emergency=true&_t=${Date.now()}`;
-      
-      fetch(url, {
-        method: 'HEAD',
-        headers: fareService.getBypassHeaders(),
-        mode: 'no-cors'
-      }).catch(err => {
-        console.log(`Emergency ping to ${endpoint} completed`);
-      });
-    });
+    // Try the unified direct-fare-update endpoint
+    const url = `${baseUrl}/api/admin/direct-fare-update.php?emergency=true&initialize=true&_t=${Date.now()}`;
     
-    toast.success('Emergency reconnection attempt completed');
+    fetch(url, {
+      method: 'GET',
+      headers: fareService.getBypassHeaders()
+    })
+    .then(response => {
+      if (response.ok) {
+        return response.json();
+      } else {
+        toast.warning(`Emergency init received status: ${response.status}`);
+        throw new Error(`Status ${response.status}`);
+      }
+    })
+    .then(data => {
+      console.log('Emergency reconnection response:', data);
+      toast.success('Emergency reconnection successful');
+    })
+    .catch(err => {
+      console.error('Emergency reconnection failed:', err);
+      toast.error('Emergency reconnection failed');
+    });
   };
   
   const runServerchecks = () => {
     const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
     toast.info('Testing direct server connection...');
     
-    // Test the most reliable direct endpoint
-    fetch(`${baseUrl}/api/admin/direct-outstation-fares.php`, {
+    // Test our unified direct endpoint
+    fetch(`${baseUrl}/api/admin/direct-fare-update.php`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -219,28 +221,37 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
                       variant="outline" 
                       size="sm"
                       className="text-green-700"
-                      onClick={() => openDirectApi('direct-outstation-fares.php')}
+                      onClick={() => openDirectApi('direct-fare-update.php')}
                     >
                       <ExternalLink className="h-3.5 w-3.5 mr-1" />
-                      Ultra-Simple Direct API
+                      Unified Direct API
                     </Button>
                     <Button 
                       variant="outline" 
                       size="sm" 
                       className="text-blue-700"
-                      onClick={() => openDirectApi('direct-vehicle-pricing.php')}
+                      onClick={() => openDirectApi('direct-outstation-fares.php?tripType=outstation')}
                     >
                       <ExternalLink className="h-3.5 w-3.5 mr-1" />
-                      Direct Vehicle Pricing
+                      Outstation Fares API
                     </Button>
                     <Button 
                       variant="outline" 
                       size="sm" 
                       className="text-blue-700"
-                      onClick={() => openDirectApi('outstation-fares-update.php')}
+                      onClick={() => openDirectApi('direct-airport-fares.php?tripType=airport')}
                     >
                       <ExternalLink className="h-3.5 w-3.5 mr-1" />
-                      Outstation Fares Update
+                      Airport Fares API
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="text-blue-700"
+                      onClick={() => openDirectApi('direct-local-fares.php?tripType=local')}
+                    >
+                      <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                      Local Fares API
                     </Button>
                     <Button 
                       variant="outline" 

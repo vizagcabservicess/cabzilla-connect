@@ -110,7 +110,22 @@ export function FareUpdateError({
       localStorage.setItem('useDirectApi', 'true');
       sessionStorage.setItem('useDirectApi', 'true');
       
-      // 4. Initialize database
+      // 4. Try the direct API for all trip types
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+      
+      try {
+        // Test direct-fare-update.php endpoint - this should now handle everything
+        await fetch(`${baseUrl}/api/admin/direct-fare-update.php?test=1&_t=${timestamp}`, {
+          method: 'GET',
+          headers: fareService.getBypassHeaders()
+        });
+        
+        toast.success('Connected to direct API successfully');
+      } catch (err) {
+        console.error('Error testing direct API:', err);
+      }
+      
+      // 5. Initialize database
       await initializeDatabase();
       
       // Success notification
@@ -136,6 +151,30 @@ export function FareUpdateError({
     });
     
     try {
+      // First, try using the direct fare update endpoint which has table creation
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+      const timestamp = Date.now();
+      
+      try {
+        const directInitResponse = await fetch(`${baseUrl}/api/admin/direct-fare-update.php?initialize=true&_t=${timestamp}`, {
+          method: 'GET',
+          headers: {
+            ...fareService.getBypassHeaders(),
+            'Accept': 'application/json'
+          }
+        });
+        
+        if (directInitResponse.ok) {
+          toast.success('Tables initialized successfully via direct endpoint', {
+            duration: 3000
+          });
+          return true;
+        }
+      } catch (error) {
+        console.error('Error using direct endpoint for initialization:', error);
+      }
+      
+      // Fall back to standard init-database endpoint
       const result = await fareService.initializeDatabase();
       
       if (result) {
@@ -146,10 +185,14 @@ export function FareUpdateError({
         toast.success('Database setup complete! Please try updating fares now.', {
           duration: 5000
         });
+        return true;
       }
+      
+      return false;
     } catch (error) {
       console.error('Error during database initialization:', error);
       toast.error('Failed to initialize database tables');
+      return false;
     } finally {
       setIsInitializingDb(false);
     }
@@ -221,6 +264,7 @@ export function FareUpdateError({
             )}
             <li>Use the comprehensive fix button to solve common API connection issues</li>
             <li>Clear browser cache and try again</li>
+            <li>Check for network connectivity issues</li>
           </ul>
         </div>
         
