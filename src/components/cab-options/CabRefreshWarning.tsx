@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { AlertCircle, RefreshCw, Globe, Server, Network, ExternalLink, FileCog, Hammer } from 'lucide-react';
+import { AlertCircle, RefreshCw, Globe, Server, Network, ExternalLink, FileCog, Hammer, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { fareService } from '@/services/fareService';
@@ -32,6 +32,17 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
     
     // Clear all caches first
     fareService.clearCache();
+    
+    // Force API version update
+    const timestamp = Date.now();
+    localStorage.setItem('apiVersionForced', timestamp.toString());
+    sessionStorage.setItem('apiVersionForced', timestamp.toString());
+    
+    // Set direct API access flag
+    localStorage.setItem('useDirectApi', 'true');
+    sessionStorage.setItem('useDirectApi', 'true');
+    localStorage.setItem('useEmergencyEndpoints', 'true');
+    sessionStorage.setItem('useEmergencyEndpoints', 'true');
     
     // Log the forced request config for debugging
     console.log('Using forced request config:', fareService.getForcedRequestConfig());
@@ -76,7 +87,30 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
       setDiagnosticsRunning(false);
     });
     
-    // Try direct endpoints
+    // Try EMERGENCY endpoints
+    const emergencyEndpoint = `${baseUrl}/api/emergency/outstation-fares?test=1&_t=${timestamp}`;
+    fetch(emergencyEndpoint, {
+      method: 'GET',
+      headers: {
+        ...fareService.getBypassHeaders(),
+        'Accept': 'application/json'
+      }
+    })
+    .then(response => {
+      if (response.ok) {
+        console.log('Emergency API endpoint is accessible');
+        toast.success('Emergency fare API is accessible');
+      } else {
+        console.error('Emergency API endpoint returned status:', response.status);
+        toast.error(`Emergency fare API returned ${response.status}`);
+      }
+    })
+    .catch(err => {
+      console.error('Could not reach emergency API endpoint:', err);
+      toast.error('Could not reach emergency fare API');
+    });
+    
+    // Also try direct endpoints
     const directEndpoint = `${baseUrl}/api/admin/direct-outstation-fares.php?test=1&_t=${timestamp}`;
     fetch(directEndpoint, {
       method: 'GET',
@@ -109,15 +143,22 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
     toast.info(`Opened ${endpoint} endpoint`);
   };
   
+  const openEmergencyEndpoint = (endpoint: string) => {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+    const timestamp = Date.now();
+    const url = `${baseUrl}/api/emergency/${endpoint}?_t=${timestamp}`;
+    
+    window.open(url, '_blank');
+    toast.info(`Opened emergency ${endpoint} endpoint`);
+  };
+  
   const runEmergencyFix = () => {
     // This is a last-resort function to try to reestablish database connection
     const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
-    const endpoints = [
-      'direct-outstation-fares.php',
-      'direct-vehicle-pricing.php',
-      'outstation-fares-update.php',
-      'vehicle-pricing.php',
-      'fares-update.php'
+    const emergencyEndpoints = [
+      'emergency/init-database',
+      'emergency/outstation-fares',
+      'emergency/airport-fares'
     ];
     
     toast.info('Attempting emergency reconnection to all API endpoints...');
@@ -126,8 +167,8 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
     fareService.clearCache();
     
     // Try a HEAD request to each endpoint
-    endpoints.forEach(endpoint => {
-      const url = `${baseUrl}/api/admin/${endpoint}?emergency=true&_t=${Date.now()}`;
+    emergencyEndpoints.forEach(endpoint => {
+      const url = `${baseUrl}/api/${endpoint}?emergency=true&_t=${Date.now()}`;
       
       fetch(url, {
         method: 'HEAD',
@@ -146,7 +187,7 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
     toast.info('Testing direct server connection...');
     
     // Test the most reliable direct endpoint
-    fetch(`${baseUrl}/api/admin/direct-outstation-fares.php`, {
+    fetch(`${baseUrl}/api/emergency/outstation-fares`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -200,6 +241,16 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
             {diagnosticsRunning ? 'Running...' : 'Diagnose Connection'}
           </Button>
           
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="border-red-400 bg-red-100 hover:bg-red-200 text-red-800"
+            onClick={runEmergencyFix}
+          >
+            <AlertTriangle className="h-3.5 w-3.5 mr-1" />
+            Run Emergency Fix
+          </Button>
+          
           {isAdmin && (
             <>
               <Popover>
@@ -215,6 +266,36 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-2">
                   <div className="grid gap-2">
+                    <p className="text-sm font-semibold mb-1">Emergency Endpoints:</p>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="text-red-700"
+                      onClick={() => openEmergencyEndpoint('outstation-fares')}
+                    >
+                      <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                      Emergency Outstation Fares
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="text-red-700"
+                      onClick={() => openEmergencyEndpoint('airport-fares')}
+                    >
+                      <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                      Emergency Airport Fares
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="text-red-700"
+                      onClick={() => openEmergencyEndpoint('init-database')}
+                    >
+                      <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                      Emergency Init Database
+                    </Button>
+                    
+                    <p className="text-sm font-semibold mt-2 mb-1">Regular Endpoints:</p>
                     <Button 
                       variant="outline" 
                       size="sm"
@@ -232,15 +313,6 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
                     >
                       <ExternalLink className="h-3.5 w-3.5 mr-1" />
                       Direct Vehicle Pricing
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="text-blue-700"
-                      onClick={() => openDirectApi('outstation-fares-update.php')}
-                    >
-                      <ExternalLink className="h-3.5 w-3.5 mr-1" />
-                      Outstation Fares Update
                     </Button>
                     <Button 
                       variant="outline" 
