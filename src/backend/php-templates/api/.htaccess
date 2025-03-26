@@ -27,8 +27,8 @@ RewriteEngine On
     Header always set Expires "60"
     
     # Add debugging headers
-    Header always set X-API-Debug "Processed by main API htaccess - v1.0.63"
-    Header always set X-API-Version "1.0.63"
+    Header always set X-API-Debug "Processed by main API htaccess - v1.0.64"
+    Header always set X-API-Version "1.0.64"
     Header always set X-Server-Time "%{TIME}e"
     Header always set X-Request-ID "%{UNIQUE_ID}e"
     Header always set X-Response-Timestamp "%{TIME}e"
@@ -94,7 +94,7 @@ RewriteRule ^direct-outstation-fares\.php$ admin/direct-outstation-fares.php [L,
 # Skip all routing complexity for these critical endpoints
 RewriteRule ^direct-outstation-fares.php$ admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^direct-airport-fares.php$ admin/direct-airport-fares.php [L,QSA]
-RewriteRule ^direct-local-fares.php$ admin/direct-outstation-fares.php?trip_type=local [L,QSA]
+RewriteRule ^direct-local-fares.php$ admin/direct-local-fares.php [L,QSA]
 RewriteRule ^direct-fare-update.php$ admin/direct-fare-update.php [L,QSA]
 
 # CRITICAL FARE UPDATE FIX - Route all fare updates to direct endpoints
@@ -111,9 +111,9 @@ RewriteRule ^direct-booking-data$ user/direct-booking-data.php [L,QSA]
 RewriteRule ^direct-user-data$ admin/direct-user-data.php [L,QSA]
 RewriteRule ^direct-vehicle-pricing$ admin/direct-vehicle-pricing.php [L,QSA]
 RewriteRule ^direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^direct-local-fares$ admin/direct-outstation-fares.php?trip_type=local [L,QSA]
+RewriteRule ^direct-local-fares$ admin/direct-local-fares.php [L,QSA]
 RewriteRule ^direct-airport-fares$ admin/direct-airport-fares.php [L,QSA]
-RewriteRule ^direct-base-pricing$ admin/direct-outstation-fares.php?trip_type=base [L,QSA]
+RewriteRule ^direct-base-pricing$ admin/direct-base-pricing.php [L,QSA]
 RewriteRule ^direct-fare-update$ admin/direct-fare-update.php [L,QSA]
 
 # Regular API routes

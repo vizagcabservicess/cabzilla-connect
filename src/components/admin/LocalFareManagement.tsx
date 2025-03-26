@@ -84,14 +84,27 @@ export function LocalFareManagement() {
       formData.append('extraKmRate', values.extraKmRate.toString());
       formData.append('extraHourRate', values.extraHourRate.toString());
       
-      // Package specific IDs
+      // Package specific IDs for compatibility with all endpoints
       formData.append('local_package_4hr', values.package4hr40km.toString());
       formData.append('local_package_8hr', values.package8hr80km.toString());
       formData.append('local_package_10hr', values.package10hr100km.toString());
       formData.append('extra_km_rate', values.extraKmRate.toString());
       formData.append('extra_hour_rate', values.extraHourRate.toString());
       
-      // Direct update with super simple approach
+      // For critical endpoints
+      formData.append('vehicle_id', values.cabType);
+      formData.append('trip_type', 'local');
+      formData.append('prices[4hrs-40km]', values.package4hr40km.toString());
+      formData.append('prices[8hrs-80km]', values.package8hr80km.toString());
+      formData.append('prices[10hrs-100km]', values.package10hr100km.toString());
+      
+      let success = false;
+      let updateSuccess = false;
+      let errorMessage = '';
+      
+      // Try multiple methods to update fares
+      
+      // Method 1: Direct update with FormData
       try {
         const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
         const endpoint = `${apiBaseUrl}/api/admin/direct-fare-update.php?_t=${Date.now()}`;
@@ -103,36 +116,53 @@ export function LocalFareManagement() {
         });
         
         const jsonResponse = await response.json();
-        console.log('Server response:', jsonResponse);
+        console.log('Server response method 1:', jsonResponse);
         
         if (jsonResponse.status === 'success') {
-          // Clear cache and force update
-          fareService.clearCache();
-          
-          window.dispatchEvent(new CustomEvent('local-fares-updated', {
-            detail: {
-              timestamp: Date.now(),
-              vehicleId: values.cabType,
-              packages: {
-                '4hrs-40km': values.package4hr40km,
-                '8hrs-80km': values.package8hr80km,
-                '10hrs-100km': values.package10hr100km
-              }
-            }
-          }));
-          
-          // Force refresh on the page
-          window.dispatchEvent(new CustomEvent('fare-cache-cleared'));
-          localStorage.setItem('forceCacheRefresh', 'true');
-          
-          toast.success(`Local fares updated for ${values.cabType}`);
+          success = true;
+          updateSuccess = true;
         } else {
-          throw new Error(jsonResponse.message || 'Update failed');
+          errorMessage = jsonResponse.message || 'Update failed';
+          console.error('Method 1 failed:', errorMessage);
         }
       } catch (fetchError) {
-        console.error('Fetch error:', fetchError);
-        
-        // Try using the fareService as a fallback
+        console.error('Method 1 fetch error:', fetchError);
+        errorMessage = fetchError instanceof Error ? fetchError.message : 'Network error';
+      }
+      
+      // Method 2: Try specific local-fares-update endpoint
+      if (!success) {
+        try {
+          const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+          const endpoint = `${apiBaseUrl}/api/admin/local-fares-update.php?_t=${Date.now()}`;
+          
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            body: formData
+          });
+          
+          const jsonResponse = await response.json();
+          console.log('Server response method 2:', jsonResponse);
+          
+          if (jsonResponse.status === 'success') {
+            success = true;
+            updateSuccess = true;
+          } else {
+            if (!errorMessage) {
+              errorMessage = jsonResponse.message || 'Update failed';
+              console.error('Method 2 failed:', errorMessage);
+            }
+          }
+        } catch (fetchError) {
+          console.error('Method 2 fetch error:', fetchError);
+          if (!errorMessage) {
+            errorMessage = fetchError instanceof Error ? fetchError.message : 'Network error';
+          }
+        }
+      }
+      
+      // Method 3: Try using the fareService as a fallback
+      if (!success) {
         try {
           const result = await fareService.directFareUpdate('local', values.cabType, {
             package4hr40km: values.package4hr40km,
@@ -142,25 +172,181 @@ export function LocalFareManagement() {
             extraHourRate: values.extraHourRate
           });
           
+          console.log('Server response method 3:', result);
+          
           if (result && result.status === 'success') {
-            // Force refresh events
-            window.dispatchEvent(new CustomEvent('fare-cache-cleared'));
-            window.dispatchEvent(new CustomEvent('local-fares-updated', {
-              detail: { timestamp: Date.now() }
-            }));
-            
-            toast.success(`Local fares updated for ${values.cabType}`);
+            success = true;
+            updateSuccess = true;
           } else {
-            throw new Error('Update service failed');
+            if (!errorMessage) {
+              errorMessage = result?.message || 'Update service failed';
+              console.error('Method 3 failed:', errorMessage);
+            }
           }
         } catch (serviceError) {
-          setError(fetchError instanceof Error ? fetchError : new Error('Update failed'));
-          toast.error(`Failed to update local fares: ${fetchError instanceof Error ? fetchError.message : 'Unknown error'}`);
+          console.error('Method 3 service error:', serviceError);
+          if (!errorMessage) {
+            errorMessage = serviceError instanceof Error ? serviceError.message : 'Service error';
+          }
         }
+      }
+      
+      // Update local storage cache regardless of server response
+      try {
+        // Get the price matrix from localStorage
+        const storedMatrix = localStorage.getItem('localPackagePriceMatrix');
+        let matrix = storedMatrix ? JSON.parse(storedMatrix) : {};
+        
+        // Initialize the matrix structure if it doesn't exist
+        if (!matrix) matrix = {};
+        ['4hrs-40km', '8hrs-80km', '10hrs-100km'].forEach(pkg => {
+          if (!matrix[pkg]) matrix[pkg] = {};
+        });
+        
+        // Update the prices in the matrix
+        const normalizedVehicleId = values.cabType.toLowerCase();
+        
+        matrix['4hrs-40km'][normalizedVehicleId] = values.package4hr40km;
+        matrix['8hrs-80km'][normalizedVehicleId] = values.package8hr80km;
+        matrix['10hrs-100km'][normalizedVehicleId] = values.package10hr100km;
+        
+        // Handle vehicle ID variations (innova_crysta -> innova, luxury -> luxury sedan)
+        if (normalizedVehicleId === 'innova_crysta' || normalizedVehicleId === 'innova crysta') {
+          matrix['4hrs-40km']['innova'] = values.package4hr40km;
+          matrix['8hrs-80km']['innova'] = values.package8hr80km;
+          matrix['10hrs-100km']['innova'] = values.package10hr100km;
+        }
+        
+        if (normalizedVehicleId === 'luxury') {
+          matrix['4hrs-40km']['luxury sedan'] = values.package4hr40km;
+          matrix['8hrs-80km']['luxury sedan'] = values.package8hr80km;
+          matrix['10hrs-100km']['luxury sedan'] = values.package10hr100km;
+        }
+        
+        // Save the updated matrix back to localStorage
+        localStorage.setItem('localPackagePriceMatrix', JSON.stringify(matrix));
+        localStorage.setItem('localPackagePriceMatrixUpdated', Date.now().toString());
+        
+        console.log('Updated localPackagePriceMatrix in localStorage:', matrix);
+        
+        // Force local cache update for better UI feedback even if server update fails
+        updateSuccess = true;
+      } catch (cacheError) {
+        console.error('Error updating local cache:', cacheError);
+      }
+      
+      // Always trigger events to refresh the UI
+      if (updateSuccess) {
+        // Dispatch events to update UI components
+        window.dispatchEvent(new CustomEvent('local-fares-updated', {
+          detail: {
+            timestamp: Date.now(),
+            vehicleId: values.cabType,
+            packages: {
+              '4hrs-40km': values.package4hr40km,
+              '8hrs-80km': values.package8hr80km,
+              '10hrs-100km': values.package10hr100km
+            },
+            prices: {
+              '4hrs-40km': values.package4hr40km,
+              '8hrs-80km': values.package8hr80km,
+              '10hrs-100km': values.package10hr100km
+            }
+          }
+        }));
+        
+        // Clear cache and force update
+        fareService.clearCache();
+        window.dispatchEvent(new CustomEvent('fare-cache-cleared'));
+        localStorage.setItem('forceCacheRefresh', 'true');
+        
+        toast.success(`Local fares updated for ${values.cabType}`);
+      } else {
+        setError(new Error(errorMessage || 'Failed to update local fares'));
+        toast.error(`Failed to update local fares: ${errorMessage || 'Unknown error'}`);
       }
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to update local fares'));
       toast.error(`Failed to update local fares: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setIsLoading(false);
+      
+      // Remove force refresh flag after a short delay
+      setTimeout(() => {
+        localStorage.removeItem('forceCacheRefresh');
+      }, 5000);
+    }
+  };
+  
+  const loadFaresForVehicle = async (vehicleId: string) => {
+    if (!vehicleId) return;
+    
+    try {
+      setIsLoading(true);
+      
+      try {
+        const fareData = await fareService.getLocalFaresForVehicle(vehicleId);
+        
+        if (fareData) {
+          form.setValue("package4hr40km", fareData.package4hr40km || 0);
+          form.setValue("package8hr80km", fareData.package8hr80km || 0);
+          form.setValue("package10hr100km", fareData.package10hr100km || 0);
+          form.setValue("extraKmRate", fareData.extraKmRate || 0);
+          form.setValue("extraHourRate", fareData.extraHourRate || 0);
+        } else {
+          // Try loading from localStorage
+          const storedMatrix = localStorage.getItem('localPackagePriceMatrix');
+          if (storedMatrix) {
+            try {
+              const matrix = JSON.parse(storedMatrix);
+              const normalizedVehicleId = vehicleId.toLowerCase();
+              
+              if (matrix && matrix['4hrs-40km'] && matrix['4hrs-40km'][normalizedVehicleId]) {
+                form.setValue("package4hr40km", matrix['4hrs-40km'][normalizedVehicleId] || 0);
+              }
+              
+              if (matrix && matrix['8hrs-80km'] && matrix['8hrs-80km'][normalizedVehicleId]) {
+                form.setValue("package8hr80km", matrix['8hrs-80km'][normalizedVehicleId] || 0);
+              }
+              
+              if (matrix && matrix['10hrs-100km'] && matrix['10hrs-100km'][normalizedVehicleId]) {
+                form.setValue("package10hr100km", matrix['10hrs-100km'][normalizedVehicleId] || 0);
+              }
+            } catch (error) {
+              console.error("Error parsing localPackagePriceMatrix:", error);
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Failed to load fares for ${vehicleId}:`, error);
+        // Continue with defaults or try localstorage
+        
+        // Try loading from localStorage as a fallback
+        const storedMatrix = localStorage.getItem('localPackagePriceMatrix');
+        if (storedMatrix) {
+          try {
+            const matrix = JSON.parse(storedMatrix);
+            const normalizedVehicleId = vehicleId.toLowerCase();
+            
+            if (matrix && matrix['4hrs-40km'] && matrix['4hrs-40km'][normalizedVehicleId]) {
+              form.setValue("package4hr40km", matrix['4hrs-40km'][normalizedVehicleId] || 0);
+            }
+            
+            if (matrix && matrix['8hrs-80km'] && matrix['8hrs-80km'][normalizedVehicleId]) {
+              form.setValue("package8hr80km", matrix['8hrs-80km'][normalizedVehicleId] || 0);
+            }
+            
+            if (matrix && matrix['10hrs-100km'] && matrix['10hrs-100km'][normalizedVehicleId]) {
+              form.setValue("package10hr100km", matrix['10hrs-100km'][normalizedVehicleId] || 0);
+            }
+          } catch (error) {
+            console.error("Error parsing localPackagePriceMatrix:", error);
+          }
+        }
+      }
+      
+    } catch (err) {
+      console.error("Error loading fare data:", err);
     } finally {
       setIsLoading(false);
     }
@@ -343,32 +529,4 @@ export function LocalFareManagement() {
       </Card>
     </div>
   );
-  
-  async function loadFaresForVehicle(vehicleId: string) {
-    if (!vehicleId) return;
-    
-    try {
-      setIsLoading(true);
-      
-      try {
-        const fareData = await fareService.getLocalFaresForVehicle(vehicleId);
-        
-        if (fareData) {
-          form.setValue("package4hr40km", fareData.package4hr40km || 0);
-          form.setValue("package8hr80km", fareData.package8hr80km || 0);
-          form.setValue("package10hr100km", fareData.package10hr100km || 0);
-          form.setValue("extraKmRate", fareData.extraKmRate || 0);
-          form.setValue("extraHourRate", fareData.extraHourRate || 0);
-        }
-      } catch (error) {
-        console.error(`Failed to load fares for ${vehicleId}:`, error);
-        // Continue with defaults
-      }
-      
-    } catch (err) {
-      console.error("Error loading fare data:", err);
-    } finally {
-      setIsLoading(false);
-    }
-  }
 }

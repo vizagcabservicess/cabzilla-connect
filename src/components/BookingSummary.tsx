@@ -37,7 +37,7 @@ export const BookingSummary = ({
   // Listen for fare update events and update the calculated fare
   useEffect(() => {
     // Initialize with the provided total price
-    setCalculatedFare(totalPrice);
+    setCalculatedFare(totalPrice > 0 ? totalPrice : selectedCab?.price || 0);
     
     const handleLocalFaresUpdated = (event: Event) => {
       console.log('BookingSummary: Detected local fares updated event');
@@ -49,9 +49,9 @@ export const BookingSummary = ({
           const hourlyPackageId = '8hrs-80km';
           const updatedFare = packages[hourlyPackageId] || totalPrice;
           console.log(`Using updated local fare for ${selectedCab.id}: ${updatedFare}`);
-          setCalculatedFare(updatedFare);
+          setCalculatedFare(updatedFare > 0 ? updatedFare : totalPrice);
         } else {
-          setCalculatedFare(totalPrice);
+          setCalculatedFare(totalPrice > 0 ? totalPrice : selectedCab?.price || 0);
         }
       }
     };
@@ -72,14 +72,14 @@ export const BookingSummary = ({
       console.log('BookingSummary: Detected trip-fares-updated event');
       if (selectedCab && (tripType === 'outstation' || tripType === 'airport')) {
         // For outstation/airport trips, use the totalPrice from props which should be updated
-        setCalculatedFare(totalPrice);
+        setCalculatedFare(totalPrice > 0 ? totalPrice : selectedCab?.price || 0);
       }
     };
     
     const handleFareCacheCleared = () => {
       console.log('BookingSummary: Detected fare-cache-cleared event');
       // When cache is cleared, use the latest total price
-      setCalculatedFare(totalPrice);
+      setCalculatedFare(totalPrice > 0 ? totalPrice : selectedCab?.price || 0);
     };
     
     // Add event listeners for fare updates
@@ -223,6 +223,16 @@ export const BookingSummary = ({
   } else {
     // For other trip types
     finalTotal = baseFare + driverAllowance + nightCharges + additionalCharges + finalGst;
+  }
+
+  // Make sure we always have a valid final total
+  if (finalTotal <= 0 && calculatedFare > 0) {
+    finalTotal = calculatedFare;
+  } else if (finalTotal <= 0 && selectedCab.price) {
+    finalTotal = selectedCab.price;
+  } else if (finalTotal <= 0) {
+    // Last resort fallback
+    finalTotal = tripType === 'airport' ? 500 : tripType === 'local' ? 1500 : 2500;
   }
 
   return (

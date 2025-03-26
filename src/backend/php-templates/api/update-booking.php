@@ -75,6 +75,42 @@ if (!$conn) {
 }
 
 try {
+    // Check if the bookings table exists
+    $checkTableStmt = $conn->query("SHOW TABLES LIKE 'bookings'");
+    if ($checkTableStmt->num_rows === 0) {
+        // Table doesn't exist, create it
+        $createTableSql = "
+            CREATE TABLE IF NOT EXISTS bookings (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                booking_number VARCHAR(20) NOT NULL,
+                pickup_location TEXT NOT NULL,
+                drop_location TEXT,
+                pickup_date DATETIME NOT NULL,
+                return_date DATETIME,
+                cab_type VARCHAR(50) NOT NULL,
+                distance DECIMAL(10,2) NOT NULL,
+                trip_type VARCHAR(20) NOT NULL,
+                trip_mode VARCHAR(20) NOT NULL,
+                total_amount DECIMAL(10,2) NOT NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                passenger_name VARCHAR(100),
+                passenger_phone VARCHAR(20),
+                passenger_email VARCHAR(100),
+                driver_name VARCHAR(100),
+                driver_phone VARCHAR(20),
+                vehicle_number VARCHAR(20),
+                admin_notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY (booking_number)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        ";
+        $conn->query($createTableSql);
+        sendJsonResponse(['status' => 'error', 'message' => 'Booking not found, created bookings table'], 404);
+        exit;
+    }
+
     // First check if the booking exists and belongs to the user or the user is an admin
     $stmt = $conn->prepare("SELECT * FROM bookings WHERE id = ?");
     $stmt->bind_param("i", $bookingId);

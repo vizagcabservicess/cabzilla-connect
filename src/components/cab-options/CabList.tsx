@@ -154,7 +154,8 @@ export function CabList({
                 const cab = cabTypes[key];
                 if (cab.id.toLowerCase() === vehicleId.toLowerCase()) {
                   // For this cab, use the direct price
-                  newFares[cab.id] = parseFloat(prices['8hrs-80km'] || 0);
+                  const newPrice = parseFloat(prices['8hrs-80km'] || 0);
+                  newFares[cab.id] = newPrice > 0 ? newPrice : prev[cab.id] || cab.price || 0;
                   
                   // Update fare history
                   if (!fareHistoryRef.current[cab.id]) {
