@@ -193,6 +193,28 @@ if (!empty($vehicleId) && ($package4hr > 0 || $package8hr > 0 || $package10hr > 
         $pdo = new PDO("mysql:host=localhost;dbname=u644605165_new_bookingdb", "u644605165_new_bookingusr", "Vizag@1213");
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         
+        // First check if local_package_fares table exists
+        $checkTable = $pdo->query("SHOW TABLES LIKE 'local_package_fares'");
+        if ($checkTable->rowCount() === 0) {
+            // Create the table if it doesn't exist
+            $createTableSql = "
+                CREATE TABLE IF NOT EXISTS local_package_fares (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    vehicle_id VARCHAR(50) NOT NULL,
+                    price_4hrs_40km DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    price_8hrs_80km DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    price_10hrs_100km DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    price_extra_km DECIMAL(5,2) NOT NULL DEFAULT 0,
+                    price_extra_hour DECIMAL(5,2) NOT NULL DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    UNIQUE KEY (vehicle_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            ";
+            $pdo->exec($createTableSql);
+            error_log("Created local_package_fares table", 3, __DIR__ . '/../logs/direct-fares.log');
+        }
+        
         // Try to update the local_package_fares table
         try {
             // Check if record exists
@@ -237,24 +259,71 @@ if (!empty($vehicleId) && ($package4hr > 0 || $package8hr > 0 || $package10hr > 
                 ]);
             }
             
+            // Check if vehicle_pricing table exists
+            $checkVPTable = $pdo->query("SHOW TABLES LIKE 'vehicle_pricing'");
+            if ($checkVPTable->rowCount() === 0) {
+                // Create the vehicle_pricing table if it doesn't exist
+                $createVPTableSql = "
+                    CREATE TABLE IF NOT EXISTS vehicle_pricing (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        vehicle_id VARCHAR(50) NOT NULL,
+                        trip_type VARCHAR(50) NOT NULL DEFAULT 'local',
+                        base_fare DECIMAL(10,2) NOT NULL DEFAULT 0,
+                        price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
+                        local_package_4hr DECIMAL(10,2) DEFAULT NULL,
+                        local_package_8hr DECIMAL(10,2) DEFAULT NULL,
+                        local_package_10hr DECIMAL(10,2) DEFAULT NULL,
+                        extra_km_charge DECIMAL(5,2) DEFAULT NULL,
+                        extra_hour_charge DECIMAL(5,2) DEFAULT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        UNIQUE KEY (vehicle_id, trip_type)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+                ";
+                $pdo->exec($createVPTableSql);
+                error_log("Created vehicle_pricing table", 3, __DIR__ . '/../logs/direct-fares.log');
+            }
+            
             // Also update the vehicle_pricing table for backward compatibility
-            $vpSql = "UPDATE vehicle_pricing 
-                      SET local_package_4hr = ?, 
-                          local_package_8hr = ?, 
-                          local_package_10hr = ?, 
-                          extra_km_charge = ?, 
-                          extra_hour_charge = ?,
-                          updated_at = NOW()
-                      WHERE vehicle_type = ?";
-            $vpStmt = $pdo->prepare($vpSql);
-            $vpStmt->execute([
-                $package4hr, 
-                $package8hr, 
-                $package10hr, 
-                $extraKmRate, 
-                $extraHourRate,
-                $vehicleId
-            ]);
+            // First check if the record exists
+            $checkVpSql = "SELECT id FROM vehicle_pricing WHERE vehicle_id = ? AND trip_type = 'local'";
+            $checkVpStmt = $pdo->prepare($checkVpSql);
+            $checkVpStmt->execute([$vehicleId]);
+            $vpExists = $checkVpStmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($vpExists) {
+                $vpSql = "UPDATE vehicle_pricing 
+                          SET local_package_4hr = ?, 
+                              local_package_8hr = ?, 
+                              local_package_10hr = ?, 
+                              extra_km_charge = ?, 
+                              extra_hour_charge = ?,
+                              updated_at = NOW()
+                          WHERE vehicle_id = ? AND trip_type = 'local'";
+                $vpStmt = $pdo->prepare($vpSql);
+                $vpStmt->execute([
+                    $package4hr, 
+                    $package8hr, 
+                    $package10hr, 
+                    $extraKmRate, 
+                    $extraHourRate,
+                    $vehicleId
+                ]);
+            } else {
+                $vpSql = "INSERT INTO vehicle_pricing 
+                          (vehicle_id, trip_type, local_package_4hr, local_package_8hr, local_package_10hr, 
+                           extra_km_charge, extra_hour_charge, created_at, updated_at)
+                          VALUES (?, 'local', ?, ?, ?, ?, ?, NOW(), NOW())";
+                $vpStmt = $pdo->prepare($vpSql);
+                $vpStmt->execute([
+                    $vehicleId,
+                    $package4hr, 
+                    $package8hr, 
+                    $package10hr, 
+                    $extraKmRate, 
+                    $extraHourRate
+                ]);
+            }
             
             $responseData['database_update'] = 'Successfully updated local_package_fares and vehicle_pricing tables';
             

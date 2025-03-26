@@ -91,6 +91,18 @@ RewriteRule ^admin/direct-outstation-fares\.php$ admin/direct-outstation-fares.p
 RewriteRule ^direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^direct-outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
 
+# Make direct-local-fares endpoint available
+RewriteRule ^admin/direct-local-fares$ admin/direct-local-fares.php [L,QSA]
+RewriteRule ^admin/direct-local-fares\.php$ admin/direct-local-fares.php [L,QSA]
+RewriteRule ^direct-local-fares$ admin/direct-local-fares.php [L,QSA]
+RewriteRule ^direct-local-fares\.php$ admin/direct-local-fares.php [L,QSA]
+
+# Make direct-airport-fares endpoint available
+RewriteRule ^admin/direct-airport-fares$ admin/direct-airport-fares.php [L,QSA]
+RewriteRule ^admin/direct-airport-fares\.php$ admin/direct-airport-fares.php [L,QSA]
+RewriteRule ^direct-airport-fares$ admin/direct-airport-fares.php [L,QSA]
+RewriteRule ^direct-airport-fares\.php$ admin/direct-airport-fares.php [L,QSA]
+
 # Skip all routing complexity for these critical endpoints
 RewriteRule ^direct-outstation-fares.php$ admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^direct-airport-fares.php$ admin/direct-airport-fares.php [L,QSA]
@@ -105,6 +117,11 @@ RewriteRule ^admin/airport-fares-update$ admin/direct-fare-update.php?tripType=a
 RewriteRule ^admin/local-fares-update$ admin/direct-fare-update.php?tripType=local [QSA,L]
 RewriteRule ^admin/fare-update$ admin/direct-fare-update.php [QSA,L]
 
+# FIX FOR VEHICLE UPDATES
+# Route directly to vehicles-update endpoint
+RewriteRule ^admin/vehicles-update$ admin/vehicles-update.php [L,QSA]
+RewriteRule ^admin/vehicles-update\.php$ admin/vehicles-update.php [L,QSA]
+
 # Parse API routes to PHP files - DIRECT ACCESS FIRST (higher priority)
 # Ultra-simple direct access endpoints for bypassing all routing complexity
 RewriteRule ^direct-booking-data$ user/direct-booking-data.php [L,QSA]
@@ -116,8 +133,29 @@ RewriteRule ^direct-airport-fares$ admin/direct-airport-fares.php [L,QSA]
 RewriteRule ^direct-base-pricing$ admin/direct-base-pricing.php [L,QSA]
 RewriteRule ^direct-fare-update$ admin/direct-fare-update.php [L,QSA]
 
-# Regular API routes
-# ... keep existing code (regular API route definitions)
+# Regular API routes with better fallbacks
+RewriteRule ^vehicles$ vehicles.php [L,QSA]
+RewriteRule ^vehicles/([^/]+)$ vehicles.php?id=$1 [L,QSA]
+RewriteRule ^vehicles-data$ vehicles-data.php [L,QSA]
+RewriteRule ^bookings$ bookings.php [L,QSA]
+RewriteRule ^bookings/([^/]+)$ bookings.php?id=$1 [L,QSA]
+RewriteRule ^update-booking$ update-booking.php [L,QSA]
+RewriteRule ^update-booking/([^/]+)$ update-booking.php?id=$1 [L,QSA]
+RewriteRule ^search-bookings$ search-bookings.php [L,QSA]
+RewriteRule ^login$ login.php [L,QSA]
+RewriteRule ^register$ register.php [L,QSA]
+RewriteRule ^user$ user.php [L,QSA]
+RewriteRule ^user/([^/]+)$ user.php?id=$1 [L,QSA]
+
+# Separate fare types for better organization and caching
+RewriteRule ^outstation-fares$ fares.php?type=outstation [L,QSA]
+RewriteRule ^local-fares$ fares.php?type=local [L,QSA]
+RewriteRule ^airport-fares$ fares.php?type=airport [L,QSA]
+RewriteRule ^fares$ fares.php [L,QSA]
+
+# Special route for tours
+RewriteRule ^tours$ tours.php [L,QSA]
+RewriteRule ^tours/([^/]+)$ tours.php?id=$1 [L,QSA]
 
 # Debug headers to help troubleshoot routing
 Header set X-Requested-Path "%{REQUEST_URI}e"

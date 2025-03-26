@@ -99,6 +99,10 @@ $oneWayPricePerKm = floatval($data['oneWayPricePerKm'] ?? $data['pricePerKm'] ??
 $roundTripBasePrice = floatval($data['roundTripBasePrice'] ?? $data['roundTripBaseFare'] ?? $data['round_trip_base_price'] ?? 0);
 $roundTripPricePerKm = floatval($data['roundTripPricePerKm'] ?? $data['roundTripPricePerKm'] ?? $data['round_trip_price_per_km'] ?? 0);
 
+// Extract driver allowance and night halt charges
+$driverAllowance = floatval($data['driverAllowance'] ?? $data['driver_allowance'] ?? 250);
+$nightHaltCharge = floatval($data['nightHalt'] ?? $data['nightHaltCharge'] ?? $data['night_halt_charge'] ?? 700);
+
 // Log extracted fields
 error_log("Extracted fields: vehicleId=$vehicleId, oneWayBasePrice=$oneWayBasePrice, oneWayPricePerKm=$oneWayPricePerKm, roundTripBasePrice=$roundTripBasePrice, roundTripPricePerKm=$roundTripPricePerKm");
 
@@ -140,10 +144,12 @@ try {
             CREATE TABLE IF NOT EXISTS outstation_fares (
                 id INT(11) NOT NULL AUTO_INCREMENT,
                 vehicle_id VARCHAR(50) NOT NULL,
-                one_way_base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                one_way_price_per_km DECIMAL(10,2) NOT NULL DEFAULT 0,
-                round_trip_base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                round_trip_price_per_km DECIMAL(10,2) NOT NULL DEFAULT 0,
+                base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
+                roundtrip_base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                roundtrip_price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
+                driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 0,
+                night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 0,
                 created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 PRIMARY KEY (id),
@@ -161,22 +167,26 @@ try {
         // Update outstation_fares table
         $upsertFaresStmt = $conn->prepare("
             INSERT INTO outstation_fares 
-            (vehicle_id, one_way_base_price, one_way_price_per_km, round_trip_base_price, round_trip_price_per_km, updated_at)
-            VALUES (?, ?, ?, ?, ?, NOW())
+            (vehicle_id, base_price, price_per_km, roundtrip_base_price, roundtrip_price_per_km, driver_allowance, night_halt_charge, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
             ON DUPLICATE KEY UPDATE 
-            one_way_base_price = VALUES(one_way_base_price),
-            one_way_price_per_km = VALUES(one_way_price_per_km),
-            round_trip_base_price = VALUES(round_trip_base_price),
-            round_trip_price_per_km = VALUES(round_trip_price_per_km),
+            base_price = VALUES(base_price),
+            price_per_km = VALUES(price_per_km),
+            roundtrip_base_price = VALUES(roundtrip_base_price),
+            roundtrip_price_per_km = VALUES(roundtrip_price_per_km),
+            driver_allowance = VALUES(driver_allowance),
+            night_halt_charge = VALUES(night_halt_charge),
             updated_at = NOW()
         ");
         
-        $upsertFaresStmt->bind_param("sdddd", 
+        $upsertFaresStmt->bind_param("sdddddd", 
             $vehicleId, 
             $oneWayBasePrice, 
             $oneWayPricePerKm, 
             $roundTripBasePrice, 
-            $roundTripPricePerKm
+            $roundTripPricePerKm,
+            $driverAllowance,
+            $nightHaltCharge
         );
         
         $upsertFaresStmt->execute();
@@ -188,19 +198,23 @@ try {
         // Update one-way pricing
         $upsertOneWayStmt = $conn->prepare("
             INSERT INTO vehicle_pricing 
-            (vehicle_id, trip_type, base_fare, price_per_km, updated_at)
-            VALUES (?, ?, ?, ?, NOW())
+            (vehicle_id, trip_type, base_fare, price_per_km, driver_allowance, night_halt_charge, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, NOW())
             ON DUPLICATE KEY UPDATE 
             base_fare = VALUES(base_fare),
             price_per_km = VALUES(price_per_km),
+            driver_allowance = VALUES(driver_allowance),
+            night_halt_charge = VALUES(night_halt_charge),
             updated_at = NOW()
         ");
         
-        $upsertOneWayStmt->bind_param("ssdd", 
+        $upsertOneWayStmt->bind_param("ssdddd", 
             $vehicleId, 
             $oneWayTripType, 
             $oneWayBasePrice, 
-            $oneWayPricePerKm
+            $oneWayPricePerKm,
+            $driverAllowance,
+            $nightHaltCharge
         );
         
         $upsertOneWayStmt->execute();
@@ -208,19 +222,23 @@ try {
         // Update round-trip pricing
         $upsertRoundTripStmt = $conn->prepare("
             INSERT INTO vehicle_pricing 
-            (vehicle_id, trip_type, base_fare, price_per_km, updated_at)
-            VALUES (?, ?, ?, ?, NOW())
+            (vehicle_id, trip_type, base_fare, price_per_km, driver_allowance, night_halt_charge, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, NOW())
             ON DUPLICATE KEY UPDATE 
             base_fare = VALUES(base_fare),
             price_per_km = VALUES(price_per_km),
+            driver_allowance = VALUES(driver_allowance),
+            night_halt_charge = VALUES(night_halt_charge),
             updated_at = NOW()
         ");
         
-        $upsertRoundTripStmt->bind_param("ssdd", 
+        $upsertRoundTripStmt->bind_param("ssdddd", 
             $vehicleId, 
             $roundTripTripType, 
             $roundTripBasePrice, 
-            $roundTripPricePerKm
+            $roundTripPricePerKm,
+            $driverAllowance,
+            $nightHaltCharge
         );
         
         $upsertRoundTripStmt->execute();
@@ -237,6 +255,8 @@ try {
                 'oneWayPricePerKm' => $oneWayPricePerKm,
                 'roundTripBasePrice' => $roundTripBasePrice,
                 'roundTripPricePerKm' => $roundTripPricePerKm,
+                'driverAllowance' => $driverAllowance,
+                'nightHaltCharge' => $nightHaltCharge
             ]
         ]);
     } catch (Exception $e) {

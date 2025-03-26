@@ -32,6 +32,10 @@ CREATE TABLE `bookings` (
   `passenger_name` varchar(100) NOT NULL,
   `passenger_phone` varchar(20) NOT NULL,
   `passenger_email` varchar(100) NOT NULL,
+  `driver_name` varchar(100) NULL,
+  `driver_phone` varchar(20) NULL,
+  `vehicle_number` varchar(50) NULL,
+  `admin_notes` text NULL,
   `hourly_package` varchar(50) NULL,
   `tour_id` varchar(50) NULL,
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -58,14 +62,12 @@ CREATE TABLE `tour_fares` (
 -- Vehicle Pricing Table
 CREATE TABLE `vehicle_pricing` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
-  `vehicle_type` varchar(50) NOT NULL UNIQUE,
-  `base_price` decimal(10,2) NOT NULL,
-  `price_per_km` decimal(5,2) NOT NULL,
-  `night_halt_charge` decimal(10,2) NOT NULL,
-  `driver_allowance` decimal(10,2) NOT NULL,
-  -- Outstation specific columns
-  `roundtrip_base_price` decimal(10,2) DEFAULT NULL,
-  `roundtrip_price_per_km` decimal(5,2) DEFAULT NULL,
+  `vehicle_id` varchar(50) NOT NULL,
+  `trip_type` varchar(50) NOT NULL DEFAULT 'outstation',
+  `base_fare` decimal(10,2) NOT NULL DEFAULT 0,
+  `price_per_km` decimal(5,2) NOT NULL DEFAULT 0,
+  `night_halt_charge` decimal(10,2) NOT NULL DEFAULT 0,
+  `driver_allowance` decimal(10,2) NOT NULL DEFAULT 0,
   -- Local package specific columns  
   `local_package_4hr` decimal(10,2) DEFAULT NULL,
   `local_package_8hr` decimal(10,2) DEFAULT NULL,
@@ -83,12 +85,14 @@ CREATE TABLE `vehicle_pricing` (
   `airport_tier3_price` decimal(10,2) DEFAULT NULL,
   `airport_tier4_price` decimal(10,2) DEFAULT NULL,
   `airport_extra_km_charge` decimal(5,2) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `vehicle_trip_type` (`vehicle_id`, `trip_type`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Vehicle Types Table
-CREATE TABLE `vehicle_types` (
+CREATE TABLE `vehicles` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `vehicle_id` varchar(50) NOT NULL UNIQUE,
   `name` varchar(100) NOT NULL,
@@ -152,12 +156,12 @@ CREATE TABLE `local_package_fares` (
 CREATE TABLE `outstation_fares` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `vehicle_id` varchar(50) NOT NULL,
-  `base_fare` decimal(10,2) NOT NULL DEFAULT 0,
+  `base_price` decimal(10,2) NOT NULL DEFAULT 0,
   `price_per_km` decimal(5,2) NOT NULL DEFAULT 0,
   `night_halt_charge` decimal(10,2) NOT NULL DEFAULT 0,
   `driver_allowance` decimal(10,2) NOT NULL DEFAULT 0,
-  `roundtrip_base_fare` decimal(10,2) DEFAULT NULL,
-  `roundtrip_price_per_km` decimal(5,2) DEFAULT NULL,
+  `roundtrip_base_price` decimal(10,2) DEFAULT 0,
+  `roundtrip_price_per_km` decimal(5,2) DEFAULT 0,
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -173,20 +177,29 @@ INSERT INTO `tour_fares` (`tour_id`, `tour_name`, `sedan`, `ertiga`, `innova`, `
 ('annavaram', 'Annavaram Tour', 6000, 7500, 9000, 13500, 17000),
 ('vanajangi', 'Vanajangi Tour', 5500, 7000, 8500, 12500, 16000);
 
--- Insert default data for vehicle pricing
-INSERT INTO `vehicle_pricing` (`vehicle_type`, `base_price`, `price_per_km`, `night_halt_charge`, `driver_allowance`, 
-                               `roundtrip_base_price`, `roundtrip_price_per_km`, 
+-- Insert default data for vehicle pricing (compatibility with old schema)
+INSERT INTO `vehicle_pricing` (`vehicle_id`, `trip_type`, `base_fare`, `price_per_km`, `night_halt_charge`, `driver_allowance`, 
                                `local_package_4hr`, `local_package_8hr`, `local_package_10hr`, `extra_km_charge`, `extra_hour_charge`,
                                `airport_base_price`, `airport_price_per_km`, `airport_pickup_price`, `airport_drop_price`,
                                `airport_tier1_price`, `airport_tier2_price`, `airport_tier3_price`, `airport_tier4_price`, `airport_extra_km_charge`) VALUES
-('sedan', 4200, 14, 700, 250, 4000, 12, 1200, 2200, 2500, 14, 250, 3000, 12, 800, 800, 600, 800, 1000, 1200, 12),
-('ertiga', 5400, 18, 1000, 250, 5000, 15, 1500, 2700, 3000, 18, 250, 3500, 15, 1000, 1000, 800, 1000, 1200, 1400, 15),
-('innova', 6000, 20, 1000, 250, 5600, 17, 1800, 3000, 3500, 20, 250, 4000, 17, 1200, 1200, 1000, 1200, 1400, 1600, 17),
-('tempo', 9000, 22, 1500, 300, 8500, 19, 3000, 4500, 5500, 22, 300, 6000, 19, 2000, 2000, 1600, 1800, 2000, 2500, 19),
-('luxury', 10500, 25, 1500, 300, 10000, 22, 3500, 5500, 6500, 25, 300, 7000, 22, 2500, 2500, 2000, 2200, 2500, 3000, 22);
+('sedan', 'outstation', 4200, 14, 700, 250, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+('sedan', 'local', 0, 0, 0, 0, 1200, 2200, 2500, 14, 250, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+('sedan', 'airport', 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, 3000, 12, 800, 800, 600, 800, 1000, 1200, 12),
+('ertiga', 'outstation', 5400, 18, 1000, 250, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+('ertiga', 'local', 0, 0, 0, 0, 1500, 2700, 3000, 18, 250, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+('ertiga', 'airport', 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, 3500, 15, 1000, 1000, 800, 1000, 1200, 1400, 15),
+('innova_crysta', 'outstation', 6000, 20, 1000, 250, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+('innova_crysta', 'local', 0, 0, 0, 0, 1800, 3000, 3500, 20, 250, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+('innova_crysta', 'airport', 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, 4000, 17, 1200, 1200, 1000, 1200, 1400, 1600, 17),
+('tempo', 'outstation', 9000, 22, 1500, 300, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+('tempo', 'local', 0, 0, 0, 0, 3000, 4500, 5500, 22, 300, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+('tempo', 'airport', 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, 6000, 19, 2000, 2000, 1600, 1800, 2000, 2500, 19),
+('luxury', 'outstation', 10500, 25, 1500, 300, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+('luxury', 'local', 0, 0, 0, 0, 3500, 5500, 6500, 25, 300, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+('luxury', 'airport', 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, 7000, 22, 2500, 2500, 2000, 2200, 2500, 3000, 22);
 
 -- Insert default vehicle types
-INSERT INTO `vehicle_types` (`vehicle_id`, `name`, `capacity`, `luggage_capacity`, `ac`, `image`, `amenities`, `description`, `is_active`) VALUES
+INSERT INTO `vehicles` (`vehicle_id`, `name`, `capacity`, `luggage_capacity`, `ac`, `image`, `amenities`, `description`, `is_active`) VALUES
 ('sedan', 'Sedan', 4, 2, 1, '/cars/sedan.png', 'AC, Bottle Water, Music System', 'Comfortable sedan suitable for 4 passengers.', 1),
 ('ertiga', 'Ertiga', 6, 3, 1, '/cars/ertiga.png', 'AC, Bottle Water, Music System, Extra Legroom', 'Spacious SUV suitable for 6 passengers.', 1),
 ('innova_crysta', 'Innova Crysta', 7, 4, 1, '/cars/innova.png', 'AC, Bottle Water, Music System, Extra Legroom, Charging Point', 'Premium SUV with ample space for 7 passengers.', 1),
@@ -211,8 +224,8 @@ INSERT INTO `local_package_fares` (`vehicle_id`, `price_4hrs_40km`, `price_8hrs_
 ('luxury', 3500, 5500, 6500, 25, 300);
 
 -- Insert default outstation fares
-INSERT INTO `outstation_fares` (`vehicle_id`, `base_fare`, `price_per_km`, `night_halt_charge`, `driver_allowance`, 
-                              `roundtrip_base_fare`, `roundtrip_price_per_km`) VALUES
+INSERT INTO `outstation_fares` (`vehicle_id`, `base_price`, `price_per_km`, `night_halt_charge`, `driver_allowance`, 
+                              `roundtrip_base_price`, `roundtrip_price_per_km`) VALUES
 ('sedan', 4200, 14, 700, 250, 4000, 12),
 ('ertiga', 5400, 18, 1000, 250, 5000, 15),
 ('innova_crysta', 6000, 20, 1000, 250, 5600, 17),
