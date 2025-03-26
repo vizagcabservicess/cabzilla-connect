@@ -32,34 +32,49 @@ error_log("REQUEST METHOD: " . $_SERVER['REQUEST_METHOD']);
 error_log("CONTENT TYPE: " . $_SERVER['CONTENT_TYPE'] ?? 'not set');
 error_log("ALL HEADERS: " . json_encode(getallheaders()));
 
-// Get JSON data from request
+// Get data from request
 $rawInput = file_get_contents('php://input');
 error_log("Raw input: " . $rawInput);
 
-// Ensure we have valid JSON input
-$data = json_decode($rawInput, true);
-if (json_last_error() !== JSON_ERROR_NONE) {
-    error_log("JSON parse error: " . json_last_error_msg());
-    
-    // Try to decode as URL encoded form data if JSON fails
+// Try multiple approaches to get the request data
+$data = [];
+
+// Try 1: Parse JSON
+$jsonData = json_decode($rawInput, true);
+if (json_last_error() === JSON_ERROR_NONE && !empty($jsonData)) {
+    $data = $jsonData;
+    error_log("Successfully parsed JSON data: " . print_r($data, true));
+} 
+// Try 2: Parse form-urlencoded
+else {
     parse_str($rawInput, $formData);
     if (!empty($formData)) {
         $data = $formData;
-        error_log("Parsed as form data: " . print_r($data, true));
+        error_log("Successfully parsed form-urlencoded data: " . print_r($data, true));
+    } 
+    // Try 3: Use $_POST or $_REQUEST
+    else {
+        if (!empty($_POST)) {
+            $data = $_POST;
+            error_log("Using POST data: " . print_r($data, true));
+        } else if (!empty($_REQUEST)) {
+            $data = $_REQUEST;
+            error_log("Using REQUEST data: " . print_r($data, true));
+        }
     }
 }
 
-// If still no data, try $_POST directly
-if (empty($data) && !empty($_POST)) {
-    $data = $_POST;
-    error_log("Using _POST data: " . print_r($data, true));
+// Final fallback: Check if no data was extracted
+if (empty($data)) {
+    error_log("Could not extract data from request. Using empty array.");
+    $data = [];
 }
 
 // Log received data for debugging
-error_log('Received outstation fares update data: ' . print_r($data, true));
+error_log('Final outstation fares update data: ' . print_r($data, true));
 
 // Check if data is valid
-if (!$data || (!isset($data['vehicleId']) && !isset($data['vehicle_id']) && !isset($data['vehicleType']))) {
+if (empty($data) || (!isset($data['vehicleId']) && !isset($data['vehicle_id']) && !isset($data['vehicleType']))) {
     http_response_code(400);
     echo json_encode([
         'status' => 'error',
@@ -77,13 +92,15 @@ if (strpos($vehicleId, 'item-') === 0) {
     $vehicleId = substr($vehicleId, 5);
 }
 
-// Extract one-way pricing
-$oneWayBasePrice = floatval($data['oneWayBasePrice'] ?? $data['baseFare'] ?? 0);
+// Extract pricing data with multiple possible field names
+$oneWayBasePrice = floatval($data['oneWayBasePrice'] ?? $data['baseFare'] ?? $data['basePrice'] ?? 0);
 $oneWayPricePerKm = floatval($data['oneWayPricePerKm'] ?? $data['pricePerKm'] ?? 0);
 
-// Extract round-trip pricing
-$roundTripBasePrice = floatval($data['roundTripBasePrice'] ?? $data['roundTripBaseFare'] ?? 0);
-$roundTripPricePerKm = floatval($data['roundTripPricePerKm'] ?? $data['roundTripPricePerKm'] ?? 0);
+$roundTripBasePrice = floatval($data['roundTripBasePrice'] ?? $data['roundTripBaseFare'] ?? $data['round_trip_base_price'] ?? 0);
+$roundTripPricePerKm = floatval($data['roundTripPricePerKm'] ?? $data['roundTripPricePerKm'] ?? $data['round_trip_price_per_km'] ?? 0);
+
+// Log extracted fields
+error_log("Extracted fields: vehicleId=$vehicleId, oneWayBasePrice=$oneWayBasePrice, oneWayPricePerKm=$oneWayPricePerKm, roundTripBasePrice=$roundTripBasePrice, roundTripPricePerKm=$roundTripPricePerKm");
 
 try {
     // Connect to database - try multiple connection approaches
@@ -112,7 +129,7 @@ try {
                 error_log("Global DB variables not set");
                 
                 // Try alternative file location
-                require_once __DIR__ . '/../../config.php';
+                @include_once __DIR__ . '/../../config.php';
                 
                 // Try again with global variables
                 if (isset($db_host) && isset($db_name) && isset($db_user) && isset($db_pass)) {
