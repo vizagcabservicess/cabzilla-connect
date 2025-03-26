@@ -11,55 +11,73 @@ import CabsPage from './pages/CabsPage';
 import ToursPage from './pages/ToursPage';
 import BookingEditPage from './pages/BookingEditPage';
 import ReceiptPage from './pages/ReceiptPage';
+import { VehicleManagement } from './pages/Admin/VehicleManagement';
+import Header from '@/components/Navbar';
+import Footer from '@/components/Footer';
+
+// Create a layout component that includes the Header and Footer
+const Layout = ({ children }: { children: React.ReactNode }) => (
+  <>
+    <Header />
+    <div className="min-h-[calc(100vh-64px-200px)]">
+      {children}
+    </div>
+    <Footer />
+  </>
+);
 
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: <Index />,
+    element: <Layout><Index /></Layout>,
   },
   {
     path: '/login',
-    element: <LoginPage />,
+    element: <Layout><LoginPage /></Layout>,
   },
   {
     path: '/signup',
-    element: <SignupPage />,
+    element: <Layout><SignupPage /></Layout>,
   },
   {
     path: '/dashboard',
-    element: <DashboardPage />,
+    element: <Layout><DashboardPage /></Layout>,
   },
   {
     path: '/admin',
-    element: <AdminDashboardPage />,
+    element: <Layout><AdminDashboardPage /></Layout>,
+  },
+  {
+    path: '/admin/vehicles',
+    element: <Layout><VehicleManagement /></Layout>,
   },
   {
     path: '/booking/:bookingId/confirmation',
-    element: <BookingConfirmationPage />,
+    element: <Layout><BookingConfirmationPage /></Layout>,
   },
   {
     path: '/booking-confirmation',
-    element: <BookingConfirmationPage />,
+    element: <Layout><BookingConfirmationPage /></Layout>,
   },
   {
     path: '/booking/:bookingId/edit',
-    element: <BookingEditPage />,
+    element: <Layout><BookingEditPage /></Layout>,
   },
   {
     path: '/receipt/:bookingId',
-    element: <ReceiptPage />,
+    element: <Layout><ReceiptPage /></Layout>,
   },
   {
     path: '/cabs',
-    element: <CabsPage />,
+    element: <Layout><CabsPage /></Layout>,
   },
   {
     path: '/tours',
-    element: <ToursPage />,
+    element: <Layout><ToursPage /></Layout>,
   },
   {
     path: '*',
-    element: <NotFound />,
+    element: <Layout><NotFound /></Layout>,
   },
 ]);
 
