@@ -15,7 +15,7 @@ export interface CabType {
   isActive?: boolean;
   basePrice?: number;
   vehicleId?: string;
-  // Added fare properties to fix TypeScript errors
+  // Fare properties
   outstationFares?: OutstationFare;
   localPackageFares?: LocalFare;
   airportFares?: AirportFare;
@@ -25,17 +25,17 @@ export interface OutstationFare {
   basePrice: number;
   pricePerKm: number;
   driverAllowance: number;
-  nightHaltCharge: number; // Changed from nightHalt to match usage in code
+  nightHaltCharge: number;
   roundTripBasePrice: number;
   roundTripPricePerKm: number;
 }
 
 export interface LocalFare {
-  price4hrs40km: number;  // Changed to match API structure
-  price8hrs80km: number;  // Changed to match API structure
-  price10hrs100km: number; // Changed to match API structure
-  priceExtraKm: number;    // Changed to match API structure
-  priceExtraHour: number;  // Changed to match API structure
+  price4hrs40km: number;
+  price8hrs80km: number;
+  price10hrs100km: number; 
+  priceExtraKm: number;
+  priceExtraHour: number;
 }
 
 export interface AirportFare {

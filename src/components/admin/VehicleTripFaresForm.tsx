@@ -12,6 +12,7 @@ import { updateOutstationFares, updateLocalFares, updateAirportFares } from '@/s
 import { getVehicleTypes } from '@/services/vehicleDataService';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FareUpdateError } from '../cab-options/FareUpdateError';
+import { OutstationFare, LocalFare } from '@/types/cab';
 
 interface VehicleTripFaresFormProps {
   vehicleId?: string;
@@ -218,11 +219,12 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
     setError(null);
     
     try {
-      const data = {
+      // Fixed to use nightHaltCharge instead of nightHalt to match OutstationFare interface
+      const data: OutstationFare = {
         basePrice: parseFloat(basePrice) || 0,
         pricePerKm: parseFloat(pricePerKm) || 0,
         driverAllowance: parseFloat(driverAllowance) || 0,
-        nightHalt: parseFloat(nightHalt) || 0,
+        nightHaltCharge: parseFloat(nightHalt) || 0,
         roundTripBasePrice: parseFloat(roundTripBasePrice) || 0,
         roundTripPricePerKm: parseFloat(roundTripPricePerKm) || 0
       };
@@ -232,7 +234,9 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
         // First try the specialized API endpoint via fareService
         await fareService.directFareUpdate('outstation', selectedVehicleId, {
           vehicleId: selectedVehicleId,
-          ...data
+          ...data,
+          // Include nightHalt for backward compatibility with older API
+          nightHalt: data.nightHaltCharge
         });
       } catch (error) {
         console.error('Direct update failed, trying vehicleDataService:', error);
@@ -273,12 +277,13 @@ export function VehicleTripFaresForm({ vehicleId }: VehicleTripFaresFormProps) {
     setError(null);
     
     try {
-      const data = {
-        package4hr40km: parseFloat(package4hr40km) || 0,
-        package8hr80km: parseFloat(package8hr80km) || 0,
-        package10hr100km: parseFloat(package10hr100km) || 0,
-        extraKmRate: parseFloat(extraKmRate) || 0,
-        extraHourRate: parseFloat(extraHourRate) || 0
+      // Fixed property names to match LocalFare interface
+      const data: LocalFare = {
+        price4hrs40km: parseFloat(package4hr40km) || 0,
+        price8hrs80km: parseFloat(package8hr80km) || 0,
+        price10hrs100km: parseFloat(package10hr100km) || 0,
+        priceExtraKm: parseFloat(extraKmRate) || 0,
+        priceExtraHour: parseFloat(extraHourRate) || 0
       };
       
       // Create FormData for better compatibility with server
