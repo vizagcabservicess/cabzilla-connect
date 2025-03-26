@@ -28,6 +28,17 @@ try {
     
     // Verify essential tables and create them if missing
     $requiredTables = [
+        'vehicle_types' => [
+            'vehicle_id' => 'VARCHAR(50) NOT NULL',
+            'name' => 'VARCHAR(100) NOT NULL',
+            'capacity' => 'INT NOT NULL DEFAULT 4',
+            'luggage_capacity' => 'INT NOT NULL DEFAULT 2',
+            'ac' => 'TINYINT(1) NOT NULL DEFAULT 1',
+            'image' => 'VARCHAR(255)',
+            'amenities' => 'TEXT',
+            'description' => 'TEXT',
+            'is_active' => 'TINYINT(1) NOT NULL DEFAULT 1'
+        ],
         'local_package_fares' => [
             'vehicle_id' => 'VARCHAR(50) NOT NULL',
             'price_4hrs_40km' => 'DECIMAL(10,2) NOT NULL DEFAULT 0',
@@ -131,9 +142,14 @@ try {
                 
                 // Add timestamps
                 $sql .= "\n    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    UNIQUE KEY vehicle_id (vehicle_id)
-                ) ENGINE=InnoDB;";
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP";
+                
+                // Add unique key for vehicle_id if it exists in the columns
+                if (array_key_exists('vehicle_id', $columns)) {
+                    $sql .= ",\n    UNIQUE KEY vehicle_id (vehicle_id)";
+                }
+                
+                $sql .= "\n) ENGINE=InnoDB;";
                 
                 // Execute the query
                 $result = $conn->query($sql);
@@ -183,6 +199,19 @@ try {
                             $messages[] = "Added default data to local_package_fares table";
                         } else {
                             $messages[] = "Failed to add default data to local_package_fares table: " . $conn->error;
+                        }
+                    } else if ($tableName == 'vehicle_types' && $tableExists == false) {
+                        $defaultData = "INSERT IGNORE INTO vehicle_types (vehicle_id, name, capacity, luggage_capacity, ac, image, amenities, description, is_active) VALUES
+                        ('sedan', 'Sedan', 4, 2, 1, '/cars/sedan.png', '[\"AC\", \"Bottle Water\", \"Music System\"]', 'Comfortable sedan suitable for 4 passengers.', 1),
+                        ('ertiga', 'Ertiga', 6, 3, 1, '/cars/ertiga.png', '[\"AC\", \"Bottle Water\", \"Music System\", \"Extra Legroom\"]', 'Spacious SUV suitable for 6 passengers.', 1),
+                        ('innova_crysta', 'Innova Crysta', 7, 4, 1, '/cars/innova.png', '[\"AC\", \"Bottle Water\", \"Music System\", \"Extra Legroom\", \"Charging Point\"]', 'Premium SUV with ample space for 7 passengers.', 1),
+                        ('tempo', 'Tempo Traveller', 12, 10, 1, '/cars/tempo.png', '[\"AC\", \"Bottle Water\", \"Music System\", \"Extra Legroom\", \"Charging Point\"]', 'Spacious vehicle for large groups.', 1),
+                        ('luxury', 'Luxury Sedan', 4, 3, 1, '/cars/luxury.png', '[\"AC\", \"Bottle Water\", \"Music System\", \"Premium Seats\", \"Charging Point\"]', 'Premium luxury sedan for comfortable rides.', 1)";
+                        
+                        if ($conn->query($defaultData)) {
+                            $messages[] = "Added default data to vehicle_types table";
+                        } else {
+                            $messages[] = "Failed to add default data to vehicle_types table: " . $conn->error;
                         }
                     }
                 } else {

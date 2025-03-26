@@ -55,6 +55,38 @@ try {
     // Ensure tables exist
     ensureFareTables($conn);
     
+    // Check if vehicle exists in vehicle_types
+    $checkVehicleQuery = "SELECT id FROM vehicle_types WHERE vehicle_id = ?";
+    $stmt = $conn->prepare($checkVehicleQuery);
+    
+    if (!$stmt) {
+        throw new Exception("Failed to prepare statement: " . $conn->error);
+    }
+    
+    $stmt->bind_param("s", $vehicleId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows === 0) {
+        // Vehicle doesn't exist, let's insert it
+        $insertVehicleQuery = "INSERT INTO vehicle_types (vehicle_id, name, capacity, luggage_capacity, ac, is_active) 
+                              VALUES (?, ?, ?, ?, 1, 1)";
+        $stmt = $conn->prepare($insertVehicleQuery);
+        
+        if (!$stmt) {
+            throw new Exception("Failed to prepare vehicle insert statement: " . $conn->error);
+        }
+        
+        $name = isset($_REQUEST['name']) ? $_REQUEST['name'] : ucfirst($vehicleId);
+        $capacity = isset($_REQUEST['capacity']) ? intval($_REQUEST['capacity']) : 4;
+        $luggageCapacity = isset($_REQUEST['luggageCapacity']) ? intval($_REQUEST['luggageCapacity']) : 2;
+        
+        $stmt->bind_param("ssii", $vehicleId, $name, $capacity, $luggageCapacity);
+        $stmt->execute();
+        
+        $response['details']['vehicle_created'] = true;
+    }
+    
     // Update fares based on trip type
     switch ($tripType) {
         case 'outstation':
@@ -87,6 +119,31 @@ exit();
  * Ensure all fare tables exist in the database
  */
 function ensureFareTables($conn) {
+    // Check if vehicle_types table exists
+    $result = $conn->query("SHOW TABLES LIKE 'vehicle_types'");
+    if ($result->num_rows == 0) {
+        // Create vehicle_types table
+        $sql = "CREATE TABLE vehicle_types (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            vehicle_id VARCHAR(50) NOT NULL,
+            name VARCHAR(100) NOT NULL,
+            capacity INT NOT NULL DEFAULT 4,
+            luggage_capacity INT NOT NULL DEFAULT 2,
+            ac TINYINT(1) NOT NULL DEFAULT 1,
+            image VARCHAR(255),
+            amenities TEXT,
+            description TEXT,
+            is_active TINYINT(1) NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY vehicle_id (vehicle_id)
+        ) ENGINE=InnoDB;";
+        
+        if (!$conn->query($sql)) {
+            throw new Exception("Error creating vehicle_types table: " . $conn->error);
+        }
+    }
+    
     // Check if outstation_fares table exists
     $result = $conn->query("SHOW TABLES LIKE 'outstation_fares'");
     if ($result->num_rows == 0) {
@@ -164,15 +221,22 @@ function ensureFareTables($conn) {
  */
 function updateOutstationFares($conn, $vehicleId, $data) {
     // Get parameters from request
-    $basePrice = isset($data['basePrice']) ? (float)$data['basePrice'] : 0;
-    $pricePerKm = isset($data['pricePerKm']) ? (float)$data['pricePerKm'] : 0;
+    $basePrice = isset($data['basePrice']) ? (float)$data['basePrice'] : 
+                (isset($data['oneWayBasePrice']) ? (float)$data['oneWayBasePrice'] : 0);
+    
+    $pricePerKm = isset($data['pricePerKm']) ? (float)$data['pricePerKm'] : 
+                 (isset($data['oneWayPricePerKm']) ? (float)$data['oneWayPricePerKm'] : 0);
+    
     $nightHaltCharge = isset($data['nightHaltCharge']) ? (float)$data['nightHaltCharge'] : 
                        (isset($data['nightHalt']) ? (float)$data['nightHalt'] : 0);
+    
     $driverAllowance = isset($data['driverAllowance']) ? (float)$data['driverAllowance'] : 0;
+    
     $roundTripBasePrice = isset($data['roundTripBasePrice']) ? (float)$data['roundTripBasePrice'] : 0;
+    
     $roundTripPricePerKm = isset($data['roundTripPricePerKm']) ? (float)$data['roundTripPricePerKm'] : 0;
     
-    // Check if vehicle already exists
+    // Check if vehicle already exists in outstation_fares
     $stmt = $conn->prepare("SELECT id FROM outstation_fares WHERE vehicle_id = ?");
     $stmt->bind_param("s", $vehicleId);
     $stmt->execute();
@@ -239,7 +303,7 @@ function updateLocalFares($conn, $vehicleId, $data) {
     $extraKm = isset($data['extraKm']) ? (float)$data['extraKm'] : 0;
     $extraHour = isset($data['extraHour']) ? (float)$data['extraHour'] : 0;
     
-    // Check if vehicle already exists
+    // Check if vehicle already exists in local_package_fares
     $stmt = $conn->prepare("SELECT id FROM local_package_fares WHERE vehicle_id = ?");
     $stmt->bind_param("s", $vehicleId);
     $stmt->execute();
@@ -306,7 +370,7 @@ function updateAirportFares($conn, $vehicleId, $data) {
     $tier4Price = isset($data['tier4Price']) ? (float)$data['tier4Price'] : 0;
     $extraKmCharge = isset($data['extraKmCharge']) ? (float)$data['extraKmCharge'] : 0;
     
-    // Check if vehicle already exists
+    // Check if vehicle already exists in airport_transfer_fares
     $stmt = $conn->prepare("SELECT id FROM airport_transfer_fares WHERE vehicle_id = ?");
     $stmt->bind_param("s", $vehicleId);
     $stmt->execute();
@@ -355,7 +419,7 @@ function updateAirportFares($conn, $vehicleId, $data) {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         
         $stmt->bind_param(
-            "sdddddddd",
+            "sdddddddd", 
             $vehicleId, 
             $basePrice, 
             $pricePerKm, 
