@@ -10,10 +10,7 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
-// Include the db_setup script
-require_once 'db_setup.php';
-
-// Process additional parameters
+// Process parameters
 $force = isset($_GET['force']) && $_GET['force'] === 'true';
 $verbose = isset($_GET['verbose']) && $_GET['verbose'] === 'true';
 
@@ -25,7 +22,7 @@ $tablesCreated = [];
 $tablesFailed = [];
 
 try {
-    // Connect to database again to verify tables
+    // Connect to database
     require_once '../../config.php';
     $conn = getDbConnection();
     
@@ -42,23 +39,23 @@ try {
         'airport_transfer_fares' => [
             'vehicle_id' => 'VARCHAR(50) NOT NULL',
             'base_price' => 'DECIMAL(10,2) NOT NULL DEFAULT 0',
-            'price_per_km' => 'DECIMAL(10,2) NOT NULL DEFAULT 0',
-            'driver_allowance' => 'DECIMAL(10,2) NOT NULL DEFAULT 0',
+            'price_per_km' => 'DECIMAL(5,2) NOT NULL DEFAULT 0',
             'pickup_price' => 'DECIMAL(10,2) NOT NULL DEFAULT 0',
             'drop_price' => 'DECIMAL(10,2) NOT NULL DEFAULT 0',
             'tier1_price' => 'DECIMAL(10,2) NOT NULL DEFAULT 0',
             'tier2_price' => 'DECIMAL(10,2) NOT NULL DEFAULT 0',
             'tier3_price' => 'DECIMAL(10,2) NOT NULL DEFAULT 0',
-            'tier4_price' => 'DECIMAL(10,2) NOT NULL DEFAULT 0'
+            'tier4_price' => 'DECIMAL(10,2) NOT NULL DEFAULT 0',
+            'extra_km_charge' => 'DECIMAL(5,2) NOT NULL DEFAULT 0'
         ],
         'outstation_fares' => [
             'vehicle_id' => 'VARCHAR(50) NOT NULL',
             'base_price' => 'DECIMAL(10,2) NOT NULL DEFAULT 0',
             'price_per_km' => 'DECIMAL(5,2) NOT NULL DEFAULT 0',
+            'night_halt_charge' => 'DECIMAL(10,2) NOT NULL DEFAULT 0',
             'driver_allowance' => 'DECIMAL(10,2) NOT NULL DEFAULT 0',
-            'night_halt' => 'DECIMAL(10,2) NOT NULL DEFAULT 0',
-            'round_trip_base_price' => 'DECIMAL(10,2) NOT NULL DEFAULT 0',
-            'round_trip_price_per_km' => 'DECIMAL(5,2) NOT NULL DEFAULT 0'
+            'roundtrip_base_price' => 'DECIMAL(10,2) DEFAULT 0',
+            'roundtrip_price_per_km' => 'DECIMAL(5,2) DEFAULT 0'
         ],
         'drivers' => [
             'name' => 'VARCHAR(100) NOT NULL',
@@ -72,7 +69,7 @@ try {
     foreach ($requiredTables as $tableName => $columns) {
         // Check if table exists
         $tableResult = $conn->query("SHOW TABLES LIKE '$tableName'");
-        $tableExists = $tableResult->num_rows > 0;
+        $tableExists = $tableResult && $tableResult->num_rows > 0;
         
         $createTable = false;
         
@@ -86,7 +83,7 @@ try {
                 // Check if table has all required columns
                 $columnResult = $conn->query("SHOW COLUMNS FROM $tableName");
                 $existingColumns = [];
-                while ($row = $columnResult->fetch_assoc()) {
+                while ($columnResult && $row = $columnResult->fetch_assoc()) {
                     $existingColumns[] = $row['Field'];
                 }
                 
@@ -144,6 +141,50 @@ try {
                 if ($result) {
                     $messages[] = "Successfully created table $tableName";
                     $tablesCreated[] = $tableName;
+                    
+                    // Add sample data for newly created tables
+                    if ($tableName == 'outstation_fares') {
+                        $defaultData = "INSERT IGNORE INTO outstation_fares (vehicle_id, base_price, price_per_km, night_halt_charge, driver_allowance, 
+                                    roundtrip_base_price, roundtrip_price_per_km) VALUES
+                        ('sedan', 4200, 14, 700, 250, 4000, 12),
+                        ('ertiga', 5400, 18, 1000, 250, 5000, 15),
+                        ('innova_crysta', 6000, 20, 1000, 250, 5600, 17),
+                        ('tempo', 9000, 22, 1500, 300, 8500, 19),
+                        ('luxury', 10500, 25, 1500, 300, 10000, 22)";
+                        
+                        if ($conn->query($defaultData)) {
+                            $messages[] = "Added default data to outstation_fares table";
+                        } else {
+                            $messages[] = "Failed to add default data to outstation_fares table: " . $conn->error;
+                        }
+                    } else if ($tableName == 'airport_transfer_fares') {
+                        $defaultData = "INSERT IGNORE INTO airport_transfer_fares (vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
+                                        tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge) VALUES
+                        ('sedan', 3000, 12, 800, 800, 600, 800, 1000, 1200, 12),
+                        ('ertiga', 3500, 15, 1000, 1000, 800, 1000, 1200, 1400, 15),
+                        ('innova_crysta', 4000, 17, 1200, 1200, 1000, 1200, 1400, 1600, 17),
+                        ('tempo', 6000, 19, 2000, 2000, 1600, 1800, 2000, 2500, 19),
+                        ('luxury', 7000, 22, 2500, 2500, 2000, 2200, 2500, 3000, 22)";
+                        
+                        if ($conn->query($defaultData)) {
+                            $messages[] = "Added default data to airport_transfer_fares table";
+                        } else {
+                            $messages[] = "Failed to add default data to airport_transfer_fares table: " . $conn->error;
+                        }
+                    } else if ($tableName == 'local_package_fares') {
+                        $defaultData = "INSERT IGNORE INTO local_package_fares (vehicle_id, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour) VALUES
+                        ('sedan', 1200, 2200, 2500, 14, 250),
+                        ('ertiga', 1500, 2700, 3000, 18, 250),
+                        ('innova_crysta', 1800, 3000, 3500, 20, 250),
+                        ('tempo', 3000, 4500, 5500, 22, 300),
+                        ('luxury', 3500, 5500, 6500, 25, 300)";
+                        
+                        if ($conn->query($defaultData)) {
+                            $messages[] = "Added default data to local_package_fares table";
+                        } else {
+                            $messages[] = "Failed to add default data to local_package_fares table: " . $conn->error;
+                        }
+                    }
                 } else {
                     $messages[] = "Failed to create table $tableName: " . $conn->error;
                     $tablesFailed[] = $tableName;
@@ -156,15 +197,15 @@ try {
     }
     
     // Final verification
-    $verified = empty($tablesFailed);
+    $verified = count($tablesFailed) === 0;
     
 } catch (Exception $e) {
     $messages[] = "Verification error: " . $e->getMessage();
     $verified = false;
 }
 
-// Output response in JSON
-echo json_encode([
+// Prepare the response
+$response = [
     'status' => $verified ? 'success' : 'error',
     'message' => $verified ? 'Database initialization completed successfully' : 'Database initialization completed with errors',
     'tables_verified' => $verified,
@@ -174,7 +215,10 @@ echo json_encode([
     'tables_failed' => $tablesFailed,
     'force_applied' => $force,
     'endpoint' => $_SERVER['REQUEST_URI']
-]);
+];
+
+// Output response in JSON
+echo json_encode($response, JSON_PRETTY_PRINT);
 
 // If this is a browser request, add a redirect button for easy navigation
 if (isset($_GET['html']) && $_GET['html'] === 'true') {
@@ -206,7 +250,7 @@ if (isset($_GET['html']) && $_GET['html'] === 'true') {
     if (!$verified) {
         echo '<a href="?force=true&verbose=true&html=true" style="background-color: #007bff; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px; margin-right: 10px;">Force Initialize</a>';
     }
-    echo '<a href="../fares/vehicles.php" style="background-color: #28a745; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px;">View Vehicles</a>';
+    echo '<a href="../fares.php" style="background-color: #28a745; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px;">View Fares</a>';
     echo '</div>';
     
     echo '</body></html>';

@@ -73,8 +73,12 @@ export function OutstationFareManagement() {
   const initializeDatabase = async () => {
     try {
       setIsInitializingDB(true);
+      setError(null);
       
-      const response = await fetch('/api/init-database', {
+      const apiUrl = `${apiBaseUrl}/api/init-database`;
+      console.log('Initializing database with API URL:', apiUrl);
+      
+      const response = await fetch(apiUrl, {
         method: 'GET',
         headers: {
           'X-Force-Refresh': 'true',
@@ -82,16 +86,31 @@ export function OutstationFareManagement() {
         }
       });
       
+      if (!response.ok) {
+        throw new Error(`Failed to initialize database: ${response.status} ${response.statusText}`);
+      }
+      
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('Non-JSON response received:', text);
+        throw new Error('Non-JSON response received from server');
+      }
+      
       const data = await response.json();
+      console.log('Database initialization response:', data);
       
       if (data.status === 'success') {
         toast.success("Database tables initialized successfully");
+        // Reload cab types after successful initialization
+        await loadData();
       } else {
         throw new Error(data.message || "Failed to initialize database");
       }
     } catch (err) {
       console.error("Error initializing database:", err);
-      toast.error("Failed to initialize database");
+      toast.error(`Failed to initialize database: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setError(err instanceof Error ? err : new Error('Failed to initialize database'));
     } finally {
       setIsInitializingDB(false);
     }
@@ -103,7 +122,7 @@ export function OutstationFareManagement() {
       setError(null);
       
       toast.info(`Updating fares for ${values.cabType}...`);
-      console.log('Starting directFareUpdate for outstation with vehicle ID', values.cabType);
+      console.log('Starting fare update for outstation with vehicle ID', values.cabType);
       
       // First attempt - use the directFareUpdate method with all fields
       try {
@@ -134,10 +153,10 @@ export function OutstationFareManagement() {
       } catch (updateError) {
         console.error('Error updating fares via directFareUpdate:', updateError);
         
-        console.log('Attempting to update fare via direct-fare-update.php');
-        // Try super-direct fetch approach with minimal headers and FormData
+        console.log('Attempting direct POST to fare-update.php');
+        
         try {
-          const endpoint = `${apiBaseUrl}/api/direct-fare-update.php?tripType=outstation&_t=${Date.now()}`;
+          const endpoint = `${apiBaseUrl}/api/fare-update.php`;
           
           // Create form data
           const formData = new FormData();
@@ -148,9 +167,10 @@ export function OutstationFareManagement() {
           formData.append('roundTripBasePrice', values.roundTripBasePrice.toString());
           formData.append('roundTripPricePerKm', values.roundTripPricePerKm.toString());
           formData.append('driverAllowance', values.driverAllowance.toString());
-          formData.append('nightHalt', values.nightHalt.toString());
+          formData.append('nightHaltCharge', values.nightHalt.toString());
           
-          console.log('Attempting to update fare via direct-fare-update.php');
+          console.log('Submitting form data:', Object.fromEntries(formData));
+          
           const response = await fetch(endpoint, {
             method: 'POST',
             body: formData,
@@ -160,13 +180,18 @@ export function OutstationFareManagement() {
             }
           });
           
+          if (!response.ok) {
+            const text = await response.text();
+            console.error('Error response:', text);
+            throw new Error(`Server returned ${response.status}: ${text}`);
+          }
+          
           const jsonResponse = await response.json();
           console.log('Direct fare update response:', jsonResponse);
           
           if (jsonResponse.status === 'success') {
             // Clear cache and trigger refresh events
             fareService.clearCache();
-            console.log('Clearing fare cache');
             
             // Dispatch events to refresh UI
             window.dispatchEvent(new CustomEvent('fare-cache-cleared'));
@@ -178,62 +203,12 @@ export function OutstationFareManagement() {
             }));
             
             toast.success(`Fares updated for ${values.cabType}`);
-            console.log('Successfully updated outstation fares:', jsonResponse);
           } else {
             throw new Error(jsonResponse.message || 'Update failed');
           }
         } catch (fetchError) {
-          console.error('Error with direct fare update fetch:', fetchError);
-          
-          // Last attempt - use direct-outstation-fares.php endpoint
-          try {
-            console.log('Trying to update vehicle using endpoint:', `${apiBaseUrl}/api/admin/direct-outstation-fares.php`);
-            const outstationEndpoint = `${apiBaseUrl}/api/admin/direct-outstation-fares.php?_t=${Date.now()}`;
-            
-            // Create form data
-            const formData = new FormData();
-            formData.append('vehicleId', values.cabType);
-            formData.append('basePrice', values.oneWayBasePrice.toString());
-            formData.append('pricePerKm', values.oneWayPricePerKm.toString());
-            formData.append('roundTripBasePrice', values.roundTripBasePrice.toString());
-            formData.append('roundTripPricePerKm', values.roundTripPricePerKm.toString());
-            formData.append('driverAllowance', values.driverAllowance.toString());
-            formData.append('nightHalt', values.nightHalt.toString());
-            
-            const response = await fetch(outstationEndpoint, {
-              method: 'POST',
-              body: formData,
-              headers: {
-                'X-Force-Refresh': 'true',
-                'Cache-Control': 'no-cache, no-store, must-revalidate'
-              }
-            });
-            
-            const jsonResponse = await response.json();
-            console.log('Vehicle updated successfully via', outstationEndpoint, jsonResponse);
-            
-            if (jsonResponse.status === 'success') {
-              // Clear cache and trigger refresh events
-              fareService.clearCache();
-              
-              // Dispatch events to refresh UI
-              window.dispatchEvent(new CustomEvent('fare-cache-cleared'));
-              window.dispatchEvent(new CustomEvent('trip-fares-updated', {
-                detail: { 
-                  timestamp: Date.now(),
-                  vehicleId: values.cabType
-                }
-              }));
-              
-              toast.success(`Fares updated for ${values.cabType}`);
-            } else {
-              throw new Error(jsonResponse.message || 'Update failed');
-            }
-          } catch (finalError) {
-            console.error('All update attempts failed:', finalError);
-            setError(finalError instanceof Error ? finalError : new Error('All update attempts failed'));
-            toast.error(`Failed to update fares after multiple attempts`);
-          }
+          console.error('Error with fare update:', fetchError);
+          throw fetchError;
         }
       }
     } catch (err) {
