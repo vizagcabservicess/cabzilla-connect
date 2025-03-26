@@ -1,4 +1,3 @@
-
 <?php
 require_once '../../config.php';
 
@@ -201,6 +200,10 @@ try {
             'ac' => (bool)($row['ac'] ?? 0),
             'isActive' => (bool)($row['is_active'] ?? 0),
             'db_id' => $row['db_id'] ?? null,
+            // Initialize fare objects
+            'outstationFares' => null,
+            'localPackageFares' => null,
+            'airportFares' => null
         ];
         
         // Only add active vehicles for non-admin requests or if specifically including inactive
@@ -229,8 +232,8 @@ try {
                     $vehicles[$vehicleId]['pricePerKm'] = floatval($row['price_per_km'] ?? 0);
                     $vehicles[$vehicleId]['nightHaltCharge'] = floatval($row['night_halt_charge'] ?? 0);
                     $vehicles[$vehicleId]['driverAllowance'] = floatval($row['driver_allowance'] ?? 0);
-                    $vehicles[$vehicleId]['roundTripBasePrice'] = floatval($row['roundtrip_base_price'] ?? 0);
-                    $vehicles[$vehicleId]['roundTripPricePerKm'] = floatval($row['roundtrip_price_per_km'] ?? 0);
+                    
+                    // Create the outstationFares object
                     $vehicles[$vehicleId]['outstationFares'] = [
                         'basePrice' => floatval($row['base_price'] ?? 0),
                         'pricePerKm' => floatval($row['price_per_km'] ?? 0),
@@ -255,6 +258,7 @@ try {
             while ($row = $result->fetch_assoc()) {
                 $vehicleId = $row['vehicle_id'];
                 if (isset($vehicles[$vehicleId])) {
+                    // Create the localPackageFares object
                     $vehicles[$vehicleId]['localPackageFares'] = [
                         'price4hrs40km' => floatval($row['price_4hrs_40km'] ?? 0),
                         'price8hrs80km' => floatval($row['price_8hrs_80km'] ?? 0),
@@ -278,6 +282,7 @@ try {
             while ($row = $result->fetch_assoc()) {
                 $vehicleId = $row['vehicle_id'];
                 if (isset($vehicles[$vehicleId])) {
+                    // Create the airportFares object
                     $vehicles[$vehicleId]['airportFares'] = [
                         'basePrice' => floatval($row['base_price'] ?? 0),
                         'pricePerKm' => floatval($row['price_per_km'] ?? 0),

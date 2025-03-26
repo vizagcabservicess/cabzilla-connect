@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -195,8 +194,8 @@ export function OutstationFareManagement() {
     try {
       setIsLoading(true);
       
-      // Fetch all vehicle data
-      const vehicles = await loadCabTypes(true);
+      // Fetch all vehicle data - fixing the error by removing the boolean argument
+      const vehicles = await loadCabTypes();
       const vehicle = vehicles.find(v => v.id === vehicleId);
       
       if (vehicle && vehicle.outstationFares) {

@@ -5,7 +5,7 @@ import { getVehicleData } from '@/services/vehicleDataService';
 let cabTypesCache: CabType[] = [];
 
 // Function to load cab types from API or cache
-export const loadCabTypes = async (): Promise<CabType[]> => {
+export const loadCabTypes = async (includeInactive: boolean = false): Promise<CabType[]> => {
   try {
     console.log('Attempting to load cab types...');
     
@@ -23,6 +23,10 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
           cabTypes.length = 0;
           cabTypes.push(...parsed);
           
+          // Filter out inactive ones if not including inactive
+          if (!includeInactive) {
+            return parsed.filter(vehicle => vehicle.isActive !== false);
+          }
           return parsed;
         }
       } catch (e) {
@@ -33,7 +37,7 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
 
     // If no cache or invalid cache, fetch from API
     console.log('Fetching vehicle types from API...');
-    const vehicles = await getVehicleData();
+    const vehicles = await getVehicleData(includeInactive);
     
     // Process the data to ensure it conforms to CabType
     const processedVehicles = vehicles.map(vehicle => ({
@@ -49,7 +53,11 @@ export const loadCabTypes = async (): Promise<CabType[]> => {
       ac: Boolean(vehicle.ac),
       nightHaltCharge: Number(vehicle.nightHaltCharge) || 0,
       driverAllowance: Number(vehicle.driverAllowance) || 0,
-      isActive: vehicle.isActive !== false // Default to active if not specified
+      isActive: vehicle.isActive !== false, // Default to active if not specified
+      // Add the fare-specific properties
+      outstationFares: vehicle.outstationFares,
+      localPackageFares: vehicle.localPackageFares,
+      airportFares: vehicle.airportFares
     }));
     
     console.log('Processed', processedVehicles.length, 'vehicle types');
@@ -232,7 +240,10 @@ export const reloadCabTypes = async (): Promise<CabType[]> => {
         ac: Boolean(vehicle.ac),
         nightHaltCharge: Number(vehicle.nightHaltCharge) || 0,
         driverAllowance: Number(vehicle.driverAllowance) || 0,
-        isActive: vehicle.isActive !== false // Default to active if not specified
+        isActive: vehicle.isActive !== false, // Default to active if not specified
+        outstationFares: vehicle.outstationFares,
+        localPackageFares: vehicle.localPackageFares,
+        airportFares: vehicle.airportFares
       }));
       
       // Store in sessionStorage for later use
@@ -282,7 +293,10 @@ export const reloadCabTypes = async (): Promise<CabType[]> => {
           ac: Boolean(vehicle.ac),
           nightHaltCharge: Number(vehicle.night_halt_charge) || 0,
           driverAllowance: Number(vehicle.driver_allowance) || 0,
-          isActive: vehicle.is_active !== false
+          isActive: vehicle.is_active !== false,
+          outstationFares: vehicle.outstationFares,
+          localPackageFares: vehicle.localPackageFares,
+          airportFares: vehicle.airportFares
         }));
         
         sessionStorage.setItem('cabTypes', JSON.stringify(processedVehicles));
