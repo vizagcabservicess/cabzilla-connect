@@ -14,46 +14,40 @@ RewriteRule ^api/init-database\.php$ api/admin/init-database.php [L,QSA]
 RewriteRule ^api/admin/init-database$ api/admin/init-database.php [L,QSA]
 RewriteRule ^api/admin/init-database\.php$ api/admin/init-database.php [L,QSA]
 
-# Direct all fare update endpoints to direct-fare-update.php - HIGHEST PRIORITY
-RewriteRule ^api/fare-update$ api/admin/direct-fare-update.php [L,QSA]
-RewriteRule ^api/fare-update\.php$ api/admin/direct-fare-update.php [L,QSA]
-RewriteRule ^api/admin/fare-update$ api/admin/direct-fare-update.php [L,QSA]
-RewriteRule ^api/admin/fare-update\.php$ api/admin/direct-fare-update.php [L,QSA]
+# HIGHEST PRIORITY - Ensure all fare updates go through our universal fare-update.php
+RewriteRule ^api/fare-update$ api/admin/fare-update.php [L,QSA]
+RewriteRule ^api/fare-update\.php$ api/admin/fare-update.php [L,QSA]
+RewriteRule ^api/admin/fare-update$ api/admin/fare-update.php [L,QSA]
+RewriteRule ^api/admin/fare-update\.php$ api/admin/fare-update.php [L,QSA]
 
-# Direct fare update endpoints
-RewriteRule ^api/direct-fare-update$ api/admin/direct-fare-update.php [L,QSA]
-RewriteRule ^api/direct-fare-update\.php$ api/admin/direct-fare-update.php [L,QSA]
-RewriteRule ^api/admin/direct-fare-update$ api/admin/direct-fare-update.php [L,QSA]
-RewriteRule ^api/admin/direct-fare-update\.php$ api/admin/direct-fare-update.php [L,QSA]
-
-# Outstation fare updates
-RewriteRule ^api/outstation-fares-update$ api/admin/direct-fare-update.php?tripType=outstation [L,QSA]
-RewriteRule ^api/outstation-fares-update\.php$ api/admin/direct-fare-update.php?tripType=outstation [L,QSA]
-RewriteRule ^api/admin/outstation-fares-update$ api/admin/direct-fare-update.php?tripType=outstation [L,QSA]
-RewriteRule ^api/admin/outstation-fares-update\.php$ api/admin/direct-fare-update.php?tripType=outstation [L,QSA]
-RewriteRule ^api/admin/outstation-fares-update/$ api/admin/direct-fare-update.php?tripType=outstation [L,QSA]
+# Route all fare-specific endpoints to our universal fare-update.php with appropriate parameters
+RewriteRule ^api/outstation-fares-update$ api/admin/fare-update.php?tripType=outstation [L,QSA]
+RewriteRule ^api/outstation-fares-update\.php$ api/admin/fare-update.php?tripType=outstation [L,QSA]
+RewriteRule ^api/admin/outstation-fares-update$ api/admin/fare-update.php?tripType=outstation [L,QSA]
+RewriteRule ^api/admin/outstation-fares-update\.php$ api/admin/fare-update.php?tripType=outstation [L,QSA]
+RewriteRule ^api/admin/outstation-fares-update/$ api/admin/fare-update.php?tripType=outstation [L,QSA]
 
 # Local fare updates
-RewriteRule ^api/local-fares-update$ api/admin/direct-fare-update.php?tripType=local [L,QSA]
-RewriteRule ^api/local-fares-update\.php$ api/admin/direct-fare-update.php?tripType=local [L,QSA]
-RewriteRule ^api/admin/local-fares-update$ api/admin/direct-fare-update.php?tripType=local [L,QSA]
-RewriteRule ^api/admin/local-fares-update\.php$ api/admin/direct-fare-update.php?tripType=local [L,QSA]
-RewriteRule ^api/admin/local-fares-update/$ api/admin/direct-fare-update.php?tripType=local [L,QSA]
+RewriteRule ^api/local-fares-update$ api/admin/fare-update.php?tripType=local [L,QSA]
+RewriteRule ^api/local-fares-update\.php$ api/admin/fare-update.php?tripType=local [L,QSA]
+RewriteRule ^api/admin/local-fares-update$ api/admin/fare-update.php?tripType=local [L,QSA]
+RewriteRule ^api/admin/local-fares-update\.php$ api/admin/fare-update.php?tripType=local [L,QSA]
+RewriteRule ^api/admin/local-fares-update/$ api/admin/fare-update.php?tripType=local [L,QSA]
 
 # Airport fare updates
-RewriteRule ^api/airport-fares-update$ api/admin/direct-fare-update.php?tripType=airport [L,QSA]
-RewriteRule ^api/airport-fares-update\.php$ api/admin/direct-fare-update.php?tripType=airport [L,QSA]
-RewriteRule ^api/admin/airport-fares-update$ api/admin/direct-fare-update.php?tripType=airport [L,QSA]
-RewriteRule ^api/admin/airport-fares-update\.php$ api/admin/direct-fare-update.php?tripType=airport [L,QSA]
-RewriteRule ^api/admin/airport-fares-update/$ api/admin/direct-fare-update.php?tripType=airport [L,QSA]
+RewriteRule ^api/airport-fares-update$ api/admin/fare-update.php?tripType=airport [L,QSA]
+RewriteRule ^api/airport-fares-update\.php$ api/admin/fare-update.php?tripType=airport [L,QSA]
+RewriteRule ^api/admin/airport-fares-update$ api/admin/fare-update.php?tripType=airport [L,QSA]
+RewriteRule ^api/admin/airport-fares-update\.php$ api/admin/fare-update.php?tripType=airport [L,QSA]
+RewriteRule ^api/admin/airport-fares-update/$ api/admin/fare-update.php?tripType=airport [L,QSA]
 
 # Direct specific fare endpoints
-RewriteRule ^api/admin/direct-outstation-fares$ api/admin/direct-fare-update.php?tripType=outstation [L,QSA]
-RewriteRule ^api/admin/direct-outstation-fares\.php$ api/admin/direct-fare-update.php?tripType=outstation [L,QSA]
-RewriteRule ^api/admin/direct-local-fares$ api/admin/direct-fare-update.php?tripType=local [L,QSA]
-RewriteRule ^api/admin/direct-local-fares\.php$ api/admin/direct-fare-update.php?tripType=local [L,QSA]
-RewriteRule ^api/admin/direct-airport-fares$ api/admin/direct-fare-update.php?tripType=airport [L,QSA]
-RewriteRule ^api/admin/direct-airport-fares\.php$ api/admin/direct-fare-update.php?tripType=airport [L,QSA]
+RewriteRule ^api/admin/direct-outstation-fares$ api/admin/fare-update.php?tripType=outstation [L,QSA]
+RewriteRule ^api/admin/direct-outstation-fares\.php$ api/admin/fare-update.php?tripType=outstation [L,QSA]
+RewriteRule ^api/admin/direct-local-fares$ api/admin/fare-update.php?tripType=local [L,QSA]
+RewriteRule ^api/admin/direct-local-fares\.php$ api/admin/fare-update.php?tripType=local [L,QSA]
+RewriteRule ^api/admin/direct-airport-fares$ api/admin/fare-update.php?tripType=airport [L,QSA]
+RewriteRule ^api/admin/direct-airport-fares\.php$ api/admin/fare-update.php?tripType=airport [L,QSA]
 
 # Direct endpoint for vehicle pricing
 RewriteRule ^api/admin/direct-vehicle-pricing$ api/admin/direct-vehicle-pricing.php [QSA,L]
