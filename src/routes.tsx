@@ -12,13 +12,13 @@ import ToursPage from './pages/ToursPage';
 import BookingEditPage from './pages/BookingEditPage';
 import ReceiptPage from './pages/ReceiptPage';
 import { VehicleManagement } from './pages/Admin/VehicleManagement';
-import Header from '@/components/Navbar';
+import { Navbar } from '@/components/Navbar';
 import Footer from '@/components/Footer';
 
 // Create a layout component that includes the Header and Footer
 const Layout = ({ children }: { children: React.ReactNode }) => (
   <>
-    <Header />
+    <Navbar />
     <div className="min-h-[calc(100vh-64px-200px)]">
       {children}
     </div>
