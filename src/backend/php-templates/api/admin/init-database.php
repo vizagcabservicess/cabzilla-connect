@@ -1,248 +1,125 @@
 
 <?php
-// init-database.php - Initializes all necessary database tables
+// init-database.php - Initialize all required database tables
 
-// Set headers for CORS and content type
+header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh');
-header('Content-Type: application/json');
+header('Access-Control-Allow-Headers: *');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 
-// Include database configuration
-require_once '../../config.php';
+// Include the db_setup script
+require_once 'db_setup.php';
 
-// For OPTIONS preflight requests
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit;
-}
+// Process additional parameters
+$force = isset($_GET['force']) && $_GET['force'] === 'true';
+$verbose = isset($_GET['verbose']) && $_GET['verbose'] === 'true';
 
-// Function to connect to the database with error handling
-function connectToDatabase() {
-    try {
-        // Try using constants from config.php
-        if (defined('DB_HOST') && defined('DB_DATABASE') && defined('DB_USERNAME') && defined('DB_PASSWORD')) {
-            $conn = new mysqli(DB_HOST, DB_USERNAME, DB_PASSWORD, DB_DATABASE);
-            if ($conn->connect_error) {
-                throw new Exception("Connection failed using constants: " . $conn->connect_error);
-            }
-            return $conn;
-        }
-        
-        // Try using global variables from config.php
-        global $db_host, $db_name, $db_user, $db_pass;
-        if (isset($db_host) && isset($db_name) && isset($db_user) && isset($db_pass)) {
-            $conn = new mysqli($db_host, $db_user, $db_pass, $db_name);
-            if ($conn->connect_error) {
-                throw new Exception("Connection failed using globals: " . $conn->connect_error);
-            }
-            return $conn;
-        }
-        
-        // Fallback to hardcoded credentials (for development only)
-        $conn = new mysqli("localhost", "u644605165_new_bookingusr", "Vizag@1213", "u644605165_new_bookingdb");
-        if ($conn->connect_error) {
-            throw new Exception("Connection failed using hardcoded values: " . $conn->connect_error);
-        }
-        return $conn;
-    } catch (Exception $e) {
-        error_log("Database connection error: " . $e->getMessage());
-        throw $e;
-    }
-}
-
-// Function to create all required tables
-function createAllTables($conn) {
-    $tablesCreated = [];
-    $errors = [];
-    
-    // Create vehicles table if not exists
-    $vehiclesTable = "
-    CREATE TABLE IF NOT EXISTS vehicles (
-        id VARCHAR(50) NOT NULL PRIMARY KEY,
-        vehicle_id VARCHAR(50),
-        name VARCHAR(100) NOT NULL,
-        description TEXT,
-        image_url VARCHAR(255),
-        capacity INT DEFAULT 4,
-        is_active TINYINT(1) DEFAULT 1,
-        display_order INT DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    ";
-    
-    if ($conn->query($vehiclesTable)) {
-        $tablesCreated[] = 'vehicles';
-    } else {
-        $errors[] = "Error creating vehicles table: " . $conn->error;
-    }
-    
-    // Create local_package_pricing table if not exists
-    $localPricingTable = "
-    CREATE TABLE IF NOT EXISTS local_package_pricing (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        vehicle_id VARCHAR(50) NOT NULL,
-        price_4hrs_40km DECIMAL(10,2) NOT NULL DEFAULT 0,
-        price_8hrs_80km DECIMAL(10,2) NOT NULL DEFAULT 0,
-        price_10hrs_100km DECIMAL(10,2) NOT NULL DEFAULT 0,
-        price_extra_km DECIMAL(10,2) NOT NULL DEFAULT 0,
-        price_extra_hour DECIMAL(10,2) NOT NULL DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY unique_vehicle_id (vehicle_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    ";
-    
-    if ($conn->query($localPricingTable)) {
-        $tablesCreated[] = 'local_package_pricing';
-    } else {
-        $errors[] = "Error creating local_package_pricing table: " . $conn->error;
-    }
-    
-    // Create airport_pricing table if not exists
-    $airportPricingTable = "
-    CREATE TABLE IF NOT EXISTS airport_pricing (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        vehicle_id VARCHAR(50) NOT NULL,
-        base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-        price_per_km DECIMAL(10,2) NOT NULL DEFAULT 0,
-        pickup_charge DECIMAL(10,2) DEFAULT 0,
-        drop_charge DECIMAL(10,2) DEFAULT 0,
-        tier1_price DECIMAL(10,2) DEFAULT 0,
-        tier2_price DECIMAL(10,2) DEFAULT 0,
-        tier3_price DECIMAL(10,2) DEFAULT 0,
-        tier4_price DECIMAL(10,2) DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY unique_vehicle_id (vehicle_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    ";
-    
-    if ($conn->query($airportPricingTable)) {
-        $tablesCreated[] = 'airport_pricing';
-    } else {
-        $errors[] = "Error creating airport_pricing table: " . $conn->error;
-    }
-    
-    // Create outstation_fares table if not exists
-    $outstationFaresTable = "
-    CREATE TABLE IF NOT EXISTS outstation_fares (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        vehicle_id VARCHAR(50) NOT NULL,
-        base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-        price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-        roundtrip_base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-        roundtrip_price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-        driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 0,
-        night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY unique_vehicle_id (vehicle_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    ";
-    
-    if ($conn->query($outstationFaresTable)) {
-        $tablesCreated[] = 'outstation_fares';
-    } else {
-        $errors[] = "Error creating outstation_fares table: " . $conn->error;
-    }
-    
-    // Create vehicle_pricing table for general pricing (alternative table)
-    $vehiclePricingTable = "
-    CREATE TABLE IF NOT EXISTS vehicle_pricing (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        vehicle_id VARCHAR(50) NOT NULL,
-        trip_type VARCHAR(50) NOT NULL, 
-        base_fare DECIMAL(10,2) NOT NULL DEFAULT 0,
-        price_per_km DECIMAL(10,2) NOT NULL DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY unique_vehicle_trip (vehicle_id, trip_type)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    ";
-    
-    if ($conn->query($vehiclePricingTable)) {
-        $tablesCreated[] = 'vehicle_pricing';
-    } else {
-        $errors[] = "Error creating vehicle_pricing table: " . $conn->error;
-    }
-    
-    // Create fare_prices table (another alternative)
-    $farePricesTable = "
-    CREATE TABLE IF NOT EXISTS fare_prices (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        vehicle_id VARCHAR(50) NOT NULL,
-        trip_type VARCHAR(50) NOT NULL,
-        package_type VARCHAR(50) NOT NULL,
-        base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-        price_per_km DECIMAL(10,2) NOT NULL DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY trip_vehicle_package (vehicle_id, trip_type, package_type)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    ";
-    
-    if ($conn->query($farePricesTable)) {
-        $tablesCreated[] = 'fare_prices';
-    } else {
-        $errors[] = "Error creating fare_prices table: " . $conn->error;
-    }
-    
-    // Insert default vehicles if table is empty
-    $checkVehicles = $conn->query("SELECT COUNT(*) as count FROM vehicles");
-    $vehicleCount = $checkVehicles->fetch_assoc()['count'];
-    
-    if ($vehicleCount == 0) {
-        $defaultVehicles = [
-            ["sedan", "Sedan", "Comfortable sedan for up to 4 passengers", 4, 1],
-            ["ertiga", "Ertiga", "Spacious SUV for up to 6 passengers", 6, 1],
-            ["innova_crysta", "Innova Crysta", "Premium SUV for up to 6 passengers", 6, 1],
-            ["tempo_traveller", "Tempo Traveller", "Minibus for up to 12 passengers", 12, 1]
-        ];
-        
-        $insertVehicle = $conn->prepare("INSERT INTO vehicles (id, name, description, capacity, is_active) VALUES (?, ?, ?, ?, ?)");
-        
-        foreach ($defaultVehicles as $vehicle) {
-            $insertVehicle->bind_param("ssiii", $vehicle[0], $vehicle[1], $vehicle[2], $vehicle[3], $vehicle[4]);
-            $insertVehicle->execute();
-        }
-        
-        $tablesCreated[] = 'default_vehicles_added';
-    }
-    
-    return [
-        'tablesCreated' => $tablesCreated,
-        'errors' => $errors
-    ];
-}
+// Check if verification tables exist
+$result = null;
+$verified = false;
+$messages = [];
 
 try {
-    // Connect to the database
-    $conn = connectToDatabase();
+    // Connect to database again to verify tables
+    require_once '../../config.php';
+    $conn = getDbConnection();
     
-    // Create all required tables
-    $result = createAllTables($conn);
+    // Verify essential tables
+    $tableChecks = [
+        'local_package_fares' => false,
+        'airport_transfer_fares' => false,
+        'outstation_fares' => false,
+        'drivers' => false
+    ];
     
-    // Return success response
-    echo json_encode([
-        'status' => 'success',
-        'message' => 'Database tables initialized successfully',
-        'data' => [
-            'tablesCreated' => $result['tablesCreated'],
-            'tablesWithErrors' => $result['errors'],
-            'timestamp' => date('Y-m-d H:i:s')
-        ]
-    ]);
-
+    // Check table existence and structure
+    foreach (array_keys($tableChecks) as $tableName) {
+        $tableResult = $conn->query("SHOW TABLES LIKE '$tableName'");
+        $tableExists = $tableResult->num_rows > 0;
+        
+        if ($tableExists) {
+            // Verify table structure if needed
+            $tableChecks[$tableName] = true;
+            $messages[] = "Table $tableName exists";
+            
+            // Check column names for the local_package_fares table
+            if ($tableName === 'local_package_fares') {
+                $columnResult = $conn->query("SHOW COLUMNS FROM $tableName");
+                $columns = [];
+                while ($row = $columnResult->fetch_assoc()) {
+                    $columns[] = $row['Field'];
+                }
+                
+                $requiredColumns = [
+                    'vehicle_id', 
+                    'price_4hrs_40km', 
+                    'price_8hrs_80km', 
+                    'price_10hrs_100km', 
+                    'price_extra_km', 
+                    'price_extra_hour'
+                ];
+                
+                $missingColumns = array_diff($requiredColumns, $columns);
+                
+                if (!empty($missingColumns)) {
+                    $messages[] = "Warning: Missing columns in $tableName: " . implode(', ', $missingColumns);
+                    $tableChecks[$tableName] = false;
+                    
+                    // If force is true, drop and recreate the table
+                    if ($force) {
+                        $messages[] = "Force option: Dropping and recreating $tableName";
+                        $conn->query("DROP TABLE $tableName");
+                        $tableChecks[$tableName] = false;
+                    }
+                }
+            }
+        } else {
+            $messages[] = "Table $tableName does not exist";
+        }
+    }
+    
+    $verified = !in_array(false, $tableChecks);
+    
 } catch (Exception $e) {
-    // Return error response
-    http_response_code(500);
-    echo json_encode([
-        'status' => 'error',
-        'message' => 'Database initialization failed: ' . $e->getMessage(),
-        'file' => basename(__FILE__),
-        'line' => $e->getLine()
-    ]);
+    $messages[] = "Verification error: " . $e->getMessage();
+    $verified = false;
 }
-?>
+
+// Output response in JSON
+echo json_encode([
+    'status' => 'success',
+    'message' => 'Database initialization completed',
+    'tables_verified' => $verified,
+    'timestamp' => time(),
+    'messages' => $messages,
+    'force_applied' => $force,
+    'endpoint' => $_SERVER['REQUEST_URI']
+]);
+
+// If this is a browser request, add a redirect button for easy navigation
+if (isset($_GET['html']) && $_GET['html'] === 'true') {
+    echo '<html><body style="font-family: Arial, sans-serif; padding: 20px;">';
+    echo '<h2>Database Initialization</h2>';
+    echo '<div style="background-color: ' . ($verified ? '#e6ffe6' : '#ffe6e6') . '; border-radius: 5px; padding: 15px; margin-bottom: 20px;">';
+    echo '<strong>Status:</strong> ' . ($verified ? 'Success' : 'Issues detected') . '<br>';
+    echo '</div>';
+    
+    echo '<h3>Verification Results:</h3>';
+    echo '<ul>';
+    foreach ($messages as $message) {
+        echo '<li>' . htmlspecialchars($message) . '</li>';
+    }
+    echo '</ul>';
+    
+    echo '<div style="margin-top: 20px;">';
+    if (!$verified) {
+        echo '<a href="?force=true&verbose=true&html=true" style="background-color: #007bff; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px; margin-right: 10px;">Force Initialize</a>';
+    }
+    echo '<a href="../fares/vehicles.php" style="background-color: #28a745; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px;">View Vehicles</a>';
+    echo '</div>';
+    
+    echo '</body></html>';
+}

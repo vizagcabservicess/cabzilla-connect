@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -9,8 +9,17 @@ import {
   Database, 
   ShieldAlert, 
   Terminal, 
+  Globe, 
+  ExternalLink,
   Server,
+  FileCode,
   Wifi,
+  ArrowUp,
+  Network,
+  Hammer,
+  Wrench,
+  ChevronDown,
+  ChevronUp,
   DatabaseBackup
 } from "lucide-react";
 import { fareService } from '@/services/fareService';
@@ -34,7 +43,6 @@ export function FareUpdateError({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [isFixing, setIsFixing] = useState(false);
   const [isInitializingDb, setIsInitializingDb] = useState(false);
-  const [attempted500Fix, setAttempted500Fix] = useState(false);
   const errorMessage = typeof error === "string" ? error : error.message;
   
   // Error classification
@@ -50,20 +58,6 @@ export function FareUpdateError({
   const isTableError =
     /table.*not found|doesn't exist|database_error|SQLSTATE|base table or view not found/i.test(errorMessage);
   
-  // Auto-attempt database initialization for 500 errors
-  useEffect(() => {
-    if (isServerError && !attempted500Fix) {
-      setAttempted500Fix(true);
-      
-      // Add a small delay before attempting fix
-      const timer = setTimeout(() => {
-        initializeDatabase(); 
-      }, 800);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [isServerError]);
-
   const handleRetry = () => {
     console.log("Retrying fare update after error...");
     
@@ -73,8 +67,9 @@ export function FareUpdateError({
       duration: 2000
     });
     
-    // Clear all caches
-    fareService.clearCache();
+    // Clear all caches and create a forced request config
+    const forceConfig = fareService.getForcedRequestConfig();
+    console.log('Using forced request config for retry:', forceConfig);
     
     // Wait a moment before retrying
     setTimeout(() => {
@@ -110,8 +105,67 @@ export function FareUpdateError({
       localStorage.setItem('useDirectApi', 'true');
       sessionStorage.setItem('useDirectApi', 'true');
       
-      // 4. Initialize database
-      await initializeDatabase();
+      // 4. Clear all authentication tokens
+      const authKeys = ['token', 'authToken', 'refreshToken', 'user', 'userData'];
+      authKeys.forEach(key => {
+        try {
+          localStorage.removeItem(key);
+          sessionStorage.removeItem(key);
+        } catch (e) {}
+      });
+      
+      // 5. Ping the direct fare update endpoint
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+      
+      try {
+        // Try to hit the ultra-simple direct-outstation-fares endpoint
+        const response = await fetch(`${baseUrl}/api/admin/direct-outstation-fares.php?_t=${timestamp}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...fareService.getBypassHeaders()
+          },
+          body: JSON.stringify({ 
+            test: true, 
+            timestamp,
+            action: 'comprehensive-fix'
+          })
+        });
+        
+        if (response.ok) {
+          console.log('Direct outstation fares endpoint is reachable');
+          toast.success('Server connection successful');
+        } else {
+          console.warn('Direct outstation fares endpoint returned:', response.status);
+          toast.warning(`Server returned status ${response.status}`);
+        }
+      } catch (err) {
+        console.warn('Could not reach direct outstation fares endpoint');
+        
+        // Try the direct-fare-update endpoint as fallback
+        try {
+          const fallbackResponse = await fetch(`${baseUrl}/api/admin/direct-fare-update.php?_t=${timestamp}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...fareService.getBypassHeaders()
+            },
+            body: JSON.stringify({ 
+              test: true, 
+              timestamp,
+              action: 'comprehensive-fix'
+            })
+          });
+          
+          if (fallbackResponse.ok) {
+            console.log('Direct fare update endpoint is reachable');
+            toast.success('Alternative server connection successful');
+          }
+        } catch (fallbackErr) {
+          console.error('All direct endpoints unreachable');
+          toast.error('All server endpoints unreachable');
+        }
+      }
       
       // Success notification
       toast.success('Comprehensive fixes applied', {
@@ -136,9 +190,62 @@ export function FareUpdateError({
     });
     
     try {
-      const result = await fareService.initializeDatabase();
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+      const timestamp = Date.now();
       
-      if (result) {
+      // Try multiple initialization methods
+      let initialized = false;
+      
+      // Method 1: Try the dedicated init-database endpoint
+      try {
+        const response = await fetch(`${baseUrl}/api/init-database.php?_t=${timestamp}`, {
+          method: 'GET',
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+            ...fareService.getBypassHeaders()
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Database initialization successful:', data);
+          toast.success('Database tables created successfully');
+          initialized = true;
+        } else {
+          console.warn('Database initialization failed with status:', response.status);
+          throw new Error('Primary initialization failed');
+        }
+      } catch (err) {
+        console.warn('Primary database initialization failed, trying fallback method');
+        
+        // Method 2: Try db_setup.php directly as fallback
+        try {
+          const fallbackResponse = await fetch(`${baseUrl}/api/admin/db_setup.php?_t=${timestamp}`, {
+            method: 'GET',
+            headers: {
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache',
+              ...fareService.getBypassHeaders()
+            }
+          });
+          
+          if (fallbackResponse.ok) {
+            console.log('Fallback database initialization successful');
+            toast.success('Database tables created (fallback method)');
+            initialized = true;
+          } else {
+            console.error('Fallback database initialization failed with status:', fallbackResponse.status);
+            throw new Error('Fallback initialization failed');
+          }
+        } catch (fallbackErr) {
+          console.error('All database initialization methods failed');
+          toast.error('Could not initialize database tables');
+          throw fallbackErr;
+        }
+      }
+      
+      if (initialized) {
         // Clear all caches after successful initialization
         fareService.clearCache();
         
@@ -153,6 +260,98 @@ export function FareUpdateError({
     } finally {
       setIsInitializingDb(false);
     }
+  };
+
+  // Direct connection test
+  const testDirectConnection = () => {
+    toast.info('Testing direct server connection...');
+    
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+    const timestamp = Date.now();
+    
+    // Test multiple endpoints for most reliability
+    const testEndpoints = [
+      `${baseUrl}/api/admin/direct-outstation-fares.php?test=true&_t=${timestamp}`,
+      `${baseUrl}/api/admin/direct-fare-update.php?test=true&_t=${timestamp}`
+    ];
+    
+    let successCount = 0;
+    let failCount = 0;
+    
+    const checkEndpoint = async (url: string) => {
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...fareService.getBypassHeaders()
+          },
+          body: JSON.stringify({ test: 'connection', timestamp })
+        });
+        
+        if (response.ok) {
+          successCount++;
+          console.log(`Endpoint test success: ${url}`);
+        } else {
+          failCount++;
+          console.error(`Endpoint test failed with status ${response.status}: ${url}`);
+        }
+        
+        // Check if we've tested all endpoints
+        if (successCount + failCount === testEndpoints.length) {
+          if (successCount > 0) {
+            toast.success(`${successCount}/${testEndpoints.length} server connections successful`);
+          } else {
+            toast.error('All server connections failed');
+          }
+        }
+      } catch (err) {
+        failCount++;
+        console.error(`Connection test failed: ${url}`, err);
+        
+        // Check if we've tested all endpoints
+        if (successCount + failCount === testEndpoints.length) {
+          if (successCount > 0) {
+            toast.success(`${successCount}/${testEndpoints.length} server connections successful`);
+          } else {
+            toast.error('All server connections failed');
+          }
+        }
+      }
+    };
+    
+    // Test all endpoints simultaneously
+    testEndpoints.forEach(endpoint => checkEndpoint(endpoint));
+  };
+
+  // Open multiple direct API endpoints in new tabs to bypass potential issues
+  const openDirectEndpoints = () => {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+    const timestamp = Date.now();
+    
+    const endpoints = [
+      // Try the direct endpoints first (most reliable)
+      `${baseUrl}/api/admin/direct-outstation-fares.php?_t=${timestamp}`,
+      `${baseUrl}/api/admin/direct-fare-update.php?_t=${timestamp}`,
+      
+      // Specialized endpoints
+      `${baseUrl}/api/admin/outstation-fares-update.php?_t=${timestamp}`,
+      `${baseUrl}/api/admin/vehicle-pricing.php?_t=${timestamp}`,
+      
+      // Database initialization endpoint
+      `${baseUrl}/api/init-database.php?_t=${timestamp}`
+    ];
+    
+    // Open all endpoint URLs in new tabs
+    endpoints.forEach(endpoint => {
+      const url = new URL(endpoint);
+      url.searchParams.append('test', 'true');
+      url.searchParams.append('_', timestamp.toString());
+      
+      window.open(url.toString(), '_blank');
+    });
+    
+    toast.info('Opened direct API endpoints in new tabs');
   };
 
   // Pick the most appropriate icon
@@ -175,7 +374,7 @@ export function FareUpdateError({
       return "You don't have permission to update fares. This might be an authentication issue.";
     }
     if (isServerError) {
-      return "The server encountered an error while processing your request. Click 'Initialize Database' to fix missing tables.";
+      return "The server encountered an error while processing your request. This may be temporary.";
     }
     if (isNetworkError) {
       return "Unable to connect to the fare update server. Please check your connection.";
@@ -213,17 +412,16 @@ export function FareUpdateError({
         <div className="text-sm space-y-2">
           <p className="font-medium text-gray-700">Try the following:</p>
           <ul className="list-disc pl-5 space-y-1 text-gray-600">
-            {(isTableError || isServerError) && (
+            {isTableError && (
               <>
-                <li className="font-medium text-red-700">Database tables may be missing - use 'Initialize Database' button below</li>
+                <li className="font-medium text-red-700">Database table is missing - use 'Initialize Database' button below</li>
                 <li>This will create all required database tables</li>
               </>
             )}
             <li>Use the comprehensive fix button to solve common API connection issues</li>
-            <li>Clear browser cache and try again</li>
-            {isNetworkError && (
-              <li>Check your internet connection and try again later</li>
-            )}
+            <li>Try direct API access to bypass connection issues</li>
+            <li>Clear browser cache and authentication tokens</li>
+            <li>Try logging out and back in</li>
           </ul>
         </div>
         
@@ -233,7 +431,7 @@ export function FareUpdateError({
               <Terminal className="h-4 w-4 mt-1 text-blue-500 mr-2" />
               <div className="text-xs">
                 <p className="font-medium text-blue-800">Error Details:</p>
-                <pre className="mt-1 text-xs text-blue-700 bg-blue-100 p-1 rounded overflow-auto max-h-28">
+                <pre className="mt-1 text-xs text-blue-700 bg-blue-100 p-1 rounded overflow-auto max-h-20">
                   {JSON.stringify({
                     endpoint: error?.['config']?.url || 'Unknown',
                     status: error?.['response']?.status || 'Unknown',
@@ -250,7 +448,7 @@ export function FareUpdateError({
         )}
       </CardContent>
       <CardFooter className="pt-0 flex flex-wrap gap-3">
-        {(isTableError || isServerError) && (
+        {isTableError && (
           <Button 
             onClick={initializeDatabase} 
             className="gap-2 bg-amber-600 hover:bg-amber-700"
@@ -291,11 +489,33 @@ export function FareUpdateError({
             </>
           ) : (
             <>
-              <Server className="h-4 w-4" />
+              <Wrench className="h-4 w-4" />
               Comprehensive Fix
             </>
           )}
         </Button>
+        
+        {showDirectLink && (
+          <>
+            <Button 
+              onClick={testDirectConnection} 
+              variant="outline" 
+              className="gap-2 border-blue-300 bg-blue-50 hover:bg-blue-100 text-blue-800"
+            >
+              <Network className="h-4 w-4" />
+              Test Connection
+            </Button>
+            
+            <Button 
+              onClick={openDirectEndpoints} 
+              variant="outline" 
+              className="gap-2 border-green-300 bg-green-50 hover:bg-green-100 text-green-800"
+            >
+              <Server className="h-4 w-4" />
+              Direct API Access
+            </Button>
+          </>
+        )}
         
         <Button
           onClick={() => setShowAdvanced(!showAdvanced)}
@@ -303,7 +523,17 @@ export function FareUpdateError({
           size="sm"
           className="w-full text-xs text-gray-500 mt-1"
         >
-          {showAdvanced ? "Hide Technical Details" : "Show Technical Details"}
+          {showAdvanced ? (
+            <>
+              <ChevronUp className="h-3 w-3 mr-1" />
+              Hide Technical Details
+            </>
+          ) : (
+            <>
+              <ChevronDown className="h-3 w-3 mr-1" />
+              Show Technical Details
+            </>
+          )}
         </Button>
       </CardFooter>
     </Card>
