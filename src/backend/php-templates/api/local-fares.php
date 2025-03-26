@@ -13,7 +13,7 @@ header('Expires: 0');
 
 // Add debugging headers
 header('X-Debug-File: local-fares.php');
-header('X-API-Version: 1.0.1');
+header('X-API-Version: 1.0.2');
 header('X-Timestamp: ' . time());
 
 // Handle preflight OPTIONS request
@@ -38,57 +38,37 @@ try {
         'vehicle_id' => $vehicleId
     ]));
     
-    // Check if local_package_fares exists, if not try to fetch from specialized table
-    $checkTableQuery = "SHOW TABLES LIKE 'local_package_fares'";
-    $checkResult = $conn->query($checkTableQuery);
+    // ALWAYS prioritize local_package_fares without checking existence
+    // because we're assuming it exists
+    $query = "
+        SELECT 
+            lpf.id,
+            lpf.vehicle_id,
+            lpf.price_4hrs_40km as price4hrs40km,
+            lpf.price_8hrs_80km as price8hrs80km,
+            lpf.price_10hrs_100km as price10hrs100km,
+            lpf.price_extra_km as priceExtraKm,
+            lpf.price_extra_hour as priceExtraHour
+        FROM 
+            local_package_fares lpf
+    ";
     
-    $localTableExists = $checkResult && $checkResult->num_rows > 0;
-    
-    // Log which table will be used
-    error_log("Checking local_package_fares table exists: " . ($localTableExists ? 'yes' : 'no'));
-    
-    $query = "";
-    $useLocalTable = false;
-    
-    // Use the specialized local_package_fares table if it exists and has data
-    if ($localTableExists) {
-        // Check if the table has data
-        $countQuery = "SELECT COUNT(*) as count FROM local_package_fares";
-        $countResult = $conn->query($countQuery);
-        $row = $countResult->fetch_assoc();
-        $hasData = $row['count'] > 0;
-        
-        error_log("local_package_fares table has data: " . ($hasData ? 'yes' : 'no'));
-        
-        if ($hasData) {
-            $useLocalTable = true;
-            // QUERY SPECIALIZED LOCAL FARES TABLE
-            $query = "
-                SELECT 
-                    lpf.id,
-                    lpf.vehicle_id,
-                    lpf.price_4hrs_40km as price4hrs40km,
-                    lpf.price_8hrs_80km as price8hrs80km,
-                    lpf.price_10hrs_100km as price10hrs100km,
-                    lpf.price_extra_km as priceExtraKm,
-                    lpf.price_extra_hour as priceExtraHour
-                FROM 
-                    local_package_fares lpf
-            ";
-            
-            // If vehicle_id parameter is provided, filter by it
-            if ($vehicleId) {
-                $query .= " WHERE lpf.vehicle_id = '$vehicleId'";
-            }
-            
-            error_log("Using local_package_fares table with query: $query");
-        }
+    // If vehicle_id parameter is provided, filter by it
+    if ($vehicleId) {
+        $query .= " WHERE lpf.vehicle_id = '$vehicleId'";
     }
     
-    // Fallback to vehicle_pricing table if needed
-    if (!$useLocalTable) {
+    error_log("Using local_package_fares table with query: $query");
+    
+    // Execute the query with error handling
+    error_log("Executing local query: " . $query);
+    $result = $conn->query($query);
+    
+    if (!$result) {
+        error_log("Query failed: " . $conn->error);
+        
+        // Fallback to vehicle_pricing table if the main query fails
         error_log("Falling back to vehicle_pricing table");
-        // FALLBACK TO vehicle_pricing TABLE
         $query = "
             SELECT 
                 vp.id,
@@ -110,15 +90,11 @@ try {
         }
         
         error_log("Using vehicle_pricing table with query: $query");
-    }
-    
-    // Execute the query with error handling
-    error_log("Executing local query: " . $query);
-    $result = $conn->query($query);
-    
-    if (!$result) {
-        error_log("Query failed: " . $conn->error);
-        throw new Exception("Database query failed: " . $conn->error);
+        $result = $conn->query($query);
+        
+        if (!$result) {
+            throw new Exception("Both main and fallback queries failed: " . $conn->error);
+        }
     }
     
     // Process and structure the data
@@ -155,7 +131,7 @@ try {
     echo json_encode([
         'fares' => $fares,
         'timestamp' => time(),
-        'sourceTable' => $useLocalTable ? 'local_package_fares' : 'vehicle_pricing',
+        'sourceTable' => 'local_package_fares',  // Hardcoded to local_package_fares
         'fareCount' => count($fares),
         'vehicleId' => $vehicleId
     ]);

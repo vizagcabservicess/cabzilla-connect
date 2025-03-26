@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -56,9 +57,11 @@ export function OutstationFareManagement() {
       setIsLoading(true);
       setError(null);
       
+      // Clear fare caches to ensure fresh data
       fareService.clearCache();
       
-      const types = await loadCabTypes();
+      // Force refresh of cab types
+      const types = await loadCabTypes(true); // Added true to force refresh
       setCabTypes(types);
       
       setIsLoading(false);
@@ -73,37 +76,11 @@ export function OutstationFareManagement() {
       setIsInitializingDB(true);
       setError(null);
       
-      const apiUrl = `${apiBaseUrl}/api/admin/init-database.php`;
-      console.log('Initializing database with API URL:', apiUrl);
+      const result = await fareService.initializeDatabase(true);
+      console.log('Database initialization response:', result);
       
-      const response = await fetch(apiUrl, {
-        method: 'GET',
-        headers: {
-          'X-Force-Refresh': 'true',
-          'Cache-Control': 'no-cache'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to initialize database: ${response.status} ${response.statusText}`);
-      }
-      
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await response.text();
-        console.error('Non-JSON response received:', text);
-        throw new Error('Non-JSON response received from server');
-      }
-      
-      const data = await response.json();
-      console.log('Database initialization response:', data);
-      
-      if (data.status === 'success') {
-        toast.success("Database tables initialized successfully");
-        await loadData();
-      } else {
-        throw new Error(data.message || "Failed to initialize database");
-      }
+      toast.success("Database tables initialized successfully");
+      await loadData();
     } catch (err) {
       console.error("Error initializing database:", err);
       toast.error(`Failed to initialize database: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -122,7 +99,8 @@ export function OutstationFareManagement() {
       console.log('Starting fare update for outstation with vehicle ID', values.cabType);
       
       try {
-        await fareService.directFareUpdate('outstation', values.cabType, {
+        // Use the direct fare update method from fareService
+        const result = await fareService.directFareUpdate('outstation', values.cabType, {
           basePrice: values.oneWayBasePrice,
           pricePerKm: values.oneWayPricePerKm,
           roundTripBasePrice: values.roundTripBasePrice,
@@ -131,8 +109,12 @@ export function OutstationFareManagement() {
           nightHaltCharge: values.nightHalt,
         });
         
+        console.log('Fare update result:', result);
+        
+        // Clear all fare caches
         fareService.clearCache();
         
+        // Trigger events to notify that fares have been updated
         window.dispatchEvent(new CustomEvent('fare-cache-cleared'));
         window.dispatchEvent(new CustomEvent('trip-fares-updated', {
           detail: { 
@@ -141,57 +123,13 @@ export function OutstationFareManagement() {
           }
         }));
         
+        // Reset cab options state
+        fareService.resetCabOptionsState();
+        
         toast.success(`Fares updated for ${values.cabType}`);
-      } catch (fetchError) {
-        console.error('Error with fare update:', fetchError);
-        
-        const endpoint = `${apiBaseUrl}/api/admin/fare-update.php`;
-        
-        const formData = new FormData();
-        formData.append('vehicleId', values.cabType);
-        formData.append('tripType', 'outstation');
-        formData.append('basePrice', values.oneWayBasePrice.toString());
-        formData.append('pricePerKm', values.oneWayPricePerKm.toString());
-        formData.append('roundTripBasePrice', values.roundTripBasePrice.toString());
-        formData.append('roundTripPricePerKm', values.roundTripPricePerKm.toString());
-        formData.append('driverAllowance', values.driverAllowance.toString());
-        formData.append('nightHaltCharge', values.nightHalt.toString());
-        
-        console.log('Submitting form data to legacy endpoint:', Object.fromEntries(formData));
-        
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          body: formData,
-          headers: {
-            'X-Force-Refresh': 'true',
-            'Cache-Control': 'no-cache, no-store, must-revalidate'
-          }
-        });
-        
-        if (!response.ok) {
-          const text = await response.text();
-          console.error('Error response:', text);
-          throw new Error(`Server returned ${response.status}: ${text}`);
-        }
-        
-        const data = await response.json();
-        console.log('Fare update response:', data);
-        
-        if (data.status === 'success') {
-          fareService.clearCache();
-          
-          window.dispatchEvent(new CustomEvent('fare-cache-cleared'));
-          window.dispatchEvent(new CustomEvent('trip-fares-updated', {
-            detail: { 
-              timestamp: Date.now(),
-              vehicleId: values.cabType
-            }
-          }));
-          
-          toast.success(`Fares updated for ${values.cabType}`);
-        } else {
-          throw new Error(data.message || 'Update failed');
-        }
+      } catch (error) {
+        console.error('Error updating fares:', error);
+        throw error;
       }
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to update fares'));
@@ -207,68 +145,98 @@ export function OutstationFareManagement() {
     try {
       setIsLoading(true);
       
-      const vehicles = await loadCabTypes();
+      // Fetch outstation fares specifically for this vehicle
+      try {
+        const fares = await fareService.getOutstationFaresForVehicle(vehicleId);
+        console.log('Loaded outstation fares for vehicle:', fares);
+        
+        if (fares) {
+          form.setValue("oneWayBasePrice", fares.basePrice || 0);
+          form.setValue("oneWayPricePerKm", fares.pricePerKm || 0);
+          form.setValue("roundTripBasePrice", fares.roundTripBasePrice || 0);
+          form.setValue("roundTripPricePerKm", fares.roundTripPricePerKm || 0);
+          form.setValue("driverAllowance", fares.driverAllowance || 0);
+          form.setValue("nightHalt", fares.nightHaltCharge || 0);
+          return;
+        }
+      } catch (fareError) {
+        console.error('Error fetching fares directly:', fareError);
+      }
+      
+      // Fallback to vehicle list if direct fare fetch fails
+      const vehicles = await loadCabTypes(true);
       const vehicle = vehicles.find(v => v.id === vehicleId);
       
       if (vehicle && vehicle.outstationFares) {
-        console.log('Loaded existing outstation fares for vehicle:', vehicle.outstationFares);
+        console.log('Loaded outstation fares from vehicle data:', vehicle.outstationFares);
+        
         form.setValue("oneWayBasePrice", vehicle.outstationFares.basePrice || 0);
         form.setValue("oneWayPricePerKm", vehicle.outstationFares.pricePerKm || 0);
         form.setValue("roundTripBasePrice", vehicle.outstationFares.roundTripBasePrice || 0);
         form.setValue("roundTripPricePerKm", vehicle.outstationFares.roundTripPricePerKm || 0);
         form.setValue("driverAllowance", vehicle.outstationFares.driverAllowance || 0);
         form.setValue("nightHalt", vehicle.outstationFares.nightHaltCharge || 0);
-      } else {
-        console.log('No existing fares found for vehicle, using defaults');
-        if (vehicleId === 'sedan') {
-          form.setValue("oneWayBasePrice", 4200);
-          form.setValue("oneWayPricePerKm", 14);
-          form.setValue("roundTripBasePrice", 4000);
-          form.setValue("roundTripPricePerKm", 12);
-          form.setValue("driverAllowance", 250);
-          form.setValue("nightHalt", 700);
-        } else if (vehicleId === 'ertiga' || vehicleId === 'suv') {
-          form.setValue("oneWayBasePrice", 5400);
-          form.setValue("oneWayPricePerKm", 18);
-          form.setValue("roundTripBasePrice", 5000);
-          form.setValue("roundTripPricePerKm", 15);
-          form.setValue("driverAllowance", 250);
-          form.setValue("nightHalt", 1000);
-        } else if (vehicleId === 'innova' || vehicleId === 'innova_crysta') {
-          form.setValue("oneWayBasePrice", 6000);
-          form.setValue("oneWayPricePerKm", 20);
-          form.setValue("roundTripBasePrice", 5600);
-          form.setValue("roundTripPricePerKm", 17);
-          form.setValue("driverAllowance", 250);
-          form.setValue("nightHalt", 1000);
-        } else if (vehicleId === 'luxury') {
-          form.setValue("oneWayBasePrice", 10500);
-          form.setValue("oneWayPricePerKm", 25);
-          form.setValue("roundTripBasePrice", 10000);
-          form.setValue("roundTripPricePerKm", 22);
-          form.setValue("driverAllowance", 300);
-          form.setValue("nightHalt", 1500);
-        } else if (vehicleId === 'tempo' || vehicleId === 'tempo_traveller') {
-          form.setValue("oneWayBasePrice", 9000);
-          form.setValue("oneWayPricePerKm", 22);
-          form.setValue("roundTripBasePrice", 8500);
-          form.setValue("roundTripPricePerKm", 19);
-          form.setValue("driverAllowance", 300);
-          form.setValue("nightHalt", 1500);
-        } else {
-          form.setValue("oneWayBasePrice", 4200);
-          form.setValue("oneWayPricePerKm", 14);
-          form.setValue("roundTripBasePrice", 4000);
-          form.setValue("roundTripPricePerKm", 12);
-          form.setValue("driverAllowance", 250);
-          form.setValue("nightHalt", 700);
-        }
-      }
+        return;
+      } 
+      
+      // Use default values if no data found
+      console.log('No existing fares found for vehicle, using defaults');
+      setDefaultPricesForVehicle(vehicleId);
+      
     } catch (error) {
       console.error("Error loading fares for vehicle:", error);
       toast.error("Failed to load fare data for vehicle");
+      
+      // Set fallback defaults
+      setDefaultPricesForVehicle(vehicleId);
     } finally {
       setIsLoading(false);
+    }
+  };
+  
+  const setDefaultPricesForVehicle = (vehicleId: string) => {
+    if (vehicleId === 'sedan') {
+      form.setValue("oneWayBasePrice", 4200);
+      form.setValue("oneWayPricePerKm", 14);
+      form.setValue("roundTripBasePrice", 4000);
+      form.setValue("roundTripPricePerKm", 12);
+      form.setValue("driverAllowance", 250);
+      form.setValue("nightHalt", 700);
+    } else if (vehicleId === 'ertiga' || vehicleId === 'suv') {
+      form.setValue("oneWayBasePrice", 5400);
+      form.setValue("oneWayPricePerKm", 18);
+      form.setValue("roundTripBasePrice", 5000);
+      form.setValue("roundTripPricePerKm", 15);
+      form.setValue("driverAllowance", 250);
+      form.setValue("nightHalt", 1000);
+    } else if (vehicleId === 'innova' || vehicleId === 'innova_crysta') {
+      form.setValue("oneWayBasePrice", 6000);
+      form.setValue("oneWayPricePerKm", 20);
+      form.setValue("roundTripBasePrice", 5600);
+      form.setValue("roundTripPricePerKm", 17);
+      form.setValue("driverAllowance", 250);
+      form.setValue("nightHalt", 1000);
+    } else if (vehicleId === 'luxury') {
+      form.setValue("oneWayBasePrice", 10500);
+      form.setValue("oneWayPricePerKm", 25);
+      form.setValue("roundTripBasePrice", 10000);
+      form.setValue("roundTripPricePerKm", 22);
+      form.setValue("driverAllowance", 300);
+      form.setValue("nightHalt", 1500);
+    } else if (vehicleId === 'tempo' || vehicleId === 'tempo_traveller') {
+      form.setValue("oneWayBasePrice", 9000);
+      form.setValue("oneWayPricePerKm", 22);
+      form.setValue("roundTripBasePrice", 8500);
+      form.setValue("roundTripPricePerKm", 19);
+      form.setValue("driverAllowance", 300);
+      form.setValue("nightHalt", 1500);
+    } else {
+      form.setValue("oneWayBasePrice", 4200);
+      form.setValue("oneWayPricePerKm", 14);
+      form.setValue("roundTripBasePrice", 4000);
+      form.setValue("roundTripPricePerKm", 12);
+      form.setValue("driverAllowance", 250);
+      form.setValue("nightHalt", 700);
     }
   };
   
@@ -380,6 +348,7 @@ export function OutstationFareManagement() {
                             {...field} 
                             className="font-mono"
                             min="0"
+                            step="0.01"
                             onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                           />
                         </FormControl>
@@ -422,6 +391,7 @@ export function OutstationFareManagement() {
                             {...field} 
                             className="font-mono"
                             min="0"
+                            step="0.01"
                             onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                           />
                         </FormControl>

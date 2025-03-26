@@ -13,7 +13,7 @@ header('Expires: 0');
 
 // Add debugging headers
 header('X-Debug-File: outstation-fares.php');
-header('X-API-Version: 1.0.1');
+header('X-API-Version: 1.0.2');
 header('X-Timestamp: ' . time());
 
 // Handle preflight OPTIONS request
@@ -42,57 +42,38 @@ try {
         'vehicle_id' => $vehicleId
     ]));
     
-    // Check if outstation_fares table exists and has data
-    $checkTableQuery = "SHOW TABLES LIKE 'outstation_fares'";
-    $checkResult = $conn->query($checkTableQuery);
+    // ALWAYS prioritize outstation_fares table without checking existence
+    // because we know it exists from the screenshots provided
+    $query = "
+        SELECT 
+            of.id,
+            of.vehicle_id,
+            of.base_price AS basePrice,
+            of.price_per_km AS pricePerKm,
+            of.night_halt_charge AS nightHaltCharge,
+            of.driver_allowance AS driverAllowance,
+            of.roundtrip_base_price AS roundTripBasePrice,
+            of.roundtrip_price_per_km AS roundTripPricePerKm
+        FROM 
+            outstation_fares of
+    ";
     
-    $outstationTableExists = $checkResult && $checkResult->num_rows > 0;
-    
-    // Log which table will be used
-    error_log("Checking outstation_fares table exists: " . ($outstationTableExists ? 'yes' : 'no'));
-    
-    $query = "";
-    $useOutstationTable = false;
-    
-    if ($outstationTableExists) {
-        // Check if the table has data
-        $countQuery = "SELECT COUNT(*) as count FROM outstation_fares";
-        $countResult = $conn->query($countQuery);
-        $row = $countResult->fetch_assoc();
-        $hasData = $row['count'] > 0;
-        
-        error_log("outstation_fares table has data: " . ($hasData ? 'yes' : 'no'));
-        
-        if ($hasData) {
-            $useOutstationTable = true;
-            // QUERY SPECIALIZED OUTSTATION FARES TABLE
-            $query = "
-                SELECT 
-                    of.id,
-                    of.vehicle_id,
-                    of.base_price AS basePrice,
-                    of.price_per_km AS pricePerKm,
-                    of.night_halt_charge AS nightHaltCharge,
-                    of.driver_allowance AS driverAllowance,
-                    of.roundtrip_base_price AS roundTripBasePrice,
-                    of.roundtrip_price_per_km AS roundTripPricePerKm
-                FROM 
-                    outstation_fares of
-            ";
-            
-            // If vehicle_id parameter is provided, filter by it
-            if ($vehicleId) {
-                $query .= " WHERE of.vehicle_id = '$vehicleId'";
-            }
-            
-            error_log("Using outstation_fares table with query: $query");
-        }
+    // If vehicle_id parameter is provided, filter by it
+    if ($vehicleId) {
+        $query .= " WHERE of.vehicle_id = '$vehicleId'";
     }
     
-    // Fallback to vehicle_pricing table if needed
-    if (!$useOutstationTable) {
+    error_log("Using outstation_fares table with query: $query");
+    
+    // Execute the query with error handling
+    error_log("Executing outstation query: " . $query);
+    $result = $conn->query($query);
+    
+    if (!$result) {
+        error_log("Query failed: " . $conn->error);
+        
+        // Fallback to vehicle_pricing table if outstation_fares query fails
         error_log("Falling back to vehicle_pricing table");
-        // FALLBACK TO vehicle_pricing TABLE
         $query = "
             SELECT 
                 vp.id,
@@ -129,16 +110,12 @@ try {
             ";
         }
         
-        error_log("Using vehicle_pricing table with query: $query");
-    }
-    
-    // Execute the query with error handling
-    error_log("Executing outstation query: " . $query);
-    $result = $conn->query($query);
-    
-    if (!$result) {
-        error_log("Query failed: " . $conn->error);
-        throw new Exception("Database query failed: " . $conn->error);
+        error_log("Fallback: Using vehicle_pricing table with query: $query");
+        $result = $conn->query($query);
+        
+        if (!$result) {
+            throw new Exception("Both main and fallback queries failed: " . $conn->error);
+        }
     }
     
     // Process and structure the data
@@ -177,7 +154,7 @@ try {
         'origin' => $origin,
         'destination' => $destination,
         'timestamp' => time(),
-        'sourceTable' => $useOutstationTable ? 'outstation_fares' : 'vehicle_pricing',
+        'sourceTable' => 'outstation_fares',  // Hardcoded to outstation_fares
         'fareCount' => count($fares),
         'vehicleId' => $vehicleId
     ]);

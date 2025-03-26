@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { TripType, TripMode } from '@/lib/tripTypes';
 import { LocalFare, OutstationFare, AirportFare } from '@/types/cab';
@@ -15,6 +16,18 @@ export const clearFareCache = () => {
   localStorage.removeItem('local_fares_timestamp'); 
   localStorage.removeItem('airport_fares_timestamp');
   localStorage.setItem('globalFareRefreshToken', Date.now().toString());
+  
+  // Clear all fare-related cache items from localStorage and sessionStorage
+  const keysToRemove = [
+    'cachedFareData', 'cabPricing', 'fareCache', 'fares', 
+    'cabData', 'vehicles', 'calculatedFares', 'cabTypes', 
+    'outstationFares', 'airportFares', 'tourFares'
+  ];
+  
+  keysToRemove.forEach(key => {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+  });
   
   // Trigger a fare cache cleared event
   window.dispatchEvent(new CustomEvent('fare-cache-cleared', {
@@ -39,7 +52,8 @@ export const getForcedRequestConfig = () => {
   return {
     headers: getBypassHeaders(),
     params: {
-      _t: Date.now() // Cache busting timestamp
+      _t: Date.now(), // Cache busting timestamp
+      force: 'true'
     }
   };
 };
@@ -130,13 +144,18 @@ export const directFareUpdate = async (tripType: string, vehicleId: string, data
 // Outstation Fares
 export const getOutstationFares = async (origin?: string, destination?: string): Promise<Record<string, OutstationFare>> => {
   try {
-    // Force a refresh of fares by skipping cache
+    // Always force a refresh of fares by skipping cache
     const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    const timestamp = Date.now();
+    
+    console.log('Fetching outstation fares with timestamp:', timestamp);
+    
     const response = await axios.get(`${baseUrl}/api/outstation-fares.php`, {
       params: { 
         origin,
         destination,
-        _t: Date.now() // Cache busting
+        _t: timestamp, // Cache busting
+        force: 'true'
       },
       headers: getBypassHeaders()
     });
@@ -145,7 +164,7 @@ export const getOutstationFares = async (origin?: string, destination?: string):
       console.log('Outstation fares fetched successfully:', response.data);
       // Cache the fares
       localStorage.setItem('outstation_fares', JSON.stringify(response.data.fares));
-      localStorage.setItem('outstation_fares_timestamp', Date.now().toString());
+      localStorage.setItem('outstation_fares_timestamp', timestamp.toString());
       
       return response.data.fares;
     }
@@ -171,16 +190,21 @@ export const getOutstationFaresForVehicle = async (vehicleId: string): Promise<O
     // Try to fetch directly for this vehicle
     const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
     const now = Date.now();
+    
+    console.log(`Fetching outstation fares for vehicle ${vehicleId} with timestamp:`, now);
+    
     const response = await axios.get(`${baseUrl}/api/outstation-fares.php`, {
       params: {
         vehicle_id: vehicleId,
-        _t: now // Cache busting
+        _t: now, // Cache busting
+        force: 'true'
       },
       headers: getBypassHeaders()
     });
     
     if (response.data && response.data.fares && response.data.fares[vehicleId]) {
       console.log(`Outstation fares for vehicle ${vehicleId}:`, response.data.fares[vehicleId]);
+      console.log(`Source table: ${response.data.sourceTable}`);
       
       // Cache this specific vehicle fare
       const cachedFares = localStorage.getItem('outstation_fares');
@@ -236,39 +260,30 @@ export const getOutstationFaresForVehicle = async (vehicleId: string): Promise<O
 // Local Fares
 export const getLocalFares = async (): Promise<Record<string, LocalFare>> => {
   try {
-    // Check if we have cached fares and they are less than 5 minutes old
-    const cachedTimestamp = localStorage.getItem('local_fares_timestamp');
-    const cachedFares = localStorage.getItem('local_fares');
-    const globalRefreshToken = localStorage.getItem('globalFareRefreshToken');
-    
-    if (cachedTimestamp && cachedFares && globalRefreshToken) {
-      const timestamp = parseInt(cachedTimestamp, 10);
-      const refreshToken = parseInt(globalRefreshToken, 10);
-      const now = Date.now();
-      const fiveMinutes = 5 * 60 * 1000;
-      
-      // Use cached data if it's recent and there hasn't been a global refresh
-      if (now - timestamp < fiveMinutes && timestamp > refreshToken) {
-        return JSON.parse(cachedFares);
-      }
-    }
-    
-    // Fetch fares from API
+    // Always fetch fares from API
     const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    const timestamp = Date.now();
+    
+    console.log('Fetching local fares with timestamp:', timestamp);
+    
     const response = await axios.get(`${baseUrl}/api/local-fares.php`, {
       params: { 
-        _t: Date.now() // Cache busting
-      }
+        _t: timestamp, // Cache busting
+        force: 'true'
+      },
+      headers: getBypassHeaders()
     });
     
     if (response.data && response.data.fares) {
+      console.log('Local fares fetched successfully:', response.data);
       // Cache the fares
       localStorage.setItem('local_fares', JSON.stringify(response.data.fares));
-      localStorage.setItem('local_fares_timestamp', Date.now().toString());
+      localStorage.setItem('local_fares_timestamp', timestamp.toString());
       
       return response.data.fares;
     }
     
+    console.warn('No local fares returned from API');
     return {};
   } catch (error) {
     console.error('Error fetching local fares:', error);
@@ -490,6 +505,12 @@ export const getFaresByTripType = async (tripType: TripType): Promise<Record<str
   }
 };
 
+// Reset CabOptions state
+export const resetCabOptionsState = () => {
+  window.dispatchEvent(new CustomEvent('reset-cab-options'));
+  localStorage.setItem('forceTripFaresRefresh', 'true');
+};
+
 // Export the fareService
 export const fareService = {
   getOutstationFares,
@@ -503,6 +524,6 @@ export const fareService = {
   directFareUpdate,
   getBypassHeaders,
   getForcedRequestConfig,
+  resetCabOptionsState,
   initializeDatabase
 };
-

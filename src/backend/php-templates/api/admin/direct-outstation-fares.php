@@ -11,6 +11,7 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Force-Refresh');
 header('Content-Type: application/json');
+header('X-API-Version: 1.0.2');
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -49,58 +50,52 @@ try {
     // Begin transaction
     $conn->begin_transaction();
 
-    // First check if the outstation_fares table exists
-    $tableCheckQuery = "SHOW TABLES LIKE 'outstation_fares'";
-    $tableCheckResult = $conn->query($tableCheckQuery);
-    $tableExists = $tableCheckResult && $tableCheckResult->num_rows > 0;
-
-    if ($tableExists) {
-        // Check if the vehicle already exists in the specialized table
-        $checkQuery = "SELECT id FROM outstation_fares WHERE vehicle_id = ?";
-        $checkStmt = $conn->prepare($checkQuery);
-        $checkStmt->bind_param('s', $vehicleId);
-        $checkStmt->execute();
-        $checkResult = $checkStmt->get_result();
+    // ALWAYS update outstation_fares table first - it's our primary source
+    // Check if the vehicle already exists in the specialized table
+    $checkQuery = "SELECT id FROM outstation_fares WHERE vehicle_id = ?";
+    $checkStmt = $conn->prepare($checkQuery);
+    $checkStmt->bind_param('s', $vehicleId);
+    $checkStmt->execute();
+    $checkResult = $checkStmt->get_result();
+    
+    if ($checkResult->num_rows > 0) {
+        // Update existing record
+        $updateQuery = "
+            UPDATE outstation_fares
+            SET base_price = ?,
+                price_per_km = ?,
+                night_halt_charge = ?,
+                driver_allowance = ?,
+                roundtrip_base_price = ?,
+                roundtrip_price_per_km = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE vehicle_id = ?
+        ";
         
-        if ($checkResult->num_rows > 0) {
-            // Update existing record
-            $updateQuery = "
-                UPDATE outstation_fares
-                SET base_price = ?,
-                    price_per_km = ?,
-                    night_halt_charge = ?,
-                    driver_allowance = ?,
-                    roundtrip_base_price = ?,
-                    roundtrip_price_per_km = ?,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE vehicle_id = ?
-            ";
-            
-            $updateStmt = $conn->prepare($updateQuery);
-            $updateStmt->bind_param('dddddds', $basePrice, $pricePerKm, $nightHalt, $driverAllowance, $roundTripBasePrice, $roundTripPricePerKm, $vehicleId);
-            
-            if (!$updateStmt->execute()) {
-                throw new Exception("Failed to update outstation_fares: " . $conn->error);
-            }
-            
-            error_log("Updated existing record in outstation_fares for $vehicleId");
-        } else {
-            // Insert new record
-            $insertQuery = "
-                INSERT INTO outstation_fares (
-                    vehicle_id, base_price, price_per_km, night_halt_charge, driver_allowance, roundtrip_base_price, roundtrip_price_per_km
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            ";
-            
-            $insertStmt = $conn->prepare($insertQuery);
-            $insertStmt->bind_param('sdddddd', $vehicleId, $basePrice, $pricePerKm, $nightHalt, $driverAllowance, $roundTripBasePrice, $roundTripPricePerKm);
-            
-            if (!$insertStmt->execute()) {
-                throw new Exception("Failed to insert into outstation_fares: " . $conn->error);
-            }
-            
-            error_log("Inserted new record in outstation_fares for $vehicleId");
+        $updateStmt = $conn->prepare($updateQuery);
+        $updateStmt->bind_param('dddddds', $basePrice, $pricePerKm, $nightHalt, $driverAllowance, $roundTripBasePrice, $roundTripPricePerKm, $vehicleId);
+        
+        if (!$updateStmt->execute()) {
+            throw new Exception("Failed to update outstation_fares: " . $conn->error);
         }
+        
+        error_log("Updated existing record in outstation_fares for $vehicleId");
+    } else {
+        // Insert new record
+        $insertQuery = "
+            INSERT INTO outstation_fares (
+                vehicle_id, base_price, price_per_km, night_halt_charge, driver_allowance, roundtrip_base_price, roundtrip_price_per_km
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ";
+        
+        $insertStmt = $conn->prepare($insertQuery);
+        $insertStmt->bind_param('sdddddd', $vehicleId, $basePrice, $pricePerKm, $nightHalt, $driverAllowance, $roundTripBasePrice, $roundTripPricePerKm);
+        
+        if (!$insertStmt->execute()) {
+            throw new Exception("Failed to insert into outstation_fares: " . $conn->error);
+        }
+        
+        error_log("Inserted new record in outstation_fares for $vehicleId");
     }
 
     // Also update the vehicle_pricing table for backward compatibility
@@ -110,7 +105,7 @@ try {
 
     if ($vehiclePricingExists) {
         // First update the one-way fares
-        $checkOneWayQuery = "SELECT id FROM vehicle_pricing WHERE vehicle_type = ? AND (trip_type = 'outstation-one-way' OR trip_type = 'outstation')";
+        $checkOneWayQuery = "SELECT id FROM vehicle_pricing WHERE vehicle_id = ? AND (trip_type = 'outstation-one-way' OR trip_type = 'outstation')";
         $checkOneWayStmt = $conn->prepare($checkOneWayQuery);
         $checkOneWayStmt->bind_param('s', $vehicleId);
         $checkOneWayStmt->execute();
@@ -125,7 +120,7 @@ try {
                     night_halt_charge = ?,
                     driver_allowance = ?,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE vehicle_type = ? AND (trip_type = 'outstation-one-way' OR trip_type = 'outstation')
+                WHERE vehicle_id = ? AND (trip_type = 'outstation-one-way' OR trip_type = 'outstation')
             ";
             
             $updateOneWayStmt = $conn->prepare($updateOneWayQuery);
@@ -140,7 +135,7 @@ try {
             // Insert new one-way record
             $insertOneWayQuery = "
                 INSERT INTO vehicle_pricing (
-                    vehicle_type, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance
+                    vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance
                 ) VALUES (?, 'outstation-one-way', ?, ?, ?, ?)
             ";
             
@@ -155,7 +150,7 @@ try {
         }
         
         // Now update the round-trip fares
-        $checkRoundTripQuery = "SELECT id FROM vehicle_pricing WHERE vehicle_type = ? AND trip_type = 'outstation-round-trip'";
+        $checkRoundTripQuery = "SELECT id FROM vehicle_pricing WHERE vehicle_id = ? AND trip_type = 'outstation-round-trip'";
         $checkRoundTripStmt = $conn->prepare($checkRoundTripQuery);
         $checkRoundTripStmt->bind_param('s', $vehicleId);
         $checkRoundTripStmt->execute();
@@ -170,7 +165,7 @@ try {
                     night_halt_charge = ?,
                     driver_allowance = ?,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE vehicle_type = ? AND trip_type = 'outstation-round-trip'
+                WHERE vehicle_id = ? AND trip_type = 'outstation-round-trip'
             ";
             
             $updateRoundTripStmt = $conn->prepare($updateRoundTripQuery);
@@ -185,7 +180,7 @@ try {
             // Insert new round-trip record only if we have round trip pricing
             $insertRoundTripQuery = "
                 INSERT INTO vehicle_pricing (
-                    vehicle_type, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance
+                    vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance
                 ) VALUES (?, 'outstation-round-trip', ?, ?, ?, ?)
             ";
             
@@ -215,7 +210,7 @@ try {
             'roundTripBasePrice' => $roundTripBasePrice,
             'roundTripPricePerKm' => $roundTripPricePerKm,
             'updatedTables' => [
-                'outstation_fares' => $tableExists,
+                'outstation_fares' => true,
                 'vehicle_pricing' => $vehiclePricingExists
             ]
         ]
