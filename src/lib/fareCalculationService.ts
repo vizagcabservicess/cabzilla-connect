@@ -133,20 +133,31 @@ export const calculateAirportFare = (cabName: string, distance: number): number 
     return cachedFare.price;
   }
   
+  // Default airport fare values
   const defaultFare = {
     basePrice: 1000,
     pricePerKm: 14,
-    airportFee: 150
+    airportFee: 150,
+    dropPrice: 1200,
+    pickupPrice: 1500,
+    tier1Price: 800,    // 0-10 KM
+    tier2Price: 1200,   // 11-20 KM
+    tier3Price: 1800,   // 21-30 KM
+    tier4Price: 2500,   // 31+ KM
+    extraKmCharge: 14
   };
   
   let basePrice = defaultFare.basePrice;
   let pricePerKm = defaultFare.pricePerKm;
+  let airportFee = defaultFare.airportFee;
+  let tierPrice = 0;
   
   const cabNameLower = safeToLowerCase(cabName);
   
+  // Determine vehicle type and set appropriate base prices
   if (cabNameLower.includes('sedan') || cabNameLower.includes('dzire') || 
       cabNameLower.includes('etios') || cabNameLower.includes('amaze') || 
-      cabNameLower.includes('swift')) {
+      cabNameLower.includes('swift') || cabNameLower.includes('luxury')) {
     basePrice = 1200;
     pricePerKm = 14;
   } else if (cabNameLower.includes('ertiga') || cabNameLower.includes('suv')) {
@@ -160,11 +171,35 @@ export const calculateAirportFare = (cabName: string, distance: number): number 
     pricePerKm = 22;
   }
   
-  let fare = Math.round(basePrice * 0.7);
-  fare += Math.round(distance * pricePerKm);
-  fare += defaultFare.airportFee;
+  // Determine tier price based on distance
+  if (distance <= 10) {
+    tierPrice = defaultFare.tier1Price;
+  } else if (distance <= 20) {
+    tierPrice = defaultFare.tier2Price;
+  } else if (distance <= 30) {
+    tierPrice = defaultFare.tier3Price;
+  } else {
+    tierPrice = defaultFare.tier4Price;
+  }
+  
+  // Calculate fare components
+  let fare = Math.round(basePrice * 0.8);  // Base fare is 80% of the actual base price
+  
+  // Use tier price as a baseline if it's provided
+  if (tierPrice > 0) {
+    fare = Math.round(tierPrice * 0.8);  // 80% of tier price as base
+  } else {
+    // Fallback to distance-based calculation
+    fare += Math.round(distance * pricePerKm);
+  }
+  
+  // Add airport fee
+  fare += airportFee;
+  
+  // Add GST (5%)
   fare = Math.round(fare * 1.05);
   
+  // Cache the result
   fareCache.set(cacheKey, {
     expire: Date.now() + 15 * 60 * 1000,
     price: fare

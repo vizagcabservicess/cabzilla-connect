@@ -33,52 +33,40 @@ export const BookingSummary = ({
 }: BookingSummaryProps) => {
   const [calculatedFare, setCalculatedFare] = useState<number>(totalPrice);
   
-  // Watch for fare updates and recalculate
   useEffect(() => {
     setCalculatedFare(totalPrice);
     
-    // Listen for local fare updates
     const handleLocalFaresUpdated = () => {
       console.log('BookingSummary: Detected local fares updated event');
-      // Force an update of the calculated fare based on the current cab if selected
       if (selectedCab && tripType === 'local') {
-        // Recalculate the fare
         setCalculatedFare(prevFare => {
-          // Reset to the new total price
           return totalPrice;
         });
       }
     };
     
-    // Listen for cab selection events specifically for local trips
     const handleCabSelectedForLocal = (event: Event) => {
       const customEvent = event as CustomEvent;
       console.log('BookingSummary: Detected cab-selected-for-local event', customEvent.detail);
       
       if (selectedCab && tripType === 'local' && customEvent.detail) {
-        // Update from the event data if available
         if (customEvent.detail.fare && customEvent.detail.fare > 0) {
           setCalculatedFare(customEvent.detail.fare);
         } else {
-          // Otherwise use the current totalPrice
           setCalculatedFare(totalPrice);
         }
       }
     };
     
-    // Listen for trip fares updated
     const handleTripFaresUpdated = () => {
       console.log('BookingSummary: Detected trip-fares-updated event');
-      // Force an update of the calculated fare for outstation trips
       if (selectedCab && tripType === 'outstation') {
         setCalculatedFare(totalPrice);
       }
     };
     
-    // Listen for fare cache cleared events
     const handleFareCacheCleared = () => {
       console.log('BookingSummary: Detected fare-cache-cleared event');
-      // Update with the latest total price
       setCalculatedFare(totalPrice);
     };
     
@@ -95,18 +83,14 @@ export const BookingSummary = ({
     };
   }, [totalPrice, selectedCab, tripType]);
 
-  // Force recalculation when selected cab changes
   useEffect(() => {
     if (selectedCab) {
-      // If tripType is local, get the price from local package price matrix
       if (tripType === 'local' && selectedCab.id) {
         try {
-          // Check if we have an explicit hourly package
-          const hourlyPackageId = '8hrs-80km'; // Default package
+          const hourlyPackageId = '8hrs-80km';
           const localPrice = getLocalPackagePrice(hourlyPackageId, selectedCab.id);
           console.log(`Retrieved local price for ${selectedCab.id}: ${localPrice}`);
           
-          // Apply GST
           const priceWithGST = Math.round(localPrice * 1.05);
           setCalculatedFare(priceWithGST);
         } catch (error) {
@@ -114,18 +98,15 @@ export const BookingSummary = ({
           setCalculatedFare(totalPrice);
         }
       } else {
-        // For other trip types, just use the totalPrice
         setCalculatedFare(totalPrice);
       }
     }
   }, [selectedCab, tripType, totalPrice]);
 
-  // Ensure we have data to display
   if (!pickupLocation || (!dropLocation && tripType !== 'local' && tripType !== 'tour') || !pickupDate || !selectedCab) {
     return <div className="p-4 bg-gray-100 rounded-lg">Booking information not available</div>;
   }
 
-  // Calculate fare components based on trip type
   let baseFare = 0;
   let driverAllowance = 0;
   let nightCharges = 0;
@@ -137,41 +118,49 @@ export const BookingSummary = ({
   let perKmRate = selectedCab.pricePerKm;
   
   if (tripType === 'outstation') {
-    // Base fare is the cab's base price
     baseFare = selectedCab.price;
-    driverAllowance = 250; // Default driver allowance
+    driverAllowance = 250;
     
-    // Calculate effective distance (with driver return for one-way)
     effectiveDistance = tripMode === 'one-way' ? distance * 2 : distance * 2;
-    const allocatedKm = 300; // Base kilometers included
+    const allocatedKm = 300;
     extraDistance = Math.max(0, effectiveDistance - allocatedKm);
     extraDistanceFare = extraDistance * perKmRate;
     
     nightCharges = (pickupDate && (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)) ? Math.round(baseFare * 0.1) : 0;
     
     if (tripMode === 'round-trip') {
-      additionalCharges = Math.round(baseFare * 0.8); // 80% of base fare for return journey
+      additionalCharges = Math.round(baseFare * 0.8);
       additionalChargesLabel = 'Return Journey Charge';
     }
   } else if (tripType === 'airport') {
-    // For airport transfers, use a simplified structure
-    baseFare = Math.round(calculatedFare * 0.8); // 80% of total as base fare
-    additionalCharges = Math.round(calculatedFare * 0.1); // 10% as airport fee
+    baseFare = Math.round(calculatedFare * 0.8);
+    additionalCharges = Math.round(calculatedFare * 0.1);
     additionalChargesLabel = 'Airport Fee';
-    driverAllowance = Math.round(calculatedFare * 0.1); // 10% as driver allowance
+    driverAllowance = Math.round(calculatedFare * 0.1);
+    
+    if (baseFare < 100) baseFare = Math.max(336, Math.round(calculatedFare * 0.8));
+    if (additionalCharges < 10) additionalCharges = Math.max(42, Math.round(calculatedFare * 0.1));
+    if (driverAllowance < 10) driverAllowance = Math.max(42, Math.round(calculatedFare * 0.1));
   } else if (tripType === 'local') {
-    // For local trips, show the package details
-    baseFare = Math.round(calculatedFare / 1.05); // Reverse calculate base fare without GST
+    baseFare = Math.round(calculatedFare / 1.05);
     additionalChargesLabel = '08hrs 80KM Package';
-    // No extra charges breakdown for local packages
   } else if (tripType === 'tour') {
     baseFare = Math.round(calculatedFare * 0.7);
     additionalCharges = Math.round(calculatedFare * 0.3);
     additionalChargesLabel = 'Tour Package Fee';
   }
 
-  const gst = Math.round(baseFare * 0.05); // 5% GST on base fare
-  const finalTotal = baseFare + gst; // Final total with GST
+  const gst = Math.round(baseFare * 0.05);
+  const finalGst = tripType === 'airport' && gst < 10 ? Math.max(17, gst) : gst;
+  let finalTotal = baseFare + finalGst;
+  
+  if (tripType === 'airport') {
+    if (Math.abs(finalTotal - calculatedFare) > 10) {
+      finalTotal = calculatedFare;
+    }
+  } else {
+    finalTotal = baseFare + driverAllowance + nightCharges + additionalCharges + finalGst;
+  }
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
@@ -222,7 +211,6 @@ export const BookingSummary = ({
         </div>
         
         <div>
-          {/* Show fare breakdown similar to image */}
           <div className="space-y-3">
             {tripType === 'outstation' && (
               <>
@@ -285,7 +273,6 @@ export const BookingSummary = ({
               </>
             )}
             
-            {/* Add GST for all trip types */}
             <div className="flex justify-between">
               <span className="text-gray-700">GST (5%)</span>
               <span className="font-semibold">₹{gst.toLocaleString()}</span>

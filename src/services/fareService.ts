@@ -1,4 +1,3 @@
-
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 import { toast } from 'sonner';
 
@@ -313,41 +312,130 @@ class FareService {
       params.append('vehicle_id', vehicleId);
       params.append('_t', Date.now().toString()); // Add timestamp to bypass cache
       
-      const response = await axios.get(`${url}?${params.toString()}`, this.getForcedRequestConfig());
-      console.log('Airport transfer fares response:', response.data);
-      
-      // Return empty object with default values if no data received
-      if (!response.data || typeof response.data !== 'object') {
-        console.warn(`No airport fare data received for vehicle: ${vehicleId}`);
-        return {
-          basePrice: 0,
-          pricePerKm: 0,
-          dropPrice: 0,
-          pickupPrice: 0,
-          tier1Price: 0,
-          tier2Price: 0,
-          tier3Price: 0,
-          tier4Price: 0,
-          extraKmCharge: 0
-        };
+      // Try direct endpoint first
+      try {
+        const response = await axios.get(`${url}?${params.toString()}`, this.getForcedRequestConfig());
+        console.log('Airport transfer fares response:', response.data);
+        
+        if (response.data && typeof response.data === 'object') {
+          return response.data;
+        }
+      } catch (directError) {
+        console.warn(`Direct endpoint failed for airport fares: ${directError.message}`, directError);
+        // Continue to fallback - don't throw yet
       }
       
-      return response.data;
+      // Fallback: Try to get data from vehicle_pricing table
+      try {
+        const pricingUrl = `${API_BASE_URL}/api/admin/vehicle-pricing`;
+        const pricingParams = new URLSearchParams();
+        pricingParams.append('vehicle_id', vehicleId);
+        pricingParams.append('_t', Date.now().toString());
+        
+        const pricingResponse = await axios.get(`${pricingUrl}?${pricingParams.toString()}`, this.getForcedRequestConfig());
+        console.log('Vehicle pricing response for airport:', pricingResponse.data);
+        
+        if (pricingResponse.data && typeof pricingResponse.data === 'object') {
+          // Extract airport-specific data from vehicle pricing
+          return {
+            basePrice: pricingResponse.data.airport_base_price || 0,
+            pricePerKm: pricingResponse.data.airport_price_per_km || 0,
+            dropPrice: pricingResponse.data.airport_drop_price || 0,
+            pickupPrice: pricingResponse.data.airport_pickup_price || 0,
+            tier1Price: pricingResponse.data.airport_tier1_price || 0,
+            tier2Price: pricingResponse.data.airport_tier2_price || 0,
+            tier3Price: pricingResponse.data.airport_tier3_price || 0,
+            tier4Price: pricingResponse.data.airport_tier4_price || 0,
+            extraKmCharge: pricingResponse.data.airport_extra_km_charge || 0
+          };
+        }
+      } catch (pricingError) {
+        console.warn(`Vehicle pricing fallback failed for airport fares: ${pricingError.message}`);
+        // Continue to default values - don't throw yet
+      }
+      
+      // If we get here, we need to use default values based on vehicle type
+      console.log(`No airport fare data received for vehicle: ${vehicleId}, using defaults`);
+      return this.getDefaultAirportFares(vehicleId);
     } catch (error) {
       console.error(`Error fetching airport fares for vehicle ${vehicleId}:`, error);
       // Return default values on error
-      return {
-        basePrice: 0,
-        pricePerKm: 0,
-        dropPrice: 0,
-        pickupPrice: 0,
-        tier1Price: 0,
-        tier2Price: 0,
-        tier3Price: 0,
-        tier4Price: 0,
-        extraKmCharge: 0
+      return this.getDefaultAirportFares(vehicleId);
+    }
+  }
+  
+  // Helper method to generate default airport fares based on vehicle type
+  private getDefaultAirportFares(vehicleId: string): any {
+    const cabNameLower = vehicleId.toLowerCase();
+    
+    // Base default values
+    let defaults = {
+      basePrice: 1000,
+      pricePerKm: 14,
+      dropPrice: 1200,
+      pickupPrice: 1500,
+      tier1Price: 800,
+      tier2Price: 1200,
+      tier3Price: 1800,
+      tier4Price: 2500,
+      extraKmCharge: 14
+    };
+    
+    // Adjust based on vehicle type
+    if (cabNameLower.includes('sedan') || cabNameLower.includes('swift') || 
+        cabNameLower.includes('dzire') || cabNameLower.includes('etios') || 
+        cabNameLower.includes('luxury')) {
+      defaults = {
+        basePrice: 1200,
+        pricePerKm: 14,
+        dropPrice: 1200,
+        pickupPrice: 1500,
+        tier1Price: 800,
+        tier2Price: 1200,
+        tier3Price: 1800,
+        tier4Price: 2500,
+        extraKmCharge: 14
+      };
+    } else if (cabNameLower.includes('ertiga') || cabNameLower.includes('suv')) {
+      defaults = {
+        basePrice: 1500,
+        pricePerKm: 16,
+        dropPrice: 1500,
+        pickupPrice: 1800,
+        tier1Price: 1000,
+        tier2Price: 1500,
+        tier3Price: 2000,
+        tier4Price: 2800,
+        extraKmCharge: 16
+      };
+    } else if (cabNameLower.includes('innova')) {
+      defaults = {
+        basePrice: 1800,
+        pricePerKm: 18,
+        dropPrice: 1800,
+        pickupPrice: 2100,
+        tier1Price: 1200,
+        tier2Price: 1800,
+        tier3Price: 2400,
+        tier4Price: 3200,
+        extraKmCharge: 18
+      };
+    } else if (cabNameLower.includes('tempo') || cabNameLower.includes('traveller')) {
+      defaults = {
+        basePrice: 2500,
+        pricePerKm: 22,
+        dropPrice: 2500,
+        pickupPrice: 3000,
+        tier1Price: 1800,
+        tier2Price: 2500,
+        tier3Price: 3200,
+        tier4Price: 4000,
+        extraKmCharge: 22
       };
     }
+    
+    console.log(`Generated default airport fares for ${cabNameLower}:`, defaults);
+    return defaults;
   }
 
   // General method to update fares directly for any trip type
