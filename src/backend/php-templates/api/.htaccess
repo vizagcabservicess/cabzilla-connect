@@ -28,8 +28,8 @@ RewriteEngine On
     Header always set Expires "0"
     
     # Add debugging headers
-    Header always set X-API-Debug "Processed by main API htaccess - v1.0.73"
-    Header always set X-API-Version "1.0.73"
+    Header always set X-API-Debug "Processed by main API htaccess - v1.0.71"
+    Header always set X-API-Version "1.0.71"
     Header always set X-Server-Time "%{TIME}e"
     Header always set X-Request-ID "%{UNIQUE_ID}e"
     Header always set X-Response-Timestamp "%{TIME}e"
@@ -77,8 +77,6 @@ RewriteRule ^admin/outstation-fares-update\.php$ admin/direct-outstation-fares.p
 RewriteRule ^outstation-fares/update$ admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^outstation-fares/direct$ admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^outstation/update-fares$ admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^outstation-fares/get$ admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^outstation-fares/fetch$ admin/direct-outstation-fares.php [L,QSA]
 
 # Direct access to fare endpoints
 RewriteRule ^fares/airport$ fares/airport.php [QSA,L]
