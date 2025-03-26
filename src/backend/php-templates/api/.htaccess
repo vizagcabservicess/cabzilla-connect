@@ -22,9 +22,9 @@ RewriteEngine On
     </If>
     
     # Enhanced caching headers for stability - prevent browsers from causing loops
-    Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    Header always set Cache-Control "private, must-revalidate, max-age=60"
     Header always set Pragma "no-cache"
-    Header always set Expires "0"
+    Header always set Expires "60"
     
     # Add debugging headers
     Header always set X-API-Debug "Processed by main API htaccess - v1.0.63"
@@ -33,6 +33,8 @@ RewriteEngine On
     Header always set X-Request-ID "%{UNIQUE_ID}e"
     Header always set X-Response-Timestamp "%{TIME}e"
     Header always set X-Rate-Limit-Remaining "100"
+    Header always set X-Server-Name "%{SERVER_NAME}e"
+    Header always set X-Real-Path "%{SCRIPT_FILENAME}e"
 </IfModule>
 
 # Handle OPTIONS requests for CORS preflight - immediately return 200
@@ -45,24 +47,24 @@ RewriteRule .* - [R=200,L]
 <IfModule mod_headers.c>
     # Set stricter caching for vehicle-data endpoint
     <FilesMatch "vehicles-data\.php$">
-        Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
-        Header set Expires "0"
+        Header set Cache-Control "public, max-age=300"
+        Header set Expires "300"
     </FilesMatch>
     
     # Also cache vehicles endpoint
     <FilesMatch "vehicles\.php$">
-        Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
-        Header set Expires "0"
+        Header set Cache-Control "public, max-age=300" 
+        Header set Expires "300"
     </FilesMatch>
     
     # Force browser caching for fare endpoints to prevent rapid requests
     <FilesMatch "(local|airport|outstation)-fares\.php$">
-        Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
-        Header set Expires "0"
+        Header set Cache-Control "public, max-age=60"
+        Header set Expires "60"
     </FilesMatch>
     
-    # No caching for direct fare update endpoints
-    <FilesMatch "(direct-fare-update|local-fares-update|direct-.*-fares|init-database)\.php$">
+    # No caching for direct fare update endpoints - highest priority
+    <FilesMatch "(direct-fare-update|direct-outstation-fares|outstation-fares-update|local-fares-update|direct-.*-fares|init-database)\.php$">
         Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
         Header set Pragma "no-cache"
         Header set Expires "0"
@@ -76,7 +78,19 @@ RewriteRule ^init-database\.php$ admin/init-database.php [L,QSA]
 RewriteRule ^admin/init-database$ admin/init-database.php [L,QSA]
 RewriteRule ^admin/init-database\.php$ admin/init-database.php [L,QSA]
 
-# ULTRA HIGH PRIORITY - Direct access to update endpoints
+# ULTRA HIGH PRIORITY - Direct access to fare update endpoints
+# Critical direct fare update - make this highest priority
+RewriteRule ^direct-fare-update$ admin/direct-fare-update.php [L,QSA]
+RewriteRule ^direct-fare-update\.php$ admin/direct-fare-update.php [L,QSA]
+RewriteRule ^admin/direct-fare-update$ admin/direct-fare-update.php [L,QSA]
+RewriteRule ^admin/direct-fare-update\.php$ admin/direct-fare-update.php [L,QSA]
+
+# Outstation-specific direct fare update - HIGH PRIORITY
+RewriteRule ^admin/direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^admin/direct-outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^direct-outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
+
 # Skip all routing complexity for these critical endpoints
 RewriteRule ^direct-outstation-fares.php$ admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^direct-airport-fares.php$ admin/direct-airport-fares.php [L,QSA]
@@ -85,15 +99,11 @@ RewriteRule ^direct-fare-update.php$ admin/direct-fare-update.php [L,QSA]
 
 # CRITICAL FARE UPDATE FIX - Route all fare updates to direct endpoints
 # This is essential to ensure fare updates work correctly
-RewriteRule ^admin/([^/]+)-fares-update$ admin/direct-outstation-fares.php?trip_type=$1 [QSA,L]
-RewriteRule ^admin/airport-fares-update$ admin/direct-airport-fares.php [QSA,L]
-RewriteRule ^admin/outstation-fares-update$ admin/direct-outstation-fares.php [QSA,L]
-RewriteRule ^admin/local-fares-update$ admin/direct-outstation-fares.php?trip_type=local [QSA,L]
+RewriteRule ^admin/outstation-fares-update$ admin/direct-fare-update.php?tripType=outstation [QSA,L]
+RewriteRule ^admin/outstation-fares-update\.php$ admin/direct-fare-update.php?tripType=outstation [QSA,L]
+RewriteRule ^admin/airport-fares-update$ admin/direct-fare-update.php?tripType=airport [QSA,L]
+RewriteRule ^admin/local-fares-update$ admin/direct-fare-update.php?tripType=local [QSA,L]
 RewriteRule ^admin/fare-update$ admin/direct-fare-update.php [QSA,L]
-
-# New endpoint for direct fare updates
-RewriteRule ^admin/direct-fare-update$ admin/direct-fare-update.php [QSA,L]
-RewriteRule ^admin/direct-fare-update\.php$ admin/direct-fare-update.php [QSA,L]
 
 # Parse API routes to PHP files - DIRECT ACCESS FIRST (higher priority)
 # Ultra-simple direct access endpoints for bypassing all routing complexity

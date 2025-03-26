@@ -1,34 +1,37 @@
 
-import { RouterProvider } from 'react-router-dom';
 import { useEffect } from 'react';
-import { Toaster } from "@/components/ui/toaster";
-import { router } from '@/routes';
-import { clearFareCache } from '@/lib/fareCalculationService';
+import { RouterProvider } from 'react-router-dom';
+import { router } from './routes';
+import { GoogleMapsProvider } from './providers/GoogleMapsProvider';
+import { Toaster as ToastUIToaster } from './components/ui/toaster';
+import { Toaster as SonnerToaster } from './components/ui/sonner';
+import { ThemeProvider } from './providers/ThemeProvider';
 
 function App() {
-  // Clear fare cache when app loads
   useEffect(() => {
-    const forceCacheRefresh = localStorage.getItem('forceCacheRefresh') === 'true';
-    clearFareCache(forceCacheRefresh);
+    // Set page title
+    document.title = 'Vizag Cabs - Book Cabs in Visakhapatnam';
     
-    // Add event listener for fare cache cleared events
-    const handleFareCacheCleared = () => {
-      console.log('Fare cache cleared event received in App component');
-      // You could do additional app-wide updates here if needed
+    // Log navigation for debugging routes
+    const handleRouteChange = () => {
+      console.log('Route changed to:', window.location.pathname);
     };
     
-    window.addEventListener('fare-cache-cleared', handleFareCacheCleared);
+    window.addEventListener('popstate', handleRouteChange);
     
     return () => {
-      window.removeEventListener('fare-cache-cleared', handleFareCacheCleared);
+      window.removeEventListener('popstate', handleRouteChange);
     };
   }, []);
-  
+
   return (
-    <>
-      <RouterProvider router={router} />
-      <Toaster />
-    </>
+    <ThemeProvider defaultTheme="light" storageKey="vizag-cabs-theme">
+      <GoogleMapsProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
+        <RouterProvider router={router} />
+        <ToastUIToaster />
+        <SonnerToaster position="top-right" closeButton richColors />
+      </GoogleMapsProvider>
+    </ThemeProvider>
   );
 }
 
