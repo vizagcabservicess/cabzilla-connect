@@ -67,7 +67,7 @@ export default function AdminDatabasePage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Alert variant="warning" className="mb-4">
+              <Alert variant="destructive" className="mb-4">
                 <FileWarning className="h-4 w-4" />
                 <AlertTitle>Warning</AlertTitle>
                 <AlertDescription>

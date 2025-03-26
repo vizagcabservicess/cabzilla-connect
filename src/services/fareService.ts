@@ -1,3 +1,4 @@
+
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 import { toast } from 'sonner';
 
@@ -218,6 +219,192 @@ class FareService {
       
       return response.data;
     } catch (error) {
+      this.handleApiError(error);
+      throw error;
+    }
+  }
+
+  // =============== ADD MISSING METHODS BELOW ===============
+
+  // Method to get outstation fares for a specific vehicle
+  async getOutstationFaresForVehicle(vehicleId: string): Promise<any> {
+    try {
+      console.log(`Fetching outstation fares for vehicle: ${vehicleId}`);
+      const url = `${API_BASE_URL}/api/admin/outstation-fares`;
+      const params = new URLSearchParams();
+      params.append('vehicle_id', vehicleId);
+      params.append('_t', Date.now().toString()); // Add timestamp to bypass cache
+      
+      const response = await axios.get(`${url}?${params.toString()}`, this.getForcedRequestConfig());
+      console.log('Outstation fares response:', response.data);
+      
+      // Return empty object with default values if no data received
+      if (!response.data || typeof response.data !== 'object') {
+        console.warn(`No outstation fare data received for vehicle: ${vehicleId}`);
+        return {
+          basePrice: 0,
+          pricePerKm: 0,
+          driverAllowance: 0,
+          nightHalt: 0,
+          roundTripBasePrice: 0,
+          roundTripPricePerKm: 0
+        };
+      }
+      
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching outstation fares for vehicle ${vehicleId}:`, error);
+      // Return default values on error
+      return {
+        basePrice: 0,
+        pricePerKm: 0,
+        driverAllowance: 0,
+        nightHalt: 0,
+        roundTripBasePrice: 0,
+        roundTripPricePerKm: 0
+      };
+    }
+  }
+
+  // Method to get local package fares for a specific vehicle
+  async getLocalFaresForVehicle(vehicleId: string): Promise<any> {
+    try {
+      console.log(`Fetching local package fares for vehicle: ${vehicleId}`);
+      const url = `${API_BASE_URL}/api/admin/local-fares`;
+      const params = new URLSearchParams();
+      params.append('vehicle_id', vehicleId);
+      params.append('_t', Date.now().toString()); // Add timestamp to bypass cache
+      
+      const response = await axios.get(`${url}?${params.toString()}`, this.getForcedRequestConfig());
+      console.log('Local package fares response:', response.data);
+      
+      // Return empty object with default values if no data received
+      if (!response.data || typeof response.data !== 'object') {
+        console.warn(`No local fare data received for vehicle: ${vehicleId}`);
+        return {
+          package4hr40km: 0,
+          package8hr80km: 0,
+          package10hr100km: 0,
+          extraKmRate: 0,
+          extraHourRate: 0
+        };
+      }
+      
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching local fares for vehicle ${vehicleId}:`, error);
+      // Return default values on error
+      return {
+        package4hr40km: 0,
+        package8hr80km: 0,
+        package10hr100km: 0,
+        extraKmRate: 0,
+        extraHourRate: 0
+      };
+    }
+  }
+
+  // Method to get airport transfer fares for a specific vehicle
+  async getAirportFaresForVehicle(vehicleId: string): Promise<any> {
+    try {
+      console.log(`Fetching airport transfer fares for vehicle: ${vehicleId}`);
+      const url = `${API_BASE_URL}/api/admin/airport-fares`;
+      const params = new URLSearchParams();
+      params.append('vehicle_id', vehicleId);
+      params.append('_t', Date.now().toString()); // Add timestamp to bypass cache
+      
+      const response = await axios.get(`${url}?${params.toString()}`, this.getForcedRequestConfig());
+      console.log('Airport transfer fares response:', response.data);
+      
+      // Return empty object with default values if no data received
+      if (!response.data || typeof response.data !== 'object') {
+        console.warn(`No airport fare data received for vehicle: ${vehicleId}`);
+        return {
+          basePrice: 0,
+          pricePerKm: 0,
+          dropPrice: 0,
+          pickupPrice: 0,
+          tier1Price: 0,
+          tier2Price: 0,
+          tier3Price: 0,
+          tier4Price: 0,
+          extraKmCharge: 0
+        };
+      }
+      
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching airport fares for vehicle ${vehicleId}:`, error);
+      // Return default values on error
+      return {
+        basePrice: 0,
+        pricePerKm: 0,
+        dropPrice: 0,
+        pickupPrice: 0,
+        tier1Price: 0,
+        tier2Price: 0,
+        tier3Price: 0,
+        tier4Price: 0,
+        extraKmCharge: 0
+      };
+    }
+  }
+
+  // General method to update fares directly for any trip type
+  async directFareUpdate(tripType: string, vehicleId: string, data: any): Promise<any> {
+    try {
+      console.log(`Direct fare update for ${tripType} vehicle ${vehicleId}:`, data);
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+      
+      // Create a FormData object to send
+      const formData = new FormData();
+      
+      // Add vehicle ID with multiple keys to ensure compatibility
+      formData.append('vehicleId', vehicleId);
+      formData.append('vehicle_id', vehicleId);
+      formData.append('cab_id', vehicleId);
+      
+      // Add trip type with multiple keys
+      formData.append('tripType', tripType);
+      formData.append('trip_type', tripType);
+      
+      // Add all data fields from the data object
+      Object.entries(data).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          formData.append(key, String(value));
+        }
+      });
+      
+      // Send the request
+      const response = await fetch(`${baseUrl}/api/admin/direct-fare-update.php`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          ...this.getBypassHeaders()
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status} ${response.statusText}`);
+      }
+      
+      const result = await response.json();
+      console.log(`Direct fare update result for ${tripType}:`, result);
+      
+      // Clear cache after update
+      this.clearCache();
+      
+      // Dispatch an event that fares were updated
+      window.dispatchEvent(new CustomEvent(`${tripType}-fares-updated`, {
+        detail: { 
+          timestamp: Date.now(),
+          vehicleId: vehicleId
+        }
+      }));
+      
+      return result;
+    } catch (error) {
+      console.error(`Error in direct fare update for ${tripType}:`, error);
       this.handleApiError(error);
       throw error;
     }
