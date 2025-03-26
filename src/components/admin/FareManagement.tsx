@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -21,8 +20,7 @@ import {
   Globe,
   Map,
   Car,
-  Bookmark,
-  Truck
+  Bookmark
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { TourFare, FareUpdateRequest } from '@/types/api';
@@ -37,7 +35,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { OutstationFareManagement } from './OutstationFareManagement';
 
 const formSchema = z.object({
   tourId: z.string().min(1, { message: "Tour is required" }),
@@ -240,9 +237,6 @@ export function FareManagement() {
         <TabsTrigger value="update" className="flex items-center gap-1">
           <Edit className="h-4 w-4" /> Update Tour Fares
         </TabsTrigger>
-        <TabsTrigger value="outstation" className="flex items-center gap-1">
-          <Truck className="h-4 w-4" /> Outstation Fares
-        </TabsTrigger>
         <TabsTrigger value="all" className="flex items-center gap-1">
           <Globe className="h-4 w-4" /> View All Fares
         </TabsTrigger>
@@ -413,54 +407,6 @@ export function FareManagement() {
         </Card>
       </TabsContent>
       
-      <TabsContent value="outstation">
-        <OutstationFareManagement />
-      </TabsContent>
-      
-      <TabsContent value="all">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Globe className="h-5 w-5" /> All Tour Fares
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {tourFares.length === 0 ? (
-              <p className="text-muted-foreground">No tour fares available.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-2 px-2">Tour Name</th>
-                      <th className="text-left py-2 px-2">Tour ID</th>
-                      <th className="text-right py-2 px-2">Sedan</th>
-                      <th className="text-right py-2 px-2">Ertiga</th>
-                      <th className="text-right py-2 px-2">Innova</th>
-                      <th className="text-right py-2 px-2">Tempo</th>
-                      <th className="text-right py-2 px-2">Luxury</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tourFares.map((fare) => (
-                      <tr key={fare.tourId} className="border-b hover:bg-muted/50">
-                        <td className="py-2 px-2">{fare.tourName}</td>
-                        <td className="py-2 px-2">{fare.tourId}</td>
-                        <td className="text-right py-2 px-2">₹{fare.sedan.toLocaleString()}</td>
-                        <td className="text-right py-2 px-2">₹{fare.ertiga.toLocaleString()}</td>
-                        <td className="text-right py-2 px-2">₹{fare.innova.toLocaleString()}</td>
-                        <td className="text-right py-2 px-2">₹{fare.tempo ? fare.tempo.toLocaleString() : '-'}</td>
-                        <td className="text-right py-2 px-2">₹{fare.luxury ? fare.luxury.toLocaleString() : '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </TabsContent>
-      
       <TabsContent value="add">
         <Card>
           <CardHeader>
@@ -588,6 +534,91 @@ export function FareManagement() {
                 </Button>
               </form>
             </Form>
+          </CardContent>
+        </Card>
+      </TabsContent>
+      
+      <TabsContent value="all">
+        <Card>
+          <CardHeader>
+            <div className="flex justify-between items-center">
+              <CardTitle className="flex items-center gap-2">
+                <Globe className="h-5 w-5" /> All Tour Fares
+              </CardTitle>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={fetchTourFares} 
+                disabled={isRefreshing}
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {error && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            
+            {isRefreshing ? (
+              <div className="flex justify-center p-10">
+                <RefreshCw className="h-10 w-10 animate-spin text-gray-400" />
+              </div>
+            ) : tourFares.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-2 px-2">Tour</th>
+                      <th className="text-right py-2 px-2">Sedan</th>
+                      <th className="text-right py-2 px-2">Ertiga</th>
+                      <th className="text-right py-2 px-2">Innova</th>
+                      <th className="text-right py-2 px-2">Tempo</th>
+                      <th className="text-right py-2 px-2">Luxury</th>
+                      <th className="text-right py-2 px-2">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tourFares.map((fare) => (
+                      <tr key={fare.tourId} className="border-b hover:bg-gray-50">
+                        <td className="py-2 px-2">{fare.tourName}</td>
+                        <td className="text-right py-2 px-2">₹{fare.sedan.toLocaleString('en-IN')}</td>
+                        <td className="text-right py-2 px-2">₹{fare.ertiga.toLocaleString('en-IN')}</td>
+                        <td className="text-right py-2 px-2">₹{fare.innova.toLocaleString('en-IN')}</td>
+                        <td className="text-right py-2 px-2">₹{fare.tempo.toLocaleString('en-IN')}</td>
+                        <td className="text-right py-2 px-2">₹{fare.luxury.toLocaleString('en-IN')}</td>
+                        <td className="text-right py-2 px-2">
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleTourSelect(fare.tourId)}
+                            className="text-blue-600 hover:text-blue-800"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleDeleteTour(fare.tourId)}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-10 text-gray-500">
+                No tour fares found.
+              </div>
+            )}
           </CardContent>
         </Card>
       </TabsContent>
