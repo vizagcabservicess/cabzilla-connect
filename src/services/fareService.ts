@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { TripType, TripMode } from '@/lib/tripTypes';
 import { LocalFare, OutstationFare, AirportFare } from '@/types/cab';
@@ -16,6 +15,12 @@ export const clearFareCache = () => {
   localStorage.removeItem('local_fares_timestamp'); 
   localStorage.removeItem('airport_fares_timestamp');
   localStorage.setItem('globalFareRefreshToken', Date.now().toString());
+  
+  // Trigger a fare cache cleared event
+  window.dispatchEvent(new CustomEvent('fare-cache-cleared', {
+    detail: { timestamp: Date.now() }
+  }));
+  
   globalTimestamp = Date.now();
 };
 
@@ -125,34 +130,19 @@ export const directFareUpdate = async (tripType: string, vehicleId: string, data
 // Outstation Fares
 export const getOutstationFares = async (origin?: string, destination?: string): Promise<Record<string, OutstationFare>> => {
   try {
-    // Check if we have cached fares and they are less than 5 minutes old
-    const cachedTimestamp = localStorage.getItem('outstation_fares_timestamp');
-    const cachedFares = localStorage.getItem('outstation_fares');
-    const globalRefreshToken = localStorage.getItem('globalFareRefreshToken');
-    
-    if (cachedTimestamp && cachedFares && globalRefreshToken) {
-      const timestamp = parseInt(cachedTimestamp, 10);
-      const refreshToken = parseInt(globalRefreshToken, 10);
-      const now = Date.now();
-      const fiveMinutes = 5 * 60 * 1000;
-      
-      // Use cached data if it's recent and there hasn't been a global refresh
-      if (now - timestamp < fiveMinutes && timestamp > refreshToken) {
-        return JSON.parse(cachedFares);
-      }
-    }
-    
-    // Fetch fares from API
+    // Force a refresh of fares by skipping cache
     const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
     const response = await axios.get(`${baseUrl}/api/outstation-fares.php`, {
       params: { 
         origin,
         destination,
         _t: Date.now() // Cache busting
-      }
+      },
+      headers: getBypassHeaders()
     });
     
     if (response.data && response.data.fares) {
+      console.log('Outstation fares fetched successfully:', response.data);
       // Cache the fares
       localStorage.setItem('outstation_fares', JSON.stringify(response.data.fares));
       localStorage.setItem('outstation_fares_timestamp', Date.now().toString());
@@ -160,6 +150,7 @@ export const getOutstationFares = async (origin?: string, destination?: string):
       return response.data.fares;
     }
     
+    console.warn('No outstation fares returned from API');
     return {};
   } catch (error) {
     console.error('Error fetching outstation fares:', error);
@@ -177,27 +168,9 @@ export const getOutstationFares = async (origin?: string, destination?: string):
 // Get outstation fares for a specific vehicle
 export const getOutstationFaresForVehicle = async (vehicleId: string): Promise<OutstationFare> => {
   try {
-    // First try to get from cache
-    const cachedFares = localStorage.getItem('outstation_fares');
-    const cachedTimestamp = localStorage.getItem('outstation_fares_timestamp');
-    const globalRefreshToken = localStorage.getItem('globalFareRefreshToken');
-    const now = Date.now();
-    
-    if (cachedFares && cachedTimestamp && globalRefreshToken) {
-      const timestamp = parseInt(cachedTimestamp, 10);
-      const refreshToken = parseInt(globalRefreshToken, 10);
-      const fiveMinutes = 5 * 60 * 1000;
-      
-      if (now - timestamp < fiveMinutes && timestamp > refreshToken) {
-        const fares = JSON.parse(cachedFares);
-        if (fares[vehicleId]) {
-          return fares[vehicleId];
-        }
-      }
-    }
-    
     // Try to fetch directly for this vehicle
     const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    const now = Date.now();
     const response = await axios.get(`${baseUrl}/api/outstation-fares.php`, {
       params: {
         vehicle_id: vehicleId,
@@ -207,15 +180,26 @@ export const getOutstationFaresForVehicle = async (vehicleId: string): Promise<O
     });
     
     if (response.data && response.data.fares && response.data.fares[vehicleId]) {
+      console.log(`Outstation fares for vehicle ${vehicleId}:`, response.data.fares[vehicleId]);
+      
+      // Cache this specific vehicle fare
+      const cachedFares = localStorage.getItem('outstation_fares');
+      const fares = cachedFares ? JSON.parse(cachedFares) : {};
+      fares[vehicleId] = response.data.fares[vehicleId];
+      localStorage.setItem('outstation_fares', JSON.stringify(fares));
+      localStorage.setItem('outstation_fares_timestamp', now.toString());
+      
       return response.data.fares[vehicleId];
     }
     
     // If direct fetch failed, try to get all fares
+    console.warn(`No specific fare found for vehicle ${vehicleId}, fetching all fares`);
     const allFares = await getOutstationFares();
     if (allFares && allFares[vehicleId]) {
       return allFares[vehicleId];
     }
     
+    console.warn(`No outstation fare found for vehicle ${vehicleId}`);
     // Return default values if no data found
     return {
       basePrice: 0,
@@ -227,6 +211,15 @@ export const getOutstationFaresForVehicle = async (vehicleId: string): Promise<O
     };
   } catch (error) {
     console.error(`Error fetching outstation fares for vehicle ${vehicleId}:`, error);
+    
+    // Try to get from cache if available
+    const cachedFares = localStorage.getItem('outstation_fares');
+    if (cachedFares) {
+      const fares = JSON.parse(cachedFares);
+      if (fares[vehicleId]) {
+        return fares[vehicleId];
+      }
+    }
     
     // Return default values if error
     return {
@@ -512,3 +505,4 @@ export const fareService = {
   getForcedRequestConfig,
   initializeDatabase
 };
+
