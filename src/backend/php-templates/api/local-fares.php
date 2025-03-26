@@ -25,7 +25,7 @@ try {
         throw new Exception("Database connection failed");
     }
     
-    // Check if pricing_data exists, if not try to fetch from specialized table
+    // Check if local_package_fares exists, if not try to fetch from specialized table
     $checkTableQuery = "SHOW TABLES LIKE 'local_package_fares'";
     $checkResult = $conn->query($checkTableQuery);
     
@@ -88,7 +88,13 @@ try {
             'price8hrs80km' => floatval($row['price8hrs80km'] ?? 0),
             'price10hrs100km' => floatval($row['price10hrs100km'] ?? 0),
             'priceExtraKm' => floatval($row['priceExtraKm'] ?? 0),
-            'priceExtraHour' => floatval($row['priceExtraHour'] ?? 0)
+            'priceExtraHour' => floatval($row['priceExtraHour'] ?? 0),
+            // Add alias properties for compatibility
+            'package4hr40km' => floatval($row['price4hrs40km'] ?? 0),
+            'package8hr80km' => floatval($row['price8hrs80km'] ?? 0),
+            'package10hr100km' => floatval($row['price10hrs100km'] ?? 0),
+            'extraKmRate' => floatval($row['priceExtraKm'] ?? 0),
+            'extraHourRate' => floatval($row['priceExtraHour'] ?? 0)
         ];
     }
     

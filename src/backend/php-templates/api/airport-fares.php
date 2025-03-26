@@ -89,10 +89,16 @@ try {
         // Skip entries with null ID
         if (!$id) continue;
         
-        // Skip entries with no data
-        if (empty($row['basePrice']) && empty($row['pickupPrice']) && empty($row['dropPrice'])) {
-            continue;
+        // Check if this row has any useful fare data
+        $hasData = false;
+        foreach (['basePrice', 'pickupPrice', 'dropPrice', 'tier1Price', 'tier2Price'] as $key) {
+            if (!empty($row[$key])) {
+                $hasData = true;
+                break;
+            }
         }
+        
+        if (!$hasData) continue;
         
         // Map to standardized properties
         $fares[$id] = [
@@ -108,11 +114,12 @@ try {
         ];
     }
     
-    // Return response
+    // Return response with debugging info
     echo json_encode([
         'fares' => $fares,
         'timestamp' => time(),
-        'sourceTable' => $airportTableExists ? 'airport_transfer_fares' : 'vehicle_pricing'
+        'sourceTable' => $airportTableExists ? 'airport_transfer_fares' : 'vehicle_pricing',
+        'fareCount' => count($fares)
     ]);
     
 } catch (Exception $e) {

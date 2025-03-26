@@ -89,14 +89,19 @@ try {
         // Skip entries with null ID
         if (!$id) continue;
 
+        // Add nightHalt as an alias for nightHaltCharge
+        $nightHaltCharge = floatval($row['nightHaltCharge'] ?? 0);
+
         // Map to standardized properties
         $fares[$id] = [
             'basePrice' => floatval($row['basePrice'] ?? 0),
             'pricePerKm' => floatval($row['pricePerKm'] ?? 0),
-            'nightHaltCharge' => floatval($row['nightHaltCharge'] ?? 0),
+            'nightHaltCharge' => $nightHaltCharge,
             'driverAllowance' => floatval($row['driverAllowance'] ?? 0),
             'roundTripBasePrice' => floatval($row['roundTripBasePrice'] ?? 0),
-            'roundTripPricePerKm' => floatval($row['roundTripPricePerKm'] ?? 0)
+            'roundTripPricePerKm' => floatval($row['roundTripPricePerKm'] ?? 0),
+            // Add aliases for backward compatibility
+            'nightHalt' => $nightHaltCharge
         ];
     }
     

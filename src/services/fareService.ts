@@ -144,7 +144,7 @@ export const getOutstationFares = async (origin?: string, destination?: string):
     
     // Fetch fares from API
     const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
-    const response = await axios.get(`${baseUrl}/api/outstation-fares`, {
+    const response = await axios.get(`${baseUrl}/api/outstation-fares.php`, {
       params: { 
         origin,
         destination,
@@ -198,7 +198,7 @@ export const getOutstationFaresForVehicle = async (vehicleId: string): Promise<O
     
     // Try to fetch directly for this vehicle
     const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
-    const response = await axios.get(`${baseUrl}/api/admin/outstation-fares`, {
+    const response = await axios.get(`${baseUrl}/api/outstation-fares.php`, {
       params: {
         vehicle_id: vehicleId,
         _t: now // Cache busting
@@ -262,7 +262,7 @@ export const getLocalFares = async (): Promise<Record<string, LocalFare>> => {
     
     // Fetch fares from API
     const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
-    const response = await axios.get(`${baseUrl}/api/local-fares`, {
+    const response = await axios.get(`${baseUrl}/api/local-fares.php`, {
       params: { 
         _t: Date.now() // Cache busting
       }
@@ -314,7 +314,7 @@ export const getLocalFaresForVehicle = async (vehicleId: string): Promise<LocalF
     
     // Try to fetch directly for this vehicle
     const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
-    const response = await axios.get(`${baseUrl}/api/admin/local-fares`, {
+    const response = await axios.get(`${baseUrl}/api/local-fares.php`, {
       params: {
         vehicle_id: vehicleId,
         _t: now // Cache busting
@@ -376,7 +376,7 @@ export const getAirportFares = async (): Promise<Record<string, AirportFare>> =>
     
     // Fetch fares from API
     const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
-    const response = await axios.get(`${baseUrl}/api/airport-fares`, {
+    const response = await axios.get(`${baseUrl}/api/airport-fares.php`, {
       params: { 
         _t: Date.now() // Cache busting
       }
@@ -432,17 +432,12 @@ export const getAirportFaresForVehicle = async (vehicleId: string): Promise<Airp
     // Try to fetch directly for this vehicle
     try {
       const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
-      const response = await axios.get(`${baseUrl}/api/admin/airport-fares`, {
+      const response = await axios.get(`${baseUrl}/api/airport-fares.php`, {
         params: {
           vehicle_id: vehicleId,
           _t: now // Cache busting
         },
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-          'X-Force-Refresh': 'true'
-        }
+        headers: getBypassHeaders()
       });
       
       if (response.data && response.data.fares && response.data.fares[vehicleId]) {
@@ -467,12 +462,7 @@ export const getAirportFaresForVehicle = async (vehicleId: string): Promise<Airp
         params: {
           _t: now // Cache busting
         },
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-          'X-Force-Refresh': 'true'
-        }
+        headers: getBypassHeaders()
       });
       
       if (response.data && response.data.vehicles) {
