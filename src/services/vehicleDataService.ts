@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { CabType, OutstationFare, LocalFare, AirportFare } from '@/types/cab';
 import { toast } from 'sonner';
@@ -483,232 +484,13 @@ export const getVehicleTypes = async (): Promise<{id: string, name: string}[]> =
 };
 
 /**
- * Get outstation fares for a specific vehicle
- * Added to fetch existing outstation fares when selecting a vehicle
- */
-export const getOutstationFares = async (vehicleId: string): Promise<OutstationFare | null> => {
-  try {
-    // Clean the vehicle ID
-    const cleanedVehicleId = cleanVehicleId(vehicleId);
-    
-    console.log(`Fetching outstation fares for vehicle ${cleanedVehicleId}...`);
-    
-    // Add cache busting timestamp
-    const timestamp = Date.now();
-    
-    // Try multiple API endpoints to fetch outstation fares
-    const endpoints = [
-      // Direct outstation endpoint with GET
-      `${apiBaseUrl}/api/direct-outstation-fares?vehicleId=${cleanedVehicleId}&_t=${timestamp}`,
-      `/api/direct-outstation-fares?vehicleId=${cleanedVehicleId}&_t=${timestamp}`,
-      `${apiBaseUrl}/api/admin/direct-outstation-fares.php?vehicleId=${cleanedVehicleId}&_t=${timestamp}`,
-      `/api/admin/direct-outstation-fares.php?vehicleId=${cleanedVehicleId}&_t=${timestamp}`,
-      
-      // Additional endpoints
-      `${apiBaseUrl}/api/outstation-fares/get?vehicleId=${cleanedVehicleId}&_t=${timestamp}`,
-      `/api/outstation-fares/get?vehicleId=${cleanedVehicleId}&_t=${timestamp}`,
-      
-      // Emergency endpoints 
-      `${apiBaseUrl}/api/emergency/outstation-fares?vehicleId=${cleanedVehicleId}&_t=${timestamp}`,
-      `/api/emergency/outstation-fares?vehicleId=${cleanedVehicleId}&_t=${timestamp}`
-    ];
-    
-    for (const endpoint of endpoints) {
-      try {
-        console.log(`Trying to fetch outstation fares from: ${endpoint}`);
-        
-        const response = await axios.get(endpoint, {
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0',
-            'X-API-Version': apiVersion,
-            'X-Force-Refresh': 'true'
-          },
-          timeout: 8000 // 8 second timeout
-        });
-        
-        if (response.status === 200 && response.data) {
-          console.log('Successfully fetched outstation fares from', endpoint, response.data);
-          
-          // Process response data
-          const fare = response.data.data || response.data;
-          
-          if (fare) {
-            return {
-              vehicleId: cleanedVehicleId,
-              basePrice: parseFloat(fare.oneWayBasePrice || fare.basePrice || 0),
-              pricePerKm: parseFloat(fare.oneWayPricePerKm || fare.pricePerKm || 0),
-              roundTripBasePrice: parseFloat(fare.roundTripBasePrice || fare.roundtrip_base_price || fare.oneWayBasePrice || 0),
-              roundTripPricePerKm: parseFloat(fare.roundTripPricePerKm || fare.roundtrip_price_per_km || fare.oneWayPricePerKm || 0),
-              driverAllowance: parseFloat(fare.driverAllowance || fare.driver_allowance || 250),
-              nightHalt: parseFloat(fare.nightHaltCharge || fare.night_halt_charge || 700),
-              // Add optional fields for compatibility 
-              oneWayBasePrice: parseFloat(fare.oneWayBasePrice || fare.basePrice || 0),
-              oneWayPricePerKm: parseFloat(fare.oneWayPricePerKm || fare.pricePerKm || 0),
-              nightHaltCharge: parseFloat(fare.nightHaltCharge || fare.night_halt_charge || 700)
-            };
-          }
-        }
-      } catch (error) {
-        console.error(`Error fetching outstation fares from ${endpoint}:`, error);
-      }
-    }
-    
-    // If all endpoints fail, return default values
-    console.warn('No outstation fares found, using defaults');
-    return {
-      vehicleId: cleanedVehicleId,
-      basePrice: 0,
-      pricePerKm: 0,
-      roundTripBasePrice: 0,
-      roundTripPricePerKm: 0,
-      driverAllowance: 250,
-      nightHalt: 700,
-      // Add optional fields for compatibility
-      oneWayBasePrice: 0,
-      oneWayPricePerKm: 0,
-      nightHaltCharge: 700
-    };
-    
-  } catch (error) {
-    console.error('Error fetching outstation fares:', error);
-    return null;
-  }
-};
-
-/**
  * Update outstation fares for a vehicle
  */
 export const updateOutstationFares = async (
   vehicleId: string,
   outstation: OutstationFare
 ): Promise<boolean> => {
-  try {
-    // Clean the vehicle ID
-    const cleanedVehicleId = cleanVehicleId(vehicleId);
-    
-    console.log(`Updating outstation fares for vehicle ${cleanedVehicleId}:`, outstation);
-    
-    // Set the Authorization header if JWT is available in localStorage
-    const authHeader: Record<string, string> = {};
-    const token = localStorage.getItem('token');
-    if (token) {
-      authHeader.Authorization = `Bearer ${token}`;
-    }
-    
-    // Add cache busting timestamp
-    const timestamp = Date.now();
-    
-    // Create payload combining vehicle ID and fare data
-    const payload = {
-      vehicleId: cleanedVehicleId,
-      ...outstation
-    };
-    
-    // Log the payload for debugging
-    console.log('Outstation fare update payload:', payload);
-    
-    // Try our direct outstation endpoint first - this is the most reliable
-    const endpoints = [
-      `${apiBaseUrl}/api/direct-outstation-fares?_t=${timestamp}`,
-      `/api/direct-outstation-fares?_t=${timestamp}`,
-      `${apiBaseUrl}/api/admin/direct-outstation-fares.php?_t=${timestamp}`,
-      `/api/admin/direct-outstation-fares.php?_t=${timestamp}`,
-      `${apiBaseUrl}/api/emergency/outstation-fares?_t=${timestamp}`,
-      `/api/emergency/outstation-fares?_t=${timestamp}`,
-      // Additional regular endpoints
-      `${apiBaseUrl}/api/admin/outstation-fares-update.php?_t=${timestamp}`,
-      `/api/admin/outstation-fares-update.php?_t=${timestamp}`
-    ];
-    
-    // Try multiple methods for sending data
-    for (const endpoint of endpoints) {
-      try {
-        console.log(`Trying to update outstation fares using endpoint: ${endpoint}`);
-        
-        const response = await axios.post(endpoint, payload, {
-          headers: {
-            ...authHeader,
-            'Content-Type': 'application/json',
-            'X-API-Version': apiVersion,
-            'X-Force-Refresh': 'true',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
-          },
-          timeout: 15000 // 15 second timeout
-        });
-        
-        console.log(`Response from ${endpoint}:`, response.data);
-        
-        if (response.status === 200) {
-          const result = response.data;
-          
-          // Log database operation details for debugging
-          if (result.databaseOperation) {
-            console.log(`Database operation: ${result.databaseOperation}`);
-            console.log('Operation details:', result.debug || 'Not provided');
-          }
-          
-          console.log(`Outstation fares updated successfully via ${endpoint}`);
-          toast.success(`Outstation fares updated successfully for ${cleanedVehicleId}`);
-          
-          // Clear fare caches
-          localStorage.removeItem('cabFares');
-          sessionStorage.removeItem('cabFares');
-          
-          return true;
-        }
-      } catch (error: any) {
-        console.error(`Error updating outstation fares at endpoint ${endpoint}:`, error.response || error);
-      }
-    }
-    
-    // If we reach here, try with FormData as a last resort
-    for (const endpoint of endpoints) {
-      try {
-        console.log(`Trying with FormData at ${endpoint}`);
-        
-        const formData = new FormData();
-        for (const key in payload) {
-          formData.append(key, String(payload[key as keyof typeof payload]));
-        }
-        
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          body: formData,
-          headers: {
-            ...authHeader,
-            'X-API-Version': apiVersion,
-            'X-Force-Refresh': 'true'
-          }
-        });
-        
-        if (response.ok) {
-          const result = await response.json();
-          console.log(`Outstation fares updated successfully via FormData to ${endpoint}`, result);
-          toast.success(`Outstation fares updated successfully for ${cleanedVehicleId}`);
-          
-          // Clear fare caches
-          localStorage.removeItem('cabFares');
-          sessionStorage.removeItem('cabFares');
-          
-          return true;
-        }
-      } catch (error) {
-        console.error(`FormData error updating outstation fares at ${endpoint}:`, error);
-      }
-    }
-    
-    // If all attempts fail
-    toast.error(`Failed to update outstation fares for ${cleanedVehicleId}`);
-    return false;
-  } catch (error: any) {
-    console.error('Error updating outstation fares:', error);
-    toast.error(`Error updating outstation fares: ${error.message || 'Unknown error'}`);
-    return false;
-  }
+  return updateTripFares(vehicleId, 'outstation', outstation);
 };
 
 /**
@@ -854,52 +636,86 @@ export const updateTripFares = async (
             // For multipart/form-data, let axios set the content type with boundary
             const formData = new FormData();
             for (const key in payload) {
-              formData.append(key, String(payload[key as keyof typeof payload]));
+              formData.append(key, String(payload[key]));
             }
             axiosConfig.data = formData;
           }
           
           const response = await axios(axiosConfig);
           
-          if (response.status === 200) {
-            console.log(`Successfully updated ${tripType} fares via ${endpoint} with ${contentType}`);
+          console.log(`Response from ${endpoint} (${contentType}):`, response.data);
+          
+          if (response.status >= 200 && response.status < 300) {
+            console.log(`${tripType} fares updated successfully via ${endpoint} with ${contentType}`);
             successful = true;
-            
-            // Clear any cached data for this trip type
-            localStorage.removeItem(`${tripType}Fares`);
-            sessionStorage.removeItem(`${tripType}Fares`);
-            
-            // Dispatch a custom event to notify other components
-            const updateEvent = new CustomEvent(`${tripType}-fares-updated`, {
-              detail: {
-                vehicleId: cleanedVehicleId,
-                tripType,
-                updatedAt: new Date().toISOString(),
-                prices: fareData
-              }
-            });
-            window.dispatchEvent(updateEvent);
-            
             toast.success(`${tripType} fares updated successfully`);
+            
+            // Clear all caches to ensure fresh data
+            localStorage.removeItem('cabFares');
+            localStorage.removeItem('tourFares');
+            sessionStorage.removeItem('cabFares');
+            sessionStorage.removeItem('tourFares');
+            sessionStorage.removeItem('calculatedFares');
+            
             return true;
           }
-        } catch (error) {
-          console.error(`Error updating ${tripType} fares at ${endpoint} with ${contentType}:`, error);
+        } catch (error: any) {
           lastError = error;
+          console.error(`Error updating ${tripType} fares at endpoint ${endpoint} with ${contentType}:`, error.response || error);
         }
       }
     }
     
-    // If all attempts fail
-    if (lastError) {
-      console.error(`All attempts to update ${tripType} fares failed. Last error:`, lastError);
-      toast.error(`Failed to update ${tripType} fares`);
+    // If axios methods all failed, try fetch as a last resort
+    if (!successful) {
+      for (const endpoint of endpoints) {
+        try {
+          console.log(`Trying fetch with ${endpoint}`);
+          
+          // Try with FormData
+          const formData = new FormData();
+          for (const key in payload) {
+            formData.append(key, String(payload[key]));
+          }
+          
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            body: formData,
+            headers: {
+              ...authHeader,
+              'X-API-Version': apiVersion,
+              'X-Force-Refresh': 'true',
+            }
+          });
+          
+          if (response.ok) {
+            console.log(`${tripType} fares updated successfully via fetch to ${endpoint}`);
+            toast.success(`${tripType} fares updated successfully`);
+            
+            // Clear all caches
+            localStorage.removeItem('cabFares');
+            localStorage.removeItem('tourFares');
+            sessionStorage.removeItem('cabFares');
+            sessionStorage.removeItem('tourFares');
+            sessionStorage.removeItem('calculatedFares');
+            
+            return true;
+          }
+        } catch (error) {
+          console.error(`Fetch error updating ${tripType} fares at endpoint ${endpoint}:`, error);
+        }
+      }
     }
     
+    if (lastError) {
+      toast.error(`Failed to update ${tripType} fares: ${lastError.response?.data?.message || lastError.message || 'Unknown error'}`);
+      throw lastError;
+    }
+    
+    toast.error(`Failed to update ${tripType} fares: All attempts failed`);
     return false;
-  } catch (error) {
-    console.error(`Error in updateTripFares for ${tripType}:`, error);
-    toast.error(`Error updating ${tripType} fares: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  } catch (error: any) {
+    console.error(`Error updating ${tripType} fares:`, error);
     return false;
   }
 };

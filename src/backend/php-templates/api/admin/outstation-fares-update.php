@@ -59,7 +59,7 @@ if (empty($data) && !empty($_POST)) {
 error_log('Received outstation fares update data: ' . print_r($data, true));
 
 // Check if data is valid
-if (!$data || (!isset($data['vehicleId']) && !isset($data['vehicle_id']) && !isset($data['vehicleType']) && !isset($data['id']))) {
+if (!$data || (!isset($data['vehicleId']) && !isset($data['vehicle_id']) && !isset($data['vehicleType']))) {
     http_response_code(400);
     echo json_encode([
         'status' => 'error',
@@ -70,7 +70,7 @@ if (!$data || (!isset($data['vehicleId']) && !isset($data['vehicle_id']) && !iss
 }
 
 // Extract vehicle ID and normalize
-$vehicleId = $data['id'] ?? $data['vehicleId'] ?? $data['vehicle_id'] ?? $data['vehicleType'] ?? '';
+$vehicleId = $data['vehicleId'] ?? $data['vehicle_id'] ?? $data['vehicleType'] ?? '';
 
 // Normalize vehicle ID (remove any 'item-' prefix)
 if (strpos($vehicleId, 'item-') === 0) {
@@ -78,7 +78,7 @@ if (strpos($vehicleId, 'item-') === 0) {
 }
 
 // Extract one-way pricing
-$oneWayBasePrice = floatval($data['oneWayBasePrice'] ?? $data['baseFare'] ?? $data['basePrice'] ?? 0);
+$oneWayBasePrice = floatval($data['oneWayBasePrice'] ?? $data['baseFare'] ?? 0);
 $oneWayPricePerKm = floatval($data['oneWayPricePerKm'] ?? $data['pricePerKm'] ?? 0);
 
 // Extract round-trip pricing
@@ -161,57 +161,57 @@ try {
     
     // APPROACH 1: Update one-way pricing
     try {
-        // Check if one-way record exists - try both id and vehicle_id
+        // Check if one-way record exists
         $checkOneWayStmt = $pdo->prepare("
             SELECT id FROM vehicle_pricing 
-            WHERE (id = ? OR vehicle_id = ?) AND trip_type = 'outstation-one-way'
+            WHERE vehicle_id = ? AND trip_type = 'outstation-one-way'
         ");
-        $checkOneWayStmt->execute([$vehicleId, $vehicleId]);
+        $checkOneWayStmt->execute([$vehicleId]);
         
         if ($checkOneWayStmt->rowCount() > 0) {
-            // Update existing record - try both id and vehicle_id
+            // Update existing record
             $updateOneWayStmt = $pdo->prepare("
                 UPDATE vehicle_pricing 
                 SET base_fare = ?, price_per_km = ?, updated_at = NOW()
-                WHERE (id = ? OR vehicle_id = ?) AND trip_type = 'outstation-one-way'
+                WHERE vehicle_id = ? AND trip_type = 'outstation-one-way'
             ");
-            $updateOneWayStmt->execute([$oneWayBasePrice, $oneWayPricePerKm, $vehicleId, $vehicleId]);
+            $updateOneWayStmt->execute([$oneWayBasePrice, $oneWayPricePerKm, $vehicleId]);
             error_log("Updated one-way record");
         } else {
-            // Insert new record - use id since that's what was causing the issue
+            // Insert new record
             $insertOneWayStmt = $pdo->prepare("
                 INSERT INTO vehicle_pricing 
-                (id, vehicle_id, trip_type, base_fare, price_per_km, created_at, updated_at)
-                VALUES (?, ?, 'outstation-one-way', ?, ?, NOW(), NOW())
+                (vehicle_id, trip_type, base_fare, price_per_km, created_at, updated_at)
+                VALUES (?, 'outstation-one-way', ?, ?, NOW(), NOW())
             ");
-            $insertOneWayStmt->execute([$vehicleId, $vehicleId, $oneWayBasePrice, $oneWayPricePerKm]);
+            $insertOneWayStmt->execute([$vehicleId, $oneWayBasePrice, $oneWayPricePerKm]);
             error_log("Inserted new one-way record");
         }
         
-        // Check if round-trip record exists - try both id and vehicle_id
+        // Check if round-trip record exists
         $checkRoundTripStmt = $pdo->prepare("
             SELECT id FROM vehicle_pricing 
-            WHERE (id = ? OR vehicle_id = ?) AND trip_type = 'outstation-round-trip'
+            WHERE vehicle_id = ? AND trip_type = 'outstation-round-trip'
         ");
-        $checkRoundTripStmt->execute([$vehicleId, $vehicleId]);
+        $checkRoundTripStmt->execute([$vehicleId]);
         
         if ($checkRoundTripStmt->rowCount() > 0) {
-            // Update existing record - try both id and vehicle_id
+            // Update existing record
             $updateRoundTripStmt = $pdo->prepare("
                 UPDATE vehicle_pricing 
                 SET base_fare = ?, price_per_km = ?, updated_at = NOW()
-                WHERE (id = ? OR vehicle_id = ?) AND trip_type = 'outstation-round-trip'
+                WHERE vehicle_id = ? AND trip_type = 'outstation-round-trip'
             ");
-            $updateRoundTripStmt->execute([$roundTripBasePrice, $roundTripPricePerKm, $vehicleId, $vehicleId]);
+            $updateRoundTripStmt->execute([$roundTripBasePrice, $roundTripPricePerKm, $vehicleId]);
             error_log("Updated round-trip record");
         } else {
-            // Insert new record - use id since that's what was causing the issue
+            // Insert new record
             $insertRoundTripStmt = $pdo->prepare("
                 INSERT INTO vehicle_pricing 
-                (id, vehicle_id, trip_type, base_fare, price_per_km, created_at, updated_at)
-                VALUES (?, ?, 'outstation-round-trip', ?, ?, NOW(), NOW())
+                (vehicle_id, trip_type, base_fare, price_per_km, created_at, updated_at)
+                VALUES (?, 'outstation-round-trip', ?, ?, NOW(), NOW())
             ");
-            $insertRoundTripStmt->execute([$vehicleId, $vehicleId, $roundTripBasePrice, $roundTripPricePerKm]);
+            $insertRoundTripStmt->execute([$vehicleId, $roundTripBasePrice, $roundTripPricePerKm]);
             error_log("Inserted new round-trip record");
         }
         

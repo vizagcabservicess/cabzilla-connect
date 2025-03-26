@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { toast } from 'sonner';
 import { OutstationFare, LocalFare, AirportFare } from '@/types/cab';
@@ -7,20 +8,14 @@ class FareService {
   private apiVersion: string;
   private apiBaseUrl: string;
   private useDirectApiAccess: boolean;
-  private useUltraEmergency: boolean;
   
   constructor() {
     // Load environment variables
     this.apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
-    this.apiVersion = import.meta.env.VITE_API_VERSION || '1.0.71';
+    this.apiVersion = import.meta.env.VITE_API_VERSION || '1.0.0';
     
     // Check environment variable for direct API access
     this.useDirectApiAccess = import.meta.env.VITE_USE_DIRECT_API === 'true';
-    
-    // Check if ultra emergency mode is active
-    this.useUltraEmergency = import.meta.env.VITE_USE_ULTRA_EMERGENCY === 'true' || 
-                            localStorage.getItem('useUltraEmergency') === 'true' ||
-                            sessionStorage.getItem('useUltraEmergency') === 'true';
     
     // Check if we should force disable cache
     const forceCacheRefresh = localStorage.getItem('forceCacheRefresh');
@@ -72,22 +67,6 @@ class FareService {
     };
   }
   
-  // Method for ultra emergency headers
-  getUltraEmergencyHeaders() {
-    const timestamp = Date.now();
-    
-    return {
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0',
-      'X-API-Version': this.apiVersion,
-      'X-Force-Refresh': 'true',
-      'X-Bypass-Cache': 'true',
-      'X-Ultra-Emergency': 'true',
-      'X-Custom-Timestamp': timestamp.toString()
-    };
-  }
-  
   async getTourFares() {
     // Check if we have cached data
     if (this.cacheEnabled) {
@@ -108,18 +87,14 @@ class FareService {
     
     // If no cached data or cache disabled, fetch from API
     try {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
-      const apiVersion = import.meta.env.VITE_API_VERSION || '1.0.0';
-      
-      // Add cache busting parameter
       const timestamp = Date.now();
       
-      const response = await axios.get(`${apiBaseUrl}/api/fares/tours.php?_t=${timestamp}`, {
+      const response = await axios.get(`${this.apiBaseUrl}/api/fares/tours.php?_t=${timestamp}`, {
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache',
           'Expires': '0',
-          'X-API-Version': apiVersion
+          'X-API-Version': this.apiVersion
         }
       });
       
@@ -157,6 +132,40 @@ class FareService {
           localStorage.removeItem('cabFares');
         }
       }
+    }
+    
+    // Try to fetch from direct API endpoint
+    try {
+      const timestamp = Date.now();
+      const endpoint = `${this.apiBaseUrl}/api/direct-outstation-fares.php?vehicleId=${vehicleId}&_t=${timestamp}`;
+      
+      console.log(`Fetching outstation fares for ${vehicleId} from API: ${endpoint}`);
+      
+      const response = await axios.get(endpoint, this.getForcedRequestConfig());
+      
+      if (response.data && response.data.status === 'success' && response.data.data) {
+        console.log(`Successfully fetched outstation fares for ${vehicleId}:`, response.data.data);
+        
+        // Cache this new data
+        try {
+          const cabFaresStr = localStorage.getItem('cabFares');
+          let cabFares = cabFaresStr ? JSON.parse(cabFaresStr) : {};
+          
+          if (!cabFares.outstation) {
+            cabFares.outstation = {};
+          }
+          
+          cabFares.outstation[vehicleId] = response.data.data;
+          localStorage.setItem('cabFares', JSON.stringify(cabFares));
+          console.log(`Cached outstation fares for ${vehicleId}`);
+        } catch (e) {
+          console.error('Error caching outstation fares:', e);
+        }
+        
+        return response.data.data;
+      }
+    } catch (error) {
+      console.error(`Failed to fetch outstation fares for ${vehicleId} from API:`, error);
     }
     
     // Fallback to default values
@@ -276,6 +285,94 @@ class FareService {
     }
   }
   
+  // Enhanced outstation fare updater with multiple fallback approaches
+  async updateOutstationFares(vehicleId: string, data: any): Promise<any> {
+    console.log(`Starting updateOutstationFares for vehicle ID ${vehicleId}`, data);
+    
+    // Ensure consistent data format
+    const fareData = {
+      vehicleId: vehicleId,
+      basePrice: data.basePrice || 0,
+      pricePerKm: data.pricePerKm || 0,
+      driverAllowance: data.driverAllowance || 0, 
+      nightHalt: data.nightHalt || data.nightHaltCharge || 0,
+      roundTripBasePrice: data.roundTripBasePrice || 0,
+      roundTripPricePerKm: data.roundTripPricePerKm || 0,
+      timestamp: Date.now()
+    };
+    
+    try {
+      // Try direct endpoint first - most reliable
+      const directResponse = await this.updateDirectOutstationFares(vehicleId, fareData);
+      
+      if (directResponse && directResponse.status === 'success') {
+        console.log('Outstation fares updated successfully via direct endpoint');
+        this.clearCache();
+        
+        // Dispatch an event to notify of the update
+        window.dispatchEvent(new CustomEvent('outstation-fares-updated', {
+          detail: { vehicleId, success: true, data: fareData }
+        }));
+        
+        return directResponse;
+      }
+      
+      // If direct method failed, try the standard fare update endpoint
+      console.log('Direct outstation fare update failed, trying standard endpoint');
+      return await this.directFareUpdate('outstation', vehicleId, fareData);
+      
+    } catch (error) {
+      console.error('All outstation fare update attempts failed:', error);
+      
+      // Dispatch failure event
+      window.dispatchEvent(new CustomEvent('outstation-fares-updated', {
+        detail: { vehicleId, success: false, error }
+      }));
+      
+      throw error;
+    }
+  }
+  
+  // Direct call to the outstation fares endpoint
+  private async updateDirectOutstationFares(vehicleId: string, data: any): Promise<any> {
+    try {
+      const timestamp = Date.now();
+      const endpoint = `${this.apiBaseUrl}/api/direct-outstation-fares.php?_t=${timestamp}`;
+      
+      console.log(`Updating outstation fares at ${endpoint} for vehicle ${vehicleId}`);
+      
+      // Create a FormData object for more reliable form submission
+      const formData = new FormData();
+      Object.entries(data).forEach(([key, value]) => {
+        formData.append(key, String(value));
+      });
+      
+      // Append additional fields for better compatibility
+      formData.append('vehicle_id', vehicleId);
+      formData.append('trip_type', 'outstation');
+      formData.append('_timestamp', timestamp.toString());
+      
+      // Send the request
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        body: formData,
+        headers: this.getBypassHeaders()
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+      }
+      
+      const responseData = await response.json();
+      console.log('Direct outstation fare update response:', responseData);
+      
+      return responseData;
+    } catch (error) {
+      console.error('Error in updateDirectOutstationFares:', error);
+      throw error;
+    }
+  }
+  
   async directFareUpdate(tripType: string, vehicleId: string, data: any): Promise<any> {
     try {
       console.log(`Starting directFareUpdate for ${tripType} with vehicle ID ${vehicleId}`);
@@ -297,311 +394,112 @@ class FareService {
       // Initialize response tracking variables
       let successfulResponse = null;
       let fallbackAttempted = false;
-      let directResponse = null;
       
-      // Try to initialize the database first to ensure tables exist
-      console.log("First initializing database to ensure tables exist...");
+      // Try to update via the direct-fare-update.php endpoint first (preferred)
       try {
-        const initResponse = await fetch(`${this.apiBaseUrl}/api/init-database.php?_t=${timestamp}`, {
-          method: 'GET',
-          headers: this.getBypassHeaders()
+        console.log("Attempting to update fare via direct-fare-update.php");
+        
+        const directEndpoint = `${this.apiBaseUrl}/api/direct-fare-update.php?_t=${timestamp}`;
+        
+        const formData = new FormData();
+        Object.entries(data).forEach(([key, value]) => {
+          formData.append(key, String(value));
         });
         
-        if (initResponse.ok) {
-          const initData = await initResponse.json();
-          console.log("Database initialization response:", initData);
-        }
-      } catch (initError) {
-        console.error("Initial database initialization error (non-critical):", initError);
-        // Continue anyway - this is just a preparatory step
-      }
-      
-      // Check if we should use ultra emergency mode for outstation
-      const useUltra = this.useUltraEmergency || 
-                     localStorage.getItem('useUltraEmergency') === 'true' || 
-                     sessionStorage.getItem('useUltraEmergency') === 'true';
-      
-      // ULTRA EMERGENCY MODE - highest priority override
-      if (useUltra && tripType === 'outstation') {
-        try {
-          console.log("Using ULTRA EMERGENCY endpoint for outstation update");
-          
-          const formData = new FormData();
-          Object.entries(data).forEach(([key, value]) => {
-            if (value !== undefined && value !== null) {
-              formData.append(key, String(value));
-            }
-          });
-          
-          // Specifically ensure these fields are in the form data for outstation fares
-          if (data.oneWayBasePrice) formData.append('oneWayBasePrice', String(data.oneWayBasePrice));
-          if (data.oneWayPricePerKm) formData.append('oneWayPricePerKm', String(data.oneWayPricePerKm));
-          if (data.roundTripBasePrice) formData.append('roundTripBasePrice', String(data.roundTripBasePrice));
-          if (data.roundTripPricePerKm) formData.append('roundTripPricePerKm', String(data.roundTripPricePerKm));
-          
-          const ultraEndpoint = `${this.apiBaseUrl}/api/ultra-emergency-outstation?_t=${timestamp}`;
-          
-          // First try with FormData
-          const response = await fetch(ultraEndpoint, {
-            method: 'POST',
-            body: formData,
-            headers: this.getUltraEmergencyHeaders()
-          });
-          
-          if (response.ok) {
-            let responseData;
-            const responseText = await response.text();
-            
-            try {
-              responseData = JSON.parse(responseText);
-            } catch (e) {
-              console.log("Response is not JSON, using text response:", responseText);
-              responseData = { 
-                status: 'success', 
-                message: 'Non-JSON response received',
-                rawResponse: responseText
-              };
-            }
-            
-            console.log("Ultra emergency fare update response:", responseData);
-            
-            if (responseData.status === 'success') {
-              this.clearCache();
-              
-              // Show toast notification
-              toast.success(`Successfully updated ${tripType} fares using ultra emergency mode`);
-              
-              // Dispatch update event
-              window.dispatchEvent(new CustomEvent('fares-updated', { 
-                detail: { vehicleId, tripType, success: true, ultraEmergency: true }
-              }));
-              
-              return responseData;
-            }
+        const response = await fetch(directEndpoint, {
+          method: 'POST',
+          body: formData,
+          headers: {
+            ...this.getBypassHeaders()
           }
+        });
+        
+        if (response.ok) {
+          const responseData = await response.json();
+          console.log("Direct fare update response:", responseData);
           
-          // If that fails, try JSON format
-          const jsonResponse = await fetch(ultraEndpoint, {
-            method: 'POST',
-            body: JSON.stringify(data),
-            headers: {
-              ...this.getUltraEmergencyHeaders(),
-              'Content-Type': 'application/json'
-            }
-          });
-          
-          if (jsonResponse.ok) {
-            let jsonResponseData;
-            const jsonResponseText = await jsonResponse.text();
-            
-            try {
-              jsonResponseData = JSON.parse(jsonResponseText);
-            } catch (e) {
-              console.log("JSON format response is not JSON, using text response:", jsonResponseText);
-              jsonResponseData = { 
-                status: 'success', 
-                message: 'Non-JSON response received',
-                rawResponse: jsonResponseText
-              };
-            }
-            
-            console.log("Ultra emergency JSON response:", jsonResponseData);
-            
-            if (jsonResponseData.status === 'success') {
-              this.clearCache();
-              
-              // Show toast notification
-              toast.success(`Successfully updated ${tripType} fares using ultra emergency mode`);
-              
-              // Dispatch update event
-              window.dispatchEvent(new CustomEvent('fares-updated', { 
-                detail: { vehicleId, tripType, success: true, ultraEmergency: true }
-              }));
-              
-              return jsonResponseData;
-            }
-          }
-        } catch (ultraError) {
-          console.error("Error using ultra emergency endpoint:", ultraError);
-        }
-      }
-      
-      // Try different endpoints based on trip type
-      if (tripType === 'outstation') {
-        // For outstation fares, use dedicated endpoint
-        try {
-          console.log("Using dedicated outstation endpoint");
-          
-          const formData = new FormData();
-          Object.entries(data).forEach(([key, value]) => {
-            if (value !== undefined && value !== null) {
-              formData.append(key, String(value));
-            }
-          });
-          
-          // Specifically ensure these fields are in the form data for outstation fares
-          if (data.oneWayBasePrice) formData.append('oneWayBasePrice', String(data.oneWayBasePrice));
-          if (data.oneWayPricePerKm) formData.append('oneWayPricePerKm', String(data.oneWayPricePerKm));
-          if (data.roundTripBasePrice) formData.append('roundTripBasePrice', String(data.roundTripBasePrice));
-          if (data.roundTripPricePerKm) formData.append('roundTripPricePerKm', String(data.roundTripPricePerKm));
-          
-          // Also ensure alternate naming conventions are included
-          if (data.oneWayBasePrice) formData.append('one_way_base_price', String(data.oneWayBasePrice));
-          if (data.oneWayPricePerKm) formData.append('one_way_price_per_km', String(data.oneWayPricePerKm));
-          if (data.roundTripBasePrice) formData.append('round_trip_base_price', String(data.roundTripBasePrice));
-          if (data.roundTripPricePerKm) formData.append('round_trip_price_per_km', String(data.roundTripPricePerKm));
-          
-          // For backward compatibility with older endpoints
-          if (data.oneWayBasePrice) formData.append('baseFare', String(data.oneWayBasePrice));
-          if (data.oneWayPricePerKm) formData.append('pricePerKm', String(data.oneWayPricePerKm));
-          
-          const outstationEndpoint = `${this.apiBaseUrl}/api/direct-outstation-fares.php?_t=${timestamp}`;
-          
-          // First try with FormData
-          const response = await fetch(outstationEndpoint, {
-            method: 'POST',
-            body: formData,
-            headers: {
-              ...this.getBypassHeaders()
-            }
-          });
-          
-          if (response.ok) {
-            let responseData;
-            const responseText = await response.text();
-            
-            try {
-              responseData = JSON.parse(responseText);
-            } catch (e) {
-              console.log("Response is not JSON, using text response:", responseText);
-              responseData = { 
-                status: 'success', 
-                message: 'Non-JSON response received',
-                rawResponse: responseText
-              };
-            }
-            
-            console.log("Outstation fare update response:", responseData);
-            
-            if (responseData.status === 'success') {
-              successfulResponse = responseData;
-              directResponse = responseData;
-            } else {
-              console.warn("Outstation fare update returned non-success status:", responseData);
-            }
+          if (responseData.status === 'success') {
+            successfulResponse = responseData;
           } else {
-            console.error(`Outstation fare update returned non-OK status: ${response.status}`);
-            const responseText = await response.text();
-            console.log("Error response text:", responseText);
+            console.warn("Direct fare update returned non-success status:", responseData);
+          }
+        } else {
+          console.error(`Direct fare update returned non-OK status: ${response.status}`);
+          
+          // If server error, try to initialize the database
+          if (response.status === 500) {
+            console.log("Server error detected, trying to initialize database...");
             
-            // Try fallback to JSON format
-            fallbackAttempted = true;
-            
-            // Prepare JSON body
-            const jsonData = {};
-            formData.forEach((value, key) => {
-              jsonData[key] = value;
-            });
-            
-            console.log("Trying JSON format fallback with data:", jsonData);
-            
-            const jsonResponse = await fetch(outstationEndpoint, {
-              method: 'POST',
-              body: JSON.stringify(jsonData),
-              headers: {
-                ...this.getBypassHeaders(),
-                'Content-Type': 'application/json'
-              }
-            });
-            
-            if (jsonResponse.ok) {
-              let jsonResponseData;
-              const jsonResponseText = await jsonResponse.text();
+            try {
+              const initResponse = await fetch(`${this.apiBaseUrl}/api/init-database.php?_t=${timestamp}`, {
+                method: 'GET',
+                headers: this.getBypassHeaders()
+              });
               
-              try {
-                jsonResponseData = JSON.parse(jsonResponseText);
-              } catch (e) {
-                console.log("JSON fallback response is not JSON, using text response:", jsonResponseText);
-                jsonResponseData = { 
-                  status: 'success', 
-                  message: 'Non-JSON response received',
-                  rawResponse: jsonResponseText
-                };
+              if (initResponse.ok) {
+                const initData = await initResponse.json();
+                console.log("Database initialization response:", initData);
+                
+                if (initData.status === 'success') {
+                  console.log("Database successfully initialized, retrying fare update...");
+                  
+                  // Try the update again
+                  const retryResponse = await fetch(directEndpoint, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                      ...this.getBypassHeaders()
+                    }
+                  });
+                  
+                  if (retryResponse.ok) {
+                    const retryData = await retryResponse.json();
+                    console.log("Retry fare update response:", retryData);
+                    
+                    if (retryData.status === 'success') {
+                      successfulResponse = retryData;
+                    }
+                  }
+                }
               }
-              
-              console.log("JSON fallback response:", jsonResponseData);
-              
-              if (jsonResponseData.status === 'success') {
-                successfulResponse = jsonResponseData;
-              }
+            } catch (initError) {
+              console.error("Error initializing database:", initError);
             }
           }
-        } catch (outstationError) {
-          console.error("Error using outstation endpoint:", outstationError);
+        }
+      } catch (directError) {
+        console.error("Error using direct fare update:", directError);
+      }
+      
+      // If direct endpoint failed, fall back to type-specific endpoints
+      if (!successfulResponse) {
+        fallbackAttempted = true;
+        console.log("Direct fare update failed, trying type-specific endpoint");
+        
+        let endpoint = '';
+        if (tripType === 'local') {
+          endpoint = `${this.apiBaseUrl}/api/admin/local-fares-update.php`;
+        } else if (tripType === 'outstation') {
+          endpoint = `${this.apiBaseUrl}/api/admin/outstation-fares-update.php`;
+        } else if (tripType === 'airport') {
+          endpoint = `${this.apiBaseUrl}/api/admin/airport-fares-update.php`;
+        } else {
+          endpoint = `${this.apiBaseUrl}/api/admin/fares-update.php`;
         }
         
-        // If direct endpoint failed, try the alternative URL pattern
-        if (!successfulResponse) {
-          try {
-            console.log("Trying alternative outstation endpoint");
-            
-            const altEndpoint = `${this.apiBaseUrl}/api/admin/outstation-fares-update.php?_t=${timestamp}`;
-            
-            const formData = new FormData();
-            Object.entries(data).forEach(([key, value]) => {
-              if (value !== undefined && value !== null) {
-                formData.append(key, String(value));
-              }
-            });
-            
-            const response = await fetch(altEndpoint, {
-              method: 'POST',
-              body: formData,
-              headers: {
-                ...this.getBypassHeaders()
-              }
-            });
-            
-            if (response.ok) {
-              let responseData;
-              const responseText = await response.text();
-              
-              try {
-                responseData = JSON.parse(responseText);
-              } catch (e) {
-                console.log("Response is not JSON, using text response:", responseText);
-                responseData = { 
-                  status: 'success', 
-                  message: 'Non-JSON response received',
-                  rawResponse: responseText
-                };
-              }
-              
-              console.log("Alternative outstation endpoint response:", responseData);
-              
-              if (responseData.status === 'success') {
-                successfulResponse = responseData;
-              }
-            }
-          } catch (altError) {
-            console.error("Error using alternative outstation endpoint:", altError);
-          }
-        }
-      } else {
-        // For other fare types, use the generic direct-fare-update.php endpoint
+        // Add timestamp for cache busting
+        endpoint = `${endpoint}?_t=${timestamp}`;
+        
+        console.log(`Updating ${tripType} fares for vehicle ${vehicleId} at endpoint: ${endpoint}`);
+        console.log("Data being sent:", data);
+        
         try {
-          console.log("Using generic direct-fare-update endpoint");
-          
-          const directEndpoint = `${this.apiBaseUrl}/api/direct-fare-update.php?_t=${timestamp}`;
-          
           const formData = new FormData();
           Object.entries(data).forEach(([key, value]) => {
-            if (value !== undefined && value !== null) {
-              formData.append(key, String(value));
-            }
+            formData.append(key, String(value));
           });
           
-          const response = await fetch(directEndpoint, {
+          const response = await fetch(endpoint, {
             method: 'POST',
             body: formData,
             headers: {
@@ -610,38 +508,21 @@ class FareService {
           });
           
           if (response.ok) {
-            let responseData;
-            const responseText = await response.text();
-            
-            try {
-              responseData = JSON.parse(responseText);
-            } catch (e) {
-              console.log("Response is not JSON, using text response:", responseText);
-              responseData = { 
-                status: 'success', 
-                message: 'Non-JSON response received',
-                rawResponse: responseText
-              };
-            }
-            
-            console.log("Direct fare update response:", responseData);
+            const responseData = await response.json();
+            console.log(`Fallback ${tripType} fares update response:`, responseData);
             
             if (responseData.status === 'success') {
               successfulResponse = responseData;
-              directResponse = responseData;
-            } else {
-              console.warn("Direct fare update returned non-success status:", responseData);
             }
           } else {
-            console.error(`Direct fare update returned non-OK status: ${response.status}`);
-            console.log("Response text:", await response.text());
+            console.error(`Fallback fare update failed with status: ${response.status}`);
           }
-        } catch (directError) {
-          console.error("Error using direct fare update:", directError);
+        } catch (fallbackError) {
+          console.error(`Error in fallback ${tripType} fare update:`, fallbackError);
         }
       }
       
-      // If any request was successful, clear cache and return the response
+      // If any request format was successful, clear cache and return the response
       if (successfulResponse) {
         this.clearCache();
         console.log(`Successfully updated ${tripType} fares:`, successfulResponse);
@@ -660,28 +541,8 @@ class FareService {
       // If we get here, all attempts failed
       console.error(`All ${tripType} fare update attempts failed`);
       
-      // If outstation fare update failed, suggest ultra emergency mode
-      if (tripType === 'outstation' && !useUltra) {
-        toast.error(`Failed to update ${tripType} fares. Try using Ultra Emergency Mode.`, {
-          action: {
-            label: 'Activate',
-            onClick: () => {
-              localStorage.setItem('useUltraEmergency', 'true');
-              sessionStorage.setItem('useUltraEmergency', 'true');
-              this.useUltraEmergency = true;
-              toast.info('Ultra Emergency Mode activated for future requests');
-              
-              // Automatically retry with ultra emergency mode
-              setTimeout(() => {
-                this.directFareUpdate(tripType, vehicleId, data);
-              }, 500);
-            }
-          }
-        });
-      } else {
-        // Show error toast
-        toast.error(`Failed to update ${tripType} fares. Please try again.`);
-      }
+      // Show error toast
+      toast.error(`Failed to update ${tripType} fares. Please try again.`);
       
       // Dispatch failure event
       window.dispatchEvent(new CustomEvent('fares-updated', { 
@@ -695,8 +556,7 @@ class FareService {
         fallbackAttempted: fallbackAttempted,
         vehicleId: vehicleId,
         tripType: tripType,
-        timestamp: Date.now(),
-        directResponse: directResponse
+        timestamp: Date.now()
       };
       
     } catch (error) {
@@ -704,21 +564,6 @@ class FareService {
       
       // Show error toast
       toast.error(`Error updating ${tripType} fares: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      
-      // If outstation fare update failed, suggest ultra emergency mode
-      if (tripType === 'outstation' && !this.useUltraEmergency) {
-        toast.info('Try activating Ultra Emergency Mode for direct database access', {
-          action: {
-            label: 'Activate',
-            onClick: () => {
-              localStorage.setItem('useUltraEmergency', 'true');
-              sessionStorage.setItem('useUltraEmergency', 'true');
-              this.useUltraEmergency = true;
-              toast.info('Ultra Emergency Mode activated for future requests');
-            }
-          }
-        });
-      }
       
       // Dispatch failure event
       window.dispatchEvent(new CustomEvent('fares-updated', { 
@@ -759,64 +604,26 @@ class FareService {
       console.log('Initializing database tables...');
       const timestamp = Date.now();
       
-      // First attempt - use init-database endpoint
-      try {
-        const response = await fetch(`${this.apiBaseUrl}/api/init-database.php?_t=${timestamp}`, {
-          method: 'GET',
-          headers: this.getBypassHeaders()
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          console.log('Database initialization response:', data);
-          
-          if (data.status === 'success') {
-            toast.success('Database tables initialized successfully');
-            this.clearCache();
-            return true;
-          } else {
-            console.log('Primary database initialization failed, trying fallback method');
-          }
-        } else {
-          console.error('Database initialization failed with status:', response.status);
-          console.log('Trying fallback method...');
-        }
-      } catch (primaryError) {
-        console.error('Primary database initialization error:', primaryError);
-        console.log('Trying fallback method...');
-      }
+      const response = await fetch(`${this.apiBaseUrl}/api/init-database.php?_t=${timestamp}`, {
+        method: 'GET',
+        headers: this.getBypassHeaders()
+      });
       
-      // Fallback - try the direct API endpoints to create tables as needed
-      try {
-        // Try direct outstation endpoint which will create tables
-        const outstationEndpoint = `${this.apiBaseUrl}/api/direct-outstation-fares.php?createTables=1&_t=${timestamp}`;
-        const outstationResponse = await fetch(outstationEndpoint, {
-          method: 'GET',
-          headers: this.getBypassHeaders()
-        });
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Database initialization response:', data);
         
-        // Try direct fare update endpoint which will also create tables
-        const fareUpdateEndpoint = `${this.apiBaseUrl}/api/direct-fare-update.php?createTables=1&_t=${timestamp}`;
-        const fareUpdateResponse = await fetch(fareUpdateEndpoint, {
-          method: 'GET',
-          headers: this.getBypassHeaders()
-        });
-        
-        // Try airport fares endpoint
-        const airportEndpoint = `${this.apiBaseUrl}/api/fares/airport.php?createTables=1&_t=${timestamp}`;
-        const airportResponse = await fetch(airportEndpoint, {
-          method: 'GET',
-          headers: this.getBypassHeaders()
-        });
-        
-        console.log('Fallback database initialization successful');
-        toast.success('Database initialized via fallback method');
-        this.clearCache();
-        return true;
-        
-      } catch (fallbackError) {
-        console.error('Fallback database initialization error:', fallbackError);
-        toast.error('All database initialization attempts failed');
+        if (data.status === 'success') {
+          toast.success('Database tables initialized successfully');
+          this.clearCache();
+          return true;
+        } else {
+          toast.error('Failed to initialize database tables');
+          return false;
+        }
+      } else {
+        console.error('Database initialization failed with status:', response.status);
+        toast.error(`Database initialization failed with status: ${response.status}`);
         return false;
       }
     } catch (error) {
