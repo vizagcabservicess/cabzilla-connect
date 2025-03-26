@@ -537,15 +537,11 @@ export const getOutstationFares = async (vehicleId: string): Promise<OutstationF
           if (fare) {
             return {
               vehicleId: cleanedVehicleId,
-              basePrice: parseFloat(fare.oneWayBasePrice || fare.basePrice || 0),
-              pricePerKm: parseFloat(fare.oneWayPricePerKm || fare.pricePerKm || 0),
+              oneWayBasePrice: parseFloat(fare.oneWayBasePrice || fare.basePrice || 0),
+              oneWayPricePerKm: parseFloat(fare.oneWayPricePerKm || fare.pricePerKm || 0),
               roundTripBasePrice: parseFloat(fare.roundTripBasePrice || fare.roundtrip_base_price || fare.oneWayBasePrice || 0),
               roundTripPricePerKm: parseFloat(fare.roundTripPricePerKm || fare.roundtrip_price_per_km || fare.oneWayPricePerKm || 0),
               driverAllowance: parseFloat(fare.driverAllowance || fare.driver_allowance || 250),
-              nightHalt: parseFloat(fare.nightHaltCharge || fare.night_halt_charge || 700),
-              // Add optional fields for compatibility 
-              oneWayBasePrice: parseFloat(fare.oneWayBasePrice || fare.basePrice || 0),
-              oneWayPricePerKm: parseFloat(fare.oneWayPricePerKm || fare.pricePerKm || 0),
               nightHaltCharge: parseFloat(fare.nightHaltCharge || fare.night_halt_charge || 700)
             };
           }
@@ -559,15 +555,11 @@ export const getOutstationFares = async (vehicleId: string): Promise<OutstationF
     console.warn('No outstation fares found, using defaults');
     return {
       vehicleId: cleanedVehicleId,
-      basePrice: 0,
-      pricePerKm: 0,
+      oneWayBasePrice: 0,
+      oneWayPricePerKm: 0,
       roundTripBasePrice: 0,
       roundTripPricePerKm: 0,
       driverAllowance: 250,
-      nightHalt: 700,
-      // Add optional fields for compatibility
-      oneWayBasePrice: 0,
-      oneWayPricePerKm: 0,
       nightHaltCharge: 700
     };
     
@@ -854,52 +846,86 @@ export const updateTripFares = async (
             // For multipart/form-data, let axios set the content type with boundary
             const formData = new FormData();
             for (const key in payload) {
-              formData.append(key, String(payload[key as keyof typeof payload]));
+              formData.append(key, String(payload[key]));
             }
             axiosConfig.data = formData;
           }
           
           const response = await axios(axiosConfig);
           
-          if (response.status === 200) {
-            console.log(`Successfully updated ${tripType} fares via ${endpoint} with ${contentType}`);
+          console.log(`Response from ${endpoint} (${contentType}):`, response.data);
+          
+          if (response.status >= 200 && response.status < 300) {
+            console.log(`${tripType} fares updated successfully via ${endpoint} with ${contentType}`);
             successful = true;
-            
-            // Clear any cached data for this trip type
-            localStorage.removeItem(`${tripType}Fares`);
-            sessionStorage.removeItem(`${tripType}Fares`);
-            
-            // Dispatch a custom event to notify other components
-            const updateEvent = new CustomEvent(`${tripType}-fares-updated`, {
-              detail: {
-                vehicleId: cleanedVehicleId,
-                tripType,
-                updatedAt: new Date().toISOString(),
-                prices: fareData
-              }
-            });
-            window.dispatchEvent(updateEvent);
-            
             toast.success(`${tripType} fares updated successfully`);
+            
+            // Clear all caches to ensure fresh data
+            localStorage.removeItem('cabFares');
+            localStorage.removeItem('tourFares');
+            sessionStorage.removeItem('cabFares');
+            sessionStorage.removeItem('tourFares');
+            sessionStorage.removeItem('calculatedFares');
+            
             return true;
           }
-        } catch (error) {
-          console.error(`Error updating ${tripType} fares at ${endpoint} with ${contentType}:`, error);
+        } catch (error: any) {
           lastError = error;
+          console.error(`Error updating ${tripType} fares at endpoint ${endpoint} with ${contentType}:`, error.response || error);
         }
       }
     }
     
-    // If all attempts fail
-    if (lastError) {
-      console.error(`All attempts to update ${tripType} fares failed. Last error:`, lastError);
-      toast.error(`Failed to update ${tripType} fares`);
+    // If axios methods all failed, try fetch as a last resort
+    if (!successful) {
+      for (const endpoint of endpoints) {
+        try {
+          console.log(`Trying fetch with ${endpoint}`);
+          
+          // Try with FormData
+          const formData = new FormData();
+          for (const key in payload) {
+            formData.append(key, String(payload[key]));
+          }
+          
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            body: formData,
+            headers: {
+              ...authHeader,
+              'X-API-Version': apiVersion,
+              'X-Force-Refresh': 'true',
+            }
+          });
+          
+          if (response.ok) {
+            console.log(`${tripType} fares updated successfully via fetch to ${endpoint}`);
+            toast.success(`${tripType} fares updated successfully`);
+            
+            // Clear all caches
+            localStorage.removeItem('cabFares');
+            localStorage.removeItem('tourFares');
+            sessionStorage.removeItem('cabFares');
+            sessionStorage.removeItem('tourFares');
+            sessionStorage.removeItem('calculatedFares');
+            
+            return true;
+          }
+        } catch (error) {
+          console.error(`Fetch error updating ${tripType} fares at endpoint ${endpoint}:`, error);
+        }
+      }
     }
     
+    if (lastError) {
+      toast.error(`Failed to update ${tripType} fares: ${lastError.response?.data?.message || lastError.message || 'Unknown error'}`);
+      throw lastError;
+    }
+    
+    toast.error(`Failed to update ${tripType} fares: All attempts failed`);
     return false;
-  } catch (error) {
-    console.error(`Error in updateTripFares for ${tripType}:`, error);
-    toast.error(`Error updating ${tripType} fares: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  } catch (error: any) {
+    console.error(`Error updating ${tripType} fares:`, error);
     return false;
   }
 };
