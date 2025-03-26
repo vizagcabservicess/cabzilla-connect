@@ -19,6 +19,50 @@ export const clearFareCache = () => {
   globalTimestamp = Date.now();
 };
 
+// Utility function to get bypass headers for cache invalidation
+export const getBypassHeaders = () => {
+  return {
+    'X-Force-Refresh': 'true',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0'
+  };
+};
+
+// Utility function to get forced request config for axios
+export const getForcedRequestConfig = () => {
+  return {
+    headers: getBypassHeaders(),
+    params: {
+      _t: Date.now() // Cache busting timestamp
+    }
+  };
+};
+
+// Initialize database tables - useful for admin operations
+export const initializeDatabase = async (forceRecreate = false) => {
+  try {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    const params = new URLSearchParams();
+    
+    if (forceRecreate) {
+      params.append('force', 'true');
+    }
+    
+    params.append('verbose', 'true');
+    params.append('_t', Date.now().toString()); // Cache busting
+    
+    const response = await axios.get(`${baseUrl}/api/init-database.php?${params.toString()}`, {
+      headers: getBypassHeaders()
+    });
+    
+    return response.data;
+  } catch (error) {
+    console.error('Error initializing database:', error);
+    throw error;
+  }
+};
+
 // Direct method to update fares
 export const directFareUpdate = async (tripType: string, vehicleId: string, data: any) => {
   try {
@@ -130,6 +174,72 @@ export const getOutstationFares = async (origin?: string, destination?: string):
   }
 };
 
+// Get outstation fares for a specific vehicle
+export const getOutstationFaresForVehicle = async (vehicleId: string): Promise<OutstationFare> => {
+  try {
+    // First try to get from cache
+    const cachedFares = localStorage.getItem('outstation_fares');
+    const cachedTimestamp = localStorage.getItem('outstation_fares_timestamp');
+    const globalRefreshToken = localStorage.getItem('globalFareRefreshToken');
+    const now = Date.now();
+    
+    if (cachedFares && cachedTimestamp && globalRefreshToken) {
+      const timestamp = parseInt(cachedTimestamp, 10);
+      const refreshToken = parseInt(globalRefreshToken, 10);
+      const fiveMinutes = 5 * 60 * 1000;
+      
+      if (now - timestamp < fiveMinutes && timestamp > refreshToken) {
+        const fares = JSON.parse(cachedFares);
+        if (fares[vehicleId]) {
+          return fares[vehicleId];
+        }
+      }
+    }
+    
+    // Try to fetch directly for this vehicle
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    const response = await axios.get(`${baseUrl}/api/admin/outstation-fares`, {
+      params: {
+        vehicle_id: vehicleId,
+        _t: now // Cache busting
+      },
+      headers: getBypassHeaders()
+    });
+    
+    if (response.data && response.data.fares && response.data.fares[vehicleId]) {
+      return response.data.fares[vehicleId];
+    }
+    
+    // If direct fetch failed, try to get all fares
+    const allFares = await getOutstationFares();
+    if (allFares && allFares[vehicleId]) {
+      return allFares[vehicleId];
+    }
+    
+    // Return default values if no data found
+    return {
+      basePrice: 0,
+      pricePerKm: 0,
+      driverAllowance: 0,
+      nightHaltCharge: 0,
+      roundTripBasePrice: 0,
+      roundTripPricePerKm: 0
+    };
+  } catch (error) {
+    console.error(`Error fetching outstation fares for vehicle ${vehicleId}:`, error);
+    
+    // Return default values if error
+    return {
+      basePrice: 0,
+      pricePerKm: 0,
+      driverAllowance: 0,
+      nightHaltCharge: 0,
+      roundTripBasePrice: 0,
+      roundTripPricePerKm: 0
+    };
+  }
+};
+
 // Local Fares
 export const getLocalFares = async (): Promise<Record<string, LocalFare>> => {
   try {
@@ -177,6 +287,70 @@ export const getLocalFares = async (): Promise<Record<string, LocalFare>> => {
     }
     
     return {};
+  }
+};
+
+// Get local fares for a specific vehicle
+export const getLocalFaresForVehicle = async (vehicleId: string): Promise<LocalFare> => {
+  try {
+    // First try to get from cache
+    const cachedFares = localStorage.getItem('local_fares');
+    const cachedTimestamp = localStorage.getItem('local_fares_timestamp');
+    const globalRefreshToken = localStorage.getItem('globalFareRefreshToken');
+    const now = Date.now();
+    
+    if (cachedFares && cachedTimestamp && globalRefreshToken) {
+      const timestamp = parseInt(cachedTimestamp, 10);
+      const refreshToken = parseInt(globalRefreshToken, 10);
+      const fiveMinutes = 5 * 60 * 1000;
+      
+      if (now - timestamp < fiveMinutes && timestamp > refreshToken) {
+        const fares = JSON.parse(cachedFares);
+        if (fares[vehicleId]) {
+          return fares[vehicleId];
+        }
+      }
+    }
+    
+    // Try to fetch directly for this vehicle
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    const response = await axios.get(`${baseUrl}/api/admin/local-fares`, {
+      params: {
+        vehicle_id: vehicleId,
+        _t: now // Cache busting
+      },
+      headers: getBypassHeaders()
+    });
+    
+    if (response.data && response.data.fares && response.data.fares[vehicleId]) {
+      return response.data.fares[vehicleId];
+    }
+    
+    // If direct fetch failed, try to get all fares
+    const allFares = await getLocalFares();
+    if (allFares && allFares[vehicleId]) {
+      return allFares[vehicleId];
+    }
+    
+    // Return default values if no data found
+    return {
+      price4hrs40km: 0,
+      price8hrs80km: 0,
+      price10hrs100km: 0,
+      priceExtraKm: 0,
+      priceExtraHour: 0
+    };
+  } catch (error) {
+    console.error(`Error fetching local fares for vehicle ${vehicleId}:`, error);
+    
+    // Return default values if error
+    return {
+      price4hrs40km: 0,
+      price8hrs80km: 0,
+      price10hrs100km: 0,
+      priceExtraKm: 0,
+      priceExtraHour: 0
+    };
   }
 };
 
@@ -339,7 +513,12 @@ export const fareService = {
   getLocalFares,
   getAirportFares,
   getAirportFaresForVehicle,
+  getOutstationFaresForVehicle,
+  getLocalFaresForVehicle,
   getFaresByTripType,
   clearCache: clearFareCache,
-  directFareUpdate
+  directFareUpdate,
+  getBypassHeaders,
+  getForcedRequestConfig,
+  initializeDatabase
 };
