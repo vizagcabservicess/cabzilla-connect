@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { toast } from 'sonner';
 import { OutstationFare, LocalFare, AirportFare } from '@/types/cab';
@@ -7,20 +8,14 @@ class FareService {
   private apiVersion: string;
   private apiBaseUrl: string;
   private useDirectApiAccess: boolean;
-  private useUltraEmergency: boolean;
   
   constructor() {
     // Load environment variables
     this.apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
-    this.apiVersion = import.meta.env.VITE_API_VERSION || '1.0.71';
+    this.apiVersion = import.meta.env.VITE_API_VERSION || '1.0.0';
     
     // Check environment variable for direct API access
     this.useDirectApiAccess = import.meta.env.VITE_USE_DIRECT_API === 'true';
-    
-    // Check if ultra emergency mode is active
-    this.useUltraEmergency = import.meta.env.VITE_USE_ULTRA_EMERGENCY === 'true' || 
-                            localStorage.getItem('useUltraEmergency') === 'true' ||
-                            sessionStorage.getItem('useUltraEmergency') === 'true';
     
     // Check if we should force disable cache
     const forceCacheRefresh = localStorage.getItem('forceCacheRefresh');
@@ -68,22 +63,6 @@ class FareService {
       'X-API-Version': this.apiVersion,
       'X-Force-Refresh': 'true',
       'X-Bypass-Cache': 'true',
-      'X-Custom-Timestamp': timestamp.toString()
-    };
-  }
-  
-  // Method for ultra emergency headers
-  getUltraEmergencyHeaders() {
-    const timestamp = Date.now();
-    
-    return {
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0',
-      'X-API-Version': this.apiVersion,
-      'X-Force-Refresh': 'true',
-      'X-Bypass-Cache': 'true',
-      'X-Ultra-Emergency': 'true',
       'X-Custom-Timestamp': timestamp.toString()
     };
   }
@@ -314,116 +293,6 @@ class FareService {
       } catch (initError) {
         console.error("Initial database initialization error (non-critical):", initError);
         // Continue anyway - this is just a preparatory step
-      }
-      
-      // Check if we should use ultra emergency mode for outstation
-      const useUltra = this.useUltraEmergency || 
-                     localStorage.getItem('useUltraEmergency') === 'true' || 
-                     sessionStorage.getItem('useUltraEmergency') === 'true';
-      
-      // ULTRA EMERGENCY MODE - highest priority override
-      if (useUltra && tripType === 'outstation') {
-        try {
-          console.log("Using ULTRA EMERGENCY endpoint for outstation update");
-          
-          const formData = new FormData();
-          Object.entries(data).forEach(([key, value]) => {
-            if (value !== undefined && value !== null) {
-              formData.append(key, String(value));
-            }
-          });
-          
-          // Specifically ensure these fields are in the form data for outstation fares
-          if (data.oneWayBasePrice) formData.append('oneWayBasePrice', String(data.oneWayBasePrice));
-          if (data.oneWayPricePerKm) formData.append('oneWayPricePerKm', String(data.oneWayPricePerKm));
-          if (data.roundTripBasePrice) formData.append('roundTripBasePrice', String(data.roundTripBasePrice));
-          if (data.roundTripPricePerKm) formData.append('roundTripPricePerKm', String(data.roundTripPricePerKm));
-          
-          const ultraEndpoint = `${this.apiBaseUrl}/api/ultra-emergency-outstation?_t=${timestamp}`;
-          
-          // First try with FormData
-          const response = await fetch(ultraEndpoint, {
-            method: 'POST',
-            body: formData,
-            headers: this.getUltraEmergencyHeaders()
-          });
-          
-          if (response.ok) {
-            let responseData;
-            const responseText = await response.text();
-            
-            try {
-              responseData = JSON.parse(responseText);
-            } catch (e) {
-              console.log("Response is not JSON, using text response:", responseText);
-              responseData = { 
-                status: 'success', 
-                message: 'Non-JSON response received',
-                rawResponse: responseText
-              };
-            }
-            
-            console.log("Ultra emergency fare update response:", responseData);
-            
-            if (responseData.status === 'success') {
-              this.clearCache();
-              
-              // Show toast notification
-              toast.success(`Successfully updated ${tripType} fares using ultra emergency mode`);
-              
-              // Dispatch update event
-              window.dispatchEvent(new CustomEvent('fares-updated', { 
-                detail: { vehicleId, tripType, success: true, ultraEmergency: true }
-              }));
-              
-              return responseData;
-            }
-          }
-          
-          // If that fails, try JSON format
-          const jsonResponse = await fetch(ultraEndpoint, {
-            method: 'POST',
-            body: JSON.stringify(data),
-            headers: {
-              ...this.getUltraEmergencyHeaders(),
-              'Content-Type': 'application/json'
-            }
-          });
-          
-          if (jsonResponse.ok) {
-            let jsonResponseData;
-            const jsonResponseText = await jsonResponse.text();
-            
-            try {
-              jsonResponseData = JSON.parse(jsonResponseText);
-            } catch (e) {
-              console.log("JSON format response is not JSON, using text response:", jsonResponseText);
-              jsonResponseData = { 
-                status: 'success', 
-                message: 'Non-JSON response received',
-                rawResponse: jsonResponseText
-              };
-            }
-            
-            console.log("Ultra emergency JSON response:", jsonResponseData);
-            
-            if (jsonResponseData.status === 'success') {
-              this.clearCache();
-              
-              // Show toast notification
-              toast.success(`Successfully updated ${tripType} fares using ultra emergency mode`);
-              
-              // Dispatch update event
-              window.dispatchEvent(new CustomEvent('fares-updated', { 
-                detail: { vehicleId, tripType, success: true, ultraEmergency: true }
-              }));
-              
-              return jsonResponseData;
-            }
-          }
-        } catch (ultraError) {
-          console.error("Error using ultra emergency endpoint:", ultraError);
-        }
       }
       
       // Try different endpoints based on trip type
@@ -660,28 +529,8 @@ class FareService {
       // If we get here, all attempts failed
       console.error(`All ${tripType} fare update attempts failed`);
       
-      // If outstation fare update failed, suggest ultra emergency mode
-      if (tripType === 'outstation' && !useUltra) {
-        toast.error(`Failed to update ${tripType} fares. Try using Ultra Emergency Mode.`, {
-          action: {
-            label: 'Activate',
-            onClick: () => {
-              localStorage.setItem('useUltraEmergency', 'true');
-              sessionStorage.setItem('useUltraEmergency', 'true');
-              this.useUltraEmergency = true;
-              toast.info('Ultra Emergency Mode activated for future requests');
-              
-              // Automatically retry with ultra emergency mode
-              setTimeout(() => {
-                this.directFareUpdate(tripType, vehicleId, data);
-              }, 500);
-            }
-          }
-        });
-      } else {
-        // Show error toast
-        toast.error(`Failed to update ${tripType} fares. Please try again.`);
-      }
+      // Show error toast
+      toast.error(`Failed to update ${tripType} fares. Please try again.`);
       
       // Dispatch failure event
       window.dispatchEvent(new CustomEvent('fares-updated', { 
@@ -704,21 +553,6 @@ class FareService {
       
       // Show error toast
       toast.error(`Error updating ${tripType} fares: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      
-      // If outstation fare update failed, suggest ultra emergency mode
-      if (tripType === 'outstation' && !this.useUltraEmergency) {
-        toast.info('Try activating Ultra Emergency Mode for direct database access', {
-          action: {
-            label: 'Activate',
-            onClick: () => {
-              localStorage.setItem('useUltraEmergency', 'true');
-              sessionStorage.setItem('useUltraEmergency', 'true');
-              this.useUltraEmergency = true;
-              toast.info('Ultra Emergency Mode activated for future requests');
-            }
-          }
-        });
-      }
       
       // Dispatch failure event
       window.dispatchEvent(new CustomEvent('fares-updated', { 
