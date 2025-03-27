@@ -12,7 +12,7 @@ import {
   Server,
   Wifi,
   DatabaseBackup,
-  Sync
+  RefreshCcw  // Changed from Sync to RefreshCcw
 } from "lucide-react";
 import { fareService } from '@/services/fareService';
 import { toast } from 'sonner';
@@ -362,7 +362,7 @@ export function FareUpdateError({
               </>
             ) : (
               <>
-                <Sync className="h-4 w-4" />
+                <RefreshCcw className="h-4 w-4" />
                 Sync Tables
               </>
             )}
