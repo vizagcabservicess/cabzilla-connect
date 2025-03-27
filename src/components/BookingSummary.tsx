@@ -18,7 +18,6 @@ interface BookingSummaryProps {
   totalPrice?: number;
   tripType: TripType;
   tripMode: TripMode;
-  tourId?: string; // Optional tourId for tour packages
 }
 
 export function BookingSummary({ 
@@ -30,8 +29,7 @@ export function BookingSummary({
   distance, 
   totalPrice = 0,
   tripType,
-  tripMode,
-  tourId
+  tripMode
 }: BookingSummaryProps) {
   const [displayPrice, setDisplayPrice] = useState<number>(totalPrice);
   const [isUpdating, setIsUpdating] = useState<boolean>(false);
@@ -115,7 +113,7 @@ export function BookingSummary({
     
     if (tripType === 'outstation') {
       const baseKm = 300;
-      const baseFare = displayPrice > 0 ? Math.round(displayPrice * 0.6) : 0;
+      const baseFare = displayPrice > 0 ? Math.min(4200, displayPrice * 0.4) : 0;
       const driverAllowance = 250;
       const effectiveDistance = tripMode === 'one-way' ? distance * 2 : distance * 2;
       const extraDistance = Math.max(0, effectiveDistance - baseKm);
@@ -126,7 +124,7 @@ export function BookingSummary({
         <>
           <div className="flex justify-between mt-3 text-sm">
             <span>Base fare ({baseKm} km included)</span>
-            <span>{formatPrice(baseFare)}</span>
+            <span>₹{formatPrice(baseFare)}</span>
           </div>
           
           <div className="text-xs text-gray-500 mt-1">
@@ -138,13 +136,13 @@ export function BookingSummary({
           {extraDistance > 0 && (
             <div className="flex justify-between mt-3 text-sm">
               <span>Extra distance fare ({extraDistance} km × ₹{perKmRate})</span>
-              <span>{formatPrice(extraDistanceFare)}</span>
+              <span>₹{formatPrice(extraDistanceFare)}</span>
             </div>
           )}
           
           <div className="flex justify-between mt-3 text-sm">
             <span>Driver allowance</span>
-            <span>{formatPrice(driverAllowance)}</span>
+            <span>₹{formatPrice(driverAllowance)}</span>
           </div>
         </>
       );
@@ -160,12 +158,12 @@ export function BookingSummary({
         <>
           <div className="flex justify-between mt-3 text-sm">
             <span>{packageHours} hours / {packageKm} km package</span>
-            <span>{formatPrice(basePrice)}</span>
+            <span>₹{formatPrice(basePrice)}</span>
           </div>
           
           <div className="flex justify-between mt-3 text-sm">
             <span>Driver allowance</span>
-            <span>{formatPrice(200)}</span>
+            <span>₹200</span>
           </div>
         </>
       );
@@ -176,32 +174,12 @@ export function BookingSummary({
         <>
           <div className="flex justify-between mt-3 text-sm">
             <span>Airport transfer base fare</span>
-            <span>{formatPrice(displayPrice - 250)}</span>
+            <span>₹{formatPrice(displayPrice - 250)}</span>
           </div>
           
           <div className="flex justify-between mt-3 text-sm">
             <span>Driver allowance</span>
-            <span>{formatPrice(250)}</span>
-          </div>
-        </>
-      );
-    }
-    
-    if (tripType === 'tour') {
-      // For tour packages, we show a simplified breakdown
-      const driverAllowance = 250;
-      const baseFare = displayPrice - driverAllowance;
-      
-      return (
-        <>
-          <div className="flex justify-between mt-3 text-sm">
-            <span>Tour package base fare</span>
-            <span>{formatPrice(baseFare)}</span>
-          </div>
-          
-          <div className="flex justify-between mt-3 text-sm">
-            <span>Driver allowance</span>
-            <span>{formatPrice(driverAllowance)}</span>
+            <span>₹250</span>
           </div>
         </>
       );
@@ -301,7 +279,7 @@ export function BookingSummary({
                 <div className="border-t mt-4 pt-4 flex justify-between font-semibold">
                   <span>Total Amount</span>
                   <span className={`${isUpdating ? 'text-blue-600' : ''} transition-colors`}>
-                    {formatPrice(displayPrice)}
+                    ₹{formatPrice(displayPrice)}
                   </span>
                 </div>
                 
@@ -317,10 +295,6 @@ export function BookingSummary({
                       <>
                         Prices include driver allowance and all taxes.
                         Additional charges may apply for night rides.
-                      </>
-                    ) : tripType === 'tour' ? (
-                      <>
-                        Tour package prices include all tolls, permits, and driver allowance.
                       </>
                     ) : (
                       <>

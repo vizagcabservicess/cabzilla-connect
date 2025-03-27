@@ -57,7 +57,7 @@ export interface AirportFare {
   extraKmCharge: number;
 }
 
-// Updated FareCalculationParams interface to include tourId
+// Additional interfaces needed for the application
 export interface FareCalculationParams {
   cabType: CabType;
   distance: number;
@@ -66,8 +66,7 @@ export interface FareCalculationParams {
   hourlyPackage?: string;
   pickupDate?: Date;
   returnDate?: Date;
-  forceRefresh?: boolean;
-  tourId?: string;  // Added tourId for tour fare calculations
+  forceRefresh?: boolean;  // Added this property
 }
 
 export interface HourlyPackage {
