@@ -1,4 +1,3 @@
-
 export interface CabType {
   id: string;
   name: string;
@@ -51,6 +50,12 @@ export interface LocalFare {
   local_package_10hr?: number; // For vehicle_pricing table
   extra_km_charge?: number;    // For vehicle_pricing table
   extra_hour_charge?: number;  // For vehicle_pricing table
+  // Raw database column names from local_package_fares
+  price_4hrs_40km?: number;    // From local_package_fares table
+  price_8hrs_80km?: number;    // From local_package_fares table
+  price_10hrs_100km?: number;  // From local_package_fares table
+  price_extra_km?: number;     // From local_package_fares table
+  price_extra_hour?: number;   // From local_package_fares table
 }
 
 export interface AirportFare {

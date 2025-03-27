@@ -266,66 +266,45 @@ async function forceSyncOutstationFares() {
   }
 }
 
-// Sync local fares table - ensure consistency with vehicle_pricing
-async function syncLocalFareTables(vehicleId?: string) {
+// Sync local fare tables - ensure consistency with vehicle_pricing
+export const syncLocalFareTables = async (): Promise<boolean> => {
   try {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
-    console.log('Syncing local_fares with vehicle_pricing' + (vehicleId ? ` for vehicle ${vehicleId}` : ''));
+    console.log('Syncing local fare tables...');
+    const bypassHeaders = getBypassHeaders();
     
-    // Construct the URL with parameters
-    let url = `${baseUrl}/api/admin/sync-local-fares.php`;
-    const params = new URLSearchParams();
-    params.append('_t', Date.now().toString());
+    // Call the sync-local-fares.php API endpoint
+    const response = await fetch(`${API_BASE_URL}/admin/sync-local-fares.php`, {
+      method: 'GET',
+      headers: {
+        ...bypassHeaders,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    });
     
-    if (vehicleId) {
-      params.append('vehicle_id', vehicleId);
-    }
+    const data = await response.json();
+    console.log('Local fare tables sync response:', data);
     
-    try {
-      // First try using the main API endpoint
-      const response = await axios.get(`${url}?${params.toString()}`, {
-        headers: getBypassHeaders(),
-        timeout: 10000 // 10 second timeout
-      });
-      
-      console.log('Local fare sync successful using main endpoint:', response.data);
-      
-      // Clear cache after syncing
+    if (data.status === 'success') {
+      // Clear fare cache to ensure latest data is fetched
       clearFareCache();
       
-      return response.data;
-    } catch (mainError) {
-      console.error('Error using main sync endpoint for local fares:', mainError);
+      // Dispatch an event to notify components about the fare update
+      window.dispatchEvent(new CustomEvent('local-fares-updated', {
+        detail: { timestamp: Date.now().toString() }
+      }));
       
-      // As a fallback, try the default local-fares.php endpoint with sync=true
-      console.log('Trying fallback sync method for local fares...');
-      
-      const fallbackParams = new URLSearchParams(params);
-      fallbackParams.append('sync', 'true');
-      fallbackParams.append('force_sync', 'true');
-      
-      const fallbackResponse = await axios.get(`${baseUrl}/api/local-fares.php?${fallbackParams.toString()}`, {
-        headers: getBypassHeaders(),
-        timeout: 10000 // 10 second timeout
-      });
-      
-      console.log('Local fare sync successful using fallback endpoint:', fallbackResponse.data);
-      
-      // Clear cache after syncing
-      clearFareCache();
-      
-      return {
-        status: 'success',
-        message: 'Local fare sync completed using fallback method',
-        originalError: (mainError as any).message,
-        data: fallbackResponse.data
-      };
+      return true;
+    } else {
+      console.error('Failed to sync local fare tables:', data.message);
+      return false;
     }
   } catch (error) {
-    console.error('All local fare sync attempts failed:', error);
-    throw error;
+    console.error('Error syncing local fare tables:', error);
+    return false;
   }
-}
+};
 
 // Function to get fares based on trip type
 function getFaresByTripType(tripType: TripType, vehicleId?: string) {

@@ -25,26 +25,65 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 try {
-    // Get the vehicle ID from the request
-    $vehicleId = isset($_POST['vehicleId']) ? $_POST['vehicleId'] : (isset($_POST['vehicle_id']) ? $_POST['vehicle_id'] : null);
+    // Get the vehicle ID from the request - check all common parameter names
+    $vehicleId = null;
+    $possibleIdFields = ['vehicleId', 'vehicle_id', 'id', 'vehicle_type', 'vehicleType'];
+    foreach ($possibleIdFields as $field) {
+        if (isset($_POST[$field]) && !empty($_POST[$field])) {
+            $vehicleId = $_POST[$field];
+            break;
+        }
+    }
     
     if (!$vehicleId) {
         throw new Exception("Vehicle ID is required");
     }
     
-    // Get the fare values from the request
-    $price4hrs40km = isset($_POST['price4hrs40km']) ? floatval($_POST['price4hrs40km']) : 0;
-    $price8hrs80km = isset($_POST['price8hrs80km']) ? floatval($_POST['price8hrs80km']) : 0;
-    $price10hrs100km = isset($_POST['price10hrs100km']) ? floatval($_POST['price10hrs100km']) : 0;
-    $priceExtraKm = isset($_POST['priceExtraKm']) ? floatval($_POST['priceExtraKm']) : 0;
-    $priceExtraHour = isset($_POST['priceExtraHour']) ? floatval($_POST['priceExtraHour']) : 0;
+    // Get the fare values from the request - check all common parameter names
+    $price4hrs40km = 0;
+    $possiblePrice4hrFields = ['price4hrs40km', 'package4hr40km', 'price_4hrs_40km', 'local_package_4hr'];
+    foreach ($possiblePrice4hrFields as $field) {
+        if (isset($_POST[$field]) && is_numeric($_POST[$field])) {
+            $price4hrs40km = floatval($_POST[$field]);
+            break;
+        }
+    }
     
-    // Alternate parameter names for backward compatibility
-    $price4hrs40km = $price4hrs40km ?: (isset($_POST['package4hr40km']) ? floatval($_POST['package4hr40km']) : 0);
-    $price8hrs80km = $price8hrs80km ?: (isset($_POST['package8hr80km']) ? floatval($_POST['package8hr80km']) : 0);
-    $price10hrs100km = $price10hrs100km ?: (isset($_POST['package10hr100km']) ? floatval($_POST['package10hr100km']) : 0);
-    $priceExtraKm = $priceExtraKm ?: (isset($_POST['extraKmRate']) ? floatval($_POST['extraKmRate']) : 0);
-    $priceExtraHour = $priceExtraHour ?: (isset($_POST['extraHourRate']) ? floatval($_POST['extraHourRate']) : 0);
+    $price8hrs80km = 0;
+    $possiblePrice8hrFields = ['price8hrs80km', 'package8hr80km', 'price_8hrs_80km', 'local_package_8hr'];
+    foreach ($possiblePrice8hrFields as $field) {
+        if (isset($_POST[$field]) && is_numeric($_POST[$field])) {
+            $price8hrs80km = floatval($_POST[$field]);
+            break;
+        }
+    }
+    
+    $price10hrs100km = 0;
+    $possiblePrice10hrFields = ['price10hrs100km', 'package10hr100km', 'price_10hrs_100km', 'local_package_10hr'];
+    foreach ($possiblePrice10hrFields as $field) {
+        if (isset($_POST[$field]) && is_numeric($_POST[$field])) {
+            $price10hrs100km = floatval($_POST[$field]);
+            break;
+        }
+    }
+    
+    $priceExtraKm = 0;
+    $possibleExtraKmFields = ['priceExtraKm', 'extraKmRate', 'price_extra_km', 'extra_km_charge'];
+    foreach ($possibleExtraKmFields as $field) {
+        if (isset($_POST[$field]) && is_numeric($_POST[$field])) {
+            $priceExtraKm = floatval($_POST[$field]);
+            break;
+        }
+    }
+    
+    $priceExtraHour = 0;
+    $possibleExtraHourFields = ['priceExtraHour', 'extraHourRate', 'price_extra_hour', 'extra_hour_charge'];
+    foreach ($possibleExtraHourFields as $field) {
+        if (isset($_POST[$field]) && is_numeric($_POST[$field])) {
+            $priceExtraHour = floatval($_POST[$field]);
+            break;
+        }
+    }
 
     // Setup debug logging
     error_log("Local fares update for $vehicleId: 4hr=$price4hrs40km, 8hr=$price8hrs80km, 10hr=$price10hrs100km, extraKm=$priceExtraKm, extraHr=$priceExtraHour");
@@ -60,214 +99,230 @@ try {
     // Begin transaction
     $conn->begin_transaction();
     
-    // Check if the local_package_fares table exists
-    $checkTableQuery = "SHOW TABLES LIKE 'local_package_fares'";
-    $checkResult = $conn->query($checkTableQuery);
+    // Update both tables: local_package_fares and vehicle_pricing
+    $updateResults = [
+        'local_package_fares' => false,
+        'vehicle_pricing' => false
+    ];
     
-    $localTableExists = $checkResult && $checkResult->num_rows > 0;
-    
-    // If the table doesn't exist, create it
-    if (!$localTableExists) {
+    // 1. First update the local_package_fares table
+    // Check if the table exists
+    $checkLocalFaresTable = $conn->query("SHOW TABLES LIKE 'local_package_fares'");
+    if ($checkLocalFaresTable && $checkLocalFaresTable->num_rows > 0) {
+        // Check if vehicle exists in this table
+        $checkVehicleQuery = "SELECT id FROM local_package_fares WHERE vehicle_id = ?";
+        $stmt = $conn->prepare($checkVehicleQuery);
+        $stmt->bind_param("s", $vehicleId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $vehicleExistsInLocalFares = $result && $result->num_rows > 0;
+        $stmt->close();
+        
+        if ($vehicleExistsInLocalFares) {
+            // Update existing record
+            $updateQuery = "
+                UPDATE local_package_fares 
+                SET price_4hrs_40km = ?, 
+                    price_8hrs_80km = ?, 
+                    price_10hrs_100km = ?, 
+                    price_extra_km = ?, 
+                    price_extra_hour = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE vehicle_id = ?
+            ";
+            
+            $stmt = $conn->prepare($updateQuery);
+            $stmt->bind_param("ddddds", $price4hrs40km, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour, $vehicleId);
+            $updateResults['local_package_fares'] = $stmt->execute();
+            $stmt->close();
+        } else {
+            // Insert new record
+            $insertQuery = "
+                INSERT INTO local_package_fares (
+                    vehicle_id, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, 
+                    price_extra_km, price_extra_hour, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ";
+            
+            $stmt = $conn->prepare($insertQuery);
+            $stmt->bind_param("sddddd", $vehicleId, $price4hrs40km, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour);
+            $updateResults['local_package_fares'] = $stmt->execute();
+            $stmt->close();
+        }
+    } else {
+        // Table doesn't exist, create it
         $createTableQuery = "
             CREATE TABLE IF NOT EXISTS `local_package_fares` (
                 `id` int(11) NOT NULL AUTO_INCREMENT,
                 `vehicle_id` varchar(50) NOT NULL,
-                `price_4hrs_40km` decimal(10,2) NOT NULL DEFAULT '0.00',
-                `price_8hrs_80km` decimal(10,2) NOT NULL DEFAULT '0.00',
-                `price_10hrs_100km` decimal(10,2) NOT NULL DEFAULT '0.00',
-                `price_extra_km` decimal(10,2) NOT NULL DEFAULT '0.00',
-                `price_extra_hour` decimal(10,2) NOT NULL DEFAULT '0.00',
+                `price_4hrs_40km` decimal(10,2) NOT NULL DEFAULT 0,
+                `price_8hrs_80km` decimal(10,2) NOT NULL DEFAULT 0,
+                `price_10hrs_100km` decimal(10,2) NOT NULL DEFAULT 0,
+                `price_extra_km` decimal(5,2) NOT NULL DEFAULT 0,
+                `price_extra_hour` decimal(5,2) NOT NULL DEFAULT 0,
                 `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 PRIMARY KEY (`id`),
                 UNIQUE KEY `vehicle_id` (`vehicle_id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         ";
-        
         $conn->query($createTableQuery);
-        $localTableExists = true;
-    }
-    
-    // Check if the vehicle exists in the local_package_fares table
-    $checkVehicleQuery = "SELECT id FROM local_package_fares WHERE vehicle_id = ?";
-    $stmt = $conn->prepare($checkVehicleQuery);
-    $stmt->bind_param("s", $vehicleId);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $vehicleExists = $result && $result->num_rows > 0;
-    $stmt->close();
-    
-    if ($vehicleExists) {
-        // Update the existing record
-        $query = "
-            UPDATE local_package_fares 
-            SET price_4hrs_40km = ?, 
-                price_8hrs_80km = ?, 
-                price_10hrs_100km = ?, 
-                price_extra_km = ?, 
-                price_extra_hour = ?,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE vehicle_id = ?
-        ";
         
-        $stmt = $conn->prepare($query);
-        $stmt->bind_param("ddddds", $price4hrs40km, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour, $vehicleId);
-    } else {
-        // Insert a new record
-        $query = "
+        // Insert the record into the newly created table
+        $insertQuery = "
             INSERT INTO local_package_fares (
-                vehicle_id, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour,
-                created_at, updated_at
+                vehicle_id, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, 
+                price_extra_km, price_extra_hour, created_at, updated_at
             ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         ";
         
-        $stmt = $conn->prepare($query);
+        $stmt = $conn->prepare($insertQuery);
         $stmt->bind_param("sddddd", $vehicleId, $price4hrs40km, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour);
+        $updateResults['local_package_fares'] = $stmt->execute();
+        $stmt->close();
     }
     
-    $success = $stmt->execute();
-    $stmt->close();
-    
-    if (!$success) {
-        throw new Exception("Failed to update local package fares: " . $conn->error);
-    }
-    
-    // Also update the vehicle_pricing table for backward compatibility
-    // First, check if vehicle_pricing has a vehicle_id column
-    $hasVehicleIdCol = false;
-    $checkColsQuery = "SHOW COLUMNS FROM vehicle_pricing LIKE 'vehicle_id'";
-    $checkColsResult = $conn->query($checkColsQuery);
-    $hasVehicleIdCol = $checkColsResult && $checkColsResult->num_rows > 0;
-    
-    // Now check if there's an existing 'local' record
-    $checkVehiclePricingQuery = "";
-    if ($hasVehicleIdCol) {
-        $checkVehiclePricingQuery = "SELECT * FROM vehicle_pricing WHERE (vehicle_id = ? OR vehicle_type = ?) AND trip_type = 'local'";
-        $stmt = $conn->prepare($checkVehiclePricingQuery);
-        $stmt->bind_param("ss", $vehicleId, $vehicleId);
-    } else {
-        $checkVehiclePricingQuery = "SELECT * FROM vehicle_pricing WHERE vehicle_type = ? AND trip_type = 'local'";
-        $stmt = $conn->prepare($checkVehiclePricingQuery);
-        $stmt->bind_param("s", $vehicleId);
-    }
-    
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $vehiclePricingData = $result->fetch_assoc();
-    $vehiclePricingExists = $result && $result->num_rows > 0;
-    $stmt->close();
-    
-    // Preserve the existing outstation-specific fields if they exist
-    $existingBaseFare = $vehiclePricingExists && isset($vehiclePricingData['base_fare']) ? $vehiclePricingData['base_fare'] : 0;
-    $existingPricePerKm = $vehiclePricingExists && isset($vehiclePricingData['price_per_km']) ? $vehiclePricingData['price_per_km'] : 0;
-    $existingNightHalt = $vehiclePricingExists && isset($vehiclePricingData['night_halt_charge']) ? $vehiclePricingData['night_halt_charge'] : 0;
-    $existingDriverAllowance = $vehiclePricingExists && isset($vehiclePricingData['driver_allowance']) ? $vehiclePricingData['driver_allowance'] : 0;
-    
-    // Update or insert vehicle_pricing record for local trip type
-    if ($vehiclePricingExists) {
-        // Update the existing record, but ONLY update local_package fields
-        // DO NOT MODIFY base_fare, price_per_km, etc. which are used for outstation trips
-        if ($hasVehicleIdCol) {
-            $vpQuery = "
-                UPDATE vehicle_pricing 
-                SET local_package_4hr = ?, 
-                    local_package_8hr = ?, 
-                    local_package_10hr = ?, 
-                    extra_km_charge = ?, 
-                    extra_hour_charge = ?,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE (vehicle_id = ? OR vehicle_type = ?) AND trip_type = 'local'
-            ";
-            
-            $stmt = $conn->prepare($vpQuery);
-            $stmt->bind_param("dddddss", $price4hrs40km, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour, $vehicleId, $vehicleId);
+    // 2. Now update the vehicle_pricing table for backward compatibility
+    $checkVehiclePricingTable = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'");
+    if ($checkVehiclePricingTable && $checkVehiclePricingTable->num_rows > 0) {
+        // Check if the vehicle_id column exists in vehicle_pricing
+        $checkVehicleIdCol = $conn->query("SHOW COLUMNS FROM vehicle_pricing LIKE 'vehicle_id'");
+        $hasVehicleIdColumn = $checkVehicleIdCol && $checkVehicleIdCol->num_rows > 0;
+        
+        // Check if record exists
+        $checkVehicleQuery = "";
+        $checkStmt = null;
+        
+        if ($hasVehicleIdColumn) {
+            $checkVehicleQuery = "SELECT id FROM vehicle_pricing WHERE (vehicle_id = ? OR vehicle_type = ?) AND trip_type = 'local'";
+            $checkStmt = $conn->prepare($checkVehicleQuery);
+            $checkStmt->bind_param("ss", $vehicleId, $vehicleId);
         } else {
-            $vpQuery = "
-                UPDATE vehicle_pricing 
-                SET local_package_4hr = ?, 
-                    local_package_8hr = ?, 
-                    local_package_10hr = ?, 
-                    extra_km_charge = ?, 
-                    extra_hour_charge = ?,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE vehicle_type = ? AND trip_type = 'local'
-            ";
-            
-            $stmt = $conn->prepare($vpQuery);
-            $stmt->bind_param("ddddds", $price4hrs40km, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour, $vehicleId);
+            $checkVehicleQuery = "SELECT id FROM vehicle_pricing WHERE vehicle_type = ? AND trip_type = 'local'";
+            $checkStmt = $conn->prepare($checkVehicleQuery);
+            $checkStmt->bind_param("s", $vehicleId);
         }
-    } else {
-        // Insert new record - use existing outstation values if available
-        if ($hasVehicleIdCol) {
-            $vpQuery = "
-                INSERT INTO vehicle_pricing (
-                    vehicle_id, vehicle_type, trip_type, local_package_4hr, local_package_8hr, local_package_10hr, 
-                    extra_km_charge, extra_hour_charge, 
-                    base_fare, price_per_km, night_halt_charge, driver_allowance, 
-                    created_at, updated_at
-                ) VALUES (?, ?, 'local', ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-            ";
+        
+        $checkStmt->execute();
+        $result = $checkStmt->get_result();
+        $vehicleExistsInVehiclePricing = $result && $result->num_rows > 0;
+        $checkStmt->close();
+        
+        // IMPORTANT: Get existing outstation values to preserve them
+        $getExistingQuery = "SELECT * FROM vehicle_pricing WHERE vehicle_type = ? AND trip_type = 'outstation'";
+        $getStmt = $conn->prepare($getExistingQuery);
+        $getStmt->bind_param("s", $vehicleId);
+        $getStmt->execute();
+        $getResult = $getStmt->get_result();
+        $existingOutstationData = $getResult->fetch_assoc();
+        $getStmt->close();
+        
+        // Set default values for outstation data
+        $baseFare = 0;
+        $pricePerKm = 0;
+        $nightHaltCharge = 0;
+        $driverAllowance = 0;
+        
+        // If outstation data exists, use it
+        if ($existingOutstationData) {
+            $baseFare = $existingOutstationData['base_fare'] ?? 0;
+            $pricePerKm = $existingOutstationData['price_per_km'] ?? 0;
+            $nightHaltCharge = $existingOutstationData['night_halt_charge'] ?? 0;
+            $driverAllowance = $existingOutstationData['driver_allowance'] ?? 0;
+        }
+        
+        if ($vehicleExistsInVehiclePricing) {
+            // Update existing record - make sure to ONLY update local package fields
+            $updateQuery = "";
+            $stmt = null;
             
-            $stmt = $conn->prepare($vpQuery);
-            $stmt->bind_param("ssddddddddd", 
-                $vehicleId, 
-                $vehicleId, 
-                $price4hrs40km, 
-                $price8hrs80km, 
-                $price10hrs100km, 
-                $priceExtraKm, 
-                $priceExtraHour,
-                $existingBaseFare,
-                $existingPricePerKm,
-                $existingNightHalt,
-                $existingDriverAllowance
-            );
+            if ($hasVehicleIdColumn) {
+                $updateQuery = "
+                    UPDATE vehicle_pricing 
+                    SET local_package_4hr = ?, 
+                        local_package_8hr = ?, 
+                        local_package_10hr = ?, 
+                        extra_km_charge = ?, 
+                        extra_hour_charge = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE (vehicle_id = ? OR vehicle_type = ?) AND trip_type = 'local'
+                ";
+                
+                $stmt = $conn->prepare($updateQuery);
+                $stmt->bind_param("dddddss", $price4hrs40km, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour, $vehicleId, $vehicleId);
+            } else {
+                $updateQuery = "
+                    UPDATE vehicle_pricing 
+                    SET local_package_4hr = ?, 
+                        local_package_8hr = ?, 
+                        local_package_10hr = ?, 
+                        extra_km_charge = ?, 
+                        extra_hour_charge = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE vehicle_type = ? AND trip_type = 'local'
+                ";
+                
+                $stmt = $conn->prepare($updateQuery);
+                $stmt->bind_param("ddddds", $price4hrs40km, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour, $vehicleId);
+            }
+            
+            $updateResults['vehicle_pricing'] = $stmt->execute();
+            $stmt->close();
         } else {
-            $vpQuery = "
-                INSERT INTO vehicle_pricing (
-                    vehicle_type, trip_type, local_package_4hr, local_package_8hr, local_package_10hr, 
-                    extra_km_charge, extra_hour_charge, 
-                    base_fare, price_per_km, night_halt_charge, driver_allowance, 
-                    created_at, updated_at
-                ) VALUES (?, 'local', ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-            ";
+            // Insert new record - with zero-values for outstation fields to avoid confusion
+            $insertQuery = "";
+            $stmt = null;
             
-            $stmt = $conn->prepare($vpQuery);
-            $stmt->bind_param("sddddddddd", 
-                $vehicleId, 
-                $price4hrs40km, 
-                $price8hrs80km, 
-                $price10hrs100km, 
-                $priceExtraKm, 
-                $priceExtraHour,
-                $existingBaseFare,
-                $existingPricePerKm,
-                $existingNightHalt,
-                $existingDriverAllowance
-            );
+            if ($hasVehicleIdColumn) {
+                $insertQuery = "
+                    INSERT INTO vehicle_pricing (
+                        vehicle_id, vehicle_type, trip_type, 
+                        local_package_4hr, local_package_8hr, local_package_10hr, 
+                        extra_km_charge, extra_hour_charge,
+                        base_fare, price_per_km, night_halt_charge, driver_allowance,
+                        created_at, updated_at
+                    ) VALUES (?, ?, 'local', ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ";
+                
+                $stmt = $conn->prepare($insertQuery);
+                $stmt->bind_param("ssddddddddd", $vehicleId, $vehicleId, $price4hrs40km, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour, $baseFare, $pricePerKm, $nightHaltCharge, $driverAllowance);
+            } else {
+                $insertQuery = "
+                    INSERT INTO vehicle_pricing (
+                        vehicle_type, trip_type, 
+                        local_package_4hr, local_package_8hr, local_package_10hr, 
+                        extra_km_charge, extra_hour_charge,
+                        base_fare, price_per_km, night_halt_charge, driver_allowance,
+                        created_at, updated_at
+                    ) VALUES (?, 'local', ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ";
+                
+                $stmt = $conn->prepare($insertQuery);
+                $stmt->bind_param("sddddddddd", $vehicleId, $price4hrs40km, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour, $baseFare, $pricePerKm, $nightHaltCharge, $driverAllowance);
+            }
+            
+            $updateResults['vehicle_pricing'] = $stmt->execute();
+            $stmt->close();
         }
     }
-    
-    // Execute the vehicle_pricing update/insert
-    $vpSuccess = $stmt->execute();
-    $stmt->close();
     
     // Commit the transaction
     $conn->commit();
     
-    // Try to sync the tables with a separate call
+    // Trigger a sync operation
+    $syncUrl = str_replace('direct-local-fares.php', 'admin/sync-local-fares.php', $_SERVER['PHP_SELF']);
+    $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . 
+             "://" . $_SERVER['HTTP_HOST'];
+    $fullSyncUrl = $baseUrl . dirname($syncUrl) . '/sync-local-fares.php';
+    
     try {
-        $syncUrl = str_replace('direct-local-fares.php', 'admin/sync-local-fares.php', $_SERVER['PHP_SELF']);
-        $fullSyncUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . 
-                     "://" . $_SERVER['HTTP_HOST'] . $syncUrl;
-        
         $ch = curl_init($fullSyncUrl);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, 5);
-        curl_exec($ch);
+        $syncResponse = curl_exec($ch);
         curl_close($ch);
+        error_log("Sync response: " . $syncResponse);
     } catch (Exception $e) {
-        // Ignore sync errors, as we've already updated the primary tables
         error_log("Sync error (non-critical): " . $e->getMessage());
     }
     
@@ -275,8 +330,7 @@ try {
     $response = [
         'success' => true,
         'message' => 'Local package fares updated successfully',
-        'localTableUpdated' => $success,
-        'vehiclePricingUpdated' => $vpSuccess,
+        'updateResults' => $updateResults,
         'vehicleId' => $vehicleId,
         'fares' => [
             'price4hrs40km' => $price4hrs40km,
