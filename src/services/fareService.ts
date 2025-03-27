@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { TripType, TripMode } from '@/lib/tripTypes';
 import { LocalFare, OutstationFare, AirportFare } from '@/types/cab';
@@ -15,7 +14,7 @@ function clearFareCache() {
   localStorage.removeItem('outstation_fares_timestamp');
   localStorage.removeItem('local_fares_timestamp'); 
   localStorage.removeItem('airport_fares_timestamp');
-  localStorage.setItem('globalFareRefreshToken', Date.now().toString());
+  localStorage.setItem('globalFareRefreshToken', Date.now());
   
   // Clear all fare-related cache items from localStorage and sessionStorage
   const keysToRemove = [
@@ -827,6 +826,140 @@ async function getAirportFaresForVehicle(vehicleId: string): Promise<AirportFare
   }
 }
 
+// Function to update local fare specifically - matching the export in index.ts
+async function updateLocalFare(vehicleId: string, fares: {
+  package4hr40km?: number;
+  package8hr80km?: number;
+  package10hr100km?: number;
+  extraKmRate?: number;
+  extraHourRate?: number;
+  price4hrs40km?: number;
+  price8hrs80km?: number;
+  price10hrs100km?: number;
+  priceExtraKm?: number;
+  priceExtraHour?: number;
+}) {
+  try {
+    console.log(`Updating local fares for vehicle ${vehicleId}:`, fares);
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+    
+    // Create a FormData instance for more reliable data transmission
+    const formData = new FormData();
+    formData.append('vehicleId', vehicleId);
+    formData.append('vehicle_id', vehicleId);
+    formData.append('tripType', 'local');
+    
+    // Map the fare data with different key formats for compatibility
+    // with different backend implementations
+    const fareMapping = {
+      'package4hr40km': ['price4hrs40km', 'price_4hrs_40km', 'local_package_4hr'],
+      'package8hr80km': ['price8hrs80km', 'price_8hrs_80km', 'local_package_8hr'],
+      'package10hr100km': ['price10hrs100km', 'price_10hrs_100km', 'local_package_10hr'],
+      'extraKmRate': ['priceExtraKm', 'price_extra_km', 'extra_km_charge'],
+      'extraHourRate': ['priceExtraHour', 'price_extra_hour', 'extra_hour_charge'],
+    };
+    
+    // Add all possible variations of parameter names to increase compatibility
+    Object.entries(fares).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        // Add the original key
+        formData.append(key, String(value));
+        
+        // Add all variations for this key
+        for (const [sourceKey, targetKeys] of Object.entries(fareMapping)) {
+          if (key === sourceKey || targetKeys.includes(key)) {
+            // Add all target variations for this key
+            targetKeys.forEach(targetKey => {
+              formData.append(targetKey, String(value));
+            });
+            // Also add the source variation
+            formData.append(sourceKey, String(value));
+          }
+        }
+      }
+    });
+    
+    // Add a timestamp for cache busting
+    formData.append('_t', Date.now().toString());
+    
+    // We'll try multiple endpoints in sequence to maximize compatibility
+    const endpoints = [
+      // Primary endpoint
+      `${baseUrl}/api/direct-local-fares.php`,
+      // Admin endpoints
+      `${baseUrl}/api/admin/direct-local-fares.php`,
+      `${baseUrl}/api/admin/local-fares-update.php`,
+      // Universal fallback
+      `${baseUrl}/api/admin/direct-fare-update.php?tripType=local`
+    ];
+    
+    let finalResponse = null;
+    let finalError = null;
+    
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Attempting to update local fares via endpoint: ${endpoint}`);
+        const response = await axios.post(endpoint, formData, {
+          headers: {
+            ...getBypassHeaders(),
+            'Content-Type': 'multipart/form-data',
+          },
+          timeout: 10000 // 10 second timeout
+        });
+        
+        console.log(`Response from ${endpoint}:`, response.data);
+        
+        if (
+          response.data && 
+          (response.data.success === true || 
+           response.data.status === 'success' || 
+           response.data.result === 'success')
+        ) {
+          console.log(`Successfully updated local fares via ${endpoint}`);
+          finalResponse = response.data;
+          
+          // Clear cache and try to force sync between tables
+          clearFareCache();
+          
+          // Try to trigger a sync if this endpoint worked
+          try {
+            await syncLocalFareTables();
+          } catch (syncError) {
+            console.error('Error syncing after update:', syncError);
+            // Continue anyway since the primary update succeeded
+          }
+          
+          // Dispatch events to update UI components
+          window.dispatchEvent(new CustomEvent('local-fares-updated', {
+            detail: { 
+              timestamp: Date.now(),
+              vehicleId: vehicleId,
+              fares: fares
+            }
+          }));
+          
+          return finalResponse;
+        }
+      } catch (error) {
+        console.error(`Error updating local fares via ${endpoint}:`, error);
+        finalError = error;
+        // Continue to next endpoint
+      }
+    }
+    
+    // If we got here, all endpoints failed
+    if (finalError) {
+      throw finalError;
+    }
+    
+    // If no specific error but all endpoints failed
+    throw new Error('All local fare update endpoints failed');
+  } catch (error) {
+    console.error(`Error updating local fares for vehicle ${vehicleId}:`, error);
+    throw error;
+  }
+}
+
 // Create the fareService object with all methods
 export const fareService = {
   clearCache: clearFareCache,
@@ -844,7 +977,8 @@ export const fareService = {
   getOutstationFaresForVehicle,
   getLocalFaresForVehicle,
   getAirportFaresForVehicle,
-  getFaresByTripType
+  getFaresByTripType,
+  updateLocalFare
 };
 
 // Export individual functions for direct imports
@@ -864,5 +998,6 @@ export {
   getOutstationFaresForVehicle,
   getLocalFaresForVehicle,
   getAirportFaresForVehicle,
-  getFaresByTripType
+  getFaresByTripType,
+  updateLocalFare
 };
