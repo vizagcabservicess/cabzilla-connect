@@ -77,13 +77,29 @@ export function CabOptions({
       localStorage.setItem('fareDataLastRefreshed', timestamp.toString());
       localStorage.setItem('forceTripFaresRefresh', 'true');
       
+      // Force sync outstation fares tables if we're in outstation mode
+      if (tripType === 'outstation') {
+        try {
+          const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+          console.log('Forcing sync between outstation_fares and vehicle_pricing tables');
+          
+          // Make a request to sync endpoint
+          await fareService.getOutstationFares(); // This will force a sync with the updated params
+          
+          console.log('Sync completed');
+        } catch (syncError) {
+          console.error('Error syncing outstation fares tables:', syncError);
+          // Continue despite sync error
+        }
+      }
+      
       // Reload cab types from server with force flag
       console.log('Reloading cab types from server...');
-      await reloadCabTypes();  // Fixed: Remove the argument
+      await reloadCabTypes();
       
       // Refresh cab options with force parameter
       console.log('Refreshing cab options...');
-      await refreshCabOptions();  // Fixed: Remove the argument
+      await refreshCabOptions();
       
       // Update last update timestamp and increment refresh count
       setLastUpdate(timestamp);
@@ -92,7 +108,7 @@ export function CabOptions({
       setGlobalRefreshTrigger(prev => prev + 1);
       
       // Trigger recalculation of fares with force flag
-      await calculateFares(cabOptions);
+      await calculateFares(cabOptions, true);
       
       toast.success("All fare data refreshed successfully!");
       setRefreshSuccessful(true);
@@ -133,11 +149,26 @@ export function CabOptions({
         console.log('Force refresh flag set, fare cache cleared');
       }
       
+      // For outstation trips, try to sync outstation fares with vehicle pricing
+      if (tripType === 'outstation' && shouldForceRefresh) {
+        try {
+          console.log('Forcing sync of outstation fares tables before calculation');
+          await fareService.getOutstationFares();
+        } catch (syncError) {
+          console.error('Error syncing outstation fares before calculation:', syncError);
+        }
+      }
+      
       const fares: Record<string, number> = {};
       
       for (const cab of cabs) {
         try {
           console.log(`Calculating fare for ${cab.name} (${cab.id})`);
+          // For outstation trips, make sure we use the fare data directly from the cab's outstationFares property when available
+          if (tripType === 'outstation' && cab.outstationFares) {
+            console.log(`Using cab's outstation fares data for ${cab.id}:`, cab.outstationFares);
+          }
+          
           const fare = await calculateFare({
             cabType: cab,
             distance,
@@ -147,6 +178,7 @@ export function CabOptions({
             pickupDate,
             returnDate
           });
+          
           fares[cab.id] = fare;
           console.log(`Calculated fare for ${cab.name}: ${fare}`);
         } catch (error) {
