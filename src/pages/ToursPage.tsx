@@ -1,3 +1,5 @@
+
+// We need to update the getTourFare function and related calculations
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -30,6 +32,7 @@ const ToursPage = () => {
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
+  // This function gets the direct tour fare without adding GST
   const getTourFare = (tourId: string, cabId: string): number => {
     if (!tourId || !cabId) return 0;
     

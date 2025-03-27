@@ -6,21 +6,18 @@ export * from './cabData';
 export * from './packageData';
 export * from './tourData';
 
-// Export everything from fareCalculationService except clearFareCache
+// Export fare calculation functions
 export { 
   calculateFare, 
-  calculateAirportFare
+  calculateAirportFare,
+  clearFareCache
 } from './fareCalculationService';
-
-// Explicitly re-export clearFareCache from fareCalculationService to avoid ambiguity with the one from cabData
-export { clearFareCache as clearFareServiceCache } from './fareCalculationService';
 
 // Export types with the 'export type' syntax to avoid TypeScript errors
 export type { TripType, TripMode } from './tripTypes';
 
 // Re-export all methods from fareService
 export { 
-  clearFareCache,
   getBypassHeaders,
   getForcedRequestConfig,
   directFareUpdate,
@@ -34,7 +31,8 @@ export {
   getLocalFaresForVehicle,
   getAirportFaresForVehicle,
   getFaresByTripType,
-  resetCabOptionsState
+  resetCabOptionsState,
+  clearFareCache as clearFareServiceCache
 } from '@/services/fareService';
 
 // Re-export CabType from the types directly

@@ -108,17 +108,14 @@ export const BookingSummary = ({
         console.log(`Retrieved local price for ${selectedCab.id}: ${localPrice}`);
         
         if (localPrice > 0) {
-          // Include GST for local package
-          const priceWithGST = Math.round(localPrice * 1.05);
-          setCalculatedFare(priceWithGST);
+          // Use direct local price without GST
+          setCalculatedFare(localPrice);
         } else if (totalPrice > 0) {
           // Fallback to totalPrice if available
           setCalculatedFare(totalPrice);
         } else if (selectedCab.price) {
           // Use the cab's base price as a last resort
-          const basePrice = selectedCab.price;
-          const priceWithGST = Math.round(basePrice * 1.05);
-          setCalculatedFare(priceWithGST);
+          setCalculatedFare(selectedCab.price);
         }
       } catch (error) {
         console.error('Error getting local package price:', error);
@@ -143,88 +140,168 @@ export const BookingSummary = ({
   let extraDistance = 0;
   let extraDistanceFare = 0;
   let perKmRate = selectedCab.pricePerKm || 14;
+  let allocatedKm = 300;
   
   // Calculate fare breakdown based on trip type
   if (tripType === 'outstation') {
-    // For outstation trips
-    baseFare = Math.max(selectedCab.price || 3000, calculatedFare * 0.7);
-    driverAllowance = selectedCab.driverAllowance || 250;
+    console.log(`Calculating outstation fare for ${tripMode} trip, distance: ${distance}km`);
     
-    // Calculate effective distance considering driver return for one-way trips
-    effectiveDistance = tripMode === 'one-way' ? Math.min(distance * 2, 600) : Math.min(distance, 600);
+    // Set the base pricing values from the cab type if available
+    if (selectedCab.outstationFares) {
+      perKmRate = tripMode === 'one-way' ? 
+        selectedCab.outstationFares.pricePerKm : 
+        selectedCab.outstationFares.roundTripPricePerKm || selectedCab.outstationFares.pricePerKm;
+      
+      driverAllowance = selectedCab.outstationFares.driverAllowance || 250;
+      console.log(`Using outstation fares: perKmRate=${perKmRate}, driverAllowance=${driverAllowance}`);
+    } else {
+      // Fallback values if outstationFares not available
+      perKmRate = tripMode === 'one-way' ? 16 : 14;
+      driverAllowance = 250;
+      console.log(`Using fallback outstation fares: perKmRate=${perKmRate}, driverAllowance=${driverAllowance}`);
+    }
     
-    // Extra distance charges
-    const allocatedKm = 300;
-    extraDistance = Math.max(0, effectiveDistance - allocatedKm);
-    extraDistanceFare = extraDistance * perKmRate;
+    if (tripMode === 'one-way') {
+      // For one-way trips
+      effectiveDistance = Math.max(distance, 300);
+      baseFare = effectiveDistance * perKmRate;
+      extraDistance = Math.max(0, effectiveDistance - allocatedKm);
+      extraDistanceFare = extraDistance * perKmRate;
+      
+      // One-way calculation
+      if (distance <= allocatedKm) {
+        baseFare = allocatedKm * perKmRate;
+        extraDistance = 0;
+        extraDistanceFare = 0;
+      } else {
+        baseFare = allocatedKm * perKmRate;
+        extraDistance = distance - allocatedKm;
+        extraDistanceFare = extraDistance * perKmRate;
+      }
+      
+      console.log(`One-way calculation: baseFare=${baseFare}, extraDistance=${extraDistance}, extraDistanceFare=${extraDistanceFare}`);
+    } else {
+      // For round trips
+      allocatedKm = 300; // per day
+      baseFare = allocatedKm * perKmRate;
+      
+      if (distance <= allocatedKm) {
+        extraDistance = 0;
+        extraDistanceFare = 0;
+      } else {
+        extraDistance = distance - allocatedKm;
+        extraDistanceFare = extraDistance * perKmRate;
+      }
+      
+      // Add return journey charge for round trips
+      additionalCharges = baseFare * 0.8;
+      additionalChargesLabel = 'Return Journey Charge';
+      
+      console.log(`Round-trip calculation: baseFare=${baseFare}, extraDistance=${extraDistance}, extraDistanceFare=${extraDistanceFare}, returnCharge=${additionalCharges}`);
+    }
     
-    // Night charges for pickups during night hours
+    // Night charges for pickups during night hours (10 PM to 5 AM)
     nightCharges = (pickupDate && (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)) 
                   ? Math.round(baseFare * 0.1) 
                   : 0;
-    
-    // Additional charges for round trips
-    if (tripMode === 'round-trip') {
-      additionalCharges = Math.round(baseFare * 0.8);
-      additionalChargesLabel = 'Return Journey Charge';
-    }
   } 
   else if (tripType === 'airport') {
+    console.log(`Calculating airport fare for distance: ${distance}km`);
+    
     // For airport transfers, use tiered pricing based on distance
-    if (distance <= 10) {
-      baseFare = Math.round(calculatedFare * 0.8);
-    } else if (distance <= 20) {
-      baseFare = Math.round(calculatedFare * 0.75);
+    if (selectedCab.airportFares) {
+      const airportFares = selectedCab.airportFares;
+      
+      if (distance <= 10) {
+        baseFare = airportFares.tier1Price || airportFares.basePrice || 1000;
+      } else if (distance <= 20) {
+        baseFare = airportFares.tier2Price || airportFares.basePrice || 1200;
+      } else if (distance <= 30) {
+        baseFare = airportFares.tier3Price || airportFares.basePrice || 1500;
+      } else {
+        baseFare = airportFares.tier4Price || airportFares.basePrice || 2000;
+      }
+      
+      // Airport fee and driver allowance
+      additionalCharges = airportFares.extraKmCharge || 150;
+      additionalChargesLabel = 'Airport Fee';
+      driverAllowance = 250;
+      
+      // Extra distance charges for distances above 30km
+      if (distance > 30) {
+        extraDistance = distance - 30;
+        extraDistanceFare = extraDistance * (airportFares.extraKmCharge || 14);
+      }
+      
+      console.log(`Using airport fares: baseFare=${baseFare}, airportFee=${additionalCharges}, extraDistance=${extraDistance}, extraFare=${extraDistanceFare}`);
     } else {
-      baseFare = Math.round(calculatedFare * 0.7);
+      // Default airport pricing if no specific fares provided
+      if (distance <= 10) {
+        baseFare = 1000;
+      } else if (distance <= 20) {
+        baseFare = 1200;
+      } else if (distance <= 30) {
+        baseFare = 1500;
+      } else {
+        baseFare = 2000;
+      }
+      
+      // Extra distance charges
+      if (distance > 30) {
+        extraDistance = distance - 30;
+        extraDistanceFare = extraDistance * 14;
+      }
+      
+      // Airport fee and driver allowance
+      additionalCharges = 150;
+      additionalChargesLabel = 'Airport Fee';
+      driverAllowance = 250;
+      
+      console.log(`Using default airport fares: baseFare=${baseFare}, airportFee=${additionalCharges}, extraDistance=${extraDistance}, extraFare=${extraDistanceFare}`);
     }
-    
-    // Minimum base fare
-    if (baseFare < 240) baseFare = 240;
-    
-    // Airport fee and driver allowance
-    additionalCharges = Math.round(calculatedFare * 0.1);
-    additionalChargesLabel = 'Airport Fee';
-    driverAllowance = Math.round(calculatedFare * 0.1);
-    
-    // Minimum airport fee and driver allowance
-    if (additionalCharges < 30) additionalCharges = 30;
-    if (driverAllowance < 30) driverAllowance = 30;
   } 
   else if (tripType === 'local') {
     // For local packages
-    baseFare = Math.round(calculatedFare / 1.05); // Remove GST to get base fare
+    console.log(`Calculating local package fare`);
+    
+    // Either use explicitly set fare or calculate from package
+    if (calculatedFare > 0) {
+      baseFare = calculatedFare;
+    } else if (selectedCab.localPackageFares) {
+      baseFare = selectedCab.localPackageFares.price8hrs80km || 1500;
+    } else {
+      // Default local package pricing
+      if (selectedCab.id === 'sedan') {
+        baseFare = 1500;
+      } else if (selectedCab.id === 'ertiga') {
+        baseFare = 1800;
+      } else if (selectedCab.id === 'innova_crysta') {
+        baseFare = 2200;
+      } else {
+        baseFare = 1500;
+      }
+    }
+    
     additionalChargesLabel = '08hrs 80KM Package';
+    console.log(`Local package fare: ${baseFare}`);
   } 
   else if (tripType === 'tour') {
     // For tour packages
-    baseFare = Math.round(calculatedFare * 0.7);
-    additionalCharges = Math.round(calculatedFare * 0.3);
+    console.log(`Calculating tour package fare`);
+    
+    if (calculatedFare > 0) {
+      baseFare = calculatedFare;
+    } else {
+      baseFare = 3000; // Default tour base fare
+    }
+    
+    additionalCharges = 0; // No additional charges for tour packages
     additionalChargesLabel = 'Tour Package Fee';
   }
 
-  // Calculate GST (5%)
-  const gst = Math.round(baseFare * 0.05);
-  const finalGst = tripType === 'airport' && gst < 15 ? 15 : gst;
+  // Calculate final total (without GST)
+  let finalTotal = baseFare + driverAllowance + nightCharges + additionalCharges + extraDistanceFare;
   
-  // Calculate final total
-  let finalTotal = baseFare + finalGst;
-  
-  if (tripType === 'airport') {
-    // Special handling for airport transfers
-    const calculatedTotal = baseFare + driverAllowance + additionalCharges + finalGst;
-    
-    // If there's a large discrepancy, use the provided total price
-    if (Math.abs(calculatedTotal - calculatedFare) > 10) {
-      finalTotal = calculatedFare;
-    } else {
-      finalTotal = calculatedTotal;
-    }
-  } else {
-    // For other trip types
-    finalTotal = baseFare + driverAllowance + nightCharges + additionalCharges + finalGst;
-  }
-
   // Make sure we always have a valid final total
   if (finalTotal <= 0 && calculatedFare > 0) {
     finalTotal = calculatedFare;
@@ -288,14 +365,14 @@ export const BookingSummary = ({
             {tripType === 'outstation' && (
               <>
                 <div className="flex justify-between">
-                  <span className="text-gray-700">Base fare ({tripMode === 'one-way' ? '300 km included' : '300 km per day'})</span>
+                  <span className="text-gray-700">Base fare ({tripMode === 'one-way' ? `${allocatedKm} km included` : `${allocatedKm} km per day`})</span>
                   <span className="font-semibold">₹{baseFare.toLocaleString()}</span>
                 </div>
                 
                 <div className="text-gray-600 text-sm ml-1">
                   Total distance: {distance} km 
                   {tripMode === 'one-way' && (
-                    <span> (effective: {effectiveDistance} km with driver return)</span>
+                    <span> (effective: {effectiveDistance} km)</span>
                   )}
                 </div>
                 
@@ -341,10 +418,19 @@ export const BookingSummary = ({
                   <span className="font-semibold">₹{baseFare.toLocaleString()}</span>
                 </div>
                 
-                <div className="flex justify-between">
-                  <span className="text-gray-700">{additionalChargesLabel}</span>
-                  <span className="font-semibold">₹{additionalCharges.toLocaleString()}</span>
-                </div>
+                {additionalCharges > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-700">{additionalChargesLabel}</span>
+                    <span className="font-semibold">₹{additionalCharges.toLocaleString()}</span>
+                  </div>
+                )}
+                
+                {extraDistance > 0 && tripType === 'airport' && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-700">Extra distance fare ({extraDistance} km × ₹{selectedCab.airportFares?.extraKmCharge || 14})</span>
+                    <span className="font-semibold">₹{extraDistanceFare.toLocaleString()}</span>
+                  </div>
+                )}
                 
                 {tripType === 'airport' && (
                   <div className="flex justify-between">
@@ -354,11 +440,6 @@ export const BookingSummary = ({
                 )}
               </>
             )}
-            
-            <div className="flex justify-between">
-              <span className="text-gray-700">GST (5%)</span>
-              <span className="font-semibold">₹{finalGst.toLocaleString()}</span>
-            </div>
           </div>
           
           <div className="border-t mt-4 pt-4">
