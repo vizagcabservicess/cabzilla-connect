@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,7 +38,6 @@ export function FareUpdateError({
   const [attempted500Fix, setAttempted500Fix] = useState(false);
   const errorMessage = typeof error === "string" ? error : error.message;
   
-  // Error classification
   const isServerError = 
     /500|503|Internal Server Error|unavailable/i.test(errorMessage);
   
@@ -52,12 +50,10 @@ export function FareUpdateError({
   const isTableError =
     /table.*not found|doesn't exist|database_error|SQLSTATE|base table or view not found|unknown column/i.test(errorMessage);
   
-  // Auto-attempt database initialization for 500 errors
   useEffect(() => {
     if (isServerError && !attempted500Fix) {
       setAttempted500Fix(true);
       
-      // Add a small delay before attempting fix
       const timer = setTimeout(() => {
         initializeDatabase(); 
       }, 500);
@@ -69,27 +65,22 @@ export function FareUpdateError({
   const handleRetry = () => {
     console.log("Retrying fare update after error...");
     
-    // Show toast
     toast.info('Clearing all caches and refreshing...', {
       id: 'clearing-cache',
       duration: 2000
     });
     
-    // Clear all caches
     fareService.clearCache();
     
-    // Wait a moment before retrying
     setTimeout(() => {
       if (onRetry) {
         onRetry();
       } else {
-        // If no handler provided, reload the page
         window.location.reload();
       }
     }, 800);
   };
 
-  // Comprehensive fix attempt
   const runComprehensiveFix = async () => {
     setIsFixing(true);
     toast.info('Applying comprehensive API fixes...', {
@@ -100,23 +91,18 @@ export function FareUpdateError({
     try {
       console.log('Running comprehensive API fixes...');
       
-      // 1. Clear all caches
       fareService.clearCache();
       
-      // 2. Force API version update
       const timestamp = Date.now();
       localStorage.setItem('apiVersionForced', timestamp.toString());
       sessionStorage.setItem('apiVersionForced', timestamp.toString());
       
-      // 3. Set direct API access flag
       localStorage.setItem('useDirectApi', 'true');
       sessionStorage.setItem('useDirectApi', 'true');
       
-      // 4. Try the direct API for all trip types
       const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
       
       try {
-        // Test direct-fare-update.php endpoint - this should now handle everything
         const testResponse = await fetch(`${baseUrl}/api/admin/direct-fare-update.php?test=1&_t=${timestamp}`, {
           method: 'GET',
           headers: fareService.getBypassHeaders()
@@ -129,16 +115,12 @@ export function FareUpdateError({
         console.error('Error testing direct API:', err);
       }
       
-      // 5. Initialize database
       await initializeDatabase();
       
-      // 6. Sync tables
       await syncTables();
       
-      // 7. Force update local fares
       await forceUpdateAllLocalFares();
       
-      // Success notification
       toast.success('Comprehensive fixes applied', {
         id: 'comprehensive-fix-success'
       });
@@ -152,10 +134,8 @@ export function FareUpdateError({
     }
   };
 
-  // Force update all local fares
   const forceUpdateAllLocalFares = async () => {
     try {
-      // Default cab types to update
       const cabTypes = ['sedan', 'ertiga', 'innova', 'innova_crysta', 'tempo', 'luxury'];
       const packageToUpdate = '4hrs-40km';
       
@@ -165,33 +145,27 @@ export function FareUpdateError({
       });
       
       for (const cabType of cabTypes) {
-        try {
-          // Get current fare value or use default
-          const currentFare = localStorage.getItem(`localFare_${cabType}_${packageToUpdate}`) || 
-            (cabType === 'sedan' ? '1200' : 
-              cabType === 'ertiga' ? '1800' : 
-                cabType === 'innova' || cabType === 'innova_crysta' ? '2300' : 
-                  cabType === 'tempo' ? '3000' : '3500');
-          
-          // Use directFareUpdate with hardcoded values
-          await directFareUpdate({
-            tripType: 'local',
-            vehicleId: cabType,
-            fares: {
-              '4hrs-40km': parseFloat(currentFare),
-              '8hrs-80km': parseFloat(currentFare) * 2,
-              '10hrs-100km': parseFloat(currentFare) * 2.5,
-              'extraKmRate': cabType === 'sedan' ? 14 : 
-                cabType === 'ertiga' ? 18 : 20,
-              'extraHourRate': cabType === 'sedan' ? 250 : 
-                cabType === 'ertiga' ? 300 : 350,
-            }
-          });
-          
-          console.log(`Updated local fares for ${cabType}`);
-        } catch (err) {
-          console.error(`Error updating ${cabType} fares:`, err);
-        }
+        const currentFare = localStorage.getItem(`localFare_${cabType}_${packageToUpdate}`) || 
+          (cabType === 'sedan' ? '1200' : 
+            cabType === 'ertiga' ? '1800' : 
+              cabType === 'innova' || cabType === 'innova_crysta' ? '2300' : 
+                cabType === 'tempo' ? '3000' : '3500');
+        
+        await directFareUpdate(
+          'local', 
+          cabType,
+          {
+            '4hrs-40km': parseFloat(currentFare),
+            '8hrs-80km': parseFloat(currentFare) * 2,
+            '10hrs-100km': parseFloat(currentFare) * 2.5,
+            'extraKmRate': cabType === 'sedan' ? 14 : 
+              cabType === 'ertiga' ? 18 : 20,
+            'extraHourRate': cabType === 'sedan' ? 250 : 
+              cabType === 'ertiga' ? 300 : 350,
+          }
+        );
+        
+        console.log(`Updated local fares for ${cabType}`);
       }
       
       toast.success('Forced update complete');
@@ -202,7 +176,6 @@ export function FareUpdateError({
     }
   };
 
-  // Initialize database tables
   const initializeDatabase = async () => {
     setIsInitializingDb(true);
     toast.info('Initializing database tables...', {
@@ -211,7 +184,6 @@ export function FareUpdateError({
     });
     
     try {
-      // First, try using the direct fare update endpoint which has table creation
       const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
       const timestamp = Date.now();
       
@@ -234,7 +206,6 @@ export function FareUpdateError({
         console.error('Error using direct endpoint for initialization:', error);
       }
       
-      // Also try to create the tables directly
       try {
         const createTableResponse = await fetch(`${baseUrl}/api/local-fares.php?create_tables=true&_t=${timestamp}`, {
           method: 'GET',
@@ -253,14 +224,11 @@ export function FareUpdateError({
         console.error('Error creating tables via local-fares endpoint:', error);  
       }
       
-      // Fall back to standard init-database endpoint
       const result = await fareService.initializeDatabase();
       
       if (result) {
-        // Clear all caches after successful initialization
         fareService.clearCache();
         
-        // Display confirmation
         toast.success('Database setup complete! Please try updating fares now.', {
           duration: 5000
         });
@@ -277,7 +245,6 @@ export function FareUpdateError({
     }
   };
 
-  // Sync local_package_fares and vehicle_pricing tables
   const syncTables = async () => {
     setIsSyncing(true);
     toast.info('Synchronizing database tables...', {
@@ -290,7 +257,6 @@ export function FareUpdateError({
       const timestamp = Date.now();
       
       try {
-        // Call the sync endpoint
         const syncResponse = await fetch(`${baseUrl}/api/admin/sync-local-fares.php?_t=${timestamp}`, {
           method: 'GET',
           headers: {
@@ -326,7 +292,6 @@ export function FareUpdateError({
     }
   };
 
-  // Pick the most appropriate icon
   const ErrorIcon = isTableError
     ? Database
     : (isForbiddenError
@@ -335,7 +300,6 @@ export function FareUpdateError({
         ? Server 
         : (isNetworkError ? Wifi : AlertCircle)));
 
-  // Tailored error message based on type
   const getErrorDescription = () => {
     if (description) return description;
     
