@@ -34,8 +34,7 @@ export {
   clearFareCache as clearFareServiceCache,
   resetCabOptionsState,
   syncLocalFareTables,
-  fareService,
-  updateLocalFare // Export the updateLocalFare function
+  fareService
 } from '@/services/fareService';
 
 // Re-export CabType from the types directly
