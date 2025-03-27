@@ -11,7 +11,7 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Force-Refresh');
 header('Content-Type: application/json');
-header('X-API-Version: 1.0.5'); // Increment version number
+header('X-API-Version: 1.0.4');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
@@ -45,7 +45,7 @@ try {
     $driverAllowance = isset($_POST['driverAllowance']) ? floatval($_POST['driverAllowance']) : (isset($_POST['driver_allowance']) ? floatval($_POST['driver_allowance']) : 0);
     $roundTripBasePrice = isset($_POST['roundTripBasePrice']) ? floatval($_POST['roundTripBasePrice']) : (isset($_POST['roundtrip_base_price']) ? floatval($_POST['roundtrip_base_price']) : 0);
     $roundTripPricePerKm = isset($_POST['roundTripPricePerKm']) ? floatval($_POST['roundTripPricePerKm']) : (isset($_POST['roundtrip_price_per_km']) ? floatval($_POST['roundtrip_price_per_km']) : 0);
-    
+
     // If round trip values are not provided, use one-way values with a small discount
     if ($roundTripBasePrice <= 0 && $basePrice > 0) {
         $roundTripBasePrice = $basePrice * 0.95; // 5% discount on base price for round trip
@@ -200,73 +200,75 @@ try {
         }
     }
 
-    // Now sync data to vehicle_pricing table for backward compatibility
-    // First for outstation one-way
-    $syncOneWayQuery = "
-        INSERT INTO vehicle_pricing (
-            vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance, updated_at
-        ) VALUES (?, 'outstation', ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        ON DUPLICATE KEY UPDATE 
-            base_fare = VALUES(base_fare),
-            price_per_km = VALUES(price_per_km),
-            night_halt_charge = VALUES(night_halt_charge),
-            driver_allowance = VALUES(driver_allowance),
-            updated_at = CURRENT_TIMESTAMP
-    ";
-    
-    $syncOneWayStmt = $conn->prepare($syncOneWayQuery);
-    $syncOneWayStmt->bind_param('sdddd', $vehicleId, $basePrice, $pricePerKm, $nightHalt, $driverAllowance);
-    
-    if (!$syncOneWayStmt->execute()) {
-        error_log("Failed to sync to vehicle_pricing one-way: " . $conn->error);
-        // We'll continue despite this error and try to sync the rest
-    } else {
-        error_log("Synced outstation one-way fare to vehicle_pricing for $vehicleId");
-    }
-    
-    // Also for outstation-one-way type
-    $syncOneWayTypeQuery = "
-        INSERT INTO vehicle_pricing (
-            vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance, updated_at
-        ) VALUES (?, 'outstation-one-way', ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        ON DUPLICATE KEY UPDATE 
-            base_fare = VALUES(base_fare),
-            price_per_km = VALUES(price_per_km),
-            night_halt_charge = VALUES(night_halt_charge),
-            driver_allowance = VALUES(driver_allowance),
-            updated_at = CURRENT_TIMESTAMP
-    ";
-    
-    $syncOneWayTypeStmt = $conn->prepare($syncOneWayTypeQuery);
-    $syncOneWayTypeStmt->bind_param('sdddd', $vehicleId, $basePrice, $pricePerKm, $nightHalt, $driverAllowance);
-    
-    if (!$syncOneWayTypeStmt->execute()) {
-        error_log("Failed to sync to vehicle_pricing outstation-one-way: " . $conn->error);
-        // Continue despite this error
-    } else {
-        error_log("Synced outstation-one-way fare to vehicle_pricing for $vehicleId");
-    }
-    
-    // Now sync the round-trip fares
-    $syncRoundTripQuery = "
-        INSERT INTO vehicle_pricing (
-            vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance, updated_at
-        ) VALUES (?, 'outstation-round-trip', ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        ON DUPLICATE KEY UPDATE 
-            base_fare = VALUES(base_fare),
-            price_per_km = VALUES(price_per_km),
-            night_halt_charge = VALUES(night_halt_charge),
-            driver_allowance = VALUES(driver_allowance),
-            updated_at = CURRENT_TIMESTAMP
-    ";
-    
-    $syncRoundTripStmt = $conn->prepare($syncRoundTripQuery);
-    $syncRoundTripStmt->bind_param('sdddd', $vehicleId, $roundTripBasePrice, $roundTripPricePerKm, $nightHalt, $driverAllowance);
-    
-    if (!$syncRoundTripStmt->execute()) {
-        error_log("Failed to sync to vehicle_pricing round-trip: " . $conn->error);
-    } else {
-        error_log("Synced round-trip fare to vehicle_pricing for $vehicleId");
+    // Now sync this data to vehicle_pricing for backward compatibility
+    $checkVehiclePricingQuery = "SHOW TABLES LIKE 'vehicle_pricing'";
+    $checkVehiclePricingResult = $conn->query($checkVehiclePricingQuery);
+    $vehiclePricingExists = $checkVehiclePricingResult && $checkVehiclePricingResult->num_rows > 0;
+
+    if ($vehiclePricingExists) {
+        // First sync the one-way fares
+        $syncOneWayQuery = "
+            INSERT INTO vehicle_pricing (
+                vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance, updated_at
+            ) VALUES (?, 'outstation', ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON DUPLICATE KEY UPDATE 
+                base_fare = VALUES(base_fare),
+                price_per_km = VALUES(price_per_km),
+                night_halt_charge = VALUES(night_halt_charge),
+                driver_allowance = VALUES(driver_allowance),
+                updated_at = CURRENT_TIMESTAMP
+        ";
+        
+        $syncOneWayStmt = $conn->prepare($syncOneWayQuery);
+        $syncOneWayStmt->bind_param('sdddd', $vehicleId, $basePrice, $pricePerKm, $nightHalt, $driverAllowance);
+        
+        if (!$syncOneWayStmt->execute()) {
+            throw new Exception("Failed to sync to vehicle_pricing outstation: " . $conn->error);
+        }
+        
+        // Also for outstation-one-way type
+        $syncOneWayTypeQuery = "
+            INSERT INTO vehicle_pricing (
+                vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance, updated_at
+            ) VALUES (?, 'outstation-one-way', ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON DUPLICATE KEY UPDATE 
+                base_fare = VALUES(base_fare),
+                price_per_km = VALUES(price_per_km),
+                night_halt_charge = VALUES(night_halt_charge),
+                driver_allowance = VALUES(driver_allowance),
+                updated_at = CURRENT_TIMESTAMP
+        ";
+        
+        $syncOneWayTypeStmt = $conn->prepare($syncOneWayTypeQuery);
+        $syncOneWayTypeStmt->bind_param('sdddd', $vehicleId, $basePrice, $pricePerKm, $nightHalt, $driverAllowance);
+        
+        if (!$syncOneWayTypeStmt->execute()) {
+            throw new Exception("Failed to sync to vehicle_pricing one-way: " . $conn->error);
+        }
+        
+        error_log("Synced one-way fares to vehicle_pricing for $vehicleId");
+        
+        // Now sync the round-trip fares
+        $syncRoundTripQuery = "
+            INSERT INTO vehicle_pricing (
+                vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance, updated_at
+            ) VALUES (?, 'outstation-round-trip', ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON DUPLICATE KEY UPDATE 
+                base_fare = VALUES(base_fare),
+                price_per_km = VALUES(price_per_km),
+                night_halt_charge = VALUES(night_halt_charge),
+                driver_allowance = VALUES(driver_allowance),
+                updated_at = CURRENT_TIMESTAMP
+        ";
+        
+        $syncRoundTripStmt = $conn->prepare($syncRoundTripQuery);
+        $syncRoundTripStmt->bind_param('sdddd', $vehicleId, $roundTripBasePrice, $roundTripPricePerKm, $nightHalt, $driverAllowance);
+        
+        if (!$syncRoundTripStmt->execute()) {
+            throw new Exception("Failed to sync to vehicle_pricing round-trip: " . $conn->error);
+        }
+        
+        error_log("Synced round-trip fares to vehicle_pricing for $vehicleId");
     }
 
     // Commit transaction
@@ -287,12 +289,7 @@ try {
             'pricePerKm' => $pricePerKm,
             'timestamp' => date('Y-m-d H:i:s')
         ],
-        'vehicle_created' => true,
-        'sync_status' => [
-            'one_way' => $syncOneWayStmt->affected_rows,
-            'one_way_type' => $syncOneWayTypeStmt->affected_rows,
-            'round_trip' => $syncRoundTripStmt->affected_rows
-        ]
+        'vehicle_created' => true
     ];
     
     echo json_encode([

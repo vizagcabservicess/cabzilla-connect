@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, FormProvider } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -70,17 +70,6 @@ export function VehicleFareManagement() {
       luxury: 0,
     },
   });
-  
-  // Safe method to handle form field changes
-  const safeSetFormValue = (form, field, value) => {
-    try {
-      if (form && typeof form.setValue === 'function') {
-        form.setValue(field, value);
-      }
-    } catch (err) {
-      console.error(`Error setting form value for ${field}:`, err);
-    }
-  };
   
   useEffect(() => {
     fetchAllFareData();
@@ -166,23 +155,23 @@ export function VehicleFareManagement() {
   const handleVehicleSelect = (vehicleType: string) => {
     const selectedVehicle = vehiclePricing.find(pricing => pricing.vehicleType === vehicleType);
     if (selectedVehicle) {
-      safeSetFormValue(vehiclePricingForm, "vehicleType", selectedVehicle.vehicleType);
-      safeSetFormValue(vehiclePricingForm, "basePrice", selectedVehicle.basePrice);
-      safeSetFormValue(vehiclePricingForm, "pricePerKm", selectedVehicle.pricePerKm);
-      safeSetFormValue(vehiclePricingForm, "nightHaltCharge", selectedVehicle.nightHaltCharge || 0);
-      safeSetFormValue(vehiclePricingForm, "driverAllowance", selectedVehicle.driverAllowance || 0);
+      vehiclePricingForm.setValue("vehicleType", selectedVehicle.vehicleType);
+      vehiclePricingForm.setValue("basePrice", selectedVehicle.basePrice);
+      vehiclePricingForm.setValue("pricePerKm", selectedVehicle.pricePerKm);
+      vehiclePricingForm.setValue("nightHaltCharge", selectedVehicle.nightHaltCharge || 0);
+      vehiclePricingForm.setValue("driverAllowance", selectedVehicle.driverAllowance || 0);
     }
   };
   
   const handleTourSelect = (tourId: string) => {
     const selectedTour = tourFares.find(fare => fare.tourId === tourId);
     if (selectedTour) {
-      safeSetFormValue(tourFareForm, "tourId", selectedTour.tourId);
-      safeSetFormValue(tourFareForm, "sedan", selectedTour.sedan);
-      safeSetFormValue(tourFareForm, "ertiga", selectedTour.ertiga);
-      safeSetFormValue(tourFareForm, "innova", selectedTour.innova);
-      safeSetFormValue(tourFareForm, "tempo", selectedTour.tempo);
-      safeSetFormValue(tourFareForm, "luxury", selectedTour.luxury);
+      tourFareForm.setValue("tourId", selectedTour.tourId);
+      tourFareForm.setValue("sedan", selectedTour.sedan);
+      tourFareForm.setValue("ertiga", selectedTour.ertiga);
+      tourFareForm.setValue("innova", selectedTour.innova);
+      tourFareForm.setValue("tempo", selectedTour.tempo);
+      tourFareForm.setValue("luxury", selectedTour.luxury);
     }
   };
   
@@ -296,7 +285,7 @@ export function VehicleFareManagement() {
               </Alert>
             )}
             
-            <FormProvider {...vehiclePricingForm}>
+            <Form {...vehiclePricingForm}>
               <form onSubmit={vehiclePricingForm.handleSubmit(onVehiclePricingSubmit)} className="space-y-6">
                 <FormField
                   control={vehiclePricingForm.control}
@@ -410,7 +399,7 @@ export function VehicleFareManagement() {
                   )}
                 </Button>
               </form>
-            </FormProvider>
+            </Form>
             
             <div className="mt-8">
               <h3 className="text-lg font-medium mb-4">Current Outstation Fares</h3>
@@ -480,7 +469,7 @@ export function VehicleFareManagement() {
               </Alert>
             )}
             
-            <FormProvider {...tourFareForm}>
+            <Form {...tourFareForm}>
               <form onSubmit={tourFareForm.handleSubmit(onTourFareSubmit)} className="space-y-6">
                 <FormField
                   control={tourFareForm.control}
@@ -599,7 +588,7 @@ export function VehicleFareManagement() {
                   )}
                 </Button>
               </form>
-            </FormProvider>
+            </Form>
             
             <div className="mt-8">
               <h3 className="text-lg font-medium mb-4">Current Tour Fares</h3>
@@ -772,5 +761,3 @@ export function VehicleFareManagement() {
     </Tabs>
   );
 }
-
-export default VehicleFareManagement;
