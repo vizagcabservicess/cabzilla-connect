@@ -9,6 +9,7 @@ header('Expires: 0');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh');
+header('X-API-Version: 1.0.3');
 
 // Include database configuration
 require_once __DIR__ . '/../../config.php';
@@ -164,7 +165,7 @@ try {
     $conn->begin_transaction();
     
     try {
-        // Update outstation_fares table
+        // FIRST always update outstation_fares table - this is our primary source of truth
         $upsertFaresStmt = $conn->prepare("
             INSERT INTO outstation_fares 
             (vehicle_id, base_price, price_per_km, roundtrip_base_price, roundtrip_price_per_km, driver_allowance, night_halt_charge, updated_at)
@@ -190,11 +191,12 @@ try {
         );
         
         $upsertFaresStmt->execute();
-        error_log("Updated outstation_fares table for vehicle: $vehicleId");
+        error_log("Updated outstation_fares table for vehicle: $vehicleId with these values: base_price=$oneWayBasePrice, price_per_km=$oneWayPricePerKm");
         
-        // Also update vehicle_pricing table for compatibility
+        // Also update vehicle_pricing table for compatibility - BUT this is now secondary
         $oneWayTripType = 'outstation-one-way';
         $roundTripTripType = 'outstation-round-trip';
+        $outstationTripType = 'outstation';
         
         // Update one-way pricing
         $upsertOneWayStmt = $conn->prepare("
@@ -209,6 +211,7 @@ try {
             updated_at = NOW()
         ");
         
+        // Update for outstation-one-way
         $upsertOneWayStmt->bind_param("ssdddd", 
             $vehicleId, 
             $oneWayTripType, 
@@ -219,7 +222,20 @@ try {
         );
         
         $upsertOneWayStmt->execute();
-        error_log("Updated vehicle_pricing table for one-way trips: $vehicleId");
+        error_log("Updated vehicle_pricing table for one-way trips: $vehicleId with base_fare=$oneWayBasePrice");
+        
+        // Update for generic outstation
+        $upsertOneWayStmt->bind_param("ssdddd", 
+            $vehicleId, 
+            $outstationTripType, 
+            $oneWayBasePrice, 
+            $oneWayPricePerKm,
+            $driverAllowance,
+            $nightHaltCharge
+        );
+        
+        $upsertOneWayStmt->execute();
+        error_log("Updated vehicle_pricing table for generic outstation: $vehicleId with base_fare=$oneWayBasePrice");
         
         // Update round-trip pricing
         $upsertRoundTripStmt = $conn->prepare("
@@ -244,40 +260,14 @@ try {
         );
         
         $upsertRoundTripStmt->execute();
-        error_log("Updated vehicle_pricing table for round-trip: $vehicleId");
-        
-        // Also update the generic outstation type in vehicle_pricing
-        $outstationTripType = 'outstation';
-        $upsertOutstationStmt = $conn->prepare("
-            INSERT INTO vehicle_pricing 
-            (vehicle_id, trip_type, base_fare, price_per_km, driver_allowance, night_halt_charge, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, NOW())
-            ON DUPLICATE KEY UPDATE 
-            base_fare = VALUES(base_fare),
-            price_per_km = VALUES(price_per_km),
-            driver_allowance = VALUES(driver_allowance),
-            night_halt_charge = VALUES(night_halt_charge),
-            updated_at = NOW()
-        ");
-        
-        $upsertOutstationStmt->bind_param("ssdddd", 
-            $vehicleId, 
-            $outstationTripType, 
-            $oneWayBasePrice, 
-            $oneWayPricePerKm,
-            $driverAllowance,
-            $nightHaltCharge
-        );
-        
-        $upsertOutstationStmt->execute();
-        error_log("Updated vehicle_pricing table for generic outstation: $vehicleId");
+        error_log("Updated vehicle_pricing table for round-trip: $vehicleId with base_fare=$roundTripBasePrice");
         
         // Commit transaction
         $conn->commit();
         
         echo json_encode([
             'status' => 'success',
-            'message' => 'Outstation fares updated successfully',
+            'message' => "Successfully updated outstation fares for $vehicleId",
             'data' => [
                 'vehicleId' => $vehicleId,
                 'oneWayBasePrice' => $oneWayBasePrice,

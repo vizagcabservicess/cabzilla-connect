@@ -12,7 +12,7 @@ header('Expires: 0');
 
 // Add extra cache busting headers
 header('X-Cache-Timestamp: ' . time());
-header('X-API-Version: '.'1.0.2');
+header('X-API-Version: '.'1.0.3');
 
 // Respond to preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -78,7 +78,7 @@ $fallbackVehicles = [
     ]
 ];
 
-// Function to get data from specific fare tables
+// Function to get data from specific fare tables - PRIORITIZE outstation_fares
 function getSpecializedFareData($conn, $vehicleId) {
     $fareData = [
         'outstation' => null,
@@ -86,7 +86,7 @@ function getSpecializedFareData($conn, $vehicleId) {
         'airport' => null
     ];
     
-    // Try to get outstation fares - THIS IS THE PRIMARY SOURCE FOR OUTSTATION FARES
+    // First and ONLY try to get outstation fares from outstation_fares table
     try {
         $outstationQuery = $conn->prepare("
             SELECT 
@@ -107,44 +107,13 @@ function getSpecializedFareData($conn, $vehicleId) {
             
             if ($result && $result->num_rows > 0) {
                 $fareData['outstation'] = $result->fetch_assoc();
-                error_log("Found outstation fares for $vehicleId in specialized table: " . json_encode($fareData['outstation']));
+                error_log("Found outstation fares for $vehicleId in outstation_fares table: " . json_encode($fareData['outstation']));
             } else {
                 error_log("No records found in outstation_fares for vehicle_id: $vehicleId");
             }
         }
     } catch (Exception $e) {
         error_log("Error fetching outstation fares: " . $e->getMessage());
-    }
-    
-    // If no specialized outstation fares, try to get from vehicle_pricing as fallback
-    if (!$fareData['outstation']) {
-        try {
-            $fallbackQuery = $conn->prepare("
-                SELECT 
-                    base_fare as basePrice, 
-                    price_per_km as pricePerKm, 
-                    night_halt_charge as nightHaltCharge, 
-                    driver_allowance as driverAllowance,
-                    round_trip_base_fare as roundTripBasePrice, 
-                    round_trip_price_per_km as roundTripPricePerKm
-                FROM vehicle_pricing 
-                WHERE vehicle_id = ? AND (trip_type = 'outstation' OR trip_type = 'outstation-one-way')
-                LIMIT 1
-            ");
-            
-            if ($fallbackQuery) {
-                $fallbackQuery->bind_param("s", $vehicleId);
-                $fallbackQuery->execute();
-                $result = $fallbackQuery->get_result();
-                
-                if ($result && $result->num_rows > 0) {
-                    $fareData['outstation'] = $result->fetch_assoc();
-                    error_log("Fallback: Found outstation fares for $vehicleId in vehicle_pricing: " . json_encode($fareData['outstation']));
-                }
-            }
-        } catch (Exception $e) {
-            error_log("Error fetching fallback outstation fares: " . $e->getMessage());
-        }
     }
     
     // Try to get local fares
@@ -296,7 +265,7 @@ try {
             'vehicleId' => (string)$vehicleId
         ];
         
-        // Include outstation fare data if available
+        // Include outstation fare data if available, prioritizing outstation_fares table data
         if ($fareData['outstation']) {
             $vehicle['outstationFares'] = $fareData['outstation'];
             $vehicle['basePrice'] = floatval($fareData['outstation']['basePrice']);
@@ -338,7 +307,7 @@ try {
         'vehicles' => $vehicles,
         'timestamp' => time(),
         'cached' => false,
-        'version' => '1.0.2'
+        'version' => '1.0.3'
     ]);
     exit;
     

@@ -66,7 +66,7 @@ export interface FareCalculationParams {
   hourlyPackage?: string;
   pickupDate?: Date;
   returnDate?: Date;
-  forceRefresh?: boolean;  // Added this property to fix the TypeScript error
+  forceRefresh?: boolean;  // Added this property
 }
 
 export interface HourlyPackage {

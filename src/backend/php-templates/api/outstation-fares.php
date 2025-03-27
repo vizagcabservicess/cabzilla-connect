@@ -13,7 +13,7 @@ header('Expires: 0');
 
 // Add debugging headers
 header('X-Debug-File: outstation-fares.php');
-header('X-API-Version: 1.0.2');
+header('X-API-Version: 1.0.3');
 header('X-Timestamp: ' . time());
 
 // Handle preflight OPTIONS request
@@ -42,8 +42,7 @@ try {
         'vehicle_id' => $vehicleId
     ]));
     
-    // ALWAYS prioritize outstation_fares table without checking existence
-    // because we know it exists from the screenshots provided
+    // Only use outstation_fares table - no more conditional fallback
     $query = "
         SELECT 
             of.id,
@@ -66,56 +65,11 @@ try {
     error_log("Using outstation_fares table with query: $query");
     
     // Execute the query with error handling
-    error_log("Executing outstation query: " . $query);
     $result = $conn->query($query);
     
     if (!$result) {
         error_log("Query failed: " . $conn->error);
-        
-        // Fallback to vehicle_pricing table if outstation_fares query fails
-        error_log("Falling back to vehicle_pricing table");
-        $query = "
-            SELECT 
-                vp.id,
-                vp.vehicle_id,
-                vp.base_fare AS basePrice,
-                vp.price_per_km AS pricePerKm,
-                vp.night_halt_charge AS nightHaltCharge,
-                vp.driver_allowance AS driverAllowance,
-                vp.round_trip_base_fare AS roundTripBasePrice,
-                vp.round_trip_price_per_km AS roundTripPricePerKm
-            FROM 
-                vehicle_pricing vp
-            WHERE 
-                vp.trip_type = 'outstation-one-way' OR vp.trip_type = 'outstation'
-        ";
-        
-        // If vehicle_id parameter is provided, filter by it
-        if ($vehicleId) {
-            $query = "
-                SELECT 
-                    vp.id,
-                    vp.vehicle_id,
-                    vp.base_fare AS basePrice,
-                    vp.price_per_km AS pricePerKm,
-                    vp.night_halt_charge AS nightHaltCharge,
-                    vp.driver_allowance AS driverAllowance,
-                    vp.round_trip_base_fare AS roundTripBasePrice,
-                    vp.round_trip_price_per_km AS roundTripPricePerKm
-                FROM 
-                    vehicle_pricing vp
-                WHERE 
-                    (vp.trip_type = 'outstation-one-way' OR vp.trip_type = 'outstation')
-                    AND vp.vehicle_id = '$vehicleId'
-            ";
-        }
-        
-        error_log("Fallback: Using vehicle_pricing table with query: $query");
-        $result = $conn->query($query);
-        
-        if (!$result) {
-            throw new Exception("Both main and fallback queries failed: " . $conn->error);
-        }
+        throw new Exception("Failed to query outstation_fares: " . $conn->error);
     }
     
     // Process and structure the data
@@ -154,7 +108,7 @@ try {
         'origin' => $origin,
         'destination' => $destination,
         'timestamp' => time(),
-        'sourceTable' => 'outstation_fares',  // Hardcoded to outstation_fares
+        'sourceTable' => 'outstation_fares',
         'fareCount' => count($fares),
         'vehicleId' => $vehicleId
     ]);

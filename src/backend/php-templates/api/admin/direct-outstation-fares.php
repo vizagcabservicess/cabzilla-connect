@@ -11,7 +11,7 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Force-Refresh');
 header('Content-Type: application/json');
-header('X-API-Version: 1.0.2');
+header('X-API-Version: 1.0.3');
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -198,22 +198,31 @@ try {
     // Commit transaction
     $conn->commit();
     
-    echo json_encode([
-        'status' => 'success',
-        'message' => 'Outstation fares updated successfully',
-        'data' => [
-            'vehicleId' => $vehicleId,
+    // Explicitly set the force refresh flag for the client-side
+    $_SESSION['force_fare_refresh'] = true;
+    
+    // Create a debug object for response
+    $debug = [
+        'post_data' => $_POST,
+        'request_method' => $_SERVER['REQUEST_METHOD'],
+        'request_params' => [
+            'tripType' => 'outstation',
+            'vehicleId' => $vehicleId, 
+            'vehicle_id' => $vehicleId,
             'basePrice' => $basePrice,
             'pricePerKm' => $pricePerKm,
-            'nightHaltCharge' => $nightHalt,
-            'driverAllowance' => $driverAllowance,
-            'roundTripBasePrice' => $roundTripBasePrice,
-            'roundTripPricePerKm' => $roundTripPricePerKm,
-            'updatedTables' => [
-                'outstation_fares' => true,
-                'vehicle_pricing' => $vehiclePricingExists
-            ]
-        ]
+            'timestamp' => date('Y-m-d H:i:s')
+        ],
+        'vehicle_created' => true
+    ];
+    
+    echo json_encode([
+        'status' => 'success',
+        'message' => "Successfully updated outstation fares for $vehicleId",
+        'details' => [
+            'vehicle_created' => true
+        ],
+        'debug' => $debug
     ]);
     
 } catch (Exception $e) {

@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { TripType, TripMode } from '@/lib/tripTypes';
 import { LocalFare, OutstationFare, AirportFare } from '@/types/cab';
@@ -24,10 +23,26 @@ export const clearFareCache = () => {
     'outstationFares', 'airportFares', 'tourFares'
   ];
   
-  keysToRemove.forEach(key => {
+  for (const key of keysToRemove) {
     localStorage.removeItem(key);
     sessionStorage.removeItem(key);
-  });
+  }
+  
+  // Also clear all prefixed cache keys
+  for (const storageType of [localStorage, sessionStorage]) {
+    try {
+      const keys = Object.keys(storageType);
+      for (const key of keys) {
+        if (key.startsWith('cabOptions_') || 
+            key.startsWith('fare_') || 
+            key.startsWith('pricing_')) {
+          storageType.removeItem(key);
+        }
+      }
+    } catch (e) {
+      console.error('Error clearing prefixed cache keys:', e);
+    }
+  }
   
   // Trigger a fare cache cleared event
   window.dispatchEvent(new CustomEvent('fare-cache-cleared', {
@@ -43,7 +58,8 @@ export const getBypassHeaders = () => {
     'X-Force-Refresh': 'true',
     'Cache-Control': 'no-cache, no-store, must-revalidate',
     'Pragma': 'no-cache',
-    'Expires': '0'
+    'Expires': '0',
+    'X-API-Version': '1.0.55'
   };
 };
 
@@ -141,7 +157,7 @@ export const directFareUpdate = async (tripType: string, vehicleId: string, data
   }
 };
 
-// Outstation Fares
+// Outstation Fares - ALWAYS fetch from outstation_fares table
 export const getOutstationFares = async (origin?: string, destination?: string): Promise<Record<string, OutstationFare>> => {
   try {
     // Always force a refresh of fares by skipping cache
@@ -184,7 +200,7 @@ export const getOutstationFares = async (origin?: string, destination?: string):
   }
 };
 
-// Get outstation fares for a specific vehicle
+// Get outstation fares for a specific vehicle - ALWAYS force fresh data
 export const getOutstationFaresForVehicle = async (vehicleId: string): Promise<OutstationFare> => {
   try {
     // Try to fetch directly for this vehicle
@@ -505,8 +521,9 @@ export const getFaresByTripType = async (tripType: TripType): Promise<Record<str
   }
 };
 
-// Reset CabOptions state
+// Reset CabOptions state and force a global refresh
 export const resetCabOptionsState = () => {
+  clearFareCache(); // Clear all caches first
   window.dispatchEvent(new CustomEvent('reset-cab-options'));
   localStorage.setItem('forceTripFaresRefresh', 'true');
 };
