@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useRef } from 'react';
 import { CabType } from '@/types/cab';
 import { CabOptionCard } from '@/components/CabOptionCard';
@@ -25,11 +24,12 @@ export function CabList({
   const [lastUpdateTimestamp, setLastUpdateTimestamp] = useState<number>(Date.now());
   const refreshCountRef = useRef(0);
   const isProcessingRef = useRef(false);
-  const maxRefreshesRef = useRef(5); // Increased from 3 to 5
+  const maxRefreshesRef = useRef(5);
   const initializedRef = useRef(false);
   const fareHistoryRef = useRef<Record<string, number[]>>({});
   const pendingUpdatesRef = useRef<Record<string, number>>({});
   const updateTimeoutRef = useRef<number | null>(null);
+  const directUpdateEnabledRef = useRef<boolean>(true);
   
   // Initialize displayed fares from cabFares on first render or when cabTypes change
   useEffect(() => {
@@ -40,7 +40,9 @@ export function CabList({
       // Initialize fare history for each cab
       const newFareHistory: Record<string, number[]> = {};
       Object.keys(cabFares).forEach(cabId => {
-        newFareHistory[cabId] = [cabFares[cabId]];
+        if (cabFares[cabId] > 0) {
+          newFareHistory[cabId] = [cabFares[cabId]];
+        }
       });
       fareHistoryRef.current = newFareHistory;
       
@@ -73,8 +75,23 @@ export function CabList({
         }
         fareHistoryRef.current[cabId].push(fare);
         
+        // Keep history limited to last 5 fares
+        if (fareHistoryRef.current[cabId].length > 5) {
+          fareHistoryRef.current[cabId] = fareHistoryRef.current[cabId].slice(-5);
+        }
+        
         hasChanges = true;
         console.log(`CabList: Updating fare for ${cabId} to ${fare}`);
+        
+        // Immediately dispatch event for this fare update
+        window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
+          detail: {
+            cabType: cabId,
+            cabName: cabTypes.find(cab => cab.id === cabId)?.name || cabId,
+            fare: fare,
+            timestamp: Date.now()
+          }
+        }));
       }
     });
     
@@ -99,8 +116,8 @@ export function CabList({
         setTimeout(() => {
           setFadeIn({});
           isProcessingRef.current = false;
-        }, 500); // Reduced from 1000ms to 500ms
-      }, 50); // Reduced from 100ms to 50ms
+        }, 400);
+      }, 50);
     } else {
       isProcessingRef.current = false;
     }
@@ -126,10 +143,10 @@ export function CabList({
     // Check each cab for fare updates
     Object.keys(cabFares).forEach(cabId => {
       // Only process valid fares
-      if (cabFares[cabId] === undefined || cabFares[cabId] === null) return;
+      if (cabFares[cabId] === undefined || cabFares[cabId] === null || cabFares[cabId] <= 0) return;
       
       // Compare new fare with current displayed fare
-      if (cabFares[cabId] !== displayedFares[cabId] && cabFares[cabId] > 0) {
+      if (cabFares[cabId] !== displayedFares[cabId]) {
         console.log(`CabList: Adding pending update for ${cabId}, fare: ${cabFares[cabId]}`);
         pendingUpdatesRef.current[cabId] = cabFares[cabId];
       }
@@ -141,11 +158,11 @@ export function CabList({
     }
   }, [cabFares, displayedFares]);
   
-  // Reset refresh counter periodically (every 5 minutes)
+  // Reset refresh counter periodically (every 2 minutes instead of 5)
   useEffect(() => {
     const resetInterval = setInterval(() => {
       refreshCountRef.current = Math.max(0, refreshCountRef.current - 1);
-    }, 5 * 60 * 1000);
+    }, 2 * 60 * 1000);
     
     return () => clearInterval(resetInterval);
   }, []);
@@ -153,6 +170,8 @@ export function CabList({
   // Listen for direct cab selection with fare events
   useEffect(() => {
     const handleCabSelectedWithFare = (event: Event) => {
+      if (!directUpdateEnabledRef.current) return;
+      
       const customEvent = event as CustomEvent;
       console.log('CabList: Received cab-selected-with-fare event', customEvent.detail);
       
@@ -168,6 +187,8 @@ export function CabList({
     };
     
     const handleFareCalculated = (event: Event) => {
+      if (!directUpdateEnabledRef.current) return;
+      
       const customEvent = event as CustomEvent;
       console.log('CabList: Received fare-calculated event', customEvent.detail);
       
@@ -203,6 +224,11 @@ export function CabList({
         }, 500);
       }
     };
+    
+    // Enable throttled direct updates after a short delay to prevent initial loops
+    setTimeout(() => {
+      directUpdateEnabledRef.current = true;
+    }, 1000);
     
     window.addEventListener('cab-selected-with-fare', handleCabSelectedWithFare);
     window.addEventListener('fare-calculated', handleFareCalculated);
@@ -266,6 +292,53 @@ export function CabList({
     return fallbackPrices[vehicleType] || 2000;
   };
   
+  // Helper to create a more smooth cab selection and ensure fare updates
+  const enhancedSelectCab = (cab: CabType) => {
+    // Call the parent handler
+    handleSelectCab(cab);
+    
+    // Provide immediate visual feedback
+    setFadeIn(prev => ({
+      ...prev,
+      [cab.id]: true
+    }));
+    
+    // Get the current fare for this cab
+    const currentFare = getDisplayFare(cab);
+    
+    // Dispatch custom event with selected cab and fare
+    window.dispatchEvent(new CustomEvent('cab-selected', {
+      bubbles: true,
+      detail: {
+        cabType: cab.id,
+        cabName: cab.name,
+        fare: currentFare,
+        timestamp: Date.now()
+      }
+    }));
+    
+    // If we have a valid fare, also dispatch a fare event
+    if (currentFare > 0) {
+      window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
+        bubbles: true,
+        detail: {
+          cabType: cab.id,
+          cabName: cab.name,
+          fare: currentFare,
+          timestamp: Date.now()
+        }
+      }));
+    }
+    
+    // Clear the highlight after animation
+    setTimeout(() => {
+      setFadeIn(prev => ({
+        ...prev,
+        [cab.id]: false
+      }));
+    }, 500);
+  };
+  
   return (
     <div className="space-y-3">
       {isCalculatingFares && (
@@ -291,24 +364,7 @@ export function CabList({
               cab={cab}
               fare={getDisplayFare(cab)}
               isSelected={selectedCabId === cab.id}
-              onSelect={() => {
-                // Enhanced cab selection handler with immediate visual feedback
-                handleSelectCab(cab);
-                
-                // Provide immediate visual feedback
-                setFadeIn(prev => ({
-                  ...prev,
-                  [cab.id]: true
-                }));
-                
-                // Clear the highlight after animation
-                setTimeout(() => {
-                  setFadeIn(prev => ({
-                    ...prev,
-                    [cab.id]: false
-                  }));
-                }, 500);
-              }}
+              onSelect={() => enhancedSelectCab(cab)}
               fareDetails={getFareDetails(cab)}
               isCalculating={isCalculatingFares}
             />
