@@ -136,11 +136,11 @@ export const BookingSummary = ({
   let nightCharges = 0;
   let additionalCharges = 0;
   let additionalChargesLabel = '';
-  let effectiveDistance = 0;
+  let effectiveDistance = distance;
   let extraDistance = 0;
   let extraDistanceFare = 0;
-  let perKmRate = selectedCab.pricePerKm || 14;
-  let allocatedKm = 300;
+  let perKmRate = 0;
+  const minimumKm = 300; // Minimum 300km for one-way trips
   
   // Calculate fare breakdown based on trip type
   if (tripType === 'outstation') {
@@ -162,42 +162,40 @@ export const BookingSummary = ({
     }
     
     if (tripMode === 'one-way') {
-      // For one-way trips
-      effectiveDistance = Math.max(distance, 300);
-      baseFare = effectiveDistance * perKmRate;
-      extraDistance = Math.max(0, effectiveDistance - allocatedKm);
-      extraDistanceFare = extraDistance * perKmRate;
+      // For one-way trips, ensure minimum 300 km
+      effectiveDistance = Math.max(distance, minimumKm);
       
-      // One-way calculation
-      if (distance <= allocatedKm) {
-        baseFare = allocatedKm * perKmRate;
+      // Calculate base fare for minimum 300 km
+      baseFare = minimumKm * perKmRate;
+      
+      // Add extra distance fare if distance exceeds minimum
+      if (distance > minimumKm) {
+        extraDistance = distance - minimumKm;
+        extraDistanceFare = extraDistance * perKmRate;
+      } else {
         extraDistance = 0;
         extraDistanceFare = 0;
-      } else {
-        baseFare = allocatedKm * perKmRate;
-        extraDistance = distance - allocatedKm;
-        extraDistanceFare = extraDistance * perKmRate;
       }
       
       console.log(`One-way calculation: baseFare=${baseFare}, extraDistance=${extraDistance}, extraDistanceFare=${extraDistanceFare}`);
     } else {
-      // For round trips
-      allocatedKm = 300; // per day
-      baseFare = allocatedKm * perKmRate;
+      // For round trips, the effective distance is the one-way distance × 2
+      effectiveDistance = distance * 2;
       
-      if (distance <= allocatedKm) {
+      // Calculate if the round trip meets minimum distance requirement
+      if (effectiveDistance > minimumKm) {
+        // If total round trip distance exceeds minimum, charge for actual distance
+        baseFare = effectiveDistance * perKmRate;
         extraDistance = 0;
         extraDistanceFare = 0;
       } else {
-        extraDistance = distance - allocatedKm;
-        extraDistanceFare = extraDistance * perKmRate;
+        // If total round trip distance is less than minimum, charge for minimum km
+        baseFare = minimumKm * perKmRate;
+        extraDistance = 0;
+        extraDistanceFare = 0;
       }
       
-      // Add return journey charge for round trips
-      additionalCharges = baseFare * 0.8;
-      additionalChargesLabel = 'Return Journey Charge';
-      
-      console.log(`Round-trip calculation: baseFare=${baseFare}, extraDistance=${extraDistance}, extraDistanceFare=${extraDistanceFare}, returnCharge=${additionalCharges}`);
+      console.log(`Round-trip calculation: baseFare=${baseFare}, effectiveDistance=${effectiveDistance}, perKmRate=${perKmRate}`);
     }
     
     // Night charges for pickups during night hours (10 PM to 5 AM)
@@ -299,7 +297,7 @@ export const BookingSummary = ({
     additionalChargesLabel = 'Tour Package Fee';
   }
 
-  // Calculate final total (without GST)
+  // Calculate final total
   let finalTotal = baseFare + driverAllowance + nightCharges + additionalCharges + extraDistanceFare;
   
   // Make sure we always have a valid final total
@@ -365,18 +363,18 @@ export const BookingSummary = ({
             {tripType === 'outstation' && (
               <>
                 <div className="flex justify-between">
-                  <span className="text-gray-700">Base fare ({tripMode === 'one-way' ? `${allocatedKm} km included` : `${allocatedKm} km per day`})</span>
+                  <span className="text-gray-700">Base fare ({minimumKm} km included)</span>
                   <span className="font-semibold">₹{baseFare.toLocaleString()}</span>
                 </div>
                 
                 <div className="text-gray-600 text-sm ml-1">
                   Total distance: {distance} km 
-                  {tripMode === 'one-way' && (
-                    <span> (effective: {effectiveDistance} km)</span>
+                  {tripMode === 'round-trip' && (
+                    <span> (effective: {effectiveDistance} km round trip)</span>
                   )}
                 </div>
                 
-                {extraDistance > 0 && (
+                {extraDistance > 0 && extraDistanceFare > 0 && (
                   <div className="flex justify-between">
                     <span className="text-gray-700">Extra distance fare ({extraDistance} km × ₹{perKmRate})</span>
                     <span className="font-semibold">₹{extraDistanceFare.toLocaleString()}</span>
@@ -392,13 +390,6 @@ export const BookingSummary = ({
                   <div className="flex justify-between">
                     <span className="text-gray-700">Night charges</span>
                     <span className="font-semibold">₹{nightCharges.toLocaleString()}</span>
-                  </div>
-                )}
-                
-                {tripMode === 'round-trip' && additionalCharges > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-700">{additionalChargesLabel}</span>
-                    <span className="font-semibold">₹{additionalCharges.toLocaleString()}</span>
                   </div>
                 )}
               </>
@@ -453,7 +444,9 @@ export const BookingSummary = ({
             <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
             <p>
               {tripType === 'outstation' && tripMode === 'round-trip'
-                ? 'Fare includes return journey. Driver allowance included for overnight stays.'
+                ? 'Fare includes round trip journey (both ways). Driver allowance included for overnight stays.'
+                : tripType === 'outstation' && tripMode === 'one-way'
+                ? 'Minimum 300 km fare applies for one-way trips. Driver allowance included.'
                 : tripType === 'tour'
                 ? 'All-inclusive tour package fare includes driver allowance and wait charges.'
                 : tripType === 'local'

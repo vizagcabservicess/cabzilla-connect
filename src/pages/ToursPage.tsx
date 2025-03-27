@@ -36,11 +36,23 @@ const ToursPage = () => {
   const getTourFare = (tourId: string, cabId: string): number => {
     if (!tourId || !cabId) return 0;
     
+    console.log(`Getting tour fare for tour: ${tourId}, cab: ${cabId}`);
+    
+    // Try to get fare from tourFares mapping
     const tourFareMatrix = tourFares[tourId];
     if (tourFareMatrix) {
-      return tourFareMatrix[cabId as keyof typeof tourFareMatrix] || 0;
+      const fare = tourFareMatrix[cabId as keyof typeof tourFareMatrix];
+      console.log(`Tour fare from matrix: ${fare}`);
+      if (fare) return fare as number;
     }
-    return 0;
+    
+    // Fallback to default pricing if not found in the matrix
+    if (cabId === 'sedan') return 3500;
+    if (cabId === 'ertiga') return 4500;
+    if (cabId === 'innova_crysta') return 5500;
+    
+    // Last resort default
+    return 4000;
   };
   
   const handleTourSelect = (tourId: string) => {
