@@ -417,9 +417,15 @@ export const getLocalFaresForVehicle = async (vehicleId: string): Promise<LocalF
   }
 };
 
-// Airport fares and other fare types would follow a similar pattern...
-// Clear the entire fare cache programmatically
-export const clearCache = () => {
-  clearFareCache();
-  return true;
+// Create the fareService object to export all utility functions
+export const fareService = {
+  clearCache,
+  getBypassHeaders,
+  getForcedRequestConfig,
+  initializeDatabase,
+  directFareUpdate,
+  getOutstationFares,
+  getOutstationFaresForVehicle,
+  getLocalFares,
+  getLocalFaresForVehicle
 };
