@@ -124,6 +124,7 @@ try {
     }
     
     // Also update the vehicle_pricing table for backward compatibility
+    // First, check if there's an existing 'local' record
     $checkVehiclePricingQuery = "SELECT id FROM vehicle_pricing WHERE vehicle_type = ? AND trip_type = 'local'";
     $stmt = $conn->prepare($checkVehiclePricingQuery);
     $stmt->bind_param("s", $vehicleId);
@@ -133,7 +134,7 @@ try {
     $stmt->close();
     
     if ($vehiclePricingExists) {
-        // Update the existing record
+        // Update the existing record, but ONLY update local_package fields
         $vpQuery = "
             UPDATE vehicle_pricing 
             SET local_package_4hr = ?, 

@@ -9,13 +9,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertCircle, RefreshCw, Save } from "lucide-react";
+import { AlertCircle, Database, RefreshCw, Save } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { loadCabTypes } from '@/lib/cabData';
 import { CabType } from '@/types/cab';
 import { fareService } from '@/services/fareService';
 import { hourlyPackages } from '@/lib/packageData';
 import { FareUpdateError } from '../cab-options/FareUpdateError';
+import axios from 'axios';
 
 const formSchema = z.object({
   cabType: z.string().min(1, { message: "Cab type is required" }),
@@ -29,8 +30,10 @@ const formSchema = z.object({
 export function LocalFareManagement() {
   const [cabTypes, setCabTypes] = useState<CabType[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitializingDB, setIsInitializingDB] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [currentVehicleId, setCurrentVehicleId] = useState<string>("");
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -57,13 +60,46 @@ export function LocalFareManagement() {
       fareService.clearCache();
       
       // Load cab types
-      const types = await loadCabTypes();
+      const types = await loadCabTypes(true);
       setCabTypes(types);
       
       setIsLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to load cab types'));
       setIsLoading(false);
+    }
+  };
+
+  const initializeDatabase = async () => {
+    try {
+      setIsInitializingDB(true);
+      setError(null);
+      
+      // First try to sync between tables to ensure consistency
+      try {
+        const syncEndpoint = `${apiBaseUrl}/api/admin/sync-local-fares.php?_t=${Date.now()}`;
+        console.log("Syncing local package fares tables:", syncEndpoint);
+        await axios.get(syncEndpoint, {
+          headers: fareService.getBypassHeaders(),
+          timeout: 10000 // 10 second timeout
+        });
+        toast.success("Local package fares tables synchronized");
+      } catch (syncErr) {
+        console.error("Error syncing local package fares:", syncErr);
+        toast.error("Failed to sync tables, will try database initialization");
+      }
+      
+      const result = await fareService.initializeDatabase(true);
+      console.log('Database initialization response:', result);
+      
+      toast.success("Database tables initialized successfully");
+      await loadData();
+    } catch (err) {
+      console.error("Error initializing database:", err);
+      toast.error(`Failed to initialize database: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setError(err instanceof Error ? err : new Error('Failed to initialize database'));
+    } finally {
+      setIsInitializingDB(false);
     }
   };
   
@@ -73,90 +109,86 @@ export function LocalFareManagement() {
       setError(null);
       
       toast.info(`Updating local fares for ${values.cabType}...`);
+      console.log('Starting fare update for local packages with vehicle ID', values.cabType);
       
       // Use FormData for more reliable transport
       const formData = new FormData();
       formData.append('vehicleId', values.cabType);
       formData.append('tripType', 'local');
+      formData.append('price4hrs40km', values.package4hr40km.toString());
+      formData.append('price8hrs80km', values.package8hr80km.toString());
+      formData.append('price10hrs100km', values.package10hr100km.toString());
+      formData.append('priceExtraKm', values.extraKmRate.toString());
+      formData.append('priceExtraHour', values.extraHourRate.toString());
+      
+      // Package names for compatibility with all endpoints
       formData.append('package4hr40km', values.package4hr40km.toString());
       formData.append('package8hr80km', values.package8hr80km.toString());
       formData.append('package10hr100km', values.package10hr100km.toString());
       formData.append('extraKmRate', values.extraKmRate.toString());
       formData.append('extraHourRate', values.extraHourRate.toString());
       
-      // Package specific IDs for compatibility with all endpoints
-      formData.append('local_package_4hr', values.package4hr40km.toString());
-      formData.append('local_package_8hr', values.package8hr80km.toString());
-      formData.append('local_package_10hr', values.package10hr100km.toString());
-      formData.append('extra_km_rate', values.extraKmRate.toString());
-      formData.append('extra_hour_rate', values.extraHourRate.toString());
-      
-      // For critical endpoints
-      formData.append('vehicle_id', values.cabType);
-      formData.append('trip_type', 'local');
-      formData.append('prices[4hrs-40km]', values.package4hr40km.toString());
-      formData.append('prices[8hrs-80km]', values.package8hr80km.toString());
-      formData.append('prices[10hrs-100km]', values.package10hr100km.toString());
-      
+      // Try multiple methods to update fares, starting with the dedicated endpoint
       let success = false;
       let updateSuccess = false;
       let errorMessage = '';
       
-      // Try multiple methods to update fares
-      
-      // Method 1: Direct update with FormData
+      // Method 1: Try direct-local-fares.php endpoint first
       try {
-        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
-        const endpoint = `${apiBaseUrl}/api/admin/direct-fare-update.php?_t=${Date.now()}`;
+        const directLocalEndpoint = `${apiBaseUrl}/api/direct-local-fares.php`;
+        console.log(`Trying direct local fares endpoint: ${directLocalEndpoint}`);
         
-        // Direct fetch with minimal content
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          body: formData
+        const directResponse = await axios.post(directLocalEndpoint, formData, {
+          headers: {
+            ...fareService.getBypassHeaders(),
+            'Content-Type': 'multipart/form-data',
+          },
+          timeout: 10000 // 10 second timeout
         });
         
-        const jsonResponse = await response.json();
-        console.log('Server response method 1:', jsonResponse);
-        
-        if (jsonResponse.status === 'success') {
+        console.log('Direct local update response:', directResponse.data);
+        if (directResponse.data && directResponse.data.success) {
           success = true;
           updateSuccess = true;
+          console.log('Successfully updated fares via direct local fares endpoint');
         } else {
-          errorMessage = jsonResponse.message || 'Update failed';
+          errorMessage = directResponse.data?.error || 'Update response was not successful';
           console.error('Method 1 failed:', errorMessage);
         }
-      } catch (fetchError) {
-        console.error('Method 1 fetch error:', fetchError);
-        errorMessage = fetchError instanceof Error ? fetchError.message : 'Network error';
+      } catch (directError) {
+        console.error('Error using direct local fares endpoint:', directError);
+        errorMessage = directError instanceof Error ? directError.message : 'Network error';
       }
       
-      // Method 2: Try specific local-fares-update endpoint
+      // Method 2: Try the direct-fare-update.php universal endpoint
       if (!success) {
         try {
-          const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
-          const endpoint = `${apiBaseUrl}/api/admin/local-fares-update.php?_t=${Date.now()}`;
+          const universalEndpoint = `${apiBaseUrl}/api/admin/direct-fare-update.php?tripType=local&_t=${Date.now()}`;
+          console.log(`Trying universal fare update endpoint: ${universalEndpoint}`);
           
-          const response = await fetch(endpoint, {
-            method: 'POST',
-            body: formData
+          const universalResponse = await axios.post(universalEndpoint, formData, {
+            headers: {
+              ...fareService.getBypassHeaders(),
+              'Content-Type': 'multipart/form-data',
+            },
+            timeout: 10000
           });
           
-          const jsonResponse = await response.json();
-          console.log('Server response method 2:', jsonResponse);
-          
-          if (jsonResponse.status === 'success') {
+          console.log('Universal endpoint response:', universalResponse.data);
+          if (universalResponse.data && universalResponse.data.status === 'success') {
             success = true;
             updateSuccess = true;
+            console.log('Successfully updated fares via universal endpoint');
           } else {
             if (!errorMessage) {
-              errorMessage = jsonResponse.message || 'Update failed';
+              errorMessage = universalResponse.data?.message || 'Update failed';
               console.error('Method 2 failed:', errorMessage);
             }
           }
-        } catch (fetchError) {
-          console.error('Method 2 fetch error:', fetchError);
+        } catch (universalError) {
+          console.error('Error using universal endpoint:', universalError);
           if (!errorMessage) {
-            errorMessage = fetchError instanceof Error ? fetchError.message : 'Network error';
+            errorMessage = universalError instanceof Error ? universalError.message : 'Network error';
           }
         }
       }
@@ -191,7 +223,24 @@ export function LocalFareManagement() {
         }
       }
       
-      // Update local storage cache regardless of server response
+      // After updating, if successful, force sync between tables
+      if (success) {
+        try {
+          console.log("Syncing local_package_fares with vehicle_pricing");
+          const syncResponse = await axios.get(`${apiBaseUrl}/api/admin/sync-local-fares.php`, {
+            params: { 
+              _t: Date.now() // Cache busting
+            },
+            headers: fareService.getBypassHeaders()
+          });
+          console.log('Sync response:', syncResponse.data);
+        } catch (syncError) {
+          console.error('Error syncing tables after update:', syncError);
+          // Continue anyway - this is just an additional step
+        }
+      }
+      
+      // Update local storage cache
       try {
         // Get the price matrix from localStorage
         const storedMatrix = localStorage.getItem('localPackagePriceMatrix');
@@ -235,7 +284,7 @@ export function LocalFareManagement() {
         console.error('Error updating local cache:', cacheError);
       }
       
-      // Always trigger events to refresh the UI
+      // Trigger UI refresh events
       if (updateSuccess) {
         // Dispatch events to update UI components
         window.dispatchEvent(new CustomEvent('local-fares-updated', {
@@ -284,71 +333,107 @@ export function LocalFareManagement() {
     try {
       setIsLoading(true);
       
+      // First try the direct endpoint
+      try {
+        await axios.get(`${apiBaseUrl}/api/local-package-fares.php`, {
+          params: { 
+            check_sync: 'true',
+            vehicle_id: vehicleId,
+            _t: Date.now()
+          },
+          headers: fareService.getBypassHeaders(),
+          timeout: 8000 // 8 second timeout
+        });
+      } catch (directError) {
+        console.error('Error fetching from direct endpoint:', directError);
+        // Continue anyway - we'll try another approach
+      }
+      
+      // Try to get local fares via the service
       try {
         const fareData = await fareService.getLocalFaresForVehicle(vehicleId);
         
         if (fareData) {
+          console.log("Loaded local package fares for vehicle:", fareData);
           form.setValue("package4hr40km", fareData.package4hr40km || 0);
           form.setValue("package8hr80km", fareData.package8hr80km || 0);
           form.setValue("package10hr100km", fareData.package10hr100km || 0);
           form.setValue("extraKmRate", fareData.extraKmRate || 0);
           form.setValue("extraHourRate", fareData.extraHourRate || 0);
-        } else {
-          // Try loading from localStorage
-          const storedMatrix = localStorage.getItem('localPackagePriceMatrix');
-          if (storedMatrix) {
-            try {
-              const matrix = JSON.parse(storedMatrix);
-              const normalizedVehicleId = vehicleId.toLowerCase();
-              
-              if (matrix && matrix['4hrs-40km'] && matrix['4hrs-40km'][normalizedVehicleId]) {
-                form.setValue("package4hr40km", matrix['4hrs-40km'][normalizedVehicleId] || 0);
-              }
-              
-              if (matrix && matrix['8hrs-80km'] && matrix['8hrs-80km'][normalizedVehicleId]) {
-                form.setValue("package8hr80km", matrix['8hrs-80km'][normalizedVehicleId] || 0);
-              }
-              
-              if (matrix && matrix['10hrs-100km'] && matrix['10hrs-100km'][normalizedVehicleId]) {
-                form.setValue("package10hr100km", matrix['10hrs-100km'][normalizedVehicleId] || 0);
-              }
-            } catch (error) {
-              console.error("Error parsing localPackagePriceMatrix:", error);
-            }
-          }
+          setIsLoading(false);
+          return;
         }
       } catch (error) {
         console.error(`Failed to load fares for ${vehicleId}:`, error);
-        // Continue with defaults or try localstorage
-        
-        // Try loading from localStorage as a fallback
-        const storedMatrix = localStorage.getItem('localPackagePriceMatrix');
-        if (storedMatrix) {
-          try {
-            const matrix = JSON.parse(storedMatrix);
-            const normalizedVehicleId = vehicleId.toLowerCase();
-            
-            if (matrix && matrix['4hrs-40km'] && matrix['4hrs-40km'][normalizedVehicleId]) {
-              form.setValue("package4hr40km", matrix['4hrs-40km'][normalizedVehicleId] || 0);
-            }
-            
-            if (matrix && matrix['8hrs-80km'] && matrix['8hrs-80km'][normalizedVehicleId]) {
-              form.setValue("package8hr80km", matrix['8hrs-80km'][normalizedVehicleId] || 0);
-            }
-            
-            if (matrix && matrix['10hrs-100km'] && matrix['10hrs-100km'][normalizedVehicleId]) {
-              form.setValue("package10hr100km", matrix['10hrs-100km'][normalizedVehicleId] || 0);
-            }
-          } catch (error) {
-            console.error("Error parsing localPackagePriceMatrix:", error);
+      }
+      
+      // Try loading from localStorage as a fallback
+      const storedMatrix = localStorage.getItem('localPackagePriceMatrix');
+      if (storedMatrix) {
+        try {
+          const matrix = JSON.parse(storedMatrix);
+          const normalizedVehicleId = vehicleId.toLowerCase();
+          
+          if (matrix && matrix['4hrs-40km'] && matrix['4hrs-40km'][normalizedVehicleId]) {
+            console.log("Using cached local package fares from localStorage");
+            form.setValue("package4hr40km", matrix['4hrs-40km'][normalizedVehicleId] || 0);
+            form.setValue("package8hr80km", matrix['8hrs-80km'][normalizedVehicleId] || 0);
+            form.setValue("package10hr100km", matrix['10hrs-100km'][normalizedVehicleId] || 0);
+            setIsLoading(false);
+            return;
           }
+        } catch (error) {
+          console.error("Error parsing localPackagePriceMatrix:", error);
         }
       }
       
+      // If all else fails, use default values
+      console.log('No existing fares found for vehicle, using defaults');
+      setDefaultPricesForVehicle(vehicleId);
+      setIsLoading(false);
     } catch (err) {
       console.error("Error loading fare data:", err);
-    } finally {
       setIsLoading(false);
+    }
+  };
+  
+  const setDefaultPricesForVehicle = (vehicleId: string) => {
+    if (vehicleId === 'sedan') {
+      form.setValue("package4hr40km", 1500);
+      form.setValue("package8hr80km", 2500);
+      form.setValue("package10hr100km", 3200);
+      form.setValue("extraKmRate", 15);
+      form.setValue("extraHourRate", 150);
+    } else if (vehicleId === 'ertiga' || vehicleId === 'suv') {
+      form.setValue("package4hr40km", 1700);
+      form.setValue("package8hr80km", 2700);
+      form.setValue("package10hr100km", 3500);
+      form.setValue("extraKmRate", 18);
+      form.setValue("extraHourRate", 200);
+    } else if (vehicleId === 'innova' || vehicleId === 'innova_crysta') {
+      form.setValue("package4hr40km", 2000);
+      form.setValue("package8hr80km", 3000);
+      form.setValue("package10hr100km", 3800);
+      form.setValue("extraKmRate", 20);
+      form.setValue("extraHourRate", 250);
+    } else if (vehicleId === 'luxury') {
+      form.setValue("package4hr40km", 3500);
+      form.setValue("package8hr80km", 5000);
+      form.setValue("package10hr100km", 6500);
+      form.setValue("extraKmRate", 25);
+      form.setValue("extraHourRate", 300);
+    } else if (vehicleId === 'tempo' || vehicleId === 'tempo_traveller') {
+      form.setValue("package4hr40km", 2500);
+      form.setValue("package8hr80km", 4000);
+      form.setValue("package10hr100km", 5000);
+      form.setValue("extraKmRate", 22);
+      form.setValue("extraHourRate", 250);
+    } else {
+      form.setValue("package4hr40km", 1500);
+      form.setValue("package8hr80km", 2500);
+      form.setValue("package10hr100km", 3200);
+      form.setValue("extraKmRate", 15);
+      form.setValue("extraHourRate", 150);
     }
   };
   
@@ -367,6 +452,46 @@ export function LocalFareManagement() {
               description="There was a problem updating the local package fares. This could be due to network issues or server problems."
             />
           )}
+          
+          <div className="flex space-x-2 mb-4">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={initializeDatabase} 
+              disabled={isInitializingDB}
+            >
+              {isInitializingDB ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Initializing...
+                </>
+              ) : (
+                <>
+                  <Database className="mr-2 h-4 w-4" />
+                  Initialize DB Tables
+                </>
+              )}
+            </Button>
+            
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={async () => {
+                try {
+                  const syncEndpoint = `${apiBaseUrl}/api/admin/sync-local-fares.php?_t=${Date.now()}`;
+                  toast.info("Syncing local package fares tables...");
+                  await axios.get(syncEndpoint, { headers: fareService.getBypassHeaders() });
+                  toast.success("Tables synchronized successfully");
+                } catch (err) {
+                  console.error("Error syncing tables:", err);
+                  toast.error("Failed to sync tables");
+                }
+              }}
+            >
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Sync Tables
+            </Button>
+          </div>
           
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">

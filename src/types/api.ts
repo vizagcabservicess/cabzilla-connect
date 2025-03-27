@@ -1,3 +1,4 @@
+
 // src/types/api.ts
 export type BookingStatus =
   | 'pending'
@@ -114,6 +115,36 @@ export interface VehiclePricingData {
   driverAllowance?: number;
 }
 
+// New interfaces for different fare types
+export interface OutstationFareData {
+  basePrice: number;
+  pricePerKm: number;
+  roundTripBasePrice: number;
+  roundTripPricePerKm: number;
+  nightHaltCharge: number;
+  driverAllowance: number;
+}
+
+export interface LocalPackageFareData {
+  package4hr40km: number;
+  package8hr80km: number;
+  package10hr100km: number;
+  extraKmRate: number;
+  extraHourRate: number;
+}
+
+export interface AirportFareData {
+  basePrice: number;
+  pricePerKm: number;
+  pickupPrice: number;
+  dropPrice: number;
+  tier1Price: number;
+  tier2Price: number;
+  tier3Price: number;
+  tier4Price: number;
+  extraKmCharge: number;
+}
+
 export interface Location {
   id?: string;
   name?: string;
@@ -188,7 +219,42 @@ export interface VehiclePricingUpdateRequest {
   driverAllowance?: number;
 }
 
-// New interfaces for booking updates
+// Outstation fare update request
+export interface OutstationFareUpdateRequest {
+  vehicleId: string;
+  basePrice: number;
+  pricePerKm: number;
+  roundTripBasePrice: number;
+  roundTripPricePerKm: number;
+  nightHaltCharge: number;
+  driverAllowance: number;
+}
+
+// Local package fare update request
+export interface LocalPackageFareUpdateRequest {
+  vehicleId: string;
+  package4hr40km: number;
+  package8hr80km: number;
+  package10hr100km: number;
+  extraKmRate: number;
+  extraHourRate: number;
+}
+
+// Airport fare update request
+export interface AirportFareUpdateRequest {
+  vehicleId: string;
+  basePrice: number;
+  pricePerKm: number;
+  pickupPrice: number;
+  dropPrice: number;
+  tier1Price: number;
+  tier2Price: number;
+  tier3Price: number;
+  tier4Price: number;
+  extraKmCharge: number;
+}
+
+// Booking update request
 export interface BookingUpdateRequest {
   passengerName?: string;
   passengerPhone?: string;

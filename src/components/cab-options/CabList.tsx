@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import { CabType } from '@/types/cab';
 import { CabOptionCard } from '@/components/CabOptionCard';
@@ -225,6 +226,25 @@ export function CabList({
       }
     };
     
+    // Handle trip type changes as well
+    const handleTripTypeChanged = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.log('CabList: Received trip-type-changed event', customEvent.detail);
+      
+      // Force reset display and pending updates
+      initializedRef.current = false;
+      pendingUpdatesRef.current = {};
+      isProcessingRef.current = false;
+      
+      if (customEvent.detail && customEvent.detail.tripType) {
+        const tripType = customEvent.detail.tripType;
+        
+        // Reset fares when changing trip types
+        setDisplayedFares({});
+        fareHistoryRef.current = {};
+      }
+    };
+    
     // Enable throttled direct updates after a short delay to prevent initial loops
     setTimeout(() => {
       directUpdateEnabledRef.current = true;
@@ -233,6 +253,7 @@ export function CabList({
     window.addEventListener('cab-selected-with-fare', handleCabSelectedWithFare);
     window.addEventListener('fare-calculated', handleFareCalculated);
     window.addEventListener('cab-selected', handleCabSelected);
+    window.addEventListener('trip-type-changed', handleTripTypeChanged);
     window.addEventListener('fare-cache-cleared', () => {
       console.log('CabList: Fare cache cleared, resetting update flags');
       isProcessingRef.current = false;
@@ -243,13 +264,14 @@ export function CabList({
       window.removeEventListener('cab-selected-with-fare', handleCabSelectedWithFare);
       window.removeEventListener('fare-calculated', handleFareCalculated);
       window.removeEventListener('cab-selected', handleCabSelected);
+      window.removeEventListener('trip-type-changed', handleTripTypeChanged);
       window.removeEventListener('fare-cache-cleared', () => {});
       
       if (updateTimeoutRef.current !== null) {
         window.clearTimeout(updateTimeoutRef.current);
       }
     };
-  }, []);
+  }, [cabTypes]);
   
   // Helper to get the most reliable fare
   const getDisplayFare = (cab: CabType): number => {

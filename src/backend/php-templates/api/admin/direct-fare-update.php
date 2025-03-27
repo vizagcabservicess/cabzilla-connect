@@ -147,6 +147,11 @@ if (json_last_error() === JSON_ERROR_NONE && !empty($json_data)) {
     }
 }
 
+// Also check for tripType in POST or data
+if (isset($data['tripType']) && $data['tripType']) {
+    $tripType = $data['tripType'];
+}
+
 // Log the request data
 error_log("Request data: " . print_r($data, true), 3, __DIR__ . '/../../error.log');
 error_log("Trip type detected: $tripType", 3, __DIR__ . '/../../error.log');
@@ -280,9 +285,9 @@ function handleOutstationFares($conn, $data, $vehicleId) {
         
         // 2. Update vehicle_pricing table for ONE-WAY trips (for backward compatibility)
         $tripTypeOneWay = 'outstation-one-way';
-        $stmt = $conn->prepare("
+        $stmtOneWay = $conn->prepare("
             INSERT INTO vehicle_pricing 
-            (vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance, updated_at)
+            (vehicle_type, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, NOW())
             ON DUPLICATE KEY UPDATE 
             base_fare = VALUES(base_fare),
@@ -292,7 +297,7 @@ function handleOutstationFares($conn, $data, $vehicleId) {
             updated_at = NOW()
         ");
         
-        $stmt->bind_param("ssdddd", 
+        $stmtOneWay->bind_param("ssdddd", 
             $vehicleId,
             $tripTypeOneWay,
             $basePrice,
@@ -301,14 +306,14 @@ function handleOutstationFares($conn, $data, $vehicleId) {
             $driverAllowance
         );
         
-        $stmt->execute();
-        $stmt->close();
+        $stmtOneWay->execute();
+        $stmtOneWay->close();
         
         // 3. Update vehicle_pricing table for ROUND-TRIP trips (for backward compatibility)
         $tripTypeRoundTrip = 'outstation-round-trip';
-        $stmt = $conn->prepare("
+        $stmtRoundTrip = $conn->prepare("
             INSERT INTO vehicle_pricing 
-            (vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance, updated_at)
+            (vehicle_type, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, NOW())
             ON DUPLICATE KEY UPDATE 
             base_fare = VALUES(base_fare),
@@ -318,7 +323,7 @@ function handleOutstationFares($conn, $data, $vehicleId) {
             updated_at = NOW()
         ");
         
-        $stmt->bind_param("ssdddd", 
+        $stmtRoundTrip->bind_param("ssdddd", 
             $vehicleId,
             $tripTypeRoundTrip,
             $roundTripBasePrice,
@@ -327,8 +332,8 @@ function handleOutstationFares($conn, $data, $vehicleId) {
             $driverAllowance
         );
         
-        $stmt->execute();
-        $stmt->close();
+        $stmtRoundTrip->execute();
+        $stmtRoundTrip->close();
         
         // Commit transaction
         $conn->commit();
@@ -382,32 +387,61 @@ function handleLocalFares($conn, $data, $vehicleId) {
         $stmt->execute();
         $stmt->close();
         
-        // 2. Update vehicle_pricing table for LOCAL trips (for backward compatibility)
-        $tripType = 'local';
-        $stmt = $conn->prepare("
-            INSERT INTO vehicle_pricing 
-            (vehicle_id, trip_type, local_package_4hr, local_package_8hr, local_package_10hr,
-             price_per_km, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, NOW())
-            ON DUPLICATE KEY UPDATE 
-            local_package_4hr = VALUES(local_package_4hr),
-            local_package_8hr = VALUES(local_package_8hr),
-            local_package_10hr = VALUES(local_package_10hr),
-            price_per_km = VALUES(price_per_km),
-            updated_at = NOW()
-        ");
+        // 2. Check if vehicle_pricing record exists for this vehicle and trip type
+        $checkStmt = $conn->prepare("SELECT id FROM vehicle_pricing WHERE vehicle_type = ? AND trip_type = 'local'");
+        $checkStmt->bind_param("s", $vehicleId);
+        $checkStmt->execute();
+        $result = $checkStmt->get_result();
+        $exists = $result->num_rows > 0;
+        $checkStmt->close();
         
-        $stmt->bind_param("ssdddd", 
-            $vehicleId,
-            $tripType,
-            $package4hr40km,
-            $package8hr80km,
-            $package10hr100km,
-            $extraKmRate
-        );
-        
-        $stmt->execute();
-        $stmt->close();
+        if ($exists) {
+            // Update existing record - IMPORTANT: ONLY update the local package fields
+            $updateStmt = $conn->prepare("
+                UPDATE vehicle_pricing 
+                SET local_package_4hr = ?, 
+                    local_package_8hr = ?, 
+                    local_package_10hr = ?,
+                    extra_km_charge = ?,
+                    extra_hour_charge = ?,
+                    updated_at = NOW()
+                WHERE vehicle_type = ? AND trip_type = 'local'
+            ");
+            
+            $updateStmt->bind_param("ddddds", 
+                $package4hr40km,
+                $package8hr80km,
+                $package10hr100km,
+                $extraKmRate,
+                $extraHourRate,
+                $vehicleId
+            );
+            
+            $updateStmt->execute();
+            $updateStmt->close();
+        } else {
+            // Insert new record
+            $tripType = 'local';
+            $insertStmt = $conn->prepare("
+                INSERT INTO vehicle_pricing 
+                (vehicle_type, trip_type, local_package_4hr, local_package_8hr, local_package_10hr,
+                 extra_km_charge, extra_hour_charge, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+            ");
+            
+            $insertStmt->bind_param("ssddddd", 
+                $vehicleId,
+                $tripType,
+                $package4hr40km,
+                $package8hr80km,
+                $package10hr100km,
+                $extraKmRate,
+                $extraHourRate
+            );
+            
+            $insertStmt->execute();
+            $insertStmt->close();
+        }
         
         // Commit transaction
         $conn->commit();
@@ -476,22 +510,45 @@ function handleAirportFares($conn, $data, $vehicleId) {
         
         // 2. Update vehicle_pricing table for AIRPORT trips (for backward compatibility)
         $tripType = 'airport';
-        $stmt = $conn->prepare("
-            INSERT INTO vehicle_pricing 
-            (vehicle_id, trip_type, base_fare, price_per_km, updated_at)
-            VALUES (?, ?, ?, ?, NOW())
-            ON DUPLICATE KEY UPDATE 
-            base_fare = VALUES(base_fare),
-            price_per_km = VALUES(price_per_km),
-            updated_at = NOW()
-        ");
+        // Check if record exists
+        $checkStmt = $conn->prepare("SELECT id FROM vehicle_pricing WHERE vehicle_type = ? AND trip_type = ?");
+        $checkStmt->bind_param("ss", $vehicleId, $tripType);
+        $checkStmt->execute();
+        $result = $checkStmt->get_result();
+        $exists = $result->num_rows > 0;
+        $checkStmt->close();
         
-        $stmt->bind_param("ssdd", 
-            $vehicleId,
-            $tripType,
-            $basePrice,
-            $pricePerKm
-        );
+        if ($exists) {
+            // Update only airport-related fields
+            $stmt = $conn->prepare("
+                UPDATE vehicle_pricing 
+                SET base_fare = ?,
+                    price_per_km = ?,
+                    updated_at = NOW()
+                WHERE vehicle_type = ? AND trip_type = ?
+            ");
+            
+            $stmt->bind_param("ddss", 
+                $basePrice,
+                $pricePerKm,
+                $vehicleId,
+                $tripType
+            );
+        } else {
+            // Insert new record
+            $stmt = $conn->prepare("
+                INSERT INTO vehicle_pricing 
+                (vehicle_type, trip_type, base_fare, price_per_km, updated_at)
+                VALUES (?, ?, ?, ?, NOW())
+            ");
+            
+            $stmt->bind_param("ssdd", 
+                $vehicleId,
+                $tripType,
+                $basePrice,
+                $pricePerKm
+            );
+        }
         
         $stmt->execute();
         $stmt->close();
