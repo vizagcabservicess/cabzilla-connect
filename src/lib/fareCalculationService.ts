@@ -1,3 +1,4 @@
+
 import { differenceInHours, differenceInDays, differenceInMinutes, addDays, subDays, isAfter } from 'date-fns';
 import { CabType, FareCalculationParams } from '@/types/cab';
 import { TripType, TripMode } from './tripTypes';
@@ -290,17 +291,6 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
       const cachedFare = fareCache.get(cacheKey);
       if (cachedFare && cachedFare.expire > Date.now()) {
         console.log(`Using cached fare for ${cacheKey}: ₹${cachedFare.price}`);
-        
-        // Even when using cached fare, dispatch the fare event to ensure UI consistency
-        window.dispatchEvent(new CustomEvent('fare-updated', {
-          detail: {
-            cabId: cabType.id,
-            cabName: cabType.name,
-            fare: cachedFare.price,
-            timestamp: Date.now()
-          }
-        }));
-        
         return cachedFare.price;
       }
     }
@@ -591,18 +581,7 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
       console.log(`Calculated tour fare: ₹${calculatedFare}`);
     }
     
-    // CRITICAL: Always dispatch fare-updated event in addition to fare-calculated
-    // This ensures BookingSummary gets updated immediately
-    window.dispatchEvent(new CustomEvent('fare-updated', {
-      detail: {
-        cabId: cabType.id,
-        cabName: cabType.name,
-        fare: calculatedFare,
-        timestamp: Date.now()
-      }
-    }));
-    
-    // Also dispatch fare-calculated event as before
+    // Dispatch fare calculation event to update UI components
     window.dispatchEvent(new CustomEvent('fare-calculated', {
       detail: {
         cabId: cabType.id,

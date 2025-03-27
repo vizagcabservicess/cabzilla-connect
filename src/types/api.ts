@@ -188,14 +188,7 @@ export interface VehiclePricingUpdateRequest {
   driverAllowance?: number;
 }
 
-// New interface for fare update events
-export interface FareUpdateEvent {
-  cabId: string;
-  cabName: string;
-  fare: number;
-  timestamp: number;
-}
-
+// New interfaces for booking updates
 export interface BookingUpdateRequest {
   passengerName?: string;
   passengerPhone?: string;
