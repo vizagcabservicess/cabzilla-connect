@@ -11,7 +11,7 @@ header('Content-Type: application/json');
 
 // Add debugging headers
 header('X-Debug-File: direct-booking-data.php');
-header('X-API-Version: 1.0.50');
+header('X-API-Version: 1.0.55');
 header('X-Timestamp: ' . time());
 
 // Handle preflight OPTIONS request
@@ -22,6 +22,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // Log the request
 error_log("Direct booking data request received: " . json_encode($_GET));
+
+// Check if it's a booking query by ID
+if (isset($_GET['id'])) {
+    $bookingId = intval($_GET['id']);
+    error_log("Fetching booking data for ID: $bookingId");
+    
+    // Sample booking data for the requested ID
+    $booking = [
+        'id' => $bookingId,
+        'userId' => 101,
+        'bookingNumber' => 'BK'.rand(10000, 99999),
+        'pickupLocation' => 'Hyderabad Airport',
+        'dropLocation' => 'Banjara Hills, Hyderabad',
+        'pickupDate' => date('Y-m-d H:i:s', strtotime('-2 days')),
+        'returnDate' => date('Y-m-d H:i:s', strtotime('+5 days')),
+        'cabType' => 'Sedan',
+        'distance' => 25.5,
+        'tripType' => 'outstation',
+        'tripMode' => 'roundtrip',
+        'totalAmount' => 3500,
+        'status' => 'confirmed',
+        'passengerName' => 'Rahul Sharma',
+        'passengerPhone' => '9876543210',
+        'passengerEmail' => 'rahul@example.com',
+        'driverName' => 'Suresh Kumar',
+        'driverPhone' => '8765432109',
+        'createdAt' => date('Y-m-d H:i:s', strtotime('-2 days')),
+        'updatedAt' => date('Y-m-d H:i:s', strtotime('-1 day'))
+    ];
+    
+    echo json_encode([
+        'status' => 'success',
+        'booking' => $booking,
+        'source' => 'sample',
+        'timestamp' => time(),
+        'version' => '1.0.55'
+    ]);
+    exit;
+}
 
 // Sample bookings data for fallback
 $sampleBookings = [
@@ -181,7 +220,7 @@ try {
         'bookings' => $bookings,
         'source' => empty($bookings) ? 'sample' : 'database',
         'timestamp' => time(),
-        'version' => '1.0.50'
+        'version' => '1.0.55'
     ]);
     
 } catch (Exception $e) {
@@ -195,6 +234,6 @@ try {
         'bookings' => $sampleBookings, // Always provide sample data on error
         'source' => 'sample',
         'timestamp' => time(),
-        'version' => '1.0.50'
+        'version' => '1.0.55'
     ]);
 }

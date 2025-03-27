@@ -85,17 +85,23 @@ RewriteRule ^admin/sync-local-fares$ admin/sync-local-fares.php [L,QSA]
 RewriteRule ^admin/sync-local-fares\.php$ admin/sync-local-fares.php [L,QSA]
 
 # LOCAL PACKAGE FARES ENDPOINTS (NEW) - HIGHEST PRIORITY
-RewriteRule ^local-package-fares$ local-package-fares.php [L,QSA]
-RewriteRule ^local-package-fares\.php$ local-package-fares.php [L,QSA]
+RewriteRule ^local-package-fares$ admin/local-package-fares.php [L,QSA]
+RewriteRule ^local-package-fares\.php$ admin/local-package-fares.php [L,QSA]
 RewriteRule ^admin/local-package-fares$ admin/local-package-fares.php [L,QSA]
 RewriteRule ^admin/local-package-fares\.php$ admin/local-package-fares.php [L,QSA]
 
-# ULTRA HIGH PRIORITY - LOCAL FARES ENDPOINTS - Added before other fare endpoints to ensure proper routing
+# LOCAL FARES ENDPOINTS (UPDATED) - ULTRA HIGH PRIORITY
 # Direct local fares endpoint - HIGHEST PRIORITY
-RewriteRule ^direct-local-fares$ direct-local-fares.php [L,QSA]
-RewriteRule ^direct-local-fares\.php$ direct-local-fares.php [L,QSA]
+RewriteRule ^direct-local-fares$ admin/direct-local-fares.php [L,QSA]
+RewriteRule ^direct-local-fares\.php$ admin/direct-local-fares.php [L,QSA]
 RewriteRule ^admin/direct-local-fares$ admin/direct-local-fares.php [L,QSA]
 RewriteRule ^admin/direct-local-fares\.php$ admin/direct-local-fares.php [L,QSA]
+
+# BOOKING DATA ENDPOINTS (UPDATED) - HIGH PRIORITY
+RewriteRule ^direct-booking-data$ user/direct-booking-data.php [L,QSA]
+RewriteRule ^direct-booking-data\.php$ user/direct-booking-data.php [L,QSA]
+RewriteRule ^user/direct-booking-data$ user/direct-booking-data.php [L,QSA]
+RewriteRule ^user/direct-booking-data\.php$ user/direct-booking-data.php [L,QSA]
 
 # Local fare updates
 RewriteRule ^local-fares-update$ admin/local-fares-update.php [L,QSA]

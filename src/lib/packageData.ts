@@ -1,3 +1,4 @@
+
 import { HourlyPackage, LocalPackagePriceMatrix } from '@/types/cab';
 
 // Define standard hourly packages
@@ -420,7 +421,6 @@ export async function updateLocalPackagePrice(packageId: string, cabType: string
       
       // Try to update fares on backend server
       try {
-        // Use direct-local-fares.php endpoint for database updates
         updateLocalPackagePriceOnServer(normalizedPackageId, lowerCabType, price)
           .then(result => {
             console.log('Server update result:', result);
@@ -437,7 +437,7 @@ export async function updateLocalPackagePrice(packageId: string, cabType: string
   }
 }
 
-// New function to update local package prices directly on the server
+// Modified function to update local package prices directly on the server
 async function updateLocalPackagePriceOnServer(packageId: string, cabType: string, price: number): Promise<any> {
   try {
     console.log(`Sending local fare update to server for ${cabType}, package ${packageId}, price ${price}`);
@@ -485,50 +485,98 @@ async function updateLocalPackagePriceOnServer(packageId: string, cabType: strin
     // Add fares object for alternative format
     packageData.fares = { ...packageData.packages };
     
-    // Try different server endpoints
-    const serverEndpoints = [
-      '/api/direct-local-fares.php',
-      '/api/admin/direct-local-fares.php',
-      '/api/admin/local-fares-update.php',
-      '/api/admin/direct-fare-update.php?tripType=local'
-    ];
-    
-    // Try the main domain first
+    // Try direct local fares endpoint first (now a dedicated endpoint)
     const domain = window.location.origin;
-    
-    // Add timestamp to prevent caching
     const timestamp = Date.now();
     
-    // Try endpoints until one succeeds
-    for (const endpoint of serverEndpoints) {
-      try {
-        const url = `${domain}${endpoint}?_t=${timestamp}`;
-        console.log(`Starting fare update for local packages with vehicle ID ${cabType}`);
-        console.log(`Trying direct local fares endpoint: ${url}`);
-        
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Force-Refresh': 'true',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
-          },
-          body: JSON.stringify(packageData)
-        });
-        
-        if (response.ok) {
-          const result = await response.json();
-          console.log(`Successfully updated ${packageId} price for ${cabType} to ${price} on server`);
-          return result;
-        } else {
-          const errorText = await response.text();
-          console.error(`Error using direct local fares endpoint: ${response.status} ${response.statusText}`, errorText);
-        }
-      } catch (error) {
-        console.error(`Error using endpoint ${endpoint}:`, error);
+    try {
+      const directUrl = `${domain}/api/direct-local-fares.php?_t=${timestamp}`;
+      console.log(`Trying direct local fares endpoint: ${directUrl}`);
+      
+      const response = await fetch(directUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        },
+        body: JSON.stringify(packageData)
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`Successfully updated ${packageId} price for ${cabType} to ${price} on server`);
+        return result;
+      } else {
+        const errorText = await response.text();
+        console.error(`Error using direct local fares endpoint: ${response.status} ${response.statusText}`, errorText);
       }
+    } catch (error) {
+      console.error(`Error using direct local fares endpoint:`, error);
+    }
+    
+    // Try admin direct-local-fares endpoint as fallback
+    try {
+      const adminDirectUrl = `${domain}/api/admin/direct-local-fares.php?_t=${timestamp}`;
+      console.log(`Trying admin direct local fares endpoint: ${adminDirectUrl}`);
+      
+      const response = await fetch(adminDirectUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        },
+        body: JSON.stringify(packageData)
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`Successfully updated ${packageId} price for ${cabType} to ${price} on admin endpoint`);
+        return result;
+      } else {
+        const errorText = await response.text();
+        console.error(`Error using admin direct local fares endpoint: ${response.status} ${response.statusText}`, errorText);
+      }
+    } catch (error) {
+      console.error(`Error using admin direct local fares endpoint:`, error);
+    }
+    
+    // Try universal fare update endpoint as last resort
+    try {
+      const universalUrl = `${domain}/api/admin/direct-fare-update.php?tripType=local&_t=${timestamp}`;
+      console.log(`Trying universal fare update endpoint: ${universalUrl}`);
+      
+      const response = await fetch(universalUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        },
+        body: JSON.stringify({
+          ...packageData,
+          tripType: 'local',
+          trip_type: 'local'
+        })
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`Successfully updated ${packageId} price for ${cabType} to ${price} on universal endpoint`);
+        return result;
+      } else {
+        const errorText = await response.text();
+        console.error(`Error using universal fare update endpoint: ${response.status} ${response.statusText}`, errorText);
+      }
+    } catch (error) {
+      console.error(`Error using universal fare update endpoint:`, error);
     }
     
     throw new Error('All server update attempts failed');
