@@ -1,3 +1,4 @@
+
 export interface CabType {
   id: string;
   name: string;
@@ -14,6 +15,7 @@ export interface CabType {
   isActive?: boolean;
   basePrice?: number;
   vehicleId?: string;
+  vehicleType?: string;
   // Fare properties
   outstationFares?: OutstationFare;
   localPackageFares?: LocalFare;
@@ -43,6 +45,12 @@ export interface LocalFare {
   package10hr100km?: number;  // Alias for price10hrs100km
   extraKmRate?: number;  // Alias for priceExtraKm
   extraHourRate?: number;  // Alias for priceExtraHour
+  // Additional aliases for database column name variations
+  local_package_4hr?: number;  // For vehicle_pricing table
+  local_package_8hr?: number;  // For vehicle_pricing table
+  local_package_10hr?: number; // For vehicle_pricing table
+  extra_km_charge?: number;    // For vehicle_pricing table
+  extra_hour_charge?: number;  // For vehicle_pricing table
 }
 
 export interface AirportFare {
@@ -120,17 +128,26 @@ export interface LocalPackagePriceMatrix {
 
 export interface VehiclePricing {
   vehicleType: string;
+  vehicleId?: string;  // Added to support both column names
   basePrice: number;
   pricePerKm: number;
   nightHaltCharge: number;
   driverAllowance: number;
   roundtripBasePrice?: number;
   roundtripPricePerKm?: number;
+  // Local package fare properties in both naming conventions
   localPackage4hr?: number;
   localPackage8hr?: number;
   localPackage10hr?: number;
   extraKmCharge?: number;
   extraHourCharge?: number;
+  // Local package fare properties in alternative naming conventions
+  price4hrs40km?: number;
+  price8hrs80km?: number;
+  price10hrs100km?: number;
+  priceExtraKm?: number;
+  priceExtraHour?: number;
+  // Airport fare properties
   airportBasePrice?: number;
   airportPricePerKm?: number;
   airportDropPrice?: number;

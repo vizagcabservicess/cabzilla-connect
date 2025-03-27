@@ -11,7 +11,8 @@ import {
   Terminal, 
   Server,
   Wifi,
-  DatabaseBackup
+  DatabaseBackup,
+  Sync
 } from "lucide-react";
 import { fareService } from '@/services/fareService';
 import { toast } from 'sonner';
@@ -34,6 +35,7 @@ export function FareUpdateError({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [isFixing, setIsFixing] = useState(false);
   const [isInitializingDb, setIsInitializingDb] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [attempted500Fix, setAttempted500Fix] = useState(false);
   const errorMessage = typeof error === "string" ? error : error.message;
   
@@ -48,7 +50,7 @@ export function FareUpdateError({
     /network|connection|failed|ERR_NETWORK|ECONNABORTED|404|timeout/i.test(errorMessage);
   
   const isTableError =
-    /table.*not found|doesn't exist|database_error|SQLSTATE|base table or view not found/i.test(errorMessage);
+    /table.*not found|doesn't exist|database_error|SQLSTATE|base table or view not found|unknown column/i.test(errorMessage);
   
   // Auto-attempt database initialization for 500 errors
   useEffect(() => {
@@ -128,6 +130,9 @@ export function FareUpdateError({
       // 5. Initialize database
       await initializeDatabase();
       
+      // 6. Sync tables
+      await syncTables();
+      
       // Success notification
       toast.success('Comprehensive fixes applied', {
         id: 'comprehensive-fix-success'
@@ -198,6 +203,55 @@ export function FareUpdateError({
     }
   };
 
+  // Sync local_package_fares and vehicle_pricing tables
+  const syncTables = async () => {
+    setIsSyncing(true);
+    toast.info('Synchronizing database tables...', {
+      id: 'sync-tables',
+      duration: 3000
+    });
+    
+    try {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+      const timestamp = Date.now();
+      
+      try {
+        // Call the sync endpoint
+        const syncResponse = await fetch(`${baseUrl}/api/admin/sync-local-fares.php?_t=${timestamp}`, {
+          method: 'GET',
+          headers: {
+            ...fareService.getBypassHeaders(),
+            'Accept': 'application/json'
+          }
+        });
+        
+        if (syncResponse.ok) {
+          const syncData = await syncResponse.json();
+          
+          if (syncData.status === 'success') {
+            toast.success('Tables synchronized successfully', {
+              duration: 3000
+            });
+            console.log('Sync response:', syncData);
+            return true;
+          } else {
+            console.error('Sync error:', syncData.message);
+            toast.error(`Sync error: ${syncData.message}`, { duration: 5000 });
+            return false;
+          }
+        } else {
+          throw new Error(`HTTP error ${syncResponse.status}`);
+        }
+      } catch (error) {
+        console.error('Error syncing tables:', error);
+        toast.error('Failed to sync tables');
+        return false;
+      }
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   // Pick the most appropriate icon
   const ErrorIcon = isTableError
     ? Database
@@ -212,7 +266,7 @@ export function FareUpdateError({
     if (description) return description;
     
     if (isTableError) {
-      return "The database table required for this operation doesn't exist. Click the 'Initialize Database' button to create missing tables.";
+      return "The database table required for this operation doesn't exist or has a column name mismatch. Use the 'Initialize Database' or 'Sync Tables' button to fix.";
     }
     if (isForbiddenError) {
       return "You don't have permission to update fares. This might be an authentication issue.";
@@ -256,10 +310,14 @@ export function FareUpdateError({
         <div className="text-sm space-y-2">
           <p className="font-medium text-gray-700">Try the following:</p>
           <ul className="list-disc pl-5 space-y-1 text-gray-600">
-            {(isTableError || isServerError) && (
+            {isTableError && (
               <>
-                <li className="font-medium text-red-700">Database tables may be missing - use 'Initialize Database' button below</li>
-                <li>This will create all required database tables</li>
+                <li className="font-medium text-red-700">
+                  {/unknown column/i.test(errorMessage) 
+                    ? "Column mismatch detected - use the 'Sync Tables' button below" 
+                    : "Database tables may be missing - use 'Initialize Database' button below"}
+                </li>
+                <li>This will {/unknown column/i.test(errorMessage) ? "fix column inconsistencies" : "create all required database tables"}</li>
               </>
             )}
             <li>Use the comprehensive fix button to solve common API connection issues</li>
@@ -291,6 +349,26 @@ export function FareUpdateError({
         )}
       </CardContent>
       <CardFooter className="pt-0 flex flex-wrap gap-3">
+        {isTableError && /unknown column/i.test(errorMessage) && (
+          <Button 
+            onClick={syncTables} 
+            className="gap-2 bg-amber-600 hover:bg-amber-700"
+            disabled={isSyncing}
+          >
+            {isSyncing ? (
+              <>
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                Syncing...
+              </>
+            ) : (
+              <>
+                <Sync className="h-4 w-4" />
+                Sync Tables
+              </>
+            )}
+          </Button>
+        )}
+        
         {(isTableError || isServerError) && (
           <Button 
             onClick={initializeDatabase} 

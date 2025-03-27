@@ -95,6 +95,7 @@ function ensureTables($conn, &$response) {
         // Create vehicle_pricing table with required fields for all trip types
         $sql = "CREATE TABLE IF NOT EXISTS `vehicle_pricing` (
             `id` INT(11) NOT NULL AUTO_INCREMENT,
+            `vehicle_id` VARCHAR(50) NOT NULL,
             `vehicle_type` VARCHAR(50) NOT NULL,
             `trip_type` VARCHAR(50) NOT NULL,
             `base_fare` DECIMAL(10,2) DEFAULT '0.00',
@@ -141,9 +142,9 @@ function syncFromLocalPackageFaresToVehiclePricing($conn, &$response) {
     while ($row = $result->fetch_assoc()) {
         // Check if record exists in vehicle_pricing
         $checkQuery = "SELECT id FROM vehicle_pricing 
-                      WHERE vehicle_type = ? AND trip_type = 'local'";
+                      WHERE (vehicle_id = ? OR vehicle_type = ?) AND trip_type = 'local'";
         $stmt = $conn->prepare($checkQuery);
-        $stmt->bind_param("s", $row['vehicle_id']);
+        $stmt->bind_param("ss", $row['vehicle_id'], $row['vehicle_id']);
         $stmt->execute();
         $checkResult = $stmt->get_result();
         $exists = $checkResult->num_rows > 0;
@@ -157,28 +158,30 @@ function syncFromLocalPackageFaresToVehiclePricing($conn, &$response) {
                               local_package_10hr = ?, 
                               extra_km_charge = ?, 
                               extra_hour_charge = ?
-                          WHERE vehicle_type = ? AND trip_type = 'local'";
+                          WHERE (vehicle_id = ? OR vehicle_type = ?) AND trip_type = 'local'";
             
             $stmt = $conn->prepare($updateQuery);
             $stmt->bind_param(
-                "ddddds",
+                "dddddss",
                 $row['price_4hrs_40km'],
                 $row['price_8hrs_80km'],
                 $row['price_10hrs_100km'],
                 $row['price_extra_km'],
                 $row['price_extra_hour'],
+                $row['vehicle_id'],
                 $row['vehicle_id']
             );
         } else {
             // Insert new record
             $insertQuery = "INSERT INTO vehicle_pricing 
-                          (vehicle_type, trip_type, local_package_4hr, local_package_8hr, 
+                          (vehicle_id, vehicle_type, trip_type, local_package_4hr, local_package_8hr, 
                            local_package_10hr, extra_km_charge, extra_hour_charge)
-                          VALUES (?, 'local', ?, ?, ?, ?, ?)";
+                          VALUES (?, ?, 'local', ?, ?, ?, ?, ?)";
             
             $stmt = $conn->prepare($insertQuery);
             $stmt->bind_param(
-                "sddddd",
+                "ssdddd",
+                $row['vehicle_id'],
                 $row['vehicle_id'],
                 $row['price_4hrs_40km'],
                 $row['price_8hrs_80km'],
@@ -208,7 +211,7 @@ function syncFromVehiclePricingToLocalPackageFares($conn, &$response) {
     $response['logs'][] = "Syncing from vehicle_pricing to local_package_fares...";
     
     // Get data from vehicle_pricing for local trip types
-    $query = "SELECT vehicle_type, local_package_4hr, local_package_8hr, local_package_10hr, 
+    $query = "SELECT vehicle_id, vehicle_type, local_package_4hr, local_package_8hr, local_package_10hr, 
               extra_km_charge, extra_hour_charge 
               FROM vehicle_pricing 
               WHERE trip_type = 'local'";
@@ -220,10 +223,13 @@ function syncFromVehiclePricingToLocalPackageFares($conn, &$response) {
     
     $synced = 0;
     while ($row = $result->fetch_assoc()) {
+        // Use vehicle_id if available, otherwise fall back to vehicle_type
+        $vehicleId = !empty($row['vehicle_id']) ? $row['vehicle_id'] : $row['vehicle_type'];
+        
         // Check if record exists in local_package_fares
         $checkQuery = "SELECT id FROM local_package_fares WHERE vehicle_id = ?";
         $stmt = $conn->prepare($checkQuery);
-        $stmt->bind_param("s", $row['vehicle_type']);
+        $stmt->bind_param("s", $vehicleId);
         $stmt->execute();
         $checkResult = $stmt->get_result();
         $exists = $checkResult->num_rows > 0;
@@ -247,7 +253,7 @@ function syncFromVehiclePricingToLocalPackageFares($conn, &$response) {
                 $row['local_package_10hr'],
                 $row['extra_km_charge'],
                 $row['extra_hour_charge'],
-                $row['vehicle_type']
+                $vehicleId
             );
         } else {
             // Insert new record
@@ -259,7 +265,7 @@ function syncFromVehiclePricingToLocalPackageFares($conn, &$response) {
             $stmt = $conn->prepare($insertQuery);
             $stmt->bind_param(
                 "sddddd",
-                $row['vehicle_type'],
+                $vehicleId,
                 $row['local_package_4hr'],
                 $row['local_package_8hr'],
                 $row['local_package_10hr'],
@@ -271,7 +277,7 @@ function syncFromVehiclePricingToLocalPackageFares($conn, &$response) {
         if ($stmt->execute()) {
             $synced++;
         } else {
-            $response['logs'][] = "Error syncing vehicle: " . $row['vehicle_type'] . " - " . $stmt->error;
+            $response['logs'][] = "Error syncing vehicle: " . $vehicleId . " - " . $stmt->error;
         }
         
         $stmt->close();
