@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { Location } from '@/lib/locationData';
 import { CabType } from '@/types/cab';
@@ -88,41 +89,70 @@ export const BookingSummary = ({
           
           if (tripMode === 'one-way') {
             newPerKmRate = outstationFares.pricePerKm || 15;
+            
+            // FIXED: Always use basePrice from the vehicle_pricing table
+            newBaseFare = outstationFares.basePrice || minimumKm * newPerKmRate;
+            
+            // Calculate effective distance and extra distance
             newEffectiveDistance = Math.max(distance, minimumKm);
-            newBaseFare = minimumKm * newPerKmRate;
+            
             if (distance > minimumKm) {
               newExtraDistance = distance - minimumKm;
               newExtraDistanceFare = newExtraDistance * newPerKmRate;
             }
+            
             newDriverAllowance = outstationFares.driverAllowance || 250;
+            
             if (pickupDate && (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)) {
               newNightCharges = Math.round(newBaseFare * 0.1);
             }
           } else {
+            // For round trips
             newPerKmRate = outstationFares.roundTripPricePerKm || outstationFares.pricePerKm * 0.85 || 12;
             newDriverAllowance = outstationFares.driverAllowance || 250;
+            
+            // Round trip uses doubled distance
             newEffectiveDistance = distance * 2;
-            if (newEffectiveDistance < minimumKm) {
-              newBaseFare = minimumKm * newPerKmRate;
-            } else {
-              newBaseFare = newEffectiveDistance * newPerKmRate;
+            
+            // Use roundTripBasePrice if available, otherwise calculate from basePrice
+            newBaseFare = outstationFares.roundTripBasePrice || outstationFares.basePrice * 0.9 || minimumKm * newPerKmRate;
+            
+            if (newEffectiveDistance > minimumKm) {
+              newExtraDistance = newEffectiveDistance - minimumKm;
+              newExtraDistanceFare = newExtraDistance * newPerKmRate;
             }
+            
             if (pickupDate && (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)) {
               newNightCharges = Math.round(newBaseFare * 0.1);
             }
           }
         } catch (error) {
           console.error('Error fetching outstation fares:', error);
+          // Fallback logic if API fails
           newPerKmRate = selectedCab.id.includes('sedan') ? 12 : 
                         selectedCab.id.includes('ertiga') ? 14 : 
                         selectedCab.id.includes('innova') ? 16 : 15;
-          newEffectiveDistance = tripMode === 'one-way' ? Math.max(distance, minimumKm) : distance * 2;
-          newBaseFare = tripMode === 'one-way' ? minimumKm * newPerKmRate : newEffectiveDistance * newPerKmRate;
-          newDriverAllowance = 250;
-          if (tripMode === 'one-way' && distance > minimumKm) {
-            newExtraDistance = distance - minimumKm;
-            newExtraDistanceFare = newExtraDistance * newPerKmRate;
+          
+          if (tripMode === 'one-way') {
+            newBaseFare = minimumKm * newPerKmRate;
+            newEffectiveDistance = Math.max(distance, minimumKm);
+            
+            if (distance > minimumKm) {
+              newExtraDistance = distance - minimumKm;
+              newExtraDistanceFare = newExtraDistance * newPerKmRate;
+            }
+          } else {
+            newEffectiveDistance = distance * 2;
+            newPerKmRate = newPerKmRate * 0.85;
+            newBaseFare = minimumKm * newPerKmRate;
+            
+            if (newEffectiveDistance > minimumKm) {
+              newExtraDistance = newEffectiveDistance - minimumKm;
+              newExtraDistanceFare = newExtraDistance * newPerKmRate;
+            }
           }
+          
+          newDriverAllowance = 250;
         }
       } else if (tripType === 'airport') {
         // Fetch airport fares
@@ -220,6 +250,8 @@ export const BookingSummary = ({
     window.addEventListener('trip-fares-updated', handleEventsWithThrottling);
     window.addEventListener('airport-fares-updated', handleEventsWithThrottling);
     window.addEventListener('fare-cache-cleared', handleEventsWithThrottling);
+    // ADDED: Listen for fare-calculated events to update in real-time
+    window.addEventListener('fare-calculated', handleEventsWithThrottling);
     
     return () => {
       clearTimeout(initialLoadTimer);
@@ -229,9 +261,11 @@ export const BookingSummary = ({
       window.removeEventListener('trip-fares-updated', handleEventsWithThrottling);
       window.removeEventListener('airport-fares-updated', handleEventsWithThrottling);
       window.removeEventListener('fare-cache-cleared', handleEventsWithThrottling);
+      window.removeEventListener('fare-calculated', handleEventsWithThrottling);
     };
   }, []);
   
+  // FIXED: Added totalPrice to dependency array to trigger update when price changes
   useEffect(() => {
     const now = Date.now();
     if (now - lastUpdateTimeRef.current < 2000) {
@@ -246,7 +280,7 @@ export const BookingSummary = ({
     }, 500);
     
     return () => clearTimeout(timer);
-  }, [selectedCab, tripType, tripMode, distance, pickupDate, returnDate]);
+  }, [selectedCab, tripType, tripMode, distance, pickupDate, returnDate, totalPrice]);
   
   if (!pickupLocation || (!dropLocation && tripType !== 'local' && tripType !== 'tour') || !pickupDate || !selectedCab) {
     return <div className="p-4 bg-gray-100 rounded-lg">Booking information not available</div>;

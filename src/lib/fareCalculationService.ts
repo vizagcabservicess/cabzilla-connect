@@ -19,7 +19,7 @@ export const clearFareCache = () => {
   // Prevent multiple cache clears within 30 seconds
   const now = Date.now();
   if (now - lastCacheClearTime < 30000) {
-    console.log('Fare cache clear throttled - last clear was too recent');
+    console.log('Fare calculation cache clear throttled - last clear was too recent');
     return;
   }
   
@@ -420,46 +420,44 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
         
         if (tripMode === 'one-way') {
           perKmRate = outstationFares.pricePerKm;
-        } else {
-          perKmRate = outstationFares.roundTripPricePerKm || outstationFares.pricePerKm * 0.85;
-        }
-        
-        // For one-way trips
-        if (tripMode === 'one-way') {
-          // Always ensure minimum 300 km for one-way trips
-          const effectiveDistance = Math.max(distance, minimumKm);
           
-          // Calculate base fare for minimum 300 km
-          baseFare = minimumKm * perKmRate;
+          // FIXED: For one-way trips, base fare comes from vehicle_pricing table
+          // This is the base_fare value for min 300km
+          baseFare = outstationFares.basePrice;
           
-          // Add extra distance fare if distance exceeds minimum
+          // Calculate extra distance if actual distance > minimum
           if (distance > minimumKm) {
             const extraDistance = distance - minimumKm;
+            
+            // FIXED: For one-way extra distance, we need to add the per km rate
+            // without doubling the distance (already included in base price)
             const extraDistanceFare = extraDistance * perKmRate;
-            baseFare += extraDistanceFare;
+            calculatedFare = baseFare + extraDistanceFare + driverAllowance;
+          } else {
+            calculatedFare = baseFare + driverAllowance;
           }
-          
-          calculatedFare = baseFare + driverAllowance;
           
           console.log(`One-way outstation fare: Base=${baseFare}, Driver=${driverAllowance}, Total=${calculatedFare}, Rate=${perKmRate}/km`);
         }
         // For round trip
         else {
-          // For round trips, the effective distance is the one-way distance × 2
+          perKmRate = outstationFares.roundTripPricePerKm || outstationFares.pricePerKm * 0.85;
+          
+          // For round trips, use the roundTripBasePrice
+          baseFare = outstationFares.roundTripBasePrice || outstationFares.basePrice * 0.9;
+          
+          // For round trips, the effective distance is doubled
           const effectiveDistance = distance * 2;
-          const effectiveMinimumKm = minimumKm; // Per day minimum
           
-          // Base fare calculation considering round trip distance
-          if (effectiveDistance < effectiveMinimumKm) {
-            // If total round trip distance is less than minimum, charge for minimum
-            baseFare = effectiveMinimumKm * perKmRate;
+          if (effectiveDistance < minimumKm) {
+            // If total round trip distance is less than minimum, use base fare
+            calculatedFare = baseFare + driverAllowance;
           } else {
-            // If total round trip distance exceeds minimum, charge for actual distance
-            baseFare = effectiveDistance * perKmRate;
+            // Calculate extra distance if actual round trip distance > minimum
+            const extraDistance = effectiveDistance - minimumKm;
+            const extraDistanceFare = extraDistance * perKmRate;
+            calculatedFare = baseFare + extraDistanceFare + driverAllowance;
           }
-          
-          // Add driver allowance
-          calculatedFare = baseFare + driverAllowance;
           
           console.log(`Round-trip outstation fare: Base=${baseFare}, Driver=${driverAllowance}, Total=${calculatedFare}, Rate=${perKmRate}/km`);
         }
@@ -474,83 +472,88 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
         console.error(`Error fetching outstation fares for ${cabType.name}:`, error);
         
         // Fallback to cab type outstation fares
-        const minimumKm = 300; // Minimum 300km for one-way trips
-        let perKmRate = 0;
-        let baseFare = 0;
-        let driverAllowance = 250;
-        
-        // First check if the cab has outstation fares defined
         if (cabType.outstationFares) {
           const outstationFares = cabType.outstationFares;
+          const minimumKm = 300;
+          let perKmRate = 0;
+          let baseFare = 0;
+          let driverAllowance = outstationFares.driverAllowance || 250;
           
           if (tripMode === 'one-way') {
             perKmRate = outstationFares.pricePerKm;
+            baseFare = outstationFares.basePrice;
+            
+            if (distance > minimumKm) {
+              const extraDistance = distance - minimumKm;
+              const extraDistanceFare = extraDistance * perKmRate;
+              calculatedFare = baseFare + extraDistanceFare + driverAllowance;
+            } else {
+              calculatedFare = baseFare + driverAllowance;
+            }
           } else {
             perKmRate = outstationFares.roundTripPricePerKm || outstationFares.pricePerKm * 0.85;
+            baseFare = outstationFares.roundTripBasePrice || outstationFares.basePrice * 0.9;
+            
+            const effectiveDistance = distance * 2;
+            
+            if (effectiveDistance < minimumKm) {
+              calculatedFare = baseFare + driverAllowance;
+            } else {
+              const extraDistance = effectiveDistance - minimumKm;
+              const extraDistanceFare = extraDistance * perKmRate;
+              calculatedFare = baseFare + extraDistanceFare + driverAllowance;
+            }
           }
           
-          driverAllowance = outstationFares.driverAllowance || 250;
-        }
-        else {
-          // Default per km rates if no outstation fares defined
+          // Add night charges if pickup is during night hours (10 PM to 5 AM)
+          if (pickupDate && (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)) {
+            const nightCharges = Math.round(baseFare * 0.1);
+            calculatedFare += nightCharges;
+          }
+        } else {
+          // Fallback to default pricing if no outstation fares defined
+          const defaultPricing = getDefaultCabPricing(cabType.name);
+          const minimumKm = 300;
+          
           if (tripMode === 'one-way') {
-            if (safeToLowerCase(cabType.name).includes('sedan')) perKmRate = 14;
-            else if (safeToLowerCase(cabType.name).includes('ertiga')) perKmRate = 16;
-            else if (safeToLowerCase(cabType.name).includes('innova')) perKmRate = 20;
-            else perKmRate = 16;
+            const perKmRate = defaultPricing.pricePerKm;
+            const baseFare = defaultPricing.basePrice;
+            const driverAllowance = defaultPricing.driverAllowance;
+            
+            if (distance > minimumKm) {
+              const extraDistance = distance - minimumKm;
+              const extraDistanceFare = extraDistance * perKmRate;
+              calculatedFare = baseFare + extraDistanceFare + driverAllowance;
+            } else {
+              calculatedFare = baseFare + driverAllowance;
+            }
+            
+            // Add night charges if pickup is during night hours
+            if (pickupDate && (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)) {
+              const nightCharges = Math.round(baseFare * 0.1);
+              calculatedFare += nightCharges;
+            }
           } else {
-            if (safeToLowerCase(cabType.name).includes('sedan')) perKmRate = 12;
-            else if (safeToLowerCase(cabType.name).includes('ertiga')) perKmRate = 14;
-            else if (safeToLowerCase(cabType.name).includes('innova')) perKmRate = 17;
-            else perKmRate = 14;
+            const perKmRate = defaultPricing.pricePerKm * 0.85;
+            const baseFare = defaultPricing.basePrice * 0.9;
+            const driverAllowance = defaultPricing.driverAllowance;
+            
+            const effectiveDistance = distance * 2;
+            
+            if (effectiveDistance < minimumKm) {
+              calculatedFare = baseFare + driverAllowance;
+            } else {
+              const extraDistance = effectiveDistance - minimumKm;
+              const extraDistanceFare = extraDistance * perKmRate;
+              calculatedFare = baseFare + extraDistanceFare + driverAllowance;
+            }
+            
+            // Add night charges if pickup is during night hours
+            if (pickupDate && (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)) {
+              const nightCharges = Math.round(baseFare * 0.1);
+              calculatedFare += nightCharges;
+            }
           }
-        }
-        
-        // For one-way trips
-        if (tripMode === 'one-way') {
-          // Always ensure minimum 300 km for one-way trips
-          const effectiveDistance = Math.max(distance, minimumKm);
-          
-          // Calculate base fare for minimum 300 km
-          baseFare = minimumKm * perKmRate;
-          
-          // Add extra distance fare if distance exceeds minimum
-          if (distance > minimumKm) {
-            const extraDistance = distance - minimumKm;
-            const extraDistanceFare = extraDistance * perKmRate;
-            baseFare += extraDistanceFare;
-          }
-          
-          calculatedFare = baseFare + driverAllowance;
-          
-          console.log(`One-way outstation fare (fallback): Base=${baseFare}, Driver=${driverAllowance}, Total=${calculatedFare}`);
-        }
-        // For round trip
-        else {
-          // For round trips, the effective distance is the one-way distance × 2
-          const effectiveDistance = distance * 2;
-          const effectiveMinimumKm = minimumKm; // Per day minimum
-          
-          // Base fare calculation considering round trip distance
-          if (effectiveDistance < effectiveMinimumKm) {
-            // If total round trip distance is less than minimum, charge for minimum
-            baseFare = effectiveMinimumKm * perKmRate;
-          } else {
-            // If total round trip distance exceeds minimum, charge for actual distance
-            baseFare = effectiveDistance * perKmRate;
-          }
-          
-          // Add driver allowance
-          calculatedFare = baseFare + driverAllowance;
-          
-          console.log(`Round-trip outstation fare (fallback): Base=${baseFare}, Driver=${driverAllowance}, Total=${calculatedFare}`);
-        }
-        
-        // Add night charges if pickup is during night hours (10 PM to 5 AM)
-        if (pickupDate && (pickupDate.getHours() >= 22 || pickupDate.getHours() <= 5)) {
-          const nightCharges = Math.round(baseFare * 0.1);
-          calculatedFare += nightCharges;
-          console.log(`Added night charges: ${nightCharges}`);
         }
       }
     }
@@ -572,6 +575,17 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
       console.log(`Calculated tour fare: ₹${calculatedFare}`);
     }
     
+    // Dispatch fare calculation event to update UI components
+    window.dispatchEvent(new CustomEvent('fare-calculated', {
+      detail: {
+        cabId: cabType.id,
+        tripType,
+        tripMode,
+        fare: calculatedFare,
+        timestamp: Date.now()
+      }
+    }));
+    
     // Cache the calculated fare
     fareCache.set(cacheKey, {
       expire: Date.now() + 15 * 60 * 1000, // Cache for 15 minutes
@@ -584,3 +598,4 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
     return 0;
   }
 };
+
