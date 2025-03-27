@@ -310,7 +310,7 @@ function updateNormalizedMatrix(): void {
   }
 }
 
-// Function to update local package prices
+// Function to update local package prices with direct API update
 export function updateLocalPackagePrice(packageId: string, cabType: string, price: number): void {
   // Handle undefined or null cabType
   if (!cabType) {
@@ -406,9 +406,120 @@ export function updateLocalPackagePrice(packageId: string, cabType: string, pric
       setTimeout(() => {
         localStorage.removeItem('forceCacheRefresh');
       }, 5000);
+      
+      // Try to update fares on backend server
+      try {
+        // Use direct-local-fares.php endpoint for database updates
+        updateLocalPackagePriceOnServer(normalizedPackageId, lowerCabType, price)
+          .then(result => {
+            console.log('Server update result:', result);
+          })
+          .catch(error => {
+            console.error('Error updating server:', error);
+          });
+      } catch (e) {
+        console.error('Failed to update local package price on server:', e);
+      }
     }
   } catch (e) {
     console.error('Failed to save local package price matrix to localStorage:', e);
+  }
+}
+
+// New function to update local package prices directly on the server
+async function updateLocalPackagePriceOnServer(packageId: string, cabType: string, price: number): Promise<any> {
+  try {
+    console.log(`Sending local fare update to server for ${cabType}, package ${packageId}, price ${price}`);
+    
+    // Prepare the package data to match different server naming conventions
+    const packageData: Record<string, any> = {
+      vehicleId: cabType,
+      vehicle_id: cabType,
+      vehicleType: cabType,
+      vehicle_type: cabType,
+      price4hrs40km: 0,
+      price8hrs80km: 0,
+      price10hrs100km: 0
+    };
+    
+    // Set the price for the specific package
+    if (packageId === '4hrs-40km') {
+      packageData.price4hrs40km = price;
+      packageData.price_4hrs_40km = price;
+      packageData.local_package_4hr = price;
+      packageData.package4hr40km = price;
+    } else if (packageId === '8hrs-80km') {
+      packageData.price8hrs80km = price;
+      packageData.price_8hrs_80km = price;
+      packageData.local_package_8hr = price;
+      packageData.package8hr80km = price;
+    } else if (packageId === '10hrs-100km') {
+      packageData.price10hrs100km = price;
+      packageData.price_10hrs_100km = price;
+      packageData.local_package_10hr = price;
+      packageData.package10hr100km = price;
+    }
+    
+    // Add packages object for React-style clients
+    packageData.packages = {
+      '4hrs-40km': packageId === '4hrs-40km' ? price : 0,
+      '8hrs-80km': packageId === '8hrs-80km' ? price : 0,
+      '10hrs-100km': packageId === '10hrs-100km' ? price : 0
+    };
+    
+    // Add fares object for alternative format
+    packageData.fares = { ...packageData.packages };
+    
+    // Try different server endpoints
+    const serverEndpoints = [
+      '/api/direct-local-fares.php',
+      '/api/admin/direct-local-fares.php',
+      '/api/admin/local-fares-update.php',
+      '/api/admin/direct-fare-update.php?tripType=local'
+    ];
+    
+    // Try the main domain first
+    const domain = window.location.origin;
+    
+    // Add timestamp to prevent caching
+    const timestamp = Date.now();
+    
+    // Try endpoints until one succeeds
+    for (const endpoint of serverEndpoints) {
+      try {
+        const url = `${domain}${endpoint}?_t=${timestamp}`;
+        console.log(`Starting fare update for local packages with vehicle ID ${cabType}`);
+        console.log(`Trying direct local fares endpoint: ${url}`);
+        
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          },
+          body: JSON.stringify(packageData)
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          console.log(`Successfully updated ${packageId} price for ${cabType} to ${price} on server`);
+          return result;
+        } else {
+          const errorText = await response.text();
+          console.error(`Error using direct local fares endpoint: ${response.status} ${response.statusText}`, errorText);
+        }
+      } catch (error) {
+        console.error(`Error using endpoint ${endpoint}:`, error);
+      }
+    }
+    
+    throw new Error('All server update attempts failed');
+  } catch (error) {
+    console.error('Error updating local package price on server:', error);
+    throw error;
   }
 }
 

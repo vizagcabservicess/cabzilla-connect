@@ -9,6 +9,19 @@ header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Force-Refresh');
 header('Content-Type: application/json');
 
+// Create log directory if it doesn't exist
+$logDir = __DIR__ . '/logs';
+if (!file_exists($logDir)) {
+    mkdir($logDir, 0755, true);
+}
+
+// Log request details
+$timestamp = date('Y-m-d H:i:s');
+$requestData = file_get_contents('php://input');
+error_log("[$timestamp] Direct local fare update request received at root endpoint: Method=" . $_SERVER['REQUEST_METHOD'], 3, $logDir . '/direct-fares.log');
+error_log("[$timestamp] POST data: " . print_r($_POST, true), 3, $logDir . '/direct-fares.log');
+error_log("[$timestamp] Raw input: $requestData", 3, $logDir . '/direct-fares.log');
+
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -17,40 +30,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // For direct local fare updates, we need to forward the POST data
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Path to the actual implementation
+    // Log that we're about to redirect
+    error_log("[$timestamp] Attempting to redirect to admin/direct-local-fares.php", 3, $logDir . '/direct-fares.log');
+
+    // Try using our own simplified local-fares-update.php script first (more reliable)
+    $simpleScript = __DIR__ . '/admin/local-fares-update.php';
+    if (file_exists($simpleScript)) {
+        error_log("[$timestamp] Using simplified local-fares-update.php script", 3, $logDir . '/direct-fares.log');
+        
+        // Forward all POST data and execute the simple script
+        $_REQUEST = array_merge($_GET, $_POST);
+        
+        // Include the simple script
+        require_once $simpleScript;
+        exit;
+    }
+    
+    // If simple script not found, try direct-local-fares.php in admin folder
     $targetScript = __DIR__ . '/admin/direct-local-fares.php';
     
     // Check if the target script exists
     if (file_exists($targetScript)) {
-        // Log the redirection for debugging
-        error_log('Redirecting direct-local-fares.php to admin/direct-local-fares.php');
+        // Log the redirection
+        error_log("[$timestamp] Redirecting to admin/direct-local-fares.php", 3, $logDir . '/direct-fares.log');
         
         // Forward all POST data and execute the target script
         $_REQUEST = array_merge($_GET, $_POST);
         
         // Include the target script
         require_once $targetScript;
+        exit;
     } else {
-        // Target script not found, try alternative path
+        // Try alternative path
         $alternativePath = dirname(__DIR__) . '/api/admin/direct-local-fares.php';
         
         if (file_exists($alternativePath)) {
-            error_log('Redirecting direct-local-fares.php to alternative path: ' . $alternativePath);
+            error_log("[$timestamp] Redirecting to alternative path: " . $alternativePath, 3, $logDir . '/direct-fares.log');
             
             // Forward all POST data
             $_REQUEST = array_merge($_GET, $_POST);
             
             // Include the alternative target script
             require_once $alternativePath;
+            exit;
         } else {
+            // Try direct fare update as a last resort
+            $fareUpdateScript = __DIR__ . '/admin/direct-fare-update.php';
+            if (file_exists($fareUpdateScript)) {
+                error_log("[$timestamp] Redirecting to general direct-fare-update.php with tripType=local", 3, $logDir . '/direct-fares.log');
+                
+                // Set tripType to local
+                $_REQUEST = array_merge($_GET, $_POST, ['tripType' => 'local']);
+                
+                // Include the fare update script
+                require_once $fareUpdateScript;
+                exit;
+            }
+            
             // No target script found
+            error_log("[$timestamp] ERROR: No target script found for local fare updates", 3, $logDir . '/direct-fares.log');
             http_response_code(500);
             echo json_encode([
                 'status' => 'error',
-                'message' => 'Target script admin/direct-local-fares.php not found',
+                'message' => 'Target script for local fare updates not found',
                 'paths_checked' => [
+                    'simple' => $simpleScript,
                     'primary' => $targetScript,
-                    'alternative' => $alternativePath
+                    'alternative' => $alternativePath,
+                    'fallback' => $fareUpdateScript
                 ]
             ]);
         }
