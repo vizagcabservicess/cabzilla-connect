@@ -20,6 +20,7 @@ interface CabRefreshWarningProps {
 export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRefreshWarningProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [diagnosticsRunning, setDiagnosticsRunning] = useState(false);
+  const [syncingTables, setSyncingTables] = useState(false);
   
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -169,6 +170,35 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
     });
   };
   
+  const runTableSync = () => {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+    setSyncingTables(true);
+    toast.info('Syncing database tables...');
+    
+    fetch(`${baseUrl}/api/admin/sync-local-fares.php?_t=${Date.now()}`, {
+      method: 'GET',
+      headers: fareService.getBypassHeaders()
+    })
+    .then(async response => {
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Sync response:', data);
+        toast.success('Tables synchronized successfully');
+      } else {
+        const text = await response.text();
+        console.error('Sync failed:', text);
+        toast.error(`Sync failed: ${response.status}`);
+      }
+    })
+    .catch(err => {
+      console.error('Sync error:', err);
+      toast.error(`Sync error: ${err.message}`);
+    })
+    .finally(() => {
+      setSyncingTables(false);
+    });
+  };
+  
   return (
     <Alert variant="destructive" className="bg-yellow-50 border-yellow-200 text-yellow-800 mb-4">
       <div className="flex flex-col w-full">
@@ -200,6 +230,17 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
           >
             <Network className={`h-3.5 w-3.5 mr-1 ${diagnosticsRunning ? 'animate-pulse' : ''}`} />
             {diagnosticsRunning ? 'Running...' : 'Diagnose Connection'}
+          </Button>
+          
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="border-green-400 bg-green-100 hover:bg-green-200 text-green-800"
+            onClick={runTableSync}
+            disabled={syncingTables}
+          >
+            <RefreshCcw className={`h-3.5 w-3.5 mr-1 ${syncingTables ? 'animate-spin' : ''}`} />
+            {syncingTables ? 'Syncing...' : 'Sync Tables'}
           </Button>
           
           {isAdmin && (
@@ -270,6 +311,15 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
                     >
                       <Hammer className="h-3.5 w-3.5 mr-1" />
                       Test Direct Connection
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="text-indigo-700"
+                      onClick={runTableSync}
+                    >
+                      <RefreshCcw className="h-3.5 w-3.5 mr-1" />
+                      Sync Database Tables
                     </Button>
                   </div>
                 </PopoverContent>

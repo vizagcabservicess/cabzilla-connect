@@ -291,37 +291,35 @@ if (!empty($vehicleId) && ($package4hr > 0 || $package8hr > 0 || $package10hr > 
             $hasVehicleId = in_array('vehicle_id', $columns);
             $hasVehicleType = in_array('vehicle_type', $columns);
             
-            // Also update the vehicle_pricing table for backward compatibility
-            // First check if the record exists
+            // Check if there is an existing local record for this vehicle in vehicle_pricing
+            $existingVPRecordSql = "";
+            $existingVPParams = [];
+            
             if ($hasVehicleId && $hasVehicleType) {
-                $checkVpSql = "SELECT id FROM vehicle_pricing 
-                              WHERE (vehicle_id = ? OR vehicle_type = ?) AND trip_type = 'local'";
-                $checkVpStmt = $pdo->prepare($checkVpSql);
-                $checkVpStmt->execute([$vehicleId, $vehicleId]);
+                $existingVPRecordSql = "SELECT * FROM vehicle_pricing WHERE (vehicle_id = ? OR vehicle_type = ?) AND trip_type = 'local'";
+                $existingVPParams = [$vehicleId, $vehicleId];
             } else {
-                // Only check vehicle_type if that's all we have
-                $checkVpSql = "SELECT id FROM vehicle_pricing 
-                              WHERE vehicle_type = ? AND trip_type = 'local'";
-                $checkVpStmt = $pdo->prepare($checkVpSql);
-                $checkVpStmt->execute([$vehicleId]);
+                $existingVPRecordSql = "SELECT * FROM vehicle_pricing WHERE vehicle_type = ? AND trip_type = 'local'";
+                $existingVPParams = [$vehicleId];
             }
             
-            $vpExists = $checkVpStmt->fetch(PDO::FETCH_ASSOC);
+            $existingVPStmt = $pdo->prepare($existingVPRecordSql);
+            $existingVPStmt->execute($existingVPParams);
+            $existingVPRecord = $existingVPStmt->fetch(PDO::FETCH_ASSOC);
             
-            if ($vpExists) {
-                // Update existing record, being careful about which columns we update
-                // IMPORTANT: Don't reset the base_fare, price_per_km, etc. which are for outstation
+            if ($existingVPRecord) {
+                // Update only the local package fields in vehicle_pricing, preserve other fields
                 if ($hasVehicleId && $hasVehicleType) {
-                    $vpSql = "UPDATE vehicle_pricing 
-                              SET local_package_4hr = ?, 
-                                  local_package_8hr = ?, 
-                                  local_package_10hr = ?, 
-                                  extra_km_charge = ?, 
-                                  extra_hour_charge = ?,
-                                  updated_at = NOW()
-                              WHERE (vehicle_id = ? OR vehicle_type = ?) AND trip_type = 'local'";
-                    $vpStmt = $pdo->prepare($vpSql);
-                    $vpStmt->execute([
+                    $vpUpdateSql = "UPDATE vehicle_pricing 
+                                   SET local_package_4hr = ?, 
+                                       local_package_8hr = ?, 
+                                       local_package_10hr = ?, 
+                                       extra_km_charge = ?, 
+                                       extra_hour_charge = ?,
+                                       updated_at = NOW()
+                                   WHERE (vehicle_id = ? OR vehicle_type = ?) AND trip_type = 'local'";
+                    $vpUpdateStmt = $pdo->prepare($vpUpdateSql);
+                    $vpUpdateStmt->execute([
                         $package4hr, 
                         $package8hr, 
                         $package10hr, 
@@ -331,16 +329,16 @@ if (!empty($vehicleId) && ($package4hr > 0 || $package8hr > 0 || $package10hr > 
                         $vehicleId
                     ]);
                 } else {
-                    $vpSql = "UPDATE vehicle_pricing 
-                              SET local_package_4hr = ?, 
-                                  local_package_8hr = ?, 
-                                  local_package_10hr = ?, 
-                                  extra_km_charge = ?, 
-                                  extra_hour_charge = ?,
-                                  updated_at = NOW()
-                              WHERE vehicle_type = ? AND trip_type = 'local'";
-                    $vpStmt = $pdo->prepare($vpSql);
-                    $vpStmt->execute([
+                    $vpUpdateSql = "UPDATE vehicle_pricing 
+                                   SET local_package_4hr = ?, 
+                                       local_package_8hr = ?, 
+                                       local_package_10hr = ?, 
+                                       extra_km_charge = ?, 
+                                       extra_hour_charge = ?,
+                                       updated_at = NOW()
+                                   WHERE vehicle_type = ? AND trip_type = 'local'";
+                    $vpUpdateStmt = $pdo->prepare($vpUpdateSql);
+                    $vpUpdateStmt->execute([
                         $package4hr, 
                         $package8hr, 
                         $package10hr, 
@@ -349,38 +347,133 @@ if (!empty($vehicleId) && ($package4hr > 0 || $package8hr > 0 || $package10hr > 
                         $vehicleId
                     ]);
                 }
+                
+                error_log("Updated existing local record in vehicle_pricing", 3, __DIR__ . '/../logs/direct-fares.log');
             } else {
-                // Insert new record
+                // Insert new local record in vehicle_pricing with DEFAULT values for unrelated fields
                 if ($hasVehicleId && $hasVehicleType) {
-                    $vpSql = "INSERT INTO vehicle_pricing 
-                              (vehicle_id, vehicle_type, trip_type, local_package_4hr, local_package_8hr, local_package_10hr, 
-                               extra_km_charge, extra_hour_charge, created_at, updated_at)
-                              VALUES (?, ?, 'local', ?, ?, ?, ?, ?, NOW(), NOW())";
-                    $vpStmt = $pdo->prepare($vpSql);
-                    $vpStmt->execute([
+                    $vpInsertSql = "INSERT INTO vehicle_pricing 
+                                   (vehicle_id, vehicle_type, trip_type, 
+                                    local_package_4hr, local_package_8hr, local_package_10hr, 
+                                    extra_km_charge, extra_hour_charge,
+                                    base_fare, price_per_km, night_halt_charge, driver_allowance,
+                                    created_at, updated_at)
+                                   VALUES (?, ?, 'local', ?, ?, ?, ?, ?, 0, 0, 0, 0, NOW(), NOW())";
+                    $vpInsertStmt = $pdo->prepare($vpInsertSql);
+                    $vpInsertStmt->execute([
                         $vehicleId,
                         $vehicleId,
-                        $package4hr, 
-                        $package8hr, 
-                        $package10hr, 
-                        $extraKmRate, 
+                        $package4hr,
+                        $package8hr,
+                        $package10hr,
+                        $extraKmRate,
                         $extraHourRate
                     ]);
                 } else {
-                    $vpSql = "INSERT INTO vehicle_pricing 
-                              (vehicle_type, trip_type, local_package_4hr, local_package_8hr, local_package_10hr, 
-                               extra_km_charge, extra_hour_charge, created_at, updated_at)
-                              VALUES (?, 'local', ?, ?, ?, ?, ?, NOW(), NOW())";
-                    $vpStmt = $pdo->prepare($vpSql);
-                    $vpStmt->execute([
+                    $vpInsertSql = "INSERT INTO vehicle_pricing 
+                                   (vehicle_type, trip_type, 
+                                    local_package_4hr, local_package_8hr, local_package_10hr, 
+                                    extra_km_charge, extra_hour_charge,
+                                    base_fare, price_per_km, night_halt_charge, driver_allowance,
+                                    created_at, updated_at)
+                                   VALUES (?, 'local', ?, ?, ?, ?, ?, 0, 0, 0, 0, NOW(), NOW())";
+                    $vpInsertStmt = $pdo->prepare($vpInsertSql);
+                    $vpInsertStmt->execute([
                         $vehicleId,
-                        $package4hr, 
-                        $package8hr, 
-                        $package10hr, 
-                        $extraKmRate, 
+                        $package4hr,
+                        $package8hr,
+                        $package10hr,
+                        $extraKmRate,
                         $extraHourRate
                     ]);
                 }
+                
+                error_log("Inserted new local record in vehicle_pricing", 3, __DIR__ . '/../logs/direct-fares.log');
+            }
+            
+            // Check if this vehicle has an outstation record, if not create one with default values
+            $outstationCheckSql = "";
+            $outstationParams = [];
+            
+            if ($hasVehicleId && $hasVehicleType) {
+                $outstationCheckSql = "SELECT * FROM vehicle_pricing WHERE (vehicle_id = ? OR vehicle_type = ?) AND trip_type = 'outstation'";
+                $outstationParams = [$vehicleId, $vehicleId];
+            } else {
+                $outstationCheckSql = "SELECT * FROM vehicle_pricing WHERE vehicle_type = ? AND trip_type = 'outstation'";
+                $outstationParams = [$vehicleId];
+            }
+            
+            $outstationCheckStmt = $pdo->prepare($outstationCheckSql);
+            $outstationCheckStmt->execute($outstationParams);
+            $outstationExists = $outstationCheckStmt->fetch(PDO::FETCH_ASSOC);
+            
+            if (!$outstationExists) {
+                // Create a default outstation record to prevent null values
+                $defaultBaseFare = 0;
+                $defaultPricePerKm = 0;
+                $defaultNightHalt = 0;
+                $defaultDriverAllowance = 0;
+                
+                // Set default values based on vehicle type
+                if (stripos($vehicleId, 'sedan') !== false) {
+                    $defaultBaseFare = 4000;
+                    $defaultPricePerKm = 14;
+                    $defaultNightHalt = 700;
+                    $defaultDriverAllowance = 250;
+                } elseif (stripos($vehicleId, 'ertiga') !== false) {
+                    $defaultBaseFare = 4500;
+                    $defaultPricePerKm = 18;
+                    $defaultNightHalt = 1000;
+                    $defaultDriverAllowance = 250;
+                } elseif (stripos($vehicleId, 'innova') !== false) {
+                    $defaultBaseFare = 6000;
+                    $defaultPricePerKm = 20;
+                    $defaultNightHalt = 1000;
+                    $defaultDriverAllowance = 250;
+                } elseif (stripos($vehicleId, 'tempo') !== false) {
+                    $defaultBaseFare = 8000;
+                    $defaultPricePerKm = 22;
+                    $defaultNightHalt = 1500;
+                    $defaultDriverAllowance = 300;
+                } elseif (stripos($vehicleId, 'luxury') !== false) {
+                    $defaultBaseFare = 10000;
+                    $defaultPricePerKm = 25;
+                    $defaultNightHalt = 1500;
+                    $defaultDriverAllowance = 300;
+                }
+                
+                if ($hasVehicleId && $hasVehicleType) {
+                    $outstationInsertSql = "INSERT INTO vehicle_pricing 
+                                          (vehicle_id, vehicle_type, trip_type, 
+                                           base_fare, price_per_km, night_halt_charge, driver_allowance,
+                                           created_at, updated_at)
+                                          VALUES (?, ?, 'outstation', ?, ?, ?, ?, NOW(), NOW())";
+                    $outstationInsertStmt = $pdo->prepare($outstationInsertSql);
+                    $outstationInsertStmt->execute([
+                        $vehicleId,
+                        $vehicleId,
+                        $defaultBaseFare,
+                        $defaultPricePerKm,
+                        $defaultNightHalt,
+                        $defaultDriverAllowance
+                    ]);
+                } else {
+                    $outstationInsertSql = "INSERT INTO vehicle_pricing 
+                                          (vehicle_type, trip_type, 
+                                           base_fare, price_per_km, night_halt_charge, driver_allowance,
+                                           created_at, updated_at)
+                                          VALUES (?, 'outstation', ?, ?, ?, ?, NOW(), NOW())";
+                    $outstationInsertStmt = $pdo->prepare($outstationInsertSql);
+                    $outstationInsertStmt->execute([
+                        $vehicleId,
+                        $defaultBaseFare,
+                        $defaultPricePerKm,
+                        $defaultNightHalt,
+                        $defaultDriverAllowance
+                    ]);
+                }
+                
+                error_log("Created default outstation record for $vehicleId", 3, __DIR__ . '/../logs/direct-fares.log');
             }
             
             $responseData['database_update'] = 'Successfully updated local_package_fares and vehicle_pricing tables';
