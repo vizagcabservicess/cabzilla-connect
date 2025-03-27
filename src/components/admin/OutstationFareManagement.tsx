@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -16,6 +15,7 @@ import { loadCabTypes } from '@/lib/cabData';
 import { CabType } from '@/types/cab';
 import { fareService } from '@/services/fareService';
 import { FareUpdateError } from '../cab-options/FareUpdateError';
+import axios from 'axios';
 
 const formSchema = z.object({
   cabType: z.string().min(1, { message: "Cab type is required" }),
@@ -57,11 +57,9 @@ export function OutstationFareManagement() {
       setIsLoading(true);
       setError(null);
       
-      // Clear fare caches to ensure fresh data
       fareService.clearCache();
       
-      // Force refresh of cab types
-      const types = await loadCabTypes(true); // Added true to force refresh
+      const types = await loadCabTypes(true);
       setCabTypes(types);
       
       setIsLoading(false);
@@ -99,7 +97,6 @@ export function OutstationFareManagement() {
       console.log('Starting fare update for outstation with vehicle ID', values.cabType);
       
       try {
-        // Use the direct fare update method from fareService
         const result = await fareService.directFareUpdate('outstation', values.cabType, {
           basePrice: values.oneWayBasePrice,
           pricePerKm: values.oneWayPricePerKm,
@@ -111,10 +108,8 @@ export function OutstationFareManagement() {
         
         console.log('Fare update result:', result);
         
-        // Clear all fare caches
         fareService.clearCache();
         
-        // Trigger events to notify that fares have been updated
         window.dispatchEvent(new CustomEvent('fare-cache-cleared'));
         window.dispatchEvent(new CustomEvent('trip-fares-updated', {
           detail: { 
@@ -123,7 +118,6 @@ export function OutstationFareManagement() {
           }
         }));
         
-        // Reset cab options state
         fareService.resetCabOptionsState();
         
         toast.success(`Fares updated for ${values.cabType}`);
@@ -145,53 +139,48 @@ export function OutstationFareManagement() {
     try {
       setIsLoading(true);
       
-      // Fetch outstation fares specifically for this vehicle
-      try {
-        const fares = await fareService.getOutstationFaresForVehicle(vehicleId);
-        console.log('Loaded outstation fares for vehicle:', fares);
-        
-        if (fares) {
-          form.setValue("oneWayBasePrice", fares.basePrice || 0);
-          form.setValue("oneWayPricePerKm", fares.pricePerKm || 0);
-          form.setValue("roundTripBasePrice", fares.roundTripBasePrice || 0);
-          form.setValue("roundTripPricePerKm", fares.roundTripPricePerKm || 0);
-          form.setValue("driverAllowance", fares.driverAllowance || 0);
-          form.setValue("nightHalt", fares.nightHaltCharge || 0);
-          return;
-        }
-      } catch (fareError) {
-        console.error('Error fetching fares directly:', fareError);
-      }
+      await axios.get(`${apiBaseUrl}/api/outstation-fares.php`, {
+        params: { 
+          check_sync: 'true',
+          vehicle_id: vehicleId,
+          _t: Date.now()
+        },
+        headers: fareService.getBypassHeaders()
+      });
       
-      // Fallback to vehicle list if direct fare fetch fails
-      const vehicles = await loadCabTypes(true);
-      const vehicle = vehicles.find(v => v.id === vehicleId);
+      const fares = await fareService.getOutstationFaresForVehicle(vehicleId);
+      console.log('Loaded outstation fares for vehicle:', fares);
       
-      if (vehicle && vehicle.outstationFares) {
-        console.log('Loaded outstation fares from vehicle data:', vehicle.outstationFares);
-        
-        form.setValue("oneWayBasePrice", vehicle.outstationFares.basePrice || 0);
-        form.setValue("oneWayPricePerKm", vehicle.outstationFares.pricePerKm || 0);
-        form.setValue("roundTripBasePrice", vehicle.outstationFares.roundTripBasePrice || 0);
-        form.setValue("roundTripPricePerKm", vehicle.outstationFares.roundTripPricePerKm || 0);
-        form.setValue("driverAllowance", vehicle.outstationFares.driverAllowance || 0);
-        form.setValue("nightHalt", vehicle.outstationFares.nightHaltCharge || 0);
+      if (fares) {
+        form.setValue("oneWayBasePrice", fares.basePrice || 0);
+        form.setValue("oneWayPricePerKm", fares.pricePerKm || 0);
+        form.setValue("roundTripBasePrice", fares.roundTripBasePrice || 0);
+        form.setValue("roundTripPricePerKm", fares.roundTripPricePerKm || 0);
+        form.setValue("driverAllowance", fares.driverAllowance || 0);
+        form.setValue("nightHalt", fares.nightHaltCharge || 0);
         return;
-      } 
-      
-      // Use default values if no data found
-      console.log('No existing fares found for vehicle, using defaults');
-      setDefaultPricesForVehicle(vehicleId);
-      
-    } catch (error) {
-      console.error("Error loading fares for vehicle:", error);
-      toast.error("Failed to load fare data for vehicle");
-      
-      // Set fallback defaults
-      setDefaultPricesForVehicle(vehicleId);
-    } finally {
-      setIsLoading(false);
+      }
+    } catch (fareError) {
+      console.error('Error fetching fares directly:', fareError);
     }
+    
+    const vehicles = await loadCabTypes(true);
+    const vehicle = vehicles.find(v => v.id === vehicleId);
+    
+    if (vehicle && vehicle.outstationFares) {
+      console.log('Loaded outstation fares from vehicle data:', vehicle.outstationFares);
+      
+      form.setValue("oneWayBasePrice", vehicle.outstationFares.basePrice || 0);
+      form.setValue("oneWayPricePerKm", vehicle.outstationFares.pricePerKm || 0);
+      form.setValue("roundTripBasePrice", vehicle.outstationFares.roundTripBasePrice || 0);
+      form.setValue("roundTripPricePerKm", vehicle.outstationFares.roundTripPricePerKm || 0);
+      form.setValue("driverAllowance", vehicle.outstationFares.driverAllowance || 0);
+      form.setValue("nightHalt", vehicle.outstationFares.nightHaltCharge || 0);
+      return;
+    } 
+    
+    console.log('No existing fares found for vehicle, using defaults');
+    setDefaultPricesForVehicle(vehicleId);
   };
   
   const setDefaultPricesForVehicle = (vehicleId: string) => {

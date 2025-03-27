@@ -98,7 +98,7 @@ export const initializeDatabase = async (forceRecreate = false) => {
   }
 };
 
-// Direct method to update fares
+// Direct method to update fares with sync option
 export const directFareUpdate = async (tripType: string, vehicleId: string, data: any) => {
   try {
     const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
@@ -107,16 +107,16 @@ export const directFareUpdate = async (tripType: string, vehicleId: string, data
     // Construct the appropriate endpoint based on trip type
     switch (tripType) {
       case 'outstation':
-        endpoint = `${baseUrl}/api/direct-outstation-fares.php`;
+        endpoint = `${baseUrl}/api/admin/direct-outstation-fares.php`;
         break;
       case 'local':
-        endpoint = `${baseUrl}/api/direct-local-fares.php`;
+        endpoint = `${baseUrl}/api/admin/direct-local-fares.php`;
         break;
       case 'airport':
-        endpoint = `${baseUrl}/api/direct-airport-fares.php`;
+        endpoint = `${baseUrl}/api/admin/direct-airport-fares.php`;
         break;
       default:
-        endpoint = `${baseUrl}/api/direct-fare-update.php`;
+        endpoint = `${baseUrl}/api/admin/direct-fare-update.php`;
     }
     
     // Prepare form data for the request
@@ -136,6 +136,19 @@ export const directFareUpdate = async (tripType: string, vehicleId: string, data
     
     // Make the request using FormData
     const response = await axios.post(endpoint, formData);
+    
+    // After updating, force a sync between tables
+    if (tripType === 'outstation') {
+      console.log('Syncing outstation_fares with vehicle_pricing');
+      const syncResponse = await axios.get(`${baseUrl}/api/outstation-fares.php`, {
+        params: { 
+          sync: 'true',
+          _t: Date.now() // Cache busting 
+        },
+        headers: getBypassHeaders()
+      });
+      console.log('Sync response:', syncResponse.data);
+    }
     
     // Clear cache after updating
     clearFareCache();
@@ -157,7 +170,7 @@ export const directFareUpdate = async (tripType: string, vehicleId: string, data
   }
 };
 
-// Outstation Fares - ALWAYS fetch from outstation_fares table
+// Outstation Fares - ALWAYS fetch from outstation_fares table with sync option
 export const getOutstationFares = async (origin?: string, destination?: string): Promise<Record<string, OutstationFare>> => {
   try {
     // Always force a refresh of fares by skipping cache
@@ -171,7 +184,8 @@ export const getOutstationFares = async (origin?: string, destination?: string):
         origin,
         destination,
         _t: timestamp, // Cache busting
-        force: 'true'
+        force: 'true',
+        check_sync: 'true' // Add check_sync param to ensure tables are in sync
       },
       headers: getBypassHeaders()
     });

@@ -98,100 +98,76 @@ try {
         error_log("Inserted new record in outstation_fares for $vehicleId");
     }
 
-    // Also update the vehicle_pricing table for backward compatibility
+    // Now sync this data to vehicle_pricing for backward compatibility
     $checkVehiclePricingQuery = "SHOW TABLES LIKE 'vehicle_pricing'";
     $checkVehiclePricingResult = $conn->query($checkVehiclePricingQuery);
     $vehiclePricingExists = $checkVehiclePricingResult && $checkVehiclePricingResult->num_rows > 0;
 
     if ($vehiclePricingExists) {
-        // First update the one-way fares
-        $checkOneWayQuery = "SELECT id FROM vehicle_pricing WHERE vehicle_id = ? AND (trip_type = 'outstation-one-way' OR trip_type = 'outstation')";
-        $checkOneWayStmt = $conn->prepare($checkOneWayQuery);
-        $checkOneWayStmt->bind_param('s', $vehicleId);
-        $checkOneWayStmt->execute();
-        $checkOneWayResult = $checkOneWayStmt->get_result();
+        // First sync the one-way fares
+        $syncOneWayQuery = "
+            INSERT INTO vehicle_pricing (
+                vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance, updated_at
+            ) VALUES (?, 'outstation', ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON DUPLICATE KEY UPDATE 
+                base_fare = VALUES(base_fare),
+                price_per_km = VALUES(price_per_km),
+                night_halt_charge = VALUES(night_halt_charge),
+                driver_allowance = VALUES(driver_allowance),
+                updated_at = CURRENT_TIMESTAMP
+        ";
         
-        if ($checkOneWayResult->num_rows > 0) {
-            // Update existing one-way record
-            $updateOneWayQuery = "
-                UPDATE vehicle_pricing
-                SET base_fare = ?,
-                    price_per_km = ?,
-                    night_halt_charge = ?,
-                    driver_allowance = ?,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE vehicle_id = ? AND (trip_type = 'outstation-one-way' OR trip_type = 'outstation')
-            ";
-            
-            $updateOneWayStmt = $conn->prepare($updateOneWayQuery);
-            $updateOneWayStmt->bind_param('dddds', $basePrice, $pricePerKm, $nightHalt, $driverAllowance, $vehicleId);
-            
-            if (!$updateOneWayStmt->execute()) {
-                throw new Exception("Failed to update vehicle_pricing one-way: " . $conn->error);
-            }
-            
-            error_log("Updated existing one-way record in vehicle_pricing for $vehicleId");
-        } else {
-            // Insert new one-way record
-            $insertOneWayQuery = "
-                INSERT INTO vehicle_pricing (
-                    vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance
-                ) VALUES (?, 'outstation-one-way', ?, ?, ?, ?)
-            ";
-            
-            $insertOneWayStmt = $conn->prepare($insertOneWayQuery);
-            $insertOneWayStmt->bind_param('sdddd', $vehicleId, $basePrice, $pricePerKm, $nightHalt, $driverAllowance);
-            
-            if (!$insertOneWayStmt->execute()) {
-                throw new Exception("Failed to insert into vehicle_pricing one-way: " . $conn->error);
-            }
-            
-            error_log("Inserted new one-way record in vehicle_pricing for $vehicleId");
+        $syncOneWayStmt = $conn->prepare($syncOneWayQuery);
+        $syncOneWayStmt->bind_param('sdddd', $vehicleId, $basePrice, $pricePerKm, $nightHalt, $driverAllowance);
+        
+        if (!$syncOneWayStmt->execute()) {
+            throw new Exception("Failed to sync to vehicle_pricing outstation: " . $conn->error);
         }
         
-        // Now update the round-trip fares
-        $checkRoundTripQuery = "SELECT id FROM vehicle_pricing WHERE vehicle_id = ? AND trip_type = 'outstation-round-trip'";
-        $checkRoundTripStmt = $conn->prepare($checkRoundTripQuery);
-        $checkRoundTripStmt->bind_param('s', $vehicleId);
-        $checkRoundTripStmt->execute();
-        $checkRoundTripResult = $checkRoundTripStmt->get_result();
+        // Also for outstation-one-way type
+        $syncOneWayTypeQuery = "
+            INSERT INTO vehicle_pricing (
+                vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance, updated_at
+            ) VALUES (?, 'outstation-one-way', ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON DUPLICATE KEY UPDATE 
+                base_fare = VALUES(base_fare),
+                price_per_km = VALUES(price_per_km),
+                night_halt_charge = VALUES(night_halt_charge),
+                driver_allowance = VALUES(driver_allowance),
+                updated_at = CURRENT_TIMESTAMP
+        ";
         
-        if ($checkRoundTripResult->num_rows > 0) {
-            // Update existing round-trip record
-            $updateRoundTripQuery = "
-                UPDATE vehicle_pricing
-                SET base_fare = ?,
-                    price_per_km = ?,
-                    night_halt_charge = ?,
-                    driver_allowance = ?,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE vehicle_id = ? AND trip_type = 'outstation-round-trip'
-            ";
-            
-            $updateRoundTripStmt = $conn->prepare($updateRoundTripQuery);
-            $updateRoundTripStmt->bind_param('dddds', $roundTripBasePrice, $roundTripPricePerKm, $nightHalt, $driverAllowance, $vehicleId);
-            
-            if (!$updateRoundTripStmt->execute()) {
-                throw new Exception("Failed to update vehicle_pricing round-trip: " . $conn->error);
-            }
-            
-            error_log("Updated existing round-trip record in vehicle_pricing for $vehicleId");
-        } else if ($roundTripBasePrice > 0) {
-            // Insert new round-trip record only if we have round trip pricing
-            $insertRoundTripQuery = "
+        $syncOneWayTypeStmt = $conn->prepare($syncOneWayTypeQuery);
+        $syncOneWayTypeStmt->bind_param('sdddd', $vehicleId, $basePrice, $pricePerKm, $nightHalt, $driverAllowance);
+        
+        if (!$syncOneWayTypeStmt->execute()) {
+            throw new Exception("Failed to sync to vehicle_pricing one-way: " . $conn->error);
+        }
+        
+        error_log("Synced one-way fares to vehicle_pricing for $vehicleId");
+        
+        // Now sync the round-trip fares
+        if ($roundTripBasePrice > 0) {
+            $syncRoundTripQuery = "
                 INSERT INTO vehicle_pricing (
-                    vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance
-                ) VALUES (?, 'outstation-round-trip', ?, ?, ?, ?)
+                    vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance, updated_at
+                ) VALUES (?, 'outstation-round-trip', ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON DUPLICATE KEY UPDATE 
+                    base_fare = VALUES(base_fare),
+                    price_per_km = VALUES(price_per_km),
+                    night_halt_charge = VALUES(night_halt_charge),
+                    driver_allowance = VALUES(driver_allowance),
+                    updated_at = CURRENT_TIMESTAMP
             ";
             
-            $insertRoundTripStmt = $conn->prepare($insertRoundTripQuery);
-            $insertRoundTripStmt->bind_param('sdddd', $vehicleId, $roundTripBasePrice, $roundTripPricePerKm, $nightHalt, $driverAllowance);
+            $syncRoundTripStmt = $conn->prepare($syncRoundTripQuery);
+            $syncRoundTripStmt->bind_param('sdddd', $vehicleId, $roundTripBasePrice, $roundTripPricePerKm, $nightHalt, $driverAllowance);
             
-            if (!$insertRoundTripStmt->execute()) {
-                throw new Exception("Failed to insert into vehicle_pricing round-trip: " . $conn->error);
+            if (!$syncRoundTripStmt->execute()) {
+                throw new Exception("Failed to sync to vehicle_pricing round-trip: " . $conn->error);
             }
             
-            error_log("Inserted new round-trip record in vehicle_pricing for $vehicleId");
+            error_log("Synced round-trip fares to vehicle_pricing for $vehicleId");
         }
     }
 
@@ -220,7 +196,8 @@ try {
         'status' => 'success',
         'message' => "Successfully updated outstation fares for $vehicleId",
         'details' => [
-            'vehicle_created' => true
+            'vehicle_created' => true,
+            'synced_to_vehicle_pricing' => true
         ],
         'debug' => $debug
     ]);

@@ -3,6 +3,7 @@ import { CabType, FareCalculationParams } from '@/types/cab';
 import { TripType, TripMode } from './tripTypes';
 import { getLocalPackagePrice } from './packageData';
 import { tourFares } from './tourData';
+import axios from 'axios';
 
 // Create a fare cache with expiration
 const fareCache = new Map<string, { expire: number, price: number }>();
@@ -621,5 +622,30 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
     console.log(`Using fallback fare calculation: ₹${fallbackFare}`);
     
     return fallbackFare;
+  }
+};
+
+// Add a function to manually sync the tables if needed
+export const syncOutstationFares = async () => {
+  try {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    const response = await axios.get(`${baseUrl}/api/outstation-fares.php`, {
+      params: { 
+        sync: 'true',
+        _t: Date.now() // Cache busting
+      },
+      headers: {
+        'X-Force-Refresh': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    });
+    
+    console.log('Sync response:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Error syncing outstation fares:', error);
+    throw error;
   }
 };

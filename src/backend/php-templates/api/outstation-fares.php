@@ -42,6 +42,38 @@ try {
         'vehicle_id' => $vehicleId
     ]));
     
+    // Sync outstation_fares to vehicle_pricing if needed
+    if (isset($_GET['sync']) && $_GET['sync'] === 'true') {
+        $syncQuery = "
+            UPDATE vehicle_pricing vp
+            JOIN outstation_fares of ON vp.vehicle_id = of.vehicle_id
+            SET 
+                vp.base_fare = of.base_price,
+                vp.price_per_km = of.price_per_km,
+                vp.night_halt_charge = of.night_halt_charge,
+                vp.driver_allowance = of.driver_allowance,
+                vp.updated_at = CURRENT_TIMESTAMP
+            WHERE vp.trip_type IN ('outstation', 'outstation-one-way')
+        ";
+        
+        $syncRtQuery = "
+            UPDATE vehicle_pricing vp
+            JOIN outstation_fares of ON vp.vehicle_id = of.vehicle_id
+            SET 
+                vp.base_fare = of.roundtrip_base_price,
+                vp.price_per_km = of.roundtrip_price_per_km,
+                vp.night_halt_charge = of.night_halt_charge,
+                vp.driver_allowance = of.driver_allowance,
+                vp.updated_at = CURRENT_TIMESTAMP
+            WHERE vp.trip_type = 'outstation-round-trip'
+        ";
+        
+        $conn->query($syncQuery);
+        $conn->query($syncRtQuery);
+        
+        error_log("Synced outstation_fares to vehicle_pricing");
+    }
+    
     // Only use outstation_fares table - no more conditional fallback
     $query = "
         SELECT 
@@ -101,6 +133,105 @@ try {
     }
     
     error_log("Total fares found: " . count($fares));
+    
+    // If no outstation_fares were found or we have a sync param, check if we need to sync from vehicle_pricing
+    if ((count($fares) === 0 || isset($_GET['check_sync'])) && !isset($_GET['sync'])) {
+        error_log("No fares found in outstation_fares, checking if we need to sync from vehicle_pricing");
+        
+        // Check if there are any rows in vehicle_pricing that need to be synced
+        $checkQuery = "
+            SELECT 
+                vp.vehicle_id,
+                vp.base_fare,
+                vp.price_per_km,
+                vp.night_halt_charge,
+                vp.driver_allowance
+            FROM 
+                vehicle_pricing vp
+            LEFT JOIN
+                outstation_fares of ON vp.vehicle_id = of.vehicle_id
+            WHERE 
+                (vp.trip_type = 'outstation' OR vp.trip_type = 'outstation-one-way')
+                AND of.id IS NULL
+        ";
+        
+        $checkResult = $conn->query($checkQuery);
+        
+        if ($checkResult && $checkResult->num_rows > 0) {
+            error_log("Found " . $checkResult->num_rows . " vehicles in vehicle_pricing that need to be synced to outstation_fares");
+            
+            // Import data from vehicle_pricing to outstation_fares
+            while ($row = $checkResult->fetch_assoc()) {
+                $vId = $row['vehicle_id'];
+                $baseFare = $row['base_fare'];
+                $pricePerKm = $row['price_per_km'];
+                $nightHaltCharge = $row['night_halt_charge'];
+                $driverAllowance = $row['driver_allowance'];
+                
+                error_log("Syncing vehicle $vId from vehicle_pricing to outstation_fares");
+                
+                // Get roundtrip values if available
+                $rtQuery = "
+                    SELECT base_fare, price_per_km 
+                    FROM vehicle_pricing 
+                    WHERE vehicle_id = '$vId' AND trip_type = 'outstation-round-trip'
+                ";
+                
+                $rtResult = $conn->query($rtQuery);
+                $rtBaseFare = 0;
+                $rtPricePerKm = 0;
+                
+                if ($rtResult && $rtResult->num_rows > 0) {
+                    $rtRow = $rtResult->fetch_assoc();
+                    $rtBaseFare = $rtRow['base_fare'];
+                    $rtPricePerKm = $rtRow['price_per_km'];
+                }
+                
+                // Insert into outstation_fares
+                $insertQuery = "
+                    INSERT INTO outstation_fares (
+                        vehicle_id, base_price, price_per_km, night_halt_charge, driver_allowance, 
+                        roundtrip_base_price, roundtrip_price_per_km
+                    ) VALUES (
+                        '$vId', $baseFare, $pricePerKm, $nightHaltCharge, $driverAllowance,
+                        $rtBaseFare, $rtPricePerKm
+                    )
+                ";
+                
+                if ($conn->query($insertQuery)) {
+                    error_log("Successfully synced vehicle $vId to outstation_fares");
+                } else {
+                    error_log("Failed to sync vehicle $vId to outstation_fares: " . $conn->error);
+                }
+            }
+            
+            // Now try to query again from outstation_fares
+            $result = $conn->query($query);
+            
+            if ($result) {
+                $fares = [];
+                while ($row = $result->fetch_assoc()) {
+                    $id = $row['vehicle_id'] ?? null;
+                    
+                    if (!$id) continue;
+                    
+                    $nightHaltCharge = floatval($row['nightHaltCharge'] ?? 0);
+                    
+                    $fares[$id] = [
+                        'basePrice' => floatval($row['basePrice'] ?? 0),
+                        'pricePerKm' => floatval($row['pricePerKm'] ?? 0),
+                        'nightHaltCharge' => $nightHaltCharge,
+                        'driverAllowance' => floatval($row['driverAllowance'] ?? 0),
+                        'roundTripBasePrice' => floatval($row['roundTripBasePrice'] ?? 0),
+                        'roundTripPricePerKm' => floatval($row['roundTripPricePerKm'] ?? 0),
+                        'nightHalt' => $nightHaltCharge
+                    ];
+                }
+                
+                error_log("After sync, found " . count($fares) . " outstation fares");
+            }
+        }
+    }
     
     // Return response with debug information
     echo json_encode([
