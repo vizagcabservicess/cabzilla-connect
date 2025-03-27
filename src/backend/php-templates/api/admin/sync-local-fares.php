@@ -68,7 +68,6 @@ try {
             CREATE TABLE IF NOT EXISTS `local_package_fares` (
                 `id` int(11) NOT NULL AUTO_INCREMENT,
                 `vehicle_id` varchar(50) NOT NULL,
-                `vehicle_type` varchar(50) DEFAULT NULL,
                 `price_4hrs_40km` decimal(10,2) NOT NULL DEFAULT 0,
                 `price_8hrs_80km` decimal(10,2) NOT NULL DEFAULT 0,
                 `price_10hrs_100km` decimal(10,2) NOT NULL DEFAULT 0,
@@ -239,12 +238,12 @@ try {
                     $updateStmt->bind_param("ddddds", $price4hrs40km, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour, $vehicleId);
                     $updateStmt->execute();
                 } else {
-                    // Insert new record - fixing the issue with vehicle_type
+                    // Insert new record - no vehicle_type column in table
                     $insertStmt = $conn->prepare("INSERT INTO local_package_fares 
-                                            (vehicle_id, vehicle_type, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, 
+                                            (vehicle_id, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, 
                                             price_extra_km, price_extra_hour)
-                                            VALUES (?, ?, ?, ?, ?, ?, ?)");
-                    $insertStmt->bind_param("ssddddd", $vehicleId, $vehicleId, $price4hrs40km, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour);
+                                            VALUES (?, ?, ?, ?, ?, ?)");
+                    $insertStmt->bind_param("sddddd", $vehicleId, $price4hrs40km, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour);
                     $insertStmt->execute();
                 }
                 

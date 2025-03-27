@@ -59,7 +59,7 @@ CREATE TABLE `tour_fares` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Vehicle Pricing Table - FIXED column names for local fares
+-- Vehicle Pricing Table - FIXED column names (vehicle_id instead of vehicle_type)
 CREATE TABLE `vehicle_pricing` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `vehicle_id` varchar(50) NOT NULL,
@@ -68,7 +68,7 @@ CREATE TABLE `vehicle_pricing` (
   `price_per_km` decimal(5,2) NOT NULL DEFAULT 0,
   `night_halt_charge` decimal(10,2) NOT NULL DEFAULT 0,
   `driver_allowance` decimal(10,2) NOT NULL DEFAULT 0,
-  -- Local package specific columns (FIXED column names)  
+  -- Local package specific columns  
   `local_package_4hr` decimal(10,2) DEFAULT NULL,
   `local_package_8hr` decimal(10,2) DEFAULT NULL,
   `local_package_10hr` decimal(10,2) DEFAULT NULL,
@@ -177,7 +177,7 @@ INSERT INTO `tour_fares` (`tour_id`, `tour_name`, `sedan`, `ertiga`, `innova`, `
 ('annavaram', 'Annavaram Tour', 6000, 7500, 9000, 13500, 17000),
 ('vanajangi', 'Vanajangi Tour', 5500, 7000, 8500, 12500, 16000);
 
--- Insert default data for vehicle pricing (compatibility with old schema)
+-- Insert default data for vehicle pricing using vehicle_id (not vehicle_type)
 INSERT INTO `vehicle_pricing` (`vehicle_id`, `trip_type`, `base_fare`, `price_per_km`, `night_halt_charge`, `driver_allowance`, 
                                `local_package_4hr`, `local_package_8hr`, `local_package_10hr`, `extra_km_charge`, `extra_hour_charge`,
                                `airport_base_price`, `airport_price_per_km`, `airport_pickup_price`, `airport_drop_price`,
