@@ -183,14 +183,14 @@ export const BookingSummary = ({
       effectiveDistance = distance * 2;
       
       // Calculate if the round trip meets minimum distance requirement
-      if (effectiveDistance > minimumKm) {
-        // If total round trip distance exceeds minimum, charge for actual distance
-        baseFare = effectiveDistance * perKmRate;
+      if (effectiveDistance < minimumKm) {
+        // If total round trip distance is less than minimum, charge for minimum km
+        baseFare = minimumKm * perKmRate;
         extraDistance = 0;
         extraDistanceFare = 0;
       } else {
-        // If total round trip distance is less than minimum, charge for minimum km
-        baseFare = minimumKm * perKmRate;
+        // If total round trip distance exceeds minimum, charge for actual distance
+        baseFare = effectiveDistance * perKmRate;
         extraDistance = 0;
         extraDistanceFare = 0;
       }
@@ -368,9 +368,10 @@ export const BookingSummary = ({
                 </div>
                 
                 <div className="text-gray-600 text-sm ml-1">
-                  Total distance: {distance} km 
-                  {tripMode === 'round-trip' && (
-                    <span> (effective: {effectiveDistance} km round trip)</span>
+                  {tripMode === 'one-way' ? (
+                    <>Total distance: {distance} km (300 km minimum fare applied)</>
+                  ) : (
+                    <>Total distance: {distance} km (effective: {effectiveDistance} km round trip)</>
                   )}
                 </div>
                 
