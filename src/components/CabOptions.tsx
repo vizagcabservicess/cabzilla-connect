@@ -1,3 +1,4 @@
+
 import { CabType } from '@/types/cab';
 import { TripType, TripMode } from '@/lib/tripTypes';
 import { CabOptionCard } from './CabOptionCard';
@@ -47,7 +48,10 @@ export function CabOptions({
   const [globalRefreshTrigger, setGlobalRefreshTrigger] = useState(0);
   const isCalculatingRef = useRef(false);
   const calculateAttemptsRef = useRef(0);
-  const maxCalculationAttempts = 3;
+  const maxCalculationAttempts = 5; // Increased from 3 to 5
+  const lastTripTypeRef = useRef<string>(tripType);
+  const lastTripModeRef = useRef<string>(tripMode);
+  const lastDistanceRef = useRef<number>(distance);
 
   const { 
     cabOptions, 
@@ -145,6 +149,19 @@ export function CabOptions({
           });
           fares[cab.id] = fare;
           console.log(`Calculated fare for ${cab.name}: ${fare}`);
+          
+          // Dispatch individual fare calculation event
+          window.dispatchEvent(new CustomEvent('fare-calculated', {
+            detail: {
+              cabId: cab.id,
+              cabType: cab.id,
+              cabName: cab.name,
+              tripType,
+              tripMode,
+              fare,
+              timestamp: Date.now()
+            }
+          }));
         } catch (error) {
           console.error(`Error calculating fare for ${cab.name}:`, error);
           if (cabFares[cab.id] && cabFares[cab.id] > 0) {
@@ -205,6 +222,29 @@ export function CabOptions({
       setSelectedCabId(selectedCab.id);
     }
   }, [selectedCab]);
+  
+  // Track changes to key props to force recalculation when they change
+  useEffect(() => {
+    const tripTypeChanged = lastTripTypeRef.current !== tripType;
+    const tripModeChanged = lastTripModeRef.current !== tripMode;
+    const distanceChanged = lastDistanceRef.current !== distance;
+    
+    if (tripTypeChanged || tripModeChanged || distanceChanged) {
+      console.log(`Key props changed - tripType: ${tripTypeChanged}, tripMode: ${tripModeChanged}, distance: ${distanceChanged}`);
+      
+      lastTripTypeRef.current = tripType;
+      lastTripModeRef.current = tripMode;
+      lastDistanceRef.current = distance;
+      
+      // Reset calculation state
+      calculateAttemptsRef.current = 0;
+      setForceRecalculation(prev => prev + 1);
+      
+      if (cabOptions.length > 0) {
+        calculateFares(cabOptions, true);
+      }
+    }
+  }, [tripType, tripMode, distance]);
 
   useEffect(() => {
     let lastEventTime = 0;
@@ -265,18 +305,10 @@ export function CabOptions({
     };
   }, [cabOptions]);
 
-  useEffect(() => {
-    console.log(`Trip type changed to ${tripType}, forcing refresh`);
-    calculateAttemptsRef.current = 0;
-    setForceRecalculation(prev => prev + 1);
-    if (cabOptions.length > 0) {
-      calculateFares(cabOptions, true);
-    }
-  }, [tripType]);
-
   const handleSelectCab = (cab: CabType) => {
     onSelectCab(cab);
     
+    // First dispatch a custom event indicating cab selection
     window.dispatchEvent(new CustomEvent('cab-selected', {
       bubbles: true,
       detail: {
@@ -285,6 +317,56 @@ export function CabOptions({
         timestamp: Date.now()
       }
     }));
+    
+    // Also force fare calculation for this specific cab
+    if (cab && distance > 0 && !isCalculatingRef.current) {
+      console.log(`Selected cab ${cab.name} (${cab.id}), forcing immediate fare calculation`);
+      
+      const calculateSelectedCabFare = async () => {
+        try {
+          if (isCalculatingRef.current) return;
+          
+          isCalculatingRef.current = true;
+          const fare = await calculateFare({
+            cabType: cab,
+            distance,
+            tripType,
+            tripMode,
+            hourlyPackage: tripType === 'local' ? hourlyPackage : undefined,
+            pickupDate,
+            returnDate,
+            forceRefresh: true
+          });
+          
+          // Update fare in state
+          setCabFares(prev => ({
+            ...prev,
+            [cab.id]: fare
+          }));
+          
+          console.log(`Force-calculated fare for selected cab ${cab.name}: ${fare}`);
+          
+          // Dispatch specific cab selection event with fare
+          window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
+            bubbles: true,
+            detail: {
+              cabType: cab.id,
+              cabName: cab.name,
+              fare,
+              tripType,
+              tripMode,
+              timestamp: Date.now()
+            }
+          }));
+        } catch (error) {
+          console.error(`Error calculating fare for selected cab ${cab.name}:`, error);
+        } finally {
+          isCalculatingRef.current = false;
+        }
+      };
+      
+      calculateSelectedCabFare();
+    }
     
     console.log(`Selected cab: ${cab.name} (${cab.id})`);
   };

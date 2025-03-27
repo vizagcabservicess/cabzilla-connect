@@ -25,9 +25,11 @@ export function CabList({
   const [lastUpdateTimestamp, setLastUpdateTimestamp] = useState<number>(Date.now());
   const refreshCountRef = useRef(0);
   const isProcessingRef = useRef(false);
-  const maxRefreshesRef = useRef(3); // Limit total refreshes
+  const maxRefreshesRef = useRef(5); // Increased from 3 to 5
   const initializedRef = useRef(false);
   const fareHistoryRef = useRef<Record<string, number[]>>({});
+  const pendingUpdatesRef = useRef<Record<string, number>>({});
+  const updateTimeoutRef = useRef<number | null>(null);
   
   // Initialize displayed fares from cabFares on first render or when cabTypes change
   useEffect(() => {
@@ -46,58 +48,41 @@ export function CabList({
     }
   }, [cabFares, cabTypes]);
   
-  // Update displayed fares when cabFares changes
-  useEffect(() => {
-    // Skip if still initializing or no fares are available
-    if (!initializedRef.current || Object.keys(cabFares).length === 0) return;
-    if (isProcessingRef.current) return;
-    if (refreshCountRef.current >= maxRefreshesRef.current) {
-      console.log(`CabList: Skipping update - reached maximum refresh count (${maxRefreshesRef.current})`);
+  // Process any pending updates
+  const processPendingUpdates = () => {
+    if (Object.keys(pendingUpdatesRef.current).length === 0 || isProcessingRef.current) {
       return;
     }
     
     isProcessingRef.current = true;
+    console.log('CabList: Processing pending fare updates:', pendingUpdatesRef.current);
     
     const newFadeIn: Record<string, boolean> = {};
-    const updatedCabs: string[] = [];
     const updatedFares: Record<string, number> = {...displayedFares};
     let hasChanges = false;
     
-    // Check each cab for fare updates
-    Object.keys(cabFares).forEach(cabId => {
-      // Only process valid fares
-      if (cabFares[cabId] === undefined || cabFares[cabId] === null) return;
-      
-      // Compare new fare with current displayed fare
-      if (cabFares[cabId] !== displayedFares[cabId]) {
-        // Validate fare - if zero and we had a non-zero value before, keep the old value
-        if (cabFares[cabId] === 0 && displayedFares[cabId] && displayedFares[cabId] > 0) {
-          console.log(`CabList: Ignoring zero fare for cab ${cabId}, keeping previous value ${displayedFares[cabId]}`);
-          // Still add to history for reference
-          if (!fareHistoryRef.current[cabId]) {
-            fareHistoryRef.current[cabId] = [];
-          }
-          fareHistoryRef.current[cabId].push(displayedFares[cabId]);
-        } else {
-          // Valid fare update, apply it
-          newFadeIn[cabId] = true;
-          updatedCabs.push(cabId);
-          updatedFares[cabId] = cabFares[cabId];
-          
-          // Update fare history
-          if (!fareHistoryRef.current[cabId]) {
-            fareHistoryRef.current[cabId] = [];
-          }
-          fareHistoryRef.current[cabId].push(cabFares[cabId]);
-          
-          hasChanges = true;
+    // Process all pending updates
+    Object.entries(pendingUpdatesRef.current).forEach(([cabId, fare]) => {
+      if (fare > 0 && fare !== displayedFares[cabId]) {
+        newFadeIn[cabId] = true;
+        updatedFares[cabId] = fare;
+        
+        // Update fare history
+        if (!fareHistoryRef.current[cabId]) {
+          fareHistoryRef.current[cabId] = [];
         }
+        fareHistoryRef.current[cabId].push(fare);
+        
+        hasChanges = true;
+        console.log(`CabList: Updating fare for ${cabId} to ${fare}`);
       }
     });
     
+    // Clear pending updates
+    pendingUpdatesRef.current = {};
+    
     // Apply updates if any valid changes were detected
-    if (hasChanges && refreshCountRef.current < maxRefreshesRef.current) {
-      console.log('CabList: Detected fare changes for vehicles:', updatedCabs);
+    if (hasChanges) {
       setFadeIn(newFadeIn);
       refreshCountRef.current += 1;
       
@@ -114,10 +99,45 @@ export function CabList({
         setTimeout(() => {
           setFadeIn({});
           isProcessingRef.current = false;
-        }, 1000);
-      }, 100);
+        }, 500); // Reduced from 1000ms to 500ms
+      }, 50); // Reduced from 100ms to 50ms
     } else {
       isProcessingRef.current = false;
+    }
+  };
+  
+  // Schedule processing of updates
+  const scheduleUpdate = () => {
+    if (updateTimeoutRef.current !== null) {
+      window.clearTimeout(updateTimeoutRef.current);
+    }
+    
+    updateTimeoutRef.current = window.setTimeout(() => {
+      processPendingUpdates();
+      updateTimeoutRef.current = null;
+    }, 50) as unknown as number;
+  };
+  
+  // Update displayed fares when cabFares changes
+  useEffect(() => {
+    // Skip if still initializing or no fares are available
+    if (!initializedRef.current || Object.keys(cabFares).length === 0) return;
+    
+    // Check each cab for fare updates
+    Object.keys(cabFares).forEach(cabId => {
+      // Only process valid fares
+      if (cabFares[cabId] === undefined || cabFares[cabId] === null) return;
+      
+      // Compare new fare with current displayed fare
+      if (cabFares[cabId] !== displayedFares[cabId] && cabFares[cabId] > 0) {
+        console.log(`CabList: Adding pending update for ${cabId}, fare: ${cabFares[cabId]}`);
+        pendingUpdatesRef.current[cabId] = cabFares[cabId];
+      }
+    });
+    
+    // Schedule an update if we have pending updates
+    if (Object.keys(pendingUpdatesRef.current).length > 0) {
+      scheduleUpdate();
     }
   }, [cabFares, displayedFares]);
   
@@ -130,81 +150,63 @@ export function CabList({
     return () => clearInterval(resetInterval);
   }, []);
   
-  // Listen for booking summary recalculation events
+  // Listen for direct cab selection with fare events
   useEffect(() => {
-    const handleBookingSummaryRecalculating = (event: Event) => {
+    const handleCabSelectedWithFare = (event: Event) => {
       const customEvent = event as CustomEvent;
-      console.log('CabList: Booking summary recalculating', customEvent.detail);
+      console.log('CabList: Received cab-selected-with-fare event', customEvent.detail);
       
-      // Can add visual feedback here if needed
-    };
-    
-    window.addEventListener('booking-summary-recalculating', handleBookingSummaryRecalculating);
-    
-    return () => {
-      window.removeEventListener('booking-summary-recalculating', handleBookingSummaryRecalculating);
-    };
-  }, []);
-  
-  // Listen for direct fare update events from admin panel
-  useEffect(() => {
-    const handleDirectFareUpdate = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      console.log('CabList: Received direct fare update event', customEvent.detail);
-      
-      if (customEvent.detail && customEvent.detail.prices) {
-        // We have direct price updates! Apply them immediately
-        const { vehicleId, prices } = customEvent.detail;
+      if (customEvent.detail && customEvent.detail.cabType && customEvent.detail.fare) {
+        const { cabType, fare } = customEvent.detail;
         
-        if (vehicleId && prices) {
-          // Force reset processing flag in case it got stuck
-          isProcessingRef.current = false;
-          
-          // Apply the prices directly to displayedFares
-          setDisplayedFares(prev => {
-            const newFares = {...prev};
-            
-            // If we have a vehicleId, update that specific vehicle's fare
-            if (vehicleId) {
-              Object.keys(cabTypes).forEach(key => {
-                const cab = cabTypes[key];
-                if (cab.id.toLowerCase() === vehicleId.toLowerCase()) {
-                  // For this cab, use the direct price
-                  const newPrice = parseFloat(prices['8hrs-80km'] || 0);
-                  newFares[cab.id] = newPrice > 0 ? newPrice : prev[cab.id] || cab.price || 0;
-                  
-                  // Update fare history
-                  if (!fareHistoryRef.current[cab.id]) {
-                    fareHistoryRef.current[cab.id] = [];
-                  }
-                  fareHistoryRef.current[cab.id].push(newFares[cab.id]);
-                }
-              });
-            }
-            
-            return newFares;
-          });
-          
-          // Show visual feedback
-          setFadeIn(prev => {
-            const newFadeIn = {...prev};
-            cabTypes.forEach(cab => {
-              if (cab.id.toLowerCase() === vehicleId.toLowerCase()) {
-                newFadeIn[cab.id] = true;
-              }
-            });
-            return newFadeIn;
-          });
-          
-          // Remove fade after animation completes
-          setTimeout(() => {
-            setFadeIn({});
-          }, 1000);
+        // Add to pending updates
+        if (fare > 0) {
+          pendingUpdatesRef.current[cabType] = fare;
+          scheduleUpdate();
         }
       }
     };
     
-    window.addEventListener('local-fares-updated', handleDirectFareUpdate);
+    const handleFareCalculated = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.log('CabList: Received fare-calculated event', customEvent.detail);
+      
+      if (customEvent.detail && customEvent.detail.cabId && customEvent.detail.fare) {
+        const { cabId, fare } = customEvent.detail;
+        
+        // Add to pending updates
+        if (fare > 0) {
+          pendingUpdatesRef.current[cabId] = fare;
+          scheduleUpdate();
+        }
+      }
+    };
+    
+    // Process any immediate updates when a cab is selected
+    const handleCabSelected = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail && customEvent.detail.cabType) {
+        console.log('CabList: Received cab-selected event', customEvent.detail);
+        
+        // Update fadeIn effect for the selected cab
+        setFadeIn(prev => ({
+          ...prev,
+          [customEvent.detail.cabType]: true
+        }));
+        
+        // Schedule clearing the effect
+        setTimeout(() => {
+          setFadeIn(prev => ({
+            ...prev,
+            [customEvent.detail.cabType]: false
+          }));
+        }, 500);
+      }
+    };
+    
+    window.addEventListener('cab-selected-with-fare', handleCabSelectedWithFare);
+    window.addEventListener('fare-calculated', handleFareCalculated);
+    window.addEventListener('cab-selected', handleCabSelected);
     window.addEventListener('fare-cache-cleared', () => {
       console.log('CabList: Fare cache cleared, resetting update flags');
       isProcessingRef.current = false;
@@ -212,10 +214,16 @@ export function CabList({
     });
     
     return () => {
-      window.removeEventListener('local-fares-updated', handleDirectFareUpdate);
+      window.removeEventListener('cab-selected-with-fare', handleCabSelectedWithFare);
+      window.removeEventListener('fare-calculated', handleFareCalculated);
+      window.removeEventListener('cab-selected', handleCabSelected);
       window.removeEventListener('fare-cache-cleared', () => {});
+      
+      if (updateTimeoutRef.current !== null) {
+        window.clearTimeout(updateTimeoutRef.current);
+      }
     };
-  }, [cabTypes]);
+  }, []);
   
   // Helper to get the most reliable fare
   const getDisplayFare = (cab: CabType): number => {
@@ -276,7 +284,7 @@ export function CabList({
         cabTypes.map((cab) => (
           <div 
             key={cab.id || `cab-${Math.random()}`}
-            className={`transition-all duration-500 ${fadeIn[cab.id] ? 'bg-yellow-50' : ''}`}
+            className={`transition-all duration-300 ${fadeIn[cab.id] ? 'bg-yellow-50' : ''}`}
             data-last-update={lastUpdateTimestamp}
           >
             <CabOptionCard 
