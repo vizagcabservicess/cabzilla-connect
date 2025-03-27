@@ -179,8 +179,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET
     $updateSuccess = false;
     
     try {
-        $pdo = new PDO("mysql:host=$dbHost;dbname=$dbName", $dbUser, $dbPass);
-        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $dsn = "mysql:host=$dbHost;dbname=$dbName;charset=utf8mb4";
+        $options = [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES => false,
+        ];
+        
+        $pdo = new PDO($dsn, $dbUser, $dbPass, $options);
+        error_log("[$timestamp] Database connection successful", 3, $logDir . '/direct-fares.log');
         
         // First, check if the vehicle_pricing table has all required columns
         try {
@@ -226,7 +233,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET
                               local_package_8hr = ?, 
                               local_package_10hr = ?, 
                               extra_km_charge = ?, 
-                              extra_hour_charge = ?
+                              extra_hour_charge = ?,
+                              base_fare = IFNULL(base_fare, 0),
+                              price_per_km = IFNULL(price_per_km, 0),
+                              night_halt_charge = IFNULL(night_halt_charge, 0),
+                              driver_allowance = IFNULL(driver_allowance, 0)
                           WHERE vehicle_type = ? AND trip_type = 'local'";
                 $updateStmt = $pdo->prepare($updateSql);
                 $updateStmt->execute([
@@ -355,6 +366,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET
             'vehicleId' => $vehicleId,
             'packages' => [
                 '4hrs-40km' => $package4hr,
+                '04hrs-40km' => $package4hr, // Explicitly add the 04hrs variant
                 '8hrs-80km' => $package8hr,
                 '10hrs-100km' => $package10hr,
                 'extra-km' => $extraKmRate,

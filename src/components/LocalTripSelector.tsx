@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -165,7 +166,15 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
     console.log(`Selected package: ${packageId}`);
     
     // Support 04hrs-40km format by converting to 4hrs-40km
-    const normalizedPackageId = packageId.replace('04hrs-40km', '4hrs-40km');
+    let normalizedPackageId = packageId;
+    
+    // First check for the specific 04hrs-40km case
+    if (packageId === '04hrs-40km') {
+      normalizedPackageId = '4hrs-40km';
+    } else {
+      // Then apply general normalization rules
+      normalizedPackageId = normalizePackageId(packageId);
+    }
     
     if (normalizedPackageId === selectedPackage) {
       console.log('Package already selected, forcing refresh anyway');

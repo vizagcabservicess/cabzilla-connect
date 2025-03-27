@@ -42,6 +42,50 @@ try {
     $localFaresTableExists = $conn->query("SHOW TABLES LIKE 'local_package_fares'")->num_rows > 0;
     $vehiclePricingTableExists = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'")->num_rows > 0;
     
+    // If tables don't exist, try to create them
+    if (!$localFaresTableExists) {
+        $createLocalFaresTable = "CREATE TABLE IF NOT EXISTS `local_package_fares` (
+            `id` INT NOT NULL AUTO_INCREMENT,
+            `vehicle_id` VARCHAR(50) NOT NULL,
+            `price_4hrs_40km` DECIMAL(10,2) NOT NULL DEFAULT 0,
+            `price_8hrs_80km` DECIMAL(10,2) NOT NULL DEFAULT 0,
+            `price_10hrs_100km` DECIMAL(10,2) NOT NULL DEFAULT 0,
+            `price_extra_km` DECIMAL(5,2) NOT NULL DEFAULT 0,
+            `price_extra_hour` DECIMAL(5,2) NOT NULL DEFAULT 0,
+            `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `vehicle_id` (`vehicle_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
+        
+        $conn->query($createLocalFaresTable);
+        $localFaresTableExists = $conn->query("SHOW TABLES LIKE 'local_package_fares'")->num_rows > 0;
+        error_log("Created local_package_fares table: " . ($localFaresTableExists ? "success" : "failed"));
+    }
+    
+    if (!$vehiclePricingTableExists) {
+        $createVehiclePricingTable = "CREATE TABLE IF NOT EXISTS `vehicle_pricing` (
+            `id` INT NOT NULL AUTO_INCREMENT,
+            `vehicle_type` VARCHAR(50) NOT NULL,
+            `trip_type` VARCHAR(20) NOT NULL,
+            `local_package_4hr` DECIMAL(10,2) NOT NULL DEFAULT 0,
+            `local_package_8hr` DECIMAL(10,2) NOT NULL DEFAULT 0,
+            `local_package_10hr` DECIMAL(10,2) NOT NULL DEFAULT 0,
+            `extra_km_charge` DECIMAL(5,2) NOT NULL DEFAULT 0,
+            `extra_hour_charge` DECIMAL(5,2) NOT NULL DEFAULT 0,
+            `base_fare` DECIMAL(10,2) NOT NULL DEFAULT 0,
+            `price_per_km` DECIMAL(5,2) NOT NULL DEFAULT 0,
+            `night_halt_charge` DECIMAL(10,2) NOT NULL DEFAULT 0,
+            `driver_allowance` DECIMAL(10,2) NOT NULL DEFAULT 0,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `vehicle_trip` (`vehicle_type`, `trip_type`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
+        
+        $conn->query($createVehiclePricingTable);
+        $vehiclePricingTableExists = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'")->num_rows > 0;
+        error_log("Created vehicle_pricing table: " . ($vehiclePricingTableExists ? "success" : "failed"));
+    }
+    
     $fares = [];
     $sourceTable = 'none';
     

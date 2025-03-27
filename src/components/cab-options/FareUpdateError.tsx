@@ -14,7 +14,7 @@ import {
   DatabaseBackup,
   RefreshCcw 
 } from "lucide-react";
-import { fareService } from '@/services/fareService';
+import { fareService, directFareUpdate } from '@/lib';
 import { toast } from 'sonner';
 
 interface FareUpdateErrorProps {
@@ -117,12 +117,14 @@ export function FareUpdateError({
       
       try {
         // Test direct-fare-update.php endpoint - this should now handle everything
-        await fetch(`${baseUrl}/api/admin/direct-fare-update.php?test=1&_t=${timestamp}`, {
+        const testResponse = await fetch(`${baseUrl}/api/admin/direct-fare-update.php?test=1&_t=${timestamp}`, {
           method: 'GET',
           headers: fareService.getBypassHeaders()
         });
         
-        toast.success('Connected to direct API successfully');
+        if (testResponse.ok) {
+          toast.success('Connected to direct API successfully');
+        }
       } catch (err) {
         console.error('Error testing direct API:', err);
       }
@@ -132,6 +134,9 @@ export function FareUpdateError({
       
       // 6. Sync tables
       await syncTables();
+      
+      // 7. Force update local fares
+      await forceUpdateAllLocalFares();
       
       // Success notification
       toast.success('Comprehensive fixes applied', {
@@ -144,6 +149,56 @@ export function FareUpdateError({
       });
     } finally {
       setIsFixing(false);
+    }
+  };
+
+  // Force update all local fares
+  const forceUpdateAllLocalFares = async () => {
+    try {
+      // Default cab types to update
+      const cabTypes = ['sedan', 'ertiga', 'innova', 'innova_crysta', 'tempo', 'luxury'];
+      const packageToUpdate = '4hrs-40km';
+      
+      toast.info('Forcing local fare update for all vehicles...', {
+        id: 'force-update',
+        duration: 3000
+      });
+      
+      for (const cabType of cabTypes) {
+        try {
+          // Get current fare value or use default
+          const currentFare = localStorage.getItem(`localFare_${cabType}_${packageToUpdate}`) || 
+            (cabType === 'sedan' ? '1200' : 
+              cabType === 'ertiga' ? '1800' : 
+                cabType === 'innova' || cabType === 'innova_crysta' ? '2300' : 
+                  cabType === 'tempo' ? '3000' : '3500');
+          
+          // Use directFareUpdate with hardcoded values
+          await directFareUpdate({
+            tripType: 'local',
+            vehicleId: cabType,
+            fares: {
+              '4hrs-40km': parseFloat(currentFare),
+              '8hrs-80km': parseFloat(currentFare) * 2,
+              '10hrs-100km': parseFloat(currentFare) * 2.5,
+              'extraKmRate': cabType === 'sedan' ? 14 : 
+                cabType === 'ertiga' ? 18 : 20,
+              'extraHourRate': cabType === 'sedan' ? 250 : 
+                cabType === 'ertiga' ? 300 : 350,
+            }
+          });
+          
+          console.log(`Updated local fares for ${cabType}`);
+        } catch (err) {
+          console.error(`Error updating ${cabType} fares:`, err);
+        }
+      }
+      
+      toast.success('Forced update complete');
+      return true;
+    } catch (error) {
+      console.error('Error in forceUpdateAllLocalFares:', error);
+      return false;
     }
   };
 
@@ -177,6 +232,25 @@ export function FareUpdateError({
         }
       } catch (error) {
         console.error('Error using direct endpoint for initialization:', error);
+      }
+      
+      // Also try to create the tables directly
+      try {
+        const createTableResponse = await fetch(`${baseUrl}/api/local-fares.php?create_tables=true&_t=${timestamp}`, {
+          method: 'GET',
+          headers: {
+            ...fareService.getBypassHeaders(),
+            'Accept': 'application/json' 
+          }
+        });
+        
+        if (createTableResponse.ok) {
+          toast.success('Tables created via local-fares endpoint', {
+            duration: 3000
+          });
+        }
+      } catch (error) {
+        console.error('Error creating tables via local-fares endpoint:', error);  
       }
       
       // Fall back to standard init-database endpoint
