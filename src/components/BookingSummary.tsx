@@ -126,7 +126,7 @@ export function BookingSummary({
         <>
           <div className="flex justify-between mt-3 text-sm">
             <span>Base fare ({baseKm} km included)</span>
-            <span>₹{formatPrice(baseFare)}</span>
+            <span>{formatPrice(baseFare)}</span>
           </div>
           
           <div className="text-xs text-gray-500 mt-1">
@@ -138,13 +138,13 @@ export function BookingSummary({
           {extraDistance > 0 && (
             <div className="flex justify-between mt-3 text-sm">
               <span>Extra distance fare ({extraDistance} km × ₹{perKmRate})</span>
-              <span>₹{formatPrice(extraDistanceFare)}</span>
+              <span>{formatPrice(extraDistanceFare)}</span>
             </div>
           )}
           
           <div className="flex justify-between mt-3 text-sm">
             <span>Driver allowance</span>
-            <span>₹{formatPrice(driverAllowance)}</span>
+            <span>{formatPrice(driverAllowance)}</span>
           </div>
         </>
       );
@@ -160,12 +160,12 @@ export function BookingSummary({
         <>
           <div className="flex justify-between mt-3 text-sm">
             <span>{packageHours} hours / {packageKm} km package</span>
-            <span>₹{formatPrice(basePrice)}</span>
+            <span>{formatPrice(basePrice)}</span>
           </div>
           
           <div className="flex justify-between mt-3 text-sm">
             <span>Driver allowance</span>
-            <span>₹200</span>
+            <span>{formatPrice(200)}</span>
           </div>
         </>
       );
@@ -176,12 +176,12 @@ export function BookingSummary({
         <>
           <div className="flex justify-between mt-3 text-sm">
             <span>Airport transfer base fare</span>
-            <span>₹{formatPrice(displayPrice - 250)}</span>
+            <span>{formatPrice(displayPrice - 250)}</span>
           </div>
           
           <div className="flex justify-between mt-3 text-sm">
             <span>Driver allowance</span>
-            <span>₹250</span>
+            <span>{formatPrice(250)}</span>
           </div>
         </>
       );
@@ -196,12 +196,12 @@ export function BookingSummary({
         <>
           <div className="flex justify-between mt-3 text-sm">
             <span>Tour package base fare</span>
-            <span>₹{formatPrice(baseFare)}</span>
+            <span>{formatPrice(baseFare)}</span>
           </div>
           
           <div className="flex justify-between mt-3 text-sm">
             <span>Driver allowance</span>
-            <span>₹{formatPrice(driverAllowance)}</span>
+            <span>{formatPrice(driverAllowance)}</span>
           </div>
         </>
       );
@@ -301,7 +301,7 @@ export function BookingSummary({
                 <div className="border-t mt-4 pt-4 flex justify-between font-semibold">
                   <span>Total Amount</span>
                   <span className={`${isUpdating ? 'text-blue-600' : ''} transition-colors`}>
-                    ₹{formatPrice(displayPrice)}
+                    {formatPrice(displayPrice)}
                   </span>
                 </div>
                 
