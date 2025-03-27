@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -308,8 +307,6 @@ export function FareUpdateError({
       }
       
       // Final fallback using fare service
-      // Fixed: This line had 4 arguments but the method expects 3
-      // Removed the forceRecreate parameter which was causing the TypeScript error
       const result = await fareService.initializeDatabase();
       
       if (result) {
