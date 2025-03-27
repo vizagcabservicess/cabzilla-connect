@@ -1,5 +1,3 @@
-
-// Only modify the getOutstationFares and getOutstationFaresForVehicle functions
 import axios from 'axios';
 import { TripType, TripMode } from '@/lib/tripTypes';
 import { LocalFare, OutstationFare, AirportFare } from '@/types/cab';
@@ -181,15 +179,13 @@ export const getOutstationFares = async (origin?: string, destination?: string):
     
     console.log('Fetching outstation fares with timestamp:', timestamp);
     
-    // Add sync and check_sync params to ensure database tables are in sync
     const response = await axios.get(`${baseUrl}/api/outstation-fares.php`, {
       params: { 
         origin,
         destination,
         _t: timestamp, // Cache busting
         force: 'true',
-        check_sync: 'true',
-        sync: 'true' // Force sync between tables
+        check_sync: 'true' // Add check_sync param to ensure tables are in sync
       },
       headers: getBypassHeaders()
     });
@@ -221,19 +217,17 @@ export const getOutstationFares = async (origin?: string, destination?: string):
 // Get outstation fares for a specific vehicle - ALWAYS force fresh data
 export const getOutstationFaresForVehicle = async (vehicleId: string): Promise<OutstationFare> => {
   try {
-    // Force direct fetch from database for this vehicle
+    // Try to fetch directly for this vehicle
     const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
     const now = Date.now();
     
     console.log(`Fetching outstation fares for vehicle ${vehicleId} with timestamp:`, now);
     
-    // Add sync param to ensure data is synced between tables
     const response = await axios.get(`${baseUrl}/api/outstation-fares.php`, {
       params: {
         vehicle_id: vehicleId,
         _t: now, // Cache busting
-        force: 'true',
-        sync: 'true' // Force sync between tables
+        force: 'true'
       },
       headers: getBypassHeaders()
     });
@@ -249,57 +243,17 @@ export const getOutstationFaresForVehicle = async (vehicleId: string): Promise<O
       localStorage.setItem('outstation_fares', JSON.stringify(fares));
       localStorage.setItem('outstation_fares_timestamp', now.toString());
       
-      // Also try to sync outstation_fares with vehicle_pricing directly
-      try {
-        await axios.get(`${baseUrl}/api/admin/sync-outstation-fares.php`, {
-          params: {
-            vehicle_id: vehicleId,
-            _t: now
-          },
-          headers: getBypassHeaders()
-        });
-        console.log(`Forced sync for vehicle ${vehicleId}`);
-      } catch (syncError) {
-        console.error(`Error syncing tables for ${vehicleId}:`, syncError);
-      }
-      
       return response.data.fares[vehicleId];
     }
     
-    // If direct fetch failed, try alternative approaches
-    console.warn(`No specific fare found for vehicle ${vehicleId}, trying alternatives`);
-    
-    // Attempt 1: Try vehicles-data.php endpoint
-    try {
-      const vehicleResponse = await axios.get(`${baseUrl}/api/fares/vehicles-data.php`, {
-        params: { 
-          _t: now, 
-          force: 'true' 
-        },
-        headers: getBypassHeaders()
-      });
-      
-      if (vehicleResponse.data && vehicleResponse.data.vehicles) {
-        const vehicle = vehicleResponse.data.vehicles.find((v: any) => 
-          v.id === vehicleId || v.vehicleId === vehicleId
-        );
-        
-        if (vehicle && vehicle.outstationFares) {
-          console.log(`Found outstation fares for ${vehicleId} in vehicles-data:`, vehicle.outstationFares);
-          return vehicle.outstationFares;
-        }
-      }
-    } catch (vehicleError) {
-      console.error(`Error fetching from vehicles-data for ${vehicleId}:`, vehicleError);
-    }
-    
-    // Attempt 2: Try getting all fares
+    // If direct fetch failed, try to get all fares
+    console.warn(`No specific fare found for vehicle ${vehicleId}, fetching all fares`);
     const allFares = await getOutstationFares();
     if (allFares && allFares[vehicleId]) {
       return allFares[vehicleId];
     }
     
-    console.warn(`No outstation fare found for vehicle ${vehicleId}, using defaults`);
+    console.warn(`No outstation fare found for vehicle ${vehicleId}`);
     // Return default values if no data found
     return {
       basePrice: 0,

@@ -1,4 +1,3 @@
-
 <?php
 require_once '../../config.php';
 
@@ -13,7 +12,7 @@ header('Expires: 0');
 
 // Add extra cache busting headers
 header('X-Cache-Timestamp: ' . time());
-header('X-API-Version: '.'1.0.4'); // Incrementing version
+header('X-API-Version: '.'1.0.3');
 
 // Respond to preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -49,7 +48,7 @@ $fallbackVehicles = [
         'capacity' => 6,
         'luggageCapacity' => 3,
         'price' => 5400,
-        'basePrice' => 3000, // Changed to match database
+        'basePrice' => 5400,
         'pricePerKm' => 18,
         'image' => '/cars/ertiga.png',
         'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
@@ -87,7 +86,7 @@ function getSpecializedFareData($conn, $vehicleId) {
         'airport' => null
     ];
     
-    // First try to get data from outstation_fares table (primary source)
+    // First and ONLY try to get outstation fares from outstation_fares table
     try {
         $outstationQuery = $conn->prepare("
             SELECT 
@@ -111,38 +110,6 @@ function getSpecializedFareData($conn, $vehicleId) {
                 error_log("Found outstation fares for $vehicleId in outstation_fares table: " . json_encode($fareData['outstation']));
             } else {
                 error_log("No records found in outstation_fares for vehicle_id: $vehicleId");
-                
-                // If not found in outstation_fares, try vehicle_pricing as fallback
-                $fallbackQuery = $conn->prepare("
-                    SELECT 
-                        vp1.base_fare as basePrice,
-                        vp1.price_per_km as pricePerKm,
-                        vp1.night_halt_charge as nightHaltCharge,
-                        vp1.driver_allowance as driverAllowance,
-                        vp2.base_fare as roundTripBasePrice,
-                        vp2.price_per_km as roundTripPricePerKm
-                    FROM 
-                        vehicle_pricing vp1
-                    LEFT JOIN 
-                        vehicle_pricing vp2 ON vp1.vehicle_id = vp2.vehicle_id AND vp2.trip_type = 'outstation-round-trip'
-                    WHERE 
-                        vp1.vehicle_id = ? AND (vp1.trip_type = 'outstation' OR vp1.trip_type = 'outstation-one-way')
-                    LIMIT 1
-                ");
-                
-                if ($fallbackQuery) {
-                    $fallbackQuery->bind_param("s", $vehicleId);
-                    $fallbackQuery->execute();
-                    $result = $fallbackQuery->get_result();
-                    
-                    if ($result && $result->num_rows > 0) {
-                        $fareData['outstation'] = $result->fetch_assoc();
-                        error_log("Fallback: Found outstation fares for $vehicleId in vehicle_pricing table: " . json_encode($fareData['outstation']));
-                        
-                        // Now try to sync this data back to outstation_fares table for future use
-                        syncToOutstationFares($conn, $vehicleId, $fareData['outstation']);
-                    }
-                }
             }
         }
     } catch (Exception $e) {
@@ -198,60 +165,6 @@ function getSpecializedFareData($conn, $vehicleId) {
     }
     
     return $fareData;
-}
-
-// Function to sync vehicle pricing data to outstation_fares table
-function syncToOutstationFares($conn, $vehicleId, $data) {
-    try {
-        // Check if the outstation_fares table exists
-        $tableCheckResult = $conn->query("SHOW TABLES LIKE 'outstation_fares'");
-        if ($tableCheckResult->num_rows === 0) {
-            error_log("outstation_fares table doesn't exist, skipping sync");
-            return;
-        }
-        
-        // Extract data with fallbacks
-        $basePrice = isset($data['basePrice']) ? $data['basePrice'] : 0;
-        $pricePerKm = isset($data['pricePerKm']) ? $data['pricePerKm'] : 0;
-        $nightHaltCharge = isset($data['nightHaltCharge']) ? $data['nightHaltCharge'] : 0;
-        $driverAllowance = isset($data['driverAllowance']) ? $data['driverAllowance'] : 0;
-        $roundTripBasePrice = isset($data['roundTripBasePrice']) ? $data['roundTripBasePrice'] : ($basePrice * 0.95);
-        $roundTripPricePerKm = isset($data['roundTripPricePerKm']) ? $data['roundTripPricePerKm'] : ($pricePerKm * 0.85);
-        
-        // Insert or update data in outstation_fares
-        $syncQuery = $conn->prepare("
-            INSERT INTO outstation_fares 
-            (vehicle_id, base_price, price_per_km, night_halt_charge, driver_allowance, roundtrip_base_price, roundtrip_price_per_km) 
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE 
-            base_price = VALUES(base_price),
-            price_per_km = VALUES(price_per_km),
-            night_halt_charge = VALUES(night_halt_charge),
-            driver_allowance = VALUES(driver_allowance),
-            roundtrip_base_price = VALUES(roundtrip_base_price),
-            roundtrip_price_per_km = VALUES(roundtrip_price_per_km)
-        ");
-        
-        if ($syncQuery) {
-            $syncQuery->bind_param("sdddddd", 
-                $vehicleId, 
-                $basePrice, 
-                $pricePerKm, 
-                $nightHaltCharge, 
-                $driverAllowance, 
-                $roundTripBasePrice, 
-                $roundTripPricePerKm
-            );
-            
-            if ($syncQuery->execute()) {
-                error_log("Successfully synced vehicle_pricing data to outstation_fares for $vehicleId");
-            } else {
-                error_log("Failed to sync to outstation_fares: " . $conn->error);
-            }
-        }
-    } catch (Exception $e) {
-        error_log("Error in syncToOutstationFares: " . $e->getMessage());
-    }
 }
 
 // Handle requests
@@ -394,7 +307,7 @@ try {
         'vehicles' => $vehicles,
         'timestamp' => time(),
         'cached' => false,
-        'version' => '1.0.4'
+        'version' => '1.0.3'
     ]);
     exit;
     
@@ -411,4 +324,5 @@ try {
     ]);
     exit;
 }
+
 ?>
