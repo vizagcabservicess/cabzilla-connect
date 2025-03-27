@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -104,7 +103,6 @@ export function FareUpdateError({
       const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
       
       try {
-        // Try direct API endpoints to ensure they're accessible
         const testUrls = [
           `${baseUrl}/api/admin/direct-fare-update.php?test=1&_t=${timestamp}`,
           `${baseUrl}/api/admin/local-fares-update.php?test=1&_t=${timestamp}`,
@@ -176,7 +174,6 @@ export function FareUpdateError({
             cabType === 'ertiga' ? 300 : 350,
         };
         
-        // Try multiple endpoints for updating fares
         const updateEndpoints = [
           `local-package-fares.php`,
           `admin/local-fares-update.php`,
@@ -199,7 +196,6 @@ export function FareUpdateError({
         }
         
         if (!successfulUpdate) {
-          // Fallback to the original method as last resort
           await directFareUpdate('local', cabType, fares);
         }
       }
@@ -223,7 +219,6 @@ export function FareUpdateError({
       const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
       const timestamp = Date.now();
       
-      // Try the local-package-fares.php endpoint first
       try {
         console.log('Trying to initialize via local-package-fares.php');
         const localPackageFaresResponse = await fetch(`${baseUrl}/api/local-package-fares.php?initialize=true&_t=${timestamp}`, {
@@ -244,7 +239,6 @@ export function FareUpdateError({
         console.error('Error using local-package-fares endpoint for initialization:', error);
       }
       
-      // Try direct-local-fares.php endpoint
       try {
         console.log('Trying to initialize via direct-local-fares.php');
         const directLocalFaresResponse = await fetch(`${baseUrl}/api/admin/direct-local-fares.php?initialize=true&_t=${timestamp}`, {
@@ -265,7 +259,6 @@ export function FareUpdateError({
         console.error('Error using direct-local-fares endpoint for initialization:', error);
       }
       
-      // Try local-fares-update.php endpoint
       try {
         console.log('Trying to initialize via local-fares-update.php');
         const localFaresUpdateResponse = await fetch(`${baseUrl}/api/admin/local-fares-update.php?initialize=true&_t=${timestamp}`, {
@@ -286,7 +279,6 @@ export function FareUpdateError({
         console.error('Error using local-fares-update endpoint for initialization:', error);
       }
       
-      // Fallback to local-fares.php
       try {
         console.log('Trying to initialize via local-fares.php');
         const localFaresResponse = await fetch(`${baseUrl}/api/local-fares.php?create_tables=true&_t=${timestamp}`, {
@@ -307,8 +299,6 @@ export function FareUpdateError({
         console.error('Error creating tables via local-fares endpoint:', error);  
       }
       
-      // Final fallback using fare service
-      // The error is here - remove the fourth argument
       const result = await fareService.initializeDatabase();
       
       if (result) {
@@ -341,7 +331,6 @@ export function FareUpdateError({
       const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
       const timestamp = Date.now();
       
-      // Try checking the local-package-fares endpoint first to ensure it exists
       try {
         const checkEndpoint = await fetch(`${baseUrl}/api/local-package-fares.php?_t=${timestamp}`, {
           method: 'GET',
@@ -362,7 +351,6 @@ export function FareUpdateError({
       }
       
       try {
-        // First try the admin/sync-local-fares.php endpoint (from .htaccess)
         const syncResponse = await fetch(`${baseUrl}/api/admin/sync-local-fares.php?_t=${timestamp}`, {
           method: 'GET',
           headers: {
@@ -390,7 +378,6 @@ export function FareUpdateError({
       } catch (error) {
         console.error('Error syncing tables via admin endpoint:', error);
         
-        // Try local-package-fares.php with initialize parameter
         try {
           const localPackageInitResponse = await fetch(`${baseUrl}/api/local-package-fares.php?initialize=true&_t=${timestamp}`, {
             method: 'GET',
@@ -408,7 +395,6 @@ export function FareUpdateError({
           console.error('Error initializing via local-package-fares endpoint:', initError);
         }
         
-        // Try fallback endpoint (sync-local-fares)
         try {
           const fallbackSyncResponse = await fetch(`${baseUrl}/api/sync-local-fares.php?_t=${timestamp}`, {
             method: 'GET',
