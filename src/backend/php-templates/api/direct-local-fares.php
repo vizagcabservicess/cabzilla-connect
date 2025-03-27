@@ -120,7 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET
             // Try direct fare update as a last resort
             $fareUpdateScript = __DIR__ . '/admin/direct-fare-update.php';
             if (file_exists($fareUpdateScript)) {
-                error_log("[$timestamp] Redirecting to general direct-fare-update.php with tripType=local", 3, $logDir . '/direct-fares.log');
+                error_log("[$timestamp] Redirecting to general direct-fare-update.php with tripType=local", 3, $logDir . '/local-fares.log');
                 
                 // Set tripType to local
                 $_REQUEST = array_merge($_GET, $_POST, ['tripType' => 'local']);

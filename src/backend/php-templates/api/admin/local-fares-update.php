@@ -387,16 +387,34 @@ if (!empty($vehicleId) && ($package4hr > 0 || $package8hr > 0 || $package10hr > 
             $databaseError = "Error checking/updating vehicle_pricing structure: " . $e->getMessage();
         }
         
-        // Update vehicle_pricing table
+        // Update vehicle_pricing table - now with correct column checks
         try {
-            // First check if a record exists for this vehicle_id with trip_type 'local'
-            $checkVPSql = "SELECT id FROM vehicle_pricing WHERE vehicle_id = ? AND trip_type = 'local'";
+            // First check column existence - this is critical to fix "unknown column" errors
+            $columnChecks = [
+                'vehicle_id' => false,
+                'vehicleId' => false
+            ];
+            
+            $columnsResult = $pdo->query("SHOW COLUMNS FROM vehicle_pricing");
+            while ($column = $columnsResult->fetch(PDO::FETCH_ASSOC)) {
+                if ($column['Field'] === 'vehicle_id') $columnChecks['vehicle_id'] = true;
+                if ($column['Field'] === 'vehicleId') $columnChecks['vehicleId'] = true;
+            }
+            
+            error_log("[$timestamp] Column check results: " . print_r($columnChecks, true), 3, $logDir . '/local-fares.log');
+            
+            // Determine which column name to use
+            $vehicleIdColumn = $columnChecks['vehicle_id'] ? 'vehicle_id' : 'vehicleId';
+            error_log("[$timestamp] Using column name: $vehicleIdColumn for vehicle identification", 3, $logDir . '/local-fares.log');
+            
+            // Check if a record exists for this vehicle_id with trip_type 'local'
+            $checkVPSql = "SELECT id FROM vehicle_pricing WHERE $vehicleIdColumn = ? AND trip_type = 'local'";
             $checkVPStmt = $pdo->prepare($checkVPSql);
             $checkVPStmt->execute([$vehicleId]);
             $vpExists = $checkVPStmt->fetch(PDO::FETCH_ASSOC);
             
             if ($vpExists) {
-                // Update existing record
+                // Update existing record with the correct column name
                 $updateVPSql = "UPDATE vehicle_pricing 
                                SET local_package_4hr = ?, 
                                    local_package_8hr = ?, 
@@ -404,7 +422,7 @@ if (!empty($vehicleId) && ($package4hr > 0 || $package8hr > 0 || $package10hr > 
                                    extra_km_charge = ?, 
                                    extra_hour_charge = ?,
                                    updated_at = NOW()
-                               WHERE vehicle_id = ? AND trip_type = 'local'";
+                               WHERE $vehicleIdColumn = ? AND trip_type = 'local'";
                 $updateVPStmt = $pdo->prepare($updateVPSql);
                 $updateVPStmt->execute([
                     $package4hr, 
@@ -416,9 +434,9 @@ if (!empty($vehicleId) && ($package4hr > 0 || $package8hr > 0 || $package10hr > 
                 ]);
                 error_log("[$timestamp] Updated existing record in vehicle_pricing for $vehicleId with trip_type 'local'", 3, $logDir . '/local-fares.log');
             } else {
-                // Insert new record
+                // Insert new record with the correct column name
                 $insertVPSql = "INSERT INTO vehicle_pricing 
-                              (vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance,
+                              ($vehicleIdColumn, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance,
                                local_package_4hr, local_package_8hr, local_package_10hr, 
                                extra_km_charge, extra_hour_charge, created_at, updated_at)
                               VALUES (?, 'local', 0, 0, 0, 0, ?, ?, ?, ?, ?, NOW(), NOW())";
