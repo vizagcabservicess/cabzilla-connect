@@ -25,19 +25,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Log the redirection for debugging
         error_log('Redirecting direct-local-fares.php to admin/direct-local-fares.php');
         
-        // Forward all POST data
+        // Forward all POST data and execute the target script
         $_REQUEST = array_merge($_GET, $_POST);
         
         // Include the target script
         require_once $targetScript;
     } else {
-        // Target script not found
-        http_response_code(500);
-        echo json_encode([
-            'status' => 'error',
-            'message' => 'Target script admin/direct-local-fares.php not found',
-            'path' => $targetScript
-        ]);
+        // Target script not found, try alternative path
+        $alternativePath = dirname(__DIR__) . '/api/admin/direct-local-fares.php';
+        
+        if (file_exists($alternativePath)) {
+            error_log('Redirecting direct-local-fares.php to alternative path: ' . $alternativePath);
+            
+            // Forward all POST data
+            $_REQUEST = array_merge($_GET, $_POST);
+            
+            // Include the alternative target script
+            require_once $alternativePath;
+        } else {
+            // No target script found
+            http_response_code(500);
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'Target script admin/direct-local-fares.php not found',
+                'paths_checked' => [
+                    'primary' => $targetScript,
+                    'alternative' => $alternativePath
+                ]
+            ]);
+        }
     }
 } else {
     // Method not allowed

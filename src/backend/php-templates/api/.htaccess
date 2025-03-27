@@ -27,8 +27,8 @@ RewriteEngine On
     Header always set Expires "60"
     
     # Add debugging headers
-    Header always set X-API-Debug "Processed by main API htaccess - v1.0.67"
-    Header always set X-API-Version "1.0.67"
+    Header always set X-API-Debug "Processed by main API htaccess - v1.0.68"
+    Header always set X-API-Version "1.0.68"
     Header always set X-Server-Time "%{TIME}e"
     Header always set X-Request-ID "%{UNIQUE_ID}e"
     Header always set X-Response-Timestamp "%{TIME}e"
@@ -98,10 +98,10 @@ RewriteRule ^admin/outstation-fares-update$ admin/fare-update.php?tripType=outst
 RewriteRule ^admin/outstation-fares-update\.php$ admin/fare-update.php?tripType=outstation [L,QSA]
 
 # Local fare updates
-RewriteRule ^local-fares-update$ admin/fare-update.php?tripType=local [L,QSA]
-RewriteRule ^local-fares-update\.php$ admin/fare-update.php?tripType=local [L,QSA]
-RewriteRule ^admin/local-fares-update$ admin/fare-update.php?tripType=local [L,QSA]
-RewriteRule ^admin/local-fares-update\.php$ admin/fare-update.php?tripType=local [L,QSA]
+RewriteRule ^local-fares-update$ admin/local-fares-update.php [L,QSA]
+RewriteRule ^local-fares-update\.php$ admin/local-fares-update.php [L,QSA]
+RewriteRule ^admin/local-fares-update$ admin/local-fares-update.php [L,QSA]
+RewriteRule ^admin/local-fares-update\.php$ admin/local-fares-update.php [L,QSA]
 
 # Airport fare updates
 RewriteRule ^airport-fares-update$ admin/fare-update.php?tripType=airport [L,QSA]
@@ -116,8 +116,9 @@ RewriteRule ^admin/direct-fare-update$ admin/direct-fare-update.php [L,QSA]
 RewriteRule ^admin/direct-fare-update\.php$ admin/direct-fare-update.php [L,QSA]
 
 # Direct local fares endpoint - HIGH PRIORITY
-RewriteRule ^direct-local-fares$ admin/direct-local-fares.php [L,QSA]
-RewriteRule ^direct-local-fares\.php$ admin/direct-local-fares.php [L,QSA]
+# Keep both the root and admin versions accessible
+RewriteRule ^direct-local-fares$ direct-local-fares.php [L,QSA]
+RewriteRule ^direct-local-fares\.php$ direct-local-fares.php [L,QSA]
 RewriteRule ^admin/direct-local-fares$ admin/direct-local-fares.php [L,QSA]
 RewriteRule ^admin/direct-local-fares\.php$ admin/direct-local-fares.php [L,QSA]
 
