@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { TripType, TripMode } from '@/lib/tripTypes';
 import { LocalFare, OutstationFare, AirportFare } from '@/types/cab';
@@ -306,7 +307,7 @@ export const getOutstationFaresForVehicle = async (vehicleId: string): Promise<O
     
     if (response.data && response.data.fares && response.data.fares[vehicleId]) {
       console.log(`Outstation fares for vehicle ${vehicleId}:`, response.data.fares[vehicleId]);
-      console.log(`Source table: ${response.data.sourceTable}`);
+      console.log(`Source table: ${response.data.sourceTable || 'vehicle_pricing'}`);
       
       // Cache this specific vehicle fare
       const cachedFares = localStorage.getItem('outstation_fares');
@@ -404,41 +405,39 @@ export const getLocalFares = async (): Promise<Record<string, LocalFare>> => {
 // Get local fares for a specific vehicle from vehicle_pricing table
 export const getLocalFaresForVehicle = async (vehicleId: string): Promise<LocalFare> => {
   try {
-    // First try to get from cache
-    const cachedFares = localStorage.getItem('local_fares');
-    const cachedTimestamp = localStorage.getItem('local_fares_timestamp');
-    const globalRefreshToken = localStorage.getItem('globalFareRefreshToken');
-    const now = Date.now();
-    
-    if (cachedFares && cachedTimestamp && globalRefreshToken) {
-      const timestamp = parseInt(cachedTimestamp, 10);
-      const refreshToken = parseInt(globalRefreshToken, 10);
-      const fiveMinutes = 5 * 60 * 1000;
-      
-      if (now - timestamp < fiveMinutes && timestamp > refreshToken) {
-        const fares = JSON.parse(cachedFares);
-        if (fares[vehicleId]) {
-          return fares[vehicleId];
-        }
-      }
-    }
-    
+    // Always fetch fresh data - skip the cache check
     // Try to fetch directly for this vehicle
     const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    const now = Date.now();
+    
+    console.log(`Fetching local fares for vehicle ${vehicleId} with timestamp:`, now);
+    
     const response = await axios.get(`${baseUrl}/api/local-fares.php`, {
       params: {
         vehicle_id: vehicleId,
         _t: now, // Cache busting
+        force: 'true',
         source: 'vehicle_pricing' // Force using vehicle_pricing table
       },
       headers: getBypassHeaders()
     });
     
     if (response.data && response.data.fares && response.data.fares[vehicleId]) {
+      console.log(`Local fares for vehicle ${vehicleId}:`, response.data.fares[vehicleId]);
+      console.log(`Source table: ${response.data.sourceTable || 'vehicle_pricing'}`);
+      
+      // Cache this specific vehicle fare
+      const cachedFares = localStorage.getItem('local_fares');
+      const fares = cachedFares ? JSON.parse(cachedFares) : {};
+      fares[vehicleId] = response.data.fares[vehicleId];
+      localStorage.setItem('local_fares', JSON.stringify(fares));
+      localStorage.setItem('local_fares_timestamp', now.toString());
+      
       return response.data.fares[vehicleId];
     }
     
     // If direct fetch failed, try to get all fares
+    console.warn(`No specific local fare found for vehicle ${vehicleId}, fetching all fares`);
     const allFares = await getLocalFares();
     if (allFares && allFares[vehicleId]) {
       return allFares[vehicleId];
@@ -529,6 +528,7 @@ export const getAirportFaresForVehicle = async (vehicleId: string): Promise<Airp
     
     if (response.data && response.data.fares && response.data.fares[vehicleId]) {
       console.log(`Airport fares for vehicle ${vehicleId}:`, response.data.fares[vehicleId]);
+      console.log(`Source table: ${response.data.sourceTable || 'vehicle_pricing'}`);
       
       // Cache this specific vehicle fare
       const cachedFares = localStorage.getItem('airport_fares');
