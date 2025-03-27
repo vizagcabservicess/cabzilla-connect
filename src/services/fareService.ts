@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { TripType, TripMode } from '@/lib/tripTypes';
 import { LocalFare, OutstationFare, AirportFare } from '@/types/cab';
@@ -6,8 +5,26 @@ import { LocalFare, OutstationFare, AirportFare } from '@/types/cab';
 // Create a global timestamp for fare cache refreshes
 let globalTimestamp = Date.now();
 
+// Create the fareService object with all methods
+export const fareService = {
+  clearCache,
+  getBypassHeaders,
+  getForcedRequestConfig,
+  initializeDatabase,
+  directFareUpdate,
+  forceSyncOutstationFares,
+  syncOutstationFares,
+  getOutstationFares,
+  getLocalFares,
+  getAirportFares,
+  getOutstationFaresForVehicle,
+  getLocalFaresForVehicle,
+  getAirportFaresForVehicle,
+  getFaresByTripType
+};
+
 // Function to clear the fare cache
-export const clearFareCache = () => {
+export function clearFareCache() {
   console.log('Clearing fare cache at', new Date().toISOString());
   localStorage.removeItem('outstation_fares');
   localStorage.removeItem('local_fares'); 
@@ -51,10 +68,10 @@ export const clearFareCache = () => {
   }));
   
   globalTimestamp = Date.now();
-};
+}
 
 // Utility function to get bypass headers for cache invalidation
-export const getBypassHeaders = () => {
+export function getBypassHeaders() {
   return {
     'X-Force-Refresh': 'true',
     'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -62,10 +79,10 @@ export const getBypassHeaders = () => {
     'Expires': '0',
     'X-API-Version': '1.0.55'
   };
-};
+}
 
 // Utility function to get forced request config for axios
-export const getForcedRequestConfig = () => {
+export function getForcedRequestConfig() {
   return {
     headers: getBypassHeaders(),
     params: {
@@ -73,12 +90,12 @@ export const getForcedRequestConfig = () => {
       force: 'true'
     }
   };
-};
+}
 
 // Initialize database tables - useful for admin operations
-export const initializeDatabase = async (forceRecreate = false) => {
+export async function initializeDatabase(forceRecreate = false) {
   try {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
     const params = new URLSearchParams();
     
     if (forceRecreate) {
@@ -97,12 +114,12 @@ export const initializeDatabase = async (forceRecreate = false) => {
     console.error('Error initializing database:', error);
     throw error;
   }
-};
+}
 
 // Direct method to update fares with sync option
-export const directFareUpdate = async (tripType: string, vehicleId: string, data: any) => {
+export async function directFareUpdate(tripType: string, vehicleId: string, data: any) {
   try {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
     let endpoint = '';
     
     // Construct the appropriate endpoint based on trip type
@@ -168,12 +185,12 @@ export const directFareUpdate = async (tripType: string, vehicleId: string, data
     console.error(`Error updating ${tripType} fares for ${vehicleId}:`, error);
     throw error;
   }
-};
+}
 
 // Sync outstation fares - safer implementation with fallback to local API
-export const syncOutstationFares = async (vehicleId?: string) => {
+export async function syncOutstationFares(vehicleId?: string) {
   try {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
     console.log('Syncing outstation_fares with vehicle_pricing' + (vehicleId ? ` for vehicle ${vehicleId}` : ''));
     
     // Construct the URL with parameters
@@ -229,50 +246,110 @@ export const syncOutstationFares = async (vehicleId?: string) => {
     console.error('All sync attempts failed:', error);
     throw error;
   }
-};
+}
 
 // Force sync outstation fares with vehicle_pricing
-export const forceSyncOutstationFares = async () => {
+export async function forceSyncOutstationFares() {
   try {
     return await syncOutstationFares();
   } catch (error) {
     console.error('Error forcing sync of outstation fares:', error);
     throw error;
   }
-};
+}
 
-// Outstation Fares - ALWAYS fetch from vehicle_pricing table with sync option
-export const getOutstationFares = async (origin?: string, destination?: string): Promise<Record<string, OutstationFare>> => {
+// Function to get fares based on trip type
+export function getFaresByTripType(tripType: TripType, vehicleId?: string) {
+  switch (tripType) {
+    case 'outstation':
+      return vehicleId ? getOutstationFaresForVehicle(vehicleId) : getOutstationFares();
+    case 'local':
+      return vehicleId ? getLocalFaresForVehicle(vehicleId) : getLocalFares();
+    case 'airport':
+      return vehicleId ? getAirportFaresForVehicle(vehicleId) : getAirportFares();
+    default:
+      return Promise.resolve({});
+  }
+}
+
+// Helper function to build a fallback URL when outstation-fares.php is not available
+function getFallbackOutstationUrl() {
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+  // Try to use the vehicle_pricing table directly as a fallback
+  return `${baseUrl}/api/vehicle-pricing.php?trip_type=outstation`;
+}
+
+// Outstation Fares - use vehicle_pricing table with fallbacks
+export async function getOutstationFares(origin?: string, destination?: string): Promise<Record<string, OutstationFare>> {
   try {
     // Always force a refresh of fares by skipping cache
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
     const timestamp = Date.now();
     
     console.log('Fetching outstation fares with timestamp:', timestamp);
     
-    const response = await axios.get(`${baseUrl}/api/outstation-fares.php`, {
-      params: { 
-        origin,
-        destination,
-        _t: timestamp, // Cache busting
-        force: 'true',
-        source: 'vehicle_pricing', // Force using vehicle_pricing table
-        check_sync: 'true' // Add check_sync param to ensure tables are in sync
-      },
-      headers: getBypassHeaders()
-    });
-    
-    if (response.data && response.data.fares) {
-      console.log('Outstation fares fetched successfully:', response.data);
-      // Cache the fares
-      localStorage.setItem('outstation_fares', JSON.stringify(response.data.fares));
-      localStorage.setItem('outstation_fares_timestamp', timestamp.toString());
+    try {
+      // First try the main outstation-fares.php endpoint
+      const response = await axios.get(`${baseUrl}/api/outstation-fares.php`, {
+        params: { 
+          origin,
+          destination,
+          _t: timestamp, // Cache busting
+          force: 'true',
+          source: 'vehicle_pricing', // Force using vehicle_pricing table
+          check_sync: 'true' // Add check_sync param to ensure tables are in sync
+        },
+        headers: getBypassHeaders(),
+        timeout: 5000 // 5 second timeout
+      });
       
-      return response.data.fares;
+      if (response.data && response.data.fares) {
+        console.log('Outstation fares fetched successfully:', response.data);
+        // Cache the fares
+        localStorage.setItem('outstation_fares', JSON.stringify(response.data.fares));
+        localStorage.setItem('outstation_fares_timestamp', timestamp.toString());
+        
+        return response.data.fares;
+      }
+    } catch (mainError) {
+      console.error('Error fetching from outstation-fares.php:', mainError);
+      
+      // Try the fallback URL
+      console.log('Trying fallback URL for outstation fares');
+      try {
+        const fallbackUrl = getFallbackOutstationUrl();
+        const fallbackResponse = await axios.get(fallbackUrl, {
+          params: { 
+            _t: timestamp, // Cache busting
+            force: 'true'
+          },
+          headers: getBypassHeaders(),
+          timeout: 5000 // 5 second timeout
+        });
+        
+        if (fallbackResponse.data && fallbackResponse.data.fares) {
+          console.log('Outstation fares fetched from fallback URL:', fallbackResponse.data);
+          // Cache the fares
+          localStorage.setItem('outstation_fares', JSON.stringify(fallbackResponse.data.fares));
+          localStorage.setItem('outstation_fares_timestamp', timestamp.toString());
+          
+          return fallbackResponse.data.fares;
+        }
+      } catch (fallbackError) {
+        console.error('Error fetching from fallback outstation URL:', fallbackError);
+      }
     }
     
-    console.warn('No outstation fares returned from API');
-    return {};
+    // If both tries failed, try to return cached fares
+    const cachedFares = localStorage.getItem('outstation_fares');
+    if (cachedFares) {
+      console.log('Using cached outstation fares');
+      return JSON.parse(cachedFares);
+    }
+    
+    // Return default fallback fares if all else fails
+    console.warn('No outstation fares available, using defaults');
+    return generateDefaultOutstationFares();
   } catch (error) {
     console.error('Error fetching outstation fares:', error);
     
@@ -282,64 +359,138 @@ export const getOutstationFares = async (origin?: string, destination?: string):
       return JSON.parse(cachedFares);
     }
     
-    return {};
+    return generateDefaultOutstationFares();
   }
-};
+}
 
-// Get outstation fares for a specific vehicle - ALWAYS force fresh data from vehicle_pricing
-export const getOutstationFaresForVehicle = async (vehicleId: string): Promise<OutstationFare> => {
+// Generate default outstation fares when API fails
+function generateDefaultOutstationFares(): Record<string, OutstationFare> {
+  console.log('Generating default outstation fares');
+  return {
+    'sedan': {
+      basePrice: 1500,
+      pricePerKm: 12,
+      driverAllowance: 250,
+      nightHaltCharge: 300,
+      roundTripBasePrice: 1400,
+      roundTripPricePerKm: 10
+    },
+    'ertiga': {
+      basePrice: 1800,
+      pricePerKm: 14,
+      driverAllowance: 250,
+      nightHaltCharge: 350,
+      roundTripBasePrice: 1700,
+      roundTripPricePerKm: 12
+    },
+    'innova': {
+      basePrice: 2200,
+      pricePerKm: 16,
+      driverAllowance: 300,
+      nightHaltCharge: 400,
+      roundTripBasePrice: 2000,
+      roundTripPricePerKm: 14
+    },
+    'innova_crysta': {
+      basePrice: 2500,
+      pricePerKm: 18,
+      driverAllowance: 300,
+      nightHaltCharge: 400,
+      roundTripBasePrice: 2300,
+      roundTripPricePerKm: 16
+    }
+  };
+}
+
+// Get outstation fares for a specific vehicle with robust fallbacks
+export async function getOutstationFaresForVehicle(vehicleId: string): Promise<OutstationFare> {
   try {
     // Try to fetch directly for this vehicle
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
     const now = Date.now();
     
     console.log(`Fetching outstation fares for vehicle ${vehicleId} with timestamp:`, now);
     
-    const response = await axios.get(`${baseUrl}/api/outstation-fares.php`, {
-      params: {
-        vehicle_id: vehicleId,
-        _t: now, // Cache busting
-        force: 'true',
-        source: 'vehicle_pricing' // Force using vehicle_pricing table
-      },
-      headers: getBypassHeaders()
-    });
-    
-    if (response.data && response.data.fares && response.data.fares[vehicleId]) {
-      console.log(`Outstation fares for vehicle ${vehicleId}:`, response.data.fares[vehicleId]);
-      console.log(`Source table: ${response.data.sourceTable || 'vehicle_pricing'}`);
+    try {
+      // First try the main API endpoint
+      const response = await axios.get(`${baseUrl}/api/outstation-fares.php`, {
+        params: {
+          vehicle_id: vehicleId,
+          _t: now, // Cache busting
+          force: 'true',
+          source: 'vehicle_pricing' // Force using vehicle_pricing table
+        },
+        headers: getBypassHeaders(),
+        timeout: 5000 // 5 second timeout
+      });
       
-      // Cache this specific vehicle fare
-      const cachedFares = localStorage.getItem('outstation_fares');
-      const fares = cachedFares ? JSON.parse(cachedFares) : {};
-      fares[vehicleId] = response.data.fares[vehicleId];
-      localStorage.setItem('outstation_fares', JSON.stringify(fares));
-      localStorage.setItem('outstation_fares_timestamp', now.toString());
+      if (response.data && response.data.fares && response.data.fares[vehicleId]) {
+        console.log(`Outstation fares for vehicle ${vehicleId}:`, response.data.fares[vehicleId]);
+        console.log(`Source table: ${response.data.sourceTable || 'vehicle_pricing'}`);
+        
+        // Cache this specific vehicle fare
+        const cachedFares = localStorage.getItem('outstation_fares');
+        const fares = cachedFares ? JSON.parse(cachedFares) : {};
+        fares[vehicleId] = response.data.fares[vehicleId];
+        localStorage.setItem('outstation_fares', JSON.stringify(fares));
+        localStorage.setItem('outstation_fares_timestamp', now.toString());
+        
+        return response.data.fares[vehicleId];
+      }
+    } catch (mainError) {
+      console.error(`Error fetching outstation fares for vehicle ${vehicleId} from main endpoint:`, mainError);
       
-      return response.data.fares[vehicleId];
+      // Try fallback vehicle_pricing endpoint directly
+      try {
+        console.log(`Trying fallback for vehicle ${vehicleId}`);
+        const fallbackUrl = `${baseUrl}/api/vehicle-pricing.php`;
+        const fallbackResponse = await axios.get(fallbackUrl, {
+          params: {
+            vehicle_id: vehicleId,
+            trip_type: 'outstation',
+            _t: now,
+            force: 'true'
+          },
+          headers: getBypassHeaders(),
+          timeout: 5000
+        });
+        
+        if (fallbackResponse.data && fallbackResponse.data.prices) {
+          console.log(`Retrieved vehicle pricing for ${vehicleId} from fallback:`, fallbackResponse.data);
+          
+          // Convert vehicle_pricing format to OutstationFare format
+          const pricing = fallbackResponse.data.prices;
+          const fare: OutstationFare = {
+            basePrice: pricing.base_fare || 0,
+            pricePerKm: pricing.price_per_km || 0,
+            driverAllowance: pricing.driver_allowance || 250,
+            nightHaltCharge: pricing.night_halt_charge || 300,
+            roundTripBasePrice: pricing.round_trip_base_fare || pricing.base_fare * 0.9 || 0,
+            roundTripPricePerKm: pricing.round_trip_price_per_km || pricing.price_per_km * 0.85 || 0
+          };
+          
+          // Cache this fare
+          const cachedFares = localStorage.getItem('outstation_fares');
+          const fares = cachedFares ? JSON.parse(cachedFares) : {};
+          fares[vehicleId] = fare;
+          localStorage.setItem('outstation_fares', JSON.stringify(fares));
+          localStorage.setItem('outstation_fares_timestamp', now.toString());
+          
+          return fare;
+        }
+      } catch (fallbackError) {
+        console.error(`Error fetching from fallback for ${vehicleId}:`, fallbackError);
+      }
     }
     
-    // If direct fetch failed, try to get all fares
+    // If direct fetches failed, try to get all fares
     console.warn(`No specific fare found for vehicle ${vehicleId}, fetching all fares`);
     const allFares = await getOutstationFares();
     if (allFares && allFares[vehicleId]) {
       return allFares[vehicleId];
     }
     
-    console.warn(`No outstation fare found for vehicle ${vehicleId}`);
-    // Return default values if no data found
-    return {
-      basePrice: 0,
-      pricePerKm: 0,
-      driverAllowance: 0,
-      nightHaltCharge: 0,
-      roundTripBasePrice: 0,
-      roundTripPricePerKm: 0
-    };
-  } catch (error) {
-    console.error(`Error fetching outstation fares for vehicle ${vehicleId}:`, error);
-    
-    // Try to get from cache if available
+    // Try to find in cache as a last resort
     const cachedFares = localStorage.getItem('outstation_fares');
     if (cachedFares) {
       const fares = JSON.parse(cachedFares);
@@ -348,23 +499,53 @@ export const getOutstationFaresForVehicle = async (vehicleId: string): Promise<O
       }
     }
     
-    // Return default values if error
+    console.warn(`No outstation fare found for vehicle ${vehicleId}, using defaults`);
+    // Return default values based on vehicle type
+    const defaultFares = generateDefaultOutstationFares();
+    return defaultFares[vehicleId] || {
+      basePrice: vehicleId.includes('sedan') ? 1500 : 
+                vehicleId.includes('ertiga') ? 1800 : 
+                vehicleId.includes('innova') ? 2200 : 2000,
+      pricePerKm: vehicleId.includes('sedan') ? 12 : 
+                 vehicleId.includes('ertiga') ? 14 : 
+                 vehicleId.includes('innova') ? 16 : 15,
+      driverAllowance: 250,
+      nightHaltCharge: 300,
+      roundTripBasePrice: vehicleId.includes('sedan') ? 1400 : 
+                        vehicleId.includes('ertiga') ? 1700 : 
+                        vehicleId.includes('innova') ? 2000 : 1800,
+      roundTripPricePerKm: vehicleId.includes('sedan') ? 10 : 
+                         vehicleId.includes('ertiga') ? 12 : 
+                         vehicleId.includes('innova') ? 14 : 13
+    };
+  } catch (error) {
+    console.error(`Error fetching outstation fares for vehicle ${vehicleId}:`, error);
+    
+    // Return default values based on vehicle type
     return {
-      basePrice: 0,
-      pricePerKm: 0,
-      driverAllowance: 0,
-      nightHaltCharge: 0,
-      roundTripBasePrice: 0,
-      roundTripPricePerKm: 0
+      basePrice: vehicleId.includes('sedan') ? 1500 : 
+                vehicleId.includes('ertiga') ? 1800 : 
+                vehicleId.includes('innova') ? 2200 : 2000,
+      pricePerKm: vehicleId.includes('sedan') ? 12 : 
+                 vehicleId.includes('ertiga') ? 14 : 
+                 vehicleId.includes('innova') ? 16 : 15,
+      driverAllowance: 250,
+      nightHaltCharge: 300,
+      roundTripBasePrice: vehicleId.includes('sedan') ? 1400 : 
+                        vehicleId.includes('ertiga') ? 1700 : 
+                        vehicleId.includes('innova') ? 2000 : 1800,
+      roundTripPricePerKm: vehicleId.includes('sedan') ? 10 : 
+                         vehicleId.includes('ertiga') ? 12 : 
+                         vehicleId.includes('innova') ? 14 : 13
     };
   }
-};
+}
 
-// Local Fares - ALWAYS fetch from vehicle_pricing table 
-export const getLocalFares = async (): Promise<Record<string, LocalFare>> => {
+// Local Fares - with fallbacks
+export async function getLocalFares(): Promise<Record<string, LocalFare>> {
   try {
     // Always fetch fares from API
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
     const timestamp = Date.now();
     
     console.log('Fetching local fares with timestamp:', timestamp);
@@ -400,14 +581,14 @@ export const getLocalFares = async (): Promise<Record<string, LocalFare>> => {
     
     return {};
   }
-};
+}
 
-// Get local fares for a specific vehicle from vehicle_pricing table
-export const getLocalFaresForVehicle = async (vehicleId: string): Promise<LocalFare> => {
+// Get local fares for a specific vehicle with fallbacks
+export async function getLocalFaresForVehicle(vehicleId: string): Promise<LocalFare> {
   try {
     // Always fetch fresh data - skip the cache check
     // Try to fetch directly for this vehicle
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
     const now = Date.now();
     
     console.log(`Fetching local fares for vehicle ${vehicleId} with timestamp:`, now);
@@ -454,6 +635,15 @@ export const getLocalFaresForVehicle = async (vehicleId: string): Promise<LocalF
   } catch (error) {
     console.error(`Error fetching local fares for vehicle ${vehicleId}:`, error);
     
+    // Try to get from cache if available
+    const cachedFares = localStorage.getItem('local_fares');
+    if (cachedFares) {
+      const fares = JSON.parse(cachedFares);
+      if (fares[vehicleId]) {
+        return fares[vehicleId];
+      }
+    }
+    
     // Return default values if error
     return {
       price4hrs40km: 0,
@@ -463,13 +653,13 @@ export const getLocalFaresForVehicle = async (vehicleId: string): Promise<LocalF
       priceExtraHour: 0
     };
   }
-};
+}
 
-// Airport Fares - ALWAYS fetch from vehicle_pricing table
-export const getAirportFares = async (): Promise<Record<string, AirportFare>> => {
+// Airport Fares - with fallbacks
+export async function getAirportFares(): Promise<Record<string, AirportFare>> {
   try {
     // Always force refresh to get the latest data
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
     const timestamp = Date.now();
     
     console.log('Fetching airport fares with timestamp:', timestamp);
@@ -505,13 +695,13 @@ export const getAirportFares = async (): Promise<Record<string, AirportFare>> =>
     
     return {};
   }
-};
+}
 
-// Get airport fares for a specific vehicle from vehicle_pricing table
-export const getAirportFaresForVehicle = async (vehicleId: string): Promise<AirportFare> => {
+// Get airport fares for a specific vehicle with fallbacks
+export async function getAirportFaresForVehicle(vehicleId: string): Promise<AirportFare> {
   try {
     // Try to fetch directly for this vehicle
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
     const now = Date.now();
     
     console.log(`Fetching airport fares for vehicle ${vehicleId} with timestamp:`, now);
@@ -585,65 +775,4 @@ export const getAirportFaresForVehicle = async (vehicleId: string): Promise<Airp
       extraKmCharge: 0
     };
   }
-};
-
-// Get fares by trip type from vehicle_pricing table
-export const getFaresByTripType = async (tripType: TripType): Promise<any> => {
-  try {
-    switch (tripType) {
-      case 'outstation':
-        return await getOutstationFares();
-      case 'local':
-        return await getLocalFares();
-      case 'airport':
-        return await getAirportFares();
-      default:
-        throw new Error(`Unsupported trip type: ${tripType}`);
-    }
-  } catch (error) {
-    console.error(`Error getting fares for trip type ${tripType}:`, error);
-    return {};
-  }
-};
-
-// Reset cab options state
-export const resetCabOptionsState = () => {
-  // Dispatch reset event
-  window.dispatchEvent(new CustomEvent('reset-cab-options', {
-    detail: { timestamp: Date.now() }
-  }));
-  
-  // Clear fare cache
-  clearFareCache();
-  
-  // Clear cab options cache
-  localStorage.removeItem('cabOptions');
-  localStorage.removeItem('selectedCab');
-  sessionStorage.removeItem('cabOptions');
-  sessionStorage.removeItem('selectedCab');
-  
-  const tripTypes = ['outstation', 'local', 'airport', 'tour'];
-  for (const type of tripTypes) {
-    localStorage.removeItem(`cabOptions_${type}`);
-    localStorage.removeItem(`cabOptions_${type}_timestamp`);
-  }
-};
-
-// Export fareService object with all functions
-export const fareService = {
-  clearCache: clearFareCache,
-  getBypassHeaders,
-  getForcedRequestConfig,
-  initializeDatabase,
-  directFareUpdate,
-  syncOutstationFares,
-  forceSyncOutstationFares,
-  getOutstationFares,
-  getOutstationFaresForVehicle,
-  getLocalFares,
-  getLocalFaresForVehicle,
-  getAirportFares,
-  getAirportFaresForVehicle,
-  getFaresByTripType,
-  resetCabOptionsState
-};
+}

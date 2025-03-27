@@ -10,8 +10,7 @@ export * from './tourData';
 export { 
   calculateFare, 
   calculateAirportFare,
-  clearFareCache,
-  fareService
+  clearFareCache
 } from './fareCalculationService';
 
 // Export types with the 'export type' syntax to avoid TypeScript errors
@@ -32,9 +31,8 @@ export {
   getLocalFaresForVehicle,
   getAirportFaresForVehicle,
   getFaresByTripType,
-  resetCabOptionsState,
   clearFareCache as clearFareServiceCache,
-  fareService as fareServiceObject
+  fareService
 } from '@/services/fareService';
 
 // Re-export CabType from the types directly
