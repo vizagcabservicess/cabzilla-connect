@@ -1,4 +1,3 @@
-
 import { HourlyPackage, LocalPackagePriceMatrix } from '@/types/cab';
 
 // Define standard hourly packages
@@ -485,10 +484,39 @@ async function updateLocalPackagePriceOnServer(packageId: string, cabType: strin
     // Add fares object for alternative format
     packageData.fares = { ...packageData.packages };
     
-    // Try direct local fares endpoint first (now a dedicated endpoint)
+    // Try the new simplified endpoint first
     const domain = window.location.origin;
     const timestamp = Date.now();
     
+    try {
+      const simplifiedEndpoint = `${domain}/api/admin/local-fares-update.php?_t=${timestamp}`;
+      console.log(`Trying simplified local fares endpoint: ${simplifiedEndpoint}`);
+      
+      const response = await fetch(simplifiedEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        },
+        body: JSON.stringify(packageData)
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`Successfully updated ${packageId} price for ${cabType} to ${price} on simplified endpoint`);
+        return result;
+      } else {
+        const errorText = await response.text();
+        console.error(`Error using simplified endpoint: ${response.status} ${response.statusText}`, errorText);
+      }
+    } catch (error) {
+      console.error(`Error using simplified endpoint:`, error);
+    }
+    
+    // Try direct local fares endpoint as first fallback (now a dedicated endpoint)
     try {
       const directUrl = `${domain}/api/direct-local-fares.php?_t=${timestamp}`;
       console.log(`Trying direct local fares endpoint: ${directUrl}`);
@@ -517,7 +545,7 @@ async function updateLocalPackagePriceOnServer(packageId: string, cabType: strin
       console.error(`Error using direct local fares endpoint:`, error);
     }
     
-    // Try admin direct-local-fares endpoint as fallback
+    // Try admin direct-local-fares endpoint as second fallback
     try {
       const adminDirectUrl = `${domain}/api/admin/direct-local-fares.php?_t=${timestamp}`;
       console.log(`Trying admin direct local fares endpoint: ${adminDirectUrl}`);

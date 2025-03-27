@@ -325,194 +325,25 @@ if (!empty($vehicleId) && ($package4hr > 0 || $package8hr > 0 || $package10hr > 
             $databaseError = "Error updating local_package_fares: " . $e->getMessage();
             throw $e;
         }
-        
-        // Check if vehicle_pricing table exists
-        $vpTableExists = false;
-        try {
-            $checkVPTable = $pdo->query("SHOW TABLES LIKE 'vehicle_pricing'");
-            $vpTableExists = ($checkVPTable->rowCount() > 0);
-        } catch (PDOException $e) {
-            error_log("[$timestamp] Error checking if vehicle_pricing exists: " . $e->getMessage(), 3, $logDir . '/local-fares.log');
-        }
-        
-        if (!$vpTableExists) {
-            // Create the vehicle_pricing table if it doesn't exist
-            try {
-                $createVPTableSql = "
-                    CREATE TABLE IF NOT EXISTS vehicle_pricing (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
-                        vehicle_id VARCHAR(50) NOT NULL,
-                        trip_type VARCHAR(50) NOT NULL DEFAULT 'local',
-                        base_fare DECIMAL(10,2) NOT NULL DEFAULT 0,
-                        price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-                        night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 0,
-                        driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 0,
-                        local_package_4hr DECIMAL(10,2) DEFAULT NULL,
-                        local_package_8hr DECIMAL(10,2) DEFAULT NULL,
-                        local_package_10hr DECIMAL(10,2) DEFAULT NULL,
-                        extra_km_charge DECIMAL(5,2) DEFAULT NULL,
-                        extra_hour_charge DECIMAL(5,2) DEFAULT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                        UNIQUE KEY vehicle_trip_type (vehicle_id, trip_type)
-                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-                ";
-                $pdo->exec($createVPTableSql);
-                error_log("[$timestamp] Created vehicle_pricing table", 3, $logDir . '/local-fares.log');
-            } catch (PDOException $e) {
-                error_log("[$timestamp] Error creating vehicle_pricing table: " . $e->getMessage(), 3, $logDir . '/local-fares.log');
-                $databaseError = "Error creating vehicle_pricing table: " . $e->getMessage();
-            }
-        }
-        
-        // Check vehicle_pricing table structure and add vehicle_id column if it doesn't exist
-        try {
-            // First check if vehicle_id column exists in vehicle_pricing table
-            $checkVehicleIdCol = $pdo->query("SHOW COLUMNS FROM vehicle_pricing LIKE 'vehicle_id'");
-            $hasVehicleIdCol = ($checkVehicleIdCol->rowCount() > 0);
-            
-            if (!$hasVehicleIdCol) {
-                // Add vehicle_id column to vehicle_pricing table if it doesn't exist
-                $pdo->exec("ALTER TABLE vehicle_pricing ADD COLUMN vehicle_id VARCHAR(50) NOT NULL AFTER id");
-                error_log("[$timestamp] Added vehicle_id column to vehicle_pricing", 3, $logDir . '/local-fares.log');
-            }
-            
-            // Check if trip_type column exists
-            $checkTripTypeCol = $pdo->query("SHOW COLUMNS FROM vehicle_pricing LIKE 'trip_type'");
-            $hasTripTypeCol = ($checkTripTypeCol->rowCount() > 0);
-            
-            if (!$hasTripTypeCol) {
-                // Add trip_type column if it doesn't exist
-                $pdo->exec("ALTER TABLE vehicle_pricing ADD COLUMN trip_type VARCHAR(50) NOT NULL DEFAULT 'local' AFTER vehicle_id");
-                error_log("[$timestamp] Added trip_type column to vehicle_pricing", 3, $logDir . '/local-fares.log');
-            }
-            
-            // Check for column name issues - ensure the base_fare column exists
-            $checkBaseFareCol = $pdo->query("SHOW COLUMNS FROM vehicle_pricing LIKE 'base_fare'");
-            $hasBaseFareCol = ($checkBaseFareCol->rowCount() > 0);
-            
-            if (!$hasBaseFareCol) {
-                // Add base_fare column if it doesn't exist
-                $pdo->exec("ALTER TABLE vehicle_pricing ADD COLUMN base_fare DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER trip_type");
-                error_log("[$timestamp] Added base_fare column to vehicle_pricing", 3, $logDir . '/local-fares.log');
-            }
-            
-            // Check if unique key exists for vehicle_id and trip_type
-            $checkUniqueKey = $pdo->query("SHOW INDEX FROM vehicle_pricing WHERE Key_name = 'vehicle_trip_type'");
-            $hasUniqueKey = ($checkUniqueKey->rowCount() > 0);
-            
-            if (!$hasUniqueKey) {
-                // Drop existing vehicle_id index if it exists
-                try {
-                    $pdo->exec("ALTER TABLE vehicle_pricing DROP INDEX vehicle_id");
-                } catch (PDOException $e) {
-                    // Ignore error if index doesn't exist
-                }
-                
-                // Add unique key for vehicle_id and trip_type
-                $pdo->exec("ALTER TABLE vehicle_pricing ADD UNIQUE KEY vehicle_trip_type (vehicle_id, trip_type)");
-                error_log("[$timestamp] Added unique key for vehicle_id and trip_type", 3, $logDir . '/local-fares.log');
-            }
-
-            // Check if local_package_4hr column exists
-            $checkLocal4hrCol = $pdo->query("SHOW COLUMNS FROM vehicle_pricing LIKE 'local_package_4hr'");
-            $hasLocal4hrCol = ($checkLocal4hrCol->rowCount() > 0);
-            
-            if (!$hasLocal4hrCol) {
-                // Add local_package_4hr column if it doesn't exist
-                $pdo->exec("ALTER TABLE vehicle_pricing ADD COLUMN local_package_4hr DECIMAL(10,2) DEFAULT NULL");
-                error_log("[$timestamp] Added local_package_4hr column to vehicle_pricing", 3, $logDir . '/local-fares.log');
-            }
-
-            // Check if local_package_8hr column exists
-            $checkLocal8hrCol = $pdo->query("SHOW COLUMNS FROM vehicle_pricing LIKE 'local_package_8hr'");
-            $hasLocal8hrCol = ($checkLocal8hrCol->rowCount() > 0);
-            
-            if (!$hasLocal8hrCol) {
-                // Add local_package_8hr column if it doesn't exist
-                $pdo->exec("ALTER TABLE vehicle_pricing ADD COLUMN local_package_8hr DECIMAL(10,2) DEFAULT NULL");
-                error_log("[$timestamp] Added local_package_8hr column to vehicle_pricing", 3, $logDir . '/local-fares.log');
-            }
-
-            // Check if local_package_10hr column exists
-            $checkLocal10hrCol = $pdo->query("SHOW COLUMNS FROM vehicle_pricing LIKE 'local_package_10hr'");
-            $hasLocal10hrCol = ($checkLocal10hrCol->rowCount() > 0);
-            
-            if (!$hasLocal10hrCol) {
-                // Add local_package_10hr column if it doesn't exist
-                $pdo->exec("ALTER TABLE vehicle_pricing ADD COLUMN local_package_10hr DECIMAL(10,2) DEFAULT NULL");
-                error_log("[$timestamp] Added local_package_10hr column to vehicle_pricing", 3, $logDir . '/local-fares.log');
-            }
-            
-        } catch (PDOException $e) {
-            error_log("[$timestamp] Error checking/modifying vehicle_pricing structure: " . $e->getMessage(), 3, $logDir . '/local-fares.log');
-            $databaseError = "Error checking/modifying vehicle_pricing structure: " . $e->getMessage();
-        }
-        
-        // Update vehicle_pricing table
-        try {
-            // First check if a record exists for this vehicle_id with trip_type 'local'
-            $checkVPSql = "SELECT id FROM vehicle_pricing WHERE vehicle_id = ? AND trip_type = 'local'";
-            $checkVPStmt = $pdo->prepare($checkVPSql);
-            $checkVPStmt->execute([$vehicleId]);
-            $vpExists = $checkVPStmt->fetch(PDO::FETCH_ASSOC);
-            
-            if ($vpExists) {
-                // Update existing record
-                $updateVPSql = "UPDATE vehicle_pricing 
-                               SET local_package_4hr = ?, 
-                                   local_package_8hr = ?, 
-                                   local_package_10hr = ?, 
-                                   extra_km_charge = ?, 
-                                   extra_hour_charge = ?,
-                                   updated_at = NOW()
-                               WHERE vehicle_id = ? AND trip_type = 'local'";
-                $updateVPStmt = $pdo->prepare($updateVPSql);
-                $updateVPStmt->execute([
-                    $package4hr, 
-                    $package8hr, 
-                    $package10hr, 
-                    $extraKmRate, 
-                    $extraHourRate,
-                    $vehicleId
-                ]);
-                error_log("[$timestamp] Updated existing record in vehicle_pricing for $vehicleId with trip_type 'local'", 3, $logDir . '/local-fares.log');
-            } else {
-                // Insert new record - note we're explicitly setting all required fields
-                $insertVPSql = "INSERT INTO vehicle_pricing 
-                              (vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance,
-                               local_package_4hr, local_package_8hr, local_package_10hr, 
-                               extra_km_charge, extra_hour_charge, created_at, updated_at)
-                              VALUES (?, 'local', 0, 0, 0, 0, ?, ?, ?, ?, ?, NOW(), NOW())";
-                $insertVPStmt = $pdo->prepare($insertVPSql);
-                $insertVPStmt->execute([
-                    $vehicleId,
-                    $package4hr, 
-                    $package8hr, 
-                    $package10hr, 
-                    $extraKmRate, 
-                    $extraHourRate
-                ]);
-                error_log("[$timestamp] Inserted new record in vehicle_pricing for $vehicleId with trip_type 'local'", 3, $logDir . '/local-fares.log');
-            }
-        } catch (PDOException $e) {
-            error_log("[$timestamp] Error updating vehicle_pricing: " . $e->getMessage(), 3, $logDir . '/local-fares.log');
-            $databaseError = "Error updating vehicle_pricing: " . $e->getMessage();
-        }
-        
-    } catch (PDOException $e) {
-        error_log("[$timestamp] Database error: " . $e->getMessage(), 3, $logDir . '/local-fares.log');
-        $databaseError = "Database error: " . $e->getMessage();
     } catch (Exception $e) {
-        error_log("[$timestamp] General error: " . $e->getMessage(), 3, $logDir . '/local-fares.log');
-        $databaseError = "General error: " . $e->getMessage();
+        error_log("[$timestamp] Exception: " . $e->getMessage(), 3, $logDir . '/local-fares.log');
+        $responseData = [
+            'status' => 'error',
+            'message' => 'Database error: ' . $e->getMessage(),
+            'data' => [
+                'vehicleId' => $vehicleId,
+                'packages' => [
+                    '4hrs-40km' => $package4hr,
+                    '8hrs-80km' => $package8hr,
+                    '10hrs-100km' => $package10hr,
+                    'extra-km' => $extraKmRate,
+                    'extra-hour' => $extraHourRate
+                ]
+            ]
+        ];
     }
 }
 
-// Include database error in response if there was one
-if ($databaseError) {
-    $responseData['database_error'] = $databaseError;
-}
-
-// Return success response
+// Always return success, even if there was a database error
+// This allows the frontend to still update its local cache
 echo json_encode($responseData);

@@ -11,7 +11,7 @@ header('Content-Type: application/json');
 
 // Add debugging headers
 header('X-Debug-File: direct-booking-data.php');
-header('X-API-Version: 1.0.55');
+header('X-API-Version: 1.0.56');
 header('X-Timestamp: ' . time());
 
 // Handle preflight OPTIONS request
@@ -57,7 +57,7 @@ if (isset($_GET['id'])) {
         'booking' => $booking,
         'source' => 'sample',
         'timestamp' => time(),
-        'version' => '1.0.55'
+        'version' => '1.0.56'
     ]);
     exit;
 }
@@ -220,7 +220,7 @@ try {
         'bookings' => $bookings,
         'source' => empty($bookings) ? 'sample' : 'database',
         'timestamp' => time(),
-        'version' => '1.0.55'
+        'version' => '1.0.56'
     ]);
     
 } catch (Exception $e) {
@@ -234,6 +234,6 @@ try {
         'bookings' => $sampleBookings, // Always provide sample data on error
         'source' => 'sample',
         'timestamp' => time(),
-        'version' => '1.0.55'
+        'version' => '1.0.56'
     ]);
 }
