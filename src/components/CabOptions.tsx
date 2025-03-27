@@ -77,13 +77,27 @@ export function CabOptions({
       localStorage.setItem('fareDataLastRefreshed', timestamp.toString());
       localStorage.setItem('forceTripFaresRefresh', 'true');
       
+      // Special handling for outstation fares - force a direct sync from database
+      if (tripType === 'outstation') {
+        try {
+          const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+          // Force a sync between outstation_fares and vehicle_pricing tables
+          await fetch(`${baseUrl}/api/admin/sync-outstation-fares.php?force_create=true&_t=${timestamp}`, {
+            headers: fareService.getBypassHeaders()
+          });
+          console.log('Forced outstation fares sync');
+        } catch (syncError) {
+          console.error('Error syncing outstation fares:', syncError);
+        }
+      }
+      
       // Reload cab types from server with force flag
       console.log('Reloading cab types from server...');
-      await reloadCabTypes();  // Fixed: Remove the argument
+      await reloadCabTypes();
       
       // Refresh cab options with force parameter
       console.log('Refreshing cab options...');
-      await refreshCabOptions();  // Fixed: Remove the argument
+      await refreshCabOptions();
       
       // Update last update timestamp and increment refresh count
       setLastUpdate(timestamp);
@@ -92,7 +106,7 @@ export function CabOptions({
       setGlobalRefreshTrigger(prev => prev + 1);
       
       // Trigger recalculation of fares with force flag
-      await calculateFares(cabOptions);
+      await calculateFares(cabOptions, true);
       
       toast.success("All fare data refreshed successfully!");
       setRefreshSuccessful(true);
@@ -131,6 +145,16 @@ export function CabOptions({
         fareService.clearCache();
         localStorage.setItem('forceCacheRefresh', 'true');
         console.log('Force refresh flag set, fare cache cleared');
+        
+        // For outstation trips, ensure we get fresh fare data from API
+        if (tripType === 'outstation') {
+          try {
+            console.log('Forcing fresh outstation fare data fetch');
+            await fareService.getOutstationFares();
+          } catch (error) {
+            console.error('Error fetching fresh outstation fares:', error);
+          }
+        }
       }
       
       const fares: Record<string, number> = {};
@@ -138,6 +162,32 @@ export function CabOptions({
       for (const cab of cabs) {
         try {
           console.log(`Calculating fare for ${cab.name} (${cab.id})`);
+          
+          // For outstation trips, get the latest fare data directly for this vehicle
+          if (tripType === 'outstation' && shouldForceRefresh) {
+            try {
+              const freshFareData = await fareService.getOutstationFaresForVehicle(cab.id);
+              console.log(`Fresh outstation fare data for ${cab.id}:`, freshFareData);
+              
+              // Update the cab object with fresh fare data
+              cab.basePrice = freshFareData.basePrice;
+              cab.pricePerKm = freshFareData.pricePerKm;
+              cab.nightHaltCharge = freshFareData.nightHaltCharge;
+              cab.driverAllowance = freshFareData.driverAllowance;
+              
+              if (cab.outstationFares) {
+                cab.outstationFares = {
+                  ...cab.outstationFares,
+                  ...freshFareData
+                };
+              } else {
+                cab.outstationFares = freshFareData;
+              }
+            } catch (fareError) {
+              console.error(`Error fetching fresh fare data for ${cab.id}:`, fareError);
+            }
+          }
+          
           const fare = await calculateFare({
             cabType: cab,
             distance,
