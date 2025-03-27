@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { TripType, TripMode } from '@/lib/tripTypes';
 import { LocalFare, OutstationFare, AirportFare } from '@/types/cab';
@@ -166,6 +167,30 @@ export const directFareUpdate = async (tripType: string, vehicleId: string, data
     return response.data;
   } catch (error) {
     console.error(`Error updating ${tripType} fares for ${vehicleId}:`, error);
+    throw error;
+  }
+};
+
+// Force sync outstation fares with vehicle_pricing
+export const forceSyncOutstationFares = async () => {
+  try {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    console.log('Forcing sync between outstation_fares and vehicle_pricing tables');
+    
+    const response = await axios.get(`${baseUrl}/api/admin/force-sync-outstation-fares.php`, {
+      params: { 
+        _t: Date.now(), // Cache busting
+        force: 'true'
+      },
+      headers: getBypassHeaders()
+    });
+    
+    // Clear cache after syncing
+    clearFareCache();
+    
+    return response.data;
+  } catch (error) {
+    console.error('Error forcing sync of outstation fares:', error);
     throw error;
   }
 };
@@ -556,5 +581,6 @@ export const fareService = {
   getBypassHeaders,
   getForcedRequestConfig,
   resetCabOptionsState,
-  initializeDatabase
+  initializeDatabase,
+  forceSyncOutstationFares
 };
