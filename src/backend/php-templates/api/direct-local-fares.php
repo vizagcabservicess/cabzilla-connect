@@ -142,20 +142,28 @@ try {
     // Now check if there's an existing 'local' record
     $checkVehiclePricingQuery = "";
     if ($hasVehicleIdCol) {
-        $checkVehiclePricingQuery = "SELECT id FROM vehicle_pricing WHERE (vehicle_id = ? OR vehicle_type = ?) AND trip_type = 'local'";
+        $checkVehiclePricingQuery = "SELECT * FROM vehicle_pricing WHERE (vehicle_id = ? OR vehicle_type = ?) AND trip_type = 'local'";
         $stmt = $conn->prepare($checkVehiclePricingQuery);
         $stmt->bind_param("ss", $vehicleId, $vehicleId);
     } else {
-        $checkVehiclePricingQuery = "SELECT id FROM vehicle_pricing WHERE vehicle_type = ? AND trip_type = 'local'";
+        $checkVehiclePricingQuery = "SELECT * FROM vehicle_pricing WHERE vehicle_type = ? AND trip_type = 'local'";
         $stmt = $conn->prepare($checkVehiclePricingQuery);
         $stmt->bind_param("s", $vehicleId);
     }
     
     $stmt->execute();
     $result = $stmt->get_result();
+    $vehiclePricingData = $result->fetch_assoc();
     $vehiclePricingExists = $result && $result->num_rows > 0;
     $stmt->close();
     
+    // Preserve the existing outstation-specific fields if they exist
+    $existingBaseFare = $vehiclePricingExists && isset($vehiclePricingData['base_fare']) ? $vehiclePricingData['base_fare'] : 0;
+    $existingPricePerKm = $vehiclePricingExists && isset($vehiclePricingData['price_per_km']) ? $vehiclePricingData['price_per_km'] : 0;
+    $existingNightHalt = $vehiclePricingExists && isset($vehiclePricingData['night_halt_charge']) ? $vehiclePricingData['night_halt_charge'] : 0;
+    $existingDriverAllowance = $vehiclePricingExists && isset($vehiclePricingData['driver_allowance']) ? $vehiclePricingData['driver_allowance'] : 0;
+    
+    // Update or insert vehicle_pricing record for local trip type
     if ($vehiclePricingExists) {
         // Update the existing record, but ONLY update local_package fields
         // DO NOT MODIFY base_fare, price_per_km, etc. which are used for outstation trips
@@ -189,7 +197,7 @@ try {
             $stmt->bind_param("ddddds", $price4hrs40km, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour, $vehicleId);
         }
     } else {
-        // Insert new record
+        // Insert new record - use existing outstation values if available
         if ($hasVehicleIdCol) {
             $vpQuery = "
                 INSERT INTO vehicle_pricing (
@@ -197,11 +205,23 @@ try {
                     extra_km_charge, extra_hour_charge, 
                     base_fare, price_per_km, night_halt_charge, driver_allowance, 
                     created_at, updated_at
-                ) VALUES (?, ?, 'local', ?, ?, ?, ?, ?, 0, 0, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ) VALUES (?, ?, 'local', ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             ";
             
             $stmt = $conn->prepare($vpQuery);
-            $stmt->bind_param("ssdddd", $vehicleId, $vehicleId, $price4hrs40km, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour);
+            $stmt->bind_param("ssddddddddd", 
+                $vehicleId, 
+                $vehicleId, 
+                $price4hrs40km, 
+                $price8hrs80km, 
+                $price10hrs100km, 
+                $priceExtraKm, 
+                $priceExtraHour,
+                $existingBaseFare,
+                $existingPricePerKm,
+                $existingNightHalt,
+                $existingDriverAllowance
+            );
         } else {
             $vpQuery = "
                 INSERT INTO vehicle_pricing (
@@ -209,11 +229,22 @@ try {
                     extra_km_charge, extra_hour_charge, 
                     base_fare, price_per_km, night_halt_charge, driver_allowance, 
                     created_at, updated_at
-                ) VALUES (?, 'local', ?, ?, ?, ?, ?, 0, 0, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ) VALUES (?, 'local', ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             ";
             
             $stmt = $conn->prepare($vpQuery);
-            $stmt->bind_param("sdddd", $vehicleId, $price4hrs40km, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour);
+            $stmt->bind_param("sddddddddd", 
+                $vehicleId, 
+                $price4hrs40km, 
+                $price8hrs80km, 
+                $price10hrs100km, 
+                $priceExtraKm, 
+                $priceExtraHour,
+                $existingBaseFare,
+                $existingPricePerKm,
+                $existingNightHalt,
+                $existingDriverAllowance
+            );
         }
     }
     

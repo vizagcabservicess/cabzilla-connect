@@ -118,7 +118,89 @@ function ensureTablesExist($conn) {
         error_log("Created airport_transfer_fares table");
     }
 
+    // Check if vehicle_pricing table exists
+    $checkVehiclePricing = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'");
+    if ($checkVehiclePricing->num_rows === 0) {
+        // Create vehicle_pricing table
+        $conn->query("
+            CREATE TABLE IF NOT EXISTS vehicle_pricing (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                vehicle_id VARCHAR(50) DEFAULT NULL,
+                vehicle_type VARCHAR(50) NOT NULL,
+                trip_type VARCHAR(50) NOT NULL,
+                base_fare DECIMAL(10,2) DEFAULT 0,
+                price_per_km DECIMAL(5,2) DEFAULT 0,
+                night_halt_charge DECIMAL(10,2) DEFAULT 0,
+                driver_allowance DECIMAL(10,2) DEFAULT 0,
+                local_package_4hr DECIMAL(10,2) DEFAULT 0,
+                local_package_8hr DECIMAL(10,2) DEFAULT 0,
+                local_package_10hr DECIMAL(10,2) DEFAULT 0,
+                extra_km_charge DECIMAL(5,2) DEFAULT 0,
+                extra_hour_charge DECIMAL(5,2) DEFAULT 0,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_vehicle_trip (vehicle_type, trip_type)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        ");
+        error_log("Created vehicle_pricing table");
+    } else {
+        // Check if vehicle_pricing has the vehicle_id column
+        $checkVehicleIdCol = $conn->query("SHOW COLUMNS FROM vehicle_pricing LIKE 'vehicle_id'");
+        if ($checkVehicleIdCol->num_rows === 0) {
+            $conn->query("ALTER TABLE vehicle_pricing ADD COLUMN vehicle_id VARCHAR(50) DEFAULT NULL AFTER id");
+            error_log("Added vehicle_id column to vehicle_pricing table");
+        }
+    }
+
     return true;
+}
+
+// If the initialize flag is set, just create the tables and return
+if (isset($_GET['initialize']) && $_GET['initialize'] === 'true') {
+    try {
+        $conn = getDbConnection();
+        if (!$conn) {
+            throw new Exception("Database connection failed");
+        }
+        
+        ensureTablesExist($conn);
+        
+        echo json_encode([
+            "status" => "success",
+            "message" => "Database tables initialized successfully"
+        ]);
+        exit;
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode([
+            "status" => "error",
+            "message" => $e->getMessage()
+        ]);
+        exit;
+    }
+}
+
+// If test flag is set, just check the connection and return
+if (isset($_GET['test']) && $_GET['test'] === '1') {
+    try {
+        $conn = getDbConnection();
+        if (!$conn) {
+            throw new Exception("Database connection failed");
+        }
+        
+        echo json_encode([
+            "status" => "success",
+            "message" => "Database connection successful"
+        ]);
+        exit;
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode([
+            "status" => "error",
+            "message" => $e->getMessage()
+        ]);
+        exit;
+    }
 }
 
 // Determine the trip type from URL or parameters
@@ -388,12 +470,19 @@ function handleLocalFares($conn, $data, $vehicleId) {
         $stmt->close();
         
         // 2. Check if vehicle_pricing record exists for this vehicle and trip type
-        $checkStmt = $conn->prepare("SELECT id FROM vehicle_pricing WHERE vehicle_type = ? AND trip_type = 'local'");
+        $checkStmt = $conn->prepare("SELECT * FROM vehicle_pricing WHERE vehicle_type = ? AND trip_type = 'local'");
         $checkStmt->bind_param("s", $vehicleId);
         $checkStmt->execute();
         $result = $checkStmt->get_result();
+        $vehiclePricingData = $result->fetch_assoc();
         $exists = $result->num_rows > 0;
         $checkStmt->close();
+        
+        // Preserve the existing outstation-specific fields if they exist
+        $existingBaseFare = $exists && isset($vehiclePricingData['base_fare']) ? $vehiclePricingData['base_fare'] : 0;
+        $existingPricePerKm = $exists && isset($vehiclePricingData['price_per_km']) ? $vehiclePricingData['price_per_km'] : 0;
+        $existingNightHalt = $exists && isset($vehiclePricingData['night_halt_charge']) ? $vehiclePricingData['night_halt_charge'] : 0;
+        $existingDriverAllowance = $exists && isset($vehiclePricingData['driver_allowance']) ? $vehiclePricingData['driver_allowance'] : 0;
         
         if ($exists) {
             // Update existing record - IMPORTANT: ONLY update the local package fields
@@ -425,18 +514,24 @@ function handleLocalFares($conn, $data, $vehicleId) {
             $insertStmt = $conn->prepare("
                 INSERT INTO vehicle_pricing 
                 (vehicle_type, trip_type, local_package_4hr, local_package_8hr, local_package_10hr,
-                 extra_km_charge, extra_hour_charge, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+                 extra_km_charge, extra_hour_charge, 
+                 base_fare, price_per_km, night_halt_charge, driver_allowance,
+                 updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
             ");
             
-            $insertStmt->bind_param("ssddddd", 
+            $insertStmt->bind_param("ssddddddddd", 
                 $vehicleId,
                 $tripType,
                 $package4hr40km,
                 $package8hr80km,
                 $package10hr100km,
                 $extraKmRate,
-                $extraHourRate
+                $extraHourRate,
+                $existingBaseFare,
+                $existingPricePerKm,
+                $existingNightHalt,
+                $existingDriverAllowance
             );
             
             $insertStmt->execute();

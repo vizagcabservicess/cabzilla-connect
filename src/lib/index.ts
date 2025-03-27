@@ -33,6 +33,7 @@ export {
   getFaresByTripType,
   clearFareCache as clearFareServiceCache,
   resetCabOptionsState,
+  syncLocalFareTables,
   fareService
 } from '@/services/fareService';
 

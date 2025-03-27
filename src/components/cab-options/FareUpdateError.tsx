@@ -12,7 +12,7 @@ import {
   Server,
   Wifi,
   DatabaseBackup,
-  RefreshCcw  // Changed from Sync to RefreshCcw
+  RefreshCcw 
 } from "lucide-react";
 import { fareService } from '@/services/fareService';
 import { toast } from 'sonner';
