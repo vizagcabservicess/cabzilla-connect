@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -307,6 +308,7 @@ export function FareUpdateError({
       }
       
       // Final fallback using fare service
+      // The error is here - remove the fourth argument
       const result = await fareService.initializeDatabase();
       
       if (result) {
