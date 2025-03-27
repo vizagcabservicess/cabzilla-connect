@@ -113,7 +113,7 @@ export function BookingSummary({
     
     if (tripType === 'outstation') {
       const baseKm = 300;
-      const baseFare = displayPrice > 0 ? Math.min(4200, displayPrice * 0.4) : 0;
+      const baseFare = displayPrice > 0 ? Math.round(displayPrice * 0.6) : 0;
       const driverAllowance = 250;
       const effectiveDistance = tripMode === 'one-way' ? distance * 2 : distance * 2;
       const extraDistance = Math.max(0, effectiveDistance - baseKm);
@@ -174,6 +174,23 @@ export function BookingSummary({
         <>
           <div className="flex justify-between mt-3 text-sm">
             <span>Airport transfer base fare</span>
+            <span>₹{formatPrice(displayPrice - 250)}</span>
+          </div>
+          
+          <div className="flex justify-between mt-3 text-sm">
+            <span>Driver allowance</span>
+            <span>₹250</span>
+          </div>
+        </>
+      );
+    }
+    
+    if (tripType === 'tour') {
+      // For tour packages, we show a simplified breakdown
+      return (
+        <>
+          <div className="flex justify-between mt-3 text-sm">
+            <span>Tour package base fare</span>
             <span>₹{formatPrice(displayPrice - 250)}</span>
           </div>
           
@@ -295,6 +312,10 @@ export function BookingSummary({
                       <>
                         Prices include driver allowance and all taxes.
                         Additional charges may apply for night rides.
+                      </>
+                    ) : tripType === 'tour' ? (
+                      <>
+                        Tour package prices include all tolls, permits, and driver allowance.
                       </>
                     ) : (
                       <>

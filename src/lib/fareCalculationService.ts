@@ -575,20 +575,26 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
     }
     else if (tripType === 'tour') {
       // For tour packages - check if we have tour fares defined
-      let tourId = 'araku'; // Default tour ID
+      if (!params.tourId) {
+        console.warn('No tourId provided for tour fare calculation, using default tour');
+      }
       
-      // Try to extract tour ID from the trip details
-      if (cabType.id && tourFares[tourId] && tourFares[tourId][cabType.id as keyof typeof tourFares[typeof tourId]]) {
+      const tourId = params.tourId || 'araku';
+      console.log(`Calculating fare for tour: ${tourId}, cab: ${cabType.id}`);
+      
+      // Check if we have specific tour fares for this cab
+      if (tourFares[tourId] && cabType.id && tourFares[tourId][cabType.id as keyof typeof tourFares[typeof tourId]]) {
         calculatedFare = tourFares[tourId][cabType.id as keyof typeof tourFares[typeof tourId]] as number;
+        console.log(`Found exact tour fare in matrix: ₹${calculatedFare}`);
       } else {
-        // Use default tour pricing if tour fare not found
+        // Use default tour pricing if specific fare not found
         if (safeToLowerCase(cabType.name).includes('sedan')) calculatedFare = 3500;
         else if (safeToLowerCase(cabType.name).includes('ertiga')) calculatedFare = 4500;
         else if (safeToLowerCase(cabType.name).includes('innova')) calculatedFare = 5500;
         else calculatedFare = 4000;
+        
+        console.log(`Using default tour fare: ₹${calculatedFare}`);
       }
-      
-      console.log(`Calculated tour fare: ₹${calculatedFare}`);
     }
     
     // CRITICAL: Always dispatch fare-updated event in addition to fare-calculated

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -18,6 +19,7 @@ import { MapPin, Calendar, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { bookingAPI } from "@/services/api";
 import { BookingRequest } from "@/types/api";
+import { calculateFare } from "@/lib/fareCalculationService";
 
 const ToursPage = () => {
   const navigate = useNavigate();
@@ -29,6 +31,7 @@ const ToursPage = () => {
   const [selectedCab, setSelectedCab] = useState<CabType | null>(null);
   const [showGuestDetailsForm, setShowGuestDetailsForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [currentTourFare, setCurrentTourFare] = useState<number>(0);
   
   const getTourFare = (tourId: string, cabId: string): number => {
     if (!tourId || !cabId) return 0;
@@ -52,7 +55,37 @@ const ToursPage = () => {
   const handleTourSelect = (tourId: string) => {
     setSelectedTour(tourId);
     setSelectedCab(null);
+    setCurrentTourFare(0);
   };
+  
+  // Effect to update fare when cab and tour are selected
+  useEffect(() => {
+    const updateTourFare = async () => {
+      if (selectedTour && selectedCab) {
+        const tourDistance = availableTours.find(t => t.id === selectedTour)?.distance || 0;
+        try {
+          const fare = await calculateFare({
+            cabType: selectedCab,
+            distance: tourDistance,
+            tripType: 'tour',
+            tripMode: 'one-way',
+            pickupDate,
+            tourId: selectedTour,
+            forceRefresh: true
+          });
+          console.log(`Calculated tour fare: ${fare}`);
+          setCurrentTourFare(fare);
+        } catch (error) {
+          console.error('Error calculating tour fare:', error);
+          // Fallback to direct fare calculation
+          const fare = getTourFare(selectedTour, selectedCab.id);
+          setCurrentTourFare(fare);
+        }
+      }
+    };
+    
+    updateTourFare();
+  }, [selectedTour, selectedCab]);
   
   const handleBookNow = () => {
     if (!selectedTour) {
@@ -123,7 +156,7 @@ const ToursPage = () => {
         return;
       }
       
-      const fare = getTourFare(selectedTour!, selectedCab!.id);
+      const fare = currentTourFare > 0 ? currentTourFare : getTourFare(selectedTour!, selectedCab!.id);
       
       const bookingData: BookingRequest = {
         pickupLocation: pickupLocation.name || '',
@@ -291,8 +324,8 @@ const ToursPage = () => {
               <div>
                 <GuestDetailsForm
                   onSubmit={handleGuestDetailsSubmit}
-                  totalPrice={selectedTour && selectedCab ? 
-                    getTourFare(selectedTour, selectedCab.id) : 0}
+                  totalPrice={currentTourFare > 0 ? currentTourFare : 
+                    (selectedTour && selectedCab ? getTourFare(selectedTour, selectedCab.id) : 0)}
                   isSubmitting={isSubmitting}
                 />
               </div>
@@ -305,7 +338,7 @@ const ToursPage = () => {
                     pickupDate={pickupDate}
                     selectedCab={selectedCab}
                     distance={availableTours.find(t => t.id === selectedTour)?.distance || 0}
-                    totalPrice={getTourFare(selectedTour, selectedCab.id)}
+                    totalPrice={currentTourFare > 0 ? currentTourFare : getTourFare(selectedTour, selectedCab.id)}
                     tripType="tour"
                     tripMode="one-way"
                   />
