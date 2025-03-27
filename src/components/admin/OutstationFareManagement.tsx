@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -57,6 +58,7 @@ export function OutstationFareManagement() {
       setIsLoading(true);
       setError(null);
       
+      // Clear cache before loading data
       fareService.clearCache();
       
       const types = await loadCabTypes(true);
@@ -64,6 +66,7 @@ export function OutstationFareManagement() {
       
       setIsLoading(false);
     } catch (err) {
+      console.error("Error loading cab types:", err);
       setError(err instanceof Error ? err : new Error('Failed to load cab types'));
       setIsLoading(false);
     }
@@ -73,6 +76,20 @@ export function OutstationFareManagement() {
     try {
       setIsInitializingDB(true);
       setError(null);
+      
+      // First try to sync between tables to ensure consistency
+      try {
+        const syncEndpoint = `${apiBaseUrl}/api/admin/sync-outstation-fares.php?_t=${Date.now()}`;
+        console.log("Syncing outstation fares tables:", syncEndpoint);
+        await axios.get(syncEndpoint, {
+          headers: fareService.getBypassHeaders(),
+          timeout: 10000 // 10 second timeout
+        });
+        toast.success("Outstation fares tables synchronized");
+      } catch (syncErr) {
+        console.error("Error syncing outstation fares:", syncErr);
+        toast.error("Failed to sync tables, will try database initialization");
+      }
       
       const result = await fareService.initializeDatabase(true);
       console.log('Database initialization response:', result);
@@ -96,36 +113,90 @@ export function OutstationFareManagement() {
       toast.info(`Updating fares for ${values.cabType}...`);
       console.log('Starting fare update for outstation with vehicle ID', values.cabType);
       
+      // First, try the direct outstation-fares-update.php endpoint
       try {
-        const result = await fareService.directFareUpdate('outstation', values.cabType, {
-          basePrice: values.oneWayBasePrice,
-          pricePerKm: values.oneWayPricePerKm,
-          roundTripBasePrice: values.roundTripBasePrice,
-          roundTripPricePerKm: values.roundTripPricePerKm,
-          driverAllowance: values.driverAllowance,
-          nightHaltCharge: values.nightHalt,
+        const directEndpoint = `${apiBaseUrl}/api/admin/outstation-fares-update.php`;
+        console.log(`Trying direct endpoint: ${directEndpoint}`);
+        
+        const formData = new FormData();
+        formData.append('vehicleId', values.cabType);
+        formData.append('oneWayBasePrice', values.oneWayBasePrice.toString());
+        formData.append('oneWayPricePerKm', values.oneWayPricePerKm.toString());
+        formData.append('roundTripBasePrice', values.roundTripBasePrice.toString());
+        formData.append('roundTripPricePerKm', values.roundTripPricePerKm.toString());
+        formData.append('driverAllowance', values.driverAllowance.toString());
+        formData.append('nightHalt', values.nightHalt.toString());
+        
+        const directResponse = await axios.post(directEndpoint, formData, {
+          headers: {
+            ...fareService.getBypassHeaders(),
+            'Content-Type': 'multipart/form-data',
+          },
+          timeout: 10000 // 10 second timeout
         });
         
-        console.log('Fare update result:', result);
+        console.log('Direct update response:', directResponse.data);
+        if (directResponse.data && directResponse.data.status === 'success') {
+          console.log('Successfully updated fares via direct endpoint');
+        } else {
+          throw new Error('Direct update response was not successful');
+        }
+      } catch (directError) {
+        console.error('Error using direct outstation endpoint:', directError);
         
-        fareService.clearCache();
-        
-        window.dispatchEvent(new CustomEvent('fare-cache-cleared'));
-        window.dispatchEvent(new CustomEvent('trip-fares-updated', {
-          detail: { 
-            timestamp: Date.now(),
-            vehicleId: values.cabType
-          }
-        }));
-        
-        fareService.resetCabOptionsState();
-        
-        toast.success(`Fares updated for ${values.cabType}`);
-      } catch (error) {
-        console.error('Error updating fares:', error);
-        throw error;
+        // Fallback to the standard directFareUpdate method
+        try {
+          const result = await fareService.directFareUpdate('outstation', values.cabType, {
+            basePrice: values.oneWayBasePrice,
+            pricePerKm: values.oneWayPricePerKm,
+            roundTripBasePrice: values.roundTripBasePrice,
+            roundTripPricePerKm: values.roundTripPricePerKm,
+            driverAllowance: values.driverAllowance,
+            nightHaltCharge: values.nightHalt,
+          });
+          
+          console.log('Fare update result:', result);
+        } catch (fallbackError) {
+          console.error('Fallback error:', fallbackError);
+          throw fallbackError;
+        }
       }
+      
+      // After updating, force sync between tables
+      try {
+        console.log("Syncing outstation_fares with vehicle_pricing");
+        const syncResponse = await axios.get(`${apiBaseUrl}/api/admin/sync-outstation-fares.php`, {
+          params: { 
+            _t: Date.now() // Cache busting
+          },
+          headers: fareService.getBypassHeaders()
+        });
+        console.log('Sync response:', syncResponse.data);
+      } catch (syncError) {
+        console.error('Error syncing tables after update:', syncError);
+        // Continue anyway - this is just an additional step
+      }
+      
+      // Clear all caches
+      fareService.clearCache();
+      
+      // Dispatch events to update UI
+      window.dispatchEvent(new CustomEvent('fare-cache-cleared'));
+      window.dispatchEvent(new CustomEvent('trip-fares-updated', {
+        detail: { 
+          timestamp: Date.now(),
+          vehicleId: values.cabType
+        }
+      }));
+      
+      fareService.resetCabOptionsState();
+      
+      toast.success(`Fares updated for ${values.cabType}`);
+      
+      // Force a reload of the fares for this vehicle
+      loadFaresForVehicle(values.cabType);
     } catch (err) {
+      console.error('Error updating fares:', err);
       setError(err instanceof Error ? err : new Error('Failed to update fares'));
       toast.error(`Failed to update fares: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
@@ -139,48 +210,72 @@ export function OutstationFareManagement() {
     try {
       setIsLoading(true);
       
-      await axios.get(`${apiBaseUrl}/api/outstation-fares.php`, {
-        params: { 
-          check_sync: 'true',
-          vehicle_id: vehicleId,
-          _t: Date.now()
-        },
-        headers: fareService.getBypassHeaders()
-      });
-      
-      const fares = await fareService.getOutstationFaresForVehicle(vehicleId);
-      console.log('Loaded outstation fares for vehicle:', fares);
-      
-      if (fares) {
-        form.setValue("oneWayBasePrice", fares.basePrice || 0);
-        form.setValue("oneWayPricePerKm", fares.pricePerKm || 0);
-        form.setValue("roundTripBasePrice", fares.roundTripBasePrice || 0);
-        form.setValue("roundTripPricePerKm", fares.roundTripPricePerKm || 0);
-        form.setValue("driverAllowance", fares.driverAllowance || 0);
-        form.setValue("nightHalt", fares.nightHaltCharge || 0);
-        return;
+      // First try the direct endpoint with sync param
+      try {
+        await axios.get(`${apiBaseUrl}/api/outstation-fares.php`, {
+          params: { 
+            check_sync: 'true',
+            vehicle_id: vehicleId,
+            _t: Date.now()
+          },
+          headers: fareService.getBypassHeaders(),
+          timeout: 8000 // 8 second timeout
+        });
+      } catch (directError) {
+        console.error('Error fetching from direct endpoint:', directError);
+        // Continue anyway - we'll try another approach
       }
-    } catch (fareError) {
-      console.error('Error fetching fares directly:', fareError);
-    }
-    
-    const vehicles = await loadCabTypes(true);
-    const vehicle = vehicles.find(v => v.id === vehicleId);
-    
-    if (vehicle && vehicle.outstationFares) {
-      console.log('Loaded outstation fares from vehicle data:', vehicle.outstationFares);
       
-      form.setValue("oneWayBasePrice", vehicle.outstationFares.basePrice || 0);
-      form.setValue("oneWayPricePerKm", vehicle.outstationFares.pricePerKm || 0);
-      form.setValue("roundTripBasePrice", vehicle.outstationFares.roundTripBasePrice || 0);
-      form.setValue("roundTripPricePerKm", vehicle.outstationFares.roundTripPricePerKm || 0);
-      form.setValue("driverAllowance", vehicle.outstationFares.driverAllowance || 0);
-      form.setValue("nightHalt", vehicle.outstationFares.nightHaltCharge || 0);
-      return;
-    } 
-    
-    console.log('No existing fares found for vehicle, using defaults');
-    setDefaultPricesForVehicle(vehicleId);
+      // Now try to get the fares via the service
+      try {
+        const fares = await fareService.getOutstationFaresForVehicle(vehicleId);
+        console.log('Loaded outstation fares for vehicle:', fares);
+        
+        if (fares) {
+          form.setValue("oneWayBasePrice", fares.basePrice || 0);
+          form.setValue("oneWayPricePerKm", fares.pricePerKm || 0);
+          form.setValue("roundTripBasePrice", fares.roundTripBasePrice || 0);
+          form.setValue("roundTripPricePerKm", fares.roundTripPricePerKm || 0);
+          form.setValue("driverAllowance", fares.driverAllowance || 0);
+          form.setValue("nightHalt", fares.nightHaltCharge || 0);
+          setIsLoading(false);
+          return;
+        }
+      } catch (fareError) {
+        console.error('Error fetching fares via service:', fareError);
+        // Continue to fallback options
+      }
+      
+      // Try to get from cached cab types
+      try {
+        const vehicles = await loadCabTypes(true);
+        const vehicle = vehicles.find(v => v.id === vehicleId);
+        
+        if (vehicle && vehicle.outstationFares) {
+          console.log('Loaded outstation fares from vehicle data:', vehicle.outstationFares);
+          
+          form.setValue("oneWayBasePrice", vehicle.outstationFares.basePrice || 0);
+          form.setValue("oneWayPricePerKm", vehicle.outstationFares.pricePerKm || 0);
+          form.setValue("roundTripBasePrice", vehicle.outstationFares.roundTripBasePrice || 0);
+          form.setValue("roundTripPricePerKm", vehicle.outstationFares.roundTripPricePerKm || 0);
+          form.setValue("driverAllowance", vehicle.outstationFares.driverAllowance || 0);
+          form.setValue("nightHalt", vehicle.outstationFares.nightHaltCharge || 0);
+          setIsLoading(false);
+          return;
+        }
+      } catch (vehicleError) {
+        console.error('Error loading from cached vehicles:', vehicleError);
+      }
+      
+      // If all else fails, use default values
+      console.log('No existing fares found for vehicle, using defaults');
+      setDefaultPricesForVehicle(vehicleId);
+      setIsLoading(false);
+    } catch (error) {
+      console.error('Error in loadFaresForVehicle:', error);
+      setError(error instanceof Error ? error : new Error('Failed to load fares for vehicle'));
+      setIsLoading(false);
+    }
   };
   
   const setDefaultPricesForVehicle = (vehicleId: string) => {
@@ -245,25 +340,45 @@ export function OutstationFareManagement() {
             />
           )}
           
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={initializeDatabase} 
-            disabled={isInitializingDB}
-            className="mb-4"
-          >
-            {isInitializingDB ? (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                Initializing...
-              </>
-            ) : (
-              <>
-                <Database className="mr-2 h-4 w-4" />
-                Initialize DB Tables
-              </>
-            )}
-          </Button>
+          <div className="flex space-x-2 mb-4">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={initializeDatabase} 
+              disabled={isInitializingDB}
+            >
+              {isInitializingDB ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Initializing...
+                </>
+              ) : (
+                <>
+                  <Database className="mr-2 h-4 w-4" />
+                  Initialize DB Tables
+                </>
+              )}
+            </Button>
+            
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={async () => {
+                try {
+                  const syncEndpoint = `${apiBaseUrl}/api/admin/sync-outstation-fares.php?_t=${Date.now()}`;
+                  toast.info("Syncing outstation fares tables...");
+                  await axios.get(syncEndpoint, { headers: fareService.getBypassHeaders() });
+                  toast.success("Tables synchronized successfully");
+                } catch (err) {
+                  console.error("Error syncing tables:", err);
+                  toast.error("Failed to sync tables");
+                }
+              }}
+            >
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Sync Tables
+            </Button>
+          </div>
           
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
