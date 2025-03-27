@@ -11,7 +11,7 @@ header('Content-Type: application/json');
 
 // Add additional headers for debugging
 header('X-Debug-File: direct-local-fares.php');
-header('X-API-Version: 1.0.55');
+header('X-API-Version: 1.0.56');
 header('X-Timestamp: ' . time());
 
 // Handle preflight OPTIONS request
@@ -58,6 +58,33 @@ if (isset($_GET['test']) || isset($_GET['test_db'])) {
         'timestamp' => time()
     ]);
     exit;
+}
+
+// Database connection function
+function getDbConnection() {
+    try {
+        global $logDir, $timestamp;
+        
+        $host = 'localhost';
+        $dbname = 'u644605165_new_bookingdb';
+        $username = 'u644605165_new_bookingusr';
+        $password = 'Vizag@1213';
+        
+        // Log connection attempt
+        error_log("[$timestamp] Attempting to connect to database: $host, $dbname, $username", 3, $logDir . '/direct-local-fares.log');
+        
+        $conn = new mysqli($host, $username, $password, $dbname);
+        
+        if ($conn->connect_error) {
+            throw new Exception("Connection failed: " . $conn->connect_error);
+        }
+        
+        error_log("[$timestamp] Database connection successful", 3, $logDir . '/direct-local-fares.log');
+        return $conn;
+    } catch (Exception $e) {
+        error_log("[$timestamp] Database connection error: " . $e->getMessage(), 3, $logDir . '/direct-local-fares.log');
+        throw $e; // Re-throw the exception to be caught by the caller
+    }
 }
 
 // Initialize mode - if initialize=true, create and populate tables

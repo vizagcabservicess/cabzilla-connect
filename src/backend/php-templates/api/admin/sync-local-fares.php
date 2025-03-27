@@ -4,7 +4,11 @@
  * This script synchronizes data between local_package_fares and vehicle_pricing tables
  * It handles different column name variations between tables
  */
-require_once '../../config.php';
+// Direct DB connection - not using config to avoid potential connection issues
+$host = 'localhost';
+$dbname = 'u644605165_new_bookingdb';
+$username = 'u644605165_new_bookingusr';
+$password = 'Vizag@1213';
 
 // Set headers for CORS
 header('Access-Control-Allow-Origin: *');
@@ -18,16 +22,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+// Create log directory
+$logDir = __DIR__ . '/../../logs';
+if (!file_exists($logDir)) {
+    mkdir($logDir, 0755, true);
+}
+
+$timestamp = date('Y-m-d H:i:s');
+error_log("[$timestamp] Starting sync-local-fares.php script", 3, $logDir . '/sync-local-fares.log');
+
 try {
-    // Get database connection
-    $conn = getDbConnection();
+    // Get database connection directly
+    $conn = new mysqli($host, $username, $password, $dbname);
     
-    if (!$conn) {
-        throw new Exception("Failed to connect to database");
+    if ($conn->connect_error) {
+        throw new Exception("Database connection failed: " . $conn->connect_error);
     }
     
+    error_log("[$timestamp] Database connection successful", 3, $logDir . '/sync-local-fares.log');
+    
     // Log start of sync process
-    error_log("Starting sync between local_package_fares and vehicle_pricing tables");
+    error_log("[$timestamp] Starting sync between local_package_fares and vehicle_pricing tables", 3, $logDir . '/sync-local-fares.log');
     
     $tables = [];
     $syncedIds = [];
@@ -44,8 +59,8 @@ try {
     $result = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'");
     $tables['vehicle_pricing'] = $result && $result->num_rows > 0;
     
-    error_log("Tables check completed: local_package_fares=" . ($tables['local_package_fares'] ? 'exists' : 'missing') . 
-              ", vehicle_pricing=" . ($tables['vehicle_pricing'] ? 'exists' : 'missing'));
+    error_log("[$timestamp] Tables check completed: local_package_fares=" . ($tables['local_package_fares'] ? 'exists' : 'missing') . 
+              ", vehicle_pricing=" . ($tables['vehicle_pricing'] ? 'exists' : 'missing'), 3, $logDir . '/sync-local-fares.log');
     
     // Create tables if they don't exist
     if (!$tables['local_package_fares']) {
@@ -53,6 +68,7 @@ try {
             CREATE TABLE IF NOT EXISTS `local_package_fares` (
                 `id` int(11) NOT NULL AUTO_INCREMENT,
                 `vehicle_id` varchar(50) NOT NULL,
+                `vehicle_type` varchar(50) DEFAULT NULL,
                 `price_4hrs_40km` decimal(10,2) NOT NULL DEFAULT 0,
                 `price_8hrs_80km` decimal(10,2) NOT NULL DEFAULT 0,
                 `price_10hrs_100km` decimal(10,2) NOT NULL DEFAULT 0,
@@ -68,7 +84,7 @@ try {
             throw new Exception("Failed to create local_package_fares table: " . $conn->error);
         }
         $tables['local_package_fares'] = true;
-        error_log("Created local_package_fares table");
+        error_log("[$timestamp] Created local_package_fares table", 3, $logDir . '/sync-local-fares.log');
     }
     
     if (!$tables['vehicle_pricing']) {
@@ -96,7 +112,7 @@ try {
             throw new Exception("Failed to create vehicle_pricing table: " . $conn->error);
         }
         $tables['vehicle_pricing'] = true;
-        error_log("Created vehicle_pricing table");
+        error_log("[$timestamp] Created vehicle_pricing table", 3, $logDir . '/sync-local-fares.log');
     }
     
     // Begin transaction
@@ -105,7 +121,7 @@ try {
     try {
         // First sync from local_package_fares to vehicle_pricing
         if ($tables['local_package_fares'] && $tables['vehicle_pricing']) {
-            error_log("Syncing from local_package_fares to vehicle_pricing...");
+            error_log("[$timestamp] Syncing from local_package_fares to vehicle_pricing...", 3, $logDir . '/sync-local-fares.log');
             
             // Get all records from local_package_fares
             $query = "SELECT * FROM local_package_fares";
@@ -167,7 +183,7 @@ try {
                                 extra_km_charge, extra_hour_charge, base_fare, price_per_km, night_halt_charge, driver_allowance) 
                                 VALUES (?, 'local', ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                     $insertStmt = $conn->prepare($insertSql);
-                    $insertStmt->bind_param("sdddddddd", $vehicleId, $price4hrs40km, $price8hrs80km, $price10hrs100km, 
+                    $insertStmt->bind_param("sddddddddd", $vehicleId, $price4hrs40km, $price8hrs80km, $price10hrs100km, 
                                           $priceExtraKm, $priceExtraHour, $baseFare, $pricePerKm, $nightHaltCharge, $driverAllowance);
                     $insertStmt->execute();
                     $syncResults['localToVehiclePricing']++;
@@ -175,7 +191,7 @@ try {
             }
             
             // Now sync from vehicle_pricing to local_package_fares
-            error_log("Syncing from vehicle_pricing to local_package_fares...");
+            error_log("[$timestamp] Syncing from vehicle_pricing to local_package_fares...", 3, $logDir . '/sync-local-fares.log');
             
             // Get all local records from vehicle_pricing
             $query = "SELECT * FROM vehicle_pricing WHERE trip_type = 'local'";
@@ -225,10 +241,10 @@ try {
                 } else {
                     // Insert new record
                     $insertStmt = $conn->prepare("INSERT INTO local_package_fares 
-                                            (vehicle_id, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, 
+                                            (vehicle_id, vehicle_type, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, 
                                             price_extra_km, price_extra_hour)
-                                            VALUES (?, ?, ?, ?, ?, ?)");
-                    $insertStmt->bind_param("sddddd", $vehicleId, $price4hrs40km, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour);
+                                            VALUES (?, ?, ?, ?, ?, ?, ?)");
+                    $insertStmt->bind_param("ssddddd", $vehicleId, $vehicleId, $price4hrs40km, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour);
                     $insertStmt->execute();
                 }
                 
@@ -255,7 +271,7 @@ try {
     }
     
 } catch (Exception $e) {
-    error_log("Error syncing tables: " . $e->getMessage() . "\n" . $e->getTraceAsString());
+    error_log("[$timestamp] Error syncing tables: " . $e->getMessage() . "\n" . $e->getTraceAsString(), 3, $logDir . '/sync-local-fares.log');
     
     http_response_code(500);
     echo json_encode([

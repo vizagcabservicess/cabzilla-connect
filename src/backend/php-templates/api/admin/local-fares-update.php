@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // Create log directory if it doesn't exist
-$logDir = __DIR__ . '/../logs';
+$logDir = __DIR__ . '/../../logs';
 if (!file_exists($logDir)) {
     mkdir($logDir, 0755, true);
 }
@@ -256,6 +256,7 @@ if (!empty($vehicleId) && ($package4hr > 0 || $package8hr > 0 || $package10hr > 
                     CREATE TABLE IF NOT EXISTS local_package_fares (
                         id INT AUTO_INCREMENT PRIMARY KEY,
                         vehicle_id VARCHAR(50) NOT NULL,
+                        vehicle_type VARCHAR(50) DEFAULT NULL,
                         price_4hrs_40km DECIMAL(10,2) NOT NULL DEFAULT 0,
                         price_8hrs_80km DECIMAL(10,2) NOT NULL DEFAULT 0,
                         price_10hrs_100km DECIMAL(10,2) NOT NULL DEFAULT 0,
@@ -306,12 +307,13 @@ if (!empty($vehicleId) && ($package4hr > 0 || $package8hr > 0 || $package10hr > 
             } else {
                 // Insert new record
                 $insertSql = "INSERT INTO local_package_fares 
-                              (vehicle_id, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, 
-                               price_extra_km, price_extra_hour, created_at, updated_at)
-                              VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())";
+                              (vehicle_id, vehicle_type, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, 
+                               price_extra_km, price_extra_hour)
+                              VALUES (?, ?, ?, ?, ?, ?, ?)";
                 $insertStmt = $pdo->prepare($insertSql);
                 $insertStmt->execute([
                     $vehicleId,
+                    $vehicleId, // Use vehicle_id as vehicle_type if not provided
                     $package4hr, 
                     $package8hr, 
                     $package10hr, 
@@ -320,6 +322,8 @@ if (!empty($vehicleId) && ($package4hr > 0 || $package8hr > 0 || $package10hr > 
                 ]);
                 error_log("[$timestamp] Inserted new record in local_package_fares for $vehicleId", 3, $logDir . '/local-fares.log');
             }
+            
+            $responseData['database'] = 'Updated successfully';
         } catch (PDOException $e) {
             error_log("[$timestamp] Error updating local_package_fares: " . $e->getMessage(), 3, $logDir . '/local-fares.log');
             $databaseError = "Error updating local_package_fares: " . $e->getMessage();
@@ -327,23 +331,12 @@ if (!empty($vehicleId) && ($package4hr > 0 || $package8hr > 0 || $package10hr > 
         }
     } catch (Exception $e) {
         error_log("[$timestamp] Exception: " . $e->getMessage(), 3, $logDir . '/local-fares.log');
-        $responseData = [
-            'status' => 'error',
-            'message' => 'Database error: ' . $e->getMessage(),
-            'data' => [
-                'vehicleId' => $vehicleId,
-                'packages' => [
-                    '4hrs-40km' => $package4hr,
-                    '8hrs-80km' => $package8hr,
-                    '10hrs-100km' => $package10hr,
-                    'extra-km' => $extraKmRate,
-                    'extra-hour' => $extraHourRate
-                ]
-            ]
-        ];
+        $responseData['status'] = 'error';
+        $responseData['message'] = $e->getMessage();
+        $responseData['database_error'] = $databaseError ?: $e->getMessage();
+        http_response_code(500);
     }
 }
 
-// Always return success, even if there was a database error
-// This allows the frontend to still update its local cache
+// Return response
 echo json_encode($responseData);
