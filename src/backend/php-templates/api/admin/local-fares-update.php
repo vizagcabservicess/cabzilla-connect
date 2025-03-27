@@ -341,7 +341,7 @@ if (!empty($vehicleId) && ($package4hr > 0 || $package8hr > 0 || $package10hr > 
                 $createVPTableSql = "
                     CREATE TABLE IF NOT EXISTS vehicle_pricing (
                         id INT AUTO_INCREMENT PRIMARY KEY,
-                        vehicle_id VARCHAR(50) NOT NULL,
+                        vehicle_type VARCHAR(50) NOT NULL, 
                         trip_type VARCHAR(50) NOT NULL DEFAULT 'local',
                         base_fare DECIMAL(10,2) NOT NULL DEFAULT 0,
                         price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
@@ -354,7 +354,7 @@ if (!empty($vehicleId) && ($package4hr > 0 || $package8hr > 0 || $package10hr > 
                         extra_hour_charge DECIMAL(5,2) DEFAULT NULL,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                        UNIQUE KEY vehicle_trip_type (vehicle_id, trip_type)
+                        UNIQUE KEY vehicle_trip_type (vehicle_type, trip_type)
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
                 ";
                 $pdo->exec($createVPTableSql);
@@ -365,56 +365,57 @@ if (!empty($vehicleId) && ($package4hr > 0 || $package8hr > 0 || $package10hr > 
             }
         }
         
-        // Check vehicle_pricing table structure
+        // Check vehicle_pricing table structure and columns
         $hasCorrectVPStructure = false;
+        $columnInfo = [];
         try {
+            // Get all columns from vehicle_pricing table
+            $columnsStmt = $pdo->query("SHOW COLUMNS FROM vehicle_pricing");
+            $allColumns = $columnsStmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Check column names and store them
+            foreach ($allColumns as $column) {
+                $columnInfo[$column['Field']] = true;
+            }
+            
             // Check if vehicle_pricing has the trip_type column
-            $columnsStmt = $pdo->query("SHOW COLUMNS FROM vehicle_pricing LIKE 'trip_type'");
-            $hasCorrectVPStructure = ($columnsStmt->rowCount() > 0);
+            $hasCorrectVPStructure = isset($columnInfo['trip_type']);
+            
+            // Log column information for debugging
+            error_log("[$timestamp] Vehicle_pricing columns: " . json_encode(array_keys($columnInfo)), 3, $logDir . '/local-fares.log');
             
             if (!$hasCorrectVPStructure) {
                 // Add trip_type column if it doesn't exist
-                $pdo->exec("ALTER TABLE vehicle_pricing ADD COLUMN trip_type VARCHAR(50) NOT NULL DEFAULT 'local' AFTER vehicle_id");
+                $pdo->exec("ALTER TABLE vehicle_pricing ADD COLUMN trip_type VARCHAR(50) NOT NULL DEFAULT 'local' AFTER vehicle_type");
                 error_log("[$timestamp] Added trip_type column to vehicle_pricing", 3, $logDir . '/local-fares.log');
                 
-                // Add unique key for vehicle_id and trip_type
-                $pdo->exec("ALTER TABLE vehicle_pricing DROP INDEX IF EXISTS vehicle_id");
-                $pdo->exec("ALTER TABLE vehicle_pricing ADD UNIQUE KEY vehicle_trip_type (vehicle_id, trip_type)");
-                error_log("[$timestamp] Added unique key for vehicle_id and trip_type", 3, $logDir . '/local-fares.log');
+                // Add unique key for vehicle_type and trip_type
+                $pdo->exec("ALTER TABLE vehicle_pricing DROP INDEX IF EXISTS vehicle_type");
+                $pdo->exec("ALTER TABLE vehicle_pricing ADD UNIQUE KEY vehicle_trip_type (vehicle_type, trip_type)");
+                error_log("[$timestamp] Added unique key for vehicle_type and trip_type", 3, $logDir . '/local-fares.log');
+                
+                // Update columnInfo
+                $columnInfo['trip_type'] = true;
             }
         } catch (PDOException $e) {
             error_log("[$timestamp] Error checking/updating vehicle_pricing structure: " . $e->getMessage(), 3, $logDir . '/local-fares.log');
             $databaseError = "Error checking/updating vehicle_pricing structure: " . $e->getMessage();
         }
         
-        // Update vehicle_pricing table - now with correct column checks
+        // Update vehicle_pricing table using the correct column names
         try {
-            // First check column existence - this is critical to fix "unknown column" errors
-            $columnChecks = [
-                'vehicle_id' => false,
-                'vehicleId' => false
-            ];
+            // Determine which column to use for vehicle identification (vehicle_id or vehicle_type)
+            $vehicleIdColumn = isset($columnInfo['vehicle_id']) ? 'vehicle_id' : 'vehicle_type';
+            error_log("[$timestamp] Using column $vehicleIdColumn for vehicle identification", 3, $logDir . '/local-fares.log');
             
-            $columnsResult = $pdo->query("SHOW COLUMNS FROM vehicle_pricing");
-            while ($column = $columnsResult->fetch(PDO::FETCH_ASSOC)) {
-                if ($column['Field'] === 'vehicle_id') $columnChecks['vehicle_id'] = true;
-                if ($column['Field'] === 'vehicleId') $columnChecks['vehicleId'] = true;
-            }
-            
-            error_log("[$timestamp] Column check results: " . print_r($columnChecks, true), 3, $logDir . '/local-fares.log');
-            
-            // Determine which column name to use
-            $vehicleIdColumn = $columnChecks['vehicle_id'] ? 'vehicle_id' : 'vehicleId';
-            error_log("[$timestamp] Using column name: $vehicleIdColumn for vehicle identification", 3, $logDir . '/local-fares.log');
-            
-            // Check if a record exists for this vehicle_id with trip_type 'local'
+            // Check if a record exists for this vehicle with trip_type 'local'
             $checkVPSql = "SELECT id FROM vehicle_pricing WHERE $vehicleIdColumn = ? AND trip_type = 'local'";
             $checkVPStmt = $pdo->prepare($checkVPSql);
             $checkVPStmt->execute([$vehicleId]);
             $vpExists = $checkVPStmt->fetch(PDO::FETCH_ASSOC);
             
             if ($vpExists) {
-                // Update existing record with the correct column name
+                // Update existing record with the correct column names
                 $updateVPSql = "UPDATE vehicle_pricing 
                                SET local_package_4hr = ?, 
                                    local_package_8hr = ?, 
@@ -434,7 +435,7 @@ if (!empty($vehicleId) && ($package4hr > 0 || $package8hr > 0 || $package10hr > 
                 ]);
                 error_log("[$timestamp] Updated existing record in vehicle_pricing for $vehicleId with trip_type 'local'", 3, $logDir . '/local-fares.log');
             } else {
-                // Insert new record with the correct column name
+                // Insert new record with the correct column names
                 $insertVPSql = "INSERT INTO vehicle_pricing 
                               ($vehicleIdColumn, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance,
                                local_package_4hr, local_package_8hr, local_package_10hr, 

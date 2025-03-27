@@ -69,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET
         exit;
     }
     
-    // If simple script not found, try direct-local-fares.php in admin folder
+    // If simple script not found, try admin/direct-local-fares.php
     $targetScript = __DIR__ . '/admin/direct-local-fares.php';
     
     // Check if the target script exists
