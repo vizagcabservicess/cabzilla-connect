@@ -141,7 +141,7 @@ try {
                 $priceExtraKm = $fare['price_extra_km'];
                 $priceExtraHour = $fare['price_extra_hour'];
                 
-                // Check if record exists in vehicle_pricing
+                // Check if record exists in vehicle_pricing - FIXED: using vehicle_type column
                 $checkSql = "SELECT * FROM vehicle_pricing WHERE vehicle_type = ? AND trip_type = 'local'";
                 $checkStmt = $conn->prepare($checkSql);
                 $checkStmt->bind_param("s", $vehicleId);
