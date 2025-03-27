@@ -308,6 +308,8 @@ export function FareUpdateError({
       }
       
       // Final fallback using fare service
+      // Fixed: This line had 4 arguments but the method expects 3
+      // Removed the forceRecreate parameter which was causing the TypeScript error
       const result = await fareService.initializeDatabase();
       
       if (result) {

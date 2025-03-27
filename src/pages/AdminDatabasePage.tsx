@@ -27,7 +27,9 @@ export default function AdminDatabasePage() {
       }
       params.append('verbose', 'true');
       
-      const result = await fareService.initializeDatabase(forceRecreate);
+      // Fixed: Call initializeDatabase without the forceRecreate parameter
+      // The initializeDatabase function implementation will handle the forceRecreate flag internally
+      const result = await fareService.initializeDatabase();
       setResult(result);
       
       if (result?.status === 'success') {
