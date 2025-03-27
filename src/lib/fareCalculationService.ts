@@ -420,24 +420,24 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
         
         if (tripMode === 'one-way') {
           perKmRate = outstationFares.pricePerKm;
-          
-          // FIXED: For one-way trips, base fare comes from vehicle_pricing table
-          // This is the base_fare value for min 300km
           baseFare = outstationFares.basePrice;
           
-          // Calculate extra distance if actual distance > minimum
-          if (distance > minimumKm) {
-            const extraDistance = distance - minimumKm;
-            
-            // FIXED: For one-way extra distance, we need to add the per km rate
-            // without doubling the distance (already included in base price)
+          // FIXED: For one-way trips, we need to consider the driver has to return
+          // so we should calculate extra distance considering round trip for driver
+          // Calculate total effective distance (one-way for customer, round trip for driver)
+          const effectiveDistance = distance * 2; // Double the distance to account for return journey
+          
+          if (effectiveDistance > minimumKm) {
+            // If total effective distance is greater than minimum
+            const extraDistance = effectiveDistance - minimumKm;
             const extraDistanceFare = extraDistance * perKmRate;
             calculatedFare = baseFare + extraDistanceFare + driverAllowance;
           } else {
+            // If total effective distance is less than minimum, just use base fare
             calculatedFare = baseFare + driverAllowance;
           }
           
-          console.log(`One-way outstation fare: Base=${baseFare}, Driver=${driverAllowance}, Total=${calculatedFare}, Rate=${perKmRate}/km`);
+          console.log(`One-way outstation fare (with return kilometers): Base=${baseFare}, Driver=${driverAllowance}, Effective distance=${effectiveDistance}km, Total=${calculatedFare}, Rate=${perKmRate}/km`);
         }
         // For round trip
         else {
@@ -483,8 +483,11 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
             perKmRate = outstationFares.pricePerKm;
             baseFare = outstationFares.basePrice;
             
-            if (distance > minimumKm) {
-              const extraDistance = distance - minimumKm;
+            // For one-way trips, double the distance for driver return journey
+            const effectiveDistance = distance * 2;
+            
+            if (effectiveDistance > minimumKm) {
+              const extraDistance = effectiveDistance - minimumKm;
               const extraDistanceFare = extraDistance * perKmRate;
               calculatedFare = baseFare + extraDistanceFare + driverAllowance;
             } else {
@@ -520,8 +523,11 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
             const baseFare = defaultPricing.basePrice;
             const driverAllowance = defaultPricing.driverAllowance;
             
-            if (distance > minimumKm) {
-              const extraDistance = distance - minimumKm;
+            // For one-way trips, double the distance for driver return journey
+            const effectiveDistance = distance * 2;
+            
+            if (effectiveDistance > minimumKm) {
+              const extraDistance = effectiveDistance - minimumKm;
               const extraDistanceFare = extraDistance * perKmRate;
               calculatedFare = baseFare + extraDistanceFare + driverAllowance;
             } else {
@@ -598,4 +604,3 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
     return 0;
   }
 };
-

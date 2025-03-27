@@ -47,6 +47,7 @@ export const BookingSummary = ({
   const calculationInProgressRef = useRef<boolean>(false);
   const calculationAttemptsRef = useRef<number>(0);
   const maxCalculationAttempts = 2;
+  const selectedCabIdRef = useRef<string | null>(selectedCab?.id || null);
   
   const recalculateFareDetails = async () => {
     if (!selectedCab) return;
@@ -93,11 +94,12 @@ export const BookingSummary = ({
             // FIXED: Always use basePrice from the vehicle_pricing table
             newBaseFare = outstationFares.basePrice || minimumKm * newPerKmRate;
             
-            // Calculate effective distance and extra distance
-            newEffectiveDistance = Math.max(distance, minimumKm);
+            // FIXED: For one-way trips, calculate effective distance as round trip
+            // to account for driver returning (even though customer only travels one way)
+            newEffectiveDistance = distance * 2;
             
-            if (distance > minimumKm) {
-              newExtraDistance = distance - minimumKm;
+            if (newEffectiveDistance > minimumKm) {
+              newExtraDistance = newEffectiveDistance - minimumKm;
               newExtraDistanceFare = newExtraDistance * newPerKmRate;
             }
             
@@ -135,10 +137,10 @@ export const BookingSummary = ({
           
           if (tripMode === 'one-way') {
             newBaseFare = minimumKm * newPerKmRate;
-            newEffectiveDistance = Math.max(distance, minimumKm);
+            newEffectiveDistance = distance * 2; // Double for one-way to account for driver returning
             
-            if (distance > minimumKm) {
-              newExtraDistance = distance - minimumKm;
+            if (newEffectiveDistance > minimumKm) {
+              newExtraDistance = newEffectiveDistance - minimumKm;
               newExtraDistanceFare = newExtraDistance * newPerKmRate;
             }
           } else {
@@ -241,6 +243,19 @@ export const BookingSummary = ({
       }
     };
     
+    const handleCabSelected = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail && customEvent.detail.cabType) {
+        console.log('BookingSummary: Detected cab selection event:', customEvent.detail);
+        // Only recalculate if the cab type has changed
+        if (selectedCabIdRef.current !== customEvent.detail.cabType) {
+          selectedCabIdRef.current = customEvent.detail.cabType;
+          calculationAttemptsRef.current = 0; // Reset counter for this important event
+          recalculateFareDetails();
+        }
+      }
+    };
+    
     const initialLoadTimer = setTimeout(() => {
       recalculateFareDetails();
     }, 500);
@@ -250,8 +265,8 @@ export const BookingSummary = ({
     window.addEventListener('trip-fares-updated', handleEventsWithThrottling);
     window.addEventListener('airport-fares-updated', handleEventsWithThrottling);
     window.addEventListener('fare-cache-cleared', handleEventsWithThrottling);
-    // ADDED: Listen for fare-calculated events to update in real-time
     window.addEventListener('fare-calculated', handleEventsWithThrottling);
+    window.addEventListener('cab-selected', handleCabSelected);
     
     return () => {
       clearTimeout(initialLoadTimer);
@@ -262,10 +277,21 @@ export const BookingSummary = ({
       window.removeEventListener('airport-fares-updated', handleEventsWithThrottling);
       window.removeEventListener('fare-cache-cleared', handleEventsWithThrottling);
       window.removeEventListener('fare-calculated', handleEventsWithThrottling);
+      window.removeEventListener('cab-selected', handleCabSelected);
     };
   }, []);
   
-  // FIXED: Added totalPrice to dependency array to trigger update when price changes
+  // Update when selected cab changes to force a recalculation
+  useEffect(() => {
+    if (selectedCab && selectedCabIdRef.current !== selectedCab.id) {
+      console.log('BookingSummary: Selected cab changed to', selectedCab.name);
+      selectedCabIdRef.current = selectedCab.id;
+      calculationAttemptsRef.current = 0; // Reset counter for this important event
+      recalculateFareDetails();
+    }
+  }, [selectedCab]);
+  
+  // ADDED: Additional effect to trigger update when any of the important props change
   useEffect(() => {
     const now = Date.now();
     if (now - lastUpdateTimeRef.current < 2000) {
@@ -355,7 +381,7 @@ export const BookingSummary = ({
                 
                 <div className="text-gray-600 text-sm ml-1">
                   {tripMode === 'one-way' ? (
-                    <>Total distance: {distance} km (300 km minimum fare applied)</>
+                    <>Total distance: {distance} km (effective: {effectiveDistance} km with driver return)</>
                   ) : (
                     <>Total distance: {distance} km (effective: {effectiveDistance} km round trip)</>
                   )}
@@ -426,7 +452,7 @@ export const BookingSummary = ({
               {tripType === 'outstation' && tripMode === 'round-trip'
                 ? 'Fare includes round trip journey (both ways). Driver allowance included for overnight stays.'
                 : tripType === 'outstation' && tripMode === 'one-way'
-                ? 'Minimum 300 km fare applies for one-way trips. Driver allowance included.'
+                ? 'Minimum 300 km fare applies for one-way trips. Driver allowance included for return journey.'
                 : tripType === 'tour'
                 ? 'All-inclusive tour package fare includes driver allowance and wait charges.'
                 : tripType === 'local'
