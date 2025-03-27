@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -299,7 +300,8 @@ export function FareUpdateError({
         console.error('Error creating tables via local-fares endpoint:', error);  
       }
       
-      const result = await fareService.initializeDatabase();
+      // THE FIX: Remove the extra arguments and only call with forceRecreate parameter (true)
+      const result = await fareService.initializeDatabase(true);
       
       if (result) {
         fareService.clearCache();
