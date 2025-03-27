@@ -91,7 +91,7 @@ try {
         $createVehiclePricingQuery = "
             CREATE TABLE IF NOT EXISTS `vehicle_pricing` (
                 `id` int(11) NOT NULL AUTO_INCREMENT,
-                `vehicle_type` varchar(50) NOT NULL,
+                `vehicle_id` varchar(50) NOT NULL,
                 `trip_type` enum('local','outstation','airport') NOT NULL,
                 `local_package_4hr` decimal(10,2) DEFAULT '0.00',
                 `local_package_8hr` decimal(10,2) DEFAULT '0.00',
@@ -105,7 +105,7 @@ try {
                 `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 PRIMARY KEY (`id`),
-                UNIQUE KEY `vehicle_type_trip_type` (`vehicle_type`,`trip_type`)
+                UNIQUE KEY `vehicle_type_trip_type` (`vehicle_id`,`trip_type`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         ";
         if (!$conn->query($createVehiclePricingQuery)) {
@@ -141,8 +141,8 @@ try {
                 $priceExtraKm = $fare['price_extra_km'];
                 $priceExtraHour = $fare['price_extra_hour'];
                 
-                // Check if record exists in vehicle_pricing - FIXED: using vehicle_type column
-                $checkSql = "SELECT * FROM vehicle_pricing WHERE vehicle_type = ? AND trip_type = 'local'";
+                // Check if record exists in vehicle_pricing - using vehicle_id column
+                $checkSql = "SELECT * FROM vehicle_pricing WHERE vehicle_id = ? AND trip_type = 'local'";
                 $checkStmt = $conn->prepare($checkSql);
                 $checkStmt->bind_param("s", $vehicleId);
                 $checkStmt->execute();
@@ -150,7 +150,7 @@ try {
                 $vpExists = $result && $result->num_rows > 0;
                 
                 // Get existing outstation data to preserve it
-                $outStmt = $conn->prepare("SELECT * FROM vehicle_pricing WHERE vehicle_type = ? AND trip_type = 'outstation'");
+                $outStmt = $conn->prepare("SELECT * FROM vehicle_pricing WHERE vehicle_id = ? AND trip_type = 'outstation'");
                 $outStmt->bind_param("s", $vehicleId);
                 $outStmt->execute();
                 $outResult = $outStmt->get_result();
@@ -171,7 +171,7 @@ try {
                                     extra_km_charge = ?, 
                                     extra_hour_charge = ?,
                                     updated_at = CURRENT_TIMESTAMP
-                                WHERE vehicle_type = ? AND trip_type = 'local'";
+                                WHERE vehicle_id = ? AND trip_type = 'local'";
                     $updateStmt = $conn->prepare($updateSql);
                     $updateStmt->bind_param("ddddds", $price4hrs40km, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour, $vehicleId);
                     $updateStmt->execute();
@@ -179,7 +179,7 @@ try {
                 } else {
                     // Insert new record
                     $insertSql = "INSERT INTO vehicle_pricing 
-                                (vehicle_type, trip_type, local_package_4hr, local_package_8hr, local_package_10hr, 
+                                (vehicle_id, trip_type, local_package_4hr, local_package_8hr, local_package_10hr, 
                                 extra_km_charge, extra_hour_charge, base_fare, price_per_km, night_halt_charge, driver_allowance) 
                                 VALUES (?, 'local', ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                     $insertStmt = $conn->prepare($insertSql);
@@ -202,7 +202,7 @@ try {
             }
             
             while ($pricing = $vehiclePricing->fetch_assoc()) {
-                $vehicleId = $pricing['vehicle_type'];
+                $vehicleId = $pricing['vehicle_id'];
                 
                 // Skip if already processed
                 if (isset($syncedIds[$vehicleId])) {
@@ -239,7 +239,7 @@ try {
                     $updateStmt->bind_param("ddddds", $price4hrs40km, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour, $vehicleId);
                     $updateStmt->execute();
                 } else {
-                    // Insert new record
+                    // Insert new record - fixing the issue with vehicle_type
                     $insertStmt = $conn->prepare("INSERT INTO local_package_fares 
                                             (vehicle_id, vehicle_type, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, 
                                             price_extra_km, price_extra_hour)
