@@ -32,6 +32,7 @@ export {
   getAirportFaresForVehicle,
   getFaresByTripType,
   clearFareCache as clearFareServiceCache,
+  resetCabOptionsState,
   fareService
 } from '@/services/fareService';
 

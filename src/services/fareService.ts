@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { TripType, TripMode } from '@/lib/tripTypes';
 import { LocalFare, OutstationFare, AirportFare } from '@/types/cab';
@@ -5,7 +6,7 @@ import { LocalFare, OutstationFare, AirportFare } from '@/types/cab';
 // Create a global timestamp for fare cache refreshes
 let globalTimestamp = Date.now();
 
-// Define the clearCache function first, so it can be used in the fareService object
+// Define functions that will be used and exported
 function clearFareCache() {
   console.log('Clearing fare cache at', new Date().toISOString());
   localStorage.removeItem('outstation_fares');
@@ -788,6 +789,7 @@ async function getAirportFaresForVehicle(vehicleId: string): Promise<AirportFare
 // Create the fareService object with all methods
 export const fareService = {
   clearCache: clearFareCache,
+  resetCabOptionsState,
   getBypassHeaders,
   getForcedRequestConfig,
   initializeDatabase,
@@ -800,63 +802,24 @@ export const fareService = {
   getOutstationFaresForVehicle,
   getLocalFaresForVehicle,
   getAirportFaresForVehicle,
-  getFaresByTripType,
-  resetCabOptionsState
+  getFaresByTripType
 };
 
 // Export individual functions for direct imports
-export function clearFareCache() {
-  return fareService.clearCache();
-}
-
-export function getBypassHeaders() {
-  return fareService.getBypassHeaders();
-}
-
-export function getForcedRequestConfig() {
-  return fareService.getForcedRequestConfig();
-}
-
-export function initializeDatabase(forceRecreate = false) {
-  return fareService.initializeDatabase(forceRecreate);
-}
-
-export function directFareUpdate(tripType: string, vehicleId: string, data: any) {
-  return fareService.directFareUpdate(tripType, vehicleId, data);
-}
-
-export function forceSyncOutstationFares() {
-  return fareService.forceSyncOutstationFares();
-}
-
-export function syncOutstationFares(vehicleId?: string) {
-  return fareService.syncOutstationFares(vehicleId);
-}
-
-export function getOutstationFares(origin?: string, destination?: string) {
-  return fareService.getOutstationFares(origin, destination);
-}
-
-export function getLocalFares() {
-  return fareService.getLocalFares();
-}
-
-export function getAirportFares() {
-  return fareService.getAirportFares();
-}
-
-export function getOutstationFaresForVehicle(vehicleId: string) {
-  return fareService.getOutstationFaresForVehicle(vehicleId);
-}
-
-export function getLocalFaresForVehicle(vehicleId: string) {
-  return fareService.getLocalFaresForVehicle(vehicleId);
-}
-
-export function getAirportFaresForVehicle(vehicleId: string) {
-  return fareService.getAirportFaresForVehicle(vehicleId);
-}
-
-export function getFaresByTripType(tripType: TripType, vehicleId?: string) {
-  return fareService.getFaresByTripType(tripType, vehicleId);
-}
+export {
+  clearFareCache,
+  resetCabOptionsState,
+  getBypassHeaders,
+  getForcedRequestConfig,
+  initializeDatabase,
+  directFareUpdate,
+  forceSyncOutstationFares,
+  syncOutstationFares,
+  getOutstationFares,
+  getLocalFares,
+  getAirportFares,
+  getOutstationFaresForVehicle,
+  getLocalFaresForVehicle,
+  getAirportFaresForVehicle,
+  getFaresByTripType
+};
