@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { TripType, TripMode } from '@/lib/tripTypes';
 import { LocalFare, OutstationFare, AirportFare } from '@/types/cab';
@@ -628,4 +627,23 @@ export const resetCabOptionsState = () => {
     localStorage.removeItem(`cabOptions_${type}`);
     localStorage.removeItem(`cabOptions_${type}_timestamp`);
   }
+};
+
+// Export fareService object with all functions
+export const fareService = {
+  clearCache: clearFareCache,
+  getBypassHeaders,
+  getForcedRequestConfig,
+  initializeDatabase,
+  directFareUpdate,
+  syncOutstationFares,
+  forceSyncOutstationFares,
+  getOutstationFares,
+  getOutstationFaresForVehicle,
+  getLocalFares,
+  getLocalFaresForVehicle,
+  getAirportFares,
+  getAirportFaresForVehicle,
+  getFaresByTripType,
+  resetCabOptionsState
 };
