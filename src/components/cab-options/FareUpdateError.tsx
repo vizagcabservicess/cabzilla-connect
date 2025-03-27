@@ -300,7 +300,7 @@ export function FareUpdateError({
         console.error('Error creating tables via local-fares endpoint:', error);  
       }
       
-      // THE FIX: Remove the extra arguments and only call with forceRecreate parameter (true)
+      // Fix: Call initializeDatabase with only the forceRecreate parameter
       const result = await fareService.initializeDatabase(true);
       
       if (result) {

@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { AlertCircle, RefreshCw, Globe, Server, Network, ExternalLink, FileCog, Hammer, RefreshCcw } from 'lucide-react';
+import { AlertCircle, RefreshCw, Globe, Server, Network, ExternalLink, FileCog, Hammer, RefreshCcw, ServerCrash, DatabaseBackup } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { fareService } from '@/services/fareService';
@@ -21,6 +21,7 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [diagnosticsRunning, setDiagnosticsRunning] = useState(false);
   const [syncingTables, setSyncingTables] = useState(false);
+  const [testingDirectDb, setTestingDirectDb] = useState(false);
   
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -199,6 +200,42 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
     });
   };
   
+  // New function to test direct database connection
+  const testDirectDatabaseConnection = () => {
+    setTestingDirectDb(true);
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+    toast.info('Testing direct database connection...');
+    
+    // Create a test connection URL with debug parameters
+    const testUrl = `${baseUrl}/api/admin/direct-fare-update.php?test_db=true&debug=true&_t=${Date.now()}`;
+    
+    fetch(testUrl, {
+      method: 'GET',
+      headers: {
+        ...fareService.getBypassHeaders(),
+        'X-Debug-Mode': 'true',
+        'X-Test-DB-Connection': 'true'
+      }
+    })
+    .then(async response => {
+      const text = await response.text();
+      console.log('Database connection test response:', text);
+      
+      if (response.ok) {
+        toast.success('Database connection successful!');
+      } else {
+        toast.error(`Database connection failed: ${response.status}`);
+      }
+    })
+    .catch(err => {
+      console.error('Database connection test error:', err);
+      toast.error(`Database test error: ${err.message}`);
+    })
+    .finally(() => {
+      setTestingDirectDb(false);
+    });
+  };
+  
   return (
     <Alert variant="destructive" className="bg-yellow-50 border-yellow-200 text-yellow-800 mb-4">
       <div className="flex flex-col w-full">
@@ -241,6 +278,17 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
           >
             <RefreshCcw className={`h-3.5 w-3.5 mr-1 ${syncingTables ? 'animate-spin' : ''}`} />
             {syncingTables ? 'Syncing...' : 'Sync Tables'}
+          </Button>
+          
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="border-purple-400 bg-purple-100 hover:bg-purple-200 text-purple-800"
+            onClick={testDirectDatabaseConnection}
+            disabled={testingDirectDb}
+          >
+            <DatabaseBackup className={`h-3.5 w-3.5 mr-1 ${testingDirectDb ? 'animate-spin' : ''}`} />
+            {testingDirectDb ? 'Testing...' : 'Test DB Connection'}
           </Button>
           
           {isAdmin && (
@@ -320,6 +368,15 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
                     >
                       <RefreshCcw className="h-3.5 w-3.5 mr-1" />
                       Sync Database Tables
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="text-red-700"
+                      onClick={testDirectDatabaseConnection}
+                    >
+                      <ServerCrash className="h-3.5 w-3.5 mr-1" />
+                      Test Database Connection
                     </Button>
                   </div>
                 </PopoverContent>
