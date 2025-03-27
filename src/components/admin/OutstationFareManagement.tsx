@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, FormProvider } from "react-hook-form";
 import * as z from "zod";
 import axios from 'axios';
 import { toast } from "@/hooks/use-toast";
@@ -74,6 +74,17 @@ const OutstationFareManagement = () => {
     },
   });
 
+  // Safe method to handle form field changes
+  const safeSetFormValue = (field, value) => {
+    try {
+      if (form && typeof form.setValue === 'function') {
+        form.setValue(field, value);
+      }
+    } catch (err) {
+      console.error(`Error setting form value for ${field}:`, err);
+    }
+  };
+
   // Load vehicle types on mount
   useEffect(() => {
     const fetchCabTypes = async () => {
@@ -82,9 +93,9 @@ const OutstationFareManagement = () => {
         if (types && types.length > 0) {
           setCabTypes(types);
           // Set the first vehicle as default if none is selected
-          if (!selectedVehicleType) {
+          if (!selectedVehicleType && types[0]?.id) {
             setSelectedVehicleType(types[0].id);
-            form.setValue("vehicleId", types[0].id);
+            safeSetFormValue("vehicleId", types[0].id);
             loadVehicleFares(types[0].id);
           }
         }
@@ -103,16 +114,21 @@ const OutstationFareManagement = () => {
 
   // Load fare data for a specific vehicle
   const loadVehicleFares = async (vehicleId: string) => {
+    if (!vehicleId) {
+      console.warn("No vehicle ID provided for loading fares");
+      return;
+    }
+    
     try {
       const fares = await fareService.getOutstationFaresForVehicle(vehicleId);
       if (fares) {
-        form.setValue("vehicleId", vehicleId);
-        form.setValue("basePrice", fares.basePrice || 0);
-        form.setValue("pricePerKm", fares.pricePerKm || 0);
-        form.setValue("nightHaltCharge", fares.nightHaltCharge || 0);
-        form.setValue("driverAllowance", fares.driverAllowance || 0);
-        form.setValue("roundTripBasePrice", fares.roundTripBasePrice || 0);
-        form.setValue("roundTripPricePerKm", fares.roundTripPricePerKm || 0);
+        safeSetFormValue("vehicleId", vehicleId);
+        safeSetFormValue("basePrice", fares.basePrice || 0);
+        safeSetFormValue("pricePerKm", fares.pricePerKm || 0);
+        safeSetFormValue("nightHaltCharge", fares.nightHaltCharge || 0);
+        safeSetFormValue("driverAllowance", fares.driverAllowance || 0);
+        safeSetFormValue("roundTripBasePrice", fares.roundTripBasePrice || 0);
+        safeSetFormValue("roundTripPricePerKm", fares.roundTripPricePerKm || 0);
       }
     } catch (error) {
       console.error(`Failed to load fares for vehicle ${vehicleId}:`, error);
@@ -126,12 +142,23 @@ const OutstationFareManagement = () => {
 
   // Handle vehicle selection
   const handleVehicleChange = (vehicle: string) => {
+    if (!vehicle) return;
+    
     setSelectedVehicleType(vehicle);
     loadVehicleFares(vehicle);
   };
 
   // Handle form submission
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    if (!values.vehicleId) {
+      toast({
+        title: "Validation Error",
+        description: "Please select a vehicle type",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     setIsSubmitting(true);
     try {
       // Update outstation fares
@@ -174,28 +201,23 @@ const OutstationFareManagement = () => {
     setSyncError(null);
     
     try {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
-      const params = new URLSearchParams();
-      params.append('direction', 'to_vehicle_pricing');
-      params.append('_t', Date.now().toString());
+      const result = await fareService.forceSyncOutstationFares();
       
-      const response = await axios.get(`${baseUrl}/api/admin/sync-outstation-fares.php?${params.toString()}`, 
-        fareService.getForcedRequestConfig());
-      
-      if (response.data.status === 'success') {
+      if (result && result.status === 'success') {
         toast({
           title: "Sync Completed",
-          description: `Successfully synchronized outstation fares: ${response.data.updated} records updated, ${response.data.inserted} records inserted.`,
+          description: `Successfully synchronized outstation fares: ${result.updated || 0} records updated, ${result.inserted || 0} records inserted.`,
         });
         
         // Clear cache to ensure the latest data is fetched
         fareService.clearCache();
+        
         // Reload current vehicle data
         if (selectedVehicleType) {
           loadVehicleFares(selectedVehicleType);
         }
       } else {
-        throw new Error(response.data.message || "Sync failed with unknown error");
+        throw new Error(result?.message || "Sync failed with unknown error");
       }
     } catch (error) {
       console.error("Failed to sync outstation fares:", error);
@@ -216,12 +238,12 @@ const OutstationFareManagement = () => {
     setDbInitError(null);
     
     try {
-      const result = await fareService.initializeDatabase(false);
+      const result = await fareService.initializeDatabase(true);
       
       if (result && result.status === 'success') {
         toast({
           title: "Database Initialized",
-          description: `Successfully initialized database: ${result.tables_created.length} tables created or updated.`,
+          description: `Successfully initialized database: ${result.tables_created?.length || 0} tables created or updated.`,
         });
         
         // Clear cache to ensure the latest data is fetched
@@ -327,7 +349,7 @@ const OutstationFareManagement = () => {
           </Select>
         </div>
         
-        <Form {...form}>
+        <FormProvider {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <input type="hidden" {...form.register("vehicleId")} />
             
@@ -447,7 +469,7 @@ const OutstationFareManagement = () => {
               )}
             </Button>
           </form>
-        </Form>
+        </FormProvider>
       </div>
     </div>
   );
