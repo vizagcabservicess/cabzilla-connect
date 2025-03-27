@@ -1,3 +1,4 @@
+
 // File: src/services/fareService.ts
 import axios from 'axios';
 import { CabType, LocalFare, AirportFare, OutstationFare } from '@/types/cab';
@@ -35,20 +36,62 @@ export const directFareUpdate = async (tripType: string, vehicleId: string, fare
 
 // Initialize the database for the fare service
 export const initializeDatabase = async () => {
-  // Implementation details
-  return { success: true };
+  try {
+    const endpoint = `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/admin/initialize-database.php?_t=${Date.now()}`;
+    const response = await axios.get(endpoint, { headers: getBypassHeaders() });
+    return { 
+      success: true, 
+      status: response.data?.status || 'success',
+      message: response.data?.message || 'Database initialized successfully'
+    };
+  } catch (error) {
+    console.error('Error initializing database:', error);
+    return { 
+      success: false, 
+      status: 'error',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
 };
 
 // Force sync outstation fares
 export const forceSyncOutstationFares = async () => {
-  // Implementation details
-  return { success: true };
+  try {
+    const endpoint = `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/admin/sync-outstation-fares.php?force=1&_t=${Date.now()}`;
+    const response = await axios.get(endpoint, { headers: getBypassHeaders() });
+    return { 
+      success: true, 
+      status: response.data?.status || 'success',
+      message: response.data?.message || 'Outstation fares synced successfully'
+    };
+  } catch (error) {
+    console.error('Error syncing outstation fares:', error);
+    return { 
+      success: false, 
+      status: 'error',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
 };
 
 // Sync outstation fares
 export const syncOutstationFares = async () => {
-  // Implementation details
-  return { success: true };
+  try {
+    const endpoint = `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/admin/sync-outstation-fares.php?_t=${Date.now()}`;
+    const response = await axios.get(endpoint, { headers: getBypassHeaders() });
+    return { 
+      success: true, 
+      status: response.data?.status || 'success',
+      message: response.data?.message || 'Outstation fares synced successfully'
+    };
+  } catch (error) {
+    console.error('Error syncing outstation fares:', error);
+    return { 
+      success: false, 
+      status: 'error',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
 };
 
 // Get outstation fares
@@ -95,13 +138,61 @@ export const getFaresByTripType = async (tripType: string) => {
 
 // Sync local fare tables
 export const syncLocalFareTables = async () => {
-  // Implementation details
-  return { success: true };
+  try {
+    const endpoint = `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/admin/sync-local-fares.php?_t=${Date.now()}`;
+    const response = await axios.get(endpoint, { headers: getBypassHeaders() });
+    return { 
+      success: true, 
+      status: response.data?.status || 'success',
+      message: response.data?.message || 'Local fare tables synced successfully'
+    };
+  } catch (error) {
+    console.error('Error syncing local fare tables:', error);
+    return { 
+      success: false, 
+      status: 'error',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
 };
 
 // Clear fare cache
 export const clearFareCache = () => {
-  // Implementation details
+  console.log('Clearing fare cache from fareService');
+  
+  // Clear localStorage items related to fares
+  const cacheKeys = [
+    'cabFares',
+    'fareCache',
+    'localPackagePriceMatrix',
+    'lastCabOptionsUpdate',
+    'lastFareUpdate'
+  ];
+  
+  cacheKeys.forEach(key => {
+    try {
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+    } catch (e) {
+      console.error(`Error clearing cache key ${key}:`, e);
+    }
+  });
+  
+  // Set refresh flags
+  localStorage.setItem('forceCacheRefresh', 'true');
+  localStorage.setItem('lastCacheClear', Date.now().toString());
+  
+  // Dispatch cache clear event if in browser environment
+  if (typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(new CustomEvent('fare-cache-cleared', {
+        detail: { timestamp: Date.now(), source: 'fareService' }
+      }));
+    } catch (e) {
+      console.error('Error dispatching fare-cache-cleared event:', e);
+    }
+  }
+  
   return true;
 };
 
@@ -189,7 +280,7 @@ export const updateLocalFare = async (
   throw lastError || new Error('Failed to update local fares');
 };
 
-// Export fare service as a singleton
+// Export fare service as a singleton with clearCache method
 export const fareService = {
   getBypassHeaders,
   getForcedRequestConfig,
@@ -204,8 +295,9 @@ export const fareService = {
   getLocalFaresForVehicle,
   getAirportFaresForVehicle,
   getFaresByTripType,
-  clearFareCache,
+  clearCache: clearFareCache, // Add the clearCache method to the fareService object
   resetCabOptionsState,
   syncLocalFareTables,
   updateLocalFare
 };
+
