@@ -18,6 +18,25 @@ export { clearFareCache as clearFareServiceCache } from './fareCalculationServic
 // Export types with the 'export type' syntax to avoid TypeScript errors
 export type { TripType, TripMode } from './tripTypes';
 
+// Re-export all methods from fareService
+export { 
+  clearFareCache,
+  getBypassHeaders,
+  getForcedRequestConfig,
+  directFareUpdate,
+  initializeDatabase,
+  forceSyncOutstationFares,
+  syncOutstationFares,
+  getOutstationFares,
+  getLocalFares,
+  getAirportFares,
+  getOutstationFaresForVehicle,
+  getLocalFaresForVehicle,
+  getAirportFaresForVehicle,
+  getFaresByTripType,
+  resetCabOptionsState
+} from '@/services/fareService';
+
 // Re-export CabType from the types directly
 export type { 
   CabType, 

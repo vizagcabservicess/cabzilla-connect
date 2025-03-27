@@ -141,14 +141,13 @@ export const directFareUpdate = async (tripType: string, vehicleId: string, data
     // After updating, force a sync between tables
     if (tripType === 'outstation') {
       console.log('Syncing outstation_fares with vehicle_pricing');
-      const syncResponse = await axios.get(`${baseUrl}/api/outstation-fares.php`, {
-        params: { 
-          sync: 'true',
-          _t: Date.now() // Cache busting 
-        },
-        headers: getBypassHeaders()
-      });
-      console.log('Sync response:', syncResponse.data);
+      try {
+        const syncResponse = await syncOutstationFares(vehicleId);
+        console.log('Sync response:', syncResponse);
+      } catch (syncError) {
+        console.error('Error during sync after update:', syncError);
+        // Continue anyway, as the primary update succeeded
+      }
     }
     
     // Clear cache after updating
@@ -171,24 +170,71 @@ export const directFareUpdate = async (tripType: string, vehicleId: string, data
   }
 };
 
+// Sync outstation fares - safer implementation with fallback to local API
+export const syncOutstationFares = async (vehicleId?: string) => {
+  try {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    console.log('Syncing outstation_fares with vehicle_pricing' + (vehicleId ? ` for vehicle ${vehicleId}` : ''));
+    
+    // Construct the URL with parameters
+    let url = `${baseUrl}/api/admin/sync-outstation-fares.php`;
+    const params = new URLSearchParams();
+    params.append('_t', Date.now().toString());
+    
+    if (vehicleId) {
+      params.append('vehicle_id', vehicleId);
+    }
+    
+    try {
+      // First try using the main API endpoint
+      const response = await axios.get(`${url}?${params.toString()}`, {
+        headers: getBypassHeaders(),
+        timeout: 10000 // 10 second timeout
+      });
+      
+      console.log('Sync successful using main endpoint:', response.data);
+      
+      // Clear cache after syncing
+      clearFareCache();
+      
+      return response.data;
+    } catch (mainError) {
+      console.error('Error using main sync endpoint:', mainError);
+      
+      // As a fallback, try the default outstation-fares.php endpoint with sync=true
+      console.log('Trying fallback sync method...');
+      
+      const fallbackParams = new URLSearchParams(params);
+      fallbackParams.append('sync', 'true');
+      fallbackParams.append('force_sync', 'true');
+      
+      const fallbackResponse = await axios.get(`${baseUrl}/api/outstation-fares.php?${fallbackParams.toString()}`, {
+        headers: getBypassHeaders(),
+        timeout: 10000 // 10 second timeout
+      });
+      
+      console.log('Sync successful using fallback endpoint:', fallbackResponse.data);
+      
+      // Clear cache after syncing
+      clearFareCache();
+      
+      return {
+        status: 'success',
+        message: 'Sync completed using fallback method',
+        originalError: (mainError as any).message,
+        data: fallbackResponse.data
+      };
+    }
+  } catch (error) {
+    console.error('All sync attempts failed:', error);
+    throw error;
+  }
+};
+
 // Force sync outstation fares with vehicle_pricing
 export const forceSyncOutstationFares = async () => {
   try {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
-    console.log('Forcing sync between outstation_fares and vehicle_pricing tables');
-    
-    const response = await axios.get(`${baseUrl}/api/admin/force-sync-outstation-fares.php`, {
-      params: { 
-        _t: Date.now(), // Cache busting
-        force: 'true'
-      },
-      headers: getBypassHeaders()
-    });
-    
-    // Clear cache after syncing
-    clearFareCache();
-    
-    return response.data;
+    return await syncOutstationFares();
   } catch (error) {
     console.error('Error forcing sync of outstation fares:', error);
     throw error;
@@ -582,5 +628,6 @@ export const fareService = {
   getForcedRequestConfig,
   resetCabOptionsState,
   initializeDatabase,
-  forceSyncOutstationFares
+  forceSyncOutstationFares,
+  syncOutstationFares
 };
