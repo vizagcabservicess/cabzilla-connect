@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -9,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertCircle, Database, RefreshCw, Save, RotateCw } from "lucide-react";
+import { AlertCircle, Database, RefreshCw, Save, Sync } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { loadCabTypes } from '@/lib/cabData';
 import { CabType } from '@/types/cab';
@@ -395,7 +396,7 @@ export function OutstationFareManagement() {
               </>
             ) : (
               <>
-                <RotateCw className="mr-2 h-4 w-4" />
+                <Sync className="mr-2 h-4 w-4" />
                 Force Sync
               </>
             )}
@@ -424,8 +425,9 @@ export function OutstationFareManagement() {
       
       {error && (
         <FareUpdateError 
-          error={error}
-          onRetry={loadData}
+          title="Error"
+          message={error.message}
+          onRetry={() => loadData()}
         />
       )}
       
