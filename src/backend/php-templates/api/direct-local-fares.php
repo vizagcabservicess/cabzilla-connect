@@ -1,18 +1,19 @@
 
 <?php
-// This is a redirection script for compatibility with old URLs
-// It redirects to the admin/local-fares-update.php file
+// Enhanced direct local fares API with improved error handling
+// Version 2.0.1 - 2023-03-27
 
 // Include necessary headers
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Force-Refresh');
+header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Force-Refresh, X-Custom-Timestamp, X-API-Version, X-Client-Version, X-Authorization-Override, X-Debug-Mode');
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
-header('Expires: '0');
+header('Expires: 0');
 header('X-Debug-File: direct-local-fares.php');
 header('X-Debug-Mode: true');
+header('X-API-Version: 2.0.1');
 
 // Create log directory if it doesn't exist
 $logDir = __DIR__ . '/logs';
@@ -23,9 +24,12 @@ if (!file_exists($logDir)) {
 // Log request details
 $timestamp = date('Y-m-d H:i:s');
 $requestData = file_get_contents('php://input');
-error_log("[$timestamp] Direct local fare update request received at root endpoint: Method=" . $_SERVER['REQUEST_METHOD'], 3, $logDir . '/direct-fares.log');
-error_log("[$timestamp] POST data: " . print_r($_POST, true), 3, $logDir . '/direct-fares.log');
-error_log("[$timestamp] Raw input: $requestData", 3, $logDir . '/direct-fares.log');
+$logMessage = "[$timestamp] Direct local fare update request received: Method=" . $_SERVER['REQUEST_METHOD'] . "\n";
+$logMessage .= "[$timestamp] URI: " . $_SERVER['REQUEST_URI'] . "\n";
+$logMessage .= "[$timestamp] POST data: " . print_r($_POST, true) . "\n";
+$logMessage .= "[$timestamp] GET data: " . print_r($_GET, true) . "\n";
+$logMessage .= "[$timestamp] Raw input: $requestData\n";
+error_log($logMessage, 3, $logDir . '/direct-fares.log');
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -33,10 +37,179 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// For direct local fare updates, we need to forward the POST data
+// Initialize database if requested
+if (isset($_GET['initialize']) && $_GET['initialize'] === 'true') {
+    // Log initialization request
+    error_log("[$timestamp] Database initialization requested", 3, $logDir . '/direct-fares.log');
+    
+    // Database connection details
+    $dbHost = 'localhost';
+    $dbName = 'u644605165_new_bookingdb';
+    $dbUser = 'u644605165_new_bookingusr';
+    $dbPass = 'Vizag@1213';
+    
+    try {
+        $dsn = "mysql:host=$dbHost;dbname=$dbName;charset=utf8mb4";
+        $options = [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES => false,
+        ];
+        
+        $pdo = new PDO($dsn, $dbUser, $dbPass, $options);
+        error_log("[$timestamp] Database connection successful for initialization", 3, $logDir . '/direct-fares.log');
+        
+        // Create local_package_fares table if it doesn't exist
+        $createTableSql = "CREATE TABLE IF NOT EXISTS `local_package_fares` (
+                        `id` INT NOT NULL AUTO_INCREMENT,
+                        `vehicle_id` VARCHAR(50) NOT NULL,
+                        `price_4hrs_40km` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                        `price_8hrs_80km` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                        `price_10hrs_100km` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                        `price_extra_km` DECIMAL(5,2) NOT NULL DEFAULT 0,
+                        `price_extra_hour` DECIMAL(5,2) NOT NULL DEFAULT 0,
+                        `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        PRIMARY KEY (`id`),
+                        UNIQUE KEY `vehicle_id` (`vehicle_id`)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
+        $pdo->exec($createTableSql);
+        error_log("[$timestamp] Created/verified local_package_fares table", 3, $logDir . '/direct-fares.log');
+        
+        // Add default entries for common vehicle types if they don't exist
+        $defaultVehicles = ['sedan', 'ertiga', 'innova', 'innova_crysta', 'tempo', 'luxury'];
+        foreach ($defaultVehicles as $vehicle) {
+            try {
+                $checkSql = "SELECT id FROM local_package_fares WHERE vehicle_id = ?";
+                $checkStmt = $pdo->prepare($checkSql);
+                $checkStmt->execute([$vehicle]);
+                if ($checkStmt->rowCount() === 0) {
+                    // Default values based on vehicle type
+                    $price4hrs = ($vehicle === 'sedan' ? 1500 : 
+                                 ($vehicle === 'ertiga' ? 2000 : 
+                                 ($vehicle === 'innova' || $vehicle === 'innova_crysta' ? 2500 : 
+                                 ($vehicle === 'tempo' ? 3500 : 3000))));
+                    $price8hrs = $price4hrs * 1.8;
+                    $price10hrs = $price4hrs * 2.2;
+                    $extraKm = ($vehicle === 'sedan' ? 14 : ($vehicle === 'ertiga' ? 16 : 18));
+                    $extraHour = ($vehicle === 'sedan' ? 250 : ($vehicle === 'ertiga' ? 300 : 350));
+                    
+                    $insertSql = "INSERT INTO local_package_fares 
+                               (vehicle_id, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, 
+                                price_extra_km, price_extra_hour)
+                               VALUES (?, ?, ?, ?, ?, ?)";
+                    $insertStmt = $pdo->prepare($insertSql);
+                    $insertStmt->execute([
+                        $vehicle,
+                        $price4hrs,
+                        $price8hrs,
+                        $price10hrs,
+                        $extraKm,
+                        $extraHour
+                    ]);
+                    error_log("[$timestamp] Inserted default record for $vehicle", 3, $logDir . '/direct-fares.log');
+                }
+            } catch (PDOException $e) {
+                error_log("[$timestamp] Error adding default vehicle $vehicle: " . $e->getMessage(), 3, $logDir . '/direct-fares.log');
+            }
+        }
+        
+        // Check if vehicle_pricing table exists, create if not
+        try {
+            $pdo->query("SELECT 1 FROM vehicle_pricing LIMIT 1");
+        } catch (PDOException $e) {
+            // Table doesn't exist, create it
+            $createVehiclePricingSql = "CREATE TABLE IF NOT EXISTS `vehicle_pricing` (
+                                     `id` INT NOT NULL AUTO_INCREMENT,
+                                     `vehicle_type` VARCHAR(50) NOT NULL,
+                                     `trip_type` VARCHAR(20) NOT NULL,
+                                     `base_fare` DECIMAL(10,2) DEFAULT 0.00,
+                                     `price_per_km` DECIMAL(10,2) DEFAULT 0.00,
+                                     `night_halt_charge` DECIMAL(10,2) DEFAULT 0.00,
+                                     `driver_allowance` DECIMAL(10,2) DEFAULT 0.00,
+                                     `local_package_4hr` DECIMAL(10,2) DEFAULT 0.00,
+                                     `local_package_8hr` DECIMAL(10,2) DEFAULT 0.00,
+                                     `local_package_10hr` DECIMAL(10,2) DEFAULT 0.00,
+                                     `extra_km_charge` DECIMAL(10,2) DEFAULT 0.00,
+                                     `extra_hour_charge` DECIMAL(10,2) DEFAULT 0.00,
+                                     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                                     `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                                     PRIMARY KEY (`id`),
+                                     UNIQUE KEY `vehicle_trip_type` (`vehicle_type`, `trip_type`)
+                                  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
+            $pdo->exec($createVehiclePricingSql);
+            error_log("[$timestamp] Created vehicle_pricing table", 3, $logDir . '/direct-fares.log');
+            
+            // Add default entries for common vehicle types if table was just created
+            foreach ($defaultVehicles as $vehicle) {
+                try {
+                    // Default values for local trip type
+                    $price4hrs = ($vehicle === 'sedan' ? 1500 : 
+                                 ($vehicle === 'ertiga' ? 2000 : 
+                                 ($vehicle === 'innova' || $vehicle === 'innova_crysta' ? 2500 : 
+                                 ($vehicle === 'tempo' ? 3500 : 3000))));
+                    $price8hrs = $price4hrs * 1.8;
+                    $price10hrs = $price4hrs * 2.2;
+                    $extraKm = ($vehicle === 'sedan' ? 14 : ($vehicle === 'ertiga' ? 16 : 18));
+                    $extraHour = ($vehicle === 'sedan' ? 250 : ($vehicle === 'ertiga' ? 300 : 350));
+                    
+                    $insertVpSql = "INSERT INTO vehicle_pricing 
+                                  (vehicle_type, trip_type, local_package_4hr, local_package_8hr, local_package_10hr, 
+                                   extra_km_charge, extra_hour_charge)
+                                  VALUES (?, 'local', ?, ?, ?, ?, ?)";
+                    $insertVpStmt = $pdo->prepare($insertVpSql);
+                    $insertVpStmt->execute([
+                        $vehicle,
+                        $price4hrs,
+                        $price8hrs,
+                        $price10hrs,
+                        $extraKm,
+                        $extraHour
+                    ]);
+                    error_log("[$timestamp] Inserted default record in vehicle_pricing for $vehicle", 3, $logDir . '/direct-fares.log');
+                } catch (PDOException $e) {
+                    error_log("[$timestamp] Error adding default vehicle to vehicle_pricing for $vehicle: " . $e->getMessage(), 3, $logDir . '/direct-fares.log');
+                }
+            }
+        }
+        
+        // Send success response
+        http_response_code(200);
+        echo json_encode([
+            'status' => 'success',
+            'message' => 'Database tables initialized successfully',
+            'timestamp' => time()
+        ]);
+        exit;
+    } catch (PDOException $e) {
+        error_log("[$timestamp] Database initialization error: " . $e->getMessage(), 3, $logDir . '/direct-fares.log');
+        http_response_code(500);
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'Failed to initialize database: ' . $e->getMessage(),
+            'timestamp' => time()
+        ]);
+        exit;
+    }
+}
+
+// Check if we're in test mode
+if (isset($_GET['test']) && $_GET['test'] == '1') {
+    error_log("[$timestamp] Test mode requested", 3, $logDir . '/direct-fares.log');
+    http_response_code(200);
+    echo json_encode([
+        'status' => 'success',
+        'message' => 'API connection test successful',
+        'time' => date('Y-m-d H:i:s'),
+        'version' => '2.0.1'
+    ]);
+    exit;
+}
+
+// For direct local fare updates, process the data
 if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET') {
-    // Log that we're about to redirect
-    error_log("[$timestamp] Attempting to handle local fare update request", 3, $logDir . '/direct-fares.log');
+    // Log that we're about to process the fare update
+    error_log("[$timestamp] Processing local fare update request", 3, $logDir . '/direct-fares.log');
 
     // Get data from all possible sources - for maximum flexibility
     $data = [];
@@ -72,7 +245,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET
     
     // Extract vehicle ID from any possible field name
     $vehicleId = '';
-    foreach (['vehicleId', 'vehicle_id', 'vehicleType', 'vehicle_type', 'id'] as $field) {
+    foreach (['vehicleId', 'vehicle_id', 'vehicleType', 'vehicle_type', 'id', 'cab_id', 'cab_type', 'cab'] as $field) {
         if (!empty($data[$field])) {
             $vehicleId = $data[$field];
             break;
@@ -99,8 +272,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET
     // Also check in packages or fares objects
     if ($package4hr == 0 && isset($data['packages'])) {
         foreach (['4hrs-40km', '04hrs-40km', '4hr40km', '04hr40km'] as $packageKey) {
-            if (isset($data['packages'][$packageKey])) {
+            if (isset($data['packages'][$packageKey]) && is_numeric($data['packages'][$packageKey])) {
                 $package4hr = floatval($data['packages'][$packageKey]);
+                break;
+            }
+        }
+    }
+    
+    // If still no value, check in fares object
+    if ($package4hr == 0 && isset($data['fares'])) {
+        foreach (['4hrs-40km', '04hrs-40km', '4hr40km', '04hr40km'] as $packageKey) {
+            if (isset($data['fares'][$packageKey]) && is_numeric($data['fares'][$packageKey])) {
+                $package4hr = floatval($data['fares'][$packageKey]);
                 break;
             }
         }
@@ -114,9 +297,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET
         }
     }
     
-    // Also check in packages or fares objects
-    if ($package8hr == 0 && isset($data['packages']) && isset($data['packages']['8hrs-80km'])) {
-        $package8hr = floatval($data['packages']['8hrs-80km']);
+    // Also check in packages or fares objects for 8hrs package
+    if ($package8hr == 0 && isset($data['packages'])) {
+        foreach (['8hrs-80km', '8hr80km'] as $packageKey) {
+            if (isset($data['packages'][$packageKey]) && is_numeric($data['packages'][$packageKey])) {
+                $package8hr = floatval($data['packages'][$packageKey]);
+                break;
+            }
+        }
+    }
+    
+    // If still no value, check in fares object
+    if ($package8hr == 0 && isset($data['fares'])) {
+        foreach (['8hrs-80km', '8hr80km'] as $packageKey) {
+            if (isset($data['fares'][$packageKey]) && is_numeric($data['fares'][$packageKey])) {
+                $package8hr = floatval($data['fares'][$packageKey]);
+                break;
+            }
+        }
     }
     
     $package10hr = 0;
@@ -127,9 +325,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET
         }
     }
     
-    // Also check in packages object
-    if ($package10hr == 0 && isset($data['packages']) && isset($data['packages']['10hrs-100km'])) {
-        $package10hr = floatval($data['packages']['10hrs-100km']);
+    // Also check in packages object for 10hrs package
+    if ($package10hr == 0 && isset($data['packages'])) {
+        foreach (['10hrs-100km', '10hr100km'] as $packageKey) {
+            if (isset($data['packages'][$packageKey]) && is_numeric($data['packages'][$packageKey])) {
+                $package10hr = floatval($data['packages'][$packageKey]);
+                break;
+            }
+        }
+    }
+    
+    // If still no value, check in fares object
+    if ($package10hr == 0 && isset($data['fares'])) {
+        foreach (['10hrs-100km', '10hr100km'] as $packageKey) {
+            if (isset($data['fares'][$packageKey]) && is_numeric($data['fares'][$packageKey])) {
+                $package10hr = floatval($data['fares'][$packageKey]);
+                break;
+            }
+        }
     }
     
     $extraKmRate = 0;
@@ -140,12 +353,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET
         }
     }
     
+    // Check in packages object for extraKmRate
+    if ($extraKmRate == 0 && isset($data['packages']) && isset($data['packages']['extraKmRate']) && is_numeric($data['packages']['extraKmRate'])) {
+        $extraKmRate = floatval($data['packages']['extraKmRate']);
+    }
+    
+    // Check in fares object for extraKmRate
+    if ($extraKmRate == 0 && isset($data['fares']) && isset($data['fares']['extraKmRate']) && is_numeric($data['fares']['extraKmRate'])) {
+        $extraKmRate = floatval($data['fares']['extraKmRate']);
+    }
+    
     $extraHourRate = 0;
     foreach (['extraHourRate', 'priceExtraHour', 'extra_hour_rate', 'extra_hour_charge', 'price_extra_hour'] as $field) {
         if (isset($data[$field]) && is_numeric($data[$field])) {
             $extraHourRate = floatval($data[$field]);
             break;
         }
+    }
+    
+    // Check in packages object for extraHourRate
+    if ($extraHourRate == 0 && isset($data['packages']) && isset($data['packages']['extraHourRate']) && is_numeric($data['packages']['extraHourRate'])) {
+        $extraHourRate = floatval($data['packages']['extraHourRate']);
+    }
+    
+    // Check in fares object for extraHourRate
+    if ($extraHourRate == 0 && isset($data['fares']) && isset($data['fares']['extraHourRate']) && is_numeric($data['fares']['extraHourRate'])) {
+        $extraHourRate = floatval($data['fares']['extraHourRate']);
     }
     
     // Log extracted fare values
@@ -157,15 +390,73 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET
         extraHourRate: $extraHourRate", 
     3, $logDir . '/direct-fares.log');
     
-    // Simple validation
+    // Use defaults if values are zero/empty
     if (empty($vehicleId)) {
         http_response_code(400);
         echo json_encode([
             'status' => 'error',
             'message' => 'Vehicle ID is required',
-            'received_data' => $data
+            'received_data' => $data,
+            'timestamp' => time()
         ]);
         exit;
+    }
+    
+    // Set default values based on vehicle type if any values are missing
+    if ($package4hr == 0 || $package8hr == 0 || $package10hr == 0 || $extraKmRate == 0 || $extraHourRate == 0) {
+        $vehicleIdLower = strtolower($vehicleId);
+        
+        if ($package4hr == 0) {
+            if (strpos($vehicleIdLower, 'sedan') !== false) {
+                $package4hr = 1500;
+            } elseif (strpos($vehicleIdLower, 'ertiga') !== false) {
+                $package4hr = 2000;
+            } elseif (strpos($vehicleIdLower, 'innova') !== false) {
+                $package4hr = 2500;
+            } elseif (strpos($vehicleIdLower, 'tempo') !== false) {
+                $package4hr = 3500;
+            } else {
+                $package4hr = 2000; // Default value
+            }
+        }
+        
+        if ($package8hr == 0) {
+            // Default to roughly 1.8x the 4hr package
+            $package8hr = round($package4hr * 1.8);
+        }
+        
+        if ($package10hr == 0) {
+            // Default to roughly 2.2x the 4hr package
+            $package10hr = round($package4hr * 2.2);
+        }
+        
+        if ($extraKmRate == 0) {
+            if (strpos($vehicleIdLower, 'sedan') !== false) {
+                $extraKmRate = 14;
+            } elseif (strpos($vehicleIdLower, 'ertiga') !== false) {
+                $extraKmRate = 16;
+            } else {
+                $extraKmRate = 18;
+            }
+        }
+        
+        if ($extraHourRate == 0) {
+            if (strpos($vehicleIdLower, 'sedan') !== false) {
+                $extraHourRate = 250;
+            } elseif (strpos($vehicleIdLower, 'ertiga') !== false) {
+                $extraHourRate = 300;
+            } else {
+                $extraHourRate = 350;
+            }
+        }
+        
+        error_log("[$timestamp] Applied default values for missing fare data: 
+            package4hr: $package4hr, 
+            package8hr: $package8hr, 
+            package10hr: $package10hr, 
+            extraKmRate: $extraKmRate, 
+            extraHourRate: $extraHourRate", 
+        3, $logDir . '/direct-fares.log');
     }
     
     // Database connection details
@@ -217,6 +508,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET
             }
         } catch (PDOException $e) {
             error_log("[$timestamp] Error checking columns: " . $e->getMessage(), 3, $logDir . '/direct-fares.log');
+            // Try to create the table if it doesn't exist
+            try {
+                $createVehiclePricingSql = "CREATE TABLE IF NOT EXISTS `vehicle_pricing` (
+                                         `id` INT NOT NULL AUTO_INCREMENT,
+                                         `vehicle_type` VARCHAR(50) NOT NULL,
+                                         `trip_type` VARCHAR(20) NOT NULL,
+                                         `base_fare` DECIMAL(10,2) DEFAULT 0.00,
+                                         `price_per_km` DECIMAL(10,2) DEFAULT 0.00,
+                                         `night_halt_charge` DECIMAL(10,2) DEFAULT 0.00,
+                                         `driver_allowance` DECIMAL(10,2) DEFAULT 0.00,
+                                         `local_package_4hr` DECIMAL(10,2) DEFAULT 0.00,
+                                         `local_package_8hr` DECIMAL(10,2) DEFAULT 0.00,
+                                         `local_package_10hr` DECIMAL(10,2) DEFAULT 0.00,
+                                         `extra_km_charge` DECIMAL(10,2) DEFAULT 0.00,
+                                         `extra_hour_charge` DECIMAL(10,2) DEFAULT 0.00,
+                                         `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                                         `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                                         PRIMARY KEY (`id`),
+                                         UNIQUE KEY `vehicle_trip_type` (`vehicle_type`, `trip_type`)
+                                      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
+                $pdo->exec($createVehiclePricingSql);
+                error_log("[$timestamp] Created vehicle_pricing table", 3, $logDir . '/direct-fares.log');
+            } catch (PDOException $createError) {
+                error_log("[$timestamp] Error creating vehicle_pricing table: " . $createError->getMessage(), 3, $logDir . '/direct-fares.log');
+            }
         }
         
         // Check if a record exists for this vehicle_id with trip_type 'local'
@@ -357,8 +673,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET
         $databaseError = "Database connection error: " . $e->getMessage();
     }
     
-    // Send a success response regardless of database operation
-    // This way frontend always gets something positive
+    // Send a response
     $response = [
         'status' => $updateSuccess ? 'success' : 'error',
         'message' => $updateSuccess ? 'Local fares updated successfully' : 'Failed to update local fares',
@@ -369,9 +684,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET
                 '04hrs-40km' => $package4hr, // Explicitly add the 04hrs variant
                 '8hrs-80km' => $package8hr,
                 '10hrs-100km' => $package10hr,
-                'extra-km' => $extraKmRate,
-                'extra-hour' => $extraHourRate
-            ]
+                'extraKmRate' => $extraKmRate,
+                'extraHourRate' => $extraHourRate
+            ],
+            'timestamp' => time()
         ]
     ];
     
@@ -379,6 +695,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET
         $response['database_error'] = $databaseError;
     }
     
+    error_log("[$timestamp] Sending response: " . json_encode($response), 3, $logDir . '/direct-fares.log');
     echo json_encode($response);
     exit;
 }
@@ -387,5 +704,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET
 http_response_code(405);
 echo json_encode([
     'status' => 'error',
-    'message' => 'Method not allowed. Use POST for direct local fare updates.'
+    'message' => 'Method not allowed. Use POST or GET for direct local fare updates.',
+    'timestamp' => time()
 ]);

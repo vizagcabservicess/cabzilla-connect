@@ -27,8 +27,8 @@ RewriteEngine On
     Header always set Expires "60"
     
     # Add debugging headers
-    Header always set X-API-Debug "Processed by main API htaccess - v1.0.69"
-    Header always set X-API-Version "1.0.69"
+    Header always set X-API-Debug "Processed by main API htaccess - v1.0.70"
+    Header always set X-API-Version "1.0.70"
     Header always set X-Server-Time "%{TIME}e"
     Header always set X-Request-ID "%{UNIQUE_ID}e"
     Header always set X-Response-Timestamp "%{TIME}e"
@@ -64,7 +64,7 @@ RewriteRule .* - [R=200,L]
     </FilesMatch>
     
     # No caching for direct fare update endpoints - highest priority
-    <FilesMatch "(direct-fare-update|fare-update|direct-outstation-fares|outstation-fares-update|local-fares-update|airport-fares-update|direct-.*-fares|init-database|sync-local-fares)\.php$">
+    <FilesMatch "(direct-fare-update|fare-update|direct-outstation-fares|outstation-fares-update|local-fares-update|airport-fares-update|direct-.*-fares|init-database|sync-local-fares|local-package-fares)\.php$">
         Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
         Header set Pragma "no-cache"
         Header set Expires "0"
@@ -83,6 +83,12 @@ RewriteRule ^sync-local-fares$ admin/sync-local-fares.php [L,QSA]
 RewriteRule ^sync-local-fares\.php$ admin/sync-local-fares.php [L,QSA]
 RewriteRule ^admin/sync-local-fares$ admin/sync-local-fares.php [L,QSA]
 RewriteRule ^admin/sync-local-fares\.php$ admin/sync-local-fares.php [L,QSA]
+
+# LOCAL PACKAGE FARES ENDPOINTS (NEW) - HIGHEST PRIORITY
+RewriteRule ^local-package-fares$ local-package-fares.php [L,QSA]
+RewriteRule ^local-package-fares\.php$ local-package-fares.php [L,QSA]
+RewriteRule ^admin/local-package-fares$ admin/local-package-fares.php [L,QSA]
+RewriteRule ^admin/local-package-fares\.php$ admin/local-package-fares.php [L,QSA]
 
 # ULTRA HIGH PRIORITY - LOCAL FARES ENDPOINTS - Added before other fare endpoints to ensure proper routing
 # Direct local fares endpoint - HIGHEST PRIORITY

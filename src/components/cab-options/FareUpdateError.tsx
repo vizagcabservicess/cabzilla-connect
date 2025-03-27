@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -151,19 +152,17 @@ export function FareUpdateError({
               cabType === 'innova' || cabType === 'innova_crysta' ? '2300' : 
                 cabType === 'tempo' ? '3000' : '3500');
         
-        await directFareUpdate(
-          'local', 
-          cabType,
-          {
-            '4hrs-40km': parseFloat(currentFare),
-            '8hrs-80km': parseFloat(currentFare) * 2,
-            '10hrs-100km': parseFloat(currentFare) * 2.5,
-            'extraKmRate': cabType === 'sedan' ? 14 : 
-              cabType === 'ertiga' ? 18 : 20,
-            'extraHourRate': cabType === 'sedan' ? 250 : 
-              cabType === 'ertiga' ? 300 : 350,
-          }
-        );
+        const fares = {
+          '4hrs-40km': parseFloat(currentFare),
+          '8hrs-80km': parseFloat(currentFare) * 2,
+          '10hrs-100km': parseFloat(currentFare) * 2.5,
+          'extraKmRate': cabType === 'sedan' ? 14 : 
+            cabType === 'ertiga' ? 18 : 20,
+          'extraHourRate': cabType === 'sedan' ? 250 : 
+            cabType === 'ertiga' ? 300 : 350,
+        };
+        
+        await directFareUpdate('local', cabType, fares);
         
         console.log(`Updated local fares for ${cabType}`);
       }
@@ -257,6 +256,7 @@ export function FareUpdateError({
       const timestamp = Date.now();
       
       try {
+        // First try the admin/sync-local-fares.php endpoint (from .htaccess)
         const syncResponse = await fetch(`${baseUrl}/api/admin/sync-local-fares.php?_t=${timestamp}`, {
           method: 'GET',
           headers: {
@@ -277,14 +277,50 @@ export function FareUpdateError({
           } else {
             console.error('Sync error:', syncData.message);
             toast.error(`Sync error: ${syncData.message}`, { duration: 5000 });
-            return false;
           }
         } else {
           throw new Error(`HTTP error ${syncResponse.status}`);
         }
       } catch (error) {
-        console.error('Error syncing tables:', error);
-        toast.error('Failed to sync tables');
+        console.error('Error syncing tables via admin endpoint:', error);
+        
+        // Try fallback endpoint
+        try {
+          const fallbackSyncResponse = await fetch(`${baseUrl}/api/sync-local-fares.php?_t=${timestamp}`, {
+            method: 'GET',
+            headers: {
+              ...fareService.getBypassHeaders(),
+              'Accept': 'application/json'
+            }
+          });
+          
+          if (fallbackSyncResponse.ok) {
+            toast.success('Tables synchronized via fallback endpoint', { duration: 3000 });
+            return true;
+          }
+        } catch (fallbackError) {
+          console.error('Error with fallback sync endpoint:', fallbackError);
+        }
+        
+        // Create basic tables via direct-local-fares.php with initialize=true
+        try {
+          const initResponse = await fetch(`${baseUrl}/api/direct-local-fares.php?initialize=true&_t=${timestamp}`, {
+            method: 'GET',
+            headers: {
+              ...fareService.getBypassHeaders(),
+              'Accept': 'application/json'
+            }
+          });
+          
+          if (initResponse.ok) {
+            toast.success('Basic tables initialized via direct endpoint', { duration: 3000 });
+            return true;
+          }
+        } catch (initError) {
+          console.error('Error with direct table initialization:', initError);
+        }
+        
+        toast.error('Failed to sync tables - all endpoints failed', { duration: 5000 });
         return false;
       }
     } finally {
