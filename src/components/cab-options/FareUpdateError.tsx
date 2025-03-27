@@ -104,16 +104,30 @@ export function FareUpdateError({
       const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
       
       try {
-        const testResponse = await fetch(`${baseUrl}/api/admin/direct-fare-update.php?test=1&_t=${timestamp}`, {
-          method: 'GET',
-          headers: fareService.getBypassHeaders()
-        });
+        // Try direct API endpoints to ensure they're accessible
+        const testUrls = [
+          `${baseUrl}/api/admin/direct-fare-update.php?test=1&_t=${timestamp}`,
+          `${baseUrl}/api/admin/local-fares-update.php?test=1&_t=${timestamp}`,
+          `${baseUrl}/api/local-package-fares.php?test=1&_t=${timestamp}`
+        ];
         
-        if (testResponse.ok) {
-          toast.success('Connected to direct API successfully');
+        for (const url of testUrls) {
+          try {
+            const testResponse = await fetch(url, {
+              method: 'GET',
+              headers: fareService.getBypassHeaders()
+            });
+            
+            if (testResponse.ok) {
+              console.log(`Successfully accessed: ${url}`);
+              toast.success(`Connected to ${url.split('/').pop()} successfully`);
+            }
+          } catch (err) {
+            console.error(`Error testing ${url}:`, err);
+          }
         }
       } catch (err) {
-        console.error('Error testing direct API:', err);
+        console.error('Error testing direct APIs:', err);
       }
       
       await initializeDatabase();
@@ -162,9 +176,32 @@ export function FareUpdateError({
             cabType === 'ertiga' ? 300 : 350,
         };
         
-        await directFareUpdate('local', cabType, fares);
+        // Try multiple endpoints for updating fares
+        const updateEndpoints = [
+          `local-package-fares.php`,
+          `admin/local-fares-update.php`,
+          `admin/direct-local-fares.php`,
+          `admin/direct-fare-update.php?tripType=local`
+        ];
         
-        console.log(`Updated local fares for ${cabType}`);
+        let successfulUpdate = false;
+        
+        for (const endpoint of updateEndpoints) {
+          if (!successfulUpdate) {
+            try {
+              await directFareUpdate('local', cabType, fares, endpoint);
+              console.log(`Updated local fares for ${cabType} using ${endpoint}`);
+              successfulUpdate = true;
+            } catch (error) {
+              console.error(`Error updating ${cabType} with ${endpoint}:`, error);
+            }
+          }
+        }
+        
+        if (!successfulUpdate) {
+          // Fallback to the original method as last resort
+          await directFareUpdate('local', cabType, fares);
+        }
       }
       
       toast.success('Forced update complete');
@@ -186,8 +223,10 @@ export function FareUpdateError({
       const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
       const timestamp = Date.now();
       
+      // Try the local-package-fares.php endpoint first
       try {
-        const directInitResponse = await fetch(`${baseUrl}/api/admin/direct-fare-update.php?initialize=true&_t=${timestamp}`, {
+        console.log('Trying to initialize via local-package-fares.php');
+        const localPackageFaresResponse = await fetch(`${baseUrl}/api/local-package-fares.php?initialize=true&_t=${timestamp}`, {
           method: 'GET',
           headers: {
             ...fareService.getBypassHeaders(),
@@ -195,18 +234,62 @@ export function FareUpdateError({
           }
         });
         
-        if (directInitResponse.ok) {
-          toast.success('Tables initialized successfully via direct endpoint', {
+        if (localPackageFaresResponse.ok) {
+          toast.success('Tables initialized successfully via local-package-fares endpoint', {
             duration: 3000
           });
           return true;
         }
       } catch (error) {
-        console.error('Error using direct endpoint for initialization:', error);
+        console.error('Error using local-package-fares endpoint for initialization:', error);
       }
       
+      // Try direct-local-fares.php endpoint
       try {
-        const createTableResponse = await fetch(`${baseUrl}/api/local-fares.php?create_tables=true&_t=${timestamp}`, {
+        console.log('Trying to initialize via direct-local-fares.php');
+        const directLocalFaresResponse = await fetch(`${baseUrl}/api/admin/direct-local-fares.php?initialize=true&_t=${timestamp}`, {
+          method: 'GET',
+          headers: {
+            ...fareService.getBypassHeaders(),
+            'Accept': 'application/json'
+          }
+        });
+        
+        if (directLocalFaresResponse.ok) {
+          toast.success('Tables initialized successfully via direct-local-fares endpoint', {
+            duration: 3000
+          });
+          return true;
+        }
+      } catch (error) {
+        console.error('Error using direct-local-fares endpoint for initialization:', error);
+      }
+      
+      // Try local-fares-update.php endpoint
+      try {
+        console.log('Trying to initialize via local-fares-update.php');
+        const localFaresUpdateResponse = await fetch(`${baseUrl}/api/admin/local-fares-update.php?initialize=true&_t=${timestamp}`, {
+          method: 'GET',
+          headers: {
+            ...fareService.getBypassHeaders(),
+            'Accept': 'application/json'
+          }
+        });
+        
+        if (localFaresUpdateResponse.ok) {
+          toast.success('Tables initialized successfully via local-fares-update endpoint', {
+            duration: 3000
+          });
+          return true;
+        }
+      } catch (error) {
+        console.error('Error using local-fares-update endpoint for initialization:', error);
+      }
+      
+      // Fallback to local-fares.php
+      try {
+        console.log('Trying to initialize via local-fares.php');
+        const localFaresResponse = await fetch(`${baseUrl}/api/local-fares.php?create_tables=true&_t=${timestamp}`, {
           method: 'GET',
           headers: {
             ...fareService.getBypassHeaders(),
@@ -214,15 +297,17 @@ export function FareUpdateError({
           }
         });
         
-        if (createTableResponse.ok) {
+        if (localFaresResponse.ok) {
           toast.success('Tables created via local-fares endpoint', {
             duration: 3000
           });
+          return true;
         }
       } catch (error) {
         console.error('Error creating tables via local-fares endpoint:', error);  
       }
       
+      // Final fallback using fare service
       const result = await fareService.initializeDatabase();
       
       if (result) {
@@ -255,6 +340,26 @@ export function FareUpdateError({
       const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
       const timestamp = Date.now();
       
+      // Try checking the local-package-fares endpoint first to ensure it exists
+      try {
+        const checkEndpoint = await fetch(`${baseUrl}/api/local-package-fares.php?_t=${timestamp}`, {
+          method: 'GET',
+          headers: {
+            ...fareService.getBypassHeaders(),
+            'Accept': 'application/json'
+          }
+        });
+        
+        if (checkEndpoint.ok) {
+          console.log('local-package-fares.php endpoint is accessible');
+          toast.success('Local fares endpoint verified', {
+            duration: 2000
+          });
+        }
+      } catch (error) {
+        console.error('Error checking local-package-fares endpoint:', error);
+      }
+      
       try {
         // First try the admin/sync-local-fares.php endpoint (from .htaccess)
         const syncResponse = await fetch(`${baseUrl}/api/admin/sync-local-fares.php?_t=${timestamp}`, {
@@ -284,7 +389,25 @@ export function FareUpdateError({
       } catch (error) {
         console.error('Error syncing tables via admin endpoint:', error);
         
-        // Try fallback endpoint
+        // Try local-package-fares.php with initialize parameter
+        try {
+          const localPackageInitResponse = await fetch(`${baseUrl}/api/local-package-fares.php?initialize=true&_t=${timestamp}`, {
+            method: 'GET',
+            headers: {
+              ...fareService.getBypassHeaders(),
+              'Accept': 'application/json'
+            }
+          });
+          
+          if (localPackageInitResponse.ok) {
+            toast.success('Tables initialized via local-package-fares endpoint', { duration: 3000 });
+            return true;
+          }
+        } catch (initError) {
+          console.error('Error initializing via local-package-fares endpoint:', initError);
+        }
+        
+        // Try fallback endpoint (sync-local-fares)
         try {
           const fallbackSyncResponse = await fetch(`${baseUrl}/api/sync-local-fares.php?_t=${timestamp}`, {
             method: 'GET',
@@ -300,24 +423,6 @@ export function FareUpdateError({
           }
         } catch (fallbackError) {
           console.error('Error with fallback sync endpoint:', fallbackError);
-        }
-        
-        // Create basic tables via direct-local-fares.php with initialize=true
-        try {
-          const initResponse = await fetch(`${baseUrl}/api/direct-local-fares.php?initialize=true&_t=${timestamp}`, {
-            method: 'GET',
-            headers: {
-              ...fareService.getBypassHeaders(),
-              'Accept': 'application/json'
-            }
-          });
-          
-          if (initResponse.ok) {
-            toast.success('Basic tables initialized via direct endpoint', { duration: 3000 });
-            return true;
-          }
-        } catch (initError) {
-          console.error('Error with direct table initialization:', initError);
         }
         
         toast.error('Failed to sync tables - all endpoints failed', { duration: 5000 });
@@ -349,7 +454,7 @@ export function FareUpdateError({
       return "The server encountered an error while processing your request. Click 'Initialize Database' to fix missing tables.";
     }
     if (isNetworkError) {
-      return "Unable to connect to the fare update server. Please check your connection.";
+      return "Unable to connect to the fare update server. Please check your connection or try using the new direct endpoints.";
     }
     return errorMessage;
   };
@@ -393,6 +498,11 @@ export function FareUpdateError({
                 </li>
                 <li>This will {/unknown column/i.test(errorMessage) ? "fix column inconsistencies" : "create all required database tables"}</li>
               </>
+            )}
+            {isNetworkError && (
+              <li className="font-medium text-red-700">
+                The endpoint you're trying to reach might not exist or may be blocked. Try the Comprehensive Fix.
+              </li>
             )}
             <li>Use the comprehensive fix button to solve common API connection issues</li>
             <li>Clear browser cache and try again</li>
@@ -443,7 +553,7 @@ export function FareUpdateError({
           </Button>
         )}
         
-        {(isTableError || isServerError) && (
+        {(isTableError || isServerError || isNetworkError) && (
           <Button 
             onClick={initializeDatabase} 
             className="gap-2 bg-amber-600 hover:bg-amber-700"

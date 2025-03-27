@@ -23,6 +23,87 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // Log the request
 error_log("Direct booking data request received: " . json_encode($_GET));
 
+// Check if the request is for local package fares
+if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
+    error_log("Local package fares sync check request received");
+    
+    $vehicleId = $_GET['vehicle_id'];
+    
+    // Try to connect to database
+    $conn = null;
+    try {
+        $conn = getDbConnection();
+    } catch (Exception $e) {
+        error_log("Database connection failed in direct-booking-data.php: " . $e->getMessage());
+    }
+    
+    if ($conn) {
+        try {
+            // Check if local_package_fares table exists
+            $tableCheckResult = $conn->query("SHOW TABLES LIKE 'local_package_fares'");
+            $tableExists = ($tableCheckResult->num_rows > 0);
+            
+            if ($tableExists) {
+                // Query for the vehicle's fare data
+                $query = "SELECT * FROM local_package_fares WHERE vehicle_id = ?";
+                $stmt = $conn->prepare($query);
+                $stmt->bind_param("s", $vehicleId);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                
+                if ($result && $result->num_rows > 0) {
+                    $row = $result->fetch_assoc();
+                    
+                    echo json_encode([
+                        'status' => 'success',
+                        'exists' => true,
+                        'data' => [
+                            'vehicleId' => $row['vehicle_id'],
+                            'price4hrs40km' => floatval($row['price_4hrs_40km']),
+                            'price8hrs80km' => floatval($row['price_8hrs_80km']),
+                            'price10hrs100km' => floatval($row['price_10hrs_100km']),
+                            'priceExtraKm' => floatval($row['price_extra_km']),
+                            'priceExtraHour' => floatval($row['price_extra_hour']),
+                        ],
+                        'timestamp' => time()
+                    ]);
+                    exit;
+                } else {
+                    echo json_encode([
+                        'status' => 'success',
+                        'exists' => false,
+                        'message' => "No fares found for vehicle ID $vehicleId",
+                        'timestamp' => time()
+                    ]);
+                    exit;
+                }
+            } else {
+                echo json_encode([
+                    'status' => 'error',
+                    'message' => "Table local_package_fares does not exist",
+                    'timestamp' => time()
+                ]);
+                exit;
+            }
+        } catch (Exception $e) {
+            error_log("Error checking local package fares: " . $e->getMessage());
+            echo json_encode([
+                'status' => 'error',
+                'message' => "Database error: " . $e->getMessage(),
+                'timestamp' => time()
+            ]);
+            exit;
+        }
+    } else {
+        echo json_encode([
+            'status' => 'error',
+            'message' => "Database connection failed",
+            'timestamp' => time()
+        ]);
+        exit;
+    }
+}
+
 // Check if it's a booking query by ID
 if (isset($_GET['id'])) {
     $bookingId = intval($_GET['id']);

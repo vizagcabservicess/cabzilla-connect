@@ -484,13 +484,43 @@ async function updateLocalPackagePriceOnServer(packageId: string, cabType: strin
     // Add fares object for alternative format
     packageData.fares = { ...packageData.packages };
     
-    // Try the new simplified endpoint first
-    const domain = window.location.origin;
+    // Try the new direct local package fares endpoint first
+    const domain = import.meta.env.VITE_API_BASE_URL || window.location.origin;
     const timestamp = Date.now();
     
+    // Try local-package-fares.php endpoint first
     try {
+      console.log('Trying local-package-fares.php endpoint...');
+      const localPackageEndpoint = `${domain}/api/local-package-fares.php?_t=${timestamp}`;
+      
+      const response = await fetch(localPackageEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        },
+        body: JSON.stringify(packageData)
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`Successfully updated ${packageId} price for ${cabType} to ${price} using local-package-fares.php`);
+        return result;
+      } else {
+        const errorText = await response.text();
+        console.error(`Error using local-package-fares.php: ${response.status} ${response.statusText}`, errorText);
+      }
+    } catch (error) {
+      console.error(`Error using local-package-fares.php endpoint:`, error);
+    }
+    
+    // Try admin/local-fares-update.php endpoint next
+    try {
+      console.log('Trying admin/local-fares-update.php endpoint...');
       const simplifiedEndpoint = `${domain}/api/admin/local-fares-update.php?_t=${timestamp}`;
-      console.log(`Trying simplified local fares endpoint: ${simplifiedEndpoint}`);
       
       const response = await fetch(simplifiedEndpoint, {
         method: 'POST',
@@ -506,22 +536,22 @@ async function updateLocalPackagePriceOnServer(packageId: string, cabType: strin
       
       if (response.ok) {
         const result = await response.json();
-        console.log(`Successfully updated ${packageId} price for ${cabType} to ${price} on simplified endpoint`);
+        console.log(`Successfully updated ${packageId} price for ${cabType} to ${price} using admin/local-fares-update.php`);
         return result;
       } else {
         const errorText = await response.text();
-        console.error(`Error using simplified endpoint: ${response.status} ${response.statusText}`, errorText);
+        console.error(`Error using admin/local-fares-update.php: ${response.status} ${response.statusText}`, errorText);
       }
     } catch (error) {
-      console.error(`Error using simplified endpoint:`, error);
+      console.error(`Error using admin/local-fares-update.php endpoint:`, error);
     }
     
-    // Try direct local fares endpoint as first fallback (now a dedicated endpoint)
+    // Try admin/direct-local-fares.php endpoint next
     try {
-      const directUrl = `${domain}/api/direct-local-fares.php?_t=${timestamp}`;
-      console.log(`Trying direct local fares endpoint: ${directUrl}`);
+      console.log('Trying admin/direct-local-fares.php endpoint...');
+      const directLocalEndpoint = `${domain}/api/admin/direct-local-fares.php?_t=${timestamp}`;
       
-      const response = await fetch(directUrl, {
+      const response = await fetch(directLocalEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -535,49 +565,20 @@ async function updateLocalPackagePriceOnServer(packageId: string, cabType: strin
       
       if (response.ok) {
         const result = await response.json();
-        console.log(`Successfully updated ${packageId} price for ${cabType} to ${price} on server`);
+        console.log(`Successfully updated ${packageId} price for ${cabType} to ${price} using admin/direct-local-fares.php`);
         return result;
       } else {
         const errorText = await response.text();
-        console.error(`Error using direct local fares endpoint: ${response.status} ${response.statusText}`, errorText);
+        console.error(`Error using admin/direct-local-fares.php: ${response.status} ${response.statusText}`, errorText);
       }
     } catch (error) {
-      console.error(`Error using direct local fares endpoint:`, error);
-    }
-    
-    // Try admin direct-local-fares endpoint as second fallback
-    try {
-      const adminDirectUrl = `${domain}/api/admin/direct-local-fares.php?_t=${timestamp}`;
-      console.log(`Trying admin direct local fares endpoint: ${adminDirectUrl}`);
-      
-      const response = await fetch(adminDirectUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Force-Refresh': 'true',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        },
-        body: JSON.stringify(packageData)
-      });
-      
-      if (response.ok) {
-        const result = await response.json();
-        console.log(`Successfully updated ${packageId} price for ${cabType} to ${price} on admin endpoint`);
-        return result;
-      } else {
-        const errorText = await response.text();
-        console.error(`Error using admin direct local fares endpoint: ${response.status} ${response.statusText}`, errorText);
-      }
-    } catch (error) {
-      console.error(`Error using admin direct local fares endpoint:`, error);
+      console.error(`Error using admin/direct-local-fares.php endpoint:`, error);
     }
     
     // Try universal fare update endpoint as last resort
     try {
+      console.log('Trying admin/direct-fare-update.php as last resort...');
       const universalUrl = `${domain}/api/admin/direct-fare-update.php?tripType=local&_t=${timestamp}`;
-      console.log(`Trying universal fare update endpoint: ${universalUrl}`);
       
       const response = await fetch(universalUrl, {
         method: 'POST',
