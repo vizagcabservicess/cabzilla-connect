@@ -21,12 +21,19 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
   // Ensure the standard package IDs are consistent
   const standardPackageIds = {
     "4hr_40km": "4hrs-40km",
+    "04hr_40km": "4hrs-40km",
+    "04hrs_40km": "4hrs-40km",
+    "4hrs_40km": "4hrs-40km",
     "8hr_80km": "8hrs-80km",
-    "10hr_100km": "10hrs-100km"
+    "8hrs_80km": "8hrs-80km", 
+    "10hr_100km": "10hrs-100km",
+    "10hrs_100km": "10hrs-100km"
   };
   
   // Convert legacy package ID to standard format if needed
   const normalizePackageId = (packageId: string): string => {
+    if (!packageId) return "8hrs-80km"; // Default package if none provided
+    
     const normalized = packageId
       .replace('hrs-', 'hr_')
       .replace('hr-', 'hr_');

@@ -278,4 +278,3 @@ echo json_encode([
     'status' => 'error',
     'message' => 'Method not allowed. Use POST for direct local fare updates.'
 ]);
-

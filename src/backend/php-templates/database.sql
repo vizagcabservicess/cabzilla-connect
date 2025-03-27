@@ -68,7 +68,7 @@ CREATE TABLE `vehicle_pricing` (
   `price_per_km` decimal(5,2) NOT NULL DEFAULT 0,
   `night_halt_charge` decimal(10,2) NOT NULL DEFAULT 0,
   `driver_allowance` decimal(10,2) NOT NULL DEFAULT 0,
-  -- Local package specific columns  
+  -- Local package specific columns (FIXED column names)  
   `local_package_4hr` decimal(10,2) DEFAULT NULL,
   `local_package_8hr` decimal(10,2) DEFAULT NULL,
   `local_package_10hr` decimal(10,2) DEFAULT NULL,
@@ -236,4 +236,3 @@ INSERT INTO `outstation_fares` (`vehicle_id`, `base_price`, `price_per_km`, `nig
 INSERT INTO `users` (`name`, `email`, `phone`, `password`, `role`) VALUES
 ('Admin User', 'admin@example.com', '9876543210', '$2y$10$YPmH6FlAB8gQXI/qjLXVq.jlHCB1PRJKZRmj2aeMSCXvKBgNCHWc2', 'admin');
 -- Default password: admin123
-

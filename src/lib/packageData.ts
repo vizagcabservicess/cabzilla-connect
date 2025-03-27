@@ -1,9 +1,19 @@
+
 import { HourlyPackage, LocalPackagePriceMatrix } from '@/types/cab';
 
 // Define standard hourly packages
 export const hourlyPackages: HourlyPackage[] = [
   {
     id: '4hrs-40km',
+    name: '4 Hours / 40 KM',
+    hours: 4,
+    kilometers: 40,
+    basePrice: 1200,
+    multiplier: 0.6
+  },
+  // Also add the alternative format for the 04hrs package
+  {
+    id: '04hrs-40km',
     name: '4 Hours / 40 KM',
     hours: 4,
     kilometers: 40,
@@ -45,6 +55,22 @@ export const oneWayRates = {
 // Default local package price matrix - will be overridden by localStorage if available
 const defaultPackageMatrix: LocalPackagePriceMatrix = {
   '4hrs-40km': {
+    'sedan': 1200,
+    'ertiga': 1800,
+    'innova crysta': 2300,
+    'innova': 2300,
+    'tempo': 3000,
+    'luxury': 3500,
+    'luxury sedan': 3500,
+    'swift_02': 80,
+    'etios': 1200,
+    'dzire': 1200,
+    'amaze': 1200,
+    'dzire cng': 1200,
+    'swift': 1200
+  },
+  // Also add the 04hrs-40km entry with same values
+  '04hrs-40km': {
     'sedan': 1200,
     'ertiga': 1800,
     'innova crysta': 2300,
@@ -443,7 +469,7 @@ async function updateLocalPackagePriceOnServer(packageId: string, cabType: strin
     };
     
     // Set the price for the specific package
-    if (packageId === '4hrs-40km') {
+    if (packageId === '4hrs-40km' || packageId === '04hrs-40km') {
       packageData.price4hrs40km = price;
       packageData.price_4hrs_40km = price;
       packageData.local_package_4hr = price;
@@ -462,7 +488,7 @@ async function updateLocalPackagePriceOnServer(packageId: string, cabType: strin
     
     // Add packages object for React-style clients
     packageData.packages = {
-      '4hrs-40km': packageId === '4hrs-40km' ? price : 0,
+      '4hrs-40km': packageId === '4hrs-40km' || packageId === '04hrs-40km' ? price : 0,
       '8hrs-80km': packageId === '8hrs-80km' ? price : 0,
       '10hrs-100km': packageId === '10hrs-100km' ? price : 0
     };

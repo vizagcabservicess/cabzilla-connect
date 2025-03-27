@@ -413,6 +413,37 @@ if (!empty($vehicleId) && ($package4hr > 0 || $package8hr > 0 || $package10hr > 
                 $pdo->exec("ALTER TABLE vehicle_pricing ADD UNIQUE KEY vehicle_trip_type (vehicle_id, trip_type)");
                 error_log("[$timestamp] Added unique key for vehicle_id and trip_type", 3, $logDir . '/local-fares.log');
             }
+
+            // Check if local_package_4hr column exists
+            $checkLocal4hrCol = $pdo->query("SHOW COLUMNS FROM vehicle_pricing LIKE 'local_package_4hr'");
+            $hasLocal4hrCol = ($checkLocal4hrCol->rowCount() > 0);
+            
+            if (!$hasLocal4hrCol) {
+                // Add local_package_4hr column if it doesn't exist
+                $pdo->exec("ALTER TABLE vehicle_pricing ADD COLUMN local_package_4hr DECIMAL(10,2) DEFAULT NULL");
+                error_log("[$timestamp] Added local_package_4hr column to vehicle_pricing", 3, $logDir . '/local-fares.log');
+            }
+
+            // Check if local_package_8hr column exists
+            $checkLocal8hrCol = $pdo->query("SHOW COLUMNS FROM vehicle_pricing LIKE 'local_package_8hr'");
+            $hasLocal8hrCol = ($checkLocal8hrCol->rowCount() > 0);
+            
+            if (!$hasLocal8hrCol) {
+                // Add local_package_8hr column if it doesn't exist
+                $pdo->exec("ALTER TABLE vehicle_pricing ADD COLUMN local_package_8hr DECIMAL(10,2) DEFAULT NULL");
+                error_log("[$timestamp] Added local_package_8hr column to vehicle_pricing", 3, $logDir . '/local-fares.log');
+            }
+
+            // Check if local_package_10hr column exists
+            $checkLocal10hrCol = $pdo->query("SHOW COLUMNS FROM vehicle_pricing LIKE 'local_package_10hr'");
+            $hasLocal10hrCol = ($checkLocal10hrCol->rowCount() > 0);
+            
+            if (!$hasLocal10hrCol) {
+                // Add local_package_10hr column if it doesn't exist
+                $pdo->exec("ALTER TABLE vehicle_pricing ADD COLUMN local_package_10hr DECIMAL(10,2) DEFAULT NULL");
+                error_log("[$timestamp] Added local_package_10hr column to vehicle_pricing", 3, $logDir . '/local-fares.log');
+            }
+            
         } catch (PDOException $e) {
             error_log("[$timestamp] Error checking/modifying vehicle_pricing structure: " . $e->getMessage(), 3, $logDir . '/local-fares.log');
             $databaseError = "Error checking/modifying vehicle_pricing structure: " . $e->getMessage();
@@ -485,4 +516,3 @@ if ($databaseError) {
 
 // Return success response
 echo json_encode($responseData);
-

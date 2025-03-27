@@ -35,7 +35,6 @@ export {
   resetCabOptionsState,
   syncLocalFareTables,
   fareService
-  // Removed updateLocalFare as it doesn't exist
 } from '@/services/fareService';
 
 // Re-export CabType from the types directly
