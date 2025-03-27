@@ -241,7 +241,7 @@ export const forceSyncOutstationFares = async () => {
   }
 };
 
-// Outstation Fares - ALWAYS fetch from outstation_fares table with sync option
+// Outstation Fares - ALWAYS fetch from vehicle_pricing table with sync option
 export const getOutstationFares = async (origin?: string, destination?: string): Promise<Record<string, OutstationFare>> => {
   try {
     // Always force a refresh of fares by skipping cache
@@ -256,6 +256,7 @@ export const getOutstationFares = async (origin?: string, destination?: string):
         destination,
         _t: timestamp, // Cache busting
         force: 'true',
+        source: 'vehicle_pricing', // Force using vehicle_pricing table
         check_sync: 'true' // Add check_sync param to ensure tables are in sync
       },
       headers: getBypassHeaders()
@@ -285,7 +286,7 @@ export const getOutstationFares = async (origin?: string, destination?: string):
   }
 };
 
-// Get outstation fares for a specific vehicle - ALWAYS force fresh data
+// Get outstation fares for a specific vehicle - ALWAYS force fresh data from vehicle_pricing
 export const getOutstationFaresForVehicle = async (vehicleId: string): Promise<OutstationFare> => {
   try {
     // Try to fetch directly for this vehicle
@@ -298,7 +299,8 @@ export const getOutstationFaresForVehicle = async (vehicleId: string): Promise<O
       params: {
         vehicle_id: vehicleId,
         _t: now, // Cache busting
-        force: 'true'
+        force: 'true',
+        source: 'vehicle_pricing' // Force using vehicle_pricing table
       },
       headers: getBypassHeaders()
     });
@@ -358,7 +360,7 @@ export const getOutstationFaresForVehicle = async (vehicleId: string): Promise<O
   }
 };
 
-// Local Fares
+// Local Fares - ALWAYS fetch from vehicle_pricing table 
 export const getLocalFares = async (): Promise<Record<string, LocalFare>> => {
   try {
     // Always fetch fares from API
@@ -370,7 +372,8 @@ export const getLocalFares = async (): Promise<Record<string, LocalFare>> => {
     const response = await axios.get(`${baseUrl}/api/local-fares.php`, {
       params: { 
         _t: timestamp, // Cache busting
-        force: 'true'
+        force: 'true',
+        source: 'vehicle_pricing' // Force using vehicle_pricing table
       },
       headers: getBypassHeaders()
     });
@@ -399,7 +402,7 @@ export const getLocalFares = async (): Promise<Record<string, LocalFare>> => {
   }
 };
 
-// Get local fares for a specific vehicle
+// Get local fares for a specific vehicle from vehicle_pricing table
 export const getLocalFaresForVehicle = async (vehicleId: string): Promise<LocalFare> => {
   try {
     // First try to get from cache
@@ -426,7 +429,8 @@ export const getLocalFaresForVehicle = async (vehicleId: string): Promise<LocalF
     const response = await axios.get(`${baseUrl}/api/local-fares.php`, {
       params: {
         vehicle_id: vehicleId,
-        _t: now // Cache busting
+        _t: now, // Cache busting
+        source: 'vehicle_pricing' // Force using vehicle_pricing table
       },
       headers: getBypassHeaders()
     });
@@ -463,42 +467,34 @@ export const getLocalFaresForVehicle = async (vehicleId: string): Promise<LocalF
   }
 };
 
-// Airport Fares
+// Airport Fares - ALWAYS fetch from vehicle_pricing table
 export const getAirportFares = async (): Promise<Record<string, AirportFare>> => {
   try {
-    // Check if we have cached fares and they are less than 5 minutes old
-    const cachedTimestamp = localStorage.getItem('airport_fares_timestamp');
-    const cachedFares = localStorage.getItem('airport_fares');
-    const globalRefreshToken = localStorage.getItem('globalFareRefreshToken');
-    
-    if (cachedTimestamp && cachedFares && globalRefreshToken) {
-      const timestamp = parseInt(cachedTimestamp, 10);
-      const refreshToken = parseInt(globalRefreshToken, 10);
-      const now = Date.now();
-      const fiveMinutes = 5 * 60 * 1000;
-      
-      // Use cached data if it's recent and there hasn't been a global refresh
-      if (now - timestamp < fiveMinutes && timestamp > refreshToken) {
-        return JSON.parse(cachedFares);
-      }
-    }
-    
-    // Fetch fares from API
+    // Always force refresh to get the latest data
     const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    const timestamp = Date.now();
+    
+    console.log('Fetching airport fares with timestamp:', timestamp);
+    
     const response = await axios.get(`${baseUrl}/api/airport-fares.php`, {
       params: { 
-        _t: Date.now() // Cache busting
-      }
+        _t: timestamp, // Cache busting
+        force: 'true',
+        source: 'vehicle_pricing' // Force using vehicle_pricing table
+      },
+      headers: getBypassHeaders()
     });
     
     if (response.data && response.data.fares) {
+      console.log('Airport fares fetched successfully:', response.data);
       // Cache the fares
       localStorage.setItem('airport_fares', JSON.stringify(response.data.fares));
-      localStorage.setItem('airport_fares_timestamp', Date.now().toString());
+      localStorage.setItem('airport_fares_timestamp', timestamp.toString());
       
       return response.data.fares;
     }
     
+    console.warn('No airport fares returned from API');
     return {};
   } catch (error) {
     console.error('Error fetching airport fares:', error);
@@ -513,121 +509,123 @@ export const getAirportFares = async (): Promise<Record<string, AirportFare>> =>
   }
 };
 
-// Get airport fares for a specific vehicle
-export const getAirportFaresForVehicle = async (vehicleId: string): Promise<AirportFare | null> => {
+// Get airport fares for a specific vehicle from vehicle_pricing table
+export const getAirportFaresForVehicle = async (vehicleId: string): Promise<AirportFare> => {
   try {
-    console.log(`Fetching airport transfer fares for vehicle: ${vehicleId}`);
-    
-    // First try to get from cache
-    const cachedFares = localStorage.getItem('airport_fares');
-    const cachedTimestamp = localStorage.getItem('airport_fares_timestamp');
-    const globalRefreshToken = localStorage.getItem('globalFareRefreshToken');
+    // Try to fetch directly for this vehicle
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
     const now = Date.now();
     
-    if (cachedFares && cachedTimestamp && globalRefreshToken) {
-      const timestamp = parseInt(cachedTimestamp, 10);
-      const refreshToken = parseInt(globalRefreshToken, 10);
-      const fiveMinutes = 5 * 60 * 1000;
-      
-      if (now - timestamp < fiveMinutes && timestamp > refreshToken) {
-        const fares = JSON.parse(cachedFares);
-        if (fares[vehicleId]) {
-          console.log(`Using cached airport fares for ${vehicleId}:`, fares[vehicleId]);
-          return fares[vehicleId];
-        }
-      }
-    }
+    console.log(`Fetching airport fares for vehicle ${vehicleId} with timestamp:`, now);
     
-    // Try to fetch directly for this vehicle
-    try {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
-      const response = await axios.get(`${baseUrl}/api/airport-fares.php`, {
-        params: {
-          vehicle_id: vehicleId,
-          _t: now // Cache busting
-        },
-        headers: getBypassHeaders()
-      });
+    const response = await axios.get(`${baseUrl}/api/airport-fares.php`, {
+      params: {
+        vehicle_id: vehicleId,
+        _t: now, // Cache busting
+        force: 'true',
+        source: 'vehicle_pricing' // Force using vehicle_pricing table
+      },
+      headers: getBypassHeaders()
+    });
+    
+    if (response.data && response.data.fares && response.data.fares[vehicleId]) {
+      console.log(`Airport fares for vehicle ${vehicleId}:`, response.data.fares[vehicleId]);
       
-      if (response.data && response.data.fares && response.data.fares[vehicleId]) {
-        console.log(`Got direct airport fares for ${vehicleId}:`, response.data.fares[vehicleId]);
-        return response.data.fares[vehicleId];
-      }
-    } catch (error) {
-      console.error(`Error fetching direct airport fares for ${vehicleId}:`, error);
+      // Cache this specific vehicle fare
+      const cachedFares = localStorage.getItem('airport_fares');
+      const fares = cachedFares ? JSON.parse(cachedFares) : {};
+      fares[vehicleId] = response.data.fares[vehicleId];
+      localStorage.setItem('airport_fares', JSON.stringify(fares));
+      localStorage.setItem('airport_fares_timestamp', now.toString());
+      
+      return response.data.fares[vehicleId];
     }
     
     // If direct fetch failed, try to get all fares
+    console.warn(`No specific airport fare found for vehicle ${vehicleId}, fetching all fares`);
     const allFares = await getAirportFares();
     if (allFares && allFares[vehicleId]) {
-      console.log(`Got airport fares for ${vehicleId} from all fares:`, allFares[vehicleId]);
       return allFares[vehicleId];
     }
     
-    // If all else fails, try to fetch from vehicles-data
-    try {
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
-      const response = await axios.get(`${baseUrl}/api/fares/vehicles-data.php`, {
-        params: {
-          _t: now // Cache busting
-        },
-        headers: getBypassHeaders()
-      });
-      
-      if (response.data && response.data.vehicles) {
-        const vehicle = response.data.vehicles.find((v: any) => v.id === vehicleId || v.vehicleId === vehicleId);
-        if (vehicle && vehicle.airportFares) {
-          console.log(`Got airport fares for ${vehicleId} from vehicles-data:`, vehicle.airportFares);
-          return vehicle.airportFares;
-        }
-      }
-    } catch (error) {
-      console.error(`Error fetching vehicle data for ${vehicleId}:`, error);
-    }
-    
-    return null;
+    console.warn(`No airport fare found for vehicle ${vehicleId}`);
+    // Return default values if no data found
+    return {
+      basePrice: 0,
+      pricePerKm: 0,
+      pickupPrice: 0,
+      dropPrice: 0,
+      tier1Price: 0,
+      tier2Price: 0,
+      tier3Price: 0,
+      tier4Price: 0,
+      extraKmCharge: 0
+    };
   } catch (error) {
     console.error(`Error fetching airport fares for vehicle ${vehicleId}:`, error);
-    return null;
+    
+    // Try to get from cache if available
+    const cachedFares = localStorage.getItem('airport_fares');
+    if (cachedFares) {
+      const fares = JSON.parse(cachedFares);
+      if (fares[vehicleId]) {
+        return fares[vehicleId];
+      }
+    }
+    
+    // Return default values if error
+    return {
+      basePrice: 0,
+      pricePerKm: 0,
+      pickupPrice: 0,
+      dropPrice: 0,
+      tier1Price: 0,
+      tier2Price: 0,
+      tier3Price: 0,
+      tier4Price: 0,
+      extraKmCharge: 0
+    };
   }
 };
 
-// Fare Calculation by Trip Type
-export const getFaresByTripType = async (tripType: TripType): Promise<Record<string, any>> => {
-  switch (tripType) {
-    case 'outstation':
-      return getOutstationFares();
-    case 'local':
-      return getLocalFares();
-    case 'airport':
-      return getAirportFares();
-    default:
-      return {};
+// Get fares by trip type from vehicle_pricing table
+export const getFaresByTripType = async (tripType: TripType): Promise<any> => {
+  try {
+    switch (tripType) {
+      case 'outstation':
+        return await getOutstationFares();
+      case 'local':
+        return await getLocalFares();
+      case 'airport':
+        return await getAirportFares();
+      default:
+        throw new Error(`Unsupported trip type: ${tripType}`);
+    }
+  } catch (error) {
+    console.error(`Error getting fares for trip type ${tripType}:`, error);
+    return {};
   }
 };
 
-// Reset CabOptions state and force a global refresh
+// Reset cab options state
 export const resetCabOptionsState = () => {
-  clearFareCache(); // Clear all caches first
-  window.dispatchEvent(new CustomEvent('reset-cab-options'));
-  localStorage.setItem('forceTripFaresRefresh', 'true');
-};
-
-// Export the fareService
-export const fareService = {
-  getOutstationFares,
-  getLocalFares,
-  getAirportFares,
-  getAirportFaresForVehicle,
-  getOutstationFaresForVehicle,
-  getLocalFaresForVehicle,
-  getFaresByTripType,
-  clearCache: clearFareCache,
-  directFareUpdate,
-  getBypassHeaders,
-  getForcedRequestConfig,
-  resetCabOptionsState,
-  initializeDatabase,
-  forceSyncOutstationFares,
-  syncOutstationFares
+  // Dispatch reset event
+  window.dispatchEvent(new CustomEvent('reset-cab-options', {
+    detail: { timestamp: Date.now() }
+  }));
+  
+  // Clear fare cache
+  clearFareCache();
+  
+  // Clear cab options cache
+  localStorage.removeItem('cabOptions');
+  localStorage.removeItem('selectedCab');
+  sessionStorage.removeItem('cabOptions');
+  sessionStorage.removeItem('selectedCab');
+  
+  const tripTypes = ['outstation', 'local', 'airport', 'tour'];
+  for (const type of tripTypes) {
+    localStorage.removeItem(`cabOptions_${type}`);
+    localStorage.removeItem(`cabOptions_${type}_timestamp`);
+  }
 };

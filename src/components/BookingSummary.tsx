@@ -162,13 +162,13 @@ export const BookingSummary = ({
     }
     
     if (tripMode === 'one-way') {
-      // For one-way trips, ensure minimum 300 km
+      // For one-way trips, ensure minimum 300 km billing
       effectiveDistance = Math.max(distance, minimumKm);
       
-      // Calculate base fare for minimum 300 km
+      // Always calculate base fare for minimum 300 km
       baseFare = minimumKm * perKmRate;
       
-      // Add extra distance fare if distance exceeds minimum
+      // Calculate extra distance if actual distance exceeds minimum
       if (distance > minimumKm) {
         extraDistance = distance - minimumKm;
         extraDistanceFare = extraDistance * perKmRate;

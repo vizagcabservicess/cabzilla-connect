@@ -345,12 +345,12 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
         // Default per km rates if no outstation fares defined
         if (tripMode === 'one-way') {
           if (safeToLowerCase(cabType.name).includes('sedan')) perKmRate = 14;
-          else if (safeToLowerCase(cabType.name).includes('ertiga')) perKmRate = 18;
+          else if (safeToLowerCase(cabType.name).includes('ertiga')) perKmRate = 16;
           else if (safeToLowerCase(cabType.name).includes('innova')) perKmRate = 20;
           else perKmRate = 16;
         } else {
           if (safeToLowerCase(cabType.name).includes('sedan')) perKmRate = 12;
-          else if (safeToLowerCase(cabType.name).includes('ertiga')) perKmRate = 15;
+          else if (safeToLowerCase(cabType.name).includes('ertiga')) perKmRate = 14;
           else if (safeToLowerCase(cabType.name).includes('innova')) perKmRate = 17;
           else perKmRate = 14;
         }
@@ -382,12 +382,12 @@ export const calculateFare = async (params: FareCalculationParams): Promise<numb
         const effectiveMinimumKm = minimumKm; // Per day minimum
         
         // Base fare calculation considering round trip distance
-        if (effectiveDistance > effectiveMinimumKm) {
-          // If total round trip distance exceeds minimum, charge for actual distance
-          baseFare = effectiveDistance * perKmRate;
-        } else {
+        if (effectiveDistance < effectiveMinimumKm) {
           // If total round trip distance is less than minimum, charge for minimum
           baseFare = effectiveMinimumKm * perKmRate;
+        } else {
+          // If total round trip distance exceeds minimum, charge for actual distance
+          baseFare = effectiveDistance * perKmRate;
         }
         
         // Add driver allowance
