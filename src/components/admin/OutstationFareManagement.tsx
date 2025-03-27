@@ -1,10 +1,11 @@
+
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { toast } from "sonner";
+import * as z from "zod";
+import axios from 'axios';
+import { toast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -14,381 +15,249 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { loadCabTypes } from '@/lib/cabData';
 import { CabType } from '@/types/cab';
 import { fareService } from '@/services/fareService';
-import { FareUpdateError } from '../cab-options/FareUpdateError';
-import axios from 'axios';
 
 const formSchema = z.object({
-  cabType: z.string().min(1, { message: "Cab type is required" }),
-  oneWayBasePrice: z.coerce.number().min(0, { message: "Base price cannot be negative" }),
-  oneWayPricePerKm: z.coerce.number().min(0, { message: "Price per km cannot be negative" }),
-  roundTripBasePrice: z.coerce.number().min(0, { message: "Base price cannot be negative" }),
-  roundTripPricePerKm: z.coerce.number().min(0, { message: "Price per km cannot be negative" }),
-  driverAllowance: z.coerce.number().min(0, { message: "Driver allowance cannot be negative" }),
-  nightHalt: z.coerce.number().min(0, { message: "Night halt charge cannot be negative" }),
+  vehicleId: z.string().min(1, { message: "Vehicle is required" }),
+  basePrice: z.coerce.number().min(0, { message: "Base price must be a positive number" }),
+  pricePerKm: z.coerce.number().min(0, { message: "Per KM price must be a positive number" }),
+  nightHaltCharge: z.coerce.number().min(0, { message: "Night halt charge must be a positive number" }),
+  driverAllowance: z.coerce.number().min(0, { message: "Driver allowance must be a positive number" }),
+  roundTripBasePrice: z.coerce.number().min(0, { message: "Round trip base price must be a positive number" }),
+  roundTripPricePerKm: z.coerce.number().min(0, { message: "Round trip per KM price must be a positive number" }),
 });
 
-export function OutstationFareManagement() {
-  const [cabTypes, setCabTypes] = useState<CabType[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isInitializingDB, setIsInitializingDB] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
-  const [activeTab, setActiveTab] = useState("one-way");
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+// Define the error props interface
+interface FareUpdateErrorProps {
+  title: string;
+  error: any;
+  onRetry: () => Promise<void>;
+}
+
+// Error component that displays error details and retry button
+const FareUpdateError = ({ title, error, onRetry }: FareUpdateErrorProps) => {
+  const errorMessage = error?.message || 'An unknown error occurred';
   
+  return (
+    <Alert variant="destructive" className="mb-4">
+      <AlertCircle className="h-4 w-4" />
+      <AlertDescription>
+        <h3 className="font-semibold">{title}</h3>
+        <p className="text-sm mt-1">{errorMessage}</p>
+        <Button size="sm" variant="outline" className="mt-2" onClick={onRetry}>
+          Try Again
+        </Button>
+      </AlertDescription>
+    </Alert>
+  );
+};
+
+// Component for managing outstation fares
+const OutstationFareManagement = () => {
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [cabTypes, setCabTypes] = useState<CabType[]>([]);
+  const [selectedVehicleType, setSelectedVehicleType] = useState<string>('');
+  const [syncLoading, setSyncLoading] = useState<boolean>(false);
+  const [dbInitLoading, setDbInitLoading] = useState<boolean>(false);
+  const [syncError, setSyncError] = useState<any>(null);
+  const [dbInitError, setDbInitError] = useState<any>(null);
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      cabType: "",
-      oneWayBasePrice: 0,
-      oneWayPricePerKm: 0,
+      vehicleId: "",
+      basePrice: 0,
+      pricePerKm: 0,
+      nightHaltCharge: 0,
+      driverAllowance: 0,
       roundTripBasePrice: 0,
       roundTripPricePerKm: 0,
-      driverAllowance: 0,
-      nightHalt: 0,
     },
   });
-  
+
+  // Load vehicle types on mount
   useEffect(() => {
-    loadData();
+    const fetchCabTypes = async () => {
+      try {
+        const types = await loadCabTypes();
+        if (types && types.length > 0) {
+          setCabTypes(types);
+          // Set the first vehicle as default if none is selected
+          if (!selectedVehicleType) {
+            setSelectedVehicleType(types[0].id);
+            form.setValue("vehicleId", types[0].id);
+            loadVehicleFares(types[0].id);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load cab types:", error);
+        toast({
+          title: "Error Loading Vehicles",
+          description: "Failed to load vehicle types. Please try again.",
+          variant: "destructive",
+        });
+      }
+    };
+
+    fetchCabTypes();
   }, []);
-  
-  const loadData = async () => {
+
+  // Load fare data for a specific vehicle
+  const loadVehicleFares = async (vehicleId: string) => {
     try {
-      setIsLoading(true);
-      setError(null);
-      
-      // Load cab types
-      const types = await loadCabTypes(true);
-      setCabTypes(types);
-      
-      // Pre-select the first cab type if available
-      if (types.length > 0 && !form.getValues('cabType')) {
-        form.setValue('cabType', types[0].id);
-        loadFaresForVehicle(types[0].id);
+      const fares = await fareService.getOutstationFaresForVehicle(vehicleId);
+      if (fares) {
+        form.setValue("vehicleId", vehicleId);
+        form.setValue("basePrice", fares.basePrice || 0);
+        form.setValue("pricePerKm", fares.pricePerKm || 0);
+        form.setValue("nightHaltCharge", fares.nightHaltCharge || 0);
+        form.setValue("driverAllowance", fares.driverAllowance || 0);
+        form.setValue("roundTripBasePrice", fares.roundTripBasePrice || 0);
+        form.setValue("roundTripPricePerKm", fares.roundTripPricePerKm || 0);
       }
-      
-    } catch (err) {
-      console.error("Error loading cab types:", err);
-      setError(err instanceof Error ? err : new Error('Failed to load cab types'));
-    } finally {
-      setIsLoading(false);
+    } catch (error) {
+      console.error(`Failed to load fares for vehicle ${vehicleId}:`, error);
+      toast({
+        title: "Error Loading Fares",
+        description: `Failed to load fares for ${vehicleId}. Please try again.`,
+        variant: "destructive",
+      });
     }
   };
-  
-  const initializeDatabase = async () => {
-    try {
-      setIsInitializingDB(true);
-      setError(null);
-      
-      // First try to sync between tables to ensure consistency
-      await forceSyncTables();
-      
-      const result = await fareService.initializeDatabase(true);
-      console.log('Database initialization response:', result);
-      
-      toast.success("Database tables initialized successfully");
-      await loadData();
-    } catch (err) {
-      console.error("Error initializing database:", err);
-      toast.error(`Failed to initialize database: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      setError(err instanceof Error ? err : new Error('Failed to initialize database'));
-    } finally {
-      setIsInitializingDB(false);
-    }
+
+  // Handle vehicle selection
+  const handleVehicleChange = (vehicle: string) => {
+    setSelectedVehicleType(vehicle);
+    loadVehicleFares(vehicle);
   };
-  
-  const forceSyncTables = async (vehicleId?: string) => {
+
+  // Handle form submission
+  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    setIsSubmitting(true);
     try {
-      setIsSyncing(true);
-      setError(null);
-      
-      // Create URL for sync endpoint
-      const params = new URLSearchParams();
-      params.append('_t', Date.now().toString());
-      params.append('direction', 'to_vehicle_pricing');
-      
-      if (vehicleId) {
-        params.append('vehicle_id', vehicleId);
-      }
-      
-      const syncEndpoint = `${apiBaseUrl}/api/admin/force-sync-outstation-fares.php?${params.toString()}`;
-      console.log("Force syncing outstation fares tables:", syncEndpoint);
-      
-      const response = await axios.get(syncEndpoint, {
-        headers: fareService.getBypassHeaders(),
-        timeout: 15000 // 15 second timeout
+      // Update outstation fares
+      await fareService.directFareUpdate('outstation', values.vehicleId, {
+        basePrice: values.basePrice,
+        pricePerKm: values.pricePerKm,
+        nightHalt: values.nightHaltCharge,
+        nightHaltCharge: values.nightHaltCharge,
+        driverAllowance: values.driverAllowance,
+        roundTripBasePrice: values.roundTripBasePrice,
+        roundTripPricePerKm: values.roundTripPricePerKm
       });
       
-      console.log('Sync response:', response.data);
+      toast({
+        title: "Fares Updated",
+        description: `Successfully updated outstation fares for ${values.vehicleId}`,
+      });
       
-      if (response.data.status === 'success') {
-        toast.success("Tables synchronized successfully");
-        fareService.clearCache();
-      } else {
-        toast.error("Sync completed with issues, check console for details");
-      }
-      
-      return response.data;
-    } catch (err) {
-      console.error("Error syncing outstation fares:", err);
-      toast.error(`Failed to sync tables: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      setError(err instanceof Error ? err : new Error('Failed to sync tables'));
-      throw err;
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-  
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      toast.info(`Updating fares for ${values.cabType}...`);
-      console.log('Starting fare update for outstation with vehicle ID', values.cabType);
-      
-      // First, try the direct outstation-fares-update.php endpoint
-      try {
-        const directEndpoint = `${apiBaseUrl}/api/admin/direct-outstation-fares.php`;
-        console.log(`Trying direct endpoint: ${directEndpoint}`);
-        
-        const formData = new FormData();
-        formData.append('vehicleId', values.cabType);
-        formData.append('basePrice', values.oneWayBasePrice.toString());
-        formData.append('pricePerKm', values.oneWayPricePerKm.toString());
-        formData.append('roundTripBasePrice', values.roundTripBasePrice.toString());
-        formData.append('roundTripPricePerKm', values.roundTripPricePerKm.toString());
-        formData.append('driverAllowance', values.driverAllowance.toString());
-        formData.append('nightHalt', values.nightHalt.toString());
-        
-        const directResponse = await axios.post(directEndpoint, formData, {
-          headers: {
-            ...fareService.getBypassHeaders(),
-            'Content-Type': 'multipart/form-data',
-          },
-          timeout: 15000 // 15 second timeout
-        });
-        
-        console.log('Direct update response:', directResponse.data);
-        if (directResponse.data && directResponse.data.status === 'success') {
-          console.log('Successfully updated fares via direct endpoint');
-        } else {
-          throw new Error('Direct update response was not successful');
-        }
-      } catch (directError) {
-        console.error('Error using direct outstation endpoint:', directError);
-        
-        // Fallback to the standard directFareUpdate method
-        try {
-          const result = await fareService.directFareUpdate('outstation', values.cabType, {
-            basePrice: values.oneWayBasePrice,
-            pricePerKm: values.oneWayPricePerKm,
-            roundTripBasePrice: values.roundTripBasePrice,
-            roundTripPricePerKm: values.roundTripPricePerKm,
-            driverAllowance: values.driverAllowance,
-            nightHaltCharge: values.nightHalt,
-          });
-          
-          console.log('Fare update result:', result);
-        } catch (fallbackError) {
-          console.error('Fallback error:', fallbackError);
-          throw new Error('Failed to update fares through both methods');
-        }
-      }
-      
-      // After updating, force sync between tables
-      try {
-        console.log("Force syncing tables after update");
-        await forceSyncTables(values.cabType);
-      } catch (syncError) {
-        console.error('Error syncing tables after update:', syncError);
-        // Continue anyway, we'll just show a warning
-        toast.warning("Fares updated but table sync may be incomplete. Please try the 'Force Sync' button.");
-      }
-      
-      // Clear all caches
+      // Clear cache to ensure the latest data is fetched
       fareService.clearCache();
       
-      // Dispatch events to update UI
-      window.dispatchEvent(new CustomEvent('fare-cache-cleared'));
-      window.dispatchEvent(new CustomEvent('trip-fares-updated', {
-        detail: { 
-          timestamp: Date.now(),
-          vehicleId: values.cabType
-        }
-      }));
+      // Reload the fares to see the updates
+      loadVehicleFares(values.vehicleId);
       
-      fareService.resetCabOptionsState();
-      
-      toast.success(`Fares updated for ${values.cabType}`);
-      
-      // Force a reload of the fares for this vehicle
-      await loadFaresForVehicle(values.cabType);
-    } catch (err) {
-      console.error('Error updating fares:', err);
-      setError(err instanceof Error ? err : new Error('Failed to update fares'));
-      toast.error(`Failed to update fares: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } catch (error) {
+      console.error("Failed to update outstation fares:", error);
+      toast({
+        title: "Update Failed",
+        description: "Failed to update outstation fares. Please try again.",
+        variant: "destructive",
+      });
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
-  
-  const loadFaresForVehicle = async (vehicleId: string) => {
-    if (!vehicleId) return;
+
+  // Force sync between outstation_fares and vehicle_pricing tables
+  const handleForceSync = async () => {
+    setSyncLoading(true);
+    setSyncError(null);
     
     try {
-      setIsLoading(true);
-      setError(null);
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+      const params = new URLSearchParams();
+      params.append('direction', 'to_vehicle_pricing');
+      params.append('_t', Date.now().toString());
       
-      // Try to get from cached cab types first (fastest)
-      try {
-        const vehicles = cabTypes.length > 0 ? cabTypes : await loadCabTypes(true);
-        const vehicle = vehicles.find(v => v.id === vehicleId);
-        
-        if (vehicle && vehicle.outstationFares) {
-          console.log('Loaded outstation fares from vehicle data:', vehicle.outstationFares);
-          
-          form.setValue("oneWayBasePrice", vehicle.outstationFares.basePrice || 0);
-          form.setValue("oneWayPricePerKm", vehicle.outstationFares.pricePerKm || 0);
-          form.setValue("roundTripBasePrice", vehicle.outstationFares.roundTripBasePrice || 0);
-          form.setValue("roundTripPricePerKm", vehicle.outstationFares.roundTripPricePerKm || 0);
-          form.setValue("driverAllowance", vehicle.outstationFares.driverAllowance || 0);
-          form.setValue("nightHalt", vehicle.outstationFares.nightHaltCharge || 0);
-          setIsLoading(false);
-          return;
-        }
-      } catch (vehicleError) {
-        console.error('Error loading from cached vehicles:', vehicleError);
-      }
+      const response = await axios.get(`${baseUrl}/api/admin/sync-outstation-fares.php?${params.toString()}`, 
+        fareService.getForcedRequestConfig());
       
-      // Now try to get the fares via the API directly
-      try {
-        // First try the direct endpoint with sync param
-        const timestamp = Date.now();
-        const queryParams = new URLSearchParams({
-          vehicle_id: vehicleId,
-          check_sync: 'true',
-          _t: timestamp.toString()
+      if (response.data.status === 'success') {
+        toast({
+          title: "Sync Completed",
+          description: `Successfully synchronized outstation fares: ${response.data.updated} records updated, ${response.data.inserted} records inserted.`,
         });
         
-        const response = await axios.get(`${apiBaseUrl}/api/outstation-fares.php?${queryParams.toString()}`, {
-          headers: fareService.getBypassHeaders(),
-          timeout: 10000 // 10 second timeout
-        });
-        
-        console.log('Fetching outstation fares for vehicle', vehicleId, 'with timestamp:', timestamp);
-        console.log('Response:', response.data);
-        
-        if (response.data && response.data.fares && response.data.fares[vehicleId]) {
-          const fare = response.data.fares[vehicleId];
-          console.log('Outstation fares for vehicle', vehicleId, ':', fare);
-          console.log('Source table:', response.data.sourceTable);
-          
-          form.setValue("oneWayBasePrice", fare.basePrice || 0);
-          form.setValue("oneWayPricePerKm", fare.pricePerKm || 0);
-          form.setValue("roundTripBasePrice", fare.roundTripBasePrice || 0);
-          form.setValue("roundTripPricePerKm", fare.roundTripPricePerKm || 0);
-          form.setValue("driverAllowance", fare.driverAllowance || 0);
-          form.setValue("nightHalt", fare.nightHaltCharge || 0);
-          setIsLoading(false);
-          return;
+        // Clear cache to ensure the latest data is fetched
+        fareService.clearCache();
+        // Reload current vehicle data
+        if (selectedVehicleType) {
+          loadVehicleFares(selectedVehicleType);
         }
-      } catch (directError) {
-        console.error('Error fetching from direct endpoint:', directError);
+      } else {
+        throw new Error(response.data.message || "Sync failed with unknown error");
       }
-      
-      // Fall back to the service method
-      try {
-        const fares = await fareService.getOutstationFaresForVehicle(vehicleId);
-        console.log('Loaded outstation fares for vehicle:', fares);
-        
-        if (fares) {
-          form.setValue("oneWayBasePrice", fares.basePrice || 0);
-          form.setValue("oneWayPricePerKm", fares.pricePerKm || 0);
-          form.setValue("roundTripBasePrice", fares.roundTripBasePrice || 0);
-          form.setValue("roundTripPricePerKm", fares.roundTripPricePerKm || 0);
-          form.setValue("driverAllowance", fares.driverAllowance || 0);
-          form.setValue("nightHalt", fares.nightHaltCharge || 0);
-          setIsLoading(false);
-          return;
-        }
-      } catch (fareError) {
-        console.error('Error fetching fares via service:', fareError);
-      }
-      
-      // If all else fails, use default values
-      console.log('No existing fares found for vehicle, using defaults');
-      setDefaultPricesForVehicle(vehicleId);
-      toast.warning("Could not fetch existing fares, using default values");
     } catch (error) {
-      console.error('Error in loadFaresForVehicle:', error);
-      setError(error instanceof Error ? error : new Error('Failed to load fares for vehicle'));
-      toast.error("Failed to load fares, using default values");
-      setDefaultPricesForVehicle(vehicleId);
+      console.error("Failed to sync outstation fares:", error);
+      setSyncError(error);
+      toast({
+        title: "Sync Failed",
+        description: "Failed to synchronize outstation fares. Please try again.",
+        variant: "destructive",
+      });
     } finally {
-      setIsLoading(false);
+      setSyncLoading(false);
     }
   };
-  
-  const setDefaultPricesForVehicle = (vehicleId: string) => {
-    if (vehicleId === 'sedan') {
-      form.setValue("oneWayBasePrice", 4200);
-      form.setValue("oneWayPricePerKm", 14);
-      form.setValue("roundTripBasePrice", 4000);
-      form.setValue("roundTripPricePerKm", 12);
-      form.setValue("driverAllowance", 250);
-      form.setValue("nightHalt", 700);
-    } else if (vehicleId === 'ertiga' || vehicleId === 'suv') {
-      form.setValue("oneWayBasePrice", 5400);
-      form.setValue("oneWayPricePerKm", 18);
-      form.setValue("roundTripBasePrice", 5000);
-      form.setValue("roundTripPricePerKm", 15);
-      form.setValue("driverAllowance", 250);
-      form.setValue("nightHalt", 1000);
-    } else if (vehicleId === 'innova' || vehicleId === 'innova_crysta') {
-      form.setValue("oneWayBasePrice", 6000);
-      form.setValue("oneWayPricePerKm", 20);
-      form.setValue("roundTripBasePrice", 5600);
-      form.setValue("roundTripPricePerKm", 17);
-      form.setValue("driverAllowance", 250);
-      form.setValue("nightHalt", 1000);
-    } else if (vehicleId === 'luxury') {
-      form.setValue("oneWayBasePrice", 10500);
-      form.setValue("oneWayPricePerKm", 25);
-      form.setValue("roundTripBasePrice", 10000);
-      form.setValue("roundTripPricePerKm", 22);
-      form.setValue("driverAllowance", 300);
-      form.setValue("nightHalt", 1500);
-    } else if (vehicleId === 'tempo' || vehicleId === 'tempo_traveller') {
-      form.setValue("oneWayBasePrice", 9000);
-      form.setValue("oneWayPricePerKm", 22);
-      form.setValue("roundTripBasePrice", 8500);
-      form.setValue("roundTripPricePerKm", 19);
-      form.setValue("driverAllowance", 300);
-      form.setValue("nightHalt", 1500);
-    } else {
-      form.setValue("oneWayBasePrice", 4500);
-      form.setValue("oneWayPricePerKm", 15);
-      form.setValue("roundTripBasePrice", 4000);
-      form.setValue("roundTripPricePerKm", 13);
-      form.setValue("driverAllowance", 250);
-      form.setValue("nightHalt", 1000);
+
+  // Initialize database tables
+  const handleInitDatabase = async () => {
+    setDbInitLoading(true);
+    setDbInitError(null);
+    
+    try {
+      const result = await fareService.initializeDatabase(false);
+      
+      if (result && result.status === 'success') {
+        toast({
+          title: "Database Initialized",
+          description: `Successfully initialized database: ${result.tables_created.length} tables created or updated.`,
+        });
+        
+        // Clear cache to ensure the latest data is fetched
+        fareService.clearCache();
+        
+        // If the current vehicle is selected, reload its fares
+        if (selectedVehicleType) {
+          loadVehicleFares(selectedVehicleType);
+        }
+      } else {
+        throw new Error(result?.message || "Database initialization failed with unknown error");
+      }
+    } catch (error) {
+      console.error("Failed to initialize database:", error);
+      setDbInitError(error);
+      toast({
+        title: "Initialization Failed",
+        description: "Failed to initialize database tables. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setDbInitLoading(false);
     }
   };
-  
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Outstation Fare Management</h2>
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Outstation Fare Management</h1>
         <div className="flex space-x-2">
           <Button 
             variant="outline" 
-            size="sm" 
-            onClick={() => forceSyncTables()}
-            disabled={isSyncing}
+            onClick={handleForceSync}
+            disabled={syncLoading}
           >
-            {isSyncing ? (
+            {syncLoading ? (
               <>
                 <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                 Syncing...
@@ -403,13 +272,12 @@ export function OutstationFareManagement() {
           
           <Button 
             variant="outline" 
-            size="sm" 
-            onClick={initializeDatabase} 
-            disabled={isInitializingDB || isLoading}
+            onClick={handleInitDatabase}
+            disabled={dbInitLoading}
           >
-            {isInitializingDB ? (
+            {dbInitLoading ? (
               <>
-                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                <Database className="mr-2 h-4 w-4 animate-spin" />
                 Initializing...
               </>
             ) : (
@@ -422,149 +290,129 @@ export function OutstationFareManagement() {
         </div>
       </div>
       
-      {error && (
+      {/* Display sync error if any */}
+      {syncError && (
         <FareUpdateError 
-          title="Error"
-          message={error.message}
-          onRetry={() => loadData()}
+          title="Sync Failed" 
+          error={syncError}
+          onRetry={handleForceSync} 
         />
       )}
       
-      <Card>
-        <CardHeader>
-          <CardTitle>Edit Outstation Fares</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <FormField
-                control={form.control}
-                name="cabType"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Cab Type</FormLabel>
-                    <Select
-                      disabled={isLoading}
-                      onValueChange={(value) => {
-                        field.onChange(value);
-                        loadFaresForVehicle(value);
-                      }}
-                      value={field.value}
-                    >
+      {/* Display db init error if any */}
+      {dbInitError && (
+        <FareUpdateError 
+          title="Database Initialization Failed" 
+          error={dbInitError}
+          onRetry={handleInitDatabase} 
+        />
+      )}
+      
+      <div className="bg-white p-6 rounded-lg shadow-sm border">
+        <h2 className="text-xl font-semibold mb-4">Edit Outstation Fares</h2>
+        
+        <div className="mb-6">
+          <FormLabel className="block text-sm font-medium mb-1">Cab Type</FormLabel>
+          <Select value={selectedVehicleType} onValueChange={handleVehicleChange}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select a vehicle" />
+            </SelectTrigger>
+            <SelectContent>
+              {cabTypes.map((cab) => (
+                <SelectItem key={cab.id} value={cab.id}>
+                  {cab.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <input type="hidden" {...form.register("vehicleId")} />
+            
+            <Tabs defaultValue="oneway" className="w-full">
+              <TabsList className="mb-4">
+                <TabsTrigger value="oneway">One Way</TabsTrigger>
+                <TabsTrigger value="roundtrip">Round Trip</TabsTrigger>
+                <TabsTrigger value="charges">Additional Charges</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="oneway" className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="basePrice"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Base Price (₹)</FormLabel>
                       <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a cab type" />
-                        </SelectTrigger>
+                        <Input type="number" min="0" step="0.01" {...field} />
                       </FormControl>
-                      <SelectContent>
-                        {cabTypes.map((cab) => (
-                          <SelectItem key={cab.id} value={cab.id}>
-                            {cab.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <Tabs defaultValue="one-way" value={activeTab} onValueChange={setActiveTab}>
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="one-way">One Way</TabsTrigger>
-                  <TabsTrigger value="round-trip">Round Trip</TabsTrigger>
-                </TabsList>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 
-                <TabsContent value="one-way" className="space-y-4 pt-4">
-                  <FormField
-                    control={form.control}
-                    name="oneWayBasePrice"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Base Price (₹)</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            min="0" 
-                            step="100" 
-                            placeholder="0" 
-                            {...field} 
-                            disabled={isLoading} 
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="oneWayPricePerKm"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Price Per Km (₹)</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            min="0" 
-                            step="1" 
-                            placeholder="0" 
-                            {...field} 
-                            disabled={isLoading} 
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </TabsContent>
-                
-                <TabsContent value="round-trip" className="space-y-4 pt-4">
-                  <FormField
-                    control={form.control}
-                    name="roundTripBasePrice"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Round Trip Base Price (₹)</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            min="0" 
-                            step="100" 
-                            placeholder="0" 
-                            {...field} 
-                            disabled={isLoading} 
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="roundTripPricePerKm"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Round Trip Price Per Km (₹)</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            min="0" 
-                            step="1" 
-                            placeholder="0" 
-                            {...field} 
-                            disabled={isLoading} 
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </TabsContent>
-              </Tabs>
+                <FormField
+                  control={form.control}
+                  name="pricePerKm"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Price Per KM (₹)</FormLabel>
+                      <FormControl>
+                        <Input type="number" min="0" step="0.01" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </TabsContent>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <TabsContent value="roundtrip" className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="roundTripBasePrice"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Round Trip Base Price (₹)</FormLabel>
+                      <FormControl>
+                        <Input type="number" min="0" step="0.01" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="roundTripPricePerKm"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Round Trip Price Per KM (₹)</FormLabel>
+                      <FormControl>
+                        <Input type="number" min="0" step="0.01" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </TabsContent>
+              
+              <TabsContent value="charges" className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="nightHaltCharge"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Night Halt Charge (₹)</FormLabel>
+                      <FormControl>
+                        <Input type="number" min="0" step="0.01" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
                 <FormField
                   control={form.control}
                   name="driverAllowance"
@@ -572,70 +420,37 @@ export function OutstationFareManagement() {
                     <FormItem>
                       <FormLabel>Driver Allowance (₹)</FormLabel>
                       <FormControl>
-                        <Input 
-                          type="number" 
-                          min="0" 
-                          step="50" 
-                          placeholder="0" 
-                          {...field} 
-                          disabled={isLoading} 
-                        />
+                        <Input type="number" min="0" step="0.01" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                
-                <FormField
-                  control={form.control}
-                  name="nightHalt"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Night Halt Charge (₹)</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="number" 
-                          min="0" 
-                          step="100" 
-                          placeholder="0" 
-                          {...field} 
-                          disabled={isLoading} 
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              
-              <Alert className="bg-yellow-50 text-yellow-800 border-yellow-300">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  These fares will apply to all outstation trips for this cab type.
-                </AlertDescription>
-              </Alert>
-              
-              <Button 
-                type="submit" 
-                className="w-full" 
-                disabled={isLoading || isInitializingDB || isSyncing}
-              >
-                {isLoading ? (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                    Updating...
-                  </>
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    Save Fares
-                  </>
-                )}
-              </Button>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
+              </TabsContent>
+            </Tabs>
+            
+            <Button 
+              type="submit" 
+              className="w-full"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  Save Changes
+                </>
+              )}
+            </Button>
+          </form>
+        </Form>
+      </div>
     </div>
   );
-}
+};
+
+export default OutstationFareManagement;

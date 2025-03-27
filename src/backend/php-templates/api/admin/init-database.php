@@ -10,9 +10,22 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
+// Function to log debugging information
+function logDebug($message, $data = null) {
+    $logMessage = date('Y-m-d H:i:s') . " - " . $message;
+    if ($data !== null) {
+        $logMessage .= " - " . json_encode($data);
+    }
+    error_log($logMessage);
+}
+
+logDebug("Starting init-database.php execution");
+
 // Process parameters
 $force = isset($_GET['force']) && $_GET['force'] === 'true';
 $verbose = isset($_GET['verbose']) && $_GET['verbose'] === 'true';
+
+logDebug("Init parameters", ['force' => $force ? 'true' : 'false', 'verbose' => $verbose ? 'true' : 'false']);
 
 // Check if verification tables exist
 $result = null;
@@ -22,9 +35,19 @@ $tablesCreated = [];
 $tablesFailed = [];
 
 try {
+    // Increase PHP limits for this script
+    ini_set('max_execution_time', 300); // 5 minutes
+    ini_set('memory_limit', '256M');    // 256 MB
+    
     // Connect to database
     require_once '../../config.php';
     $conn = getDbConnection();
+    
+    if (!$conn) {
+        throw new Exception("Database connection failed");
+    }
+    
+    logDebug("Database connection successful");
     
     // Verify essential tables and create them if missing
     $requiredTables = [
@@ -68,6 +91,14 @@ try {
             'roundtrip_base_price' => 'DECIMAL(10,2) DEFAULT 0',
             'roundtrip_price_per_km' => 'DECIMAL(5,2) DEFAULT 0'
         ],
+        'vehicle_pricing' => [
+            'vehicle_id' => 'VARCHAR(50) NOT NULL',
+            'trip_type' => 'VARCHAR(50) NOT NULL',
+            'base_fare' => 'DECIMAL(10,2) NOT NULL DEFAULT 0',
+            'price_per_km' => 'DECIMAL(5,2) NOT NULL DEFAULT 0',
+            'driver_allowance' => 'DECIMAL(10,2) DEFAULT 0',
+            'night_halt_charge' => 'DECIMAL(10,2) DEFAULT 0'
+        ],
         'drivers' => [
             'name' => 'VARCHAR(100) NOT NULL',
             'phone' => 'VARCHAR(20) NOT NULL',
@@ -88,12 +119,20 @@ try {
             if ($force) {
                 // If force flag is set, drop the table to recreate it
                 $messages[] = "Force option: Dropping and recreating table $tableName";
+                logDebug("Force option: Dropping table $tableName");
                 $conn->query("DROP TABLE IF EXISTS $tableName");
                 $createTable = true;
             } else {
                 // Check if table has all required columns
                 $columnResult = $conn->query("SHOW COLUMNS FROM $tableName");
                 $existingColumns = [];
+                
+                if (!$columnResult) {
+                    $messages[] = "Error checking columns for table $tableName: " . $conn->error;
+                    logDebug("Error checking columns for table $tableName: " . $conn->error);
+                    continue;
+                }
+                
                 while ($columnResult && $row = $columnResult->fetch_assoc()) {
                     $existingColumns[] = $row['Field'];
                 }
@@ -103,6 +142,7 @@ try {
                 
                 if (!empty($missingColumns)) {
                     $messages[] = "Table $tableName is missing columns: " . implode(', ', $missingColumns);
+                    logDebug("Table $tableName is missing columns", $missingColumns);
                     
                     // Add missing columns
                     foreach ($missingColumns as $columnName) {
@@ -112,8 +152,10 @@ try {
                         
                         if ($result) {
                             $messages[] = "Added missing column $columnName to $tableName";
+                            logDebug("Added missing column $columnName to $tableName");
                         } else {
                             $messages[] = "Failed to add column $columnName to $tableName: " . $conn->error;
+                            logDebug("Failed to add column $columnName to $tableName: " . $conn->error);
                             $tablesFailed[] = "$tableName (column add failed)";
                         }
                     }
@@ -121,16 +163,20 @@ try {
                     $tablesCreated[] = "$tableName (columns added)";
                 } else {
                     $messages[] = "Table $tableName exists with all required columns";
+                    logDebug("Table $tableName exists with all required columns");
                 }
             }
         } else {
             $messages[] = "Table $tableName does not exist";
+            logDebug("Table $tableName does not exist, will create it");
             $createTable = true;
         }
         
         // Create table if needed
         if ($createTable) {
             try {
+                logDebug("Creating table $tableName");
+                
                 // Prepare SQL for creating table
                 $sql = "CREATE TABLE IF NOT EXISTS $tableName (
                     id INT AUTO_INCREMENT PRIMARY KEY,";
@@ -149,6 +195,11 @@ try {
                     $sql .= ",\n    UNIQUE KEY vehicle_id (vehicle_id)";
                 }
                 
+                // Add unique compound key for vehicle_pricing
+                if ($tableName === 'vehicle_pricing') {
+                    $sql = str_replace("UNIQUE KEY vehicle_id (vehicle_id)", "UNIQUE KEY vehicle_trip_type (vehicle_id, trip_type)", $sql);
+                }
+                
                 $sql .= "\n) ENGINE=InnoDB;";
                 
                 // Execute the query
@@ -156,6 +207,7 @@ try {
                 
                 if ($result) {
                     $messages[] = "Successfully created table $tableName";
+                    logDebug("Successfully created table $tableName");
                     $tablesCreated[] = $tableName;
                     
                     // Add sample data for newly created tables
@@ -170,8 +222,10 @@ try {
                         
                         if ($conn->query($defaultData)) {
                             $messages[] = "Added default data to outstation_fares table";
+                            logDebug("Added default data to outstation_fares table");
                         } else {
                             $messages[] = "Failed to add default data to outstation_fares table: " . $conn->error;
+                            logDebug("Failed to add default data to outstation_fares table: " . $conn->error);
                         }
                     } else if ($tableName == 'airport_transfer_fares') {
                         $defaultData = "INSERT IGNORE INTO airport_transfer_fares (vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
@@ -184,8 +238,10 @@ try {
                         
                         if ($conn->query($defaultData)) {
                             $messages[] = "Added default data to airport_transfer_fares table";
+                            logDebug("Added default data to airport_transfer_fares table");
                         } else {
                             $messages[] = "Failed to add default data to airport_transfer_fares table: " . $conn->error;
+                            logDebug("Failed to add default data to airport_transfer_fares table: " . $conn->error);
                         }
                     } else if ($tableName == 'local_package_fares') {
                         $defaultData = "INSERT IGNORE INTO local_package_fares (vehicle_id, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour) VALUES
@@ -197,8 +253,10 @@ try {
                         
                         if ($conn->query($defaultData)) {
                             $messages[] = "Added default data to local_package_fares table";
+                            logDebug("Added default data to local_package_fares table");
                         } else {
                             $messages[] = "Failed to add default data to local_package_fares table: " . $conn->error;
+                            logDebug("Failed to add default data to local_package_fares table: " . $conn->error);
                         }
                     } else if ($tableName == 'vehicle_types' && $tableExists == false) {
                         $defaultData = "INSERT IGNORE INTO vehicle_types (vehicle_id, name, capacity, luggage_capacity, ac, image, amenities, description, is_active) VALUES
@@ -210,27 +268,160 @@ try {
                         
                         if ($conn->query($defaultData)) {
                             $messages[] = "Added default data to vehicle_types table";
+                            logDebug("Added default data to vehicle_types table");
                         } else {
                             $messages[] = "Failed to add default data to vehicle_types table: " . $conn->error;
+                            logDebug("Failed to add default data to vehicle_types table: " . $conn->error);
+                        }
+                    } else if ($tableName == 'vehicle_pricing') {
+                        // Populate vehicle_pricing from outstation_fares if it exists
+                        $checkOutstationFares = $conn->query("SHOW TABLES LIKE 'outstation_fares'");
+                        if ($checkOutstationFares && $checkOutstationFares->num_rows > 0) {
+                            logDebug("Populating vehicle_pricing from outstation_fares");
+                            
+                            // First one-way prices
+                            $syncOneWayQuery = "
+                                INSERT INTO vehicle_pricing (vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance)
+                                SELECT 
+                                    vehicle_id, 'outstation', base_price, price_per_km, night_halt_charge, driver_allowance
+                                FROM 
+                                    outstation_fares
+                            ";
+                            
+                            if ($conn->query($syncOneWayQuery)) {
+                                $messages[] = "Synced outstation one-way fares to vehicle_pricing";
+                                logDebug("Synced outstation one-way fares to vehicle_pricing");
+                            } else {
+                                $messages[] = "Failed to sync outstation one-way fares: " . $conn->error;
+                                logDebug("Failed to sync outstation one-way fares: " . $conn->error);
+                            }
+                            
+                            // Also for outstation-one-way type
+                            $syncOneWayTypeQuery = "
+                                INSERT INTO vehicle_pricing (vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance)
+                                SELECT 
+                                    vehicle_id, 'outstation-one-way', base_price, price_per_km, night_halt_charge, driver_allowance
+                                FROM 
+                                    outstation_fares
+                            ";
+                            
+                            if ($conn->query($syncOneWayTypeQuery)) {
+                                $messages[] = "Synced outstation-one-way fares to vehicle_pricing";
+                                logDebug("Synced outstation-one-way fares to vehicle_pricing");
+                            } else {
+                                $messages[] = "Failed to sync outstation-one-way fares: " . $conn->error;
+                                logDebug("Failed to sync outstation-one-way fares: " . $conn->error);
+                            }
+                            
+                            // Round-trip prices
+                            $syncRoundTripQuery = "
+                                INSERT INTO vehicle_pricing (vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance)
+                                SELECT 
+                                    vehicle_id, 'outstation-round-trip', roundtrip_base_price, roundtrip_price_per_km, night_halt_charge, driver_allowance
+                                FROM 
+                                    outstation_fares
+                            ";
+                            
+                            if ($conn->query($syncRoundTripQuery)) {
+                                $messages[] = "Synced outstation round-trip fares to vehicle_pricing";
+                                logDebug("Synced outstation round-trip fares to vehicle_pricing");
+                            } else {
+                                $messages[] = "Failed to sync outstation round-trip fares: " . $conn->error;
+                                logDebug("Failed to sync outstation round-trip fares: " . $conn->error);
+                            }
+                        } else {
+                            // Add default entries directly to vehicle_pricing
+                            $defaultDataOutstation = "
+                                INSERT IGNORE INTO vehicle_pricing (vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance) VALUES
+                                ('sedan', 'outstation', 4200, 14, 700, 250),
+                                ('sedan', 'outstation-one-way', 4200, 14, 700, 250),
+                                ('sedan', 'outstation-round-trip', 4000, 12, 700, 250),
+                                ('ertiga', 'outstation', 5400, 18, 1000, 250),
+                                ('ertiga', 'outstation-one-way', 5400, 18, 1000, 250),
+                                ('ertiga', 'outstation-round-trip', 5000, 15, 1000, 250),
+                                ('innova_crysta', 'outstation', 6000, 20, 1000, 250),
+                                ('innova_crysta', 'outstation-one-way', 6000, 20, 1000, 250),
+                                ('innova_crysta', 'outstation-round-trip', 5600, 17, 1000, 250),
+                                ('tempo', 'outstation', 9000, 22, 1500, 300),
+                                ('tempo', 'outstation-one-way', 9000, 22, 1500, 300),
+                                ('tempo', 'outstation-round-trip', 8500, 19, 1500, 300),
+                                ('luxury', 'outstation', 10500, 25, 1500, 300),
+                                ('luxury', 'outstation-one-way', 10500, 25, 1500, 300),
+                                ('luxury', 'outstation-round-trip', 10000, 22, 1500, 300)
+                            ";
+                            
+                            if ($conn->query($defaultDataOutstation)) {
+                                $messages[] = "Added default outstation data to vehicle_pricing table";
+                                logDebug("Added default outstation data to vehicle_pricing table");
+                            } else {
+                                $messages[] = "Failed to add default outstation data to vehicle_pricing table: " . $conn->error;
+                                logDebug("Failed to add default outstation data to vehicle_pricing table: " . $conn->error);
+                            }
                         }
                     }
                 } else {
                     $messages[] = "Failed to create table $tableName: " . $conn->error;
+                    logDebug("Failed to create table $tableName: " . $conn->error);
                     $tablesFailed[] = $tableName;
                 }
             } catch (Exception $e) {
                 $messages[] = "Error creating table $tableName: " . $e->getMessage();
+                logDebug("Error creating table $tableName: " . $e->getMessage());
                 $tablesFailed[] = $tableName;
             }
         }
+    }
+    
+    // Force sync between outstation_fares and vehicle_pricing if both exist
+    $syncMessage = "";
+    try {
+        $checkOutstationFares = $conn->query("SHOW TABLES LIKE 'outstation_fares'");
+        $checkVehiclePricing = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'");
+        
+        if ($checkOutstationFares && $checkOutstationFares->num_rows > 0 && 
+            $checkVehiclePricing && $checkVehiclePricing->num_rows > 0) {
+            
+            logDebug("Syncing outstation_fares and vehicle_pricing tables");
+            
+            // Sync from outstation_fares to vehicle_pricing
+            $syncResult = $conn->query("
+                INSERT INTO vehicle_pricing (vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance)
+                SELECT 
+                    vehicle_id, 'outstation', base_price, price_per_km, night_halt_charge, driver_allowance
+                FROM 
+                    outstation_fares
+                ON DUPLICATE KEY UPDATE 
+                    base_fare = outstation_fares.base_price,
+                    price_per_km = outstation_fares.price_per_km,
+                    night_halt_charge = outstation_fares.night_halt_charge,
+                    driver_allowance = outstation_fares.driver_allowance,
+                    updated_at = CURRENT_TIMESTAMP
+            ");
+            
+            if ($syncResult) {
+                $syncMessage = "Synced outstation_fares with vehicle_pricing table";
+                $messages[] = $syncMessage;
+                logDebug($syncMessage);
+            } else {
+                $syncMessage = "Failed to sync tables: " . $conn->error;
+                $messages[] = $syncMessage;
+                logDebug($syncMessage);
+            }
+        }
+    } catch (Exception $e) {
+        $syncMessage = "Error during sync: " . $e->getMessage();
+        $messages[] = $syncMessage;
+        logDebug($syncMessage);
     }
     
     // Final verification
     $verified = count($tablesFailed) === 0;
     
 } catch (Exception $e) {
-    $messages[] = "Verification error: " . $e->getMessage();
+    $errorMessage = "Verification error: " . $e->getMessage();
+    $messages[] = $errorMessage;
     $verified = false;
+    logDebug($errorMessage);
 }
 
 // Prepare the response
@@ -245,6 +436,12 @@ $response = [
     'force_applied' => $force,
     'endpoint' => $_SERVER['REQUEST_URI']
 ];
+
+logDebug("init-database.php completed", [
+    'status' => $verified ? 'success' : 'error',
+    'tables_created' => count($tablesCreated),
+    'tables_failed' => count($tablesFailed)
+]);
 
 // Output response in JSON
 echo json_encode($response, JSON_PRETTY_PRINT);

@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { TripType, TripMode } from '@/lib/tripTypes';
 import { LocalFare, OutstationFare, AirportFare } from '@/types/cab';
@@ -77,6 +78,7 @@ export const getForcedRequestConfig = () => {
 // Initialize database tables - useful for admin operations
 export const initializeDatabase = async (forceRecreate = false) => {
   try {
+    console.log(`Initializing database with forceRecreate=${forceRecreate}`);
     const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
     const params = new URLSearchParams();
     
@@ -87,13 +89,46 @@ export const initializeDatabase = async (forceRecreate = false) => {
     params.append('verbose', 'true');
     params.append('_t', Date.now().toString()); // Cache busting
     
-    const response = await axios.get(`${baseUrl}/api/init-database.php?${params.toString()}`, {
-      headers: getBypassHeaders()
+    const response = await axios.get(`${baseUrl}/api/admin/init-database.php?${params.toString()}`, {
+      headers: getBypassHeaders(),
+      timeout: 30000 // Increase timeout for this operation
     });
     
+    console.log('Database initialization response:', response.data);
     return response.data;
   } catch (error) {
     console.error('Error initializing database:', error);
+    throw error;
+  }
+};
+
+// Force sync between outstation_fares and vehicle_pricing tables
+export const forceSyncOutstationFares = async (direction = 'to_vehicle_pricing', vehicleId?: string) => {
+  try {
+    console.log(`Force syncing outstation fares with direction=${direction}`);
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    const params = new URLSearchParams();
+    
+    params.append('direction', direction);
+    params.append('_t', Date.now().toString()); // Cache busting
+    
+    if (vehicleId) {
+      params.append('vehicle_id', vehicleId);
+    }
+    
+    const response = await axios.get(`${baseUrl}/api/admin/force-sync-outstation-fares.php?${params.toString()}`, {
+      headers: getBypassHeaders(),
+      timeout: 30000 // Increase timeout for this operation
+    });
+    
+    console.log('Force sync response:', response.data);
+    
+    // After successful sync, clear fare cache
+    clearFareCache();
+    
+    return response.data;
+  } catch (error) {
+    console.error('Error force syncing outstation fares:', error);
     throw error;
   }
 };
@@ -135,19 +170,24 @@ export const directFareUpdate = async (tripType: string, vehicleId: string, data
     console.log(`Sending ${tripType} fare update for ${vehicleId} to ${endpoint}`);
     
     // Make the request using FormData
-    const response = await axios.post(endpoint, formData);
+    const response = await axios.post(endpoint, formData, {
+      headers: {
+        ...getBypassHeaders(),
+        'Content-Type': 'multipart/form-data'
+      },
+      timeout: 30000 // Increase timeout for this operation
+    });
     
     // After updating, force a sync between tables
     if (tripType === 'outstation') {
       console.log('Syncing outstation_fares with vehicle_pricing');
-      const syncResponse = await axios.get(`${baseUrl}/api/outstation-fares.php`, {
-        params: { 
-          sync: 'true',
-          _t: Date.now() // Cache busting 
-        },
-        headers: getBypassHeaders()
-      });
-      console.log('Sync response:', syncResponse.data);
+      try {
+        const syncResponse = await forceSyncOutstationFares('to_vehicle_pricing', vehicleId);
+        console.log('Sync response:', syncResponse);
+      } catch (syncError) {
+        console.error('Error during sync after update:', syncError);
+        // Continue despite sync error - the update already succeeded
+      }
     }
     
     // Clear cache after updating
@@ -417,7 +457,8 @@ export const getAirportFares = async (): Promise<Record<string, AirportFare>> =>
     const response = await axios.get(`${baseUrl}/api/airport-fares.php`, {
       params: { 
         _t: Date.now() // Cache busting
-      }
+      },
+      headers: getBypassHeaders()
     });
     
     if (response.data && response.data.fares) {
@@ -556,5 +597,9 @@ export const fareService = {
   getBypassHeaders,
   getForcedRequestConfig,
   resetCabOptionsState,
-  initializeDatabase
+  initializeDatabase,
+  forceSyncOutstationFares
 };
+
+// Export default for convenience
+export default fareService;
