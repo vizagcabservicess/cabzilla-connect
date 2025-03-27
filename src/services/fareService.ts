@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { TripType, TripMode } from '@/lib/tripTypes';
 import { LocalFare, OutstationFare, AirportFare } from '@/types/cab';
@@ -561,12 +562,6 @@ export const resetCabOptionsState = () => {
   }
 };
 
-// Define a wrapper for clearFareCache to use in the fareService object
-const clearCache = () => {
-  clearFareCache();
-  return true;
-};
-
 // Create the fareService object to export all utility functions
 export const fareService = {
   clearCache,
@@ -582,3 +577,9 @@ export const fareService = {
   getAirportFaresForVehicle,
   resetCabOptionsState
 };
+
+// Define a wrapper for clearFareCache to use in the fareService object
+function clearCache() {
+  clearFareCache();
+  return true;
+}
