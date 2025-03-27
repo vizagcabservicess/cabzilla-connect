@@ -410,14 +410,13 @@ try {
         }
     }
     
-    // Return results
+    // Return success response
     echo json_encode([
         'status' => 'success',
-        'message' => 'Sync operation completed',
+        'message' => 'Force sync completed successfully',
         'results' => $results,
-        'tables' => $tableChecks,
-        'vehicle_id' => $vehicleId,
-        'timestamp' => time()
+        'timestamp' => time(),
+        'vehicle_id' => $vehicleId
     ]);
     
 } catch (Exception $e) {
@@ -426,6 +425,8 @@ try {
     echo json_encode([
         'status' => 'error',
         'message' => $e->getMessage(),
+        'timestamp' => time(),
+        'file' => 'force-sync-outstation-fares.php',
         'trace' => $e->getTraceAsString()
     ]);
 }

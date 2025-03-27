@@ -15,7 +15,7 @@ header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Force-Refre
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
-header('Expires: '0');
+header('Expires: 0'); // Fixed typo here that was causing 500 error
 
 // Add debugging headers
 header('X-Debug-File: sync-outstation-fares.php');
