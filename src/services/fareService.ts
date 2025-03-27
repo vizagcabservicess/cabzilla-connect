@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { TripType, TripMode } from '@/lib/tripTypes';
 import { LocalFare, OutstationFare, AirportFare } from '@/types/cab';
@@ -267,13 +268,14 @@ async function forceSyncOutstationFares() {
 }
 
 // Sync local fare tables - ensure consistency with vehicle_pricing
-export const syncLocalFareTables = async (): Promise<boolean> => {
+async function syncLocalFareTables(): Promise<boolean> {
   try {
     console.log('Syncing local fare tables...');
     const bypassHeaders = getBypassHeaders();
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
     
     // Call the sync-local-fares.php API endpoint
-    const response = await fetch(`${API_BASE_URL}/admin/sync-local-fares.php`, {
+    const response = await fetch(`${baseUrl}/admin/sync-local-fares.php`, {
       method: 'GET',
       headers: {
         ...bypassHeaders,
