@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import { CabType } from '@/types/cab';
 import { CabOptionCard } from '@/components/CabOptionCard';
@@ -83,10 +84,11 @@ export function CabList({
         hasChanges = true;
         console.log(`CabList: Updating fare for ${cabId} to ${fare}`);
         
-        // Immediately dispatch event for this fare update
-        window.dispatchEvent(new CustomEvent('cab-selected-with-fare', {
+        // CRITICAL: Immediately dispatch event for this fare update
+        // This ensures the booking summary gets updated
+        window.dispatchEvent(new CustomEvent('fare-updated', {
           detail: {
-            cabType: cabId,
+            cabId: cabId,
             cabName: cabTypes.find(cab => cab.id === cabId)?.name || cabId,
             fare: fare,
             timestamp: Date.now()
@@ -123,7 +125,7 @@ export function CabList({
     }
   };
   
-  // Schedule processing of updates
+  // Schedule processing of updates - reduced delay from 50ms to 10ms for faster updates
   const scheduleUpdate = () => {
     if (updateTimeoutRef.current !== null) {
       window.clearTimeout(updateTimeoutRef.current);
@@ -132,7 +134,7 @@ export function CabList({
     updateTimeoutRef.current = window.setTimeout(() => {
       processPendingUpdates();
       updateTimeoutRef.current = null;
-    }, 50) as unknown as number;
+    }, 10) as unknown as number;
   };
   
   // Update displayed fares when cabFares changes
@@ -158,7 +160,7 @@ export function CabList({
     }
   }, [cabFares, displayedFares]);
   
-  // Reset refresh counter periodically (every 2 minutes instead of 5)
+  // Reset refresh counter periodically (every 2 minutes)
   useEffect(() => {
     const resetInterval = setInterval(() => {
       refreshCountRef.current = Math.max(0, refreshCountRef.current - 1);
@@ -228,7 +230,7 @@ export function CabList({
     // Enable throttled direct updates after a short delay to prevent initial loops
     setTimeout(() => {
       directUpdateEnabledRef.current = true;
-    }, 1000);
+    }, 500);
     
     window.addEventListener('cab-selected-with-fare', handleCabSelectedWithFare);
     window.addEventListener('fare-calculated', handleFareCalculated);
@@ -249,7 +251,7 @@ export function CabList({
         window.clearTimeout(updateTimeoutRef.current);
       }
     };
-  }, []);
+  }, [cabTypes]);
   
   // Helper to get the most reliable fare
   const getDisplayFare = (cab: CabType): number => {
@@ -305,6 +307,16 @@ export function CabList({
     
     // Get the current fare for this cab
     const currentFare = getDisplayFare(cab);
+    
+    // CRITICAL: Dispatch event for fare update to ensure BookingSummary gets updated
+    window.dispatchEvent(new CustomEvent('fare-updated', {
+      detail: {
+        cabId: cab.id,
+        cabName: cab.name,
+        fare: currentFare,
+        timestamp: Date.now()
+      }
+    }));
     
     // Dispatch custom event with selected cab and fare
     window.dispatchEvent(new CustomEvent('cab-selected', {
