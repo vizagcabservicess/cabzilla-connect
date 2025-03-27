@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -19,7 +18,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
   const [lastUpdateTime, setLastUpdateTime] = useState<number>(Date.now());
   
   // Ensure the standard package IDs are consistent
-  const standardPackageIds = {
+  const standardPackageIds: Record<string, string> = {
     "4hr_40km": "4hrs-40km",
     "04hr_40km": "4hrs-40km",
     "04hrs_40km": "4hrs-40km",
@@ -77,8 +76,10 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
       hourlyPackages.forEach(pkg => {
         // Normalize the package ID to ensure consistent format
         const normalizedId = normalizePackageId(pkg.id);
+        
         // Only add if not already in our mergedPackages array
-        if (!mergedPackages.some(p => normalizePackageId(p.id) === normalizedId)) {
+        // Specifically exclude the 04hrs-40km variant to avoid duplication
+        if (!mergedPackages.some(p => normalizePackageId(p.id) === normalizedId) && pkg.id !== '04hrs-40km') {
           mergedPackages.push({
             ...pkg,
             id: normalizedId // Use the normalized ID for consistency
@@ -162,16 +163,20 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
   // Handle package selection
   const handlePackageSelect = (packageId: string) => {
     console.log(`Selected package: ${packageId}`);
-    if (packageId === selectedPackage) {
+    
+    // Support 04hrs-40km format by converting to 4hrs-40km
+    const normalizedPackageId = packageId.replace('04hrs-40km', '4hrs-40km');
+    
+    if (normalizedPackageId === selectedPackage) {
       console.log('Package already selected, forcing refresh anyway');
     }
     
     // Always call onPackageSelect to update the parent component
-    onPackageSelect(packageId);
+    onPackageSelect(normalizedPackageId);
     
     // Dispatch an event to notify other components about the package selection
     window.dispatchEvent(new CustomEvent('hourly-package-selected', {
-      detail: { packageId, timestamp: Date.now() }
+      detail: { packageId: normalizedPackageId, timestamp: Date.now() }
     }));
     
     // Also dispatch a global force refresh event
@@ -180,7 +185,7 @@ export function LocalTripSelector({ selectedPackage, onPackageSelect }: LocalTri
     }));
     
     // Show a toast notification
-    toast.success(`Selected ${packageId.replace(/-/g, ' ')} package`);
+    toast.success(`Selected ${normalizedPackageId.replace(/-/g, ' ')} package`);
   };
   
   // Display a message if no packages are available

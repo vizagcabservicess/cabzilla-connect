@@ -1,4 +1,3 @@
-
 import { HourlyPackage, LocalPackagePriceMatrix } from '@/types/cab';
 
 // Define standard hourly packages
@@ -11,7 +10,6 @@ export const hourlyPackages: HourlyPackage[] = [
     basePrice: 1200,
     multiplier: 0.6
   },
-  // Also add the alternative format for the 04hrs package
   {
     id: '04hrs-40km',
     name: '4 Hours / 40 KM',
@@ -69,7 +67,6 @@ const defaultPackageMatrix: LocalPackagePriceMatrix = {
     'dzire cng': 1200,
     'swift': 1200
   },
-  // Also add the 04hrs-40km entry with same values
   '04hrs-40km': {
     'sedan': 1200,
     'ertiga': 1800,
@@ -337,7 +334,7 @@ function updateNormalizedMatrix(): void {
 }
 
 // Function to update local package prices with direct API update
-export function updateLocalPackagePrice(packageId: string, cabType: string, price: number): void {
+export async function updateLocalPackagePrice(packageId: string, cabType: string, price: number): Promise<void> {
   // Handle undefined or null cabType
   if (!cabType) {
     console.warn('cabType is undefined or null for updateLocalPackagePrice, using default sedan');
@@ -368,28 +365,16 @@ export function updateLocalPackagePrice(packageId: string, cabType: string, pric
     localPackagePriceMatrix[normalizedPackageId] = {};
   }
   
-  // Normalize some common cab type variations to match what the frontend expects
-  let normalizedCabType = lowerCabType;
-  if (normalizedCabType === 'swift_02') normalizedCabType = 'swift';
-  if (normalizedCabType === 'dzire_cng') normalizedCabType = 'dzire cng';
-  if (normalizedCabType === 'innova_crysta') normalizedCabType = 'innova crysta';
-  if (normalizedCabType === 'luxury_sedan') normalizedCabType = 'luxury sedan';
-  
   // Update the price for the specified cab type
   localPackagePriceMatrix[normalizedPackageId][lowerCabType] = price;
   
-  // Also update normalized version if different
-  if (normalizedCabType !== lowerCabType) {
-    localPackagePriceMatrix[normalizedPackageId][normalizedCabType] = price;
-    console.log(`Also updated normalized cab type ${normalizedCabType} with the same price`);
-  }
-  
-  // Add price for similar cab types to improve matching
-  for (const [baseCabType, synonyms] of Object.entries(cabTypeSynonyms)) {
-    if (synonyms.includes(lowerCabType) || lowerCabType.includes(baseCabType)) {
-      localPackagePriceMatrix[normalizedPackageId][baseCabType] = price;
-      console.log(`Also updated base cab type ${baseCabType} with the same price`);
+  // Also update the 04hrs-40km entry if we're updating 4hrs-40km
+  if (normalizedPackageId === '4hrs-40km') {
+    if (!localPackagePriceMatrix['04hrs-40km']) {
+      localPackagePriceMatrix['04hrs-40km'] = {};
     }
+    localPackagePriceMatrix['04hrs-40km'][lowerCabType] = price;
+    console.log(`Also updated 04hrs-40km variant for ${lowerCabType} with price ${price}`);
   }
   
   // Update normalized matrix
@@ -465,7 +450,10 @@ async function updateLocalPackagePriceOnServer(packageId: string, cabType: strin
       vehicle_type: cabType,
       price4hrs40km: 0,
       price8hrs80km: 0,
-      price10hrs100km: 0
+      price10hrs100km: 0,
+      local_package_4hr: 0,
+      local_package_8hr: 0,
+      local_package_10hr: 0
     };
     
     // Set the price for the specific package
@@ -489,6 +477,7 @@ async function updateLocalPackagePriceOnServer(packageId: string, cabType: strin
     // Add packages object for React-style clients
     packageData.packages = {
       '4hrs-40km': packageId === '4hrs-40km' || packageId === '04hrs-40km' ? price : 0,
+      '04hrs-40km': packageId === '4hrs-40km' || packageId === '04hrs-40km' ? price : 0,
       '8hrs-80km': packageId === '8hrs-80km' ? price : 0,
       '10hrs-100km': packageId === '10hrs-100km' ? price : 0
     };
