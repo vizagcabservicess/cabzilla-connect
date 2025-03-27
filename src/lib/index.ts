@@ -20,7 +20,7 @@ export type { TripType, TripMode } from './tripTypes';
 export { 
   getBypassHeaders,
   getForcedRequestConfig,
-  directFareUpdate,  // Use directFareUpdate instead of directLocalFareUpdate
+  directFareUpdate,  // Using directFareUpdate for all fare updates
   initializeDatabase,
   forceSyncOutstationFares,
   syncOutstationFares,
@@ -34,8 +34,8 @@ export {
   clearFareCache as clearFareServiceCache,
   resetCabOptionsState,
   syncLocalFareTables,
-  fareService,
-  // Removing updateLocalFare as it doesn't exist
+  fareService
+  // Removed updateLocalFare as it doesn't exist
 } from '@/services/fareService';
 
 // Re-export CabType from the types directly

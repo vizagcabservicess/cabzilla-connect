@@ -182,9 +182,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET
         exit;
     }
     
+    // Create database connection - hardcoded for maximum reliability
+    $dbHost = 'localhost';
+    $dbName = 'u644605165_new_bookingdb';
+    $dbUser = 'u644605165_new_bookingusr';
+    $dbPass = 'Vizag@1213';
+    
+    // Try to connect to the database
+    $databaseError = null;
+    try {
+        $pdo = new PDO("mysql:host=$dbHost;dbname=$dbName", $dbUser, $dbPass);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        
+        // Update vehicle_pricing table 
+        try {
+            // Check if a record exists for this vehicle_id with trip_type 'local'
+            $checkSql = "SELECT id FROM vehicle_pricing WHERE vehicle_id = ? AND trip_type = 'local'";
+            $checkStmt = $pdo->prepare($checkSql);
+            $checkStmt->execute([$vehicleId]);
+            $exists = $checkStmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($exists) {
+                // Update existing record
+                $updateSql = "UPDATE vehicle_pricing 
+                              SET local_package_4hr = ?, 
+                                  local_package_8hr = ?, 
+                                  local_package_10hr = ?, 
+                                  extra_km_charge = ?, 
+                                  extra_hour_charge = ?,
+                                  updated_at = NOW()
+                              WHERE vehicle_id = ? AND trip_type = 'local'";
+                $updateStmt = $pdo->prepare($updateSql);
+                $updateStmt->execute([
+                    $package4hr, 
+                    $package8hr, 
+                    $package10hr, 
+                    $extraKmRate, 
+                    $extraHourRate,
+                    $vehicleId
+                ]);
+            } else {
+                // Insert new record with all required fields
+                $insertSql = "INSERT INTO vehicle_pricing 
+                              (vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance,
+                               local_package_4hr, local_package_8hr, local_package_10hr, 
+                               extra_km_charge, extra_hour_charge)
+                              VALUES (?, 'local', 0, 0, 0, 0, ?, ?, ?, ?, ?)";
+                $insertStmt = $pdo->prepare($insertSql);
+                $insertStmt->execute([
+                    $vehicleId,
+                    $package4hr, 
+                    $package8hr, 
+                    $package10hr, 
+                    $extraKmRate, 
+                    $extraHourRate
+                ]);
+            }
+        } catch (PDOException $e) {
+            error_log("[$timestamp] Error updating vehicle_pricing: " . $e->getMessage(), 3, $logDir . '/direct-fares.log');
+            $databaseError = "Error updating vehicle_pricing: " . $e->getMessage();
+        }
+    } catch (PDOException $e) {
+        error_log("[$timestamp] Database error: " . $e->getMessage(), 3, $logDir . '/direct-fares.log');
+        $databaseError = "Database error: " . $e->getMessage();
+    }
+    
     // Send a success response regardless of database operation
     // This way frontend always gets something positive
-    echo json_encode([
+    $response = [
         'status' => 'success',
         'message' => 'Local fares updated successfully',
         'data' => [
@@ -197,7 +262,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET
                 'extra-hour' => $extraHourRate
             ]
         ]
-    ]);
+    ];
+    
+    if ($databaseError) {
+        $response['database_error'] = $databaseError;
+    }
+    
+    echo json_encode($response);
     exit;
 }
 
@@ -207,3 +278,4 @@ echo json_encode([
     'status' => 'error',
     'message' => 'Method not allowed. Use POST for direct local fare updates.'
 ]);
+

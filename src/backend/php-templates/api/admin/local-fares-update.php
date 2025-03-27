@@ -387,6 +387,16 @@ if (!empty($vehicleId) && ($package4hr > 0 || $package8hr > 0 || $package10hr > 
                 error_log("[$timestamp] Added trip_type column to vehicle_pricing", 3, $logDir . '/local-fares.log');
             }
             
+            // Check for column name issues - ensure the base_fare column exists
+            $checkBaseFareCol = $pdo->query("SHOW COLUMNS FROM vehicle_pricing LIKE 'base_fare'");
+            $hasBaseFareCol = ($checkBaseFareCol->rowCount() > 0);
+            
+            if (!$hasBaseFareCol) {
+                // Add base_fare column if it doesn't exist
+                $pdo->exec("ALTER TABLE vehicle_pricing ADD COLUMN base_fare DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER trip_type");
+                error_log("[$timestamp] Added base_fare column to vehicle_pricing", 3, $logDir . '/local-fares.log');
+            }
+            
             // Check if unique key exists for vehicle_id and trip_type
             $checkUniqueKey = $pdo->query("SHOW INDEX FROM vehicle_pricing WHERE Key_name = 'vehicle_trip_type'");
             $hasUniqueKey = ($checkUniqueKey->rowCount() > 0);
@@ -437,7 +447,7 @@ if (!empty($vehicleId) && ($package4hr > 0 || $package8hr > 0 || $package10hr > 
                 ]);
                 error_log("[$timestamp] Updated existing record in vehicle_pricing for $vehicleId with trip_type 'local'", 3, $logDir . '/local-fares.log');
             } else {
-                // Insert new record
+                // Insert new record - note we're explicitly setting all required fields
                 $insertVPSql = "INSERT INTO vehicle_pricing 
                               (vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance,
                                local_package_4hr, local_package_8hr, local_package_10hr, 
@@ -475,3 +485,4 @@ if ($databaseError) {
 
 // Return success response
 echo json_encode($responseData);
+

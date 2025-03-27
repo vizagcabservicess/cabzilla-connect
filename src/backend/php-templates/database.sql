@@ -59,7 +59,7 @@ CREATE TABLE `tour_fares` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Vehicle Pricing Table
+-- Vehicle Pricing Table - FIXED column names for local fares
 CREATE TABLE `vehicle_pricing` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `vehicle_id` varchar(50) NOT NULL,
@@ -236,3 +236,4 @@ INSERT INTO `outstation_fares` (`vehicle_id`, `base_price`, `price_per_km`, `nig
 INSERT INTO `users` (`name`, `email`, `phone`, `password`, `role`) VALUES
 ('Admin User', 'admin@example.com', '9876543210', '$2y$10$YPmH6FlAB8gQXI/qjLXVq.jlHCB1PRJKZRmj2aeMSCXvKBgNCHWc2', 'admin');
 -- Default password: admin123
+
