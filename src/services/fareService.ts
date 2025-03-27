@@ -1,5 +1,3 @@
-
-// File: src/services/fareService.ts
 import axios from 'axios';
 import { CabType, LocalFare, AirportFare, OutstationFare } from '@/types/cab';
 
@@ -35,14 +33,32 @@ export const directFareUpdate = async (tripType: string, vehicleId: string, fare
 };
 
 // Initialize the database for the fare service
-export const initializeDatabase = async () => {
+export const initializeDatabase = async (forceRecreate: boolean = false): Promise<{ 
+  success: boolean; 
+  status: string;
+  message: string;
+  tables_created?: string[];
+  tables_failed?: string[];
+  messages?: string[];
+}> => {
   try {
-    const endpoint = `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/admin/initialize-database.php?_t=${Date.now()}`;
-    const response = await axios.get(endpoint, { headers: getBypassHeaders() });
+    // Build the URL with parameters
+    let url = `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/admin/initialize-database.php?_t=${Date.now()}`;
+    
+    if (forceRecreate) {
+      url += '&force=true';
+    }
+    
+    url += '&verbose=true';
+    
+    const response = await axios.get(url, { headers: getBypassHeaders() });
     return { 
       success: true, 
       status: response.data?.status || 'success',
-      message: response.data?.message || 'Database initialized successfully'
+      message: response.data?.message || 'Database initialized successfully',
+      tables_created: response.data?.tables_created,
+      tables_failed: response.data?.tables_failed,
+      messages: response.data?.messages
     };
   } catch (error) {
     console.error('Error initializing database:', error);
@@ -96,43 +112,36 @@ export const syncOutstationFares = async () => {
 
 // Get outstation fares
 export const getOutstationFares = async (): Promise<OutstationFare[]> => {
-  // Implementation details
   return [];
 };
 
 // Get local fares
 export const getLocalFares = async (): Promise<LocalFare[]> => {
-  // Implementation details
   return [];
 };
 
 // Get airport fares
 export const getAirportFares = async (): Promise<AirportFare[]> => {
-  // Implementation details
   return [];
 };
 
 // Get outstation fares for a specific vehicle
 export const getOutstationFaresForVehicle = async (vehicleId: string): Promise<OutstationFare> => {
-  // Implementation details
   return {} as OutstationFare;
 };
 
 // Get local fares for a specific vehicle
 export const getLocalFaresForVehicle = async (vehicleId: string): Promise<LocalFare> => {
-  // Implementation details
   return {} as LocalFare;
 };
 
 // Get airport fares for a specific vehicle
 export const getAirportFaresForVehicle = async (vehicleId: string): Promise<AirportFare> => {
-  // Implementation details
   return {} as AirportFare;
 };
 
 // Get fares by trip type
 export const getFaresByTripType = async (tripType: string) => {
-  // Implementation details
   return [];
 };
 
@@ -198,11 +207,10 @@ export const clearFareCache = () => {
 
 // Reset cab options state
 export const resetCabOptionsState = () => {
-  // Implementation details
   return true;
 };
 
-// Update local fare - implementation of the missing function
+// Update local fare
 export const updateLocalFare = async (
   vehicleId: string, 
   fareData: {
@@ -300,4 +308,3 @@ export const fareService = {
   syncLocalFareTables,
   updateLocalFare
 };
-
