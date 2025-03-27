@@ -130,6 +130,22 @@ export function CabList({
     return () => clearInterval(resetInterval);
   }, []);
   
+  // Listen for booking summary recalculation events
+  useEffect(() => {
+    const handleBookingSummaryRecalculating = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.log('CabList: Booking summary recalculating', customEvent.detail);
+      
+      // Can add visual feedback here if needed
+    };
+    
+    window.addEventListener('booking-summary-recalculating', handleBookingSummaryRecalculating);
+    
+    return () => {
+      window.removeEventListener('booking-summary-recalculating', handleBookingSummaryRecalculating);
+    };
+  }, []);
+  
   // Listen for direct fare update events from admin panel
   useEffect(() => {
     const handleDirectFareUpdate = (event: Event) => {
@@ -267,7 +283,24 @@ export function CabList({
               cab={cab}
               fare={getDisplayFare(cab)}
               isSelected={selectedCabId === cab.id}
-              onSelect={handleSelectCab}
+              onSelect={() => {
+                // Enhanced cab selection handler with immediate visual feedback
+                handleSelectCab(cab);
+                
+                // Provide immediate visual feedback
+                setFadeIn(prev => ({
+                  ...prev,
+                  [cab.id]: true
+                }));
+                
+                // Clear the highlight after animation
+                setTimeout(() => {
+                  setFadeIn(prev => ({
+                    ...prev,
+                    [cab.id]: false
+                  }));
+                }, 500);
+              }}
               fareDetails={getFareDetails(cab)}
               isCalculating={isCalculatingFares}
             />

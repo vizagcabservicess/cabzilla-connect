@@ -46,7 +46,7 @@ export const BookingSummary = ({
   const lastUpdateTimeRef = useRef<number>(0);
   const calculationInProgressRef = useRef<boolean>(false);
   const calculationAttemptsRef = useRef<number>(0);
-  const maxCalculationAttempts = 2;
+  const maxCalculationAttempts = 3; // Increased from 2 to 3
   const selectedCabIdRef = useRef<string | null>(selectedCab?.id || null);
   
   const recalculateFareDetails = async () => {
@@ -57,7 +57,8 @@ export const BookingSummary = ({
     }
     
     const now = Date.now();
-    if (now - lastUpdateTimeRef.current < 5000) {
+    // Reduced throttling time from 5000ms to 1000ms for more responsive updates
+    if (now - lastUpdateTimeRef.current < 1000) {
       console.log('BookingSummary: Throttling recalculation, last update was too recent');
       return;
     }
@@ -224,6 +225,28 @@ export const BookingSummary = ({
     }
   };
   
+  // Handle direct cab selection events - IMPROVED
+  const handleCabSelected = (event: Event) => {
+    const customEvent = event as CustomEvent;
+    if (customEvent.detail && customEvent.detail.cabType) {
+      console.log('BookingSummary: Detected cab selection event:', customEvent.detail);
+      
+      // Reset calculation state to ensure recalculation
+      calculationInProgressRef.current = false;
+      calculationAttemptsRef.current = 0;
+      
+      // Force immediate recalculation when a cab is selected
+      if (selectedCabIdRef.current !== customEvent.detail.cabType) {
+        selectedCabIdRef.current = customEvent.detail.cabType;
+        
+        // Use a very short timeout to allow React state to update first
+        setTimeout(() => {
+          recalculateFareDetails();
+        }, 50);
+      }
+    }
+  };
+  
   useEffect(() => {
     const resetAttemptsTimer = setInterval(() => {
       calculationAttemptsRef.current = 0;
@@ -231,35 +254,31 @@ export const BookingSummary = ({
     
     const handleEventsWithThrottling = () => {
       const now = Date.now();
-      if (now - lastUpdateTimeRef.current < 5000) {
+      // Reduced throttling time for fare update events
+      if (now - lastUpdateTimeRef.current < 2000) {
         console.log('BookingSummary: Throttling event handler');
         return;
       }
       
       if (calculationAttemptsRef.current < maxCalculationAttempts) {
-        recalculateFareDetails();
+        // Reset calculation state
+        calculationInProgressRef.current = false;
+        
+        // Use a very short timeout to allow React state to update first
+        setTimeout(() => {
+          recalculateFareDetails();
+        }, 50);
       } else {
         console.log('BookingSummary: Skipping event handler, too many attempts');
       }
     };
     
-    const handleCabSelected = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      if (customEvent.detail && customEvent.detail.cabType) {
-        console.log('BookingSummary: Detected cab selection event:', customEvent.detail);
-        // Only recalculate if the cab type has changed
-        if (selectedCabIdRef.current !== customEvent.detail.cabType) {
-          selectedCabIdRef.current = customEvent.detail.cabType;
-          calculationAttemptsRef.current = 0; // Reset counter for this important event
-          recalculateFareDetails();
-        }
-      }
-    };
-    
+    // Initial load calculation with a delay
     const initialLoadTimer = setTimeout(() => {
       recalculateFareDetails();
-    }, 500);
+    }, 300);
     
+    // Add event listeners
     window.addEventListener('local-fares-updated', handleEventsWithThrottling);
     window.addEventListener('cab-selected-for-local', handleEventsWithThrottling);
     window.addEventListener('trip-fares-updated', handleEventsWithThrottling);
@@ -285,25 +304,32 @@ export const BookingSummary = ({
   useEffect(() => {
     if (selectedCab && selectedCabIdRef.current !== selectedCab.id) {
       console.log('BookingSummary: Selected cab changed to', selectedCab.name);
+      
+      // Reset calculation state when cab changes
       selectedCabIdRef.current = selectedCab.id;
-      calculationAttemptsRef.current = 0; // Reset counter for this important event
+      calculationInProgressRef.current = false;
+      calculationAttemptsRef.current = 0;
+      
+      // Immediately trigger recalculation
       recalculateFareDetails();
+      
+      // Dispatch a custom event to notify other components that we're recalculating
+      window.dispatchEvent(new CustomEvent('booking-summary-recalculating', {
+        detail: { cabId: selectedCab.id }
+      }));
     }
   }, [selectedCab]);
   
-  // ADDED: Additional effect to trigger update when any of the important props change
+  // IMPROVED: Additional effect to trigger update when any of the important props change
   useEffect(() => {
-    const now = Date.now();
-    if (now - lastUpdateTimeRef.current < 2000) {
-      console.log('BookingSummary: Skipping update due to recent calculation');
-      return;
-    }
-    
+    // Reset calculation state
+    calculationInProgressRef.current = false;
     calculationAttemptsRef.current = 0;
     
+    // Immediate calculation with short delay
     const timer = setTimeout(() => {
       recalculateFareDetails();
-    }, 500);
+    }, 100);
     
     return () => clearTimeout(timer);
   }, [selectedCab, tripType, tripMode, distance, pickupDate, returnDate, totalPrice]);
@@ -371,7 +397,7 @@ export const BookingSummary = ({
         </div>
         
         <div>
-          <div className="space-y-3">
+          <div className={`space-y-3 ${isRefreshing ? 'opacity-50 transition-opacity' : ''}`}>
             {tripType === 'outstation' && (
               <>
                 <div className="flex justify-between">
@@ -462,6 +488,12 @@ export const BookingSummary = ({
           </div>
         </div>
       </div>
+      
+      {isRefreshing && (
+        <div className="absolute inset-0 bg-white/10 flex items-center justify-center rounded-lg">
+          <div className="animate-pulse h-2 w-16 bg-blue-200 rounded-full"></div>
+        </div>
+      )}
     </div>
   );
 };
