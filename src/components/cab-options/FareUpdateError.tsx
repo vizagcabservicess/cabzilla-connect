@@ -10,9 +10,22 @@ interface FareUpdateErrorProps {
   message?: string;
   onRefresh?: () => void;
   isAdmin?: boolean;
+  // Add the missing props
+  error?: Error;
+  title?: string;
+  description?: string;
+  onRetry?: () => void;
 }
 
-export function FareUpdateError({ message, onRefresh, isAdmin = false }: FareUpdateErrorProps) {
+export function FareUpdateError({ 
+  message, 
+  onRefresh, 
+  isAdmin = false,
+  error,
+  title,
+  description,
+  onRetry
+}: FareUpdateErrorProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   
@@ -25,7 +38,11 @@ export function FareUpdateError({ message, onRefresh, isAdmin = false }: FareUpd
     
     // Wait a moment then call refresh handler
     setTimeout(() => {
-      if (onRefresh) {
+      if (onRetry) {
+        // Use onRetry if provided
+        onRetry();
+      } else if (onRefresh) {
+        // Fallback to onRefresh if onRetry not provided
         onRefresh();
       } else {
         window.location.reload();
@@ -65,13 +82,23 @@ export function FareUpdateError({ message, onRefresh, isAdmin = false }: FareUpd
     window.open(`${baseUrl}/api/admin/direct-local-fares.php?initialize=true&_t=${Date.now()}`, '_blank');
   };
   
+  // Determine the message to display
+  const displayMessage = message || 
+                        (error && error.message) || 
+                        description || 
+                        "Failed to update fare data. The server returned an error.";
+  
+  // Determine the title to display
+  const displayTitle = title || (error ? "Error Occurred" : null);
+  
   return (
     <Alert variant="destructive" className="mb-4">
       <div className="flex flex-col w-full">
         <div className="flex items-start mb-2">
           <AlertTriangle className="h-5 w-5 mr-2 flex-shrink-0" />
           <div>
-            {message || "Failed to update fare data. The server returned an error."}
+            {displayTitle && <div className="font-semibold mb-1">{displayTitle}</div>}
+            {displayMessage}
           </div>
         </div>
         
@@ -83,7 +110,7 @@ export function FareUpdateError({ message, onRefresh, isAdmin = false }: FareUpd
             disabled={isRefreshing}
           >
             <RefreshCw className={`h-3.5 w-3.5 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
-            {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
+            {isRefreshing ? 'Refreshing...' : (onRetry ? 'Retry' : 'Refresh Data')}
           </Button>
           
           {isAdmin && (
