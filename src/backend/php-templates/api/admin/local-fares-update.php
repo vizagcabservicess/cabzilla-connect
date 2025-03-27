@@ -365,26 +365,47 @@ if (!empty($vehicleId) && ($package4hr > 0 || $package8hr > 0 || $package10hr > 
             }
         }
         
-        // Check vehicle_pricing table structure
-        $hasCorrectVPStructure = false;
+        // Check vehicle_pricing table structure and add vehicle_id column if it doesn't exist
         try {
-            // Check if vehicle_pricing has the trip_type column
-            $columnsStmt = $pdo->query("SHOW COLUMNS FROM vehicle_pricing LIKE 'trip_type'");
-            $hasCorrectVPStructure = ($columnsStmt->rowCount() > 0);
+            // First check if vehicle_id column exists in vehicle_pricing table
+            $checkVehicleIdCol = $pdo->query("SHOW COLUMNS FROM vehicle_pricing LIKE 'vehicle_id'");
+            $hasVehicleIdCol = ($checkVehicleIdCol->rowCount() > 0);
             
-            if (!$hasCorrectVPStructure) {
+            if (!$hasVehicleIdCol) {
+                // Add vehicle_id column to vehicle_pricing table if it doesn't exist
+                $pdo->exec("ALTER TABLE vehicle_pricing ADD COLUMN vehicle_id VARCHAR(50) NOT NULL AFTER id");
+                error_log("[$timestamp] Added vehicle_id column to vehicle_pricing", 3, $logDir . '/local-fares.log');
+            }
+            
+            // Check if trip_type column exists
+            $checkTripTypeCol = $pdo->query("SHOW COLUMNS FROM vehicle_pricing LIKE 'trip_type'");
+            $hasTripTypeCol = ($checkTripTypeCol->rowCount() > 0);
+            
+            if (!$hasTripTypeCol) {
                 // Add trip_type column if it doesn't exist
                 $pdo->exec("ALTER TABLE vehicle_pricing ADD COLUMN trip_type VARCHAR(50) NOT NULL DEFAULT 'local' AFTER vehicle_id");
                 error_log("[$timestamp] Added trip_type column to vehicle_pricing", 3, $logDir . '/local-fares.log');
+            }
+            
+            // Check if unique key exists for vehicle_id and trip_type
+            $checkUniqueKey = $pdo->query("SHOW INDEX FROM vehicle_pricing WHERE Key_name = 'vehicle_trip_type'");
+            $hasUniqueKey = ($checkUniqueKey->rowCount() > 0);
+            
+            if (!$hasUniqueKey) {
+                // Drop existing vehicle_id index if it exists
+                try {
+                    $pdo->exec("ALTER TABLE vehicle_pricing DROP INDEX vehicle_id");
+                } catch (PDOException $e) {
+                    // Ignore error if index doesn't exist
+                }
                 
                 // Add unique key for vehicle_id and trip_type
-                $pdo->exec("ALTER TABLE vehicle_pricing DROP INDEX IF EXISTS vehicle_id");
                 $pdo->exec("ALTER TABLE vehicle_pricing ADD UNIQUE KEY vehicle_trip_type (vehicle_id, trip_type)");
                 error_log("[$timestamp] Added unique key for vehicle_id and trip_type", 3, $logDir . '/local-fares.log');
             }
         } catch (PDOException $e) {
-            error_log("[$timestamp] Error checking/updating vehicle_pricing structure: " . $e->getMessage(), 3, $logDir . '/local-fares.log');
-            $databaseError = "Error checking/updating vehicle_pricing structure: " . $e->getMessage();
+            error_log("[$timestamp] Error checking/modifying vehicle_pricing structure: " . $e->getMessage(), 3, $logDir . '/local-fares.log');
+            $databaseError = "Error checking/modifying vehicle_pricing structure: " . $e->getMessage();
         }
         
         // Update vehicle_pricing table

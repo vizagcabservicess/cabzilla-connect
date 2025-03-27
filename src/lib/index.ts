@@ -21,6 +21,7 @@ export {
   getBypassHeaders,
   getForcedRequestConfig,
   directFareUpdate,
+  directLocalFareUpdate,
   initializeDatabase,
   forceSyncOutstationFares,
   syncOutstationFares,
@@ -34,7 +35,8 @@ export {
   clearFareCache as clearFareServiceCache,
   resetCabOptionsState,
   syncLocalFareTables,
-  fareService
+  fareService,
+  updateLocalFare
 } from '@/services/fareService';
 
 // Re-export CabType from the types directly
