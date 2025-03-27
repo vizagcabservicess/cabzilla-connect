@@ -18,6 +18,7 @@ interface BookingSummaryProps {
   totalPrice?: number;
   tripType: TripType;
   tripMode: TripMode;
+  tourId?: string; // Optional tourId for tour packages
 }
 
 export function BookingSummary({ 
@@ -29,7 +30,8 @@ export function BookingSummary({
   distance, 
   totalPrice = 0,
   tripType,
-  tripMode
+  tripMode,
+  tourId
 }: BookingSummaryProps) {
   const [displayPrice, setDisplayPrice] = useState<number>(totalPrice);
   const [isUpdating, setIsUpdating] = useState<boolean>(false);
@@ -187,16 +189,19 @@ export function BookingSummary({
     
     if (tripType === 'tour') {
       // For tour packages, we show a simplified breakdown
+      const driverAllowance = 250;
+      const baseFare = displayPrice - driverAllowance;
+      
       return (
         <>
           <div className="flex justify-between mt-3 text-sm">
             <span>Tour package base fare</span>
-            <span>₹{formatPrice(displayPrice - 250)}</span>
+            <span>₹{formatPrice(baseFare)}</span>
           </div>
           
           <div className="flex justify-between mt-3 text-sm">
             <span>Driver allowance</span>
-            <span>₹250</span>
+            <span>₹{formatPrice(driverAllowance)}</span>
           </div>
         </>
       );
