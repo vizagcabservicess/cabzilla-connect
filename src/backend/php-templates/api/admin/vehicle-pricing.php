@@ -2,8 +2,9 @@
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
-require_once __DIR__ . '/../utils/database.php';
-require_once __DIR__ . '/../utils/response.php';
+
+// Since the database.php and response.php files were not found, we'll include their functionality directly
+// in this file for now
 
 // Set necessary headers for CORS and JSON responses
 header('Access-Control-Allow-Origin: *');
@@ -106,40 +107,101 @@ function updateOutstationFares($conn, $vehicleId, $fareData) {
         $insertVehicleStmt->execute();
     }
     
-    // Update vehicle_pricing table - using vehicle_id column instead of vehicle_type
-    try {
-        // Check if base_fare or base_price column exists
-        $baseFareColumnName = columnExists($conn, "vehicle_pricing", "base_fare") ? "base_fare" : "base_price";
+    // Check if the vehicle_pricing table exists
+    $tableExistsResult = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'");
+    if ($tableExistsResult && $tableExistsResult->num_rows > 0) {
+        // Check which columns exist in vehicle_pricing
+        $hasVehicleIdColumn = columnExists($conn, "vehicle_pricing", "vehicle_id");
+        $hasVehicleTypeColumn = columnExists($conn, "vehicle_pricing", "vehicle_type");
+        $hasBaseFareColumn = columnExists($conn, "vehicle_pricing", "base_fare");
+        $hasBasePriceColumn = columnExists($conn, "vehicle_pricing", "base_price");
         
-        $updateQuery = "
-            UPDATE vehicle_pricing 
-            SET 
-                $baseFareColumnName = ?,
-                price_per_km = ?,
-                night_halt_charge = ?,
-                driver_allowance = ?,
-                updated_at = NOW() 
-            WHERE vehicle_id = ? AND trip_type = 'outstation'
-        ";
-        $updateStmt = $conn->prepare($updateQuery);
-        if (!$updateStmt) {
-            throw new Exception($conn->error);
+        // Update vehicle_pricing table using appropriate columns
+        try {
+            $conditions = [];
+            $whereParams = [];
+            $whereTypes = "";
+            
+            if ($hasVehicleIdColumn) {
+                $conditions[] = "vehicle_id = ?";
+                $whereParams[] = $vehicleId;
+                $whereTypes .= "s";
+            }
+            
+            if ($hasVehicleTypeColumn) {
+                $conditions[] = "vehicle_type = ?";
+                $whereParams[] = $vehicleId;
+                $whereTypes .= "s";
+            }
+            
+            if (!empty($conditions)) {
+                // Determine base fare/price column
+                $baseFareColumnName = $hasBasePriceColumn ? "base_price" : "base_fare";
+                
+                $updateQuery = "
+                    UPDATE vehicle_pricing 
+                    SET 
+                        $baseFareColumnName = ?,
+                        price_per_km = ?,
+                        night_halt_charge = ?,
+                        driver_allowance = ?,
+                        updated_at = NOW() 
+                    WHERE (" . implode(" OR ", $conditions) . ") AND trip_type = 'outstation'
+                ";
+                
+                $updateStmt = $conn->prepare($updateQuery);
+                if (!$updateStmt) {
+                    throw new Exception($conn->error);
+                }
+                
+                $types = "dddd" . $whereTypes;
+                $params = array_merge([$baseFare, $pricePerKm, $nightHaltCharge, $driverAllowance], $whereParams);
+                
+                $updateStmt->bind_param($types, ...$params);
+                $updateStmt->execute();
+                
+                if ($updateStmt->affected_rows > 0) {
+                    error_log("Successfully updated vehicle_pricing for $vehicleId", 3, __DIR__ . '/../../logs/debug.log');
+                } else {
+                    // Try to insert if update didn't affect any rows
+                    $insertColumns = [];
+                    $placeholders = [];
+                    $insertValues = [];
+                    $insertTypes = "";
+                    
+                    if ($hasVehicleIdColumn) {
+                        $insertColumns[] = "vehicle_id";
+                        $placeholders[] = "?";
+                        $insertValues[] = $vehicleId;
+                        $insertTypes .= "s";
+                    }
+                    
+                    if ($hasVehicleTypeColumn) {
+                        $insertColumns[] = "vehicle_type";
+                        $placeholders[] = "?";
+                        $insertValues[] = $vehicleId;
+                        $insertTypes .= "s";
+                    }
+                    
+                    $insertColumns = array_merge($insertColumns, ["trip_type", $baseFareColumnName, "price_per_km", "night_halt_charge", "driver_allowance"]);
+                    $placeholders = array_merge($placeholders, ["?", "?", "?", "?", "?"]);
+                    $insertValues = array_merge($insertValues, ["outstation", $baseFare, $pricePerKm, $nightHaltCharge, $driverAllowance]);
+                    $insertTypes .= "sdddd";
+                    
+                    $insertQuery = "INSERT INTO vehicle_pricing (" . implode(", ", $insertColumns) . 
+                                   ") VALUES (" . implode(", ", $placeholders) . ")";
+                    
+                    $insertStmt = $conn->prepare($insertQuery);
+                    if ($insertStmt) {
+                        $insertStmt->bind_param($insertTypes, ...$insertValues);
+                        $insertStmt->execute();
+                        error_log("Inserted into vehicle_pricing for $vehicleId", 3, __DIR__ . '/../../logs/debug.log');
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            error_log("Failed to update/insert vehicle_pricing: " . $e->getMessage(), 3, __DIR__ . '/../../logs/error.log');
         }
-        
-        $updateStmt->bind_param("dddds", 
-            $baseFare, 
-            $pricePerKm, 
-            $nightHaltCharge, 
-            $driverAllowance,
-            $vehicleId
-        );
-        
-        $updateStmt->execute();
-        if ($updateStmt->affected_rows > 0) {
-            return true;
-        }
-    } catch (Exception $e) {
-        error_log("Failed to update vehicle_pricing: " . $e->getMessage(), 3, __DIR__ . '/../../logs/error.log');
     }
     
     // Check which column name is used in outstation_fares
@@ -208,39 +270,117 @@ function updateLocalFares($conn, $vehicleId, $fareData) {
     $priceExtraHour = isset($fareData['priceExtraHour']) ? floatval($fareData['priceExtraHour']) : 
                     (isset($fareData['extra_hour_charge']) ? floatval($fareData['extra_hour_charge']) : 0);
     
-    // First, try to update the vehicle_pricing table 
-    try {
-        $updateQuery = "
-            UPDATE vehicle_pricing 
-            SET 
-                local_package_4hr = ?,
-                local_package_8hr = ?,
-                local_package_10hr = ?,
-                extra_km_charge = ?,
-                extra_hour_charge = ?,
-                updated_at = NOW() 
-            WHERE vehicle_id = ? AND trip_type = 'local'
-        ";
-        $updateStmt = $conn->prepare($updateQuery);
-        if (!$updateStmt) {
-            throw new Exception($conn->error);
-        }
+    // Check if the vehicle_pricing table exists
+    $tableExistsResult = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'");
+    if ($tableExistsResult && $tableExistsResult->num_rows > 0) {
+        // Check which columns exist in vehicle_pricing
+        $hasVehicleIdColumn = columnExists($conn, "vehicle_pricing", "vehicle_id");
+        $hasVehicleTypeColumn = columnExists($conn, "vehicle_pricing", "vehicle_type");
         
-        $updateStmt->bind_param("ddddds", 
-            $price4hrs40km, 
-            $price8hrs80km, 
-            $price10hrs100km, 
-            $priceExtraKm,
-            $priceExtraHour,
-            $vehicleId
-        );
-        
-        $success = $updateStmt->execute();
-        if ($updateStmt->affected_rows > 0) {
-            return true;
+        // First, try to update the vehicle_pricing table
+        try {
+            $conditions = [];
+            $whereParams = [];
+            $whereTypes = "";
+            
+            if ($hasVehicleIdColumn) {
+                $conditions[] = "vehicle_id = ?";
+                $whereParams[] = $vehicleId;
+                $whereTypes .= "s";
+            }
+            
+            if ($hasVehicleTypeColumn) {
+                $conditions[] = "vehicle_type = ?";
+                $whereParams[] = $vehicleId;
+                $whereTypes .= "s";
+            }
+            
+            if (!empty($conditions)) {
+                $updateQuery = "
+                    UPDATE vehicle_pricing 
+                    SET 
+                        local_package_4hr = ?,
+                        local_package_8hr = ?,
+                        local_package_10hr = ?,
+                        extra_km_charge = ?,
+                        extra_hour_charge = ?,
+                        updated_at = NOW() 
+                    WHERE (" . implode(" OR ", $conditions) . ") AND trip_type = 'local'
+                ";
+                
+                $updateStmt = $conn->prepare($updateQuery);
+                if (!$updateStmt) {
+                    throw new Exception($conn->error);
+                }
+                
+                $types = "ddddd" . $whereTypes;
+                $params = array_merge([
+                    $price4hrs40km, 
+                    $price8hrs80km, 
+                    $price10hrs100km, 
+                    $priceExtraKm,
+                    $priceExtraHour
+                ], $whereParams);
+                
+                $updateStmt->bind_param($types, ...$params);
+                $updateStmt->execute();
+                
+                if ($updateStmt->affected_rows > 0) {
+                    error_log("Successfully updated vehicle_pricing for $vehicleId (local)", 3, __DIR__ . '/../../logs/debug.log');
+                } else {
+                    // Try to insert if update didn't affect any rows
+                    $insertColumns = [];
+                    $placeholders = [];
+                    $insertValues = [];
+                    $insertTypes = "";
+                    
+                    if ($hasVehicleIdColumn) {
+                        $insertColumns[] = "vehicle_id";
+                        $placeholders[] = "?";
+                        $insertValues[] = $vehicleId;
+                        $insertTypes .= "s";
+                    }
+                    
+                    if ($hasVehicleTypeColumn) {
+                        $insertColumns[] = "vehicle_type";
+                        $placeholders[] = "?";
+                        $insertValues[] = $vehicleId;
+                        $insertTypes .= "s";
+                    }
+                    
+                    $insertColumns = array_merge($insertColumns, [
+                        "trip_type", 
+                        "local_package_4hr", 
+                        "local_package_8hr", 
+                        "local_package_10hr", 
+                        "extra_km_charge", 
+                        "extra_hour_charge"
+                    ]);
+                    $placeholders = array_merge($placeholders, ["?", "?", "?", "?", "?", "?"]);
+                    $insertValues = array_merge($insertValues, [
+                        "local", 
+                        $price4hrs40km, 
+                        $price8hrs80km, 
+                        $price10hrs100km, 
+                        $priceExtraKm, 
+                        $priceExtraHour
+                    ]);
+                    $insertTypes .= "sddddd";
+                    
+                    $insertQuery = "INSERT INTO vehicle_pricing (" . implode(", ", $insertColumns) . 
+                                  ") VALUES (" . implode(", ", $placeholders) . ")";
+                    
+                    $insertStmt = $conn->prepare($insertQuery);
+                    if ($insertStmt) {
+                        $insertStmt->bind_param($insertTypes, ...$insertValues);
+                        $insertStmt->execute();
+                        error_log("Inserted into vehicle_pricing for $vehicleId (local)", 3, __DIR__ . '/../../logs/debug.log');
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            error_log("Failed to update vehicle_pricing: " . $e->getMessage(), 3, __DIR__ . '/../../logs/error.log');
         }
-    } catch (Exception $e) {
-        error_log("Failed to update vehicle_pricing: " . $e->getMessage(), 3, __DIR__ . '/../../logs/error.log');
     }
     
     // Check if we have a record in local_package_fares table

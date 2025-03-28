@@ -349,22 +349,99 @@ try {
     }
     
     // Also make sure the vehicle exists in vehicle_pricing for compatibility
-    $stmt = $conn->prepare("SELECT id FROM vehicle_pricing WHERE vehicle_id = ? OR vehicle_type = ?");
-    $stmt->bind_param("ss", $vehicleId, $vehicleId);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    if ($result->num_rows === 0) {
-        // Default pricing in vehicle_pricing
-        $insertQuery = "INSERT INTO vehicle_pricing (
-                       vehicle_id, vehicle_type, trip_type
-                       ) VALUES (?, ?, 'all')";
+    // First check if vehicle_pricing table exists
+    $tableExistsResult = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'");
+    if ($tableExistsResult && $tableExistsResult->num_rows > 0) {
+        // Check which columns exist for querying
+        $hasVehicleIdColumn = false;
+        $hasVehicleTypeColumn = false;
         
-        $stmt = $conn->prepare($insertQuery);
-        $stmt->bind_param("ss", $vehicleId, $vehicleId);
-        $stmt->execute();
+        $columnsResult = $conn->query("SHOW COLUMNS FROM vehicle_pricing");
+        while ($column = $columnsResult->fetch_assoc()) {
+            if ($column['Field'] === 'vehicle_id') {
+                $hasVehicleIdColumn = true;
+            }
+            if ($column['Field'] === 'vehicle_type') {
+                $hasVehicleTypeColumn = true;
+            }
+        }
         
-        $response['details']['vehicle_pricing_created'] = true;
+        // Build the query dynamically based on what columns exist
+        $checkQuery = "SELECT id FROM vehicle_pricing WHERE ";
+        $conditions = [];
+        $queryParams = [];
+        $types = "";
+        
+        if ($hasVehicleIdColumn) {
+            $conditions[] = "vehicle_id = ?";
+            $queryParams[] = $vehicleId;
+            $types .= "s";
+        }
+        
+        if ($hasVehicleTypeColumn) {
+            $conditions[] = "vehicle_type = ?";
+            $queryParams[] = $vehicleId;
+            $types .= "s";
+        }
+        
+        if (empty($conditions)) {
+            // If no suitable columns found, skip this check
+            $response['details']['vehicle_pricing_skipped'] = true;
+        } else {
+            $checkQuery .= implode(" OR ", $conditions);
+            
+            $stmt = $conn->prepare($checkQuery);
+            if ($stmt) {
+                $stmt->bind_param($types, ...$queryParams);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                
+                if ($result->num_rows === 0) {
+                    // Need to insert into vehicle_pricing
+                    $insertColumns = [];
+                    $insertPlaceholders = [];
+                    $insertValues = [];
+                    $insertTypes = "";
+                    
+                    if ($hasVehicleIdColumn) {
+                        $insertColumns[] = "vehicle_id";
+                        $insertPlaceholders[] = "?";
+                        $insertValues[] = $vehicleId;
+                        $insertTypes .= "s";
+                    }
+                    
+                    if ($hasVehicleTypeColumn) {
+                        $insertColumns[] = "vehicle_type";
+                        $insertPlaceholders[] = "?";
+                        $insertValues[] = $vehicleId;
+                        $insertTypes .= "s";
+                    }
+                    
+                    $insertColumns[] = "trip_type";
+                    $insertPlaceholders[] = "?";
+                    $insertValues[] = "all";
+                    $insertTypes .= "s";
+                    
+                    $insertQuery = "INSERT INTO vehicle_pricing (" . implode(", ", $insertColumns) . 
+                                  ") VALUES (" . implode(", ", $insertPlaceholders) . ")";
+                    
+                    $insertStmt = $conn->prepare($insertQuery);
+                    if ($insertStmt) {
+                        $insertStmt->bind_param($insertTypes, ...$insertValues);
+                        $insertStmt->execute();
+                        $response['details']['vehicle_pricing_created'] = true;
+                    } else {
+                        $response['details']['vehicle_pricing_error'] = $conn->error;
+                    }
+                } else {
+                    $response['details']['vehicle_pricing_exists'] = true;
+                }
+            } else {
+                $response['details']['vehicle_pricing_prepare_error'] = $conn->error;
+            }
+        }
+    } else {
+        $response['details']['vehicle_pricing_table_not_found'] = true;
     }
     
     // Output the response
