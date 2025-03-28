@@ -1,4 +1,3 @@
-
 // src/types/api.ts
 export type BookingStatus =
   | 'pending'
@@ -21,6 +20,7 @@ export interface Booking {
   pickupDate: string;
   returnDate?: string;
   cabType: string;
+  distance: number; // Added this property to fix the error
   passengers?: number;
   days?: number;
   hours?: number;

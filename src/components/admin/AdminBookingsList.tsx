@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -55,28 +54,23 @@ export function AdminBookingsList() {
       setIsRefreshing(true);
       console.log('Admin: Fetching all bookings...');
       
-      // Add a timestamp for cache busting
       const timestamp = new Date().getTime();
       console.log(`Cache busting with timestamp: ${timestamp}`);
       
-      // Try to fetch bookings with fallback options
       let data: Booking[] = [];
       
       try {
-        // First attempt: Try admin API
         data = await bookingAPI.getAllBookings();
         console.log('Admin: Bookings received from admin API:', data);
       } catch (adminError) {
         console.warn('getAllBookings admin API failed:', adminError);
         
         try {
-          // Second attempt: Try user bookings API
           data = await bookingAPI.getUserBookings();
           console.log('Admin: Bookings received from user API:', data);
         } catch (userError) {
           console.warn('getUserBookings API also failed:', userError);
           
-          // Third attempt: Try direct API call as a last resort
           const token = localStorage.getItem('authToken');
           
           try {
@@ -104,7 +98,6 @@ export function AdminBookingsList() {
             }
           } catch (directError) {
             console.error('All API attempts failed:', directError);
-            // Throw the original error for consistent error handling
             throw adminError;
           }
         }
@@ -133,7 +126,6 @@ export function AdminBookingsList() {
       
       setError(errorMessage);
       
-      // Show as toast and UI alert
       toast.error("Error Loading Bookings", {
         description: errorMessage,
         duration: 5000,
@@ -145,7 +137,6 @@ export function AdminBookingsList() {
         description: errorMessage,
       });
       
-      // For development/demo purposes, provide some sample data
       const sampleBookings: Booking[] = [
         {
           id: 1,
@@ -170,7 +161,7 @@ export function AdminBookingsList() {
           bookingNumber: 'DEMO1235',
           pickupLocation: 'Demo Hotel',
           dropLocation: 'Demo Beach',
-          pickupDate: new Date(Date.now() + 86400000).toISOString(), // Tomorrow
+          pickupDate: new Date(Date.now() + 86400000).toISOString(),
           cabType: 'innova_crysta',
           distance: 25,
           tripType: 'local',
