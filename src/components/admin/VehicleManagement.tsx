@@ -326,11 +326,14 @@ export const VehicleManagement = () => {
                 Add Vehicle
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-md" aria-describedby="vehicle-dialog-description">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <Car className="h-5 w-5" /> Add New Vehicle
                 </DialogTitle>
+                <p id="vehicle-dialog-description" className="text-sm text-muted-foreground">
+                  Fill out the details below to add a new vehicle to your fleet.
+                </p>
               </DialogHeader>
               
               <div className="grid gap-4 py-4">

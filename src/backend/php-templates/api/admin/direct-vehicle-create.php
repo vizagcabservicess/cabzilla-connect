@@ -9,10 +9,7 @@ header('Expires: 0');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh');
-header('X-API-Version: 1.0.3');
-
-// Include database configuration
-require_once __DIR__ . '/../../config.php';
+header('X-API-Version: 1.0.4');
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -24,14 +21,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 $timestamp = date('Y-m-d H:i:s');
 $requestMethod = $_SERVER['REQUEST_METHOD'];
 $requestUri = $_SERVER['REQUEST_URI'];
-$logMessage = "[$timestamp] Direct vehicle create request: Method=$requestMethod, URI=$requestUri" . PHP_EOL;
-error_log($logMessage, 3, __DIR__ . '/../../error.log');
+error_log("[$timestamp] Direct vehicle create request: Method=$requestMethod, URI=$requestUri");
 
 // DEBUG: Log all request data
 error_log("REQUEST URI: " . $_SERVER['REQUEST_URI']);
 error_log("REQUEST METHOD: " . $_SERVER['REQUEST_METHOD']);
-error_log("CONTENT TYPE: " . $_SERVER['CONTENT_TYPE'] ?? 'not set');
-error_log("ALL HEADERS: " . json_encode(getallheaders()));
+error_log("CONTENT TYPE: " . ($_SERVER['CONTENT_TYPE'] ?? 'not set'));
+$headersList = function_exists('getallheaders') ? getallheaders() : [];
+error_log("ALL HEADERS: " . json_encode($headersList));
+
+// Include database configuration - adjust path as necessary
+$configPath = __DIR__ . '/../../config.php';
+if (file_exists($configPath)) {
+    require_once $configPath;
+} else {
+    error_log("Config file not found at: " . $configPath);
+    http_response_code(500);
+    echo json_encode([
+        'status' => 'error',
+        'message' => 'Server configuration not found',
+    ]);
+    exit;
+}
 
 // Get data from request using multiple approaches
 $data = [];
@@ -46,17 +57,18 @@ else {
     $rawInput = file_get_contents('php://input');
     error_log("Raw input: " . $rawInput);
     
+    // Try JSON decode
     $jsonData = json_decode($rawInput, true);
     if (json_last_error() === JSON_ERROR_NONE && !empty($jsonData)) {
         $data = $jsonData;
-        error_log("Successfully parsed JSON data: " . print_r($data, true));
+        error_log("Successfully parsed JSON data");
     }
     // Try form-urlencoded
     else {
         parse_str($rawInput, $formData);
         if (!empty($formData)) {
             $data = $formData;
-            error_log("Successfully parsed form-urlencoded data: " . print_r($data, true));
+            error_log("Successfully parsed form-urlencoded data");
         }
     }
 }
@@ -103,14 +115,14 @@ if (isset($data['amenities'])) {
     } else if (is_string($data['amenities']) && !empty($data['amenities'])) {
         // Try to parse JSON string
         $decodedAmenities = json_decode($data['amenities'], true);
-        if (json_last_error() === JSON_ERROR_NONE) {
+        if (json_last_error() === JSON_ERROR_NONE && is_array($decodedAmenities)) {
             $amenities = $decodedAmenities;
         }
     }
 } else if (isset($data['amenitiesJson']) && is_string($data['amenitiesJson']) && !empty($data['amenitiesJson'])) {
     // Try to parse from amenitiesJson field
     $decodedAmenities = json_decode($data['amenitiesJson'], true);
-    if (json_last_error() === JSON_ERROR_NONE) {
+    if (json_last_error() === JSON_ERROR_NONE && is_array($decodedAmenities)) {
         $amenities = $decodedAmenities;
     }
 }
@@ -123,6 +135,8 @@ try {
     if ($conn->connect_error) {
         throw new Exception("Database connection failed: " . $conn->connect_error);
     }
+
+    error_log("Database connected successfully");
     
     // Start transaction
     $conn->begin_transaction();
@@ -145,47 +159,69 @@ try {
             ]);
             exit;
         }
-        
-        // Create vehicle first
-        $createVehicleStmt = $conn->prepare("
-            INSERT INTO vehicles 
-            (id, vehicle_id, name, capacity, luggage_capacity, image, description, amenities, is_active, created_at, updated_at) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())
-        ");
-        
-        if (!$createVehicleStmt) {
-            throw new Exception("Failed to prepare vehicle insert statement: " . $conn->error);
+
+        // Also check vehicle_types table
+        $checkTypesStmt = $conn->prepare("SELECT vehicle_id FROM vehicle_types WHERE vehicle_id = ?");
+        if ($checkTypesStmt) {
+            $checkTypesStmt->bind_param("s", $vehicleId);
+            $checkTypesStmt->execute();
+            $typesResult = $checkTypesStmt->get_result();
+            
+            if ($typesResult->num_rows > 0) {
+                http_response_code(400);
+                echo json_encode([
+                    'status' => 'error',
+                    'message' => 'Vehicle type already exists with ID: ' . $vehicleId
+                ]);
+                exit;
+            }
+            $checkTypesStmt->close();
         }
         
-        $createVehicleStmt->bind_param(
-            "sssiisss", 
-            $vehicleId, 
-            $vehicleId, 
-            $name, 
-            $capacity, 
-            $luggageCapacity,
-            $image,
-            $description,
-            $amenitiesJson
-        );
+        error_log("Vehicle doesn't exist, proceeding with creation...");
         
-        if (!$createVehicleStmt->execute()) {
-            throw new Exception("Failed to create vehicle: " . $createVehicleStmt->error);
+        // Create vehicle first - check if the vehicles table exists
+        $tableCheckResult = $conn->query("SHOW TABLES LIKE 'vehicles'");
+        $vehiclesTableExists = $tableCheckResult && $tableCheckResult->num_rows > 0;
+        
+        if ($vehiclesTableExists) {
+            $createVehicleStmt = $conn->prepare("
+                INSERT INTO vehicles 
+                (id, vehicle_id, name, capacity, luggage_capacity, image, description, amenities, is_active, created_at, updated_at) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())
+            ");
+            
+            if (!$createVehicleStmt) {
+                throw new Exception("Failed to prepare vehicle insert statement: " . $conn->error);
+            }
+            
+            $createVehicleStmt->bind_param(
+                "sssiisss", 
+                $vehicleId, 
+                $vehicleId, 
+                $name, 
+                $capacity, 
+                $luggageCapacity,
+                $image,
+                $description,
+                $amenitiesJson
+            );
+            
+            if (!$createVehicleStmt->execute()) {
+                throw new Exception("Failed to create vehicle: " . $createVehicleStmt->error);
+            }
+            
+            $createVehicleStmt->close();
+            error_log("Created vehicle in vehicles table");
+        } else {
+            error_log("Vehicles table doesn't exist, skipping vehicles table insert");
         }
         
-        // Add to vehicle_types for compatibility
+        // Add to vehicle_types for compatibility - this is the most important table
         $createVehicleTypeStmt = $conn->prepare("
             INSERT INTO vehicle_types 
             (vehicle_id, name, capacity, luggage_capacity, image, description, amenities, is_active, created_at, updated_at) 
             VALUES (?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())
-            ON DUPLICATE KEY UPDATE
-            name = VALUES(name),
-            capacity = VALUES(capacity),
-            luggage_capacity = VALUES(luggage_capacity),
-            image = VALUES(image),
-            description = VALUES(description),
-            amenities = VALUES(amenities),
-            updated_at = NOW()
         ");
         
         if (!$createVehicleTypeStmt) {
@@ -193,7 +229,7 @@ try {
         }
         
         $createVehicleTypeStmt->bind_param(
-            "sssisss", 
+            "ssiisss", 
             $vehicleId, 
             $name, 
             $capacity, 
@@ -203,105 +239,176 @@ try {
             $amenitiesJson
         );
         
-        $createVehicleTypeStmt->execute();
-        
-        // Add base pricing in vehicle_pricing
-        $createPricingStmt = $conn->prepare("
-            INSERT INTO vehicle_pricing 
-            (vehicle_id, vehicle_type, trip_type, base_fare, price_per_km, driver_allowance, night_halt_charge, created_at, updated_at)
-            VALUES (?, ?, 'all', ?, ?, ?, ?, NOW(), NOW())
-        ");
-        
-        if (!$createPricingStmt) {
-            throw new Exception("Failed to prepare pricing statement: " . $conn->error);
+        if (!$createVehicleTypeStmt->execute()) {
+            throw new Exception("Failed to create vehicle type: " . $createVehicleTypeStmt->error);
         }
         
-        $createPricingStmt->bind_param(
-            "ssdddd", 
-            $vehicleId, 
-            $vehicleId, 
-            $basePrice, 
-            $pricePerKm, 
-            $driverAllowance, 
-            $nightHaltCharge
-        );
+        $createVehicleTypeStmt->close();
+        error_log("Created vehicle in vehicle_types table");
         
-        $createPricingStmt->execute();
+        // Check if vehicle_pricing table exists
+        $pricingTableCheckResult = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'");
+        $pricingTableExists = $pricingTableCheckResult && $pricingTableCheckResult->num_rows > 0;
         
-        // Add outstation fares
-        $outstationStmt = $conn->prepare("
-            INSERT INTO outstation_fares 
-            (vehicle_id, base_price, price_per_km, driver_allowance, night_halt_charge, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, NOW(), NOW())
-        ");
-        
-        if (!$outstationStmt) {
-            throw new Exception("Failed to prepare outstation fares statement: " . $conn->error);
+        if ($pricingTableExists) {
+            // Add base pricing in vehicle_pricing - determine which column name to use
+            $baseColumnName = "base_price";
+            $columnCheckResult = $conn->query("SHOW COLUMNS FROM vehicle_pricing LIKE 'base_price'");
+            if (!$columnCheckResult->num_rows) {
+                $baseColumnName = "base_fare"; // Use alternative column name
+            }
+            
+            $createPricingStmt = $conn->prepare("
+                INSERT INTO vehicle_pricing 
+                (vehicle_id, vehicle_type, trip_type, $baseColumnName, price_per_km, driver_allowance, night_halt_charge, created_at, updated_at)
+                VALUES (?, ?, 'all', ?, ?, ?, ?, NOW(), NOW())
+            ");
+            
+            if (!$createPricingStmt) {
+                throw new Exception("Failed to prepare pricing statement: " . $conn->error);
+            }
+            
+            $createPricingStmt->bind_param(
+                "ssdddd", 
+                $vehicleId, 
+                $vehicleId, 
+                $basePrice, 
+                $pricePerKm, 
+                $driverAllowance, 
+                $nightHaltCharge
+            );
+            
+            if (!$createPricingStmt->execute()) {
+                throw new Exception("Failed to create pricing: " . $createPricingStmt->error);
+            }
+            
+            $createPricingStmt->close();
+            error_log("Created pricing in vehicle_pricing table");
+        } else {
+            error_log("vehicle_pricing table doesn't exist, skipping pricing insert");
         }
         
-        $outstationStmt->bind_param(
-            "sdddd", 
-            $vehicleId, 
-            $basePrice, 
-            $pricePerKm, 
-            $driverAllowance, 
-            $nightHaltCharge
-        );
+        // Check if outstation_fares table exists
+        $outstationTableCheckResult = $conn->query("SHOW TABLES LIKE 'outstation_fares'");
+        $outstationTableExists = $outstationTableCheckResult && $outstationTableCheckResult->num_rows > 0;
         
-        $outstationStmt->execute();
-        
-        // Add local package fares with defaults
-        $localStmt = $conn->prepare("
-            INSERT INTO local_package_fares 
-            (vehicle_id, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, NOW(), NOW())
-        ");
-        
-        if (!$localStmt) {
-            throw new Exception("Failed to prepare local fares statement: " . $conn->error);
+        if ($outstationTableExists) {
+            // Determine which column name to use for outstation fares
+            $outstationBaseColumn = "base_price";
+            $outstationColumnCheck = $conn->query("SHOW COLUMNS FROM outstation_fares LIKE 'base_price'");
+            if (!$outstationColumnCheck->num_rows) {
+                $outstationBaseColumn = "base_fare";
+            }
+            
+            // Add outstation fares
+            $outstationStmt = $conn->prepare("
+                INSERT INTO outstation_fares 
+                (vehicle_id, $outstationBaseColumn, price_per_km, driver_allowance, night_halt_charge, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, NOW(), NOW())
+            ");
+            
+            if (!$outstationStmt) {
+                throw new Exception("Failed to prepare outstation fares statement: " . $conn->error);
+            }
+            
+            $outstationStmt->bind_param(
+                "sdddd", 
+                $vehicleId, 
+                $basePrice, 
+                $pricePerKm, 
+                $driverAllowance, 
+                $nightHaltCharge
+            );
+            
+            if (!$outstationStmt->execute()) {
+                throw new Exception("Failed to create outstation fares: " . $outstationStmt->error);
+            }
+            
+            $outstationStmt->close();
+            error_log("Created outstation fares");
+        } else {
+            error_log("outstation_fares table doesn't exist, skipping outstation fares insert");
         }
         
-        $price8hrs80km = 1500;
-        $price10hrs100km = 1800;
-        $priceExtraKm = 15;
-        $priceExtraHour = 200;
+        // Check if local_package_fares table exists
+        $localTableCheckResult = $conn->query("SHOW TABLES LIKE 'local_package_fares'");
+        $localTableExists = $localTableCheckResult && $localTableCheckResult->num_rows > 0;
         
-        $localStmt->bind_param(
-            "sdddd", 
-            $vehicleId, 
-            $price8hrs80km, 
-            $price10hrs100km, 
-            $priceExtraKm, 
-            $priceExtraHour
-        );
-        
-        $localStmt->execute();
-        
-        // Add airport fares with defaults
-        $airportStmt = $conn->prepare("
-            INSERT INTO airport_transfer_fares 
-            (vehicle_id, pickup_fare, drop_fare, created_at, updated_at)
-            VALUES (?, ?, ?, NOW(), NOW())
-        ");
-        
-        if (!$airportStmt) {
-            throw new Exception("Failed to prepare airport fares statement: " . $conn->error);
+        if ($localTableExists) {
+            // Add local package fares with defaults
+            $localStmt = $conn->prepare("
+                INSERT INTO local_package_fares 
+                (vehicle_id, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, NOW(), NOW())
+            ");
+            
+            if (!$localStmt) {
+                throw new Exception("Failed to prepare local fares statement: " . $conn->error);
+            }
+            
+            $price8hrs80km = 1500;
+            $price10hrs100km = 1800;
+            $priceExtraKm = 15;
+            $priceExtraHour = 200;
+            
+            $localStmt->bind_param(
+                "sdddd", 
+                $vehicleId, 
+                $price8hrs80km, 
+                $price10hrs100km, 
+                $priceExtraKm, 
+                $priceExtraHour
+            );
+            
+            if (!$localStmt->execute()) {
+                throw new Exception("Failed to create local package fares: " . $localStmt->error);
+            }
+            
+            $localStmt->close();
+            error_log("Created local package fares");
+        } else {
+            error_log("local_package_fares table doesn't exist, skipping local fares insert");
         }
         
-        $pickupFare = 1000;
-        $dropFare = 1000;
+        // Check if airport_transfer_fares table exists
+        $airportTableCheckResult = $conn->query("SHOW TABLES LIKE 'airport_transfer_fares'");
+        $airportTableExists = $airportTableCheckResult && $airportTableCheckResult->num_rows > 0;
         
-        $airportStmt->bind_param(
-            "sdd", 
-            $vehicleId, 
-            $pickupFare, 
-            $dropFare
-        );
-        
-        $airportStmt->execute();
+        if ($airportTableExists) {
+            // Add airport fares with defaults
+            $airportStmt = $conn->prepare("
+                INSERT INTO airport_transfer_fares 
+                (vehicle_id, pickup_fare, drop_fare, created_at, updated_at)
+                VALUES (?, ?, ?, NOW(), NOW())
+            ");
+            
+            if (!$airportStmt) {
+                throw new Exception("Failed to prepare airport fares statement: " . $conn->error);
+            }
+            
+            $pickupFare = 1000;
+            $dropFare = 1000;
+            
+            $airportStmt->bind_param(
+                "sdd", 
+                $vehicleId, 
+                $pickupFare, 
+                $dropFare
+            );
+            
+            if (!$airportStmt->execute()) {
+                throw new Exception("Failed to create airport fares: " . $airportStmt->error);
+            }
+            
+            $airportStmt->close();
+            error_log("Created airport fares");
+        } else {
+            error_log("airport_transfer_fares table doesn't exist, skipping airport fares insert");
+        }
         
         // Commit all changes
         $conn->commit();
+        error_log("All changes committed successfully");
         
         http_response_code(200);
         echo json_encode([
@@ -326,12 +433,14 @@ try {
     }
     
 } catch (Exception $e) {
+    error_log('Error creating vehicle: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+    
     http_response_code(500);
     echo json_encode([
         'status' => 'error',
         'message' => 'Failed to create vehicle: ' . $e->getMessage(),
-        'debug' => $data
+        'debug' => $data,
+        'trace' => $e->getTraceAsString()
     ]);
-    error_log('Error creating vehicle: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
     exit;
 }
