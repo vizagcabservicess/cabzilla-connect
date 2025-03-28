@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { TripType, TripMode } from '@/lib/tripTypes';
 import { LocalFare, OutstationFare, AirportFare } from '@/types/cab';
@@ -15,7 +14,7 @@ function clearFareCache() {
   localStorage.removeItem('outstation_fares_timestamp');
   localStorage.removeItem('local_fares_timestamp'); 
   localStorage.removeItem('airport_fares_timestamp');
-  localStorage.setItem('globalFareRefreshToken', Date.now().toString());
+  localStorage.setItem('globalFareRefreshToken', Date.now());
   
   // Clear all fare-related cache items from localStorage and sessionStorage
   const keysToRemove = [
@@ -306,7 +305,77 @@ async function syncLocalFareTables(): Promise<boolean> {
     console.error('Error syncing local fare tables:', error);
     return false;
   }
-};
+}
+
+// Sync vehicle tables
+async function syncVehicleTables(): Promise<boolean> {
+  try {
+    console.log('Syncing vehicle tables...');
+    const bypassHeaders = getBypassHeaders();
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+    const timestamp = Date.now();
+    
+    // Try multiple endpoints
+    const endpoints = [
+      `${baseUrl}/api/admin/sync-vehicle-tables.php?_t=${timestamp}`,
+      `/api/admin/sync-vehicle-tables.php?_t=${timestamp}`
+    ];
+    
+    // Try each endpoint until one works
+    for (const endpoint of endpoints) {
+      try {
+        const response = await fetch(endpoint, {
+          method: 'GET',
+          headers: {
+            ...bypassHeaders,
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        });
+        
+        if (!response.ok) {
+          console.error(`Failed to sync vehicle tables from ${endpoint}: ${response.status} ${response.statusText}`);
+          continue; // Try next endpoint
+        }
+        
+        const data = await response.json();
+        console.log(`Vehicle tables sync response from ${endpoint}:`, data);
+        
+        if (data.status === 'success') {
+          // Dispatch an event indicating the vehicle tables were synced
+          window.dispatchEvent(new CustomEvent('vehicle-tables-synced', {
+            detail: {
+              timestamp,
+              vehiclesSynced: data.details?.vehicles_synced || 0,
+              pricingEntriesCreated: data.details?.pricing_entries_created || 0
+            }
+          }));
+          
+          // Clear all caches
+          clearFareCache();
+          
+          console.log('Vehicle tables sync completed successfully');
+          return true;
+        } else {
+          throw new Error(data.message || 'Unknown error');
+        }
+      } catch (error) {
+        console.error(`Error syncing vehicle tables from ${endpoint}:`, error);
+        
+        // If this is the last endpoint, re-throw the error
+        if (endpoint === endpoints[endpoints.length - 1]) {
+          throw error;
+        }
+      }
+    }
+    
+    throw new Error('All endpoints failed');
+  } catch (error) {
+    console.error('Failed to sync vehicle tables:', error);
+    return false;
+  }
+}
 
 // Function to get fares based on trip type
 function getFaresByTripType(tripType: TripType, vehicleId?: string) {
@@ -838,6 +907,7 @@ export const fareService = {
   forceSyncOutstationFares,
   syncOutstationFares,
   syncLocalFareTables,
+  syncVehicleTables,
   getOutstationFares,
   getLocalFares,
   getAirportFares,
@@ -858,6 +928,7 @@ export {
   forceSyncOutstationFares,
   syncOutstationFares,
   syncLocalFareTables,
+  syncVehicleTables,
   getOutstationFares,
   getLocalFares,
   getAirportFares,
