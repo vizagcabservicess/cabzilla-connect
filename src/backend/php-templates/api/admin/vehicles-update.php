@@ -54,6 +54,27 @@ if (isset($data['vehicleId'])) {
     $vehicleId = $data['id'];
 }
 
+// Check for create new vehicle mode
+$isNewVehicle = isset($data['isNew']) && $data['isNew'] === true;
+
+// If it's a new vehicle and no vehicleId provided, generate one
+if ($isNewVehicle && empty($vehicleId)) {
+    // Generate a vehicle_id based on name or use a random one
+    if (!empty($data['name'])) {
+        // Convert name to lowercase, replace spaces with underscores
+        $vehicleId = strtolower(preg_replace('/[^a-zA-Z0-9]/', '_', $data['name']));
+        // Ensure uniqueness by adding timestamp if needed
+        if (strlen($vehicleId) < 3) {
+            $vehicleId .= '_' . time();
+        }
+    } else {
+        // Fallback to a random vehicle ID
+        $vehicleId = 'vehicle_' . time();
+    }
+    
+    $response['details']['generated_id'] = true;
+}
+
 // Extract other vehicle data
 $name = isset($data['name']) ? $data['name'] : '';
 $capacity = isset($data['capacity']) ? intval($data['capacity']) : 4;
@@ -174,6 +195,7 @@ try {
             $response['message'] = 'Vehicle created successfully';
             $response['details']['created'] = true;
             $response['details']['id'] = $vehicleTypeId;
+            $response['details']['vehicle_id'] = $vehicleId;
         } else {
             throw new Exception("Failed to insert vehicle: " . $conn->error);
         }

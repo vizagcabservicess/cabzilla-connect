@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,18 +11,29 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Trash2 } from "lucide-react";
+import { Loader2, Trash2, PlusCircle, Car } from "lucide-react";
 import { getVehicleTypes, updateVehicle, deleteVehicle } from "@/services/vehicleDataService";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { VehicleTripFaresForm } from './VehicleTripFaresForm';
 import { clearFareCache } from '@/lib/fareCalculationService';
+import { 
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 export const VehicleManagement = () => {
   const [vehicles, setVehicles] = useState<{id: string, name: string}[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Add new vehicle dialog state
+  const [addVehicleOpen, setAddVehicleOpen] = useState(false);
   
   // Basic info state
   const [name, setName] = useState("");
@@ -30,6 +42,13 @@ export const VehicleManagement = () => {
   const [isActive, setIsActive] = useState(true);
   const [description, setDescription] = useState("");
   const [image, setImage] = useState("");
+  
+  // New vehicle state
+  const [newVehicleId, setNewVehicleId] = useState("");
+  const [newVehicleName, setNewVehicleName] = useState("");
+  const [newVehicleCapacity, setNewVehicleCapacity] = useState("4");
+  const [newVehicleLuggageCapacity, setNewVehicleLuggageCapacity] = useState("2");
+  const [newVehicleImage, setNewVehicleImage] = useState("/cars/sedan.png");
   
   // Pricing state
   const [basePrice, setBasePrice] = useState("");
@@ -133,6 +152,14 @@ export const VehicleManagement = () => {
     setDriverAllowance("");
   };
   
+  const resetNewVehicleForm = () => {
+    setNewVehicleId("");
+    setNewVehicleName("");
+    setNewVehicleCapacity("4");
+    setNewVehicleLuggageCapacity("2");
+    setNewVehicleImage("/cars/sedan.png");
+  };
+  
   const handleUpdate = async () => {
     if (!selectedVehicle) {
       toast.error("Please select a vehicle to update");
@@ -184,6 +211,66 @@ export const VehicleManagement = () => {
     } catch (error) {
       console.error("Error updating vehicle:", error);
       toast.error("Failed to update vehicle");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const handleAddNewVehicle = async () => {
+    if (!newVehicleName) {
+      toast.error("Vehicle name is required");
+      return;
+    }
+    
+    setIsLoading(true);
+    
+    try {
+      // Prepare vehicle ID if not provided
+      const vehicleId = newVehicleId || newVehicleName.toLowerCase().replace(/\s+/g, '_');
+      
+      const vehicleData = {
+        isNew: true, // Signal this is a new vehicle
+        vehicleId: vehicleId,
+        name: newVehicleName,
+        capacity: parseInt(newVehicleCapacity) || 4,
+        luggageCapacity: parseInt(newVehicleLuggageCapacity) || 2,
+        isActive: true,
+        description: `${newVehicleName} vehicle`,
+        image: newVehicleImage || "/cars/sedan.png",
+        amenities: JSON.stringify(["AC", "Bottle Water", "Music System"])
+      };
+      
+      console.log("Creating new vehicle with data:", vehicleData);
+      
+      const result = await updateVehicle(vehicleData);
+      
+      console.log("Create vehicle response:", result);
+      
+      // Clear all fare caches
+      clearFareCache();
+      
+      toast.success("Vehicle created successfully");
+      
+      // Set global flag to force trip fares refresh
+      localStorage.setItem('forceTripFaresRefresh', 'true');
+      
+      // Refresh the vehicles list
+      setRefreshTrigger(prev => prev + 1);
+      
+      // Close the dialog
+      setAddVehicleOpen(false);
+      
+      // Reset the form
+      resetNewVehicleForm();
+      
+      // Select the new vehicle if it was created successfully
+      if (result?.details?.vehicle_id) {
+        setSelectedVehicle(result.details.vehicle_id);
+        handleVehicleChange(result.details.vehicle_id);
+      }
+    } catch (error) {
+      console.error("Error creating vehicle:", error);
+      toast.error("Failed to create vehicle");
     } finally {
       setIsLoading(false);
     }
@@ -247,20 +334,107 @@ export const VehicleManagement = () => {
   return (
     <div className="grid gap-6">
       <div className="flex flex-col gap-4">
-        <div>
-          <label className="text-sm font-medium">Select Vehicle</label>
-          <Select value={selectedVehicle} onValueChange={handleVehicleChange}>
-            <SelectTrigger className="w-full mt-1">
-              <SelectValue placeholder="Select a vehicle" />
-            </SelectTrigger>
-            <SelectContent>
-              {vehicles.map((vehicle) => (
-                <SelectItem key={vehicle.id} value={vehicle.id}>
-                  {vehicle.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="flex justify-between items-center">
+          <div className="w-3/4">
+            <label className="text-sm font-medium">Select Vehicle</label>
+            <Select value={selectedVehicle} onValueChange={handleVehicleChange}>
+              <SelectTrigger className="w-full mt-1">
+                <SelectValue placeholder="Select a vehicle" />
+              </SelectTrigger>
+              <SelectContent>
+                {vehicles.map((vehicle) => (
+                  <SelectItem key={vehicle.id} value={vehicle.id}>
+                    {vehicle.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <Dialog open={addVehicleOpen} onOpenChange={setAddVehicleOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="mt-6">
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Add Vehicle
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Car className="h-5 w-5" /> Add New Vehicle
+                </DialogTitle>
+              </DialogHeader>
+              
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium">Vehicle Name <span className="text-red-500">*</span></label>
+                  <Input 
+                    value={newVehicleName} 
+                    onChange={(e) => setNewVehicleName(e.target.value)} 
+                    placeholder="e.g., Sedan, SUV, etc."
+                    required
+                  />
+                </div>
+                
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium">Vehicle ID (optional)</label>
+                  <Input 
+                    value={newVehicleId} 
+                    onChange={(e) => setNewVehicleId(e.target.value)} 
+                    placeholder="e.g., sedan, suv (auto-generated if empty)"
+                  />
+                  <p className="text-xs text-muted-foreground">Leave empty to auto-generate from name</p>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium">Passenger Capacity</label>
+                    <Input 
+                      type="number" 
+                      value={newVehicleCapacity} 
+                      onChange={(e) => setNewVehicleCapacity(e.target.value)} 
+                      placeholder="e.g., 4"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Luggage Capacity</label>
+                    <Input 
+                      type="number" 
+                      value={newVehicleLuggageCapacity} 
+                      onChange={(e) => setNewVehicleLuggageCapacity(e.target.value)} 
+                      placeholder="e.g., 2"
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="text-sm font-medium">Image URL</label>
+                  <Input 
+                    value={newVehicleImage} 
+                    onChange={(e) => setNewVehicleImage(e.target.value)} 
+                    placeholder="/cars/sedan.png"
+                  />
+                </div>
+              </div>
+              
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setAddVehicleOpen(false)}>Cancel</Button>
+                <Button 
+                  onClick={handleAddNewVehicle} 
+                  disabled={!newVehicleName || isLoading}
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    "Create Vehicle"
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
         
         <Tabs defaultValue="basic" value={activeTab} onValueChange={handleTabChange} className="w-full">
