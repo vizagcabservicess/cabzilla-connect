@@ -49,8 +49,7 @@ try {
     $syncResults = [
         'localToVehiclePricing' => 0,
         'vehiclePricingToLocal' => 0,
-        'errors' => [],
-        'skipped' => 0
+        'errors' => []
     ];
     
     // Check if tables exist and create them if needed
@@ -114,37 +113,6 @@ try {
         $tables['vehicle_pricing'] = true;
         error_log("[$timestamp] Created vehicle_pricing table", 3, $logDir . '/sync-local-fares.log');
     }
-
-    // Check and update tables to ensure they have the right structure
-    // Check if vehicle_pricing has vehicle_type or vehicle_id column
-    $vehiclePricingColumns = $conn->query("SHOW COLUMNS FROM vehicle_pricing");
-    $hasVehicleTypeColumn = false;
-    $hasVehicleIdColumn = false;
-    
-    if ($vehiclePricingColumns) {
-        while ($column = $vehiclePricingColumns->fetch_assoc()) {
-            if ($column['Field'] === 'vehicle_type') {
-                $hasVehicleTypeColumn = true;
-            }
-            if ($column['Field'] === 'vehicle_id') {
-                $hasVehicleIdColumn = true;
-            }
-        }
-    }
-    
-    // If vehicle_pricing has vehicle_type but no vehicle_id, add vehicle_id
-    if ($hasVehicleTypeColumn && !$hasVehicleIdColumn) {
-        $conn->query("ALTER TABLE vehicle_pricing ADD COLUMN vehicle_id VARCHAR(50) NOT NULL DEFAULT '' AFTER vehicle_type");
-        $conn->query("UPDATE vehicle_pricing SET vehicle_id = vehicle_type WHERE vehicle_id = ''");
-        error_log("[$timestamp] Added vehicle_id column to vehicle_pricing table", 3, $logDir . '/sync-local-fares.log');
-    }
-    
-    // If vehicle_pricing has only vehicle_id but no vehicle_type, add vehicle_type
-    if (!$hasVehicleTypeColumn && $hasVehicleIdColumn) {
-        $conn->query("ALTER TABLE vehicle_pricing ADD COLUMN vehicle_type VARCHAR(50) NOT NULL DEFAULT '' AFTER id");
-        $conn->query("UPDATE vehicle_pricing SET vehicle_type = vehicle_id WHERE vehicle_type = ''");
-        error_log("[$timestamp] Added vehicle_type column to vehicle_pricing table", 3, $logDir . '/sync-local-fares.log');
-    }
     
     // Begin transaction
     $conn->begin_transaction();
@@ -164,14 +132,6 @@ try {
             
             while ($fare = $localFares->fetch_assoc()) {
                 $vehicleId = $fare['vehicle_id'];
-                
-                // Skip records with empty vehicle_id
-                if (empty($vehicleId) || $vehicleId === '') {
-                    error_log("[$timestamp] Skipping record with empty vehicle_id", 3, $logDir . '/sync-local-fares.log');
-                    $syncResults['skipped']++;
-                    continue;
-                }
-                
                 $syncedIds[$vehicleId] = true;
                 
                 $price4hrs40km = $fare['price_4hrs_40km'];
@@ -204,8 +164,7 @@ try {
                 if ($vpExists) {
                     // Update existing record
                     $updateSql = "UPDATE vehicle_pricing 
-                                SET vehicle_type = ?,
-                                    local_package_4hr = ?, 
+                                SET local_package_4hr = ?, 
                                     local_package_8hr = ?, 
                                     local_package_10hr = ?, 
                                     extra_km_charge = ?, 
@@ -213,20 +172,18 @@ try {
                                     updated_at = CURRENT_TIMESTAMP
                                 WHERE vehicle_id = ? AND trip_type = 'local'";
                     $updateStmt = $conn->prepare($updateSql);
-                    $updateStmt->bind_param("sddddds", $vehicleId, $price4hrs40km, $price8hrs80km, 
-                                         $price10hrs100km, $priceExtraKm, $priceExtraHour, $vehicleId);
+                    $updateStmt->bind_param("ddddds", $price4hrs40km, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour, $vehicleId);
                     $updateStmt->execute();
                     $syncResults['localToVehiclePricing']++;
                 } else {
                     // Insert new record
                     $insertSql = "INSERT INTO vehicle_pricing 
-                                (vehicle_id, vehicle_type, trip_type, local_package_4hr, local_package_8hr, local_package_10hr, 
+                                (vehicle_id, trip_type, local_package_4hr, local_package_8hr, local_package_10hr, 
                                 extra_km_charge, extra_hour_charge, base_fare, price_per_km, night_halt_charge, driver_allowance) 
-                                VALUES (?, ?, 'local', ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                                VALUES (?, 'local', ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                     $insertStmt = $conn->prepare($insertSql);
-                    $insertStmt->bind_param("ssdddddddd", $vehicleId, $vehicleId, $price4hrs40km, $price8hrs80km, 
-                                          $price10hrs100km, $priceExtraKm, $priceExtraHour, 
-                                          $baseFare, $pricePerKm, $nightHaltCharge, $driverAllowance);
+                    $insertStmt->bind_param("sddddddddd", $vehicleId, $price4hrs40km, $price8hrs80km, $price10hrs100km, 
+                                          $priceExtraKm, $priceExtraHour, $baseFare, $pricePerKm, $nightHaltCharge, $driverAllowance);
                     $insertStmt->execute();
                     $syncResults['localToVehiclePricing']++;
                 }
@@ -245,13 +202,6 @@ try {
             
             while ($pricing = $vehiclePricing->fetch_assoc()) {
                 $vehicleId = $pricing['vehicle_id'];
-                
-                // Skip records with empty vehicle_id
-                if (empty($vehicleId) || $vehicleId === '') {
-                    error_log("[$timestamp] Skipping vehicle_pricing record with empty vehicle_id", 3, $logDir . '/sync-local-fares.log');
-                    $syncResults['skipped']++;
-                    continue;
-                }
                 
                 // Skip if already processed
                 if (isset($syncedIds[$vehicleId])) {
@@ -299,11 +249,6 @@ try {
                 
                 $syncResults['vehiclePricingToLocal']++;
             }
-            
-            // Clean up any empty vehicle_id records
-            $conn->query("DELETE FROM local_package_fares WHERE vehicle_id = '' OR vehicle_id IS NULL");
-            $conn->query("DELETE FROM vehicle_pricing WHERE vehicle_id = '' OR vehicle_id IS NULL");
-            error_log("[$timestamp] Cleaned up empty vehicle_id records", 3, $logDir . '/sync-local-fares.log');
         }
         
         // Commit transaction

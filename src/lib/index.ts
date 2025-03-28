@@ -34,7 +34,6 @@ export {
   clearFareCache as clearFareServiceCache,
   resetCabOptionsState,
   syncLocalFareTables,
-  syncVehicleTables,
   fareService
 } from '@/services/fareService';
 

@@ -8,47 +8,26 @@ import { toast } from "sonner";
 import axios from 'axios';
 import { getBypassHeaders } from '@/lib';
 
-interface ErrorData {
-  message: string;
-  stack?: string;
-  file?: string;
-  line?: number;
-}
-
-export function FareUpdateError({ 
-  onRetry,
-  error,
-  title = "Database Diagnostic Tool",
-  description = "Use this tool to diagnose and fix issues with the vehicle and fare data"
-}: { 
-  onRetry?: () => void;
-  error?: Error | string | null;
-  title?: string;
-  description?: string;
-}) {
+export function FareUpdateError({ onRetry }: { onRetry?: () => void }) {
   const [diagnosticData, setDiagnosticData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(false);
-  const [repairing, setRepairing] = useState(false);
-  const [syncingTables, setSyncingTables] = useState(false);
-  const [syncingVehicles, setSyncingVehicles] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(error ? (typeof error === 'string' ? error : error.message) : null);
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || window.location.origin;
+  const [error, setError] = useState<string | null>(null);
 
   const runDiagnostics = async () => {
     setLoading(true);
-    setErrorMsg(null);
+    setError(null);
     
     try {
       const response = await axios.get(
-        `${apiBaseUrl}/api/admin/database-diagnostic.php`,
+        '/api/admin/database-diagnostic.php',
         { headers: getBypassHeaders() }
       );
       
       setDiagnosticData(response.data);
     } catch (err) {
       console.error('Error running diagnostics:', err);
-      setErrorMsg('Failed to run diagnostics. Please check the server logs.');
+      setError('Failed to run diagnostics. Please check the server logs.');
     } finally {
       setLoading(false);
     }
@@ -56,11 +35,11 @@ export function FareUpdateError({
 
   const initializeDatabase = async () => {
     setInitializing(true);
-    setErrorMsg(null);
+    setError(null);
     
     try {
       const response = await axios.get(
-        `${apiBaseUrl}/api/admin/database-diagnostic.php?initialize=true`,
+        '/api/admin/database-diagnostic.php?initialize=true',
         { headers: getBypassHeaders() }
       );
       
@@ -75,126 +54,10 @@ export function FareUpdateError({
       }
     } catch (err) {
       console.error('Error initializing database:', err);
-      setErrorMsg('Failed to initialize database. Please check the server logs.');
+      setError('Failed to initialize database. Please check the server logs.');
       toast.error('Failed to initialize database');
     } finally {
       setInitializing(false);
-    }
-  };
-
-  const syncTables = async () => {
-    setSyncingTables(true);
-    setErrorMsg(null);
-    
-    try {
-      const response = await axios.get(
-        `${apiBaseUrl}/api/admin/sync-local-fares.php?_t=${Date.now()}`,
-        { headers: getBypassHeaders() }
-      );
-      
-      console.log('Table sync response:', response.data);
-      
-      if (response.data.status === 'success') {
-        toast.success('Tables synchronized successfully');
-        
-        // Refresh diagnostics to show latest state
-        await runDiagnostics();
-        
-        // Call onRetry callback if provided
-        if (onRetry) {
-          setTimeout(() => {
-            onRetry();
-          }, 1000);
-        }
-      } else {
-        setErrorMsg(`Table sync failed: ${response.data.message || 'Unknown error'}`);
-        toast.error('Failed to synchronize tables');
-      }
-    } catch (err) {
-      console.error('Error syncing tables:', err);
-      setErrorMsg(`Failed to sync tables: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      toast.error('Failed to synchronize tables');
-    } finally {
-      setSyncingTables(false);
-    }
-  };
-  
-  const syncVehicles = async () => {
-    setSyncingVehicles(true);
-    setErrorMsg(null);
-    
-    try {
-      // Attempt to sync vehicle tables to ensure consistency between vehicle_types, vehicles, and vehicle_pricing
-      const response = await axios.get(
-        `${apiBaseUrl}/api/admin/sync-vehicle-tables.php?_t=${Date.now()}`,
-        { headers: getBypassHeaders() }
-      );
-      
-      console.log('Vehicle tables sync response:', response.data);
-      
-      if (response.data.status === 'success') {
-        toast.success('Vehicle tables synchronized successfully');
-        
-        // Refresh diagnostics to show latest state
-        await runDiagnostics();
-        
-        // Call onRetry callback if provided
-        if (onRetry) {
-          setTimeout(() => {
-            onRetry();
-          }, 1000);
-        }
-      } else {
-        setErrorMsg(`Vehicle tables sync failed: ${response.data.message || 'Unknown error'}`);
-        toast.error('Failed to synchronize vehicle tables');
-      }
-    } catch (err) {
-      console.error('Error syncing vehicle tables:', err);
-      setErrorMsg(`Failed to sync vehicle tables: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      toast.error('Failed to synchronize vehicle tables');
-    } finally {
-      setSyncingVehicles(false);
-    }
-  };
-  
-  const repairDatabase = async () => {
-    setRepairing(true);
-    setErrorMsg(null);
-    
-    try {
-      // Attempt to repair the database structure
-      const response = await axios.get(
-        `${apiBaseUrl}/api/admin/database-diagnostic.php?repair=true`,
-        { headers: getBypassHeaders() }
-      );
-      
-      console.log('Database repair response:', response.data);
-      
-      if (response.data.status === 'success') {
-        toast.success('Database repair completed successfully');
-        
-        // First sync tables to ensure all data is consistent
-        await syncTables();
-        
-        // Refresh diagnostics to show latest state
-        await runDiagnostics();
-        
-        // Call onRetry callback if provided
-        if (onRetry) {
-          setTimeout(() => {
-            onRetry();
-          }, 1000);
-        }
-      } else {
-        setErrorMsg(`Database repair failed: ${response.data.message || 'Unknown error'}`);
-        toast.error('Failed to repair database');
-      }
-    } catch (err) {
-      console.error('Error repairing database:', err);
-      setErrorMsg(`Failed to repair database: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      toast.error('Failed to repair database');
-    } finally {
-      setRepairing(false);
     }
   };
 
@@ -206,16 +69,16 @@ export function FareUpdateError({
   return (
     <Card className="w-full max-w-3xl mx-auto">
       <CardHeader>
-        <CardTitle>{title}</CardTitle>
+        <CardTitle>Database Diagnostic Tool</CardTitle>
         <CardDescription>
-          {description}
+          Use this tool to diagnose and fix issues with the vehicle and fare data
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {errorMsg && (
+        {error && (
           <Alert variant="destructive" className="mb-4">
             <AlertTitle>Error</AlertTitle>
-            <AlertDescription>{errorMsg}</AlertDescription>
+            <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
 
@@ -288,43 +151,20 @@ export function FareUpdateError({
           </div>
         )}
 
-        {!diagnosticData && !errorMsg && (
+        {!diagnosticData && !error && (
           <div className="flex justify-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           </div>
         )}
       </CardContent>
-      <CardFooter className="flex flex-wrap gap-2">
+      <CardFooter className="flex justify-between">
         <Button variant="outline" onClick={runDiagnostics} disabled={loading}>
           {loading ? 'Running...' : 'Run Diagnostics'}
         </Button>
         <Button 
-          variant="outline" 
-          onClick={syncTables} 
-          disabled={syncingTables || loading || initializing || repairing || syncingVehicles}
-          className="bg-blue-500 hover:bg-blue-600 text-white"
-        >
-          {syncingTables ? 'Syncing...' : 'Sync Tables'}
-        </Button>
-        <Button 
-          variant="outline" 
-          onClick={syncVehicles} 
-          disabled={syncingVehicles || loading || initializing || repairing || syncingTables}
-          className="bg-green-500 hover:bg-green-600 text-white"
-        >
-          {syncingVehicles ? 'Syncing...' : 'Sync Vehicles'}
-        </Button>
-        <Button 
-          onClick={repairDatabase} 
-          disabled={repairing || loading || initializing || syncingTables || syncingVehicles}
-          className="bg-orange-500 hover:bg-orange-600 text-white"
-        >
-          {repairing ? 'Repairing...' : 'Repair Database'}
-        </Button>
-        <Button 
           onClick={initializeDatabase} 
-          disabled={initializing || loading || syncingTables || repairing || syncingVehicles}
-          className="bg-yellow-500 hover:bg-yellow-600 text-white"
+          disabled={initializing || loading}
+          className="bg-yellow-500 hover:bg-yellow-600"
         >
           {initializing ? 'Initializing...' : 'Initialize Database'}
         </Button>
