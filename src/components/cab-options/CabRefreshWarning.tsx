@@ -1,9 +1,8 @@
-
 import React, { useState } from 'react';
 import { AlertCircle, RefreshCw, Globe, Server, Network, ExternalLink, FileCog, Hammer, RefreshCcw, ServerCrash, DatabaseBackup } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { fareService } from '@/services/fareService';
+import { syncVehicleTables, clearFareCache, getBypassHeaders } from '@/services/fareService';
 import { toast } from 'sonner';
 import {
   Popover,
@@ -33,10 +32,10 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
     });
     
     // Clear all caches first
-    fareService.clearCache();
+    clearFareCache();
     
     // Log the forced request config for debugging
-    console.log('Using forced request config:', fareService.getForcedRequestConfig());
+    console.log('Using forced request config:', getForcedRequestConfig());
     
     // Wait a moment for caches to clear
     setTimeout(() => {
@@ -118,7 +117,7 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
     toast.info('Attempting emergency reconnection to API endpoint...');
     
     // Clear all caches first
-    fareService.clearCache();
+    clearFareCache();
     
     // Try the unified direct-fare-update endpoint
     const url = `${baseUrl}/api/admin/direct-fare-update.php?emergency=true&initialize=true&_t=${Date.now()}`;
