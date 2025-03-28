@@ -1,3 +1,4 @@
+
 <?php
 /**
  * API response utility functions
@@ -44,6 +45,15 @@ function sendErrorResponse($message = 'An error occurred', $statusCode = 400, $d
     
     if (!empty($details)) {
         $response['details'] = $details;
+    }
+    
+    // Add debug backtrace in development environments
+    if (isset($_GET['debug']) && $_GET['debug'] === 'true') {
+        $response['debug'] = [
+            'backtrace' => debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 5),
+            'request' => $_REQUEST,
+            'server' => $_SERVER
+        ];
     }
     
     echo json_encode($response);
@@ -137,4 +147,39 @@ function getRequestHeaders() {
     }
     
     return $headers;
+}
+
+/**
+ * Debug helper to log and optionally display SQL queries
+ *
+ * @param string $sql SQL query
+ * @param array $params Query parameters
+ * @param string $types Parameter types
+ * @param bool $display Whether to include in response (when debug=true)
+ * @return void
+ */
+function debugSqlQuery($sql, $params = [], $types = '', $display = false) {
+    static $queries = [];
+    
+    // Format the query for logging
+    $query = [
+        'sql' => $sql,
+        'params' => $params,
+        'types' => $types,
+        'time' => date('Y-m-d H:i:s')
+    ];
+    
+    // Add to queries array
+    $queries[] = $query;
+    
+    // Log the query
+    error_log('SQL Query: ' . json_encode($query));
+    
+    // If this is enabled and debug mode is on, it will be included in error responses
+    if ($display && isset($_GET['debug']) && $_GET['debug'] === 'true') {
+        if (!isset($GLOBALS['debug_sql_queries'])) {
+            $GLOBALS['debug_sql_queries'] = [];
+        }
+        $GLOBALS['debug_sql_queries'][] = $query;
+    }
 }

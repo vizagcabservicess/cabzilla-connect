@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { CabType } from '@/types/cab';
 import { getVehicleData } from '@/services/vehicleDataService';
@@ -93,11 +92,9 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
         return cabOptions;
       }
       
-      // Fetch vehicle data
-      let vehicles = await getVehicleData();
-      
-      // Filter active vehicles only
-      vehicles = vehicles.filter(vehicle => vehicle.isActive !== false);
+      // Fetch vehicle data - Important: Pass true to include inactive vehicles
+      // This ensures we get ALL vehicles from the database, including inactive ones
+      let vehicles = await getVehicleData(true);
       
       // Ensure we have at least one vehicle
       if (!vehicles || vehicles.length === 0) {

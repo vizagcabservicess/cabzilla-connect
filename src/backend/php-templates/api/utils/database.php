@@ -181,3 +181,23 @@ function columnExists($conn, $tableName, $columnName) {
     $result = $conn->query("SHOW COLUMNS FROM `$tableName` LIKE '$columnName'");
     return $result && $result->num_rows > 0;
 }
+
+/**
+ * Get column names for a table
+ *
+ * @param mysqli $conn Database connection
+ * @param string $tableName Table name
+ * @return array Array of column names
+ */
+function getTableColumns($conn, $tableName) {
+    $columns = [];
+    $result = $conn->query("SHOW COLUMNS FROM `$tableName`");
+    
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $columns[] = $row['Field'];
+        }
+    }
+    
+    return $columns;
+}

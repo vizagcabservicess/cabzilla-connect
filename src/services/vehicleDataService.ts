@@ -104,29 +104,31 @@ const normalizeVehiclesData = (data: any): CabType[] => {
   // Map and normalize the vehicle data
   return vehicles.map((vehicle: any) => {
     // Extract and clean ID from various possible sources
-    const rawVehicleId = vehicle.id || vehicle.vehicleId || vehicle.vehicle_id || vehicle.vehicleType || '';
+    const rawVehicleId = vehicle.id || vehicle.vehicleId || vehicle.vehicle_id || vehicle.vehicleType || vehicle.vehicle_type || '';
     const vehicleId = cleanVehicleId(String(rawVehicleId));
     
     const name = String(vehicle.name || vehicleId || '').trim();
     
     return {
       id: vehicleId,
+      vehicleId: vehicleId, // Ensure vehicleId is always set
       name: name || vehicleId, // Use ID as fallback for empty names
       capacity: Number(vehicle.capacity) || 4,
       luggageCapacity: Number(vehicle.luggageCapacity || vehicle.luggage_capacity) || 2,
-      price: Number(vehicle.basePrice || vehicle.price || vehicle.base_price) || 0,
+      price: Number(vehicle.basePrice || vehicle.price || vehicle.base_price || vehicle.base_fare) || 0,
       pricePerKm: Number(vehicle.pricePerKm || vehicle.price_per_km) || 0,
       image: String(vehicle.image || '/cars/sedan.png'),
       amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : 
-               (typeof vehicle.amenities === 'string' ? vehicle.amenities.split(',').map((a: string) => a.trim()) : ['AC']),
+               (typeof vehicle.amenities === 'string' ? 
+                 (vehicle.amenities ? JSON.parse(vehicle.amenities) : ['AC']) : 
+                 ['AC']),
       description: String(vehicle.description || ''),
       ac: vehicle.ac !== undefined ? Boolean(vehicle.ac) : true,
       nightHaltCharge: Number(vehicle.nightHaltCharge || vehicle.night_halt_charge) || 0,
       driverAllowance: Number(vehicle.driverAllowance || vehicle.driver_allowance) || 0,
       isActive: vehicle.isActive !== undefined ? Boolean(vehicle.isActive) : 
               (vehicle.is_active !== undefined ? Boolean(vehicle.is_active) : true),
-      basePrice: Number(vehicle.basePrice || vehicle.price || vehicle.base_price) || 0,
-      vehicleId: vehicleId // Store the cleaned ID again for consistency
+      basePrice: Number(vehicle.basePrice || vehicle.price || vehicle.base_price || vehicle.base_fare) || 0
     };
   });
 };
@@ -135,7 +137,7 @@ const normalizeVehiclesData = (data: any): CabType[] => {
  * Get all vehicle data from API with multiple fallbacks
  */
 export const getVehicleData = async (includeInactive: boolean = false): Promise<CabType[]> => {
-  console.log('Loading vehicle data from API...');
+  console.log('Loading vehicle data from API...', includeInactive ? '(including inactive)' : '');
   
   // Add cache busting timestamp
   const timestamp = Date.now();
@@ -143,6 +145,9 @@ export const getVehicleData = async (includeInactive: boolean = false): Promise<
   
   // Try multiple API endpoints in sequence
   const endpoints = [
+    // Admin endpoint for better vehicle source
+    `${apiBaseUrl}/api/admin/vehicles-update.php?action=getAll&includeInactive=true&debug=true&${cacheParam}`,
+    `/api/admin/vehicles-update.php?action=getAll&includeInactive=true&debug=true&${cacheParam}`,
     // Primary endpoint - try the raw PHP file first
     `${apiBaseUrl}/api/fares/vehicles.php?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`,
     // Alternate local path
@@ -154,11 +159,12 @@ export const getVehicleData = async (includeInactive: boolean = false): Promise<
     `${apiBaseUrl}/api/fares/vehicles?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`,
     `/api/fares/vehicles?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`,
     `${apiBaseUrl}/api/fares/vehicles-data?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`,
-    `/api/fares/vehicles-data?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`,
-    // Admin endpoint with debug bypass for development
-    `${apiBaseUrl}/api/admin/vehicles-update.php?action=getAll&debug=true&${cacheParam}`,
-    `/api/admin/vehicles-update.php?action=getAll&debug=true&${cacheParam}`
+    `/api/fares/vehicles-data?${includeInactive ? 'includeInactive=true&' : ''}${cacheParam}`
   ];
+  
+  // Try direct database fallback at end
+  endpoints.push(`${apiBaseUrl}/api/admin/db_setup.php?action=get_vehicles&includeInactive=true&${cacheParam}`);
+  endpoints.push(`/api/admin/db_setup.php?action=get_vehicles&includeInactive=true&${cacheParam}`);
   
   // Try each endpoint until one works
   for (const endpoint of endpoints) {
@@ -187,13 +193,14 @@ export const getVehicleData = async (includeInactive: boolean = false): Promise<
           normalizedVehicles.filter(v => v.isActive !== false);
         
         if (filteredVehicles.length > 0) {
-          console.log(`Successfully fetched ${filteredVehicles.length} vehicles from primary endpoint`);
+          console.log(`Successfully fetched ${filteredVehicles.length} vehicles from endpoint: ${endpoint}`);
           
           // Do additional logging to debug vehicle IDs
           console.log('Vehicle IDs fetched:', filteredVehicles.map(v => ({
             id: v.id,
             name: v.name,
-            vehicleId: v.vehicleId
+            vehicleId: v.vehicleId,
+            isActive: v.isActive
           })));
           
           return filteredVehicles;
@@ -464,7 +471,8 @@ export const deleteVehicle = async (vehicleId: string): Promise<boolean> => {
  */
 export const getVehicleTypes = async (): Promise<{id: string, name: string}[]> => {
   try {
-    const vehicles = await getVehicleData(true); // Get all vehicles including inactive
+    // Always pass true to include inactive vehicles
+    const vehicles = await getVehicleData(true); 
     
     const vehiclesList = vehicles.map(vehicle => ({
       id: vehicle.id, // Already cleaned in getVehicleData

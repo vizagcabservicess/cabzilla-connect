@@ -4,7 +4,7 @@
 
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: *');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
@@ -16,8 +16,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
+// Log the request for debugging
+$requestPath = __DIR__ . '/../../logs/vehicle_requests.log';
+$requestData = [
+    'timestamp' => date('Y-m-d H:i:s'),
+    'method' => $_SERVER['REQUEST_METHOD'],
+    'url' => $_SERVER['REQUEST_URI'],
+    'params' => $_REQUEST,
+    'input' => file_get_contents('php://input')
+];
+file_put_contents($requestPath, json_encode($requestData, JSON_PRETTY_PRINT) . "\n\n", FILE_APPEND);
+
 // Include necessary files
-require_once '../../config.php';
+require_once __DIR__ . '/../utils/database.php';
+require_once __DIR__ . '/../utils/response.php';
 
 // Initialize response
 $response = [
@@ -25,6 +37,148 @@ $response = [
     'message' => 'No action taken',
     'details' => []
 ];
+
+// Check if this is a GET request for all vehicles
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['action'] === 'getAll') {
+    try {
+        $conn = getDbConnection();
+        
+        // Check if vehicle_types table exists
+        if (!tableExists($conn, 'vehicle_types')) {
+            throw new Exception("vehicle_types table does not exist");
+        }
+        
+        // Determine whether to include inactive vehicles
+        $includeInactive = isset($_GET['includeInactive']) && $_GET['includeInactive'] === 'true';
+        
+        // Build the SQL query
+        $sql = "SELECT * FROM vehicle_types";
+        if (!$includeInactive) {
+            $sql .= " WHERE is_active = 1";
+        }
+        $sql .= " ORDER BY name ASC";
+        
+        // Debug query
+        debugSqlQuery($sql, [], '', true);
+        
+        // Execute the query
+        $result = $conn->query($sql);
+        
+        if (!$result) {
+            throw new Exception("Failed to retrieve vehicles: " . $conn->error);
+        }
+        
+        $vehicles = [];
+        while ($row = $result->fetch_assoc()) {
+            // Normalize vehicle_id to id
+            $row['id'] = $row['vehicle_id'];
+            
+            // Convert amenities from JSON string to array if it exists
+            if (isset($row['amenities']) && !empty($row['amenities'])) {
+                try {
+                    $row['amenities'] = json_decode($row['amenities'], true);
+                } catch (Exception $e) {
+                    $row['amenities'] = [];
+                }
+            } else {
+                $row['amenities'] = [];
+            }
+            
+            // Standardize isActive property
+            $row['isActive'] = (bool)$row['is_active'];
+            
+            $vehicles[] = $row;
+        }
+        
+        // If no vehicles found, check for alternate tables
+        if (empty($vehicles)) {
+            // Try vehicle_pricing table as a fallback
+            if (tableExists($conn, 'vehicle_pricing')) {
+                $fallbackSql = "SELECT DISTINCT ";
+                
+                // Check which ID column exists
+                $vehicleIdColumnExists = columnExists($conn, 'vehicle_pricing', 'vehicle_id');
+                $vehicleTypeColumnExists = columnExists($conn, 'vehicle_pricing', 'vehicle_type');
+                
+                if ($vehicleIdColumnExists) {
+                    $fallbackSql .= "vehicle_id, ";
+                }
+                if ($vehicleTypeColumnExists) {
+                    $fallbackSql .= "vehicle_type, ";
+                }
+                
+                $fallbackSql .= "* FROM vehicle_pricing";
+                
+                // Debug fallback query
+                debugSqlQuery($fallbackSql, [], '', true);
+                
+                $fallbackResult = $conn->query($fallbackSql);
+                if ($fallbackResult) {
+                    while ($row = $fallbackResult->fetch_assoc()) {
+                        // Determine the ID from available columns
+                        $id = '';
+                        if (isset($row['vehicle_id']) && !empty($row['vehicle_id'])) {
+                            $id = $row['vehicle_id'];
+                        } else if (isset($row['vehicle_type']) && !empty($row['vehicle_type'])) {
+                            $id = $row['vehicle_type'];
+                        }
+                        
+                        if (!empty($id)) {
+                            $vehicles[] = [
+                                'id' => $id,
+                                'vehicle_id' => $id,
+                                'name' => ucfirst(str_replace('_', ' ', $id)),
+                                'capacity' => 4,
+                                'luggage_capacity' => 2,
+                                'ac' => 1,
+                                'is_active' => 1,
+                                'isActive' => true,
+                                'amenities' => ['AC'],
+                                'image' => '/cars/' . strtolower($id) . '.png'
+                            ];
+                        }
+                    }
+                }
+                
+                // Debug fallback results
+                if (!empty($vehicles)) {
+                    $response['details']['used_fallback_table'] = 'vehicle_pricing';
+                    $response['details']['fallback_vehicle_count'] = count($vehicles);
+                }
+            }
+        }
+        
+        $response['status'] = 'success';
+        $response['message'] = 'Vehicles retrieved successfully';
+        $response['data'] = $vehicles;
+        $response['details']['count'] = count($vehicles);
+        
+        // Add debug information
+        if (isset($_GET['debug']) && $_GET['debug'] === 'true') {
+            $response['details']['tables'] = [];
+            $tablesResult = $conn->query("SHOW TABLES");
+            while ($table = $tablesResult->fetch_array(MYSQLI_NUM)) {
+                $response['details']['tables'][] = $table[0];
+            }
+            
+            if (tableExists($conn, 'vehicle_types')) {
+                $response['details']['vehicle_types_columns'] = getTableColumns($conn, 'vehicle_types');
+            }
+            
+            if (tableExists($conn, 'vehicle_pricing')) {
+                $response['details']['vehicle_pricing_columns'] = getTableColumns($conn, 'vehicle_pricing');
+            }
+        }
+        
+        // Return the response
+        echo json_encode($response);
+        exit();
+    } catch (Exception $e) {
+        sendErrorResponse("Error retrieving vehicles: " . $e->getMessage(), 500, [
+            'error_trace' => $e->getTraceAsString()
+        ]);
+    }
+}
 
 // Get the raw input and try to parse it as JSON
 $input = file_get_contents('php://input');
@@ -41,6 +195,7 @@ $response['debug'] = [
     'content_type' => $_SERVER['CONTENT_TYPE'] ?? 'none',
     'request_params' => $_REQUEST,
     'post_data' => $_POST,
+    'raw_input' => $input,
     'timestamp' => date('Y-m-d H:i:s')
 ];
 
@@ -353,18 +508,8 @@ try {
     $tableExistsResult = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'");
     if ($tableExistsResult && $tableExistsResult->num_rows > 0) {
         // Check which columns exist for querying
-        $hasVehicleIdColumn = false;
-        $hasVehicleTypeColumn = false;
-        
-        $columnsResult = $conn->query("SHOW COLUMNS FROM vehicle_pricing");
-        while ($column = $columnsResult->fetch_assoc()) {
-            if ($column['Field'] === 'vehicle_id') {
-                $hasVehicleIdColumn = true;
-            }
-            if ($column['Field'] === 'vehicle_type') {
-                $hasVehicleTypeColumn = true;
-            }
-        }
+        $hasVehicleIdColumn = columnExists($conn, 'vehicle_pricing', 'vehicle_id');
+        $hasVehicleTypeColumn = columnExists($conn, 'vehicle_pricing', 'vehicle_type');
         
         // Build the query dynamically based on what columns exist
         $checkQuery = "SELECT id FROM vehicle_pricing WHERE ";
