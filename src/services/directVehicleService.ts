@@ -19,7 +19,8 @@ export const createVehicle = async (vehicleData: Partial<CabType>): Promise<bool
     }
     
     // Prepare the data to send to the server
-    const dataToSend = { ...vehicleData };
+    // Use a type assertion to allow additional properties beyond CabType
+    const dataToSend: Record<string, any> = { ...vehicleData };
     
     // Convert amenities array to string for backend processing
     if (Array.isArray(vehicleData.amenities)) {
