@@ -18,6 +18,7 @@ import {
 import { authAPI } from '@/services/api';
 import { SignupRequest } from '@/types/api';
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
+import { toast } from 'sonner';
 
 const signupSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -27,7 +28,7 @@ const signupSchema = z.object({
 });
 
 export function SignupForm() {
-  const { toast } = useToast();
+  const { toast: uiToast } = useToast();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -47,18 +48,37 @@ export function SignupForm() {
     setError(null);
     
     try {
-      const response = await authAPI.signup(values); // Changed from register to signup
-      toast({
-        title: "Account Created",
-        description: "Your account has been created successfully!",
-        duration: 3000,
-      });
-      navigate('/dashboard');
+      // Show a toast to indicate signup is in progress
+      const loadingToastId = toast.loading("Creating your account...");
+      
+      try {
+        const response = await authAPI.signup(values);
+        
+        // Success - update the loading toast
+        toast.success("Account created successfully!", { id: loadingToastId });
+        
+        uiToast({
+          title: "Welcome to our service!",
+          description: "Your account has been created successfully. You'll be redirected to your dashboard.",
+          duration: 5000,
+        });
+        
+        // Short delay before redirecting to ensure toast is seen
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 1000);
+      } catch (signupError) {
+        // Update the loading toast to show error
+        toast.error("Signup failed", { id: loadingToastId });
+        throw signupError;
+      }
     } catch (error) {
+      console.error("Signup error:", error);
       setError(error as Error);
-      toast({
+      
+      uiToast({
         title: "Signup Failed",
-        description: error instanceof Error ? error.message : "Something went wrong",
+        description: error instanceof Error ? error.message : "Something went wrong during signup",
         variant: "destructive",
         duration: 5000,
       });
@@ -69,6 +89,7 @@ export function SignupForm() {
 
   const handleRetry = () => {
     setError(null);
+    form.clearErrors();
   };
 
   if (error) {
@@ -104,7 +125,7 @@ export function SignupForm() {
             <FormItem>
               <FormLabel>Email</FormLabel>
               <FormControl>
-                <Input placeholder="your@email.com" {...field} />
+                <Input placeholder="your@email.com" type="email" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -117,7 +138,7 @@ export function SignupForm() {
             <FormItem>
               <FormLabel>Phone Number</FormLabel>
               <FormControl>
-                <Input placeholder="1234567890" {...field} />
+                <Input placeholder="1234567890" type="tel" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>

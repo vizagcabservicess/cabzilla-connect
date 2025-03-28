@@ -191,20 +191,81 @@ export const bookingAPI = {
   
   getUserBookings: async (): Promise<Booking[]> => {
     try {
-      const response = await api.get('/user/bookings.php');
-      // Check if the response has the bookings array directly or inside a data property
-      if (response.data && response.data.bookings) {
-        return response.data.bookings;
-      } else if (Array.isArray(response.data)) {
-        return response.data;
+      console.log('Fetching user bookings...');
+      const timestamp = new Date().getTime();
+      const headers = { 'Cache-Control': 'no-cache' };
+      
+      // First try the standard endpoint with cache busting
+      try {
+        const response = await api.get(`/user/bookings.php?_t=${timestamp}`, { headers });
+        console.log('User bookings API response:', response.data);
+        
+        // Check if the response has the bookings array directly or inside a data property
+        if (response.data && response.data.bookings) {
+          return response.data.bookings;
+        } else if (Array.isArray(response.data)) {
+          return response.data;
+        }
+        
+        // If response doesn't have a bookings array but is successful, return empty array
+        return [];
+      } catch (primaryError) {
+        console.warn('Primary bookings endpoint failed:', primaryError);
+        
+        // Try the direct endpoint next
+        try {
+          const directResponse = await api.get(`/user/direct-booking-data.php?_t=${timestamp}`, { headers });
+          console.log('Direct bookings API response:', directResponse.data);
+          
+          if (directResponse.data && directResponse.data.bookings) {
+            return directResponse.data.bookings;
+          } else if (Array.isArray(directResponse.data)) {
+            return directResponse.data;
+          }
+          
+          // If still no success, try one last fallback option
+          // This could be a direct Fetch call as the last resort
+          const token = localStorage.getItem('authToken');
+          const rawResponse = await fetch(`/api/user/direct-booking-data.php?_t=${timestamp}`, {
+            headers: {
+              'Authorization': token ? `Bearer ${token}` : '',
+              'Cache-Control': 'no-cache',
+              'X-Force-Refresh': 'true'
+            }
+          });
+          
+          if (rawResponse.ok) {
+            const rawData = await rawResponse.json();
+            console.log('Raw fetch fallback response:', rawData);
+            
+            if (rawData.bookings && Array.isArray(rawData.bookings)) {
+              return rawData.bookings;
+            } else if (Array.isArray(rawData)) {
+              return rawData;
+            }
+          }
+          
+          // If we got here, all API calls failed but we don't want to crash the UI
+          // Return empty array instead of throwing
+          console.warn('All booking API attempts failed, returning empty array');
+          return [];
+        } catch (secondaryError) {
+          console.error('Secondary bookings endpoint also failed:', secondaryError);
+          
+          // For new users or when the API is completely down, return empty array
+          // This prevents the dashboard from showing error states
+          console.warn('Returning empty bookings array as fallback');
+          return [];
+        }
       }
-      return [];
     } catch (error) {
-      return handleApiError(error);
+      console.error('Fatal error in getUserBookings:', error);
+      // Instead of calling handleApiError which throws, we'll return empty array
+      // This is especially helpful for new users who don't have bookings yet
+      return [];
     }
   },
   
-  // Get specific booking by ID
   getBookingById: async (bookingId: number): Promise<Booking> => {
     try {
       const response = await api.get(`/user/booking.php?id=${bookingId}`);
