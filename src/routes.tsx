@@ -1,68 +1,70 @@
 
-import { createBrowserRouter } from "react-router-dom";
-import Index from "./pages/Index";
-import NotFound from "./pages/NotFound";
-import LoginPage from "./pages/LoginPage";
-import SignupPage from "./pages/SignupPage";
-import BookingConfirmationPage from "./pages/BookingConfirmationPage";
-import DashboardPage from "./pages/DashboardPage";
-import AdminDashboardPage from "./pages/AdminDashboardPage";
-import BookingEditPage from "./pages/BookingEditPage";
-import ReceiptPage from "./pages/ReceiptPage";
-import CabsPage from "./pages/CabsPage";
-import ToursPage from "./pages/ToursPage";
-import AdminDatabasePage from "./pages/AdminDatabasePage";
-import VehiclesListPage from "./pages/admin/VehiclesListPage";
+import { createBrowserRouter } from 'react-router-dom';
+import Index from './pages/Index';
+import NotFound from './pages/NotFound';
+import LoginPage from './pages/LoginPage';
+import SignupPage from './pages/SignupPage';
+import DashboardPage from './pages/DashboardPage';
+import AdminDashboardPage from './pages/AdminDashboardPage';
+import BookingConfirmationPage from './pages/BookingConfirmationPage';
+import CabsPage from './pages/CabsPage';
+import ToursPage from './pages/ToursPage';
+import BookingEditPage from './pages/BookingEditPage';
+import ReceiptPage from './pages/ReceiptPage';
+import AdminDatabasePage from './pages/AdminDatabasePage';
 
 export const router = createBrowserRouter([
   {
-    path: "/",
+    path: '/',
     element: <Index />,
-    errorElement: <NotFound />,
   },
   {
-    path: "/login",
+    path: '/login',
     element: <LoginPage />,
   },
   {
-    path: "/signup",
+    path: '/signup',
     element: <SignupPage />,
   },
   {
-    path: "/booking-confirmation",
-    element: <BookingConfirmationPage />,
-  },
-  {
-    path: "/dashboard",
+    path: '/dashboard',
     element: <DashboardPage />,
   },
   {
-    path: "/booking/edit/:id",
-    element: <BookingEditPage />,
-  },
-  {
-    path: "/receipt/:id",
-    element: <ReceiptPage />,
-  },
-  {
-    path: "/cabs",
-    element: <CabsPage />,
-  },
-  {
-    path: "/tours",
-    element: <ToursPage />,
-  },
-  {
-    path: "/admin",
+    path: '/admin',
     element: <AdminDashboardPage />,
   },
   {
-    path: "/admin/vehicles",
-    element: <VehiclesListPage />,
+    path: '/admin/database',
+    element: <AdminDatabasePage />,
   },
   {
-    path: "/admin/database",
-    element: <AdminDatabasePage />,
+    path: '/booking/:bookingId/confirmation',
+    element: <BookingConfirmationPage />,
+  },
+  {
+    path: '/booking-confirmation',
+    element: <BookingConfirmationPage />,
+  },
+  {
+    path: '/booking/:bookingId/edit',
+    element: <BookingEditPage />,
+  },
+  {
+    path: '/receipt/:bookingId',
+    element: <ReceiptPage />,
+  },
+  {
+    path: '/cabs',
+    element: <CabsPage />,
+  },
+  {
+    path: '/tours',
+    element: <ToursPage />,
+  },
+  {
+    path: '*',
+    element: <NotFound />,
   },
 ]);
 

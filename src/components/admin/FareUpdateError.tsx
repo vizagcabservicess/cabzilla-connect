@@ -31,6 +31,7 @@ export function FareUpdateError({
   const [initializing, setInitializing] = useState(false);
   const [repairing, setRepairing] = useState(false);
   const [syncingTables, setSyncingTables] = useState(false);
+  const [syncingVehicles, setSyncingVehicles] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(error ? (typeof error === 'string' ? error : error.message) : null);
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || window.location.origin;
 
@@ -115,6 +116,44 @@ export function FareUpdateError({
       toast.error('Failed to synchronize tables');
     } finally {
       setSyncingTables(false);
+    }
+  };
+  
+  const syncVehicles = async () => {
+    setSyncingVehicles(true);
+    setErrorMsg(null);
+    
+    try {
+      // Attempt to sync vehicle tables to ensure consistency between vehicle_types, vehicles, and vehicle_pricing
+      const response = await axios.get(
+        `${apiBaseUrl}/api/admin/sync-vehicle-tables.php?_t=${Date.now()}`,
+        { headers: getBypassHeaders() }
+      );
+      
+      console.log('Vehicle tables sync response:', response.data);
+      
+      if (response.data.status === 'success') {
+        toast.success('Vehicle tables synchronized successfully');
+        
+        // Refresh diagnostics to show latest state
+        await runDiagnostics();
+        
+        // Call onRetry callback if provided
+        if (onRetry) {
+          setTimeout(() => {
+            onRetry();
+          }, 1000);
+        }
+      } else {
+        setErrorMsg(`Vehicle tables sync failed: ${response.data.message || 'Unknown error'}`);
+        toast.error('Failed to synchronize vehicle tables');
+      }
+    } catch (err) {
+      console.error('Error syncing vehicle tables:', err);
+      setErrorMsg(`Failed to sync vehicle tables: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      toast.error('Failed to synchronize vehicle tables');
+    } finally {
+      setSyncingVehicles(false);
     }
   };
   
@@ -262,21 +301,29 @@ export function FareUpdateError({
         <Button 
           variant="outline" 
           onClick={syncTables} 
-          disabled={syncingTables || loading || initializing || repairing}
+          disabled={syncingTables || loading || initializing || repairing || syncingVehicles}
           className="bg-blue-500 hover:bg-blue-600 text-white"
         >
           {syncingTables ? 'Syncing...' : 'Sync Tables'}
         </Button>
         <Button 
+          variant="outline" 
+          onClick={syncVehicles} 
+          disabled={syncingVehicles || loading || initializing || repairing || syncingTables}
+          className="bg-green-500 hover:bg-green-600 text-white"
+        >
+          {syncingVehicles ? 'Syncing...' : 'Sync Vehicles'}
+        </Button>
+        <Button 
           onClick={repairDatabase} 
-          disabled={repairing || loading || initializing || syncingTables}
+          disabled={repairing || loading || initializing || syncingTables || syncingVehicles}
           className="bg-orange-500 hover:bg-orange-600 text-white"
         >
           {repairing ? 'Repairing...' : 'Repair Database'}
         </Button>
         <Button 
           onClick={initializeDatabase} 
-          disabled={initializing || loading || syncingTables || repairing}
+          disabled={initializing || loading || syncingTables || repairing || syncingVehicles}
           className="bg-yellow-500 hover:bg-yellow-600 text-white"
         >
           {initializing ? 'Initializing...' : 'Initialize Database'}

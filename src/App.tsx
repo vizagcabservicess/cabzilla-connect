@@ -1,7 +1,7 @@
 
 import { useEffect } from 'react';
 import { RouterProvider } from 'react-router-dom';
-import router from './routes';
+import { router } from './routes';
 import { GoogleMapsProvider } from './providers/GoogleMapsProvider';
 import { Toaster as ToastUIToaster } from './components/ui/toaster';
 import { Toaster as SonnerToaster } from './components/ui/sonner';
