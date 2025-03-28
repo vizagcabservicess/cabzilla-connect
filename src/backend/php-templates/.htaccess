@@ -1,4 +1,3 @@
-
 # Enable rewrite engine
 RewriteEngine On
 
@@ -13,6 +12,10 @@ RewriteRule ^api/init-database$ api/admin/init-database.php [L,QSA]
 RewriteRule ^api/init-database\.php$ api/admin/init-database.php [L,QSA]
 RewriteRule ^api/admin/init-database$ api/admin/init-database.php [L,QSA]
 RewriteRule ^api/admin/init-database\.php$ api/admin/init-database.php [L,QSA]
+
+# Direct endpoint for vehicle creation - add this with highest priority
+RewriteRule ^api/admin/direct-vehicle-create$ api/admin/direct-vehicle-create.php [QSA,L]
+RewriteRule ^api/admin/direct-vehicle-create.php$ api/admin/direct-vehicle-create.php [QSA,L]
 
 # HIGHEST PRIORITY - Ensure all fare updates go through our universal fare-update.php
 RewriteRule ^api/fare-update$ api/admin/fare-update.php [L,QSA]

@@ -62,22 +62,28 @@ else {
 }
 
 // Final validation
-if (empty($data) || !isset($data['vehicleId']) || !isset($data['name'])) {
+if (empty($data) || !isset($data['name'])) {
     http_response_code(400);
     echo json_encode([
         'status' => 'error',
-        'message' => 'Missing required fields: vehicleId and name',
+        'message' => 'Missing required field: name',
         'receivedData' => $data
     ]);
     exit;
 }
 
 // Extract and clean vehicle ID
-$vehicleId = $data['vehicleId'];
+$vehicleId = isset($data['vehicleId']) ? $data['vehicleId'] : '';
+if (empty($vehicleId) && isset($data['name'])) {
+    // Generate vehicleId from name
+    $vehicleId = preg_replace('/[^a-z0-9_]/', '_', strtolower($data['name']));
+}
+
+// Make sure we have a valid vehicleId
 $vehicleId = preg_replace('/[^a-z0-9_]/', '_', strtolower($vehicleId));
 
-// Basic info
-$name = $data['name'];
+// Basic info - with fallbacks for all fields
+$name = isset($data['name']) ? $data['name'] : 'Unknown Vehicle';
 $capacity = isset($data['capacity']) ? intval($data['capacity']) : 4;
 $luggageCapacity = isset($data['luggageCapacity']) ? intval($data['luggageCapacity']) : 2;
 $image = isset($data['image']) ? $data['image'] : '/cars/sedan.png';
@@ -101,15 +107,21 @@ if (isset($data['amenities'])) {
             $amenities = $decodedAmenities;
         }
     }
+} else if (isset($data['amenitiesJson']) && is_string($data['amenitiesJson']) && !empty($data['amenitiesJson'])) {
+    // Try to parse from amenitiesJson field
+    $decodedAmenities = json_decode($data['amenitiesJson'], true);
+    if (json_last_error() === JSON_ERROR_NONE) {
+        $amenities = $decodedAmenities;
+    }
 }
 $amenitiesJson = json_encode($amenities);
 
 try {
     // Connect to database
-    $conn = getDbConnection();
+    $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
     
-    if (!$conn) {
-        throw new Exception("Database connection failed");
+    if ($conn->connect_error) {
+        throw new Exception("Database connection failed: " . $conn->connect_error);
     }
     
     // Start transaction
@@ -118,6 +130,9 @@ try {
     try {
         // Check if vehicle already exists
         $checkStmt = $conn->prepare("SELECT id FROM vehicles WHERE id = ? OR vehicle_id = ?");
+        if (!$checkStmt) {
+            throw new Exception("Failed to prepare check statement: " . $conn->error);
+        }
         $checkStmt->bind_param("ss", $vehicleId, $vehicleId);
         $checkStmt->execute();
         $result = $checkStmt->get_result();
@@ -137,6 +152,10 @@ try {
             (id, vehicle_id, name, capacity, luggage_capacity, image, description, amenities, is_active, created_at, updated_at) 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())
         ");
+        
+        if (!$createVehicleStmt) {
+            throw new Exception("Failed to prepare vehicle insert statement: " . $conn->error);
+        }
         
         $createVehicleStmt->bind_param(
             "sssiisss", 
@@ -169,6 +188,10 @@ try {
             updated_at = NOW()
         ");
         
+        if (!$createVehicleTypeStmt) {
+            throw new Exception("Failed to prepare vehicle_types insert statement: " . $conn->error);
+        }
+        
         $createVehicleTypeStmt->bind_param(
             "sssisss", 
             $vehicleId, 
@@ -189,6 +212,10 @@ try {
             VALUES (?, ?, 'all', ?, ?, ?, ?, NOW(), NOW())
         ");
         
+        if (!$createPricingStmt) {
+            throw new Exception("Failed to prepare pricing statement: " . $conn->error);
+        }
+        
         $createPricingStmt->bind_param(
             "ssdddd", 
             $vehicleId, 
@@ -208,6 +235,10 @@ try {
             VALUES (?, ?, ?, ?, ?, NOW(), NOW())
         ");
         
+        if (!$outstationStmt) {
+            throw new Exception("Failed to prepare outstation fares statement: " . $conn->error);
+        }
+        
         $outstationStmt->bind_param(
             "sdddd", 
             $vehicleId, 
@@ -225,6 +256,10 @@ try {
             (vehicle_id, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, NOW(), NOW())
         ");
+        
+        if (!$localStmt) {
+            throw new Exception("Failed to prepare local fares statement: " . $conn->error);
+        }
         
         $price8hrs80km = 1500;
         $price10hrs100km = 1800;
@@ -249,6 +284,10 @@ try {
             VALUES (?, ?, ?, NOW(), NOW())
         ");
         
+        if (!$airportStmt) {
+            throw new Exception("Failed to prepare airport fares statement: " . $conn->error);
+        }
+        
         $pickupFare = 1000;
         $dropFare = 1000;
         
@@ -264,6 +303,7 @@ try {
         // Commit all changes
         $conn->commit();
         
+        http_response_code(200);
         echo json_encode([
             'status' => 'success',
             'message' => 'Vehicle created successfully',
@@ -289,8 +329,9 @@ try {
     http_response_code(500);
     echo json_encode([
         'status' => 'error',
-        'message' => 'Failed to create vehicle: ' . $e->getMessage()
+        'message' => 'Failed to create vehicle: ' . $e->getMessage(),
+        'debug' => $data
     ]);
-    error_log('Error creating vehicle: ' . $e->getMessage());
+    error_log('Error creating vehicle: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
     exit;
 }

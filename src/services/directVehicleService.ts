@@ -28,22 +28,43 @@ export const createVehicle = async (vehicleData: Partial<CabType>): Promise<bool
       dataToSend.amenitiesJson = JSON.stringify(vehicleData.amenities);
     }
     
-    // Add a flag to indicate this is a new vehicle, as a separate property in dataToSend
-    const formData = formatDataForMultipart({
-      ...dataToSend,
-      isNew: true // Adding as a separate property for the backend
-    });
+    // Add a flag to indicate this is a new vehicle
+    dataToSend.isNew = true;
+    
+    // Create FormData for better PHP compatibility
+    const formData = formatDataForMultipart(dataToSend);
     
     // Add cache busting param
     const cacheBuster = `_t=${Date.now()}`;
+    
+    // Try the dedicated vehicle creation endpoint first
+    try {
+      console.log(`Attempting to create vehicle using direct-vehicle-create endpoint`);
+      
+      const response = await axios.post(`/api/admin/direct-vehicle-create.php?${cacheBuster}`, formData, {
+        headers: {
+          ...getBypassHeaders(),
+          // FormData will set its own content-type with boundary
+        },
+        timeout: 15000
+      });
+      
+      console.log(`Response from direct-vehicle-create:`, response.data);
+      
+      if (response.status === 200 && response.data) {
+        toast.success(`Vehicle ${vehicleData.name} created successfully`);
+        return true;
+      }
+    } catch (error: any) {
+      console.error(`Error with direct-vehicle-create:`, error.response || error);
+      // Continue to fallback methods if this fails
+    }
     
     // Try multiple endpoints with different methods
     const endpoints = [
       '/api/admin/direct-vehicle-pricing.php',
       '/api/admin/vehicles-update.php',
     ];
-    
-    let successResponse = null;
     
     // Try each endpoint
     for (const endpoint of endpoints) {
@@ -62,7 +83,6 @@ export const createVehicle = async (vehicleData: Partial<CabType>): Promise<bool
         console.log(`Response from ${endpoint}:`, response.data);
         
         if (response.status === 200 && response.data) {
-          successResponse = response.data;
           toast.success(`Vehicle ${vehicleData.name} created successfully`);
           return true;
         }
@@ -78,9 +98,6 @@ export const createVehicle = async (vehicleData: Partial<CabType>): Promise<bool
             }
           });
           
-          // Add isNew flag
-          params.append('isNew', 'true');
-          
           const response = await axios.post(`${endpoint}?${cacheBuster}`, params, {
             headers: {
               ...getBypassHeaders(),
@@ -92,7 +109,6 @@ export const createVehicle = async (vehicleData: Partial<CabType>): Promise<bool
           console.log(`Response from ${endpoint} (urlencoded):`, response.data);
           
           if (response.status === 200 && response.data) {
-            successResponse = response.data;
             toast.success(`Vehicle ${vehicleData.name} created successfully`);
             return true;
           }
