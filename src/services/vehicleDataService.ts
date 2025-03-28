@@ -143,6 +143,38 @@ export const getVehicleData = async (includeInactive: boolean = false): Promise<
   const timestamp = Date.now();
   const cacheParam = `_t=${timestamp}`;
   
+  // Try loading from our local JSON file first
+  try {
+    // This is our local file endpoint that should be prioritized
+    const localPath = `/data/vehicles.json?${cacheParam}`;
+    console.log(`Trying to load vehicles from local file: ${localPath}`);
+    
+    const response = await axios.get(localPath, {
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      },
+      timeout: 5000
+    });
+    
+    if (response.status === 200 && response.data) {
+      const vehicles = normalizeVehiclesData(response.data);
+      console.log(`Successfully loaded ${vehicles.length} vehicles from local JSON file`);
+      
+      // Filter active vehicles if needed
+      const filteredVehicles = includeInactive ? 
+        vehicles : 
+        vehicles.filter(v => v.isActive !== false);
+      
+      if (filteredVehicles.length > 0) {
+        return filteredVehicles;
+      }
+    }
+  } catch (error) {
+    console.log("Could not load from local JSON file, trying API endpoints");
+  }
+  
   // Try multiple API endpoints in sequence
   const endpoints = [
     // Admin endpoint for better vehicle source

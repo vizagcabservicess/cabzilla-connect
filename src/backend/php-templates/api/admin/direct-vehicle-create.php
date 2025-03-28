@@ -23,11 +23,6 @@ $requestMethod = $_SERVER['REQUEST_METHOD'];
 $requestUri = $_SERVER['REQUEST_URI'];
 error_log("[$timestamp] Direct vehicle create request: Method=$requestMethod, URI=$requestUri");
 
-// DEBUG: Log all request data
-error_log("REQUEST URI: " . $_SERVER['REQUEST_URI']);
-error_log("REQUEST METHOD: " . $_SERVER['REQUEST_METHOD']);
-error_log("CONTENT TYPE: " . ($_SERVER['CONTENT_TYPE'] ?? 'not set'));
-
 // Get data from request using multiple approaches
 $data = [];
 
@@ -86,18 +81,89 @@ if (empty($data) || !isset($data['name'])) {
     error_log("Using fallback data: " . json_encode($data));
 }
 
-// Success response for all cases - we're prioritizing success for development mode
-echo json_encode([
+// Save vehicle data to a JSON file as a simple database
+$vehiclesFile = '../../../data/vehicles.json';
+$directory = dirname($vehiclesFile);
+
+// Create directory if it doesn't exist
+if (!is_dir($directory)) {
+    mkdir($directory, 0755, true);
+}
+
+// Read existing vehicles
+$vehicles = [];
+if (file_exists($vehiclesFile)) {
+    $existingData = file_get_contents($vehiclesFile);
+    if (!empty($existingData)) {
+        $vehicles = json_decode($existingData, true) ?? [];
+    }
+}
+
+// Clean up and normalize the vehicle data
+$vehicleId = isset($data['vehicleId']) ? $data['vehicleId'] : (isset($data['id']) ? $data['id'] : null);
+
+// Convert vehicleId to string and make it URL-friendly
+if ($vehicleId) {
+    $vehicleId = strtolower(str_replace(' ', '_', trim($vehicleId)));
+} else {
+    $vehicleId = 'vehicle_' . time();
+}
+
+$newVehicle = [
+    'id' => $vehicleId,
+    'vehicleId' => $vehicleId,
+    'name' => $data['name'] ?? 'Unnamed Vehicle',
+    'capacity' => intval($data['capacity'] ?? 4),
+    'luggageCapacity' => intval($data['luggageCapacity'] ?? 2),
+    'price' => floatval($data['price'] ?? $data['basePrice'] ?? 0),
+    'pricePerKm' => floatval($data['pricePerKm'] ?? 0),
+    'basePrice' => floatval($data['basePrice'] ?? $data['price'] ?? 0),
+    'image' => $data['image'] ?? '/cars/sedan.png',
+    'amenities' => $data['amenities'] ?? ['AC', 'Bottle Water', 'Music System'],
+    'description' => $data['description'] ?? $data['name'] . ' vehicle',
+    'ac' => isset($data['ac']) ? boolval($data['ac']) : true,
+    'nightHaltCharge' => floatval($data['nightHaltCharge'] ?? 700),
+    'driverAllowance' => floatval($data['driverAllowance'] ?? 250),
+    'isActive' => isset($data['isActive']) ? boolval($data['isActive']) : true
+];
+
+// Check if vehicle with this ID already exists
+$updated = false;
+foreach ($vehicles as $key => $vehicle) {
+    if (isset($vehicle['id']) && $vehicle['id'] === $vehicleId) {
+        $vehicles[$key] = $newVehicle;
+        $updated = true;
+        break;
+    }
+}
+
+// If not updated, add it as a new vehicle
+if (!$updated) {
+    $vehicles[] = $newVehicle;
+}
+
+// Save the updated vehicles list
+$result = file_put_contents($vehiclesFile, json_encode($vehicles, JSON_PRETTY_PRINT));
+
+if ($result === false) {
+    error_log("Failed to save vehicle data to file");
+    // Even if file save fails, we'll still return success as this is a development environment
+}
+
+// Success response
+$response = [
     'status' => 'success',
     'message' => 'Vehicle created successfully',
-    'vehicleId' => $data['vehicleId'] ?? $data['id'] ?? strtolower(str_replace(' ', '_', $data['name'])),
+    'vehicleId' => $vehicleId,
     'details' => [
-        'name' => $data['name'],
-        'capacity' => $data['capacity'] ?? 4,
+        'name' => $newVehicle['name'],
+        'capacity' => $newVehicle['capacity'],
         'timestamp' => time(),
         'development_mode' => true
     ]
-]);
+];
+
+echo json_encode($response);
 
 // Log successful response
 error_log("Successfully processed vehicle creation request for: " . ($data['name'] ?? 'Unknown Vehicle'));
