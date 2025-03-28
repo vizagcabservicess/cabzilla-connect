@@ -18,15 +18,20 @@ export const createVehicle = async (vehicleData: Partial<CabType>): Promise<bool
       vehicleData.id = vehicleData.vehicleId;
     }
     
-    // Convert amenities array to string if needed
+    // Prepare the data to send to the server
+    const dataToSend = { ...vehicleData };
+    
+    // Convert amenities array to string for backend processing
     if (Array.isArray(vehicleData.amenities)) {
-      vehicleData.amenitiesJson = JSON.stringify(vehicleData.amenities);
+      // Add a separate property that our PHP endpoint can use
+      dataToSend.amenitiesJson = JSON.stringify(vehicleData.amenities);
     }
     
-    // Set a flag to indicate this is a new vehicle
-    vehicleData.isNew = true;
-    
-    const formData = formatDataForMultipart(vehicleData);
+    // Add a flag to indicate this is a new vehicle, as a separate property in dataToSend
+    const formData = formatDataForMultipart({
+      ...dataToSend,
+      isNew: true // Adding as a separate property for the backend
+    });
     
     // Add cache busting param
     const cacheBuster = `_t=${Date.now()}`;
@@ -66,11 +71,14 @@ export const createVehicle = async (vehicleData: Partial<CabType>): Promise<bool
         // Try URL encoded next
         try {
           const params = new URLSearchParams();
-          Object.entries(vehicleData).forEach(([key, value]) => {
+          Object.entries(dataToSend).forEach(([key, value]) => {
             if (value !== undefined && value !== null) {
               params.append(key, String(value));
             }
           });
+          
+          // Add isNew flag
+          params.append('isNew', 'true');
           
           const response = await axios.post(`${endpoint}?${cacheBuster}`, params, {
             headers: {
