@@ -37,7 +37,7 @@ error_log("Vehicle pricing request received: " . $method, 3, __DIR__ . '/../../l
 
 // Function to check if a vehicle exists
 function vehicleExists($conn, $vehicleId) {
-    $stmt = $conn->prepare("SELECT id FROM vehicles WHERE id = ? OR vehicle_id = ?");
+    $stmt = $conn->prepare("SELECT id FROM vehicle_types WHERE id = ? OR vehicle_id = ?");
     if (!$stmt) {
         error_log("Failed to prepare stmt for checking if vehicle exists: " . $conn->error, 3, __DIR__ . '/../../logs/error.log');
         return false;
@@ -72,45 +72,49 @@ function updateOutstationFares($conn, $vehicleId, $fareData) {
     // Log what we're trying to update
     error_log("Updating outstation fares for vehicle: " . $vehicleId, 3, __DIR__ . '/../../logs/debug.log');
     
-    // Get required fields
-    $baseFare = isset($fareData['baseFare']) ? floatval($fareData['baseFare']) : 0;
+    // Get required fields with fallbacks for both column naming styles
+    $baseFare = isset($fareData['baseFare']) ? floatval($fareData['baseFare']) : 
+              (isset($fareData['basePrice']) ? floatval($fareData['basePrice']) : 0);
     $pricePerKm = isset($fareData['pricePerKm']) ? floatval($fareData['pricePerKm']) : 0;
     $nightHaltCharge = isset($fareData['nightHaltCharge']) ? floatval($fareData['nightHaltCharge']) : 0;
     $driverAllowance = isset($fareData['driverAllowance']) ? floatval($fareData['driverAllowance']) : 0;
     
-    // First check if vehicle exists in vehicles table, if not create it
-    $vehicleQuery = "SELECT id FROM vehicles WHERE id = ? OR vehicle_id = ?";
+    // First check if vehicle exists in vehicle_types table, if not create it
+    $vehicleQuery = "SELECT id FROM vehicle_types WHERE vehicle_id = ?";
     $vehicleStmt = $conn->prepare($vehicleQuery);
     if (!$vehicleStmt) {
         error_log("Failed to prepare statement for vehicle check: " . $conn->error, 3, __DIR__ . '/../../logs/error.log');
         return false;
     }
     
-    $vehicleStmt->bind_param("ss", $vehicleId, $vehicleId);
+    $vehicleStmt->bind_param("s", $vehicleId);
     $vehicleStmt->execute();
     $vehicleResult = $vehicleStmt->get_result();
     
     if ($vehicleResult->num_rows == 0) {
         // Vehicle doesn't exist, create it
         $vehicleName = ucfirst(str_replace('_', ' ', $vehicleId));
-        $insertVehicleQuery = "INSERT INTO vehicles (id, vehicle_id, name, base_price, price_per_km, is_active, created_at, updated_at) 
-                              VALUES (?, ?, ?, ?, ?, 1, NOW(), NOW())";
+        $insertVehicleQuery = "INSERT INTO vehicle_types (vehicle_id, name, capacity, luggage_capacity, ac, is_active, created_at, updated_at) 
+                              VALUES (?, ?, 4, 2, 1, 1, NOW(), NOW())";
         $insertVehicleStmt = $conn->prepare($insertVehicleQuery);
         if (!$insertVehicleStmt) {
             error_log("Failed to prepare statement for vehicle insert: " . $conn->error, 3, __DIR__ . '/../../logs/error.log');
             return false;
         }
         
-        $insertVehicleStmt->bind_param("sssdd", $vehicleId, $vehicleId, $vehicleName, $baseFare, $pricePerKm);
+        $insertVehicleStmt->bind_param("ss", $vehicleId, $vehicleName);
         $insertVehicleStmt->execute();
     }
     
     // Update vehicle_pricing table - using vehicle_id column instead of vehicle_type
     try {
+        // Check if base_fare or base_price column exists
+        $baseFareColumnName = columnExists($conn, "vehicle_pricing", "base_fare") ? "base_fare" : "base_price";
+        
         $updateQuery = "
             UPDATE vehicle_pricing 
             SET 
-                base_fare = ?,
+                $baseFareColumnName = ?,
                 price_per_km = ?,
                 night_halt_charge = ?,
                 driver_allowance = ?,
@@ -130,13 +134,16 @@ function updateOutstationFares($conn, $vehicleId, $fareData) {
             $vehicleId
         );
         
-        $success = $updateStmt->execute();
+        $updateStmt->execute();
         if ($updateStmt->affected_rows > 0) {
             return true;
         }
     } catch (Exception $e) {
         error_log("Failed to update vehicle_pricing: " . $e->getMessage(), 3, __DIR__ . '/../../logs/error.log');
     }
+    
+    // Check which column name is used in outstation_fares
+    $basePriceColumnName = columnExists($conn, "outstation_fares", "base_price") ? "base_price" : "base_fare";
     
     // Check if record exists in outstation_fares
     $stmt = $conn->prepare("SELECT id FROM outstation_fares WHERE vehicle_id = ?");
@@ -151,7 +158,7 @@ function updateOutstationFares($conn, $vehicleId, $fareData) {
     
     if ($result->num_rows > 0) {
         // Update existing record
-        $updateQuery = "UPDATE outstation_fares SET base_fare = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?, updated_at = NOW() WHERE vehicle_id = ?";
+        $updateQuery = "UPDATE outstation_fares SET $basePriceColumnName = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?, updated_at = NOW() WHERE vehicle_id = ?";
         $updateStmt = $conn->prepare($updateQuery);
         if (!$updateStmt) {
             error_log("Failed to prepare statement for outstation fare update: " . $conn->error, 3, __DIR__ . '/../../logs/error.log');
@@ -162,7 +169,7 @@ function updateOutstationFares($conn, $vehicleId, $fareData) {
         $success = $updateStmt->execute();
     } else {
         // Insert new record
-        $insertQuery = "INSERT INTO outstation_fares (vehicle_id, base_price, price_per_km, night_halt_charge, driver_allowance, created_at, updated_at) 
+        $insertQuery = "INSERT INTO outstation_fares (vehicle_id, $basePriceColumnName, price_per_km, night_halt_charge, driver_allowance, created_at, updated_at) 
                         VALUES (?, ?, ?, ?, ?, NOW(), NOW())";
         $insertStmt = $conn->prepare($insertQuery);
         if (!$insertStmt) {
@@ -259,7 +266,7 @@ function updateLocalFares($conn, $vehicleId, $fareData) {
         $updateStmt->bind_param("ddddds", $price4hrs40km, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour, $vehicleId);
         $success = $updateStmt->execute();
     } else {
-        // Insert new record - note: removed vehicle_type field
+        // Insert new record
         $insertQuery = "INSERT INTO local_package_fares (vehicle_id, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour, created_at, updated_at) 
                         VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())";
         $insertStmt = $conn->prepare($insertQuery);
@@ -336,10 +343,10 @@ if ($method === 'POST') {
     $tripType = isset($_GET['tripType']) ? $_GET['tripType'] : null;
     
     // Get all vehicles and pricing
-    $query = "SELECT v.id, v.vehicle_id, v.name, v.capacity, v.luggage_capacity 
-              FROM vehicles v 
-              WHERE v.is_active = 1 
-              ORDER BY v.id";
+    $query = "SELECT vt.id, vt.vehicle_id, vt.name, vt.capacity, vt.luggage_capacity 
+              FROM vehicle_types vt 
+              WHERE vt.is_active = 1 
+              ORDER BY vt.id";
     $vehicles = $conn->query($query);
     
     $response = [
@@ -375,7 +382,7 @@ if ($method === 'POST') {
             ];
         }
         
-        // Get outstation pricing
+        // Get outstation pricing - handle both column naming conventions
         $outstationQuery = "SELECT * FROM outstation_fares WHERE vehicle_id = ?";
         $outstationStmt = $conn->prepare($outstationQuery);
         $outstationStmt->bind_param("s", $vehicle['vehicle_id']);
@@ -384,8 +391,13 @@ if ($method === 'POST') {
         
         if ($outstationResult->num_rows > 0) {
             $outstationData = $outstationResult->fetch_assoc();
+            // Check which column name is used (base_price or base_fare)
+            $baseFare = isset($outstationData['base_price']) ? 
+                        floatval($outstationData['base_price']) : 
+                        floatval($outstationData['base_fare'] ?? 0);
+                        
             $vehicleData['pricing']['outstation'] = [
-                'baseFare' => floatval($outstationData['base_fare']),
+                'baseFare' => $baseFare,
                 'pricePerKm' => floatval($outstationData['price_per_km']),
                 'nightHaltCharge' => floatval($outstationData['night_halt_charge']),
                 'driverAllowance' => floatval($outstationData['driver_allowance'])

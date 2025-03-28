@@ -114,6 +114,13 @@ function cleanVehicleId($id) {
     return $id;
 }
 
+// Check if a column exists in a table
+function columnExists($conn, $table, $column) {
+    $query = "SHOW COLUMNS FROM `$table` LIKE '$column'";
+    $result = $conn->query($query);
+    return ($result && $result->num_rows > 0);
+}
+
 // Handle requests
 try {
     // Connect to database
@@ -142,18 +149,28 @@ try {
         error_log("DELETE request for vehicle ID: " . $vehicleId);
         
         // First delete pricing records for this vehicle
-        $deleteStmt = $conn->prepare("DELETE FROM vehicle_pricing WHERE vehicle_type = ?");
+        $deleteStmt = $conn->prepare("DELETE FROM vehicle_pricing WHERE vehicle_id = ? OR vehicle_type = ?");
         if (!$deleteStmt) {
             throw new Exception("Database prepare error on pricing delete: " . $conn->error);
         }
         
-        $deleteStmt->bind_param("s", $vehicleId);
+        $deleteStmt->bind_param("ss", $vehicleId, $vehicleId);
         $deleteSuccess = $deleteStmt->execute();
         
         if (!$deleteSuccess) {
             error_log("Failed to delete vehicle pricing: " . $deleteStmt->error);
         } else {
             error_log("Deleted pricing for vehicle ID: " . $vehicleId);
+        }
+        
+        // Delete from outstation_fares, local_package_fares, and airport_transfer_fares
+        $tables = ["outstation_fares", "local_package_fares", "airport_transfer_fares"];
+        foreach ($tables as $table) {
+            $stmt = $conn->prepare("DELETE FROM $table WHERE vehicle_id = ?");
+            if ($stmt) {
+                $stmt->bind_param("s", $vehicleId);
+                $stmt->execute();
+            }
         }
         
         // Now delete the vehicle type
@@ -274,13 +291,19 @@ try {
             error_log("Updated vehicle type: " . $vehicleId);
         }
         
+        // Check which column name is used in vehicle_pricing and outstation_fares
+        $baseColumn = "base_price";
+        if (!columnExists($conn, "vehicle_pricing", "base_price") && columnExists($conn, "vehicle_pricing", "base_fare")) {
+            $baseColumn = "base_fare";
+        }
+        
         // Now check if pricing record exists
-        $checkPricingStmt = $conn->prepare("SELECT COUNT(*) as count FROM vehicle_pricing WHERE vehicle_type = ?");
+        $checkPricingStmt = $conn->prepare("SELECT COUNT(*) as count FROM vehicle_pricing WHERE vehicle_id = ? OR vehicle_type = ?");
         if (!$checkPricingStmt) {
             throw new Exception("Database prepare error on pricing check: " . $conn->error);
         }
         
-        $checkPricingStmt->bind_param("s", $vehicleId);
+        $checkPricingStmt->bind_param("ss", $vehicleId, $vehicleId);
         if (!$checkPricingStmt->execute()) {
             throw new Exception("Failed to check vehicle pricing: " . $checkPricingStmt->error);
         }
@@ -289,59 +312,79 @@ try {
         $pricingRow = $pricingResult->fetch_assoc();
         
         if ($pricingRow['count'] > 0) {
-            // Update existing record
+            // Update existing record in vehicle_pricing
             $updateStmt = $conn->prepare("
                 UPDATE vehicle_pricing 
-                SET base_price = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?, updated_at = NOW()
-                WHERE vehicle_type = ?
+                SET $baseColumn = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?, updated_at = NOW()
+                WHERE vehicle_id = ? OR vehicle_type = ?
             ");
             
             if (!$updateStmt) {
                 throw new Exception("Database prepare error on update: " . $conn->error);
             }
             
-            $updateStmt->bind_param("dddds", $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, $vehicleId);
+            $updateStmt->bind_param("ddddss", $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, $vehicleId, $vehicleId);
             
             if (!$updateStmt->execute()) {
                 throw new Exception("Failed to update vehicle pricing: " . $updateStmt->error);
             }
             
             error_log("Vehicle pricing updated for: " . $vehicleId);
-            echo json_encode([
-                'status' => 'success', 
-                'message' => 'Vehicle pricing updated successfully', 
-                'vehicleId' => $vehicleId, 
-                'basePrice' => $basePrice,
-                'pricePerKm' => $pricePerKm,
-                'timestamp' => time()
-            ]);
         } else {
-            // Insert new record
+            // Insert new record in vehicle_pricing
             $insertStmt = $conn->prepare("
-                INSERT INTO vehicle_pricing (vehicle_type, base_price, price_per_km, night_halt_charge, driver_allowance, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, NOW(), NOW())
+                INSERT INTO vehicle_pricing (vehicle_id, vehicle_type, $baseColumn, price_per_km, night_halt_charge, driver_allowance, trip_type, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, 'all', NOW(), NOW())
             ");
             
             if (!$insertStmt) {
                 throw new Exception("Database prepare error on insert: " . $conn->error);
             }
             
-            $insertStmt->bind_param("sdddd", $vehicleId, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
+            $insertStmt->bind_param("ssdddd", $vehicleId, $vehicleId, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
             
             if (!$insertStmt->execute()) {
                 throw new Exception("Failed to insert vehicle pricing: " . $insertStmt->error);
             }
             
             error_log("Vehicle pricing created for: " . $vehicleId);
-            echo json_encode([
-                'status' => 'success', 
-                'message' => 'Vehicle pricing created successfully', 
-                'vehicleId' => $vehicleId, 
-                'basePrice' => $basePrice,
-                'pricePerKm' => $pricePerKm,
-                'timestamp' => time()
-            ]);
         }
+        
+        // Check outstation_fares table for correct column name
+        $outstationColumn = "base_price";
+        if (!columnExists($conn, "outstation_fares", "base_price") && columnExists($conn, "outstation_fares", "base_fare")) {
+            $outstationColumn = "base_fare";
+        }
+        
+        // Check if outstation_fares record exists
+        $checkOutstationStmt = $conn->prepare("SELECT id FROM outstation_fares WHERE vehicle_id = ?");
+        if ($checkOutstationStmt) {
+            $checkOutstationStmt->bind_param("s", $vehicleId);
+            $checkOutstationStmt->execute();
+            $outResult = $checkOutstationStmt->get_result();
+            
+            if ($outResult->num_rows === 0) {
+                // Create default outstation fares
+                $outInsertStmt = $conn->prepare("
+                    INSERT INTO outstation_fares (vehicle_id, $outstationColumn, price_per_km, night_halt_charge, driver_allowance, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, NOW(), NOW())
+                ");
+                
+                if ($outInsertStmt) {
+                    $outInsertStmt->bind_param("sdddd", $vehicleId, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
+                    $outInsertStmt->execute();
+                }
+            }
+        }
+        
+        echo json_encode([
+            'status' => 'success', 
+            'message' => 'Vehicle and pricing updated successfully', 
+            'vehicleId' => $vehicleId, 
+            'basePrice' => $basePrice,
+            'pricePerKm' => $pricePerKm,
+            'timestamp' => time()
+        ]);
         exit;
     }
 
@@ -373,13 +416,14 @@ try {
                 vt.description, 
                 vt.is_active,
                 vp.base_price, 
+                vp.base_fare,
                 vp.price_per_km, 
                 vp.night_halt_charge, 
                 vp.driver_allowance
             FROM 
                 vehicle_types vt
             LEFT JOIN 
-                vehicle_pricing vp ON vt.vehicle_id = vp.vehicle_type
+                vehicle_pricing vp ON vt.vehicle_id = vp.vehicle_id OR vt.vehicle_id = vp.vehicle_type
         ";
         
         // Only add the WHERE clause if we're not including inactive vehicles
@@ -416,14 +460,22 @@ try {
                 $name = "Vehicle ID: " . $row['vehicle_id'];
             }
             
+            // Handle base_price/base_fare column naming
+            $basePrice = 0;
+            if (isset($row['base_price']) && $row['base_price'] > 0) {
+                $basePrice = floatval($row['base_price']);
+            } else if (isset($row['base_fare']) && $row['base_fare'] > 0) {
+                $basePrice = floatval($row['base_fare']);
+            }
+            
             // Format vehicle data with consistent property names for frontend
             $vehicle = [
                 'id' => (string)$row['vehicle_id'],
                 'name' => $name,
                 'capacity' => intval($row['capacity'] ?? 0),
                 'luggageCapacity' => intval($row['luggage_capacity'] ?? 0),
-                'price' => floatval($row['base_price'] ?? 0),
-                'basePrice' => floatval($row['base_price'] ?? 0),
+                'price' => $basePrice,
+                'basePrice' => $basePrice,
                 'pricePerKm' => floatval($row['price_per_km'] ?? 0),
                 'nightHaltCharge' => floatval($row['night_halt_charge'] ?? 0),
                 'driverAllowance' => floatval($row['driver_allowance'] ?? 0),

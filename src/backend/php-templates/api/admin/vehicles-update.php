@@ -232,10 +232,19 @@ try {
             $roundTripPricePerKm = 18;
         }
         
-        $insertQuery = "INSERT INTO outstation_fares (
-                       vehicle_id, base_price, price_per_km, night_halt_charge, driver_allowance, 
-                       roundtrip_base_price, roundtrip_price_per_km
-                       ) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        // Check if outstation_fares table has base_price or base_fare column
+        $columnsResult = $conn->query("SHOW COLUMNS FROM outstation_fares LIKE 'base_price'");
+        if ($columnsResult->num_rows > 0) {
+            $insertQuery = "INSERT INTO outstation_fares (
+                           vehicle_id, base_price, price_per_km, night_halt_charge, driver_allowance, 
+                           roundtrip_base_price, roundtrip_price_per_km
+                           ) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        } else {
+            $insertQuery = "INSERT INTO outstation_fares (
+                           vehicle_id, base_fare, price_per_km, night_halt_charge, driver_allowance, 
+                           roundtrip_base_price, roundtrip_price_per_km
+                           ) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        }
         
         $stmt = $conn->prepare($insertQuery);
         $stmt->bind_param("sdddddd", $vehicleId, $basePrice, $pricePerKm, $nightHaltCharge, 
