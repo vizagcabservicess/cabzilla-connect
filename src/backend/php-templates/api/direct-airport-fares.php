@@ -16,10 +16,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Check if database config is included
-if (!function_exists('getDbConnection')) {
-    require_once __DIR__ . '/../../config.php';
-}
+// Include utility files
+require_once __DIR__ . '/utils/database.php';
+require_once __DIR__ . '/utils/response.php';
 
 // Get raw input
 $raw_input = file_get_contents('php://input');
@@ -187,72 +186,125 @@ try {
         $stmt->execute();
         $stmt->close();
         
-        // 2. Update vehicle_pricing table for AIRPORT trips (for backward compatibility)
-        $tripType = 'airport';
-        $stmt = $conn->prepare("
-            INSERT INTO vehicle_pricing 
-            (vehicle_id, trip_type, base_fare, price_per_km, 
-             airport_base_price, airport_price_per_km, airport_pickup_price, airport_drop_price,
-             airport_tier1_price, airport_tier2_price, airport_tier3_price, airport_tier4_price, 
-             airport_extra_km_charge, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-            ON DUPLICATE KEY UPDATE 
-            base_fare = VALUES(base_fare),
-            price_per_km = VALUES(price_per_km),
-            airport_base_price = VALUES(airport_base_price),
-            airport_price_per_km = VALUES(airport_price_per_km),
-            airport_pickup_price = VALUES(airport_pickup_price),
-            airport_drop_price = VALUES(airport_drop_price),
-            airport_tier1_price = VALUES(airport_tier1_price),
-            airport_tier2_price = VALUES(airport_tier2_price),
-            airport_tier3_price = VALUES(airport_tier3_price),
-            airport_tier4_price = VALUES(airport_tier4_price),
-            airport_extra_km_charge = VALUES(airport_extra_km_charge),
-            updated_at = NOW()
-        ");
+        // Check if vehicle_pricing table exists
+        $vehiclePricingExists = tableExists($conn, 'vehicle_pricing');
         
-        $stmt->bind_param("ssddddddddddd", 
-            $vehicleId,
-            $tripType,
-            $basePrice,
-            $pricePerKm,
-            $basePrice,
-            $pricePerKm,
-            $pickupPrice,
-            $dropPrice,
-            $tier1Price,
-            $tier2Price,
-            $tier3Price,
-            $tier4Price,
-            $extraKmCharge
-        );
-        
-        $stmt->execute();
-        $stmt->close();
+        if ($vehiclePricingExists) {
+            // Check which columns exist in vehicle_pricing
+            $hasVehicleId = columnExists($conn, 'vehicle_pricing', 'vehicle_id');
+            $hasVehicleType = columnExists($conn, 'vehicle_pricing', 'vehicle_type');
+            
+            // Generate the appropriate query based on the columns present
+            if ($hasVehicleId || $hasVehicleType) {
+                $tripType = 'airport';
+                
+                // Build the insert part of the query
+                $insertFields = [];
+                $placeholders = [];
+                $params = [];
+                $types = "";
+                
+                // Add vehicle_id or vehicle_type
+                if ($hasVehicleId) {
+                    $insertFields[] = "vehicle_id";
+                    $placeholders[] = "?";
+                    $params[] = $vehicleId;
+                    $types .= "s";
+                }
+                
+                if ($hasVehicleType) {
+                    $insertFields[] = "vehicle_type";
+                    $placeholders[] = "?";
+                    $params[] = $vehicleId;
+                    $types .= "s";
+                }
+                
+                // Add trip_type field
+                $insertFields[] = "trip_type";
+                $placeholders[] = "?";
+                $params[] = $tripType;
+                $types .= "s";
+                
+                // Add common fields
+                $commonFields = [
+                    "base_fare" => $basePrice,
+                    "price_per_km" => $pricePerKm,
+                    "airport_base_price" => $basePrice,
+                    "airport_price_per_km" => $pricePerKm,
+                    "airport_pickup_price" => $pickupPrice,
+                    "airport_drop_price" => $dropPrice,
+                    "airport_tier1_price" => $tier1Price,
+                    "airport_tier2_price" => $tier2Price,
+                    "airport_tier3_price" => $tier3Price,
+                    "airport_tier4_price" => $tier4Price,
+                    "airport_extra_km_charge" => $extraKmCharge
+                ];
+                
+                foreach ($commonFields as $field => $value) {
+                    // Only include fields that exist in the table
+                    if (columnExists($conn, 'vehicle_pricing', $field)) {
+                        $insertFields[] = $field;
+                        $placeholders[] = "?";
+                        $params[] = $value;
+                        $types .= "d";
+                    }
+                }
+                
+                // Add the updated_at field
+                $insertFields[] = "updated_at";
+                $placeholders[] = "NOW()";
+                
+                // Build the update part of the query
+                $updateParts = [];
+                foreach ($commonFields as $field => $value) {
+                    // Only include fields that exist in the table
+                    if (columnExists($conn, 'vehicle_pricing', $field)) {
+                        $updateParts[] = "$field = VALUES($field)";
+                    }
+                }
+                $updateParts[] = "updated_at = NOW()";
+                
+                // Construct the final query
+                $sql = "INSERT INTO vehicle_pricing 
+                        (" . implode(", ", $insertFields) . ")
+                        VALUES (" . implode(", ", $placeholders) . ")
+                        ON DUPLICATE KEY UPDATE " . implode(", ", $updateParts);
+                
+                $stmt = $conn->prepare($sql);
+                
+                if ($stmt) {
+                    $stmt->bind_param($types, ...$params);
+                    $stmt->execute();
+                    $stmt->close();
+                    error_log("Updated vehicle_pricing for airport fares: $vehicleId");
+                } else {
+                    error_log("Error preparing vehicle_pricing statement: " . $conn->error);
+                }
+            }
+        }
         
         // Commit transaction
         $conn->commit();
         
         error_log("Airport fare update successful for vehicle $vehicleId", 3, __DIR__ . '/../../error.log');
+        
+        sendSuccessResponse(
+            [
+                "vehicleId" => $vehicleId,
+                "tripType" => "airport"
+            ],
+            "Airport fare updated successfully"
+        );
+        
     } catch (Exception $e) {
         // Rollback on error
         $conn->rollback();
         throw $e;
     }
     
-    echo json_encode([
-        "status" => "success",
-        "message" => "Airport fare updated successfully",
-        "vehicleId" => $vehicleId,
-        "tripType" => "airport"
-    ]);
-    
 } catch (Exception $e) {
     error_log("Error in airport fare update: " . $e->getMessage(), 3, __DIR__ . '/../../error.log');
-    http_response_code(500);
-    echo json_encode([
-        "status" => "error",
-        "message" => $e->getMessage(),
+    sendErrorResponse($e->getMessage(), 500, [
         "file" => $e->getFile(),
         "line" => $e->getLine()
     ]);
