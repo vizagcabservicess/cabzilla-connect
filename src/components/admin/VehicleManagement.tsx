@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,10 +31,8 @@ export const VehicleManagement = () => {
   const [selectedVehicle, setSelectedVehicle] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   
-  // Add new vehicle dialog state
   const [addVehicleOpen, setAddVehicleOpen] = useState(false);
   
-  // Basic info state
   const [name, setName] = useState("");
   const [capacity, setCapacity] = useState("");
   const [luggageCapacity, setLuggageCapacity] = useState("");
@@ -43,20 +40,17 @@ export const VehicleManagement = () => {
   const [description, setDescription] = useState("");
   const [image, setImage] = useState("");
   
-  // New vehicle state
   const [newVehicleId, setNewVehicleId] = useState("");
   const [newVehicleName, setNewVehicleName] = useState("");
   const [newVehicleCapacity, setNewVehicleCapacity] = useState("4");
   const [newVehicleLuggageCapacity, setNewVehicleLuggageCapacity] = useState("2");
   const [newVehicleImage, setNewVehicleImage] = useState("/cars/sedan.png");
   
-  // Pricing state
   const [basePrice, setBasePrice] = useState("");
   const [pricePerKm, setPricePerKm] = useState("");
   const [nightHaltCharge, setNightHaltCharge] = useState("");
   const [driverAllowance, setDriverAllowance] = useState("");
   
-  // Other state
   const [activeTab, setActiveTab] = useState("basic");
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   
@@ -80,18 +74,14 @@ export const VehicleManagement = () => {
   const handleVehicleChange = (vehicleId: string) => {
     setSelectedVehicle(vehicleId);
     
-    // Find the selected vehicle in the list
     const vehicle = vehicles.find(v => v.id === vehicleId);
     
     if (vehicle) {
-      // Clear previous values
       resetForm();
       
-      // Set basic info
       setName(vehicle.name || "");
-      setIsActive(true); // Default to active
+      setIsActive(true);
       
-      // Load full vehicle details 
       fetchVehicleDetails(vehicleId);
     }
   };
@@ -100,14 +90,10 @@ export const VehicleManagement = () => {
     try {
       setIsLoading(true);
       
-      // For now, we're just using placeholder data until we implement the API
-      // This would typically fetch from an API endpoint
       console.log(`Fetching details for vehicle: ${vehicleId}`);
       
-      // Simulate API delay
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // This is a placeholder. In a real implementation, you would fetch from an API
       const vehicleData = {
         capacity: 4,
         luggageCapacity: 2,
@@ -120,7 +106,6 @@ export const VehicleManagement = () => {
         driverAllowance: 250
       };
       
-      // Set form values
       setCapacity(String(vehicleData.capacity || ""));
       setLuggageCapacity(String(vehicleData.luggageCapacity || ""));
       setIsActive(Boolean(vehicleData.isActive));
@@ -130,7 +115,6 @@ export const VehicleManagement = () => {
       setPricePerKm(String(vehicleData.pricePerKm || ""));
       setNightHaltCharge(String(vehicleData.nightHaltCharge || ""));
       setDriverAllowance(String(vehicleData.driverAllowance || ""));
-      
     } catch (error) {
       console.error("Error fetching vehicle details:", error);
       toast.error("Failed to load vehicle details");
@@ -188,10 +172,8 @@ export const VehicleManagement = () => {
       
       await updateVehicle(vehicleData);
       
-      // Clear all fare caches
       clearFareCache();
       
-      // Notify about the trip fare update
       window.dispatchEvent(new CustomEvent('trip-fares-updated', {
         detail: { 
           timestamp: Date.now(),
@@ -203,10 +185,8 @@ export const VehicleManagement = () => {
       
       toast.success("Vehicle updated successfully");
       
-      // Set global flag to force trip fares refresh
       localStorage.setItem('forceTripFaresRefresh', 'true');
       
-      // Refresh the vehicles list
       setRefreshTrigger(prev => prev + 1);
     } catch (error) {
       console.error("Error updating vehicle:", error);
@@ -225,48 +205,44 @@ export const VehicleManagement = () => {
     setIsLoading(true);
     
     try {
-      // Prepare vehicle ID if not provided
       const vehicleId = newVehicleId || newVehicleName.toLowerCase().replace(/\s+/g, '_');
       
       const vehicleData = {
-        isNew: true, // Signal this is a new vehicle
+        isNew: true,
         vehicleId: vehicleId,
+        id: vehicleId,
         name: newVehicleName,
         capacity: parseInt(newVehicleCapacity) || 4,
         luggageCapacity: parseInt(newVehicleLuggageCapacity) || 2,
         isActive: true,
         description: `${newVehicleName} vehicle`,
         image: newVehicleImage || "/cars/sedan.png",
-        amenities: JSON.stringify(["AC", "Bottle Water", "Music System"])
+        amenities: ["AC", "Bottle Water", "Music System"],
+        price: 0,
+        pricePerKm: 0,
+        basePrice: 0
       };
       
       console.log("Creating new vehicle with data:", vehicleData);
       
-      const result = await updateVehicle(vehicleData);
+      const { createVehicle } = await import('@/services/directVehicleService');
+      const success = await createVehicle(vehicleData);
       
-      console.log("Create vehicle response:", result);
-      
-      // Clear all fare caches
-      clearFareCache();
-      
-      toast.success("Vehicle created successfully");
-      
-      // Set global flag to force trip fares refresh
-      localStorage.setItem('forceTripFaresRefresh', 'true');
-      
-      // Refresh the vehicles list
-      setRefreshTrigger(prev => prev + 1);
-      
-      // Close the dialog
-      setAddVehicleOpen(false);
-      
-      // Reset the form
-      resetNewVehicleForm();
-      
-      // Select the new vehicle if it was created successfully
-      if (result?.details?.vehicle_id) {
-        setSelectedVehicle(result.details.vehicle_id);
-        handleVehicleChange(result.details.vehicle_id);
+      if (success) {
+        clearFareCache();
+        
+        toast.success("Vehicle created successfully");
+        
+        localStorage.setItem('forceTripFaresRefresh', 'true');
+        
+        setRefreshTrigger(prev => prev + 1);
+        
+        setAddVehicleOpen(false);
+        
+        resetNewVehicleForm();
+        
+        setSelectedVehicle(vehicleId);
+        handleVehicleChange(vehicleId);
       }
     } catch (error) {
       console.error("Error creating vehicle:", error);
@@ -296,7 +272,6 @@ export const VehicleManagement = () => {
         resetForm();
         setSelectedVehicle("");
         
-        // Refresh the vehicles list
         setRefreshTrigger(prev => prev + 1);
       } else {
         throw new Error("Delete operation returned false");
@@ -309,19 +284,12 @@ export const VehicleManagement = () => {
     }
   };
   
-  // Handler for tab changes
   const handleTabChange = (value: string) => {
     setActiveTab(value);
     
-    // If switching to Trip Fares tab, force refresh trip fares
     if (value === "fares") {
-      // Set a flag to force trip fares refresh
       localStorage.setItem('forceTripFaresRefresh', 'true');
-      
-      // Clear fare caches
       clearFareCache();
-      
-      // Notify about the tab change
       window.dispatchEvent(new CustomEvent('trip-fares-tab-activated', {
         detail: { 
           timestamp: Date.now(),
@@ -444,7 +412,6 @@ export const VehicleManagement = () => {
             <TabsTrigger value="fares" className="flex-1">Trip Fares</TabsTrigger>
           </TabsList>
           
-          {/* Basic Info Tab */}
           <TabsContent value="basic">
             <Card className="bg-white shadow-md">
               <CardHeader>
@@ -515,7 +482,6 @@ export const VehicleManagement = () => {
             </Card>
           </TabsContent>
           
-          {/* Pricing Tab */}
           <TabsContent value="pricing">
             <Card className="bg-white shadow-md">
               <CardHeader>
@@ -569,7 +535,6 @@ export const VehicleManagement = () => {
             </Card>
           </TabsContent>
           
-          {/* Trip Fares Tab */}
           <TabsContent value="fares">
             {selectedVehicle ? (
               <VehicleTripFaresForm vehicleId={selectedVehicle} />
