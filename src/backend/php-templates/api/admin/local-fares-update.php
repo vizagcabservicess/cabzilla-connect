@@ -195,12 +195,9 @@ if ($extraHourRate === 0 && $package8hr > 0) {
 }
 
 // Log the received values
-error_log("[$timestamp] Vehicle ID: $vehicleId", 3, $logDir . '/local-fares.log');
-error_log("[$timestamp] 4hr Package: $package4hr", 3, $logDir . '/local-fares.log');
-error_log("[$timestamp] 8hr Package: $package8hr", 3, $logDir . '/local-fares.log');
-error_log("[$timestamp] 10hr Package: $package10hr", 3, $logDir . '/local-fares.log');
-error_log("[$timestamp] Extra KM Rate: $extraKmRate", 3, $logDir . '/local-fares.log');
-error_log("[$timestamp] Extra Hour Rate: $extraHourRate", 3, $logDir . '/local-fares.log');
+error_log("[$timestamp] Trip type detected: local", 3, $logDir . '/local-fares.log');
+error_log("[$timestamp] Local fare update for $vehicleId: 4hr=$package4hr, 8hr=$package8hr, 10hr=$package10hr", 3, $logDir . '/local-fares.log');
+error_log("[$timestamp] Extra rates: KM=$extraKmRate, Hour=$extraHourRate", 3, $logDir . '/local-fares.log');
 
 // Prepare response with all packages data
 $responseData = [
@@ -240,7 +237,55 @@ if (!empty($vehicleId) && ($package4hr > 0 || $package8hr > 0 || $package10hr > 
             throw $e;
         }
         
-        // First check if local_package_fares table exists
+        // First check if vehicle_types table exists and create if needed
+        try {
+            $checkTable = $pdo->query("SHOW TABLES LIKE 'vehicle_types'");
+            $vehicleTypesExists = ($checkTable->rowCount() > 0);
+            
+            if (!$vehicleTypesExists) {
+                // Create the vehicle_types table if it doesn't exist
+                $createVehicleTypesSql = "
+                    CREATE TABLE IF NOT EXISTS vehicle_types (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        vehicle_id VARCHAR(50) NOT NULL UNIQUE,
+                        name VARCHAR(100) NOT NULL,
+                        capacity INT NOT NULL DEFAULT 4,
+                        luggage_capacity INT NOT NULL DEFAULT 2,
+                        ac TINYINT(1) NOT NULL DEFAULT 1,
+                        image VARCHAR(255) DEFAULT '/cars/sedan.png',
+                        amenities TEXT DEFAULT NULL,
+                        description TEXT DEFAULT NULL,
+                        is_active TINYINT(1) NOT NULL DEFAULT 1,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+                ";
+                $pdo->exec($createVehicleTypesSql);
+                error_log("[$timestamp] Created vehicle_types table", 3, $logDir . '/local-fares.log');
+            }
+            
+            // Check if vehicle exists and create if it doesn't
+            $checkVehicleSql = "SELECT id FROM vehicle_types WHERE vehicle_id = ?";
+            $checkVehicleStmt = $pdo->prepare($checkVehicleSql);
+            $checkVehicleStmt->execute([$vehicleId]);
+            $vehicleExists = ($checkVehicleStmt->rowCount() > 0);
+            
+            if (!$vehicleExists) {
+                // Create a new vehicle entry
+                $vehicleName = ucwords(str_replace('_', ' ', $vehicleId));
+                $insertVehicleSql = "INSERT INTO vehicle_types (vehicle_id, name, capacity, luggage_capacity, ac, is_active, created_at, updated_at) 
+                                     VALUES (?, ?, 4, 2, 1, 1, NOW(), NOW())";
+                $insertVehicleStmt = $pdo->prepare($insertVehicleSql);
+                $insertVehicleStmt->execute([$vehicleId, $vehicleName]);
+                error_log("[$timestamp] Created new vehicle: $vehicleId", 3, $logDir . '/local-fares.log');
+            }
+            
+        } catch (PDOException $e) {
+            error_log("[$timestamp] Error checking vehicle_types table: " . $e->getMessage(), 3, $logDir . '/local-fares.log');
+            // Continue anyway, as we primarily want to update fares
+        }
+        
+        // Check if local_package_fares table exists
         $tableExists = false;
         try {
             $checkTable = $pdo->query("SHOW TABLES LIKE 'local_package_fares'");
@@ -323,12 +368,145 @@ if (!empty($vehicleId) && ($package4hr > 0 || $package8hr > 0 || $package10hr > 
                 error_log("[$timestamp] Inserted new record in local_package_fares for $vehicleId", 3, $logDir . '/local-fares.log');
             }
             
+            error_log("[$timestamp] Local fare update successful for vehicle $vehicleId", 3, $logDir . '/local-fares.log');
             $responseData['database'] = 'Updated successfully';
         } catch (PDOException $e) {
             error_log("[$timestamp] Error updating local_package_fares: " . $e->getMessage(), 3, $logDir . '/local-fares.log');
             $databaseError = "Error updating local_package_fares: " . $e->getMessage();
             throw $e;
         }
+        
+        // Check if vehicle_pricing table exists and update if it does
+        try {
+            $checkVehiclePricingTable = $pdo->query("SHOW TABLES LIKE 'vehicle_pricing'");
+            $vehiclePricingExists = ($checkVehiclePricingTable->rowCount() > 0);
+            
+            if ($vehiclePricingExists) {
+                // Get column names for vehicle_pricing
+                $columnsQuery = $pdo->query("SHOW COLUMNS FROM vehicle_pricing");
+                $columns = [];
+                while ($column = $columnsQuery->fetch(PDO::FETCH_ASSOC)) {
+                    $columns[] = $column['Field'];
+                }
+                
+                $hasVehicleId = in_array('vehicle_id', $columns);
+                $hasVehicleType = in_array('vehicle_type', $columns);
+                $tripType = 'local';
+                
+                if ($hasVehicleId || $hasVehicleType) {
+                    // Build conditions for where clause
+                    $whereConditions = [];
+                    $whereParams = [];
+                    
+                    if ($hasVehicleId) {
+                        $whereConditions[] = "vehicle_id = ?";
+                        $whereParams[] = $vehicleId;
+                    }
+                    
+                    if ($hasVehicleType) {
+                        $whereConditions[] = "vehicle_type = ?";
+                        $whereParams[] = $vehicleId;
+                    }
+                    
+                    // Add trip type condition
+                    $whereConditions[] = "trip_type = ?";
+                    $whereParams[] = $tripType;
+                    
+                    // Build the SET part with only columns that exist
+                    $setParts = [];
+                    $setParams = [];
+                    
+                    $possibleColumns = [
+                        'local_package_4hr' => $package4hr,
+                        'local_package_8hr' => $package8hr,
+                        'local_package_10hr' => $package10hr,
+                        'extra_km_charge' => $extraKmRate,
+                        'extra_hour_charge' => $extraHourRate
+                    ];
+                    
+                    foreach ($possibleColumns as $column => $value) {
+                        if (in_array($column, $columns)) {
+                            $setParts[] = "$column = ?";
+                            $setParams[] = $value;
+                        }
+                    }
+                    
+                    // Add updated_at if it exists
+                    if (in_array('updated_at', $columns)) {
+                        $setParts[] = "updated_at = NOW()";
+                    }
+                    
+                    // Only proceed if we have conditions and columns to update
+                    if (!empty($whereConditions) && !empty($setParts)) {
+                        // Try to update first
+                        $updateSql = "UPDATE vehicle_pricing SET " . implode(", ", $setParts) . 
+                                    " WHERE (" . implode(" OR ", array_slice($whereConditions, 0, -1)) . ") AND " . end($whereConditions);
+                        
+                        $updateVehiclePricingStmt = $pdo->prepare($updateSql);
+                        $updateParams = array_merge($setParams, $whereParams);
+                        $updateVehiclePricingStmt->execute($updateParams);
+                        $rowsAffected = $updateVehiclePricingStmt->rowCount();
+                        
+                        error_log("[$timestamp] Updated vehicle_pricing for local fares: $vehicleId, Affected rows: $rowsAffected", 3, $logDir . '/local-fares.log');
+                        
+                        // If no rows were updated, try to insert
+                        if ($rowsAffected === 0) {
+                            $insertFields = [];
+                            $insertPlaceholders = [];
+                            $insertParams = [];
+                            
+                            if ($hasVehicleId) {
+                                $insertFields[] = "vehicle_id";
+                                $insertPlaceholders[] = "?";
+                                $insertParams[] = $vehicleId;
+                            }
+                            
+                            if ($hasVehicleType) {
+                                $insertFields[] = "vehicle_type";
+                                $insertPlaceholders[] = "?";
+                                $insertParams[] = $vehicleId;
+                            }
+                            
+                            // Add trip_type
+                            $insertFields[] = "trip_type";
+                            $insertPlaceholders[] = "?";
+                            $insertParams[] = $tripType;
+                            
+                            // Add columns that exist
+                            foreach ($possibleColumns as $column => $value) {
+                                if (in_array($column, $columns)) {
+                                    $insertFields[] = $column;
+                                    $insertPlaceholders[] = "?";
+                                    $insertParams[] = $value;
+                                }
+                            }
+                            
+                            // Add created_at and updated_at if they exist
+                            if (in_array('created_at', $columns)) {
+                                $insertFields[] = "created_at";
+                                $insertPlaceholders[] = "NOW()";
+                            }
+                            
+                            if (in_array('updated_at', $columns)) {
+                                $insertFields[] = "updated_at";
+                                $insertPlaceholders[] = "NOW()";
+                            }
+                            
+                            $insertSql = "INSERT INTO vehicle_pricing (" . implode(", ", $insertFields) . 
+                                        ") VALUES (" . implode(", ", $insertPlaceholders) . ")";
+                            
+                            $insertVehiclePricingStmt = $pdo->prepare($insertSql);
+                            $insertVehiclePricingStmt->execute($insertParams);
+                            error_log("[$timestamp] Inserted into vehicle_pricing for local fares: $vehicleId", 3, $logDir . '/local-fares.log');
+                        }
+                    }
+                }
+            }
+        } catch (PDOException $e) {
+            error_log("[$timestamp] Error updating vehicle_pricing: " . $e->getMessage(), 3, $logDir . '/local-fares.log');
+            // Don't throw, as this is secondary
+        }
+        
     } catch (Exception $e) {
         error_log("[$timestamp] Exception: " . $e->getMessage(), 3, $logDir . '/local-fares.log');
         $responseData['status'] = 'error';
