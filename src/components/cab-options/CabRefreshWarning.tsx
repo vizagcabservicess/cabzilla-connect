@@ -1,8 +1,15 @@
+
 import React, { useState } from 'react';
 import { AlertCircle, RefreshCw, Globe, Server, Network, ExternalLink, FileCog, Hammer, RefreshCcw, ServerCrash, DatabaseBackup } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { syncVehicleTables, clearFareCache, getBypassHeaders } from '@/services/fareService';
+import { 
+  syncVehicleTables, 
+  clearFareCache, 
+  getBypassHeaders,
+  getForcedRequestConfig,
+  fareService
+} from '@/lib/index';
 import { toast } from 'sonner';
 import {
   Popover,
