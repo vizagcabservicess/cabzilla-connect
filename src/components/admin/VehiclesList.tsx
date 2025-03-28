@@ -8,16 +8,11 @@ import { getVehicleData } from "@/services/vehicleDataService";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
+import { CabType } from "@/types/cab";
 
-interface Vehicle {
-  id: string;
-  name: string;
-  capacity: number;
-  luggageCapacity: number;
-  price: number;
-  pricePerKm: number;
-  image: string;
-  isActive: boolean;
+// Interface that matches CabType but with required fields for our view
+interface Vehicle extends Omit<CabType, 'price'> {
+  price: number; // Make price required
 }
 
 export const VehiclesList = () => {
@@ -36,7 +31,14 @@ export const VehiclesList = () => {
     try {
       // Fetch all vehicles including inactive ones
       const data = await getVehicleData(true);
-      setVehicles(data);
+      
+      // Convert CabType[] to Vehicle[] by ensuring price is always present
+      const vehiclesWithRequiredFields: Vehicle[] = data.map(cab => ({
+        ...cab,
+        price: cab.price || cab.basePrice || 0,
+      }));
+      
+      setVehicles(vehiclesWithRequiredFields);
       console.log('Fetched vehicles:', data);
     } catch (err) {
       console.error('Error fetching vehicles:', err);

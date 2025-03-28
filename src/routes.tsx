@@ -14,7 +14,7 @@ import ToursPage from "./pages/ToursPage";
 import AdminDatabasePage from "./pages/AdminDatabasePage";
 import VehiclesListPage from "./pages/admin/VehiclesListPage";
 
-const router = createBrowserRouter([
+export const router = createBrowserRouter([
   {
     path: "/",
     element: <Index />,

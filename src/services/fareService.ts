@@ -1,9 +1,11 @@
-
 import { getBypassHeaders, getForcedRequestConfig } from '@/config/requestConfig';
 import { clearFareCache as clearFareCalcCache } from '@/lib/fareCalculationService';
 
 // Re-export the clearFareCache function
 export const clearFareCache = clearFareCalcCache;
+
+// Re-export the utility functions
+export { getBypassHeaders, getForcedRequestConfig };
 
 // Function to update fares directly
 export const directFareUpdate = async (tripType: string, vehicleType: string, fareDetails: any) => {
@@ -48,10 +50,15 @@ export const directFareUpdate = async (tripType: string, vehicleType: string, fa
   }
 };
 
-// Function to initialize the database
-export const initializeDatabase = async () => {
+// Function to initialize the database with optional forceRecreate parameter
+export const initializeDatabase = async (forceRecreate?: boolean) => {
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
-  const endpoint = `${apiBaseUrl}/api/admin/initialize-database.php`;
+  let endpoint = `${apiBaseUrl}/api/admin/initialize-database.php`;
+  
+  // Add forceRecreate parameter if provided
+  if (forceRecreate) {
+    endpoint += `?force=${forceRecreate ? 'true' : 'false'}&_t=${Date.now()}`;
+  }
   
   try {
     const response = await fetch(endpoint, {

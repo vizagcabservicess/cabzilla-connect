@@ -18,9 +18,6 @@ export type { TripType, TripMode } from './tripTypes';
 
 // Re-export all methods from fareService
 export { 
-  getBypassHeaders,
-  getForcedRequestConfig,
-  directFareUpdate,
   initializeDatabase,
   forceSyncOutstationFares,
   syncOutstationFares,
@@ -34,8 +31,15 @@ export {
   syncLocalFareTables,
   syncVehicleTables,
   resetCabOptionsState,
-  fareService
+  fareService,
+  directFareUpdate,
 } from '@/services/fareService';
+
+// Import and re-export the config functions
+export { 
+  getBypassHeaders,
+  getForcedRequestConfig 
+} from '@/config/requestConfig';
 
 // Re-export CabType from the types directly
 export type { 
