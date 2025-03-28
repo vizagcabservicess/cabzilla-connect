@@ -1,464 +1,546 @@
 
 <?php
-// database-diagnostic.php - Endpoint for diagnosing database issues
+/**
+ * Database Diagnostic and Repair Tool
+ * 
+ * This script performs diagnostics on the database structure and data,
+ * identifies issues, and can repair common problems.
+ */
 
-header('Content-Type: application/json');
+// Set headers for CORS
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: *');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Force-Refresh');
+header('Content-Type: application/json');
 
-// Handle CORS preflight requests
+// Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
-    exit();
+    exit;
 }
 
-// Include necessary files
-$utilPaths = [
-    __DIR__ . '/../utils/database.php',
-    __DIR__ . '/../../api/utils/database.php',
-    __DIR__ . '/../../utils/database.php'
+// Create log directory
+$logDir = __DIR__ . '/../../logs';
+if (!file_exists($logDir)) {
+    mkdir($logDir, 0755, true);
+}
+
+// Log diagnostic run
+$timestamp = date('Y-m-d H:i:s');
+error_log("[$timestamp] Running database-diagnostic.php - Params: " . json_encode($_GET), 3, $logDir . '/database-diagnostic.log');
+
+// Initialize response array
+$response = [
+    'status' => 'healthy',
+    'timestamp' => time(),
+    'issues' => [],
+    'tables' => [],
+    'php_info' => [],
+    'server_info' => []
 ];
 
-$databaseUtilsLoaded = false;
-foreach ($utilPaths as $path) {
-    if (file_exists($path)) {
-        require_once $path;
-        $databaseUtilsLoaded = true;
-        break;
-    }
-}
-
-if (!$databaseUtilsLoaded) {
-    // Try to load config directly
+// Try to connect to the database
+try {
+    // First check if config.php exists
     if (file_exists(__DIR__ . '/../../config.php')) {
         require_once __DIR__ . '/../../config.php';
+        $conn = getDbConnection();
+        $response['debug'][] = "Connected via config.php";
     } else {
-        http_response_code(500);
-        echo json_encode([
-            'status' => 'error',
-            'message' => 'Database utilities not found',
-            'searched_paths' => $utilPaths
-        ]);
-        exit;
-    }
-}
-
-try {
-    // Connect to database
-    if (!function_exists('getDbConnection')) {
-        echo json_encode([
-            'status' => 'error',
-            'message' => 'getDbConnection function not found',
-            'included_files' => get_included_files()
-        ]);
-        exit;
-    }
-    
-    $conn = getDbConnection();
-    
-    if (!$conn) {
-        throw new Exception("Database connection failed");
-    }
-    
-    // Get list of tables in database
-    $tables = [];
-    $result = $conn->query("SHOW TABLES");
-    
-    if (!$result) {
-        throw new Exception("Failed to get table list: " . $conn->error);
-    }
-    
-    while ($row = $result->fetch_array(MYSQLI_NUM)) {
-        $tableName = $row[0];
-        $count = 0;
+        // Fallback to hardcoded credentials
+        $host = 'localhost';
+        $dbname = 'u644605165_new_bookingdb';
+        $username = 'u644605165_new_bookingusr';
+        $password = 'Vizag@1213';
         
-        // Get count of rows in table
-        $countResult = $conn->query("SELECT COUNT(*) as count FROM `$tableName`");
-        if ($countResult && $countRow = $countResult->fetch_assoc()) {
-            $count = $countRow['count'];
+        $conn = new mysqli($host, $username, $password, $dbname);
+        
+        if ($conn->connect_error) {
+            throw new Exception("Database connection failed: " . $conn->connect_error);
         }
         
-        // Get table columns
+        $response['debug'][] = "Connected via hardcoded credentials";
+    }
+    
+    // Check if connection is successful
+    if (!$conn) {
+        throw new Exception("Failed to establish database connection");
+    }
+    
+    // Check for repair mode
+    $repairMode = isset($_GET['repair']) && $_GET['repair'] === 'true';
+    $initializeMode = isset($_GET['initialize']) && $_GET['initialize'] === 'true';
+    
+    // Get list of tables
+    $tables = [];
+    $tablesResult = $conn->query("SHOW TABLES");
+    
+    if ($tablesResult) {
+        while ($row = $tablesResult->fetch_row()) {
+            $tables[] = $row[0];
+        }
+    }
+    
+    // Check each key table
+    $requiredTables = [
+        'vehicle_types',
+        'vehicle_pricing',
+        'local_package_fares',
+        'airport_transfer_fares'
+    ];
+    
+    foreach ($requiredTables as $table) {
+        if (!in_array($table, $tables)) {
+            $response['status'] = 'issues';
+            $response['issues'][] = "Table '$table' does not exist";
+            
+            // Create missing tables in repair/initialize mode
+            if ($repairMode || $initializeMode) {
+                createTable($conn, $table);
+                $response['issues'][] = "Created missing table '$table'";
+                error_log("[$timestamp] Created missing table '$table'", 3, $logDir . '/database-diagnostic.log');
+            }
+        }
+    }
+    
+    // Check structure of each table
+    foreach ($tables as $table) {
+        $columnsResult = $conn->query("SHOW COLUMNS FROM `$table`");
         $columns = [];
-        if (function_exists('getTableColumns')) {
-            $columns = getTableColumns($conn, $tableName);
-        } else {
-            $columnsResult = $conn->query("SHOW COLUMNS FROM `$tableName`");
+        
+        if ($columnsResult) {
             while ($column = $columnsResult->fetch_assoc()) {
                 $columns[] = $column['Field'];
             }
         }
         
-        $tables[$tableName] = [
-            'row_count' => $count,
-            'columns' => $columns
+        // Get row count
+        $countResult = $conn->query("SELECT COUNT(*) as count FROM `$table`");
+        $rowCount = 0;
+        
+        if ($countResult && $row = $countResult->fetch_assoc()) {
+            $rowCount = (int)$row['count'];
+        }
+        
+        // Store table info
+        $response['tables'][$table] = [
+            'columns' => $columns,
+            'row_count' => $rowCount
         ];
         
-        // If this is the vehicle_types table, get all records
-        if ($tableName === 'vehicle_types') {
-            $vehicleResult = $conn->query("SELECT * FROM `$tableName`");
-            $vehicles = [];
-            
-            if ($vehicleResult) {
-                while ($vehicle = $vehicleResult->fetch_assoc()) {
-                    // Check if vehicle has fare entries
-                    $fareTables = ['outstation_fares', 'local_package_fares', 'airport_transfer_fares'];
-                    $fareInfo = [];
-                    
-                    foreach ($fareTables as $fareTable) {
-                        if (isset($tables[$fareTable])) {
-                            $fareCheckResult = $conn->query("SELECT COUNT(*) as count FROM `$fareTable` WHERE vehicle_id = '{$vehicle['vehicle_id']}'");
-                            if ($fareCheckResult && $fareCheckRow = $fareCheckResult->fetch_assoc()) {
-                                $fareInfo[$fareTable] = $fareCheckRow['count'] > 0;
-                            }
-                        }
-                    }
-                    
-                    $vehicle['fares'] = $fareInfo;
-                    $vehicles[] = $vehicle;
-                }
-            }
-            
-            $tables[$tableName]['records'] = $vehicles;
+        // Check for issues with specific tables
+        if ($table === 'vehicle_pricing') {
+            checkVehiclePricingTable($conn, $table, $columns, $rowCount, $response, $repairMode);
+        } else if ($table === 'vehicle_types') {
+            checkVehicleTypesTable($conn, $table, $columns, $rowCount, $response, $repairMode);
+        } else if ($table === 'local_package_fares') {
+            checkLocalPackageFaresTable($conn, $table, $columns, $rowCount, $response, $repairMode);
+        } else if ($table === 'airport_transfer_fares') {
+            checkAirportTransferFaresTable($conn, $table, $columns, $rowCount, $response, $repairMode);
         }
     }
     
-    // Check for specific issues
-    $issues = [];
-    
-    // Check for missing tables
-    $requiredTables = ['vehicle_types', 'outstation_fares', 'local_package_fares', 'airport_transfer_fares'];
-    $missingTables = array_diff($requiredTables, array_keys($tables));
-    
-    if (!empty($missingTables)) {
-        $issues[] = "Missing required tables: " . implode(", ", $missingTables);
-    }
-    
-    // Check for empty vehicle_types table
-    if (isset($tables['vehicle_types']) && $tables['vehicle_types']['row_count'] === 0) {
-        $issues[] = "The vehicle_types table is empty";
-    }
-    
-    // Check for vehicle_types without fares
-    if (isset($tables['vehicle_types']) && isset($tables['vehicle_types']['records'])) {
-        foreach ($tables['vehicle_types']['records'] as $vehicle) {
-            $missingFares = [];
-            
-            foreach (['outstation_fares', 'local_package_fares', 'airport_transfer_fares'] as $fareTable) {
-                if (isset($vehicle['fares'][$fareTable]) && !$vehicle['fares'][$fareTable]) {
-                    $missingFares[] = $fareTable;
-                }
-            }
-            
-            if (!empty($missingFares)) {
-                $issues[] = "Vehicle '{$vehicle['name']}' (ID: {$vehicle['vehicle_id']}) is missing entries in: " . implode(", ", $missingFares);
-            }
-        }
-    }
-    
-    // Get PHP version and extensions
-    $phpInfo = [
-        'version' => PHP_VERSION,
-        'extensions' => get_loaded_extensions(),
+    // PHP information
+    $response['php_info'] = [
+        'version' => phpversion(),
         'memory_limit' => ini_get('memory_limit'),
         'max_execution_time' => ini_get('max_execution_time'),
-        'post_max_size' => ini_get('post_max_size'),
-        'upload_max_filesize' => ini_get('upload_max_filesize'),
-        'display_errors' => ini_get('display_errors')
+        'post_max_size' => ini_get('post_max_size')
     ];
     
-    // Get server information
-    $serverInfo = [
+    // Server information
+    $response['server_info'] = [
         'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown',
-        'document_root' => $_SERVER['DOCUMENT_ROOT'] ?? 'Unknown',
-        'script_filename' => $_SERVER['SCRIPT_FILENAME'] ?? 'Unknown',
-        'remote_addr' => $_SERVER['REMOTE_ADDR'] ?? 'Unknown',
-        'http_host' => $_SERVER['HTTP_HOST'] ?? 'Unknown',
-        'request_uri' => $_SERVER['REQUEST_URI'] ?? 'Unknown'
+        'http_host' => $_SERVER['HTTP_HOST'] ?? 'Unknown'
     ];
     
-    // Check for initialization action
-    if (isset($_GET['initialize']) && $_GET['initialize'] === 'true') {
-        // Create missing tables if needed
-        if (function_exists('ensureDatabaseTables')) {
-            ensureDatabaseTables($conn);
-            $response['action'] = 'Database tables initialized';
-        } else {
-            // Manual initialization (basic tables)
-            foreach ($missingTables as $tableName) {
-                switch ($tableName) {
-                    case 'vehicle_types':
-                        $conn->query("
-                            CREATE TABLE IF NOT EXISTS vehicle_types (
-                                id INT AUTO_INCREMENT PRIMARY KEY,
-                                vehicle_id VARCHAR(50) NOT NULL UNIQUE,
-                                name VARCHAR(100) NOT NULL,
-                                capacity INT NOT NULL DEFAULT 4,
-                                luggage_capacity INT NOT NULL DEFAULT 2,
-                                ac TINYINT(1) NOT NULL DEFAULT 1,
-                                image VARCHAR(255) DEFAULT '/cars/sedan.png',
-                                amenities TEXT DEFAULT NULL,
-                                description TEXT DEFAULT NULL,
-                                is_active TINYINT(1) NOT NULL DEFAULT 1,
-                                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-                            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-                        ");
-                        break;
-                    
-                    case 'outstation_fares':
-                        $conn->query("
-                            CREATE TABLE IF NOT EXISTS outstation_fares (
-                                id INT AUTO_INCREMENT PRIMARY KEY,
-                                vehicle_id VARCHAR(50) NOT NULL,
-                                base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                                price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-                                night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 0,
-                                driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 0,
-                                roundtrip_base_price DECIMAL(10,2) DEFAULT 0,
-                                roundtrip_price_per_km DECIMAL(5,2) DEFAULT 0,
-                                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                                UNIQUE KEY vehicle_id (vehicle_id)
-                            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-                        ");
-                        break;
-                    
-                    case 'local_package_fares':
-                        $conn->query("
-                            CREATE TABLE IF NOT EXISTS local_package_fares (
-                                id INT AUTO_INCREMENT PRIMARY KEY,
-                                vehicle_id VARCHAR(50) NOT NULL,
-                                price_4hrs_40km DECIMAL(10,2) NOT NULL DEFAULT 0,
-                                price_8hrs_80km DECIMAL(10,2) NOT NULL DEFAULT 0,
-                                price_10hrs_100km DECIMAL(10,2) NOT NULL DEFAULT 0,
-                                price_extra_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-                                price_extra_hour DECIMAL(5,2) NOT NULL DEFAULT 0,
-                                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                                UNIQUE KEY vehicle_id (vehicle_id)
-                            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-                        ");
-                        break;
-                    
-                    case 'airport_transfer_fares':
-                        $conn->query("
-                            CREATE TABLE IF NOT EXISTS airport_transfer_fares (
-                                id INT AUTO_INCREMENT PRIMARY KEY,
-                                vehicle_id VARCHAR(50) NOT NULL,
-                                base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                                price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-                                pickup_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                                drop_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                                tier1_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                                tier2_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                                tier3_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                                tier4_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                                extra_km_charge DECIMAL(5,2) NOT NULL DEFAULT 0,
-                                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                                UNIQUE KEY vehicle_id (vehicle_id)
-                            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-                        ");
-                        break;
-                }
-            }
-            
-            $response['action'] = 'Database tables manually initialized';
-        }
-        
-        // Add default vehicles if vehicle_types is empty
-        if (isset($tables['vehicle_types']) && $tables['vehicle_types']['row_count'] === 0) {
-            $defaultVehicles = [
-                [
-                    'id' => 'sedan',
-                    'name' => 'Sedan',
-                    'capacity' => 4,
-                    'luggage_capacity' => 2,
-                    'ac' => 1,
-                    'amenities' => json_encode(['AC', 'Bottle Water', 'Music System']),
-                    'image' => '/cars/sedan.png',
-                    'description' => 'Comfortable sedan suitable for 4 passengers.',
-                    'is_active' => 1
-                ],
-                [
-                    'id' => 'ertiga',
-                    'name' => 'Ertiga',
-                    'capacity' => 6,
-                    'luggage_capacity' => 3,
-                    'ac' => 1,
-                    'amenities' => json_encode(['AC', 'Bottle Water', 'Music System', 'Extra Legroom']),
-                    'image' => '/cars/ertiga.png',
-                    'description' => 'Spacious SUV suitable for 6 passengers.',
-                    'is_active' => 1
-                ],
-                [
-                    'id' => 'innova_crysta',
-                    'name' => 'Innova Crysta',
-                    'capacity' => 7,
-                    'luggage_capacity' => 4,
-                    'ac' => 1,
-                    'amenities' => json_encode(['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point']),
-                    'image' => '/cars/innova.png',
-                    'description' => 'Premium SUV with ample space for 7 passengers.',
-                    'is_active' => 1
-                ]
-            ];
-            
-            foreach ($defaultVehicles as $vehicle) {
-                $stmt = $conn->prepare("
-                    INSERT INTO vehicle_types 
-                    (vehicle_id, name, capacity, luggage_capacity, ac, amenities, image, description, is_active) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ");
-                
-                $stmt->bind_param("ssiissssi", 
-                    $vehicle['id'],
-                    $vehicle['name'],
-                    $vehicle['capacity'],
-                    $vehicle['luggage_capacity'],
-                    $vehicle['ac'],
-                    $vehicle['amenities'],
-                    $vehicle['image'],
-                    $vehicle['description'],
-                    $vehicle['is_active']
-                );
-                
-                $stmt->execute();
-                
-                // Also create fare entries for each default vehicle
-                $vehicleId = $vehicle['id'];
-                
-                // Outstation fares
-                if (tableExists($conn, 'outstation_fares')) {
-                    $basePrice = 2500;
-                    $pricePerKm = 14;
-                    $nightHaltCharge = 700;
-                    $driverAllowance = 250;
-                    $roundTripBasePrice = 2000;
-                    $roundTripPricePerKm = 12;
-                    
-                    if ($vehicleId === 'ertiga') {
-                        $basePrice = 3200;
-                        $pricePerKm = 18;
-                        $nightHaltCharge = 1000;
-                        $roundTripBasePrice = 2800;
-                        $roundTripPricePerKm = 16;
-                    } else if ($vehicleId === 'innova_crysta') {
-                        $basePrice = 3800;
-                        $pricePerKm = 20;
-                        $nightHaltCharge = 1000;
-                        $roundTripBasePrice = 3400;
-                        $roundTripPricePerKm = 18;
-                    }
-                    
-                    $conn->query("
-                        INSERT INTO outstation_fares 
-                        (vehicle_id, base_price, price_per_km, night_halt_charge, driver_allowance, 
-                        roundtrip_base_price, roundtrip_price_per_km) 
-                        VALUES ('$vehicleId', $basePrice, $pricePerKm, $nightHaltCharge, 
-                        $driverAllowance, $roundTripBasePrice, $roundTripPricePerKm)
-                    ");
-                }
-                
-                // Local package fares
-                if (tableExists($conn, 'local_package_fares')) {
-                    $price4hrs40km = 1600;
-                    $price8hrs80km = 2800;
-                    $price10hrs100km = 3400;
-                    $priceExtraKm = 14;
-                    $priceExtraHour = 150;
-                    
-                    if ($vehicleId === 'ertiga') {
-                        $price4hrs40km = 2200;
-                        $price8hrs80km = 3800;
-                        $price10hrs100km = 4400;
-                        $priceExtraKm = 18;
-                        $priceExtraHour = 200;
-                    } else if ($vehicleId === 'innova_crysta') {
-                        $price4hrs40km = 2600;
-                        $price8hrs80km = 4400;
-                        $price10hrs100km = 5000;
-                        $priceExtraKm = 20;
-                        $priceExtraHour = 250;
-                    }
-                    
-                    $conn->query("
-                        INSERT INTO local_package_fares 
-                        (vehicle_id, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, 
-                        price_extra_km, price_extra_hour) 
-                        VALUES ('$vehicleId', $price4hrs40km, $price8hrs80km, $price10hrs100km, 
-                        $priceExtraKm, $priceExtraHour)
-                    ");
-                }
-                
-                // Airport transfer fares
-                if (tableExists($conn, 'airport_transfer_fares')) {
-                    $basePrice = 1500;
-                    $pricePerKm = 14;
-                    $pickupPrice = 1600;
-                    $dropPrice = 1500;
-                    $tier1Price = 1600;
-                    $tier2Price = 1800;
-                    $tier3Price = 2200;
-                    $tier4Price = 2600;
-                    $extraKmCharge = 14;
-                    
-                    if ($vehicleId === 'ertiga') {
-                        $basePrice = 2000;
-                        $pricePerKm = 18;
-                        $pickupPrice = 2000;
-                        $dropPrice = 1900;
-                        $tier1Price = 2000;
-                        $tier2Price = 2200;
-                        $tier3Price = 2600;
-                        $tier4Price = 3000;
-                        $extraKmCharge = 18;
-                    } else if ($vehicleId === 'innova_crysta') {
-                        $basePrice = 2500;
-                        $pricePerKm = 20;
-                        $pickupPrice = 2400;
-                        $dropPrice = 2300;
-                        $tier1Price = 2400;
-                        $tier2Price = 2600;
-                        $tier3Price = 3000;
-                        $tier4Price = 3400;
-                        $extraKmCharge = 20;
-                    }
-                    
-                    $conn->query("
-                        INSERT INTO airport_transfer_fares 
-                        (vehicle_id, base_price, price_per_km, pickup_price, drop_price,
-                        tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge) 
-                        VALUES ('$vehicleId', $basePrice, $pricePerKm, $pickupPrice, $dropPrice, 
-                        $tier1Price, $tier2Price, $tier3Price, $tier4Price, $extraKmCharge)
-                    ");
-                }
-            }
-            
-            $response['action'] .= ' and default vehicles added';
-        }
+    // Initialize the database if requested
+    if ($initializeMode) {
+        initializeDatabase($conn, $response);
     }
     
-    // Add diagnostics to response
-    $response['status'] = empty($issues) ? 'healthy' : 'issues_found';
-    $response['message'] = empty($issues) ? 'Database is healthy' : 'Database issues found';
-    $response['issues'] = $issues;
-    $response['tables'] = $tables;
-    $response['php_info'] = $phpInfo;
-    $response['server_info'] = $serverInfo;
-    $response['timestamp'] = date('Y-m-d H:i:s');
-    
-    // Return the response
+    // Success response
     echo json_encode($response);
     
 } catch (Exception $e) {
+    http_response_code(500);
     echo json_encode([
         'status' => 'error',
-        'message' => 'Diagnostic error: ' . $e->getMessage(),
-        'file' => $e->getFile(),
-        'line' => $e->getLine(),
-        'trace' => $e->getTraceAsString()
+        'message' => $e->getMessage(),
+        'timestamp' => time()
     ]);
+    
+    error_log("[$timestamp] Error in database diagnostic: " . $e->getMessage(), 3, $logDir . '/database-diagnostic.log');
+}
+
+/**
+ * Check the vehicle_pricing table
+ */
+function checkVehiclePricingTable($conn, $table, $columns, $rowCount, &$response, $repairMode) {
+    $issues = [];
+    
+    // Check for critical columns
+    if (!in_array('vehicle_id', $columns)) {
+        $issues[] = "Table '$table' missing 'vehicle_id' column";
+        
+        if ($repairMode) {
+            // Try to add the missing column
+            $addColumnQuery = "ALTER TABLE `$table` ADD COLUMN `vehicle_id` VARCHAR(50) NOT NULL DEFAULT '' AFTER `id`";
+            if ($conn->query($addColumnQuery)) {
+                $issues[] = "Added missing 'vehicle_id' column to '$table'";
+                
+                // If the table has vehicle_type column, copy values to vehicle_id
+                if (in_array('vehicle_type', $columns)) {
+                    $updateQuery = "UPDATE `$table` SET `vehicle_id` = `vehicle_type` WHERE `vehicle_id` = ''";
+                    $conn->query($updateQuery);
+                    $issues[] = "Copied values from 'vehicle_type' to 'vehicle_id' in '$table'";
+                }
+            }
+        }
+    }
+    
+    if (!in_array('vehicle_type', $columns) && in_array('vehicle_id', $columns)) {
+        $issues[] = "Table '$table' has 'vehicle_id' but missing 'vehicle_type' column";
+        
+        if ($repairMode) {
+            // Try to add the missing column
+            $addColumnQuery = "ALTER TABLE `$table` ADD COLUMN `vehicle_type` VARCHAR(50) NOT NULL DEFAULT '' AFTER `id`";
+            if ($conn->query($addColumnQuery)) {
+                $issues[] = "Added missing 'vehicle_type' column to '$table'";
+                
+                // Copy values from vehicle_id to vehicle_type
+                $updateQuery = "UPDATE `$table` SET `vehicle_type` = `vehicle_id` WHERE `vehicle_type` = ''";
+                $conn->query($updateQuery);
+                $issues[] = "Copied values from 'vehicle_id' to 'vehicle_type' in '$table'";
+            }
+        }
+    }
+    
+    // Check for empty vehicle_id values
+    $emptyIdResult = $conn->query("SELECT COUNT(*) as count FROM `$table` WHERE `vehicle_id` = '' OR `vehicle_id` IS NULL");
+    if ($emptyIdResult && $row = $emptyIdResult->fetch_assoc()) {
+        $emptyCount = (int)$row['count'];
+        
+        if ($emptyCount > 0) {
+            $issues[] = "Table '$table' has $emptyCount rows with empty vehicle_id";
+            
+            if ($repairMode) {
+                // Delete rows with empty vehicle_id
+                $deleteQuery = "DELETE FROM `$table` WHERE `vehicle_id` = '' OR `vehicle_id` IS NULL";
+                if ($conn->query($deleteQuery)) {
+                    $issues[] = "Deleted $emptyCount rows with empty vehicle_id from '$table'";
+                }
+            }
+        }
+    }
+    
+    if (!empty($issues)) {
+        $response['status'] = 'issues';
+        $response['issues'] = array_merge($response['issues'], $issues);
+    }
+}
+
+/**
+ * Check the vehicle_types table
+ */
+function checkVehicleTypesTable($conn, $table, $columns, $rowCount, &$response, $repairMode) {
+    $issues = [];
+    
+    // Check for critical columns
+    if (!in_array('vehicle_id', $columns)) {
+        $issues[] = "Table '$table' missing 'vehicle_id' column";
+        
+        if ($repairMode) {
+            // Try to add the missing column
+            $addColumnQuery = "ALTER TABLE `$table` ADD COLUMN `vehicle_id` VARCHAR(50) NOT NULL DEFAULT '' AFTER `id`";
+            if ($conn->query($addColumnQuery)) {
+                $issues[] = "Added missing 'vehicle_id' column to '$table'";
+            }
+        }
+    }
+    
+    // Check for empty vehicle_id values
+    $emptyIdResult = $conn->query("SELECT COUNT(*) as count FROM `$table` WHERE `vehicle_id` = '' OR `vehicle_id` IS NULL");
+    if ($emptyIdResult && $row = $emptyIdResult->fetch_assoc()) {
+        $emptyCount = (int)$row['count'];
+        
+        if ($emptyCount > 0) {
+            $issues[] = "Table '$table' has $emptyCount rows with empty vehicle_id";
+            
+            if ($repairMode) {
+                // Delete rows with empty vehicle_id
+                $deleteQuery = "DELETE FROM `$table` WHERE `vehicle_id` = '' OR `vehicle_id` IS NULL";
+                if ($conn->query($deleteQuery)) {
+                    $issues[] = "Deleted $emptyCount rows with empty vehicle_id from '$table'";
+                }
+            }
+        }
+    }
+    
+    if ($rowCount === 0) {
+        $issues[] = "Table '$table' is empty";
+        
+        if ($repairMode) {
+            // Add default vehicles
+            $defaultVehicles = [
+                ['sedan', 'Sedan', 4, 2],
+                ['suv', 'SUV', 6, 3],
+                ['ertiga', 'Ertiga', 6, 3],
+                ['innova', 'Innova', 7, 3],
+                ['innova_crysta', 'Innova Crysta', 7, 3],
+                ['luxury', 'Luxury Sedan', 4, 2],
+                ['tempo', 'Tempo Traveller', 12, 6]
+            ];
+            
+            foreach ($defaultVehicles as $vehicle) {
+                $insertQuery = "INSERT INTO `$table` (`vehicle_id`, `name`, `capacity`, `luggage_capacity`, `is_active`) 
+                                VALUES (?, ?, ?, ?, 1)
+                                ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `capacity` = VALUES(`capacity`), 
+                                `luggage_capacity` = VALUES(`luggage_capacity`), `is_active` = 1";
+                
+                $stmt = $conn->prepare($insertQuery);
+                $stmt->bind_param("ssii", $vehicle[0], $vehicle[1], $vehicle[2], $vehicle[3]);
+                $stmt->execute();
+            }
+            
+            $issues[] = "Added default vehicles to '$table'";
+        }
+    }
+    
+    if (!empty($issues)) {
+        $response['status'] = 'issues';
+        $response['issues'] = array_merge($response['issues'], $issues);
+    }
+}
+
+/**
+ * Check the local_package_fares table
+ */
+function checkLocalPackageFaresTable($conn, $table, $columns, $rowCount, &$response, $repairMode) {
+    $issues = [];
+    
+    // Check for critical columns
+    if (!in_array('vehicle_id', $columns)) {
+        $issues[] = "Table '$table' missing 'vehicle_id' column";
+        
+        if ($repairMode) {
+            // Try to add the missing column
+            $addColumnQuery = "ALTER TABLE `$table` ADD COLUMN `vehicle_id` VARCHAR(50) NOT NULL DEFAULT '' AFTER `id`";
+            if ($conn->query($addColumnQuery)) {
+                $issues[] = "Added missing 'vehicle_id' column to '$table'";
+            }
+        }
+    }
+    
+    // Check for empty vehicle_id values
+    $emptyIdResult = $conn->query("SELECT COUNT(*) as count FROM `$table` WHERE `vehicle_id` = '' OR `vehicle_id` IS NULL");
+    if ($emptyIdResult && $row = $emptyIdResult->fetch_assoc()) {
+        $emptyCount = (int)$row['count'];
+        
+        if ($emptyCount > 0) {
+            $issues[] = "Table '$table' has $emptyCount rows with empty vehicle_id";
+            
+            if ($repairMode) {
+                // Delete rows with empty vehicle_id
+                $deleteQuery = "DELETE FROM `$table` WHERE `vehicle_id` = '' OR `vehicle_id` IS NULL";
+                if ($conn->query($deleteQuery)) {
+                    $issues[] = "Deleted $emptyCount rows with empty vehicle_id from '$table'";
+                }
+            }
+        }
+    }
+    
+    if (!empty($issues)) {
+        $response['status'] = 'issues';
+        $response['issues'] = array_merge($response['issues'], $issues);
+    }
+}
+
+/**
+ * Check the airport_transfer_fares table
+ */
+function checkAirportTransferFaresTable($conn, $table, $columns, $rowCount, &$response, $repairMode) {
+    $issues = [];
+    
+    // Check for critical columns
+    if (!in_array('vehicle_id', $columns)) {
+        $issues[] = "Table '$table' missing 'vehicle_id' column";
+        
+        if ($repairMode) {
+            // Try to add the missing column
+            $addColumnQuery = "ALTER TABLE `$table` ADD COLUMN `vehicle_id` VARCHAR(50) NOT NULL DEFAULT '' AFTER `id`";
+            if ($conn->query($addColumnQuery)) {
+                $issues[] = "Added missing 'vehicle_id' column to '$table'";
+            }
+        }
+    }
+    
+    // Check for empty vehicle_id values
+    $emptyIdResult = $conn->query("SELECT COUNT(*) as count FROM `$table` WHERE `vehicle_id` = '' OR `vehicle_id` IS NULL");
+    if ($emptyIdResult && $row = $emptyIdResult->fetch_assoc()) {
+        $emptyCount = (int)$row['count'];
+        
+        if ($emptyCount > 0) {
+            $issues[] = "Table '$table' has $emptyCount rows with empty vehicle_id";
+            
+            if ($repairMode) {
+                // Delete rows with empty vehicle_id
+                $deleteQuery = "DELETE FROM `$table` WHERE `vehicle_id` = '' OR `vehicle_id` IS NULL";
+                if ($conn->query($deleteQuery)) {
+                    $issues[] = "Deleted $emptyCount rows with empty vehicle_id from '$table'";
+                }
+            }
+        }
+    }
+    
+    if (!empty($issues)) {
+        $response['status'] = 'issues';
+        $response['issues'] = array_merge($response['issues'], $issues);
+    }
+}
+
+/**
+ * Create a table if it doesn't exist
+ */
+function createTable($conn, $table) {
+    switch ($table) {
+        case 'vehicle_types':
+            $sql = "
+                CREATE TABLE IF NOT EXISTS `vehicle_types` (
+                    `id` INT AUTO_INCREMENT PRIMARY KEY,
+                    `vehicle_id` VARCHAR(50) NOT NULL,
+                    `name` VARCHAR(100) NOT NULL,
+                    `capacity` INT NOT NULL DEFAULT 4,
+                    `luggage_capacity` INT NOT NULL DEFAULT 2,
+                    `ac` TINYINT(1) NOT NULL DEFAULT 1,
+                    `image` VARCHAR(255) DEFAULT '/cars/sedan.png',
+                    `amenities` TEXT DEFAULT NULL,
+                    `description` TEXT DEFAULT NULL,
+                    `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+                    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    UNIQUE KEY (`vehicle_id`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            ";
+            break;
+            
+        case 'vehicle_pricing':
+            $sql = "
+                CREATE TABLE IF NOT EXISTS `vehicle_pricing` (
+                    `id` INT AUTO_INCREMENT PRIMARY KEY,
+                    `vehicle_id` VARCHAR(50) NOT NULL,
+                    `vehicle_type` VARCHAR(50) NOT NULL,
+                    `trip_type` ENUM('local', 'outstation', 'airport') NOT NULL,
+                    `base_fare` DECIMAL(10,2) DEFAULT 0,
+                    `price_per_km` DECIMAL(10,2) DEFAULT 0,
+                    `night_halt_charge` DECIMAL(10,2) DEFAULT 0,
+                    `driver_allowance` DECIMAL(10,2) DEFAULT 0,
+                    `local_package_4hr` DECIMAL(10,2) DEFAULT 0,
+                    `local_package_8hr` DECIMAL(10,2) DEFAULT 0,
+                    `local_package_10hr` DECIMAL(10,2) DEFAULT 0,
+                    `extra_km_charge` DECIMAL(10,2) DEFAULT 0,
+                    `extra_hour_charge` DECIMAL(10,2) DEFAULT 0,
+                    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    UNIQUE KEY (`vehicle_id`, `trip_type`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            ";
+            break;
+            
+        case 'local_package_fares':
+            $sql = "
+                CREATE TABLE IF NOT EXISTS `local_package_fares` (
+                    `id` INT AUTO_INCREMENT PRIMARY KEY,
+                    `vehicle_id` VARCHAR(50) NOT NULL,
+                    `price_4hrs_40km` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    `price_8hrs_80km` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    `price_10hrs_100km` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    `price_extra_km` DECIMAL(5,2) NOT NULL DEFAULT 0,
+                    `price_extra_hour` DECIMAL(5,2) NOT NULL DEFAULT 0,
+                    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    UNIQUE KEY (`vehicle_id`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            ";
+            break;
+            
+        case 'airport_transfer_fares':
+            $sql = "
+                CREATE TABLE IF NOT EXISTS `airport_transfer_fares` (
+                    `id` INT AUTO_INCREMENT PRIMARY KEY,
+                    `vehicle_id` VARCHAR(50) NOT NULL,
+                    `base_price` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    `price_per_km` DECIMAL(5,2) NOT NULL DEFAULT 0,
+                    `pickup_price` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    `drop_price` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    `tier1_price` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    `tier2_price` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    `tier3_price` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    `tier4_price` DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    `extra_km_charge` DECIMAL(5,2) NOT NULL DEFAULT 0,
+                    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    UNIQUE KEY (`vehicle_id`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            ";
+            break;
+            
+        default:
+            return false;
+    }
+    
+    return $conn->query($sql);
+}
+
+/**
+ * Initialize the database with default data
+ */
+function initializeDatabase($conn, &$response) {
+    // Add default vehicles if vehicle_types is empty
+    $countResult = $conn->query("SELECT COUNT(*) as count FROM vehicle_types");
+    if ($countResult && $row = $countResult->fetch_assoc() && (int)$row['count'] === 0) {
+        // Add default vehicles
+        $defaultVehicles = [
+            ['sedan', 'Sedan', 4, 2],
+            ['suv', 'SUV', 6, 3],
+            ['ertiga', 'Ertiga', 6, 3],
+            ['innova', 'Innova', 7, 3],
+            ['innova_crysta', 'Innova Crysta', 7, 3],
+            ['luxury', 'Luxury Sedan', 4, 2],
+            ['tempo', 'Tempo Traveller', 12, 6]
+        ];
+        
+        foreach ($defaultVehicles as $vehicle) {
+            $insertQuery = "INSERT INTO vehicle_types (vehicle_id, name, capacity, luggage_capacity, is_active) 
+                            VALUES (?, ?, ?, ?, 1)
+                            ON DUPLICATE KEY UPDATE name = VALUES(name), capacity = VALUES(capacity), 
+                            luggage_capacity = VALUES(luggage_capacity), is_active = 1";
+            
+            $stmt = $conn->prepare($insertQuery);
+            $stmt->bind_param("ssii", $vehicle[0], $vehicle[1], $vehicle[2], $vehicle[3]);
+            $stmt->execute();
+        }
+        
+        $response['issues'][] = "Added default vehicles to 'vehicle_types'";
+    }
+    
+    // Remove any empty vehicle_id records
+    $conn->query("DELETE FROM vehicle_types WHERE vehicle_id = '' OR vehicle_id IS NULL");
+    $conn->query("DELETE FROM vehicle_pricing WHERE vehicle_id = '' OR vehicle_id IS NULL");
+    $conn->query("DELETE FROM local_package_fares WHERE vehicle_id = '' OR vehicle_id IS NULL");
+    $conn->query("DELETE FROM airport_transfer_fares WHERE vehicle_id = '' OR vehicle_id IS NULL");
+    
+    $response['issues'][] = "Removed records with empty vehicle_id from all tables";
+    
+    // If vehicle_type exists in vehicle_pricing but vehicle_id doesn't
+    $conn->query("UPDATE vehicle_pricing SET vehicle_id = vehicle_type WHERE (vehicle_id = '' OR vehicle_id IS NULL) AND vehicle_type != ''");
+    
+    // If vehicle_id exists in vehicle_pricing but vehicle_type doesn't
+    $conn->query("UPDATE vehicle_pricing SET vehicle_type = vehicle_id WHERE (vehicle_type = '' OR vehicle_type IS NULL) AND vehicle_id != ''");
+    
+    $response['issues'][] = "Synchronized vehicle_id and vehicle_type in vehicle_pricing table";
+    
+    // Update the response status
+    $response['status'] = 'success';
+    $response['message'] = 'Database initialized successfully';
 }
