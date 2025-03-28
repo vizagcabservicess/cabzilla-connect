@@ -151,27 +151,6 @@ try {
         error_log("Found existing vehicle: $vehicleId with name $vehicleName");
     }
     
-    // Make sure this vehicle exists in other tables
-    // This helps with having all vehicle tables in sync
-    
-    // Check if vehicle exists in vehicles table
-    $checkVehiclesStmt = $conn->prepare("SELECT id FROM vehicles WHERE vehicle_id = ?");
-    $checkVehiclesStmt->bind_param("s", $vehicleId);
-    $checkVehiclesStmt->execute();
-    $checkVehiclesResult = $checkVehiclesStmt->get_result();
-    
-    if ($checkVehiclesResult->num_rows === 0) {
-        // Insert into vehicles table
-        $insertVehiclesStmt = $conn->prepare("
-            INSERT INTO vehicles (vehicle_id, name, is_active) 
-            VALUES (?, ?, 1)
-            ON DUPLICATE KEY UPDATE name = VALUES(name), is_active = 1
-        ");
-        $insertVehiclesStmt->bind_param("ss", $vehicleId, $vehicleName);
-        $insertVehiclesStmt->execute();
-        error_log("Added vehicle $vehicleId to vehicles table");
-    }
-    
     // Extract values with multiple field name possibilities
     $basePrice = floatval($data['basePrice'] ?? $data['base_price'] ?? 0);
     $pricePerKm = floatval($data['pricePerKm'] ?? $data['price_per_km'] ?? 0);
@@ -351,9 +330,6 @@ try {
         
         // Clean up any empty vehicle_id records
         $conn->query("DELETE FROM vehicle_pricing WHERE vehicle_id = '' OR vehicle_id IS NULL");
-        
-        // Ensure vehicle_type matches vehicle_id
-        $conn->query("UPDATE vehicle_pricing SET vehicle_type = vehicle_id WHERE vehicle_type != vehicle_id");
         
         // Commit transaction
         $conn->commit();

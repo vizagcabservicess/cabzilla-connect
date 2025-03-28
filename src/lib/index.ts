@@ -16,14 +16,10 @@ export {
 // Export types with the 'export type' syntax to avoid TypeScript errors
 export type { TripType, TripMode } from './tripTypes';
 
-// Export config functions
-export { 
-  getBypassHeaders,
-  getForcedRequestConfig
-} from '@/config/requestConfig';
-
 // Re-export all methods from fareService
 export { 
+  getBypassHeaders,
+  getForcedRequestConfig,
   directFareUpdate,  // Using directFareUpdate for all fare updates
   initializeDatabase,
   forceSyncOutstationFares,
@@ -38,7 +34,6 @@ export {
   clearFareCache as clearFareServiceCache,
   resetCabOptionsState,
   syncLocalFareTables,
-  syncVehicleTables,
   fareService
 } from '@/services/fareService';
 
