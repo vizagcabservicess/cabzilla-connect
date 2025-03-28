@@ -59,7 +59,7 @@ CREATE TABLE `tour_fares` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Vehicle Pricing Table - FIXED column names (vehicle_id instead of vehicle_type)
+-- Vehicle Pricing Table
 CREATE TABLE `vehicle_pricing` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `vehicle_id` varchar(50) NOT NULL,
@@ -177,7 +177,7 @@ INSERT INTO `tour_fares` (`tour_id`, `tour_name`, `sedan`, `ertiga`, `innova`, `
 ('annavaram', 'Annavaram Tour', 6000, 7500, 9000, 13500, 17000),
 ('vanajangi', 'Vanajangi Tour', 5500, 7000, 8500, 12500, 16000);
 
--- Insert default data for vehicle pricing using vehicle_id (not vehicle_type)
+-- Insert default data for vehicle pricing using vehicle_id
 INSERT INTO `vehicle_pricing` (`vehicle_id`, `trip_type`, `base_fare`, `price_per_km`, `night_halt_charge`, `driver_allowance`, 
                                `local_package_4hr`, `local_package_8hr`, `local_package_10hr`, `extra_km_charge`, `extra_hour_charge`,
                                `airport_base_price`, `airport_price_per_km`, `airport_pickup_price`, `airport_drop_price`,
@@ -236,3 +236,20 @@ INSERT INTO `outstation_fares` (`vehicle_id`, `base_price`, `price_per_km`, `nig
 INSERT INTO `users` (`name`, `email`, `phone`, `password`, `role`) VALUES
 ('Admin User', 'admin@example.com', '9876543210', '$2y$10$YPmH6FlAB8gQXI/qjLXVq.jlHCB1PRJKZRmj2aeMSCXvKBgNCHWc2', 'admin');
 -- Default password: admin123
+
+-- Insert sample bookings for testing
+INSERT INTO `bookings` (`user_id`, `booking_number`, `pickup_location`, `drop_location`, `pickup_date`, `return_date`, 
+                      `cab_type`, `distance`, `trip_type`, `trip_mode`, `total_amount`, `status`, 
+                      `passenger_name`, `passenger_phone`, `passenger_email`) 
+VALUES 
+(1, 'BK12345', 'Visakhapatnam Airport', 'RK Beach', '2023-04-15 14:30:00', NULL, 
+ 'sedan', 15.5, 'airport', 'one-way', 2500.00, 'completed', 
+ 'John Smith', '9876543210', 'john@example.com'),
+ 
+(1, 'BK12346', 'Vizag Railway Station', 'Araku Valley', '2023-04-20 09:00:00', '2023-04-22 18:00:00', 
+ 'innova_crysta', 120, 'outstation', 'round-trip', 12000.00, 'confirmed', 
+ 'Sarah Johnson', '9876543211', 'sarah@example.com'),
+ 
+(NULL, 'BK12347', 'The Park Hotel', 'City Tour', '2023-04-25 10:00:00', '2023-04-25 18:00:00', 
+ 'ertiga', 80, 'local', 'one-way', 3500.00, 'pending', 
+ 'Guest User', '9876543212', 'guest@example.com');
