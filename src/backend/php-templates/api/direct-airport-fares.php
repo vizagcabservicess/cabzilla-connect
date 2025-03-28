@@ -20,15 +20,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require_once __DIR__ . '/utils/database.php';
 require_once __DIR__ . '/utils/response.php';
 
-// Log directory
-$logDir = __DIR__ . '/../../logs';
-if (!file_exists($logDir)) {
-    mkdir($logDir, 0755, true);
-}
-
 // Get raw input
 $raw_input = file_get_contents('php://input');
-error_log("[" . date('Y-m-d H:i:s') . "] Raw input for airport fare update: $raw_input", 3, $logDir . '/fare-updates.log');
+error_log("Raw input for airport fare update: $raw_input", 3, __DIR__ . '/../../error.log');
 
 // Function to ensure tables exist
 function ensureTablesExist($conn) {
@@ -52,7 +46,7 @@ function ensureTablesExist($conn) {
                 updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         ");
-        error_log("[" . date('Y-m-d H:i:s') . "] Created vehicle_types table", 3, $logDir . '/fare-updates.log');
+        error_log("Created vehicle_types table");
     }
 
     // Check if airport_transfer_fares table exists
@@ -77,7 +71,7 @@ function ensureTablesExist($conn) {
                 UNIQUE KEY vehicle_id (vehicle_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         ");
-        error_log("[" . date('Y-m-d H:i:s') . "] Created airport_transfer_fares table", 3, $logDir . '/fare-updates.log');
+        error_log("Created airport_transfer_fares table");
     }
 
     return true;
@@ -98,7 +92,7 @@ if (json_last_error() === JSON_ERROR_NONE && !empty($json_data)) {
 }
 
 // Log the request data
-error_log("[" . date('Y-m-d H:i:s') . "] Airport fare update request data: " . print_r($data, true), 3, $logDir . '/fare-updates.log');
+error_log("Airport fare update request data: " . print_r($data, true), 3, __DIR__ . '/../../error.log');
 
 // Establish database connection
 try {
@@ -122,8 +116,8 @@ try {
         throw new Exception("Vehicle ID is required");
     }
     
-    // Check if vehicle exists in vehicle_types
-    $checkVehicleStmt = $conn->prepare("SELECT * FROM vehicle_types WHERE vehicle_id = ?");
+    // Create vehicle if it doesn't exist
+    $checkVehicleStmt = $conn->prepare("SELECT vehicle_id FROM vehicle_types WHERE vehicle_id = ?");
     $checkVehicleStmt->bind_param("s", $vehicleId);
     $checkVehicleStmt->execute();
     $checkResult = $checkVehicleStmt->get_result();
@@ -137,10 +131,7 @@ try {
         ");
         $insertVehicleStmt->bind_param("ss", $vehicleId, $vehicleName);
         $insertVehicleStmt->execute();
-        error_log("[" . date('Y-m-d H:i:s') . "] Created new vehicle: $vehicleId", 3, $logDir . '/fare-updates.log');
-    } else {
-        // Vehicle exists, log it
-        error_log("[" . date('Y-m-d H:i:s') . "] Vehicle already exists: $vehicleId", 3, $logDir . '/fare-updates.log');
+        error_log("Created new vehicle: $vehicleId");
     }
     
     // Extract values with multiple field name possibilities
@@ -154,7 +145,7 @@ try {
     $tier4Price = floatval($data['tier4Price'] ?? $data['tier4_price'] ?? 0);
     $extraKmCharge = floatval($data['extraKmCharge'] ?? $data['extra_km_charge'] ?? 0);
     
-    error_log("[" . date('Y-m-d H:i:s') . "] Airport fare update for $vehicleId: Base=$basePrice, PerKm=$pricePerKm, Pickup=$pickupPrice, Drop=$dropPrice", 3, $logDir . '/fare-updates.log');
+    error_log("Airport fare update for $vehicleId: Base=$basePrice, PerKm=$pricePerKm, Pickup=$pickupPrice, Drop=$dropPrice", 3, __DIR__ . '/../../error.log');
     
     // Begin transaction
     $conn->begin_transaction();
@@ -196,159 +187,98 @@ try {
         $stmt->close();
         
         // Check if vehicle_pricing table exists
-        $tableExistsResult = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'");
-        $vehiclePricingExists = ($tableExistsResult && $tableExistsResult->num_rows > 0);
+        $vehiclePricingExists = tableExists($conn, 'vehicle_pricing');
         
         if ($vehiclePricingExists) {
-            // Get column names to know which to include in our query
-            $columnQuery = "SHOW COLUMNS FROM vehicle_pricing";
-            $columnResult = $conn->query($columnQuery);
-            $columns = [];
-            while ($columnRow = $columnResult->fetch_assoc()) {
-                $columns[] = $columnRow['Field'];
-            }
-            
-            $hasVehicleId = in_array('vehicle_id', $columns);
-            $hasVehicleType = in_array('vehicle_type', $columns);
+            // Check which columns exist in vehicle_pricing
+            $hasVehicleId = columnExists($conn, 'vehicle_pricing', 'vehicle_id');
+            $hasVehicleType = columnExists($conn, 'vehicle_pricing', 'vehicle_type');
             
             // Generate the appropriate query based on the columns present
             if ($hasVehicleId || $hasVehicleType) {
                 $tripType = 'airport';
                 
-                // Build the conditions for WHERE clause
-                $conditions = [];
-                $whereParams = [];
-                $whereTypes = "";
+                // Build the insert part of the query
+                $insertFields = [];
+                $placeholders = [];
+                $params = [];
+                $types = "";
                 
+                // Add vehicle_id or vehicle_type
                 if ($hasVehicleId) {
-                    $conditions[] = "vehicle_id = ?";
-                    $whereParams[] = $vehicleId;
-                    $whereTypes .= "s";
+                    $insertFields[] = "vehicle_id";
+                    $placeholders[] = "?";
+                    $params[] = $vehicleId;
+                    $types .= "s";
                 }
                 
                 if ($hasVehicleType) {
-                    $conditions[] = "vehicle_type = ?";
-                    $whereParams[] = $vehicleId;
-                    $whereTypes .= "s";
+                    $insertFields[] = "vehicle_type";
+                    $placeholders[] = "?";
+                    $params[] = $vehicleId;
+                    $types .= "s";
                 }
                 
-                // Add trip_type condition
-                $conditions[] = "trip_type = ?";
-                $whereParams[] = $tripType;
-                $whereTypes .= "s";
+                // Add trip_type field
+                $insertFields[] = "trip_type";
+                $placeholders[] = "?";
+                $params[] = $tripType;
+                $types .= "s";
                 
-                // Build SET part of query with only columns that exist
-                $setParts = [];
-                $setParams = [];
-                $setTypes = "";
-                
-                $possibleColumns = [
-                    'airport_base_price' => $basePrice,
-                    'airport_price_per_km' => $pricePerKm,
-                    'airport_pickup_price' => $pickupPrice,
-                    'airport_drop_price' => $dropPrice,
-                    'airport_tier1_price' => $tier1Price,
-                    'airport_tier2_price' => $tier2Price,
-                    'airport_tier3_price' => $tier3Price,
-                    'airport_tier4_price' => $tier4Price,
-                    'airport_extra_km_charge' => $extraKmCharge,
-                    'updated_at' => 'NOW()'
+                // Add common fields
+                $commonFields = [
+                    "base_fare" => $basePrice,
+                    "price_per_km" => $pricePerKm,
+                    "airport_base_price" => $basePrice,
+                    "airport_price_per_km" => $pricePerKm,
+                    "airport_pickup_price" => $pickupPrice,
+                    "airport_drop_price" => $dropPrice,
+                    "airport_tier1_price" => $tier1Price,
+                    "airport_tier2_price" => $tier2Price,
+                    "airport_tier3_price" => $tier3Price,
+                    "airport_tier4_price" => $tier4Price,
+                    "airport_extra_km_charge" => $extraKmCharge
                 ];
                 
-                foreach ($possibleColumns as $column => $value) {
-                    if (in_array($column, $columns) && $column !== 'updated_at') {
-                        $setParts[] = "$column = ?";
-                        $setParams[] = $value;
-                        $setTypes .= "d"; // all are decimal values
-                    } elseif ($column === 'updated_at' && in_array($column, $columns)) {
-                        $setParts[] = "updated_at = NOW()";
+                foreach ($commonFields as $field => $value) {
+                    // Only include fields that exist in the table
+                    if (columnExists($conn, 'vehicle_pricing', $field)) {
+                        $insertFields[] = $field;
+                        $placeholders[] = "?";
+                        $params[] = $value;
+                        $types .= "d";
                     }
                 }
                 
-                // Check if we have both conditions and columns to update
-                if (!empty($conditions) && !empty($setParts)) {
-                    // First try to update
-                    $updateQuery = "UPDATE vehicle_pricing SET " . implode(", ", $setParts) . 
-                                  " WHERE (" . implode(" OR ", array_slice($conditions, 0, -1)) . ") AND " . end($conditions);
-                    
-                    $updateStmt = $conn->prepare($updateQuery);
-                    
-                    if ($updateStmt) {
-                        $allParams = array_merge($setParams, $whereParams);
-                        $allTypes = $setTypes . $whereTypes;
-                        
-                        $updateStmt->bind_param($allTypes, ...$allParams);
-                        $updateStmt->execute();
-                        $affectedRows = $updateStmt->affected_rows;
-                        $updateStmt->close();
-                        
-                        error_log("[" . date('Y-m-d H:i:s') . "] Updated vehicle_pricing for airport fares: $vehicleId, Affected rows: $affectedRows", 3, $logDir . '/fare-updates.log');
-                        
-                        // If no rows were updated, try to insert
-                        if ($affectedRows === 0) {
-                            $insertFields = [];
-                            $placeholders = [];
-                            $insertParams = [];
-                            $insertTypes = "";
-                            
-                            if ($hasVehicleId) {
-                                $insertFields[] = "vehicle_id";
-                                $placeholders[] = "?";
-                                $insertParams[] = $vehicleId;
-                                $insertTypes .= "s";
-                            }
-                            
-                            if ($hasVehicleType) {
-                                $insertFields[] = "vehicle_type";
-                                $placeholders[] = "?";
-                                $insertParams[] = $vehicleId;
-                                $insertTypes .= "s";
-                            }
-                            
-                            // Add trip_type
-                            $insertFields[] = "trip_type";
-                            $placeholders[] = "?";
-                            $insertParams[] = $tripType;
-                            $insertTypes .= "s";
-                            
-                            // Add all columns that exist
-                            foreach ($possibleColumns as $column => $value) {
-                                if (in_array($column, $columns) && $column !== 'updated_at') {
-                                    $insertFields[] = $column;
-                                    $placeholders[] = "?";
-                                    $insertParams[] = $value;
-                                    $insertTypes .= "d";
-                                }
-                            }
-                            
-                            // Add created_at and updated_at if they exist
-                            if (in_array('created_at', $columns)) {
-                                $insertFields[] = "created_at";
-                                $placeholders[] = "NOW()";
-                            }
-                            
-                            if (in_array('updated_at', $columns)) {
-                                $insertFields[] = "updated_at";
-                                $placeholders[] = "NOW()";
-                            }
-                            
-                            $insertQuery = "INSERT INTO vehicle_pricing (" . implode(", ", $insertFields) . 
-                                         ") VALUES (" . implode(", ", $placeholders) . ")";
-                            
-                            $insertStmt = $conn->prepare($insertQuery);
-                            
-                            if ($insertStmt) {
-                                $insertStmt->bind_param($insertTypes, ...$insertParams);
-                                $insertStmt->execute();
-                                $insertStmt->close();
-                                error_log("[" . date('Y-m-d H:i:s') . "] Inserted into vehicle_pricing for airport fares: $vehicleId", 3, $logDir . '/fare-updates.log');
-                            } else {
-                                error_log("[" . date('Y-m-d H:i:s') . "] Error preparing vehicle_pricing insert statement: " . $conn->error, 3, $logDir . '/fare-updates.log');
-                            }
-                        }
-                    } else {
-                        error_log("[" . date('Y-m-d H:i:s') . "] Error preparing vehicle_pricing update statement: " . $conn->error, 3, $logDir . '/fare-updates.log');
+                // Add the updated_at field
+                $insertFields[] = "updated_at";
+                $placeholders[] = "NOW()";
+                
+                // Build the update part of the query
+                $updateParts = [];
+                foreach ($commonFields as $field => $value) {
+                    // Only include fields that exist in the table
+                    if (columnExists($conn, 'vehicle_pricing', $field)) {
+                        $updateParts[] = "$field = VALUES($field)";
                     }
+                }
+                $updateParts[] = "updated_at = NOW()";
+                
+                // Construct the final query
+                $sql = "INSERT INTO vehicle_pricing 
+                        (" . implode(", ", $insertFields) . ")
+                        VALUES (" . implode(", ", $placeholders) . ")
+                        ON DUPLICATE KEY UPDATE " . implode(", ", $updateParts);
+                
+                $stmt = $conn->prepare($sql);
+                
+                if ($stmt) {
+                    $stmt->bind_param($types, ...$params);
+                    $stmt->execute();
+                    $stmt->close();
+                    error_log("Updated vehicle_pricing for airport fares: $vehicleId");
+                } else {
+                    error_log("Error preparing vehicle_pricing statement: " . $conn->error);
                 }
             }
         }
@@ -356,7 +286,7 @@ try {
         // Commit transaction
         $conn->commit();
         
-        error_log("[" . date('Y-m-d H:i:s') . "] Airport fare update successful for vehicle $vehicleId", 3, $logDir . '/fare-updates.log');
+        error_log("Airport fare update successful for vehicle $vehicleId", 3, __DIR__ . '/../../error.log');
         
         sendSuccessResponse(
             [
@@ -373,7 +303,7 @@ try {
     }
     
 } catch (Exception $e) {
-    error_log("[" . date('Y-m-d H:i:s') . "] Error in airport fare update: " . $e->getMessage(), 3, $logDir . '/fare-updates.log');
+    error_log("Error in airport fare update: " . $e->getMessage(), 3, __DIR__ . '/../../error.log');
     sendErrorResponse($e->getMessage(), 500, [
         "file" => $e->getFile(),
         "line" => $e->getLine()

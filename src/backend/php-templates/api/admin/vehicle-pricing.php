@@ -12,17 +12,10 @@ header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh');
 header('Content-Type: application/json');
 
-// Create log directory if it doesn't exist
-$logDir = __DIR__ . '/../../logs';
-if (!file_exists($logDir)) {
-    mkdir($logDir, 0755, true);
-}
-
 // Connect to the database
 try {
     $conn = getDbConnection();
 } catch (Exception $e) {
-    error_log("[" . date('Y-m-d H:i:s') . "] Database connection error: " . $e->getMessage(), 3, $logDir . '/vehicle-pricing.log');
     http_response_code(500);
     echo json_encode([
         'status' => 'error',
@@ -41,13 +34,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 $method = $_SERVER['REQUEST_METHOD'];
 
 // Log incoming request for debugging
-error_log("[" . date('Y-m-d H:i:s') . "] Vehicle pricing request received: " . $method, 3, $logDir . '/vehicle-pricing.log');
+error_log("Vehicle pricing request received: " . $method, 3, __DIR__ . '/../../logs/debug.log');
 
 // Function to check if a vehicle exists
 function vehicleExists($conn, $vehicleId) {
     $stmt = $conn->prepare("SELECT id FROM vehicle_types WHERE id = ? OR vehicle_id = ?");
     if (!$stmt) {
-        error_log("[" . date('Y-m-d H:i:s') . "] Failed to prepare stmt for checking if vehicle exists: " . $conn->error, 3, __DIR__ . '/../../logs/vehicle-pricing.log');
+        error_log("Failed to prepare stmt for checking if vehicle exists: " . $conn->error, 3, __DIR__ . '/../../logs/error.log');
         return false;
     }
     $stmt->bind_param("ss", $vehicleId, $vehicleId);
@@ -72,96 +65,13 @@ function columnExists($conn, $table, $column) {
     return ($result && $result->num_rows > 0);
 }
 
-// Function to check if a table exists
-function tableExists($conn, $table) {
-    $result = $conn->query("SHOW TABLES LIKE '$table'");
-    return ($result && $result->num_rows > 0);
-}
-
-// Function to ensure necessary tables exist
-function ensureTables($conn) {
-    // Check if vehicle_types table exists
-    $vehicleTypesExists = tableExists($conn, 'vehicle_types');
-    
-    if (!$vehicleTypesExists) {
-        // Create vehicle_types table
-        $sql = "CREATE TABLE IF NOT EXISTS vehicle_types (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            vehicle_id VARCHAR(50) NOT NULL UNIQUE,
-            name VARCHAR(100) NOT NULL,
-            capacity INT NOT NULL DEFAULT 4,
-            luggage_capacity INT NOT NULL DEFAULT 2,
-            ac TINYINT(1) NOT NULL DEFAULT 1,
-            image VARCHAR(255) DEFAULT '/cars/sedan.png',
-            amenities TEXT DEFAULT NULL,
-            description TEXT DEFAULT NULL,
-            is_active TINYINT(1) NOT NULL DEFAULT 1,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
-        
-        if (!$conn->query($sql)) {
-            error_log("[" . date('Y-m-d H:i:s') . "] Error creating vehicle_types table: " . $conn->error, 3, __DIR__ . '/../../logs/vehicle-pricing.log');
-            return false;
-        }
-        
-        error_log("[" . date('Y-m-d H:i:s') . "] Created vehicle_types table", 3, __DIR__ . '/../../logs/vehicle-pricing.log');
-    }
-    
-    // Check if vehicle_pricing table exists
-    $vehiclePricingExists = tableExists($conn, 'vehicle_pricing');
-    
-    if (!$vehiclePricingExists) {
-        // Create vehicle_pricing table
-        $sql = "CREATE TABLE IF NOT EXISTS vehicle_pricing (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            vehicle_id VARCHAR(50),
-            vehicle_type VARCHAR(50),
-            trip_type ENUM('outstation', 'local', 'airport') NOT NULL,
-            base_fare DECIMAL(10,2) DEFAULT 0,
-            price_per_km DECIMAL(5,2) DEFAULT 0,
-            night_halt_charge DECIMAL(10,2) DEFAULT 0,
-            driver_allowance DECIMAL(10,2) DEFAULT 0,
-            local_package_4hr DECIMAL(10,2) DEFAULT 0,
-            local_package_8hr DECIMAL(10,2) DEFAULT 0,
-            local_package_10hr DECIMAL(10,2) DEFAULT 0,
-            extra_km_charge DECIMAL(5,2) DEFAULT 0,
-            extra_hour_charge DECIMAL(5,2) DEFAULT 0,
-            airport_base_price DECIMAL(10,2) DEFAULT 0,
-            airport_price_per_km DECIMAL(5,2) DEFAULT 0,
-            airport_pickup_price DECIMAL(10,2) DEFAULT 0,
-            airport_drop_price DECIMAL(10,2) DEFAULT 0,
-            airport_tier1_price DECIMAL(10,2) DEFAULT 0,
-            airport_tier2_price DECIMAL(10,2) DEFAULT 0,
-            airport_tier3_price DECIMAL(10,2) DEFAULT 0,
-            airport_tier4_price DECIMAL(10,2) DEFAULT 0,
-            airport_extra_km_charge DECIMAL(5,2) DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            UNIQUE KEY idx_vehicle_trip (vehicle_id, trip_type)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
-        
-        if (!$conn->query($sql)) {
-            error_log("[" . date('Y-m-d H:i:s') . "] Error creating vehicle_pricing table: " . $conn->error, 3, __DIR__ . '/../../logs/vehicle-pricing.log');
-            return false;
-        }
-        
-        error_log("[" . date('Y-m-d H:i:s') . "] Created vehicle_pricing table", 3, __DIR__ . '/../../logs/vehicle-pricing.log');
-    }
-    
-    return true;
-}
-
-// Ensure necessary tables exist
-ensureTables($conn);
-
 // Function to update or create outstation fares
 function updateOutstationFares($conn, $vehicleId, $fareData) {
     // Clean the vehicle ID
     $vehicleId = cleanVehicleId($vehicleId);
     
     // Log what we're trying to update
-    error_log("[" . date('Y-m-d H:i:s') . "] Updating outstation fares for vehicle: " . $vehicleId, 3, __DIR__ . '/../../logs/vehicle-pricing.log');
+    error_log("Updating outstation fares for vehicle: " . $vehicleId, 3, __DIR__ . '/../../logs/debug.log');
     
     // Get required fields with fallbacks for both column naming styles
     $baseFare = isset($fareData['baseFare']) ? floatval($fareData['baseFare']) : 
@@ -174,7 +84,7 @@ function updateOutstationFares($conn, $vehicleId, $fareData) {
     $vehicleQuery = "SELECT id FROM vehicle_types WHERE vehicle_id = ?";
     $vehicleStmt = $conn->prepare($vehicleQuery);
     if (!$vehicleStmt) {
-        error_log("[" . date('Y-m-d H:i:s') . "] Failed to prepare statement for vehicle check: " . $conn->error, 3, __DIR__ . '/../../logs/vehicle-pricing.log');
+        error_log("Failed to prepare statement for vehicle check: " . $conn->error, 3, __DIR__ . '/../../logs/error.log');
         return false;
     }
     
@@ -189,13 +99,12 @@ function updateOutstationFares($conn, $vehicleId, $fareData) {
                               VALUES (?, ?, 4, 2, 1, 1, NOW(), NOW())";
         $insertVehicleStmt = $conn->prepare($insertVehicleQuery);
         if (!$insertVehicleStmt) {
-            error_log("[" . date('Y-m-d H:i:s') . "] Failed to prepare statement for vehicle insert: " . $conn->error, 3, __DIR__ . '/../../logs/vehicle-pricing.log');
+            error_log("Failed to prepare statement for vehicle insert: " . $conn->error, 3, __DIR__ . '/../../logs/error.log');
             return false;
         }
         
         $insertVehicleStmt->bind_param("ss", $vehicleId, $vehicleName);
         $insertVehicleStmt->execute();
-        error_log("[" . date('Y-m-d H:i:s') . "] Created new vehicle: $vehicleId with name: $vehicleName", 3, __DIR__ . '/../../logs/vehicle-pricing.log');
     }
     
     // Check if the vehicle_pricing table exists
@@ -252,7 +161,7 @@ function updateOutstationFares($conn, $vehicleId, $fareData) {
                 $updateStmt->execute();
                 
                 if ($updateStmt->affected_rows > 0) {
-                    error_log("[" . date('Y-m-d H:i:s') . "] Successfully updated vehicle_pricing for $vehicleId", 3, __DIR__ . '/../../logs/vehicle-pricing.log');
+                    error_log("Successfully updated vehicle_pricing for $vehicleId", 3, __DIR__ . '/../../logs/debug.log');
                 } else {
                     // Try to insert if update didn't affect any rows
                     $insertColumns = [];
@@ -286,12 +195,12 @@ function updateOutstationFares($conn, $vehicleId, $fareData) {
                     if ($insertStmt) {
                         $insertStmt->bind_param($insertTypes, ...$insertValues);
                         $insertStmt->execute();
-                        error_log("[" . date('Y-m-d H:i:s') . "] Inserted into vehicle_pricing for $vehicleId", 3, __DIR__ . '/../../logs/vehicle-pricing.log');
+                        error_log("Inserted into vehicle_pricing for $vehicleId", 3, __DIR__ . '/../../logs/debug.log');
                     }
                 }
             }
         } catch (Exception $e) {
-            error_log("[" . date('Y-m-d H:i:s') . "] Failed to update/insert vehicle_pricing: " . $e->getMessage(), 3, __DIR__ . '/../../logs/vehicle-pricing.log');
+            error_log("Failed to update/insert vehicle_pricing: " . $e->getMessage(), 3, __DIR__ . '/../../logs/error.log');
         }
     }
     
@@ -301,7 +210,7 @@ function updateOutstationFares($conn, $vehicleId, $fareData) {
     // Check if record exists in outstation_fares
     $stmt = $conn->prepare("SELECT id FROM outstation_fares WHERE vehicle_id = ?");
     if (!$stmt) {
-        error_log("[" . date('Y-m-d H:i:s') . "] Failed to prepare statement for outstation fare check: " . $conn->error, 3, __DIR__ . '/../../logs/vehicle-pricing.log');
+        error_log("Failed to prepare statement for outstation fare check: " . $conn->error, 3, __DIR__ . '/../../logs/error.log');
         return false;
     }
     
@@ -314,7 +223,7 @@ function updateOutstationFares($conn, $vehicleId, $fareData) {
         $updateQuery = "UPDATE outstation_fares SET $basePriceColumnName = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?, updated_at = NOW() WHERE vehicle_id = ?";
         $updateStmt = $conn->prepare($updateQuery);
         if (!$updateStmt) {
-            error_log("[" . date('Y-m-d H:i:s') . "] Failed to prepare statement for outstation fare update: " . $conn->error, 3, __DIR__ . '/../../logs/vehicle-pricing.log');
+            error_log("Failed to prepare statement for outstation fare update: " . $conn->error, 3, __DIR__ . '/../../logs/error.log');
             return false;
         }
         
@@ -326,7 +235,7 @@ function updateOutstationFares($conn, $vehicleId, $fareData) {
                         VALUES (?, ?, ?, ?, ?, NOW(), NOW())";
         $insertStmt = $conn->prepare($insertQuery);
         if (!$insertStmt) {
-            error_log("[" . date('Y-m-d H:i:s') . "] Failed to prepare statement for outstation fare insert: " . $conn->error, 3, __DIR__ . '/../../logs/vehicle-pricing.log');
+            error_log("Failed to prepare statement for outstation fare insert: " . $conn->error, 3, __DIR__ . '/../../logs/error.log');
             return false;
         }
         
@@ -343,7 +252,7 @@ function updateLocalFares($conn, $vehicleId, $fareData) {
     $vehicleId = cleanVehicleId($vehicleId);
     
     // Log what we're trying to update
-    error_log("[" . date('Y-m-d H:i:s') . "] Updating local fares for vehicle: " . $vehicleId, 3, __DIR__ . '/../../logs/vehicle-pricing.log');
+    error_log("Updating local fares for vehicle: " . $vehicleId, 3, __DIR__ . '/../../logs/debug.log');
     
     // Get prices with multiple fallbacks
     $price4hrs40km = isset($fareData['price4hrs40km']) ? floatval($fareData['price4hrs40km']) : 
@@ -360,34 +269,6 @@ function updateLocalFares($conn, $vehicleId, $fareData) {
                   
     $priceExtraHour = isset($fareData['priceExtraHour']) ? floatval($fareData['priceExtraHour']) : 
                     (isset($fareData['extra_hour_charge']) ? floatval($fareData['extra_hour_charge']) : 0);
-    
-    // First check if vehicle exists in vehicle_types table, if not create it
-    $vehicleQuery = "SELECT id FROM vehicle_types WHERE vehicle_id = ?";
-    $vehicleStmt = $conn->prepare($vehicleQuery);
-    if (!$vehicleStmt) {
-        error_log("[" . date('Y-m-d H:i:s') . "] Failed to prepare statement for vehicle check: " . $conn->error, 3, __DIR__ . '/../../logs/vehicle-pricing.log');
-        return false;
-    }
-    
-    $vehicleStmt->bind_param("s", $vehicleId);
-    $vehicleStmt->execute();
-    $vehicleResult = $vehicleStmt->get_result();
-    
-    if ($vehicleResult->num_rows == 0) {
-        // Vehicle doesn't exist, create it
-        $vehicleName = ucfirst(str_replace('_', ' ', $vehicleId));
-        $insertVehicleQuery = "INSERT INTO vehicle_types (vehicle_id, name, capacity, luggage_capacity, ac, is_active, created_at, updated_at) 
-                              VALUES (?, ?, 4, 2, 1, 1, NOW(), NOW())";
-        $insertVehicleStmt = $conn->prepare($insertVehicleQuery);
-        if (!$insertVehicleStmt) {
-            error_log("[" . date('Y-m-d H:i:s') . "] Failed to prepare statement for vehicle insert: " . $conn->error, 3, __DIR__ . '/../../logs/vehicle-pricing.log');
-            return false;
-        }
-        
-        $insertVehicleStmt->bind_param("ss", $vehicleId, $vehicleName);
-        $insertVehicleStmt->execute();
-        error_log("[" . date('Y-m-d H:i:s') . "] Created new vehicle: $vehicleId with name: $vehicleName", 3, __DIR__ . '/../../logs/vehicle-pricing.log');
-    }
     
     // Check if the vehicle_pricing table exists
     $tableExistsResult = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'");
@@ -445,7 +326,7 @@ function updateLocalFares($conn, $vehicleId, $fareData) {
                 $updateStmt->execute();
                 
                 if ($updateStmt->affected_rows > 0) {
-                    error_log("[" . date('Y-m-d H:i:s') . "] Successfully updated vehicle_pricing for $vehicleId (local)", 3, __DIR__ . '/../../logs/vehicle-pricing.log');
+                    error_log("Successfully updated vehicle_pricing for $vehicleId (local)", 3, __DIR__ . '/../../logs/debug.log');
                 } else {
                     // Try to insert if update didn't affect any rows
                     $insertColumns = [];
@@ -493,44 +374,19 @@ function updateLocalFares($conn, $vehicleId, $fareData) {
                     if ($insertStmt) {
                         $insertStmt->bind_param($insertTypes, ...$insertValues);
                         $insertStmt->execute();
-                        error_log("[" . date('Y-m-d H:i:s') . "] Inserted into vehicle_pricing for $vehicleId (local)", 3, __DIR__ . '/../../logs/vehicle-pricing.log');
+                        error_log("Inserted into vehicle_pricing for $vehicleId (local)", 3, __DIR__ . '/../../logs/debug.log');
                     }
                 }
             }
         } catch (Exception $e) {
-            error_log("[" . date('Y-m-d H:i:s') . "] Failed to update vehicle_pricing: " . $e->getMessage(), 3, __DIR__ . '/../../logs/vehicle-pricing.log');
+            error_log("Failed to update vehicle_pricing: " . $e->getMessage(), 3, __DIR__ . '/../../logs/error.log');
         }
-    }
-    
-    // Check if local_package_fares table exists
-    $tableExistsResult = $conn->query("SHOW TABLES LIKE 'local_package_fares'");
-    $localFaresExists = ($tableExistsResult && $tableExistsResult->num_rows > 0);
-    
-    if (!$localFaresExists) {
-        // Create the table if it doesn't exist
-        $createTableSql = "
-            CREATE TABLE IF NOT EXISTS local_package_fares (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                vehicle_id VARCHAR(50) NOT NULL,
-                vehicle_type VARCHAR(50) DEFAULT NULL,
-                price_4hrs_40km DECIMAL(10,2) NOT NULL DEFAULT 0,
-                price_8hrs_80km DECIMAL(10,2) NOT NULL DEFAULT 0,
-                price_10hrs_100km DECIMAL(10,2) NOT NULL DEFAULT 0,
-                price_extra_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-                price_extra_hour DECIMAL(5,2) NOT NULL DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                UNIQUE KEY (vehicle_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        ";
-        $conn->query($createTableSql);
-        error_log("[" . date('Y-m-d H:i:s') . "] Created local_package_fares table", 3, __DIR__ . '/../../logs/vehicle-pricing.log');
     }
     
     // Check if we have a record in local_package_fares table
     $stmt = $conn->prepare("SELECT id FROM local_package_fares WHERE vehicle_id = ?");
     if (!$stmt) {
-        error_log("[" . date('Y-m-d H:i:s') . "] Failed to prepare statement for local fare check: " . $conn->error, 3, __DIR__ . '/../../logs/vehicle-pricing.log');
+        error_log("Failed to prepare statement for local fare check: " . $conn->error, 3, __DIR__ . '/../../logs/error.log');
         return false;
     }
     
@@ -543,26 +399,24 @@ function updateLocalFares($conn, $vehicleId, $fareData) {
         $updateQuery = "UPDATE local_package_fares SET price_4hrs_40km = ?, price_8hrs_80km = ?, price_10hrs_100km = ?, price_extra_km = ?, price_extra_hour = ?, updated_at = NOW() WHERE vehicle_id = ?";
         $updateStmt = $conn->prepare($updateQuery);
         if (!$updateStmt) {
-            error_log("[" . date('Y-m-d H:i:s') . "] Failed to prepare statement for local fare update: " . $conn->error, 3, __DIR__ . '/../../logs/vehicle-pricing.log');
+            error_log("Failed to prepare statement for local fare update: " . $conn->error, 3, __DIR__ . '/../../logs/error.log');
             return false;
         }
         
         $updateStmt->bind_param("ddddds", $price4hrs40km, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour, $vehicleId);
         $success = $updateStmt->execute();
-        error_log("[" . date('Y-m-d H:i:s') . "] Updated local_package_fares for $vehicleId", 3, __DIR__ . '/../../logs/vehicle-pricing.log');
     } else {
         // Insert new record
         $insertQuery = "INSERT INTO local_package_fares (vehicle_id, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour, created_at, updated_at) 
                         VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())";
         $insertStmt = $conn->prepare($insertQuery);
         if (!$insertStmt) {
-            error_log("[" . date('Y-m-d H:i:s') . "] Failed to prepare statement for local fare insert: " . $conn->error, 3, __DIR__ . '/../../logs/vehicle-pricing.log');
+            error_log("Failed to prepare statement for local fare insert: " . $conn->error, 3, __DIR__ . '/../../logs/error.log');
             return false;
         }
         
         $insertStmt->bind_param("sddddd", $vehicleId, $price4hrs40km, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour);
         $success = $insertStmt->execute();
-        error_log("[" . date('Y-m-d H:i:s') . "] Inserted into local_package_fares for $vehicleId", 3, __DIR__ . '/../../logs/vehicle-pricing.log');
     }
     
     return $success;
@@ -578,9 +432,6 @@ if ($method === 'POST') {
     if (json_last_error() !== JSON_ERROR_NONE) {
         $data = $_POST;
     }
-    
-    // Log the raw request
-    error_log("[" . date('Y-m-d H:i:s') . "] Raw request data: " . print_r($data, true), 3, $logDir . '/vehicle-pricing.log');
     
     // Get vehicleId and tripType from the request
     $vehicleId = isset($data['vehicleId']) ? $data['vehicleId'] : null;
@@ -630,36 +481,6 @@ if ($method === 'POST') {
     // Handle GET request to retrieve pricing
     $vehicleId = isset($_GET['vehicleId']) ? $_GET['vehicleId'] : null;
     $tripType = isset($_GET['tripType']) ? $_GET['tripType'] : null;
-    
-    // Verify vehicle_types table exists and has data
-    $vehicleTypesExist = $conn->query("SHOW TABLES LIKE 'vehicle_types'")->num_rows > 0;
-    $vehicleCount = 0;
-    
-    if ($vehicleTypesExist) {
-        $countResult = $conn->query("SELECT COUNT(*) as count FROM vehicle_types");
-        if ($countResult && $countRow = $countResult->fetch_assoc()) {
-            $vehicleCount = $countRow['count'];
-        }
-        
-        // If no vehicles exist, create a sample one
-        if ($vehicleCount === 0) {
-            $sampleVehicles = [
-                ['sedan', 'Sedan', 4, 2],
-                ['ertiga', 'Ertiga', 6, 3],
-                ['innova', 'Innova', 7, 4]
-            ];
-            
-            foreach ($sampleVehicles as $vehicle) {
-                $insertQuery = "INSERT INTO vehicle_types (vehicle_id, name, capacity, luggage_capacity, ac, is_active) 
-                               VALUES (?, ?, ?, ?, 1, 1)";
-                $stmt = $conn->prepare($insertQuery);
-                $stmt->bind_param("ssii", $vehicle[0], $vehicle[1], $vehicle[2], $vehicle[3]);
-                $stmt->execute();
-            }
-            
-            error_log("[" . date('Y-m-d H:i:s') . "] Created sample vehicles as vehicle_types table was empty", 3, $logDir . '/vehicle-pricing.log');
-        }
-    }
     
     // Get all vehicles and pricing
     $query = "SELECT vt.id, vt.vehicle_id, vt.name, vt.capacity, vt.luggage_capacity 
@@ -725,8 +546,6 @@ if ($method === 'POST') {
         
         $response['data'][] = $vehicleData;
     }
-    
-    error_log("[" . date('Y-m-d H:i:s') . "] Returning data for " . count($response['data']) . " vehicles", 3, $logDir . '/vehicle-pricing.log');
     
     echo json_encode($response);
 } else {
