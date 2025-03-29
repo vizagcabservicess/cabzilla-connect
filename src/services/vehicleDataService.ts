@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { CabType, OutstationFare, LocalFare, AirportFare } from '@/types/cab';
 import { toast } from 'sonner';
@@ -76,24 +77,35 @@ const cleanVehicleId = (id: string | undefined): string => {
 
 /**
  * Normalize API response to handle different formats
+ * Add enhanced logging to diagnose the issue
  */
 const normalizeVehiclesData = (data: any): CabType[] => {
-  if (!data) return [];
+  if (!data) {
+    console.log('No data received to normalize');
+    return [];
+  }
   
   let vehicles = [];
+  let sourceType = 'unknown';
   
   // Check if the data is already an array
   if (Array.isArray(data)) {
+    sourceType = 'direct-array';
     vehicles = data;
   }
   // Check if data.vehicles is an array
   else if (data.vehicles && Array.isArray(data.vehicles)) {
+    sourceType = 'vehicles-property';
     vehicles = data.vehicles;
   }
   // Check if data.data is an array
   else if (data.data && Array.isArray(data.data)) {
+    sourceType = 'data-property';
     vehicles = data.data;
   }
+  
+  // Enhanced logging to diagnose empty vehicles
+  console.log(`Normalizing vehicles from ${sourceType} source, found ${vehicles.length} vehicles`);
   
   if (vehicles.length === 0) {
     console.warn('No valid vehicle data found in API response');
@@ -101,12 +113,18 @@ const normalizeVehiclesData = (data: any): CabType[] => {
   }
   
   // Map and normalize the vehicle data
-  return vehicles.map((vehicle: any) => {
+  const normalizedVehicles = vehicles.map((vehicle: any) => {
     // Extract and clean ID from various possible sources
     const rawVehicleId = vehicle.id || vehicle.vehicleId || vehicle.vehicle_id || vehicle.vehicleType || vehicle.vehicle_type || '';
     const vehicleId = cleanVehicleId(String(rawVehicleId));
     
     const name = String(vehicle.name || vehicleId || '').trim();
+    
+    // Basic validation check
+    if (!vehicleId) {
+      console.warn('Vehicle missing ID, skipping:', vehicle);
+      return null;
+    }
     
     return {
       id: vehicleId,
@@ -129,7 +147,16 @@ const normalizeVehiclesData = (data: any): CabType[] => {
               (vehicle.is_active !== undefined ? Boolean(vehicle.is_active) : true),
       basePrice: Number(vehicle.basePrice || vehicle.price || vehicle.base_price || vehicle.base_fare) || 0
     };
-  });
+  }).filter(Boolean); // Remove any null entries
+  
+  console.log(`Successfully normalized ${normalizedVehicles.length} vehicles`);
+  
+  if (normalizedVehicles.length === 0) {
+    console.warn('No vehicles passed normalization, using defaults');
+    return defaultVehicles;
+  }
+  
+  return normalizedVehicles;
 };
 
 /**
@@ -167,11 +194,35 @@ export const getVehicleData = async (includeInactive: boolean = false): Promise<
         vehicles.filter(v => v.isActive !== false);
       
       if (filteredVehicles.length > 0) {
+        console.log(`Successfully fetched vehicles from primary endpoint: ${filteredVehicles.length}`);
         return filteredVehicles;
       }
     }
   } catch (error) {
     console.log("Could not load from local JSON file, trying API endpoints");
+  }
+  
+  // Also check localStorage for cached vehicles as an extra fallback
+  try {
+    const cachedVehicles = localStorage.getItem('cachedVehicles');
+    if (cachedVehicles) {
+      const vehicles = JSON.parse(cachedVehicles) as CabType[];
+      console.log(`Found ${vehicles.length} vehicles in localStorage cache`);
+      
+      // Only use cache if we have vehicles
+      if (vehicles.length > 0) {
+        // Filter active vehicles if needed
+        const filteredVehicles = includeInactive ? 
+          vehicles : 
+          vehicles.filter(v => v.isActive !== false);
+        
+        if (filteredVehicles.length > 0) {
+          return filteredVehicles;
+        }
+      }
+    }
+  } catch (error) {
+    console.log("Could not load from localStorage cache");
   }
   
   // Try multiple API endpoints in sequence
@@ -218,6 +269,9 @@ export const getVehicleData = async (includeInactive: boolean = false): Promise<
         
         const normalizedVehicles = normalizeVehiclesData(response.data);
         
+        // Save to localStorage for future fallback
+        localStorage.setItem('cachedVehicles', JSON.stringify(normalizedVehicles));
+        
         // Filter active vehicles if needed
         const filteredVehicles = includeInactive ? 
           normalizedVehicles : 
@@ -249,6 +303,9 @@ export const getVehicleData = async (includeInactive: boolean = false): Promise<
     id: "vehicle-api-error",
     duration: 4000
   });
+  
+  // Save defaults to localStorage too
+  localStorage.setItem('cachedVehicles', JSON.stringify(defaultVehicles));
   
   return defaultVehicles;
 };
@@ -499,8 +556,9 @@ export const deleteVehicle = async (vehicleId: string): Promise<boolean> => {
 
 /**
  * Get all vehicle types for dropdown selection
+ * Ensure this returns the full vehicle data, not just id/name
  */
-export const getVehicleTypes = async (): Promise<any[]> => {
+export const getVehicleTypes = async (): Promise<CabType[]> => {
   try {
     // Always pass true to include inactive vehicles
     const vehicles = await getVehicleData(true); 
@@ -510,6 +568,17 @@ export const getVehicleTypes = async (): Promise<any[]> => {
     return vehicles;
   } catch (error) {
     console.error('Error getting vehicle types:', error);
+    
+    // Try to load from localStorage as last resort
+    try {
+      const cachedVehicles = localStorage.getItem('cachedVehicles');
+      if (cachedVehicles) {
+        return JSON.parse(cachedVehicles) as CabType[];
+      }
+    } catch (e) {
+      console.log('Failed to load from cache:', e);
+    }
+    
     return defaultVehicles;
   }
 };
