@@ -1,3 +1,4 @@
+
 <?php
 require_once '../../config.php';
 
@@ -76,6 +77,35 @@ $fallbackVehicles = [
         'vehicleId' => 'innova_crysta'
     ]
 ];
+
+// Save vehicles to a local JSON file for fast access
+function saveVehiclesToJson($vehicles) {
+    try {
+        // Ensure the directory exists
+        $dir = __DIR__ . '/../../../public/data';
+        if (!is_dir($dir)) {
+            if (!mkdir($dir, 0755, true)) {
+                error_log("Failed to create directory: $dir");
+                return false;
+            }
+        }
+        
+        $jsonFile = $dir . '/vehicles.json';
+        $jsonData = json_encode($vehicles, JSON_PRETTY_PRINT);
+        
+        // Write to file
+        if (file_put_contents($jsonFile, $jsonData)) {
+            error_log("Successfully saved vehicles to JSON file: $jsonFile");
+            return true;
+        } else {
+            error_log("Failed to write vehicles to JSON file: $jsonFile");
+            return false;
+        }
+    } catch (Exception $e) {
+        error_log("Exception saving vehicles to JSON: " . $e->getMessage());
+        return false;
+    }
+}
 
 // Parse the input data either from POST body or PUT body
 function getRequestData() {
@@ -222,6 +252,78 @@ try {
             
             // Commit transaction
             $conn->commit();
+            
+            // Get updated vehicle list to update JSON file
+            $updatedVehicles = [];
+            $query = "
+                SELECT 
+                    vt.vehicle_id, 
+                    vt.name, 
+                    vt.capacity, 
+                    vt.luggage_capacity,
+                    vt.ac, 
+                    vt.image,
+                    vt.description,
+                    vt.amenities,
+                    vt.is_active,
+                    vp.base_price,
+                    vp.base_fare,
+                    vp.price_per_km,
+                    vp.night_halt_charge,
+                    vp.driver_allowance
+                FROM 
+                    vehicle_types vt
+                LEFT JOIN 
+                    vehicle_pricing vp ON vt.vehicle_id = vp.vehicle_id
+            ";
+            
+            $result = $conn->query($query);
+            if ($result) {
+                while ($row = $result->fetch_assoc()) {
+                    // Process vehicle data
+                    $basePrice = isset($row['base_price']) ? $row['base_price'] : 
+                                (isset($row['base_fare']) ? $row['base_fare'] : 0);
+                    
+                    // Try to parse amenities
+                    $amenities = [];
+                    if (!empty($row['amenities'])) {
+                        try {
+                            $amenitiesData = json_decode($row['amenities'], true);
+                            if (is_array($amenitiesData)) {
+                                $amenities = $amenitiesData;
+                            } else {
+                                $amenities = [$row['amenities']];
+                            }
+                        } catch (Exception $e) {
+                            $amenities = [$row['amenities']];
+                        }
+                    }
+                    
+                    // Build vehicle object
+                    $vehicle = [
+                        'id' => $row['vehicle_id'],
+                        'vehicleId' => $row['vehicle_id'],
+                        'name' => $row['name'],
+                        'capacity' => intval($row['capacity']),
+                        'luggageCapacity' => intval($row['luggage_capacity']),
+                        'price' => floatval($basePrice),
+                        'basePrice' => floatval($basePrice),
+                        'pricePerKm' => floatval($row['price_per_km']),
+                        'image' => $row['image'],
+                        'amenities' => $amenities,
+                        'description' => $row['description'],
+                        'ac' => (bool)$row['ac'],
+                        'nightHaltCharge' => floatval($row['night_halt_charge']),
+                        'driverAllowance' => floatval($row['driver_allowance']),
+                        'isActive' => (bool)$row['is_active']
+                    ];
+                    
+                    $updatedVehicles[] = $vehicle;
+                }
+                
+                // Save updated vehicles to JSON
+                saveVehiclesToJson($updatedVehicles);
+            }
             
             echo json_encode([
                 'status' => 'success',
@@ -428,13 +530,86 @@ try {
             // Commit transaction
             $conn->commit();
             
+            // Get updated vehicle list to update JSON file
+            $updatedVehicles = [];
+            $query = "
+                SELECT 
+                    vt.vehicle_id, 
+                    vt.name, 
+                    vt.capacity, 
+                    vt.luggage_capacity,
+                    vt.ac, 
+                    vt.image,
+                    vt.description,
+                    vt.amenities,
+                    vt.is_active,
+                    vp.base_price,
+                    vp.base_fare,
+                    vp.price_per_km,
+                    vp.night_halt_charge,
+                    vp.driver_allowance
+                FROM 
+                    vehicle_types vt
+                LEFT JOIN 
+                    vehicle_pricing vp ON vt.vehicle_id = vp.vehicle_id
+            ";
+            
+            $result = $conn->query($query);
+            if ($result) {
+                while ($row = $result->fetch_assoc()) {
+                    // Process vehicle data
+                    $basePrice = isset($row['base_price']) ? $row['base_price'] : 
+                                (isset($row['base_fare']) ? $row['base_fare'] : 0);
+                    
+                    // Try to parse amenities
+                    $amenities = [];
+                    if (!empty($row['amenities'])) {
+                        try {
+                            $amenitiesData = json_decode($row['amenities'], true);
+                            if (is_array($amenitiesData)) {
+                                $amenities = $amenitiesData;
+                            } else {
+                                $amenities = [$row['amenities']];
+                            }
+                        } catch (Exception $e) {
+                            $amenities = [$row['amenities']];
+                        }
+                    }
+                    
+                    // Build vehicle object
+                    $vehicle = [
+                        'id' => $row['vehicle_id'],
+                        'vehicleId' => $row['vehicle_id'],
+                        'name' => $row['name'],
+                        'capacity' => intval($row['capacity']),
+                        'luggageCapacity' => intval($row['luggage_capacity']),
+                        'price' => floatval($basePrice),
+                        'basePrice' => floatval($basePrice),
+                        'pricePerKm' => floatval($row['price_per_km']),
+                        'image' => $row['image'],
+                        'amenities' => $amenities,
+                        'description' => $row['description'],
+                        'ac' => (bool)$row['ac'],
+                        'nightHaltCharge' => floatval($row['night_halt_charge']),
+                        'driverAllowance' => floatval($row['driver_allowance']),
+                        'isActive' => (bool)$row['is_active']
+                    ];
+                    
+                    $updatedVehicles[] = $vehicle;
+                }
+                
+                // Save updated vehicles to JSON
+                saveVehiclesToJson($updatedVehicles);
+            }
+            
             echo json_encode([
                 'status' => 'success', 
                 'message' => 'Vehicle and pricing updated successfully', 
                 'vehicleId' => $vehicleId, 
                 'basePrice' => $basePrice,
                 'pricePerKm' => $pricePerKm,
-                'timestamp' => time()
+                'timestamp' => time(),
+                'vehicleCount' => count($updatedVehicles)
             ]);
         } catch (Exception $e) {
             // Rollback on error
@@ -541,6 +716,11 @@ try {
                 $vehicles[] = $vehicle;
             }
             
+            // Save vehicles to JSON file for future use
+            if (!empty($vehicles)) {
+                saveVehiclesToJson($vehicles);
+            }
+            
             // If no vehicles were found, return fallbacks
             if (empty($vehicles)) {
                 echo json_encode([
@@ -554,7 +734,8 @@ try {
                 echo json_encode([
                     'vehicles' => $vehicles,
                     'timestamp' => time(),
-                    'cached' => false
+                    'cached' => false,
+                    'count' => count($vehicles)
                 ]);
             }
         } catch (Exception $e) {

@@ -57,6 +57,45 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
       
       setError(null);
       
+      // Try to get fresh data first if force refreshing
+      if (forceRefresh) {
+        try {
+          // First, try the JSON file for faster loading
+          const jsonResponse = await fetch(`/public/data/vehicles.json?_t=${now}`, {
+            headers: {
+              'Cache-Control': 'no-cache',
+            }
+          });
+          
+          if (jsonResponse.ok) {
+            const jsonData = await jsonResponse.json();
+            if (Array.isArray(jsonData) && jsonData.length > 0) {
+              console.log(`Using JSON data, found ${jsonData.length} vehicles`);
+              setCabOptions(jsonData);
+              setIsLoading(false);
+              loadingRef.current = false;
+              return jsonData;
+            }
+          }
+        } catch (jsonError) {
+          console.warn('Could not load from JSON file:', jsonError);
+        }
+        
+        // If JSON file fails, try the API
+        try {
+          const freshVehicles = await getVehicleData(true, true);
+          if (Array.isArray(freshVehicles) && freshVehicles.length > 0) {
+            console.log(`Fresh data from API, found ${freshVehicles.length} vehicles`);
+            setCabOptions(freshVehicles);
+            setIsLoading(false);
+            loadingRef.current = false;
+            return freshVehicles;
+          }
+        } catch (apiError) {
+          console.warn('Could not load from API with force refresh:', apiError);
+        }
+      }
+      
       // Use local cache if available and not doing a forced refresh
       if (!forceRefresh && tripType) {
         const cachedTimestamp = localStorage.getItem(`cabOptions_${tripType}_timestamp`);
@@ -92,8 +131,7 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
         return cabOptions;
       }
       
-      // Fetch vehicle data - Important: Pass true to include inactive vehicles
-      // This ensures we get ALL vehicles from the database, including inactive ones
+      // Fetch vehicle data - Include all vehicles for comprehensive filtering
       let vehicles = await getVehicleData(true);
       
       // Ensure we have at least one vehicle
@@ -158,27 +196,35 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
         console.log('Using default vehicles:', vehicles.length);
       }
       
+      // Filter based on trip type if needed
+      let filteredVehicles = vehicles;
+      
       // For certain trip types like tours, we may want to filter vehicles
       if (tripType === 'tour') {
         // Filter vehicles that are suitable for tours
-        vehicles = vehicles.filter(v => v.capacity >= 4);
+        filteredVehicles = vehicles.filter(v => v.capacity >= 4);
+      } else if (tripType !== 'admin') {
+        // For regular trips, show only active vehicles
+        filteredVehicles = vehicles.filter(v => v.isActive !== false);
       }
       
       // Set the cab options
-      console.log(`Loaded ${vehicles.length} vehicles for ${tripType} trip`);
-      setCabOptions(vehicles);
+      console.log(`Loaded ${filteredVehicles.length} vehicles for ${tripType} trip`);
+      setCabOptions(filteredVehicles);
       
       // Cache the vehicles by trip type
       if (tripType) {
         try {
-          localStorage.setItem(`cabOptions_${tripType}`, JSON.stringify(vehicles));
+          localStorage.setItem(`cabOptions_${tripType}`, JSON.stringify(filteredVehicles));
           localStorage.setItem(`cabOptions_${tripType}_timestamp`, Date.now().toString());
         } catch (cacheError) {
           console.warn('Could not cache cab options:', cacheError);
         }
       }
       
-      return vehicles;
+      setIsLoading(false);
+      loadingRef.current = false;
+      return filteredVehicles;
     } catch (error) {
       console.error("Error loading cab options:", error);
       setError('Failed to load vehicle options. Please try again.');
@@ -204,11 +250,10 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
         return cabOptions;
       }
       
-      // Otherwise return default vehicles
-      return [];
-    } finally {
+      // Otherwise return empty array
       setIsLoading(false);
       loadingRef.current = false;
+      return [];
     }
   };
   
@@ -263,6 +308,13 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
       
       lastEventTimes.set(eventType, now);
       console.log(`useCabOptions: Detected ${eventType} event:`, customEvent.detail);
+      
+      // Listen for vehicle data refreshed events specifically
+      if (eventType === 'vehicle-data-refreshed') {
+        refreshCountRef.current = 0; // Reset the refresh counter
+        loadCabOptions(true);
+        return;
+      }
       
       // For local-fares-updated events, update the localPackagePriceMatrix in localStorage
       if (eventType === 'local-fares-updated' && customEvent.detail && customEvent.detail.prices) {
@@ -326,12 +378,14 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
     window.addEventListener('local-fares-updated', handleFareUpdated, { passive: true });
     window.addEventListener('trip-fares-updated', handleFareUpdated, { passive: true });
     window.addEventListener('airport-fares-updated', handleFareUpdated, { passive: true });
+    window.addEventListener('vehicle-data-refreshed', handleFareUpdated, { passive: true });
     
     return () => {
       window.removeEventListener('fare-cache-cleared', handleFareCacheCleared);
       window.removeEventListener('local-fares-updated', handleFareUpdated);
       window.removeEventListener('trip-fares-updated', handleFareUpdated);
       window.removeEventListener('airport-fares-updated', handleFareUpdated);
+      window.removeEventListener('vehicle-data-refreshed', handleFareUpdated);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

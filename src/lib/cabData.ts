@@ -199,7 +199,7 @@ export const cabTypes: CabType[] = [
 (async () => {
   try {
     console.log('Initializing cabTypes on app startup...');
-    const loadedCabs = await loadCabTypes();
+    const loadedCabs = await loadCabTypes(true); // Get ALL vehicles including inactive ones
     if (loadedCabs && loadedCabs.length > 0) {
       // Update the cabTypes array in-place to keep the same reference
       cabTypes.length = 0; // Clear the array
@@ -224,143 +224,65 @@ export const reloadCabTypes = async (): Promise<CabType[]> => {
   localStorage.setItem('cache_buster', cacheBuster);
   
   try {
-    // Try direct fetch from vehicles.json first for consistency
+    // First try API endpoints directly
     try {
-      const jsonResponse = await fetch(`/data/vehicles.json?_t=${cacheBuster}`, {
+      console.info('Fetching fresh vehicle data from primary API...');
+      
+      // Try API endpoint first for most up-to-date data
+      const freshVehicles = await getVehicleData(true, true); // The second 'true' forces a server-side refresh
+      
+      if (Array.isArray(freshVehicles) && freshVehicles.length > 0) {
+        console.log('Successfully loaded', freshVehicles.length, 'vehicles from primary API');
+        
+        // Process the data to ensure it conforms to CabType
+        const processedVehicles = freshVehicles.map(vehicle => ({
+          id: vehicle.id || vehicle.vehicleId || '',
+          name: vehicle.name || '',
+          capacity: Number(vehicle.capacity) || 4,
+          luggageCapacity: Number(vehicle.luggageCapacity) || 2,
+          price: Number(vehicle.price || vehicle.basePrice) || 0,
+          pricePerKm: Number(vehicle.pricePerKm) || 0,
+          image: vehicle.image || '/cars/sedan.png',
+          amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC'],
+          description: vehicle.description || '',
+          ac: Boolean(vehicle.ac),
+          nightHaltCharge: Number(vehicle.nightHaltCharge) || 0,
+          driverAllowance: Number(vehicle.driverAllowance) || 0,
+          isActive: vehicle.isActive !== false, // Default to active if not specified
+          outstationFares: vehicle.outstationFares,
+          localPackageFares: vehicle.localPackageFares,
+          airportFares: vehicle.airportFares
+        }));
+        
+        // Store in sessionStorage for later use
+        sessionStorage.setItem('cabTypes', JSON.stringify(processedVehicles));
+        console.log('Refreshed and cached', processedVehicles.length, 'vehicles');
+        
+        // Publish event to notify components about the refresh
+        window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', { 
+          detail: { count: processedVehicles.length, source: 'api' }
+        }));
+        
+        // Update the cabTypes array in-place
+        cabTypes.length = 0;
+        cabTypes.push(...processedVehicles);
+        
+        return processedVehicles;
+      }
+    } catch (apiError) {
+      console.error('Error fetching from primary API:', apiError);
+    }
+    
+    // If API fails, try direct database access
+    try {
+      console.info('Trying direct database query for vehicles...');
+      
+      // Try direct database query endpoint as backup
+      const response = await fetch(`/api/admin/vehicles-update.php?action=getAll&_t=${cacheBuster}`, {
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache',
           'Expires': '0',
-          'X-Force-Refresh': 'true'
-        }
-      });
-      
-      if (jsonResponse.ok) {
-        const jsonVehicles = await jsonResponse.json();
-        if (Array.isArray(jsonVehicles) && jsonVehicles.length > 0) {
-          console.log('Successfully loaded', jsonVehicles.length, 'vehicles from local JSON file');
-          
-          // Process vehicles from JSON file
-          const processedVehicles = jsonVehicles.map(vehicle => ({
-            id: vehicle.id || vehicle.vehicleId || '',
-            name: vehicle.name || '',
-            capacity: Number(vehicle.capacity) || 4,
-            luggageCapacity: Number(vehicle.luggageCapacity) || 2,
-            price: Number(vehicle.price || vehicle.basePrice) || 0,
-            pricePerKm: Number(vehicle.pricePerKm) || 0,
-            image: vehicle.image || '/cars/sedan.png',
-            amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC'],
-            description: vehicle.description || '',
-            ac: Boolean(vehicle.ac),
-            nightHaltCharge: Number(vehicle.nightHaltCharge) || 0,
-            driverAllowance: Number(vehicle.driverAllowance) || 0,
-            isActive: vehicle.isActive !== false,
-            outstationFares: vehicle.outstationFares,
-            localPackageFares: vehicle.localPackageFares,
-            airportFares: vehicle.airportFares
-          }));
-          
-          // Store processed vehicles in cache
-          sessionStorage.setItem('cabTypes', JSON.stringify(processedVehicles));
-          console.log('Cached', processedVehicles.length, 'vehicles from JSON file');
-          
-          // Update the cabTypes array in-place
-          cabTypes.length = 0;
-          cabTypes.push(...processedVehicles);
-          
-          // Get fresh data from API in the background
-          getVehicleData(true)
-            .then(vehicles => {
-              if (Array.isArray(vehicles) && vehicles.length > 0) {
-                console.log('Successfully fetched vehicles from primary endpoint:', vehicles.length);
-                // Process and update cache silently
-                const apiProcessedVehicles = vehicles.map(vehicle => ({
-                  id: vehicle.id || vehicle.vehicleId || '',
-                  name: vehicle.name || '',
-                  capacity: Number(vehicle.capacity) || 4,
-                  luggageCapacity: Number(vehicle.luggageCapacity) || 2,
-                  price: Number(vehicle.price || vehicle.basePrice) || 0,
-                  pricePerKm: Number(vehicle.pricePerKm) || 0,
-                  image: vehicle.image || '/cars/sedan.png',
-                  amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC'],
-                  description: vehicle.description || '',
-                  ac: Boolean(vehicle.ac),
-                  nightHaltCharge: Number(vehicle.nightHaltCharge) || 0,
-                  driverAllowance: Number(vehicle.driverAllowance) || 0,
-                  isActive: vehicle.isActive !== false,
-                  outstationFares: vehicle.outstationFares,
-                  localPackageFares: vehicle.localPackageFares,
-                  airportFares: vehicle.airportFares
-                }));
-                
-                // Silently update cache with fresh API data
-                sessionStorage.setItem('cabTypes', JSON.stringify(apiProcessedVehicles));
-                // Dispatch event for any listeners
-                window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', { 
-                  detail: { count: apiProcessedVehicles.length, source: 'api' }
-                }));
-              }
-            })
-            .catch(error => {
-              console.warn('Background API refresh failed, using JSON data:', error);
-            });
-          
-          return processedVehicles;
-        }
-      }
-    } catch (jsonError) {
-      console.error('Error fetching from JSON file:', jsonError);
-    }
-    
-    // Get fresh data from API with all fallbacks
-    const freshVehicles = await getVehicleData(true);
-    
-    // Process the fresh data
-    if (Array.isArray(freshVehicles) && freshVehicles.length > 0) {
-      console.log('Successfully fetched vehicles from primary endpoint:', freshVehicles.length);
-      
-      // Process the data to ensure it conforms to CabType
-      const processedVehicles = freshVehicles.map(vehicle => ({
-        id: vehicle.id || vehicle.vehicleId || '',
-        name: vehicle.name || '',
-        capacity: Number(vehicle.capacity) || 4,
-        luggageCapacity: Number(vehicle.luggageCapacity) || 2,
-        price: Number(vehicle.price || vehicle.basePrice) || 0,
-        pricePerKm: Number(vehicle.pricePerKm) || 0,
-        image: vehicle.image || '/cars/sedan.png',
-        amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC'],
-        description: vehicle.description || '',
-        ac: Boolean(vehicle.ac),
-        nightHaltCharge: Number(vehicle.nightHaltCharge) || 0,
-        driverAllowance: Number(vehicle.driverAllowance) || 0,
-        isActive: vehicle.isActive !== false, // Default to active if not specified
-        outstationFares: vehicle.outstationFares,
-        localPackageFares: vehicle.localPackageFares,
-        airportFares: vehicle.airportFares
-      }));
-      
-      // Store in sessionStorage for later use
-      sessionStorage.setItem('cabTypes', JSON.stringify(processedVehicles));
-      console.log('Refreshed and cached', processedVehicles.length, 'vehicles');
-      
-      // Update the cabTypes array in-place
-      cabTypes.length = 0;
-      cabTypes.push(...processedVehicles);
-      
-      return processedVehicles;
-    } else {
-      throw new Error('API returned empty or invalid vehicle data');
-    }
-  } catch (error) {
-    console.error('Error refreshing cab types:', error);
-    
-    try {
-      console.info('Using direct database query as last resort');
-      
-      // Try direct database query endpoint as backup
-      const response = await fetch('/api/admin/vehicles-update.php?action=getAll&_t=' + Date.now(), {
-        headers: {
-          'Cache-Control': 'no-cache',
           'X-Force-Refresh': 'true'
         }
       });
@@ -393,7 +315,12 @@ export const reloadCabTypes = async (): Promise<CabType[]> => {
         }));
         
         sessionStorage.setItem('cabTypes', JSON.stringify(processedVehicles));
-        console.log('Used backup endpoint, cached', processedVehicles.length, 'vehicles');
+        console.log('Used database endpoint, cached', processedVehicles.length, 'vehicles');
+        
+        // Publish event to notify components
+        window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', { 
+          detail: { count: processedVehicles.length, source: 'database' }
+        }));
         
         // Update the cabTypes array in-place
         cabTypes.length = 0;
@@ -403,6 +330,64 @@ export const reloadCabTypes = async (): Promise<CabType[]> => {
       }
     } catch (dbError) {
       console.error('Error with direct db query:', dbError);
+    }
+    
+    // Last resort - try fares/vehicles.php specifically (dedicated endpoint)
+    try {
+      console.info('Trying dedicated vehicles endpoint as last resort...');
+      
+      const response = await fetch(`/api/fares/vehicles.php?_t=${cacheBuster}&includeInactive=true`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          'X-Force-Refresh': 'true'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error from vehicles.php! status: ${response.status}`);
+      }
+      
+      const responseData = await response.json();
+      
+      if (responseData && responseData.vehicles && Array.isArray(responseData.vehicles) && responseData.vehicles.length > 0) {
+        // Process vehicles from the dedicated endpoint
+        const processedVehicles = responseData.vehicles.map(vehicle => ({
+          id: vehicle.id || vehicle.vehicleId || '',
+          name: vehicle.name || '',
+          capacity: Number(vehicle.capacity) || 4,
+          luggageCapacity: Number(vehicle.luggageCapacity) || 2,
+          price: Number(vehicle.price || vehicle.basePrice) || 0,
+          pricePerKm: Number(vehicle.pricePerKm) || 0,
+          image: vehicle.image || '/cars/sedan.png',
+          amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC'],
+          description: vehicle.description || '',
+          ac: Boolean(vehicle.ac),
+          nightHaltCharge: Number(vehicle.nightHaltCharge) || 0,
+          driverAllowance: Number(vehicle.driverAllowance) || 0,
+          isActive: vehicle.isActive !== false,
+          outstationFares: vehicle.outstationFares,
+          localPackageFares: vehicle.localPackageFares,
+          airportFares: vehicle.airportFares
+        }));
+        
+        sessionStorage.setItem('cabTypes', JSON.stringify(processedVehicles));
+        console.log('Used vehicles.php endpoint, cached', processedVehicles.length, 'vehicles');
+        
+        // Publish event to notify components
+        window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', { 
+          detail: { count: processedVehicles.length, source: 'vehicles-php' }
+        }));
+        
+        // Update the cabTypes array in-place
+        cabTypes.length = 0;
+        cabTypes.push(...processedVehicles);
+        
+        return processedVehicles;
+      }
+    } catch (faresError) {
+      console.error('Error with vehicles.php endpoint:', faresError);
     }
     
     console.warn('No vehicles found in any API response, using defaults');
@@ -459,6 +444,63 @@ export const reloadCabTypes = async (): Promise<CabType[]> => {
     // Store default cabs in sessionStorage
     sessionStorage.setItem('cabTypes', JSON.stringify(defaultCabs));
     console.log('Using default vehicles as fallback');
+    
+    // Update the cabTypes array in-place
+    cabTypes.length = 0;
+    cabTypes.push(...defaultCabs);
+    
+    return defaultCabs;
+  } catch (error) {
+    console.error('Error refreshing cab types:', error);
+    
+    // Return default cabs as fallback
+    const defaultCabs = [
+      {
+        id: 'sedan',
+        name: 'Sedan',
+        capacity: 4,
+        luggageCapacity: 2,
+        price: 4200,
+        pricePerKm: 14,
+        image: '/cars/sedan.png',
+        amenities: ['AC', 'Bottle Water', 'Music System'],
+        description: 'Comfortable sedan suitable for 4 passengers.',
+        ac: true,
+        nightHaltCharge: 700,
+        driverAllowance: 250,
+        isActive: true
+      },
+      {
+        id: 'ertiga',
+        name: 'Ertiga',
+        capacity: 6,
+        luggageCapacity: 3,
+        price: 5400,
+        pricePerKm: 18,
+        image: '/cars/ertiga.png',
+        amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
+        description: 'Spacious SUV suitable for 6 passengers.',
+        ac: true,
+        nightHaltCharge: 1000,
+        driverAllowance: 250,
+        isActive: true
+      },
+      {
+        id: 'innova_crysta',
+        name: 'Innova Crysta',
+        capacity: 7,
+        luggageCapacity: 4,
+        price: 6000,
+        pricePerKm: 20,
+        image: '/cars/innova.png',
+        amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
+        description: 'Premium SUV with ample space for 7 passengers.',
+        ac: true,
+        nightHaltCharge: 1000,
+        driverAllowance: 250,
+        isActive: true
+      }
+    ];
     
     // Update the cabTypes array in-place
     cabTypes.length = 0;

@@ -13,13 +13,45 @@ header('Expires: 0');
 
 // Add debugging headers
 header('X-Debug-File: outstation-fares.php');
-header('X-API-Version: 1.0.5');
+header('X-API-Version: 1.0.6');
 header('X-Timestamp: ' . time());
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
+}
+
+// Save fares to JSON file for client-side caching
+function saveFaresToJson($fares) {
+    try {
+        // Ensure the directory exists
+        $dir = __DIR__ . '/../../public/data';
+        if (!is_dir($dir)) {
+            if (!mkdir($dir, 0755, true)) {
+                error_log("Failed to create directory: $dir");
+                return false;
+            }
+        }
+        
+        $jsonFile = $dir . '/outstation-fares.json';
+        $jsonData = json_encode([
+            'fares' => $fares,
+            'timestamp' => time()
+        ], JSON_PRETTY_PRINT);
+        
+        // Write to file
+        if (file_put_contents($jsonFile, $jsonData)) {
+            error_log("Successfully saved fares to JSON file: $jsonFile");
+            return true;
+        } else {
+            error_log("Failed to write fares to JSON file: $jsonFile");
+            return false;
+        }
+    } catch (Exception $e) {
+        error_log("Exception saving fares to JSON: " . $e->getMessage());
+        return false;
+    }
 }
 
 try {
@@ -331,6 +363,94 @@ try {
             }
         }
     }
+    
+    // If we have no vehicles at all, try to pull from vehicle_types and create default fares
+    if (empty($fares)) {
+        $checkVehicleTypes = $conn->query("SHOW TABLES LIKE 'vehicle_types'");
+        
+        if ($checkVehicleTypes->num_rows > 0) {
+            $vehicleQuery = "SELECT vehicle_id, name FROM vehicle_types WHERE is_active = 1";
+            $vehicleResult = $conn->query($vehicleQuery);
+            
+            if ($vehicleResult && $vehicleResult->num_rows > 0) {
+                while ($vehicleRow = $vehicleResult->fetch_assoc()) {
+                    $vehicleId = $vehicleRow['vehicle_id'];
+                    
+                    // Create default fares based on vehicle type
+                    $basePrice = 3000;
+                    $pricePerKm = 15;
+                    $nightHaltCharge = 800;
+                    $driverAllowance = 300;
+                    
+                    if (stripos($vehicleRow['name'], 'sedan') !== false) {
+                        $basePrice = 3000;
+                        $pricePerKm = 15;
+                    } elseif (stripos($vehicleRow['name'], 'ertiga') !== false || stripos($vehicleRow['name'], 'suv') !== false) {
+                        $basePrice = 3500;
+                        $pricePerKm = 18;
+                    } elseif (stripos($vehicleRow['name'], 'innova') !== false) {
+                        $basePrice = 4000;
+                        $pricePerKm = 20;
+                    } elseif (stripos($vehicleRow['name'], 'luxury') !== false) {
+                        $basePrice = 5000;
+                        $pricePerKm = 25;
+                    } elseif (stripos($vehicleRow['name'], 'tempo') !== false) {
+                        $basePrice = 6000;
+                        $pricePerKm = 30;
+                    }
+                    
+                    // Calculate round trip fares with a discount
+                    $roundTripBasePrice = $basePrice * 0.95;
+                    $roundTripPricePerKm = $pricePerKm * 0.85;
+                    
+                    $fare = [
+                        'basePrice' => $basePrice,
+                        'pricePerKm' => $pricePerKm,
+                        'nightHaltCharge' => $nightHaltCharge,
+                        'driverAllowance' => $driverAllowance,
+                        'roundTripBasePrice' => $roundTripBasePrice,
+                        'roundTripPricePerKm' => $roundTripPricePerKm
+                    ];
+                    
+                    $fares[$vehicleId] = $fare;
+                    
+                    // Insert default fares for this vehicle
+                    $insertQuery = "
+                        INSERT INTO outstation_fares (
+                            vehicle_id, base_price, price_per_km, night_halt_charge, driver_allowance,
+                            roundtrip_base_price, roundtrip_price_per_km
+                        ) VALUES (
+                            '$vehicleId', 
+                            {$fare['basePrice']}, 
+                            {$fare['pricePerKm']}, 
+                            {$fare['nightHaltCharge']}, 
+                            {$fare['driverAllowance']},
+                            {$fare['roundTripBasePrice']}, 
+                            {$fare['roundTripPricePerKm']}
+                        )
+                        ON DUPLICATE KEY UPDATE
+                            base_price = VALUES(base_price),
+                            price_per_km = VALUES(price_per_km),
+                            night_halt_charge = VALUES(night_halt_charge),
+                            driver_allowance = VALUES(driver_allowance),
+                            roundtrip_base_price = VALUES(roundtrip_base_price),
+                            roundtrip_price_per_km = VALUES(roundtrip_price_per_km),
+                            updated_at = CURRENT_TIMESTAMP
+                    ";
+                    
+                    try {
+                        $conn->query($insertQuery);
+                        error_log("Created default outstation fares for $vehicleId");
+                    } catch (Exception $e) {
+                        error_log("Error creating default fares: " . $e->getMessage());
+                    }
+                }
+            }
+        }
+    }
+    
+    // Save fares to JSON for client-side caching
+    saveFaresToJson($fares);
     
     // Determine which table was the source of the fare data
     $sourceTable = 'outstation_fares';
