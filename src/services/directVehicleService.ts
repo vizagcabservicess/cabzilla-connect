@@ -46,36 +46,46 @@ export const createVehicle = async (vehicleData: any): Promise<boolean> => {
       timestamp: Date.now()
     };
     
+    // Always immediately store in localStorage as failsafe
+    try {
+      const existingVehicles = JSON.parse(localStorage.getItem('localVehicles') || '[]');
+      const updatedVehicles = existingVehicles.filter((v: any) => v.id !== vehicleId);
+      updatedVehicles.push({...normalizedData, offline: true, lastSaved: Date.now()});
+      localStorage.setItem('localVehicles', JSON.stringify(updatedVehicles));
+      console.log('Stored vehicle in localStorage as failsafe', vehicleId);
+    } catch (e) {
+      console.error('Error storing vehicle in localStorage:', e);
+    }
+    
     // First try the dedicated creation endpoint which is most likely to work
     try {
-      const createEndpoints = [
-        '/api/admin/direct-vehicle-create.php',
+      const directEndpoints = [
         '/api/admin/direct-vehicle-create',
+        '/api/admin/direct-vehicle-create.php',
         '/api/direct-vehicle-create',
         '/api/vehicle-create'
       ];
       
-      const createResponse = await makeApiRequest<VehicleOperationResponse>(createEndpoints, 'POST', normalizedData, {
+      const response = await makeApiRequest<VehicleOperationResponse>(directEndpoints, 'POST', normalizedData, {
         contentTypes: ['application/json', 'multipart/form-data'],
         retries: 3,
         notification: false
       });
       
-      if (createResponse && createResponse.status === 'success') {
-        console.log('Successfully created vehicle using dedicated endpoint:', createResponse);
+      if (response && response.status === 'success') {
+        console.log('Successfully created vehicle using direct endpoint:', response);
         
-        // Store in localStorage as fallback
+        // Update localStorage copy as successful
         try {
           const existingVehicles = JSON.parse(localStorage.getItem('localVehicles') || '[]');
           const updatedVehicles = existingVehicles.filter((v: any) => v.id !== vehicleId);
-          updatedVehicles.push(normalizedData);
+          updatedVehicles.push({...normalizedData, offline: false, lastSaved: Date.now()});
           localStorage.setItem('localVehicles', JSON.stringify(updatedVehicles));
-          console.log('Stored vehicle in localStorage as fallback');
         } catch (e) {
-          console.error('Error storing vehicle in localStorage:', e);
+          console.error('Error updating localStorage vehicle state:', e);
         }
         
-        // Clear any vehicle caches after creating
+        // Clear any vehicle caches
         localStorage.removeItem('cachedVehicles');
         sessionStorage.removeItem('cabTypes');
         
@@ -86,40 +96,39 @@ export const createVehicle = async (vehicleData: any): Promise<boolean> => {
         
         return true;
       }
-    } catch (createError) {
-      console.warn('Dedicated vehicle creation failed, falling back to update endpoint:', createError);
+    } catch (error) {
+      console.warn('Direct vehicle creation failed, continuing with fallbacks:', error);
     }
     
-    // Fall back to direct update endpoint if creation endpoint failed
+    // Fall back to direct-vehicle-update endpoint
     try {
-      const directEndpoints = [
-        '/api/admin/direct-vehicle-update.php',
+      const updateEndpoints = [
         '/api/admin/direct-vehicle-update',
+        '/api/admin/direct-vehicle-update.php',
         '/api/direct-vehicle-update',
-        '/api/admin/vehicles-update'
+        '/api/vehicles-update'
       ];
       
-      const directResponse = await makeApiRequest<VehicleOperationResponse>(directEndpoints, 'POST', normalizedData, {
+      const updateResponse = await makeApiRequest<VehicleOperationResponse>(updateEndpoints, 'POST', normalizedData, {
         contentTypes: ['application/json', 'multipart/form-data'],
         retries: 2,
         notification: false
       });
       
-      if (directResponse && directResponse.status === 'success') {
-        console.log('Successfully created vehicle using direct update endpoint:', directResponse);
+      if (updateResponse && updateResponse.status === 'success') {
+        console.log('Successfully created vehicle via update endpoint:', updateResponse);
         
-        // Store in localStorage as fallback
+        // Update localStorage copy as successful
         try {
           const existingVehicles = JSON.parse(localStorage.getItem('localVehicles') || '[]');
           const updatedVehicles = existingVehicles.filter((v: any) => v.id !== vehicleId);
-          updatedVehicles.push(normalizedData);
+          updatedVehicles.push({...normalizedData, offline: false, lastSaved: Date.now()});
           localStorage.setItem('localVehicles', JSON.stringify(updatedVehicles));
-          console.log('Stored vehicle in localStorage as fallback');
         } catch (e) {
-          console.error('Error storing vehicle in localStorage:', e);
+          console.error('Error updating localStorage vehicle status:', e);
         }
         
-        // Clear any vehicle caches after creating
+        // Clear caches
         localStorage.removeItem('cachedVehicles');
         sessionStorage.removeItem('cabTypes');
         
@@ -130,90 +139,40 @@ export const createVehicle = async (vehicleData: any): Promise<boolean> => {
         
         return true;
       }
-    } catch (directError) {
-      console.warn('Direct vehicle update failed, falling back to standard operation:', directError);
+    } catch (error) {
+      console.warn('Update endpoint vehicle creation failed:', error);
     }
     
-    // Use the enhanced directVehicleOperation function as last resort
-    const response = await directVehicleOperation<VehicleOperationResponse>('create', normalizedData, {
-      notification: true,
-      localStorageFallback: true
-    });
-    
-    console.log('Vehicle creation response:', response);
-    
-    // Store in localStorage regardless of response
+    // Fall back to localStorage if both API methods failed
+    console.log('All API attempts failed, using localStorage vehicle only');
     try {
       const existingVehicles = JSON.parse(localStorage.getItem('localVehicles') || '[]');
       const updatedVehicles = existingVehicles.filter((v: any) => v.id !== vehicleId);
-      updatedVehicles.push(normalizedData);
-      localStorage.setItem('localVehicles', JSON.stringify(updatedVehicles));
-      console.log('Stored vehicle in localStorage for persistence');
-    } catch (e) {
-      console.error('Error storing vehicle in localStorage:', e);
-    }
-    
-    // Clear any vehicle caches after creating
-    localStorage.removeItem('cachedVehicles');
-    sessionStorage.removeItem('cabTypes');
-    
-    // If this is marked as offline operation, show a custom toast
-    if (response.offline) {
-      toast.warning("Created vehicle in offline mode - data will be saved locally until connection is restored", {
-        duration: 5000
-      });
-    } else {
-      toast.success("Vehicle created successfully");
-    }
-    
-    // Reload cab types to ensure new vehicle appears
-    await reloadCabTypes();
-    
-    return true;
-    
-  } catch (error) {
-    console.error('Error in createVehicle:', error);
-    
-    // Even on error, try to save to localStorage for persistence
-    try {
-      const vehicleId = vehicleData.vehicleId || vehicleData.id || 
-                        vehicleData.name?.toLowerCase().replace(/\s+/g, '_') || 
-                        `vehicle_${Date.now()}`;
-      
-      const normalizedData = {
-        vehicleId,
-        id: vehicleId,
-        name: vehicleData.name || 'New Vehicle',
-        capacity: Number(vehicleData.capacity) || 4,
-        luggageCapacity: Number(vehicleData.luggageCapacity) || 2,
-        price: Number(vehicleData.price || vehicleData.basePrice) || 0,
-        pricePerKm: Number(vehicleData.pricePerKm) || 0,
-        basePrice: Number(vehicleData.price || vehicleData.basePrice) || 0,
-        image: vehicleData.image || '/cars/sedan.png',
-        isActive: vehicleData.isActive !== false,
-        amenities: Array.isArray(vehicleData.amenities) ? vehicleData.amenities : ['AC'],
-        description: vehicleData.description || `${vehicleData.name} vehicle`,
-        nightHaltCharge: Number(vehicleData.nightHaltCharge) || 700,
-        driverAllowance: Number(vehicleData.driverAllowance) || 250,
-        ac: vehicleData.ac !== false,
-        timestamp: Date.now(),
-        offline: true
-      };
-      
-      const existingVehicles = JSON.parse(localStorage.getItem('localVehicles') || '[]');
-      const updatedVehicles = existingVehicles.filter((v: any) => v.id !== vehicleId);
-      updatedVehicles.push(normalizedData);
+      updatedVehicles.push({...normalizedData, offline: true, lastSaved: Date.now()});
       localStorage.setItem('localVehicles', JSON.stringify(updatedVehicles));
       
-      toast.warning("Vehicle saved in offline mode - will be synced when connection is restored", {
+      // Also try to store in sessionStorage for immediate use
+      try {
+        const cabTypes = JSON.parse(sessionStorage.getItem('cabTypes') || '[]');
+        const updatedCabTypes = cabTypes.filter((v: any) => v.id !== vehicleId);
+        updatedCabTypes.push(normalizedData);
+        sessionStorage.setItem('cabTypes', JSON.stringify(updatedCabTypes));
+      } catch (e) {
+        console.error('Error updating sessionStorage cab types:', e);
+      }
+      
+      toast.warning("Created vehicle in offline mode. It will be saved to the server when connection is restored.", {
         duration: 5000
       });
       
       return true;
-    } catch (e) {
-      console.error('Error storing vehicle in localStorage:', e);
+    } catch (error) {
+      console.error('Final localStorage fallback failed:', error);
+      throw error; // Re-throw to trigger the catch block below
     }
     
+  } catch (error) {
+    console.error('Error in createVehicle:', error);
     toast.error(`Failed to create vehicle: ${(error as Error).message || 'Unknown error'}`);
     return false;
   }
@@ -310,6 +269,51 @@ export const deleteVehicle = async (vehicleId: string): Promise<boolean> => {
   try {
     console.log('Deleting vehicle with ID:', vehicleId);
     
+    // Try the direct delete endpoint first
+    try {
+      const deleteEndpoints = [
+        '/api/admin/direct-vehicle-delete.php',
+        '/api/admin/direct-vehicle-delete',
+        '/api/direct-vehicle-delete',
+        '/api/vehicle-delete'
+      ];
+      
+      const deleteResponse = await makeApiRequest<VehicleOperationResponse>(deleteEndpoints, 'POST', { vehicleId }, {
+        contentTypes: ['application/json', 'multipart/form-data'],
+        retries: 2,
+        notification: false
+      });
+      
+      if (deleteResponse && deleteResponse.status === 'success') {
+        console.log('Successfully deleted vehicle using direct endpoint:', deleteResponse);
+        
+        // Also remove from localStorage
+        try {
+          const storedVehicles = localStorage.getItem('localVehicles');
+          if (storedVehicles) {
+            let localVehicles = JSON.parse(storedVehicles);
+            localVehicles = localVehicles.filter((v: any) => v.id !== vehicleId);
+            localStorage.setItem('localVehicles', JSON.stringify(localVehicles));
+          }
+        } catch (e) {
+          console.error("Error updating local storage:", e);
+        }
+        
+        // Clear caches
+        localStorage.removeItem('cachedVehicles');
+        sessionStorage.removeItem('cabTypes');
+        
+        toast.success("Vehicle deleted successfully");
+        
+        // Reload cab types
+        await reloadCabTypes();
+        
+        return true;
+      }
+    } catch (directError) {
+      console.warn('Direct vehicle deletion failed, falling back to standard operation:', directError);
+    }
+    
     // Use the enhanced directVehicleOperation function
     const response = await directVehicleOperation<VehicleOperationResponse>('delete', { vehicleId }, {
       notification: true,
@@ -321,6 +325,18 @@ export const deleteVehicle = async (vehicleId: string): Promise<boolean> => {
     // Clear any vehicle caches after deleting
     localStorage.removeItem('cachedVehicles');
     sessionStorage.removeItem('cabTypes');
+    
+    // Also remove from localStorage
+    try {
+      const storedVehicles = localStorage.getItem('localVehicles');
+      if (storedVehicles) {
+        let localVehicles = JSON.parse(storedVehicles);
+        localVehicles = localVehicles.filter((v: any) => v.id !== vehicleId);
+        localStorage.setItem('localVehicles', JSON.stringify(localVehicles));
+      }
+    } catch (e) {
+      console.error("Error updating local storage:", e);
+    }
     
     // Show appropriate toast based on whether this was an offline operation
     if (response.offline) {

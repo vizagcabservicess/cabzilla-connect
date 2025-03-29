@@ -9,7 +9,7 @@ header('Expires: 0');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh');
-header('X-API-Version: 1.0.5');
+header('X-API-Version: 1.0.6');
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -23,10 +23,17 @@ $requestMethod = $_SERVER['REQUEST_METHOD'];
 $requestUri = $_SERVER['REQUEST_URI'];
 error_log("[$timestamp] Direct vehicle delete request: Method=$requestMethod, URI=$requestUri");
 
-// Get the vehicle ID
-$vehicleId = isset($_GET['vehicleId']) ? $_GET['vehicleId'] : null;
+// Get vehicle ID from various possible sources
+$vehicleId = null;
 
-// If not in query string, try to get from request body
+// Try GET parameter
+if (isset($_GET['vehicleId'])) {
+    $vehicleId = $_GET['vehicleId'];
+} elseif (isset($_GET['id'])) {
+    $vehicleId = $_GET['id'];
+}
+
+// Try POST/JSON body if not in GET
 if (!$vehicleId) {
     $rawInput = file_get_contents('php://input');
     $jsonData = json_decode($rawInput, true);
@@ -42,117 +49,115 @@ if (!$vehicleId) {
     }
 }
 
+// If still no vehicle ID, return error
 if (!$vehicleId) {
     http_response_code(400);
     echo json_encode([
         'status' => 'error',
-        'message' => 'Vehicle ID is required'
+        'message' => 'Vehicle ID is required for deletion'
     ]);
     exit;
 }
 
-error_log("[$timestamp] Attempting to delete vehicle: $vehicleId");
-
 try {
-    // 1. Remove from vehicles.json file first (local backup)
+    // 1. First delete from vehicles.json file
     $vehiclesFile = '../../../data/vehicles.json';
+    $fileDeletionResult = false;
     
     if (file_exists($vehiclesFile)) {
-        $existingData = file_get_contents($vehiclesFile);
-        if (!empty($existingData)) {
-            $vehicles = json_decode($existingData, true) ?? [];
+        $jsonContent = file_get_contents($vehiclesFile);
+        
+        if (!empty($jsonContent)) {
+            $vehicles = json_decode($jsonContent, true) ?? [];
             
-            // Filter out the vehicle with matching ID
-            $vehicles = array_filter($vehicles, function($vehicle) use ($vehicleId) {
-                return (!isset($vehicle['id']) || $vehicle['id'] !== $vehicleId) && 
-                       (!isset($vehicle['vehicleId']) || $vehicle['vehicleId'] !== $vehicleId);
+            // Filter out the vehicle with the matching ID
+            $filteredVehicles = array_filter($vehicles, function($vehicle) use ($vehicleId) {
+                return $vehicle['id'] !== $vehicleId && $vehicle['vehicleId'] !== $vehicleId;
             });
             
-            // Save the updated vehicles list
-            file_put_contents($vehiclesFile, json_encode(array_values($vehicles), JSON_PRETTY_PRINT));
-            error_log("Removed vehicle $vehicleId from local JSON file");
+            // Save the filtered list back to the file
+            file_put_contents($vehiclesFile, json_encode(array_values($filteredVehicles), JSON_PRETTY_PRINT));
+            $fileDeletionResult = true;
+            
+            error_log("Deleted vehicle $vehicleId from JSON file");
         }
     }
     
     // 2. Now try to delete from database
-    $databaseDeleted = false;
+    $databaseDeletionResult = false;
     
     if (file_exists('../../config.php')) {
         require_once '../../config.php';
         
-        // Get database connection
-        $conn = getDbConnection();
-        
-        if ($conn) {
-            // Begin transaction
-            $conn->begin_transaction();
-            
-            try {
-                // 1. Delete from vehicle_pricing
-                $stmt = $conn->prepare("DELETE FROM vehicle_pricing WHERE vehicle_id = ? OR vehicle_type = ?");
-                $stmt->bind_param("ss", $vehicleId, $vehicleId);
-                $stmt->execute();
-                error_log("Deleted from vehicle_pricing: " . $stmt->affected_rows . " rows");
-                
-                // 2. Delete from outstation_fares
-                $stmt = $conn->prepare("DELETE FROM outstation_fares WHERE vehicle_id = ?");
-                $stmt->bind_param("s", $vehicleId);
-                $stmt->execute();
-                error_log("Deleted from outstation_fares: " . $stmt->affected_rows . " rows");
-                
-                // 3. Delete from local_package_fares
-                $stmt = $conn->prepare("DELETE FROM local_package_fares WHERE vehicle_id = ?");
-                $stmt->bind_param("s", $vehicleId);
-                $stmt->execute();
-                error_log("Deleted from local_package_fares: " . $stmt->affected_rows . " rows");
-                
-                // 4. Delete from airport_transfer_fares
-                $stmt = $conn->prepare("DELETE FROM airport_transfer_fares WHERE vehicle_id = ?");
-                $stmt->bind_param("s", $vehicleId);
-                $stmt->execute();
-                error_log("Deleted from airport_transfer_fares: " . $stmt->affected_rows . " rows");
-                
-                // 5. Finally delete from vehicle_types
-                $stmt = $conn->prepare("DELETE FROM vehicle_types WHERE vehicle_id = ? OR id = ?");
-                $stmt->bind_param("ss", $vehicleId, $vehicleId);
-                $stmt->execute();
-                error_log("Deleted from vehicle_types: " . $stmt->affected_rows . " rows");
-                
-                // Commit the transaction
-                $conn->commit();
-                $databaseDeleted = true;
-                error_log("Successfully deleted vehicle $vehicleId from database");
-                
-            } catch (Exception $e) {
-                // Rollback the transaction on error
-                $conn->rollback();
-                error_log("Error deleting vehicle from database: " . $e->getMessage());
+        try {
+            // Use database connection helper if available
+            if (function_exists('getDbConnection')) {
+                $conn = getDbConnection();
+            } else {
+                // Fall back to direct connection
+                $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
             }
-        } else {
-            error_log("Database connection failed");
+            
+            if ($conn && !$conn->connect_error) {
+                // Begin transaction
+                $conn->begin_transaction();
+                
+                try {
+                    // Delete from vehicle_pricing table
+                    $stmt = $conn->prepare("DELETE FROM vehicle_pricing WHERE vehicle_id = ?");
+                    $stmt->bind_param("s", $vehicleId);
+                    $stmt->execute();
+                    
+                    // Delete from vehicle_types table
+                    $stmt = $conn->prepare("DELETE FROM vehicle_types WHERE vehicle_id = ?");
+                    $stmt->bind_param("s", $vehicleId);
+                    $stmt->execute();
+                    
+                    // Commit transaction
+                    $conn->commit();
+                    $databaseDeletionResult = true;
+                    
+                    error_log("Deleted vehicle $vehicleId from database tables");
+                    
+                } catch (Exception $e) {
+                    // Rollback on error
+                    $conn->rollback();
+                    error_log("Database error during deletion: " . $e->getMessage());
+                }
+            }
+        } catch (Exception $e) {
+            error_log("Database connection error: " . $e->getMessage());
         }
-    } else {
-        error_log("Config file not found - unable to connect to database");
     }
     
-    // Return success response
-    echo json_encode([
-        'status' => 'success',
-        'message' => $databaseDeleted ? 
-                     'Vehicle deleted successfully from database' : 
-                     'Vehicle deleted from local storage only',
-        'vehicleId' => $vehicleId,
-        'databaseDeleted' => $databaseDeleted,
-        'fileDeleted' => true
-    ]);
+    // Return success response if either file or database deletion was successful
+    if ($fileDeletionResult || $databaseDeletionResult) {
+        // Create cache invalidation marker to trigger client refresh
+        $cacheMarker = "../../../data/vehicle_cache_invalidated.txt";
+        file_put_contents($cacheMarker, time());
+        
+        http_response_code(200);
+        echo json_encode([
+            'status' => 'success',
+            'message' => 'Vehicle deleted successfully',
+            'vehicleId' => $vehicleId,
+            'fileDeletion' => $fileDeletionResult,
+            'databaseDeletion' => $databaseDeletionResult,
+            'timestamp' => time()
+        ]);
+    } else {
+        throw new Exception("Failed to delete vehicle from any storage");
+    }
     
 } catch (Exception $e) {
+    // Log and return error
     error_log("Error deleting vehicle: " . $e->getMessage());
     
     http_response_code(500);
     echo json_encode([
         'status' => 'error',
-        'message' => $e->getMessage(),
-        'vehicleId' => $vehicleId
+        'message' => 'Error deleting vehicle: ' . $e->getMessage(),
+        'vehicleId' => $vehicleId,
+        'timestamp' => time()
     ]);
 }
