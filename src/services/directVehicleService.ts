@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { toast } from 'sonner';
 import { getBypassHeaders } from '@/config/requestConfig';
@@ -451,13 +452,24 @@ export const updateVehicleFares = async (vehicleId: string, fareData: any, tripT
  */
 export const syncVehicleData = async () => {
   try {
+    // Add a sync lock to prevent multiple simultaneous syncs
+    if (window.isSyncingVehicleData) {
+      console.log('Vehicle sync already in progress, skipping duplicate request');
+      return { success: false, alreadyInProgress: true };
+    }
+    
+    // Set sync lock
+    window.isSyncingVehicleData = true;
+    
     console.log('Syncing vehicle data between database and JSON file...');
     
     // Try multiple approaches to ensure sync
     let success = false;
+    let responseData = null;
 
     // Approach 1: Try using the vehicles-data.php endpoint
     try {
+      console.log('Attempting sync with vehicles-data.php endpoint');
       const response = await axios.get(
         `${apiBaseUrl}/api/fares/vehicles-data.php?force_sync=true&_t=${Date.now()}`,
         { 
@@ -465,12 +477,14 @@ export const syncVehicleData = async () => {
           params: {
             sync: 'true',
             force_sync: 'true'
-          }
+          },
+          timeout: 8000 // Add timeout to prevent hanging requests
         }
       );
       
       if (response.data) {
         console.log('Vehicle data sync response:', response.data);
+        responseData = response.data;
         success = true;
       }
     } catch (error) {
@@ -480,18 +494,21 @@ export const syncVehicleData = async () => {
     // Approach 2: Try the direct vehicle creation endpoint with sync flag
     if (!success) {
       try {
+        console.log('Attempting sync with direct-vehicle-create.php endpoint');
         const response = await axios.get(
           `${apiBaseUrl}/api/admin/direct-vehicle-create.php?sync=true&_t=${Date.now()}`,
           { 
             headers: getBypassHeaders(),
             params: {
               sync: 'true'
-            }
+            },
+            timeout: 8000 // Add timeout to prevent hanging requests
           }
         );
         
         if (response.data) {
           console.log('Vehicle data sync response from direct endpoint:', response.data);
+          responseData = response.data;
           success = true;
         }
       } catch (error) {
@@ -502,18 +519,21 @@ export const syncVehicleData = async () => {
     // Approach 3: Try the vehicle admin endpoint
     if (!success) {
       try {
+        console.log('Attempting sync with vehicles-update.php endpoint');
         const response = await axios.get(
           `${apiBaseUrl}/api/admin/vehicles-update.php?sync=true&_t=${Date.now()}`,
           { 
             headers: getBypassHeaders(),
             params: {
               sync: 'true'
-            }
+            },
+            timeout: 8000 // Add timeout to prevent hanging requests
           }
         );
         
         if (response.data) {
           console.log('Vehicle data sync response from admin endpoint:', response.data);
+          responseData = response.data;
           success = true;
         }
       } catch (error) {
@@ -521,21 +541,68 @@ export const syncVehicleData = async () => {
       }
     }
     
+    // Fall back to local data if all API calls fail
+    if (!success) {
+      console.log('All API sync attempts failed, using cached data as fallback');
+      
+      // Check if we have cached vehicles in localStorage
+      const cachedVehicles = localStorage.getItem('cachedVehicles');
+      
+      if (cachedVehicles) {
+        try {
+          const vehicles = JSON.parse(cachedVehicles);
+          
+          if (Array.isArray(vehicles) && vehicles.length > 0) {
+            console.log(`Using ${vehicles.length} vehicles from cache as fallback`);
+            success = true;
+          }
+        } catch (e) {
+          console.error('Error parsing cached vehicles:', e);
+        }
+      }
+    }
+    
     // Dispatch event to notify components about potentially new data
     window.dispatchEvent(new CustomEvent('vehicles-updated', {
       detail: { 
         timestamp: Date.now(),
-        syncSuccessful: success
+        syncSuccessful: success,
+        responseData: responseData
       }
     }));
     
-    // Clear localStorage cache to force refresh
-    localStorage.removeItem('cachedVehicles');
-    localStorage.setItem('forceCacheRefresh', 'true');
+    // Clear localStorage cache to force refresh, but only if we had a successful sync
+    if (success) {
+      localStorage.removeItem('cachedVehicles');
+      localStorage.setItem('forceCacheRefresh', 'true');
+      
+      // Add a small delay before removing the forceCacheRefresh flag
+      setTimeout(() => {
+        localStorage.removeItem('forceCacheRefresh');
+      }, 5000);
+      
+      console.log('Vehicle sync completed successfully, cleared cache');
+    } else {
+      console.warn('Vehicle sync did not complete successfully');
+    }
     
-    return { success };
+    // Release sync lock
+    window.isSyncingVehicleData = false;
+    
+    return { success, responseData };
   } catch (error) {
     console.error('Vehicle data synchronization failed:', error);
+    
+    // Make sure to release sync lock even if there's an error
+    window.isSyncingVehicleData = false;
+    
     throw error;
   }
 };
+
+// Add TypeScript declaration for window property
+declare global {
+  interface Window {
+    isSyncingVehicleData?: boolean;
+  }
+}
