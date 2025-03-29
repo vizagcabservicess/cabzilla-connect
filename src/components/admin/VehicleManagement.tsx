@@ -26,9 +26,25 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { CabType } from '@/types/cab';
+
+interface ExtendedVehicleType {
+  id: string;
+  name: string;
+  capacity?: number;
+  luggageCapacity?: number;
+  isActive?: boolean;
+  description?: string;
+  image?: string;
+  basePrice?: number;
+  price?: number;
+  pricePerKm?: number;
+  nightHaltCharge?: number;
+  driverAllowance?: number;
+}
 
 export const VehicleManagement = () => {
-  const [vehicles, setVehicles] = useState<{id: string, name: string}[]>([]);
+  const [vehicles, setVehicles] = useState<ExtendedVehicleType[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -61,7 +77,6 @@ export const VehicleManagement = () => {
       setIsRefreshing(true);
       console.log("Loading vehicles for management UI", forceRefresh ? "(force refresh)" : "");
       
-      // Clear any caches first if forcing refresh
       if (forceRefresh) {
         sessionStorage.removeItem('cabTypes');
         localStorage.removeItem('cabTypes');
@@ -69,20 +84,17 @@ export const VehicleManagement = () => {
         console.log("Cleared vehicle cache before loading");
       }
       
-      // Load vehicles with latest data
-      const vehicleList = await getVehicleTypes(forceRefresh);
+      const vehicleList = await getVehicleTypes();
       
       if (vehicleList && Array.isArray(vehicleList) && vehicleList.length > 0) {
         setVehicles(vehicleList);
         console.log("Successfully loaded vehicles:", vehicleList);
         
-        // Check for local vehicles as a backup
         const localVehicles = localStorage.getItem('localVehicles');
         if (localVehicles) {
           try {
             const parsedLocalVehicles = JSON.parse(localVehicles);
             if (Array.isArray(parsedLocalVehicles) && parsedLocalVehicles.length > 0) {
-              // Add any local vehicles that don't exist in the fetched list
               const localOnlyVehicles = parsedLocalVehicles.filter(
                 localVeh => !vehicleList.some(v => v.id === localVeh.id)
               );
@@ -100,7 +112,6 @@ export const VehicleManagement = () => {
         console.warn("No vehicles returned from API");
         toast.error("No vehicles found");
         
-        // Try to load from local storage as fallback
         const localVehicles = localStorage.getItem('localVehicles');
         if (localVehicles) {
           try {
@@ -122,7 +133,6 @@ export const VehicleManagement = () => {
       console.error("Error loading vehicles:", error);
       toast.error("Failed to load vehicles");
       
-      // Try to load from local storage as fallback
       const localVehicles = localStorage.getItem('localVehicles');
       if (localVehicles) {
         try {
@@ -144,7 +154,6 @@ export const VehicleManagement = () => {
   useEffect(() => {
     loadVehicles();
     
-    // Set up listeners for vehicle creation/updates
     const handleVehicleCreated = () => {
       console.log("Vehicle created event detected, refreshing vehicle list");
       setRefreshTrigger(prev => prev + 1);
@@ -184,7 +193,7 @@ export const VehicleManagement = () => {
       resetForm();
       
       setName(vehicle.name || "");
-      setIsActive(true);
+      setIsActive(vehicle.isActive !== false);
       
       fetchVehicleDetails(vehicleId);
     }
@@ -196,11 +205,9 @@ export const VehicleManagement = () => {
       
       console.log(`Fetching details for vehicle: ${vehicleId}`);
       
-      // First check if we can find this vehicle in our list
       const vehicle = vehicles.find(v => v.id === vehicleId);
       
       if (vehicle && typeof vehicle === 'object') {
-        // Check if we already have all the detailed fields
         if (vehicle.capacity !== undefined && vehicle.basePrice !== undefined) {
           console.log("Using existing vehicle data:", vehicle);
           
@@ -218,7 +225,6 @@ export const VehicleManagement = () => {
         }
       }
       
-      // Otherwise use fallback data
       console.log("Using fallback vehicle data");
       await new Promise(resolve => setTimeout(resolve, 500));
       
@@ -363,7 +369,6 @@ export const VehicleManagement = () => {
         
         localStorage.setItem('forceTripFaresRefresh', 'true');
         
-        // Add to local vehicles list immediately for UI feedback
         try {
           let localVehicles = [];
           const storedVehicles = localStorage.getItem('localVehicles');
@@ -384,7 +389,6 @@ export const VehicleManagement = () => {
         
         resetNewVehicleForm();
         
-        // Force reload all cab data
         await reloadCabTypes();
         
         setSelectedVehicle(vehicleId);
@@ -418,7 +422,6 @@ export const VehicleManagement = () => {
         resetForm();
         setSelectedVehicle("");
         
-        // Remove from local vehicles list
         try {
           const storedVehicles = localStorage.getItem('localVehicles');
           if (storedVehicles) {

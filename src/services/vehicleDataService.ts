@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { CabType, OutstationFare, LocalFare, AirportFare } from '@/types/cab';
 import { toast } from 'sonner';
@@ -501,25 +500,17 @@ export const deleteVehicle = async (vehicleId: string): Promise<boolean> => {
 /**
  * Get all vehicle types for dropdown selection
  */
-export const getVehicleTypes = async (): Promise<{id: string, name: string}[]> => {
+export const getVehicleTypes = async (): Promise<any[]> => {
   try {
     // Always pass true to include inactive vehicles
     const vehicles = await getVehicleData(true); 
     
-    const vehiclesList = vehicles.map(vehicle => ({
-      id: vehicle.id, // Already cleaned in getVehicleData
-      name: vehicle.name || vehicle.id
-    }));
+    console.log('Available vehicle types for selection:', vehicles);
     
-    console.log('Available vehicle types for selection:', vehiclesList);
-    
-    return vehiclesList;
+    return vehicles;
   } catch (error) {
     console.error('Error getting vehicle types:', error);
-    return defaultVehicles.map(vehicle => ({
-      id: vehicle.id,
-      name: vehicle.name || vehicle.id
-    }));
+    return defaultVehicles;
   }
 };
 
