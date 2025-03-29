@@ -4,6 +4,16 @@ import type { CabType } from '@/types/cab';
 import { reloadCabTypes } from '@/lib/cabData';
 import { makeApiRequest, directVehicleOperation } from '@/utils/apiHelper';
 
+// Define a type for the API response to fix the 'offline' property errors
+interface VehicleOperationResponse {
+  status: string;
+  message: string;
+  vehicleId?: string;
+  offline?: boolean;
+  timestamp?: number;
+  [key: string]: any;
+}
+
 /**
  * Create a new vehicle using all available API endpoints and local storage fallback
  */
@@ -37,7 +47,7 @@ export const createVehicle = async (vehicleData: any): Promise<boolean> => {
     };
     
     // Use the enhanced directVehicleOperation function
-    const response = await directVehicleOperation('create', normalizedData, {
+    const response = await directVehicleOperation<VehicleOperationResponse>('create', normalizedData, {
       notification: true,
       localStorageFallback: true
     });
@@ -89,7 +99,7 @@ export const updateVehicle = async (vehicleData: any): Promise<boolean> => {
     };
     
     // Use the enhanced directVehicleOperation function
-    const response = await directVehicleOperation('update', normalizedData, {
+    const response = await directVehicleOperation<VehicleOperationResponse>('update', normalizedData, {
       notification: true,
       localStorageFallback: true
     });
@@ -129,7 +139,7 @@ export const deleteVehicle = async (vehicleId: string): Promise<boolean> => {
     console.log('Deleting vehicle with ID:', vehicleId);
     
     // Use the enhanced directVehicleOperation function
-    const response = await directVehicleOperation('delete', { vehicleId }, {
+    const response = await directVehicleOperation<VehicleOperationResponse>('delete', { vehicleId }, {
       notification: true,
       localStorageFallback: true
     });
