@@ -351,6 +351,9 @@ export const updateVehicle = async (vehicleData: any): Promise<any> => {
     // Log what we're sending
     console.log('Sending form data with these keys:', Object.fromEntries(formData.entries()));
     
+    // Add cache busting timestamp
+    const timestamp = Date.now();
+    
     // Try multiple API endpoints in sequence
     const endpoints = [
       `${apiBaseUrl}/api/admin/vehicles-update.php?_t=${timestamp}`,
@@ -552,7 +555,12 @@ export const addVehicle = async (vehicleData: any): Promise<any> => {
         localStorage.setItem('cachedVehicles', JSON.stringify(vehicles));
         
         toast.success("Vehicle added to local cache (offline mode)");
-        return { status: 'success', message: 'Vehicle added to local cache', offlineMode: true };
+        return { 
+          status: 'success', 
+          message: 'Vehicle added to local cache', 
+          offlineMode: true,
+          timestamp: Date.now()
+        };
       } catch (localError) {
         console.error('Error adding to local storage:', localError);
         throw new Error('All add endpoints failed and local storage fallback failed');
