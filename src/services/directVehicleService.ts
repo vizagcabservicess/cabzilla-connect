@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { toast } from 'sonner';
 import { getBypassHeaders } from '@/config/requestConfig';
@@ -120,7 +119,7 @@ export const createVehicle = async (vehicleData: any) => {
           capacity: parseInt(normalizedData.capacity) || 4,
           luggageCapacity: parseInt(normalizedData.luggageCapacity) || 2,
           ac: true,
-          isActive: true, // Fixed: Changed from is_active to isActive to match CabType interface
+          isActive: true, // Fixed: Using isActive property that matches CabType interface
           description: normalizedData.description || '',
           image: normalizedData.image || '',
           amenities: normalizedData.amenities || []
