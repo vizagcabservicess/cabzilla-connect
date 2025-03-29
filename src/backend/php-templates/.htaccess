@@ -20,11 +20,13 @@ RewriteRule ^api/admin/direct-vehicle-create\.php$ api/admin/direct-vehicle-crea
 RewriteRule ^api/direct-vehicle-create$ api/admin/direct-vehicle-create.php [QSA,L]
 RewriteRule ^api/vehicle-create$ api/admin/direct-vehicle-create.php [QSA,L]
 
-# Direct endpoint for vehicle deletion - highest priority
-RewriteRule ^api/admin/direct-vehicle-delete$ api/admin/direct-vehicle-delete.php [QSA,L]
-RewriteRule ^api/admin/direct-vehicle-delete\.php$ api/admin/direct-vehicle-delete.php [QSA,L]
-RewriteRule ^api/direct-vehicle-delete$ api/admin/direct-vehicle-delete.php [QSA,L]
-RewriteRule ^api/vehicle-delete$ api/admin/direct-vehicle-delete.php [QSA,L]
+# Direct endpoint for vehicle deletion - highest priority (with improved patterns)
+RewriteRule ^api/admin/direct-vehicle-delete(/.*)?$ api/admin/direct-vehicle-delete.php [QSA,L]
+RewriteRule ^api/admin/direct-vehicle-delete\.php(/.*)?$ api/admin/direct-vehicle-delete.php [QSA,L]
+RewriteRule ^api/direct-vehicle-delete(/.*)?$ api/admin/direct-vehicle-delete.php [QSA,L]
+RewriteRule ^api/vehicle-delete(/.*)?$ api/admin/direct-vehicle-delete.php [QSA,L]
+RewriteRule ^api/admin/vehicles/delete(/.*)?$ api/admin/direct-vehicle-delete.php [QSA,L]
+RewriteRule ^api/admin/vehicle/delete(/.*)?$ api/admin/direct-vehicle-delete.php [QSA,L]
 
 # Direct endpoint for vehicle update - highest priority
 RewriteRule ^api/admin/direct-vehicle-update$ api/admin/direct-vehicle-update.php [QSA,L]
