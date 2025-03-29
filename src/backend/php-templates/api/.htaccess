@@ -41,12 +41,18 @@ RewriteEngine On
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
 
-# DIRECT VEHICLE CREATE - HIGHEST PRIORITY
-# Make sure this endpoint has absolute top priority
+# DIRECT VEHICLE CREATE AND UPDATE - HIGHEST PRIORITY
+# Make sure these endpoints have absolute top priority
 RewriteRule ^direct-vehicle-create$ admin/direct-vehicle-create.php [L,QSA]
 RewriteRule ^direct-vehicle-create\.php$ admin/direct-vehicle-create.php [L,QSA]
 RewriteRule ^admin/direct-vehicle-create$ admin/direct-vehicle-create.php [L,QSA]
 RewriteRule ^admin/direct-vehicle-create\.php$ admin/direct-vehicle-create.php [L,QSA]
+
+# NEW: Direct vehicle update endpoint with high priority
+RewriteRule ^direct-vehicle-update$ admin/direct-vehicle-update.php [L,QSA]
+RewriteRule ^direct-vehicle-update\.php$ admin/direct-vehicle-update.php [L,QSA]
+RewriteRule ^admin/direct-vehicle-update$ admin/direct-vehicle-update.php [L,QSA]
+RewriteRule ^admin/direct-vehicle-update\.php$ admin/direct-vehicle-update.php [L,QSA]
 
 # Enhanced rate limiting for vehicle data and fare endpoints
 # These endpoints can cause client-side loops if called too frequently
@@ -70,7 +76,7 @@ RewriteRule ^admin/direct-vehicle-create\.php$ admin/direct-vehicle-create.php [
     </FilesMatch>
     
     # No caching for direct fare update endpoints - highest priority
-    <FilesMatch "(direct-fare-update|fare-update|direct-outstation-fares|outstation-fares-update|local-fares-update|airport-fares-update|direct-.*-fares|init-database|sync-local-fares|local-package-fares)\.php$">
+    <FilesMatch "(direct-fare-update|fare-update|direct-outstation-fares|outstation-fares-update|local-fares-update|airport-fares-update|direct-.*-fares|init-database|sync-local-fares|local-package-fares|direct-vehicle-update)\.php$">
         Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
         Header set Pragma "no-cache"
         Header set Expires "0"

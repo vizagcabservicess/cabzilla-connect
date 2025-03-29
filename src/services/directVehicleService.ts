@@ -98,7 +98,39 @@ export const updateVehicle = async (vehicleData: any): Promise<boolean> => {
       timestamp: Date.now()
     };
     
-    // Use the enhanced directVehicleOperation function
+    // First try the direct endpoint which is most likely to work
+    try {
+      const directEndpoints = [
+        '/api/admin/direct-vehicle-update.php',
+        '/api/direct-vehicle-update',
+        '/api/admin/direct-vehicle-update'
+      ];
+      
+      const directResponse = await makeApiRequest(directEndpoints, 'POST', normalizedData, {
+        contentTypes: ['application/json', 'multipart/form-data'],
+        retries: 2,
+        notification: false
+      });
+      
+      if (directResponse && directResponse.status === 'success') {
+        console.log('Successfully updated vehicle using direct endpoint:', directResponse);
+        
+        // Clear vehicle caches
+        localStorage.removeItem('cachedVehicles');
+        sessionStorage.removeItem('cabTypes');
+        
+        toast.success("Vehicle updated successfully");
+        
+        // Reload cab types
+        await reloadCabTypes();
+        
+        return true;
+      }
+    } catch (directError) {
+      console.warn('Direct vehicle update failed, falling back to standard operation:', directError);
+    }
+    
+    // Fall back to the standard operation if direct update failed
     const response = await directVehicleOperation<VehicleOperationResponse>('update', normalizedData, {
       notification: true,
       localStorageFallback: true

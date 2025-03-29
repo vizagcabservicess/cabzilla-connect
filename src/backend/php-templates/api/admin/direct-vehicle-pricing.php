@@ -124,7 +124,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $row = $checkResult->fetch_assoc();
     $vehicleExists = $row['count'] > 0;
     
-    // Check if vehicle_pricing table exists
+    // Check if vehicle_pricing table exists and create if needed
     $pricingTableExists = false;
     $result = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'");
     if ($result && $result->num_rows > 0) {
@@ -134,25 +134,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $conn->query("
             CREATE TABLE IF NOT EXISTS vehicle_pricing (
                 id INT AUTO_INCREMENT PRIMARY KEY,
-                vehicle_id VARCHAR(50) NOT NULL UNIQUE,
+                vehicle_id VARCHAR(50) NOT NULL,
                 base_price DECIMAL(10,2) DEFAULT 0,
                 price_per_km DECIMAL(10,2) DEFAULT 0,
                 night_halt_charge DECIMAL(10,2) DEFAULT 0,
                 driver_allowance DECIMAL(10,2) DEFAULT 0,
                 trip_type VARCHAR(50) DEFAULT 'all',
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_vehicle_trip (vehicle_id, trip_type)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         ");
         $pricingTableExists = true;
         error_log("DIRECT VEHICLE PRICING: Created vehicle_pricing table");
     }
     
-    // Check if outstation_fares table exists
+    // Check if outstation_fares table exists and create if needed
     $outstationTableExists = false;
     $result = $conn->query("SHOW TABLES LIKE 'outstation_fares'");
     if ($result && $result->num_rows > 0) {
         $outstationTableExists = true;
+    } else {
+        // Create outstation_fares table
+        $conn->query("
+            CREATE TABLE IF NOT EXISTS outstation_fares (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                vehicle_id VARCHAR(50) NOT NULL UNIQUE,
+                base_fare DECIMAL(10,2) DEFAULT 0,
+                price_per_km DECIMAL(10,2) DEFAULT 0,
+                night_halt_charge DECIMAL(10,2) DEFAULT 0,
+                driver_allowance DECIMAL(10,2) DEFAULT 0,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ");
+        $outstationTableExists = true;
+        error_log("DIRECT VEHICLE PRICING: Created outstation_fares table");
     }
     
     if ($vehicleExists) {
@@ -160,7 +177,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         // Update vehicle_pricing table
         if ($pricingTableExists) {
-            $checkPricingStmt = $conn->prepare("SELECT COUNT(*) as count FROM vehicle_pricing WHERE vehicle_id = ?");
+            $checkPricingStmt = $conn->prepare("SELECT COUNT(*) as count FROM vehicle_pricing WHERE vehicle_id = ? AND trip_type = 'all'");
             $checkPricingStmt->bind_param("s", $vehicleId);
             $checkPricingStmt->execute();
             $pricingResult = $checkPricingStmt->get_result();
@@ -171,7 +188,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $updateStmt = $conn->prepare("
                     UPDATE vehicle_pricing 
                     SET base_price = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?, updated_at = NOW() 
-                    WHERE vehicle_id = ?
+                    WHERE vehicle_id = ? AND trip_type = 'all'
                 ");
                 
                 if (!$updateStmt) {
@@ -218,10 +235,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $outstationRow = $outstationResult->fetch_assoc();
             
             if ($outstationRow['count'] > 0) {
-                // Update existing outstation fare
+                // Update existing outstation fare using base_fare
                 $updateStmt = $conn->prepare("
                     UPDATE outstation_fares 
-                    SET base_fare = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ? 
+                    SET base_fare = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?, updated_at = NOW() 
                     WHERE vehicle_id = ?
                 ");
                 
@@ -238,7 +255,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
             } else {
-                // Insert new outstation fare
+                // Insert new outstation fare using base_fare
                 $insertStmt = $conn->prepare("
                     INSERT INTO outstation_fares 
                     (vehicle_id, base_fare, price_per_km, night_halt_charge, driver_allowance) 
@@ -351,6 +368,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
         } catch (Exception $e) {
             error_log("DIRECT VEHICLE PRICING: Error updating JSON file: " . $e->getMessage());
+        }
+        
+        // Trigger vehicle data refresh events
+        try {
+            // Dispatch a vehicle data refreshed event to notify the frontend
+            echo "
+                <script>
+                    if (window.parent && window.parent.dispatchEvent) {
+                        window.parent.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
+                            detail: {
+                                vehicleId: '$vehicleId',
+                                timestamp: " . time() . "
+                            }
+                        }));
+                    }
+                </script>
+            ";
+        } catch (Exception $e) {
+            error_log("DIRECT VEHICLE PRICING: Error dispatching event: " . $e->getMessage());
         }
         
         header('Content-Type: application/json');
@@ -525,3 +561,4 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Close database connection
 $conn->close();
+

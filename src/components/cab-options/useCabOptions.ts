@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { CabType } from '@/types/cab';
 import { getVehicleData } from '@/services/vehicleDataService';
-import { TripType, TripMode } from '@/lib/tripTypes';
+import { TripType, TripMode, isAdminTripType, isTourTripType, isRegularTripType } from '@/lib/tripTypes';
 import { fareService } from '@/services/fareService';
 import { toast } from 'sonner';
 
@@ -62,7 +62,7 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
       if (forceRefresh) {
         try {
           // First, try the JSON file for faster loading
-          const jsonResponse = await fetch(`/public/data/vehicles.json?_t=${now}`, {
+          const jsonResponse = await fetch(`/data/vehicles.json?_t=${now}`, {
             headers: {
               'Cache-Control': 'no-cache',
             }
@@ -202,10 +202,10 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
       let filteredVehicles = vehicles;
       
       // Fix: Update type comparison to handle 'admin' as a special case
-      if (tripType === 'tour') {
+      if (isTourTripType(tripType)) {
         // Filter vehicles that are suitable for tours
         filteredVehicles = vehicles.filter(v => v.capacity >= 4);
-      } else if (tripType !== 'outstation' && tripType !== 'local' && tripType !== 'airport' && tripType !== 'tour') {
+      } else if (!isRegularTripType(tripType)) {
         // For custom or admin-like trip types, show all vehicles
         filteredVehicles = vehicles;
       } else {
