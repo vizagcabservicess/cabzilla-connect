@@ -1,3 +1,4 @@
+
 <?php
 // Set up error reporting and logging for debugging
 ini_set('display_errors', 0);
@@ -18,7 +19,7 @@ header('Expires: 0');
 
 // Add extra cache busting headers
 header('X-Cache-Timestamp: ' . time());
-header('X-API-Version: '.'1.0.5');
+header('X-API-Version: '.'1.0.6'); // Updated version number
 
 // Respond to preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -265,7 +266,7 @@ try {
                 'timestamp' => time(),
                 'cached' => true,
                 'source' => 'json',
-                'version' => '1.0.5',
+                'version' => '1.0.6', // Updated version
                 'includeInactive' => $includeInactive
             ]);
             exit;
@@ -331,6 +332,7 @@ try {
     error_log("Using $vehicleTableToUse table for vehicle data");
     
     // Build query to get vehicle types based on which table exists
+    // Get all fields directly from the vehicle table instead of joining
     $query = "SELECT * FROM $vehicleTableToUse";
     
     // Only add the WHERE clause if we're not including inactive vehicles
@@ -403,57 +405,90 @@ try {
             
             error_log("Added outstation fares to vehicle $vehicleId: " . json_encode($fareData['outstation']));
         } else {
-            // Try to get pricing from vehicle_pricing table
-            try {
-                if (tableExists($conn, 'vehicle_pricing')) {
-                    $pricingQuery = $conn->prepare("
-                        SELECT 
-                            base_price as basePrice, 
-                            price_per_km as pricePerKm, 
-                            night_halt_charge as nightHaltCharge, 
-                            driver_allowance as driverAllowance
-                        FROM vehicle_pricing 
-                        WHERE vehicle_id = ?
-                    ");
-                    
-                    if ($pricingQuery) {
-                        $pricingQuery->bind_param("s", $vehicleId);
-                        $pricingQuery->execute();
-                        $pricingResult = $pricingQuery->get_result();
+            // Try to get pricing directly from the vehicle table
+            $vehicle['basePrice'] = floatval($row['base_price'] ?? 0);
+            $vehicle['price'] = floatval($row['base_price'] ?? $row['price'] ?? 0);
+            $vehicle['pricePerKm'] = floatval($row['price_per_km'] ?? 0);
+            $vehicle['nightHaltCharge'] = floatval($row['night_halt_charge'] ?? 0);
+            $vehicle['driverAllowance'] = floatval($row['driver_allowance'] ?? 0);
+            
+            // If values are still 0, try to get from vehicle_pricing table
+            if ($vehicle['basePrice'] == 0 || $vehicle['pricePerKm'] == 0) {
+                try {
+                    if (tableExists($conn, 'vehicle_pricing')) {
+                        // Use base_fare and base_price to handle both column names
+                        $pricingQuery = $conn->prepare("
+                            SELECT 
+                                base_fare as baseFare, 
+                                base_price as basePrice,
+                                price_per_km as pricePerKm, 
+                                night_halt_charge as nightHaltCharge, 
+                                driver_allowance as driverAllowance
+                            FROM vehicle_pricing 
+                            WHERE vehicle_id = ? AND trip_type = 'outstation'
+                            LIMIT 1
+                        ");
                         
-                        if ($pricingResult && $pricingResult->num_rows > 0) {
-                            $pricing = $pricingResult->fetch_assoc();
-                            $vehicle['basePrice'] = floatval($pricing['basePrice'] ?? 0);
-                            $vehicle['price'] = floatval($pricing['basePrice'] ?? 0);
-                            $vehicle['pricePerKm'] = floatval($pricing['pricePerKm'] ?? 0);
-                            $vehicle['nightHaltCharge'] = floatval($pricing['nightHaltCharge'] ?? 0);
-                            $vehicle['driverAllowance'] = floatval($pricing['driverAllowance'] ?? 0);
-                            error_log("Added pricing from vehicle_pricing for $vehicleId: " . json_encode($pricing));
-                        } else {
-                            // Default values if no pricing data
-                            $vehicle['basePrice'] = 2500;
-                            $vehicle['price'] = 2500; 
-                            $vehicle['pricePerKm'] = 14;
-                            $vehicle['nightHaltCharge'] = 700;
-                            $vehicle['driverAllowance'] = 250;
+                        if ($pricingQuery) {
+                            $pricingQuery->bind_param("s", $vehicleId);
+                            $pricingQuery->execute();
+                            $pricingResult = $pricingQuery->get_result();
+                            
+                            if ($pricingResult && $pricingResult->num_rows > 0) {
+                                $pricing = $pricingResult->fetch_assoc();
+                                $vehicle['basePrice'] = floatval($pricing['basePrice'] ?? $pricing['baseFare'] ?? 0);
+                                $vehicle['price'] = floatval($pricing['basePrice'] ?? $pricing['baseFare'] ?? 0);
+                                $vehicle['pricePerKm'] = floatval($pricing['pricePerKm'] ?? 0);
+                                $vehicle['nightHaltCharge'] = floatval($pricing['nightHaltCharge'] ?? 0);
+                                $vehicle['driverAllowance'] = floatval($pricing['driverAllowance'] ?? 0);
+                                error_log("Added pricing from vehicle_pricing for $vehicleId: " . json_encode($pricing));
+                            } else {
+                                // Fall back to general pricing query without trip_type constraint
+                                $generalPricingQuery = $conn->prepare("
+                                    SELECT 
+                                        base_fare as baseFare,
+                                        base_price as basePrice, 
+                                        price_per_km as pricePerKm, 
+                                        night_halt_charge as nightHaltCharge, 
+                                        driver_allowance as driverAllowance
+                                    FROM vehicle_pricing 
+                                    WHERE vehicle_id = ?
+                                    LIMIT 1
+                                ");
+                                
+                                if ($generalPricingQuery) {
+                                    $generalPricingQuery->bind_param("s", $vehicleId);
+                                    $generalPricingQuery->execute();
+                                    $generalPricingResult = $generalPricingQuery->get_result();
+                                    
+                                    if ($generalPricingResult && $generalPricingResult->num_rows > 0) {
+                                        $pricing = $generalPricingResult->fetch_assoc();
+                                        $vehicle['basePrice'] = floatval($pricing['basePrice'] ?? $pricing['baseFare'] ?? 0);
+                                        $vehicle['price'] = floatval($pricing['basePrice'] ?? $pricing['baseFare'] ?? 0);
+                                        $vehicle['pricePerKm'] = floatval($pricing['pricePerKm'] ?? 0);
+                                        $vehicle['nightHaltCharge'] = floatval($pricing['nightHaltCharge'] ?? 0);
+                                        $vehicle['driverAllowance'] = floatval($pricing['driverAllowance'] ?? 0);
+                                    } else {
+                                        // Default values if no pricing data
+                                        $vehicle['basePrice'] = $vehicle['basePrice'] ?: 2500;
+                                        $vehicle['price'] = $vehicle['price'] ?: 2500; 
+                                        $vehicle['pricePerKm'] = $vehicle['pricePerKm'] ?: 14;
+                                        $vehicle['nightHaltCharge'] = $vehicle['nightHaltCharge'] ?: 700;
+                                        $vehicle['driverAllowance'] = $vehicle['driverAllowance'] ?: 250;
+                                    }
+                                }
+                            }
                         }
                     }
-                } else {
-                    // Default values if no outstation fare data
-                    $vehicle['basePrice'] = 2500;
-                    $vehicle['price'] = 2500; 
-                    $vehicle['pricePerKm'] = 14;
-                    $vehicle['nightHaltCharge'] = 700;
-                    $vehicle['driverAllowance'] = 250;
+                } catch (Exception $e) {
+                    error_log("Error fetching pricing data: " . $e->getMessage());
+                    // Default values if error
+                    $vehicle['basePrice'] = $vehicle['basePrice'] ?: 2500;
+                    $vehicle['price'] = $vehicle['price'] ?: 2500; 
+                    $vehicle['pricePerKm'] = $vehicle['pricePerKm'] ?: 14;
+                    $vehicle['nightHaltCharge'] = $vehicle['nightHaltCharge'] ?: 700;
+                    $vehicle['driverAllowance'] = $vehicle['driverAllowance'] ?: 250;
                 }
-            } catch (Exception $e) {
-                error_log("Error fetching pricing data: " . $e->getMessage());
-                // Default values if error
-                $vehicle['basePrice'] = 2500;
-                $vehicle['price'] = 2500; 
-                $vehicle['pricePerKm'] = 14;
-                $vehicle['nightHaltCharge'] = 700;
-                $vehicle['driverAllowance'] = 250;
             }
         }
         
@@ -506,7 +541,7 @@ try {
         'vehicles' => $vehicles,
         'timestamp' => time(),
         'cached' => false,
-        'version' => '1.0.5',
+        'version' => '1.0.6', // Updated version
         'tableUsed' => $vehicleTableToUse,
         'includeInactive' => $includeInactive
     ]);

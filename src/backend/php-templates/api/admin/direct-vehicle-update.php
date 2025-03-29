@@ -201,6 +201,8 @@ try {
             price_per_km DECIMAL(5,2) DEFAULT 0,
             night_halt_charge DECIMAL(10,2) DEFAULT 0,
             driver_allowance DECIMAL(10,2) DEFAULT 0,
+            roundtrip_base_price DECIMAL(10,2) DEFAULT 0,
+            roundtrip_price_per_km DECIMAL(5,2) DEFAULT 0,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             UNIQUE KEY vehicle_id (vehicle_id)

@@ -1,425 +1,323 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Card, 
+  CardContent, 
+  CardDescription, 
+  CardFooter, 
+  CardHeader, 
+  CardTitle 
+} from "@/components/ui/card";
+import { toast } from 'sonner';
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
 } from "@/components/ui/select";
-import { toast } from "sonner";
-import { Loader2, Trash2, PlusCircle, Car, RefreshCw, RotateCw } from "lucide-react";
-import { getVehicleTypes, updateVehicle, deleteVehicle } from "@/services/vehicleDataService";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Textarea } from "@/components/ui/textarea";
-import { VehicleTripFaresForm } from './VehicleTripFaresForm';
-import { clearFareCache } from '@/lib/fareCalculationService';
+import { 
+  Tabs, 
+  TabsContent, 
+  TabsList, 
+  TabsTrigger 
+} from "@/components/ui/tabs";
+import { 
+  createVehicle, 
+  updateVehicle, 
+  deleteVehicle,
+  syncVehicleData 
+} from '@/services/directVehicleService';
 import { reloadCabTypes } from '@/lib/cabData';
 import { 
   Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
   DialogTrigger,
+  DialogContent,
+  DialogTitle,
+  DialogHeader,
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { syncVehicleData } from '@/services/directVehicleService';
 import { CabType } from '@/types/cab';
 
 interface ExtendedVehicleType {
   id: string;
+  vehicleId?: string;
   name: string;
-  capacity?: number;
-  luggageCapacity?: number;
+  capacity: number;
+  luggageCapacity: number;
+  ac?: boolean;
   isActive?: boolean;
-  description?: string;
   image?: string;
+  description?: string;
+  amenities?: string[];
   basePrice?: number;
-  price?: number;
   pricePerKm?: number;
   nightHaltCharge?: number;
   driverAllowance?: number;
 }
 
-export const VehicleManagement = () => {
+// VehicleManagement component
+const VehicleManagement = () => {
   const [vehicles, setVehicles] = useState<ExtendedVehicleType[]>([]);
-  const [selectedVehicle, setSelectedVehicle] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [selectedVehicle, setSelectedVehicle] = useState<ExtendedVehicleType | null>(null);
   
-  const [addVehicleOpen, setAddVehicleOpen] = useState(false);
-  const [debugOpen, setDebugOpen] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<any>(null);
+  // New vehicle form state
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [newVehicleName, setNewVehicleName] = useState('');
+  const [newVehicleId, setNewVehicleId] = useState('');
+  const [newVehicleCapacity, setNewVehicleCapacity] = useState('4');
+  const [newVehicleLuggageCapacity, setNewVehicleLuggageCapacity] = useState('2');
+  const [newVehicleImage, setNewVehicleImage] = useState('');
   
-  const [name, setName] = useState("");
-  const [capacity, setCapacity] = useState("");
-  const [luggageCapacity, setLuggageCapacity] = useState("");
-  const [isActive, setIsActive] = useState(true);
-  const [description, setDescription] = useState("");
-  const [image, setImage] = useState("");
+  // Edit vehicle form state
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editVehicleName, setEditVehicleName] = useState('');
+  const [editVehicleCapacity, setEditVehicleCapacity] = useState('');
+  const [editVehicleLuggageCapacity, setEditVehicleLuggageCapacity] = useState('');
+  const [editVehicleImage, setEditVehicleImage] = useState('');
+  const [editVehicleDescription, setEditVehicleDescription] = useState('');
+  const [editVehicleIsActive, setEditVehicleIsActive] = useState(true);
   
-  const [newVehicleId, setNewVehicleId] = useState("");
-  const [newVehicleName, setNewVehicleName] = useState("");
-  const [newVehicleCapacity, setNewVehicleCapacity] = useState("4");
-  const [newVehicleLuggageCapacity, setNewVehicleLuggageCapacity] = useState("2");
-  const [newVehicleImage, setNewVehicleImage] = useState("/cars/sedan.png");
-  
-  const [basePrice, setBasePrice] = useState("");
-  const [pricePerKm, setPricePerKm] = useState("");
-  const [nightHaltCharge, setNightHaltCharge] = useState("");
-  const [driverAllowance, setDriverAllowance] = useState("");
-  
-  const [activeTab, setActiveTab] = useState("basic");
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
-  
-  const loadVehicles = useCallback(async (forceRefresh = false) => {
+  const fetchVehicles = useCallback(async () => {
+    setLoading(true);
     try {
-      setIsRefreshing(true);
-      console.log("Loading vehicles for management UI", forceRefresh ? "(force refresh)" : "");
+      // Call reloadCabTypes with forceRefresh=true to ensure fresh data
+      await reloadCabTypes(true);
       
-      if (forceRefresh) {
-        sessionStorage.clear();
-        localStorage.removeItem('cabTypes');
-        localStorage.removeItem('cachedVehicles');
-        localStorage.setItem('forceCacheRefresh', 'true');
-        console.log("Cleared vehicle cache before loading");
-        
-        const syncResult = await syncVehicleData(true);
-        console.log("Direct vehicle sync result:", syncResult);
-      }
+      // Get cached vehicles from session/local storage
+      const cachedVehicles = sessionStorage.getItem('cabTypes');
+      const localStorageVehicles = localStorage.getItem('cachedVehicles');
       
-      const vehicleList = await getVehicleTypes(true);
+      const combinedVehicles: ExtendedVehicleType[] = [];
       
-      if (vehicleList && Array.isArray(vehicleList) && vehicleList.length > 0) {
-        console.log("Successfully loaded vehicles:", vehicleList);
-        
-        setDebugInfo({
-          timestamp: new Date().toISOString(),
-          vehicleCount: vehicleList.length,
-          vehicleIds: vehicleList.map(v => v.id),
-          vehicleNames: vehicleList.map(v => v.name)
-        });
-        
-        const localVehicles = localStorage.getItem('localVehicles');
-        if (localVehicles) {
-          try {
-            const parsedLocalVehicles = JSON.parse(localVehicles);
-            if (Array.isArray(parsedLocalVehicles) && parsedLocalVehicles.length > 0) {
-              console.log("Found local vehicles:", parsedLocalVehicles.length);
-              
-              const combinedVehicles = [...vehicleList];
-              let addedCount = 0;
-              
-              parsedLocalVehicles.forEach((localVeh: any) => {
-                if (localVeh && localVeh.id && !combinedVehicles.some(v => v.id === localVeh.id)) {
-                  combinedVehicles.push(localVeh);
-                  addedCount++;
-                }
-              });
-              
-              if (addedCount > 0) {
-                console.log(`Added ${addedCount} vehicles from local storage`);
-              }
-              
-              try {
-                const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
-                const { getBypassHeaders } = await import('@/config/requestConfig');
-                const response = await fetch(`${apiBaseUrl}/api/admin/vehicle-pricing.php?t=${Date.now()}`, {
-                  headers: getBypassHeaders()
-                });
-                
-                if (response.ok) {
-                  const data = await response.json();
-                  if (data && data.status === 'success' && data.data && Array.isArray(data.data)) {
-                    console.log("Found vehicles in pricing API:", data.data.length);
-                    
-                    for (const item of data.data) {
-                      if (item && item.vehicleId && !combinedVehicles.some(v => 
-                          v.id === item.vehicleId || v.vehicleId === item.vehicleId
-                      )) {
-                        const newVehicle: CabType = {
-                          id: item.vehicleId,
-                          vehicleId: item.vehicleId,
-                          name: item.name || item.vehicleId,
-                          capacity: parseInt(item.capacity) || 4,
-                          luggageCapacity: parseInt(item.luggageCapacity) || 2,
-                          isActive: true,
-                          description: item.description || `${item.name || item.vehicleId} vehicle`,
-                          image: item.image || `/cars/sedan.png`,
-                          amenities: ['AC', 'Bottle Water', 'Music System'],
-                          ac: true
-                        };
-                        combinedVehicles.push(newVehicle);
-                      }
-                    }
-                  }
-                }
-              } catch (apiError) {
-                console.error("Error fetching from pricing API:", apiError);
-              }
-              
-              console.log("Final combined vehicles:", combinedVehicles.length);
-              setVehicles(combinedVehicles);
-            } else {
-              setVehicles(vehicleList);
-            }
-          } catch (e) {
-            console.error("Error parsing local vehicles:", e);
-            setVehicles(vehicleList);
-          }
-        } else {
-          setVehicles(vehicleList);
-        }
-      } else {
-        console.warn("No vehicles returned from API");
-        
-        await syncVehicleData(true);
-        
-        const localVehicles = localStorage.getItem('localVehicles');
-        if (localVehicles) {
-          try {
-            const parsedLocalVehicles = JSON.parse(localVehicles);
-            if (Array.isArray(parsedLocalVehicles) && parsedLocalVehicles.length > 0) {
-              console.log("Using vehicles from localStorage as fallback:", parsedLocalVehicles.length);
-              setVehicles(parsedLocalVehicles);
-              
-              if (forceRefresh) {
-                toast.success("Loaded vehicles from local storage");
-              }
-            } else {
-              toast.error("No vehicles found");
-            }
-          } catch (e) {
-            console.error("Error parsing local vehicles:", e);
-            toast.error("Failed to load vehicles");
-          }
-        } else {
-          toast.error("No vehicles found from API or local storage");
-        }
-      }
-    } catch (error) {
-      console.error("Error loading vehicles:", error);
-      toast.error("Failed to load vehicles");
-      
-      const localVehicles = localStorage.getItem('localVehicles');
-      if (localVehicles) {
+      // Process cached vehicles first
+      if (cachedVehicles) {
         try {
-          const parsedLocalVehicles = JSON.parse(localVehicles);
-          if (Array.isArray(parsedLocalVehicles) && parsedLocalVehicles.length > 0) {
-            console.log("Using vehicles from localStorage after error:", parsedLocalVehicles.length);
-            setVehicles(parsedLocalVehicles);
+          const parsed = JSON.parse(cachedVehicles);
+          
+          if (Array.isArray(parsed)) {
+            parsed.forEach(vehicle => {
+              if (!combinedVehicles.some(v => v.id === vehicle.id)) {
+                combinedVehicles.push(vehicle);
+              }
+            });
           }
         } catch (e) {
-          console.error("Error parsing local vehicles:", e);
+          console.error('Error parsing cached vehicles:', e);
         }
       }
+      
+      // Add vehicles from local storage if they don't exist in combined list
+      if (localStorageVehicles) {
+        try {
+          const parsed = JSON.parse(localStorageVehicles);
+          
+          if (Array.isArray(parsed)) {
+            parsed.forEach(vehicle => {
+              if (!combinedVehicles.some(v => 
+                v.id === vehicle.id || v.id === vehicle.vehicleId
+              )) {
+                combinedVehicles.push(vehicle);
+              }
+            });
+          }
+        } catch (e) {
+          console.error('Error parsing local storage vehicles:', e);
+        }
+      }
+      
+      // If we have pricing data, try to include those vehicles too
+      try {
+        const pricingData = localStorage.getItem('vehiclePricing');
+        if (pricingData) {
+          const pricing = JSON.parse(pricingData);
+          
+          if (pricing && pricing.data && Array.isArray(pricing.data)) {
+            for (const item of pricing.data) {
+              if (item && item.vehicleId && !combinedVehicles.some(v => 
+                  v.id === item.vehicleId || v.vehicleId === item.vehicleId
+              )) {
+                const newVehicle: CabType = {
+                  id: item.vehicleId,
+                  vehicleId: item.vehicleId,
+                  name: item.name || item.vehicleId,
+                  capacity: parseInt(item.capacity) || 4,
+                  luggageCapacity: parseInt(item.luggageCapacity) || 2,
+                  isActive: true,
+                  description: item.description || `${item.name || item.vehicleId} vehicle`,
+                  image: item.image || `/cars/sedan.png`,
+                  amenities: ['AC', 'Bottle Water', 'Music System'],
+                  ac: true
+                };
+                combinedVehicles.push(newVehicle);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Error processing pricing data:', e);
+      }
+      
+      // Sort vehicles by name
+      combinedVehicles.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      
+      setVehicles(combinedVehicles);
+      console.log(`Loaded ${combinedVehicles.length} vehicles`);
+    } catch (error) {
+      console.error('Error fetching vehicles:', error);
+      toast.error('Failed to load vehicles');
     } finally {
-      setIsRefreshing(false);
-      localStorage.removeItem('forceCacheRefresh');
+      setLoading(false);
     }
   }, []);
   
   useEffect(() => {
-    loadVehicles();
+    fetchVehicles();
     
-    const handleVehicleCreated = () => {
-      console.log("Vehicle created event detected, refreshing vehicle list");
-      setRefreshTrigger(prev => prev + 1);
+    // Listen for vehicle updates
+    const handleVehicleUpdates = () => {
+      console.log('Detected vehicle updates, refreshing data...');
+      fetchVehicles();
     };
     
-    const handleFaresUpdated = () => {
-      console.log("Fares updated event detected, refreshing vehicle list");
-      setRefreshTrigger(prev => prev + 1);
-    };
-    
-    window.addEventListener('vehicle-created', handleVehicleCreated);
-    window.addEventListener('trip-fares-updated', handleFaresUpdated);
+    window.addEventListener('vehicles-updated', handleVehicleUpdates);
+    window.addEventListener('vehicle-data-refreshed', handleVehicleUpdates);
     
     return () => {
-      window.removeEventListener('vehicle-created', handleVehicleCreated);
-      window.removeEventListener('trip-fares-updated', handleFaresUpdated);
+      window.removeEventListener('vehicles-updated', handleVehicleUpdates);
+      window.removeEventListener('vehicle-data-refreshed', handleVehicleUpdates);
     };
-  }, [loadVehicles]);
+  }, [fetchVehicles]);
   
-  useEffect(() => {
-    loadVehicles();
-  }, [refreshTrigger, loadVehicles]);
-  
-  const handleRefresh = () => {
-    localStorage.removeItem('cachedVehicles');
-    localStorage.removeItem('localVehicles');
-    sessionStorage.removeItem('cabTypes');
-    localStorage.setItem('forceCacheRefresh', 'true');
-    
-    loadVehicles(true);
-    
-    reloadCabTypes(true).then(() => {
-      console.log("Global cab types refreshed");
-      toast.success("Refreshed vehicle list");
-    });
-  };
-  
-  const handleVehicleChange = (vehicleId: string) => {
-    console.log("Selected vehicle:", vehicleId);
-    setSelectedVehicle(vehicleId);
-    
-    const vehicle = vehicles.find(v => v.id === vehicleId);
-    
-    if (vehicle) {
-      console.log("Found vehicle details:", vehicle);
-      resetForm();
-      
-      setName(vehicle.name || "");
-      setIsActive(vehicle.isActive !== false);
-      
-      fetchVehicleDetails(vehicleId);
-    } else {
-      console.warn(`Vehicle with ID ${vehicleId} not found in loaded vehicles`);
-    }
-  };
-  
-  const fetchVehicleDetails = async (vehicleId: string) => {
-    try {
-      setIsLoading(true);
-      
-      console.log(`Fetching details for vehicle: ${vehicleId}`);
-      
-      const vehicle = vehicles.find(v => v.id === vehicleId);
-      
-      if (vehicle && typeof vehicle === 'object') {
-        console.log("Using existing vehicle data:", vehicle);
-        
-        setCapacity(String(vehicle.capacity || "4"));
-        setLuggageCapacity(String(vehicle.luggageCapacity || "2"));
-        setIsActive(Boolean(vehicle.isActive !== false));
-        setDescription(vehicle.description || "");
-        setImage(vehicle.image || "/cars/sedan.png");
-        setBasePrice(String(vehicle.basePrice || vehicle.price || "0"));
-        setPricePerKm(String(vehicle.pricePerKm || "0"));
-        setNightHaltCharge(String(vehicle.nightHaltCharge || "700"));
-        setDriverAllowance(String(vehicle.driverAllowance || "250"));
-        
-        return;
-      }
-      
-      console.log("Using fallback vehicle data");
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      const vehicleData = {
-        capacity: 4,
-        luggageCapacity: 2,
-        isActive: true,
-        description: "Standard vehicle",
-        image: "/cars/sedan.png",
-        basePrice: 4200,
-        pricePerKm: 14,
-        nightHaltCharge: 700,
-        driverAllowance: 250
-      };
-      
-      setCapacity(String(vehicleData.capacity || ""));
-      setLuggageCapacity(String(vehicleData.luggageCapacity || ""));
-      setIsActive(Boolean(vehicleData.isActive));
-      setDescription(vehicleData.description || "");
-      setImage(vehicleData.image || "");
-      setBasePrice(String(vehicleData.basePrice || ""));
-      setPricePerKm(String(vehicleData.pricePerKm || ""));
-      setNightHaltCharge(String(vehicleData.nightHaltCharge || ""));
-      setDriverAllowance(String(vehicleData.driverAllowance || ""));
-    } catch (error) {
-      console.error("Error fetching vehicle details:", error);
-      toast.error("Failed to load vehicle details");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  const resetForm = () => {
-    setName("");
-    setCapacity("");
-    setLuggageCapacity("");
-    setIsActive(true);
-    setDescription("");
-    setImage("");
-    setBasePrice("");
-    setPricePerKm("");
-    setNightHaltCharge("");
-    setDriverAllowance("");
-  };
-  
-  const resetNewVehicleForm = () => {
-    setNewVehicleId("");
-    setNewVehicleName("");
-    setNewVehicleCapacity("4");
-    setNewVehicleLuggageCapacity("2");
-    setNewVehicleImage("/cars/sedan.png");
-  };
-  
-  const handleUpdate = async () => {
-    if (!selectedVehicle) {
-      toast.error("Please select a vehicle to update");
-      return;
-    }
-    
-    setIsLoading(true);
+  const handleRefreshData = useCallback(async () => {
+    toast.info('Refreshing vehicle data...');
     
     try {
-      const vehicleData = {
-        id: selectedVehicle,
-        vehicleId: selectedVehicle,
-        name: name,
-        capacity: parseInt(capacity) || 4,
-        luggageCapacity: parseInt(luggageCapacity) || 2,
-        isActive: isActive,
-        description: description,
-        image: image || "/cars/sedan.png",
-        basePrice: parseFloat(basePrice) || 0,
-        pricePerKm: parseFloat(pricePerKm) || 0,
-        nightHaltCharge: parseFloat(nightHaltCharge) || 0,
-        driverAllowance: parseFloat(driverAllowance) || 0
-      };
+      // Use the syncVehicleData function with forceRefresh=true
+      const result = await syncVehicleData(true);
       
-      console.log("Updating vehicle with data:", vehicleData);
-      
-      await updateVehicle(vehicleData);
-      
-      clearFareCache();
-      
-      window.dispatchEvent(new CustomEvent('trip-fares-updated', {
-        detail: { 
-          timestamp: Date.now(),
-          vehicleId: selectedVehicle,
-          basePrice: parseFloat(basePrice) || 0,
-          pricePerKm: parseFloat(pricePerKm) || 0
+      if (result.success) {
+        toast.success(`Successfully refreshed vehicle data (${result.vehicleCount} vehicles)`);
+        await fetchVehicles();
+      } else {
+        if (result.alreadyInProgress) {
+          toast.info('Vehicle sync already in progress, please wait');
+        } else {
+          toast.error('Failed to refresh vehicle data');
         }
-      }));
-      
-      toast.success("Vehicle updated successfully");
-      
-      localStorage.setItem('forceTripFaresRefresh', 'true');
-      
-      setRefreshTrigger(prev => prev + 1);
+      }
     } catch (error) {
-      console.error("Error updating vehicle:", error);
-      toast.error("Failed to update vehicle");
-    } finally {
-      setIsLoading(false);
+      console.error('Error refreshing vehicles:', error);
+      toast.error('Error refreshing vehicle data');
+    }
+  }, [fetchVehicles]);
+  
+  const handleEditVehicle = (vehicle: ExtendedVehicleType) => {
+    setSelectedVehicle(vehicle);
+    setEditVehicleName(vehicle.name || '');
+    setEditVehicleCapacity(String(vehicle.capacity) || '4');
+    setEditVehicleLuggageCapacity(String(vehicle.luggageCapacity) || '2');
+    setEditVehicleImage(vehicle.image || '');
+    setEditVehicleDescription(vehicle.description || '');
+    setEditVehicleIsActive(vehicle.isActive !== false);
+    setIsEditDialogOpen(true);
+  };
+  
+  const handleUpdateVehicle = async () => {
+    if (!selectedVehicle) return;
+    
+    try {
+      toast.info(`Updating vehicle: ${editVehicleName}`);
+      
+      const vehicleData = {
+        ...selectedVehicle,
+        name: editVehicleName,
+        capacity: parseInt(editVehicleCapacity) || 4,
+        luggageCapacity: parseInt(editVehicleLuggageCapacity) || 2,
+        image: editVehicleImage,
+        description: editVehicleDescription,
+        isActive: editVehicleIsActive,
+        // Make sure we're using the correct ID field
+        vehicleId: selectedVehicle.id,
+        id: selectedVehicle.id,
+        // Include required fields for CabType compatibility
+        ac: true,
+        amenities: selectedVehicle.amenities || ['AC', 'Bottle Water', 'Music System']
+      };
+      
+      // First try direct update
+      const result = await updateVehicle(vehicleData);
+      
+      if (result.status === 'success') {
+        toast.success(`Vehicle ${editVehicleName} updated successfully`);
+        setIsEditDialogOpen(false);
+        await syncVehicleData(true);
+        await fetchVehicles();
+      } else {
+        toast.error('Failed to update vehicle');
+      }
+    } catch (error) {
+      console.error('Error updating vehicle:', error);
+      toast.error('Error updating vehicle');
+    }
+  };
+  
+  const handleDeleteVehicle = async (vehicle: ExtendedVehicleType) => {
+    if (window.confirm(`Are you sure you want to delete ${vehicle.name}?`)) {
+      try {
+        toast.info(`Deleting vehicle: ${vehicle.name}`);
+        
+        const result = await deleteVehicle(vehicle.id);
+        
+        if (result.status === 'success') {
+          toast.success(`Vehicle ${vehicle.name} deleted successfully`);
+          await fetchVehicles();
+        } else {
+          toast.error('Failed to delete vehicle');
+        }
+      } catch (error) {
+        console.error('Error deleting vehicle:', error);
+        toast.error('Error deleting vehicle');
+      }
+    }
+  };
+  
+  const handleToggleVehicleActive = async (vehicle: ExtendedVehicleType, isActive: boolean) => {
+    try {
+      toast.info(`${isActive ? 'Activating' : 'Deactivating'} vehicle: ${vehicle.name}`);
+      
+      const updatedVehicle = {
+        ...vehicle,
+        isActive,
+        // Include required fields for CabType compatibility
+        ac: true,
+        amenities: vehicle.amenities || ['AC', 'Bottle Water', 'Music System']
+      };
+      
+      const result = await updateVehicle(updatedVehicle);
+      
+      if (result.status === 'success') {
+        toast.success(`Vehicle ${vehicle.name} ${isActive ? 'activated' : 'deactivated'} successfully`);
+        
+        // Update the local state to reflect the change
+        setVehicles(prev => 
+          prev.map(v => v.id === vehicle.id ? { ...v, isActive } : v)
+        );
+      } else {
+        toast.error(`Failed to ${isActive ? 'activate' : 'deactivate'} vehicle`);
+      }
+    } catch (error) {
+      console.error(`Error ${isActive ? 'activating' : 'deactivating'} vehicle:`, error);
+      toast.error(`Error ${isActive ? 'activating' : 'deactivating'} vehicle`);
     }
   };
   
   const handleAddNewVehicle = async () => {
-    if (!newVehicleName) {
-      toast.error("Vehicle name is required");
-      return;
-    }
-    
-    setIsLoading(true);
-    
     try {
       const vehicleId = newVehicleId || newVehicleName.toLowerCase().replace(/\s+/g, '_');
       
@@ -439,478 +337,313 @@ export const VehicleManagement = () => {
         basePrice: 0
       };
       
-      console.log("Creating new vehicle with data:", vehicleData);
+      toast.info(`Creating vehicle: ${newVehicleName}`);
       
-      const { createVehicle } = await import('@/services/directVehicleService');
       const result = await createVehicle(vehicleData);
       
-      if (result) {
-        toast.success("Vehicle created successfully");
+      if (result.status === 'success') {
+        toast.success(`Vehicle ${newVehicleName} created successfully`);
         
-        setVehicles(prev => {
-          const updatedVehicles = [...prev];
-          const existingIndex = updatedVehicles.findIndex(v => v.id === vehicleId);
-          if (existingIndex >= 0) {
-            updatedVehicles.splice(existingIndex, 1);
-          }
-          updatedVehicles.push(vehicleData);
-          return updatedVehicles;
-        });
+        // Reset form
+        setNewVehicleName('');
+        setNewVehicleId('');
+        setNewVehicleCapacity('4');
+        setNewVehicleLuggageCapacity('2');
+        setNewVehicleImage('');
+        setIsAddDialogOpen(false);
         
-        try {
-          const existingVehicles = JSON.parse(localStorage.getItem('localVehicles') || '[]');
-          const updatedVehicles = existingVehicles.filter((v: any) => v.id !== vehicleId);
-          updatedVehicles.push(vehicleData);
-          localStorage.setItem('localVehicles', JSON.stringify(updatedVehicles));
-          localStorage.setItem('cachedVehicles', JSON.stringify(updatedVehicles));
-          sessionStorage.setItem('cabTypes', JSON.stringify(updatedVehicles));
-        } catch (e) {
-          console.error('Error storing vehicle in localStorage:', e);
-        }
+        // Update vehicles list with new vehicle
+        setVehicles(prev => [
+          ...prev, 
+          vehicleData as ExtendedVehicleType
+        ]);
         
-        clearFareCache();
-        localStorage.setItem('forceTripFaresRefresh', 'true');
-        
-        window.dispatchEvent(new CustomEvent('vehicle-created', {
-          detail: {
-            vehicleId: vehicleId,
-            name: newVehicleName,
-            timestamp: Date.now()
-          }
-        }));
-        
-        window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
-          detail: {
-            vehicleId: vehicleId,
-            timestamp: Date.now(),
-            action: 'create',
-            forceRefresh: true
-          }
-        }));
-        
-        await reloadCabTypes(true);
-        
-        setSelectedVehicle(vehicleId);
-        handleVehicleChange(vehicleId);
-        
-        setRefreshTrigger(prev => prev + 1);
-        
-        setAddVehicleOpen(false);
-        
-        resetNewVehicleForm();
+        // Force vehicle data sync
+        await syncVehicleData(true);
+        await fetchVehicles();
       } else {
-        throw new Error("Vehicle creation returned an empty result");
+        toast.error('Failed to create vehicle');
       }
     } catch (error) {
-      console.error("Error creating vehicle:", error);
-      toast.error("Failed to create vehicle");
-    } finally {
-      setIsLoading(false);
+      console.error('Error creating vehicle:', error);
+      toast.error('Error creating vehicle');
     }
   };
   
-  const handleDelete = async () => {
-    if (!selectedVehicle) {
-      toast.error("Please select a vehicle to delete");
-      return;
+  // Reset new vehicle form when dialog is closed
+  useEffect(() => {
+    if (!isAddDialogOpen) {
+      setNewVehicleName('');
+      setNewVehicleId('');
+      setNewVehicleCapacity('4');
+      setNewVehicleLuggageCapacity('2');
+      setNewVehicleImage('');
     }
-    
-    if (!confirm(`Are you sure you want to delete ${name}?`)) {
-      return;
-    }
-    
-    setIsLoading(true);
-    
-    try {
-      const success = await deleteVehicle(selectedVehicle);
-      
-      if (success) {
-        toast.success("Vehicle deleted successfully");
-        resetForm();
-        setSelectedVehicle("");
-        
-        try {
-          const storedVehicles = localStorage.getItem('localVehicles');
-          if (storedVehicles) {
-            let localVehicles = JSON.parse(storedVehicles);
-            localVehicles = localVehicles.filter((v: any) => v.id !== selectedVehicle);
-            localStorage.setItem('localVehicles', JSON.stringify(localVehicles));
-          }
-        } catch (e) {
-          console.error("Error updating local storage:", e);
-        }
-        
-        setRefreshTrigger(prev => prev + 1);
-      } else {
-        throw new Error("Delete operation returned false");
-      }
-    } catch (error) {
-      console.error("Error deleting vehicle:", error);
-      toast.error("Failed to delete vehicle");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  }, [isAddDialogOpen]);
   
-  const handleTabChange = (value: string) => {
-    setActiveTab(value);
-    
-    if (value === "fares") {
-      localStorage.setItem('forceTripFaresRefresh', 'true');
-      clearFareCache();
-      window.dispatchEvent(new CustomEvent('trip-fares-tab-activated', {
-        detail: { 
-          timestamp: Date.now(),
-          vehicleId: selectedVehicle
-        }
-      }));
+  // Auto-generate vehicle ID based on name
+  useEffect(() => {
+    if (newVehicleName && !newVehicleId) {
+      setNewVehicleId(newVehicleName.toLowerCase().replace(/\s+/g, '_'));
     }
-  };
+  }, [newVehicleName, newVehicleId]);
   
   return (
-    <div className="grid gap-6">
-      <div className="flex flex-col gap-4">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <div className="w-3/4">
-              <label className="text-sm font-medium">Select Vehicle</label>
-              <Select value={selectedVehicle} onValueChange={handleVehicleChange}>
-                <SelectTrigger className="w-full mt-1">
-                  <SelectValue placeholder="Select a vehicle" />
-                </SelectTrigger>
-                <SelectContent>
-                  {vehicles.length === 0 ? (
-                    <div className="p-2 text-center text-muted-foreground">
-                      No vehicles found
-                    </div>
-                  ) : (
-                    vehicles.map((vehicle) => (
-                      <SelectItem key={vehicle.id} value={vehicle.id}>
-                        {vehicle.name || vehicle.id}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-            <Button 
-              variant="outline" 
-              size="icon" 
-              className="self-end mb-[2px]" 
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-            >
-              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-              <span className="sr-only">Refresh Vehicles</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="self-end mb-[2px]"
-              onClick={() => setDebugOpen(true)}
-            >
-              <RotateCw className="h-4 w-4" />
-              <span className="sr-only">Debug</span>
-            </Button>
-          </div>
-          
-          <Dialog open={addVehicleOpen} onOpenChange={setAddVehicleOpen}>
+    <div className="container p-4">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Vehicle Management</h1>
+        <div className="flex space-x-2">
+          <Button onClick={handleRefreshData} variant="outline">
+            Refresh Data
+          </Button>
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline" className="mt-6">
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Add Vehicle
-              </Button>
+              <Button>Add New Vehicle</Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md" aria-describedby="vehicle-dialog-description">
+            <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Car className="h-5 w-5" /> Add New Vehicle
-                </DialogTitle>
-                <DialogDescription id="vehicle-dialog-description">
-                  Fill out the details below to add a new vehicle to your fleet.
+                <DialogTitle>Add New Vehicle</DialogTitle>
+                <DialogDescription>
+                  Create a new vehicle type for your fleet.
                 </DialogDescription>
               </DialogHeader>
-              
               <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <label className="text-sm font-medium">Vehicle Name <span className="text-red-500">*</span></label>
-                  <Input 
-                    value={newVehicleName} 
-                    onChange={(e) => setNewVehicleName(e.target.value)} 
-                    placeholder="e.g., Sedan, SUV, etc."
-                    required
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="name" className="text-right">
+                    Name
+                  </Label>
+                  <Input
+                    id="name"
+                    value={newVehicleName}
+                    onChange={(e) => setNewVehicleName(e.target.value)}
+                    className="col-span-3"
                   />
                 </div>
-                
-                <div className="grid gap-2">
-                  <label className="text-sm font-medium">Vehicle ID (optional)</label>
-                  <Input 
-                    value={newVehicleId} 
-                    onChange={(e) => setNewVehicleId(e.target.value)} 
-                    placeholder="e.g., sedan, suv (auto-generated if empty)"
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="vehicleId" className="text-right">
+                    Vehicle ID
+                  </Label>
+                  <Input
+                    id="vehicleId"
+                    value={newVehicleId}
+                    onChange={(e) => setNewVehicleId(e.target.value)}
+                    className="col-span-3"
+                    placeholder="auto-generated from name"
                   />
-                  <p className="text-xs text-muted-foreground">Leave empty to auto-generate from name</p>
                 </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium">Passenger Capacity</label>
-                    <Input 
-                      type="number" 
-                      value={newVehicleCapacity} 
-                      onChange={(e) => setNewVehicleCapacity(e.target.value)} 
-                      placeholder="e.g., 4"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium">Luggage Capacity</label>
-                    <Input 
-                      type="number" 
-                      value={newVehicleLuggageCapacity} 
-                      onChange={(e) => setNewVehicleLuggageCapacity(e.target.value)} 
-                      placeholder="e.g., 2"
-                    />
-                  </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="capacity" className="text-right">
+                    Passenger Capacity
+                  </Label>
+                  <Input
+                    id="capacity"
+                    type="number"
+                    value={newVehicleCapacity}
+                    onChange={(e) => setNewVehicleCapacity(e.target.value)}
+                    className="col-span-3"
+                  />
                 </div>
-                
-                <div>
-                  <label className="text-sm font-medium">Image URL</label>
-                  <Input 
-                    value={newVehicleImage} 
-                    onChange={(e) => setNewVehicleImage(e.target.value)} 
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="luggageCapacity" className="text-right">
+                    Luggage Capacity
+                  </Label>
+                  <Input
+                    id="luggageCapacity"
+                    type="number"
+                    value={newVehicleLuggageCapacity}
+                    onChange={(e) => setNewVehicleLuggageCapacity(e.target.value)}
+                    className="col-span-3"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="image" className="text-right">
+                    Image URL
+                  </Label>
+                  <Input
+                    id="image"
+                    value={newVehicleImage}
+                    onChange={(e) => setNewVehicleImage(e.target.value)}
+                    className="col-span-3"
                     placeholder="/cars/sedan.png"
                   />
                 </div>
               </div>
-              
               <DialogFooter>
-                <Button variant="outline" onClick={() => setAddVehicleOpen(false)}>Cancel</Button>
-                <Button 
-                  onClick={handleAddNewVehicle} 
-                  disabled={!newVehicleName || isLoading}
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    "Create Vehicle"
-                  )}
+                <Button type="submit" onClick={handleAddNewVehicle}>
+                  Create Vehicle
                 </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
-          
-          <Dialog open={debugOpen} onOpenChange={setDebugOpen}>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Vehicle Debug Information</DialogTitle>
-              </DialogHeader>
-              <div className="mt-4 text-sm border p-4 rounded bg-muted/30 overflow-auto max-h-96">
-                <pre className="whitespace-pre-wrap break-words">
-                  {JSON.stringify(debugInfo || {
-                    vehicles: vehicles.map(v => ({id: v.id, name: v.name})),
-                    selectedVehicle,
-                    localVehicles: "Check localStorage",
-                    timestamp: new Date().toISOString()
-                  }, null, 2)}
-                </pre>
-              </div>
-              <div className="flex justify-between mt-4">
-                <Button 
-                  variant="outline" 
-                  onClick={() => {
-                    localStorage.removeItem('cachedVehicles');
-                    localStorage.removeItem('localVehicles');
-                    sessionStorage.clear();
-                    toast.success("Cache cleared");
-                  }}
-                >
-                  Clear All Cache
-                </Button>
-                <Button onClick={() => window.location.reload()}>
-                  Reload Page
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </div>
-        
-        <Tabs defaultValue="basic" value={activeTab} onValueChange={handleTabChange} className="w-full">
-          <TabsList className="w-full">
-            <TabsTrigger value="basic" className="flex-1">Basic Info</TabsTrigger>
-            <TabsTrigger value="pricing" className="flex-1">Pricing</TabsTrigger>
-            <TabsTrigger value="fares" className="flex-1">Trip Fares</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="basic">
-            <Card className="bg-white shadow-md">
-              <CardHeader>
-                <CardTitle className="text-xl font-bold">Basic Vehicle Information</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-4">
-                  <div>
-                    <label className="text-sm font-medium">Vehicle Name</label>
-                    <Input 
-                      value={name} 
-                      onChange={(e) => setName(e.target.value)} 
-                      placeholder="e.g., Sedan, SUV, etc." 
-                    />
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium">Passenger Capacity</label>
-                      <Input 
-                        type="number" 
-                        value={capacity} 
-                        onChange={(e) => setCapacity(e.target.value)} 
-                        placeholder="e.g., 4" 
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium">Luggage Capacity</label>
-                      <Input 
-                        type="number" 
-                        value={luggageCapacity} 
-                        onChange={(e) => setLuggageCapacity(e.target.value)} 
-                        placeholder="e.g., 2" 
-                      />
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label className="text-sm font-medium">Image URL</label>
-                    <Input 
-                      value={image} 
-                      onChange={(e) => setImage(e.target.value)} 
-                      placeholder="/cars/sedan.png" 
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="text-sm font-medium">Description</label>
-                    <Textarea 
-                      value={description} 
-                      onChange={(e) => setDescription(e.target.value)} 
-                      placeholder="Vehicle description" 
-                    />
-                  </div>
-                  
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="isActive" 
-                      checked={isActive} 
-                      onCheckedChange={(checked) => setIsActive(checked === true)} 
-                    />
-                    <label htmlFor="isActive" className="text-sm font-medium">
-                      Active (available for booking)
-                    </label>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="pricing">
-            <Card className="bg-white shadow-md">
-              <CardHeader>
-                <CardTitle className="text-xl font-bold">Pricing Information</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium">Base Price (₹)</label>
-                      <Input 
-                        type="number" 
-                        value={basePrice} 
-                        onChange={(e) => setBasePrice(e.target.value)} 
-                        placeholder="e.g., 4200" 
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium">Price per Km (₹)</label>
-                      <Input 
-                        type="number" 
-                        value={pricePerKm} 
-                        onChange={(e) => setPricePerKm(e.target.value)} 
-                        placeholder="e.g., 14" 
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium">Night Halt Charge (₹)</label>
-                      <Input 
-                        type="number" 
-                        value={nightHaltCharge} 
-                        onChange={(e) => setNightHaltCharge(e.target.value)} 
-                        placeholder="e.g., 700" 
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium">Driver Allowance (₹)</label>
-                      <Input 
-                        type="number" 
-                        value={driverAllowance} 
-                        onChange={(e) => setDriverAllowance(e.target.value)} 
-                        placeholder="e.g., 250" 
-                      />
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="fares">
-            {selectedVehicle ? (
-              <VehicleTripFaresForm vehicleId={selectedVehicle} />
-            ) : (
-              <Card className="bg-white shadow-md">
-                <CardContent className="pt-6">
-                  <p className="text-center text-muted-foreground">Please select a vehicle to manage trip fares</p>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-        </Tabs>
-        
-        <div className="flex justify-between mt-4">
-          <Button 
-            variant="destructive" 
-            onClick={handleDelete} 
-            disabled={!selectedVehicle || isLoading}
-          >
-            {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <>
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete Vehicle
-              </>
-            )}
-          </Button>
-          
-          <Button 
-            onClick={handleUpdate} 
-            disabled={!selectedVehicle || isLoading}
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Updating...
-              </>
-            ) : (
-              "Update Vehicle"
-            )}
-          </Button>
         </div>
       </div>
+      
+      {loading ? (
+        <div className="text-center p-4">Loading vehicles...</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {vehicles.length === 0 ? (
+            <div className="col-span-full text-center p-4">
+              No vehicles found. Add a new vehicle to get started.
+            </div>
+          ) : (
+            vehicles.map((vehicle) => (
+              <Card key={vehicle.id} className={!vehicle.isActive ? "opacity-60" : ""}>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <div>
+                    <CardTitle>{vehicle.name}</CardTitle>
+                    <CardDescription>ID: {vehicle.id}</CardDescription>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Label htmlFor={`active-${vehicle.id}`} className="text-sm">
+                      {vehicle.isActive ? "Active" : "Inactive"}
+                    </Label>
+                    <Switch
+                      id={`active-${vehicle.id}`}
+                      checked={vehicle.isActive ?? true}
+                      onCheckedChange={(checked) => handleToggleVehicleActive(vehicle, checked)}
+                    />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-2 mb-4">
+                    <div className="text-sm">
+                      <span className="font-medium">Capacity:</span> {vehicle.capacity} passengers
+                    </div>
+                    <div className="text-sm">
+                      <span className="font-medium">Luggage:</span> {vehicle.luggageCapacity} bags
+                    </div>
+                  </div>
+                  <div className="h-[100px] bg-gray-100 rounded-md flex items-center justify-center mb-2">
+                    {vehicle.image ? (
+                      <img
+                        src={vehicle.image}
+                        alt={vehicle.name}
+                        className="h-full object-contain"
+                        onError={(e) => {
+                          e.currentTarget.src = "/cars/sedan.png";
+                        }}
+                      />
+                    ) : (
+                      <div className="text-gray-400">No image</div>
+                    )}
+                  </div>
+                  <div className="text-sm mt-2">
+                    <span className="font-medium">Description:</span>{" "}
+                    {vehicle.description || `${vehicle.name} vehicle`}
+                  </div>
+                </CardContent>
+                <CardFooter className="flex justify-between">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEditVehicle(vehicle)}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => handleDeleteVehicle(vehicle)}
+                  >
+                    Delete
+                  </Button>
+                </CardFooter>
+              </Card>
+            ))
+          )}
+        </div>
+      )}
+      
+      {/* Edit Vehicle Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Edit Vehicle</DialogTitle>
+            <DialogDescription>
+              Update vehicle details.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit-name" className="text-right">
+                Name
+              </Label>
+              <Input
+                id="edit-name"
+                value={editVehicleName}
+                onChange={(e) => setEditVehicleName(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit-capacity" className="text-right">
+                Passenger Capacity
+              </Label>
+              <Input
+                id="edit-capacity"
+                type="number"
+                value={editVehicleCapacity}
+                onChange={(e) => setEditVehicleCapacity(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit-luggageCapacity" className="text-right">
+                Luggage Capacity
+              </Label>
+              <Input
+                id="edit-luggageCapacity"
+                type="number"
+                value={editVehicleLuggageCapacity}
+                onChange={(e) => setEditVehicleLuggageCapacity(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit-image" className="text-right">
+                Image URL
+              </Label>
+              <Input
+                id="edit-image"
+                value={editVehicleImage}
+                onChange={(e) => setEditVehicleImage(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit-description" className="text-right">
+                Description
+              </Label>
+              <Input
+                id="edit-description"
+                value={editVehicleDescription}
+                onChange={(e) => setEditVehicleDescription(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit-isActive" className="text-right">
+                Active
+              </Label>
+              <div className="col-span-3">
+                <Switch
+                  id="edit-isActive"
+                  checked={editVehicleIsActive}
+                  onCheckedChange={setEditVehicleIsActive}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="submit" onClick={handleUpdateVehicle}>
+              Update Vehicle
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
+
+export default VehicleManagement;

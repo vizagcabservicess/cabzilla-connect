@@ -85,6 +85,8 @@ CREATE TABLE `vehicle_pricing` (
   `airport_tier3_price` decimal(10,2) DEFAULT NULL,
   `airport_tier4_price` decimal(10,2) DEFAULT NULL,
   `airport_extra_km_charge` decimal(5,2) DEFAULT NULL,
+  -- Add this column to fix the SQL issue
+  `base_price` decimal(10,2) NOT NULL DEFAULT 0,
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -103,6 +105,32 @@ CREATE TABLE `vehicles` (
   `amenities` text DEFAULT NULL,
   `description` text DEFAULT NULL,
   `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  -- Add these columns to match what the API is looking for
+  `base_price` decimal(10,2) NOT NULL DEFAULT 0,
+  `price_per_km` decimal(5,2) NOT NULL DEFAULT 0,
+  `night_halt_charge` decimal(10,2) NOT NULL DEFAULT 0, 
+  `driver_allowance` decimal(10,2) NOT NULL DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Also create the vehicle_types table as an alias to vehicles 
+CREATE TABLE `vehicle_types` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `vehicle_id` varchar(50) NOT NULL UNIQUE,
+  `name` varchar(100) NOT NULL,
+  `capacity` int(11) NOT NULL DEFAULT 4,
+  `luggage_capacity` int(11) NOT NULL DEFAULT 2,
+  `ac` tinyint(1) NOT NULL DEFAULT 1,
+  `image` varchar(255) DEFAULT '/cars/sedan.png',
+  `amenities` text DEFAULT NULL,
+  `description` text DEFAULT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `base_price` decimal(10,2) NOT NULL DEFAULT 0,
+  `price_per_km` decimal(5,2) NOT NULL DEFAULT 0,
+  `night_halt_charge` decimal(10,2) NOT NULL DEFAULT 0, 
+  `driver_allowance` decimal(10,2) NOT NULL DEFAULT 0,
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
@@ -178,33 +206,52 @@ INSERT INTO `tour_fares` (`tour_id`, `tour_name`, `sedan`, `ertiga`, `innova`, `
 ('vanajangi', 'Vanajangi Tour', 5500, 7000, 8500, 12500, 16000);
 
 -- Insert default data for vehicle pricing using vehicle_id
-INSERT INTO `vehicle_pricing` (`vehicle_id`, `trip_type`, `base_fare`, `price_per_km`, `night_halt_charge`, `driver_allowance`, 
-                               `local_package_4hr`, `local_package_8hr`, `local_package_10hr`, `extra_km_charge`, `extra_hour_charge`,
-                               `airport_base_price`, `airport_price_per_km`, `airport_pickup_price`, `airport_drop_price`,
-                               `airport_tier1_price`, `airport_tier2_price`, `airport_tier3_price`, `airport_tier4_price`, `airport_extra_km_charge`) VALUES
-('sedan', 'outstation', 4200, 14, 700, 250, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-('sedan', 'local', 0, 0, 0, 0, 1200, 2200, 2500, 14, 250, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-('sedan', 'airport', 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, 3000, 12, 800, 800, 600, 800, 1000, 1200, 12),
-('ertiga', 'outstation', 5400, 18, 1000, 250, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-('ertiga', 'local', 0, 0, 0, 0, 1500, 2700, 3000, 18, 250, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-('ertiga', 'airport', 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, 3500, 15, 1000, 1000, 800, 1000, 1200, 1400, 15),
-('innova_crysta', 'outstation', 6000, 20, 1000, 250, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-('innova_crysta', 'local', 0, 0, 0, 0, 1800, 3000, 3500, 20, 250, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-('innova_crysta', 'airport', 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, 4000, 17, 1200, 1200, 1000, 1200, 1400, 1600, 17),
-('tempo', 'outstation', 9000, 22, 1500, 300, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-('tempo', 'local', 0, 0, 0, 0, 3000, 4500, 5500, 22, 300, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-('tempo', 'airport', 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, 6000, 19, 2000, 2000, 1600, 1800, 2000, 2500, 19),
-('luxury', 'outstation', 10500, 25, 1500, 300, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-('luxury', 'local', 0, 0, 0, 0, 3500, 5500, 6500, 25, 300, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-('luxury', 'airport', 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, 7000, 22, 2500, 2500, 2000, 2200, 2500, 3000, 22);
+INSERT INTO `vehicle_pricing` (
+  `vehicle_id`, `trip_type`, `base_fare`, `price_per_km`, `night_halt_charge`, `driver_allowance`, 
+  `local_package_4hr`, `local_package_8hr`, `local_package_10hr`, `extra_km_charge`, `extra_hour_charge`,
+  `airport_base_price`, `airport_price_per_km`, `airport_pickup_price`, `airport_drop_price`,
+  `airport_tier1_price`, `airport_tier2_price`, `airport_tier3_price`, `airport_tier4_price`, 
+  `airport_extra_km_charge`, `base_price`
+) VALUES
+('sedan', 'outstation', 4200, 14, 700, 250, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 4200),
+('sedan', 'local', 0, 0, 0, 0, 1200, 2200, 2500, 14, 250, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1200),
+('sedan', 'airport', 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, 3000, 12, 800, 800, 600, 800, 1000, 1200, 12, 3000),
+('ertiga', 'outstation', 5400, 18, 1000, 250, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 5400),
+('ertiga', 'local', 0, 0, 0, 0, 1500, 2700, 3000, 18, 250, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1500),
+('ertiga', 'airport', 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, 3500, 15, 1000, 1000, 800, 1000, 1200, 1400, 15, 3500),
+('innova_crysta', 'outstation', 6000, 20, 1000, 250, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 6000),
+('innova_crysta', 'local', 0, 0, 0, 0, 1800, 3000, 3500, 20, 250, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1800),
+('innova_crysta', 'airport', 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, 4000, 17, 1200, 1200, 1000, 1200, 1400, 1600, 17, 4000),
+('tempo', 'outstation', 9000, 22, 1500, 300, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 9000),
+('tempo', 'local', 0, 0, 0, 0, 3000, 4500, 5500, 22, 300, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 3000),
+('tempo', 'airport', 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, 6000, 19, 2000, 2000, 1600, 1800, 2000, 2500, 19, 6000),
+('luxury', 'outstation', 10500, 25, 1500, 300, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 10500),
+('luxury', 'local', 0, 0, 0, 0, 3500, 5500, 6500, 25, 300, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 3500),
+('luxury', 'airport', 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, 7000, 22, 2500, 2500, 2000, 2200, 2500, 3000, 22, 7000);
 
 -- Insert default vehicle types
-INSERT INTO `vehicles` (`vehicle_id`, `name`, `capacity`, `luggage_capacity`, `ac`, `image`, `amenities`, `description`, `is_active`) VALUES
-('sedan', 'Sedan', 4, 2, 1, '/cars/sedan.png', 'AC, Bottle Water, Music System', 'Comfortable sedan suitable for 4 passengers.', 1),
-('ertiga', 'Ertiga', 6, 3, 1, '/cars/ertiga.png', 'AC, Bottle Water, Music System, Extra Legroom', 'Spacious SUV suitable for 6 passengers.', 1),
-('innova_crysta', 'Innova Crysta', 7, 4, 1, '/cars/innova.png', 'AC, Bottle Water, Music System, Extra Legroom, Charging Point', 'Premium SUV with ample space for 7 passengers.', 1),
-('tempo', 'Tempo Traveller', 12, 8, 1, '/cars/tempo.png', 'AC, Bottle Water, Music System, Extra Legroom, Charging Point', 'Spacious van suitable for group travel of up to 12 passengers.', 1),
-('luxury', 'Luxury Sedan', 4, 3, 1, '/cars/luxury.png', 'AC, Bottle Water, Music System, Premium Leather Seats, WiFi, Charging Points', 'Premium luxury sedan with high-end amenities for a comfortable journey.', 1);
+INSERT INTO `vehicles` (
+  `vehicle_id`, `name`, `capacity`, `luggage_capacity`, `ac`, `image`, 
+  `amenities`, `description`, `is_active`, `base_price`, `price_per_km`, 
+  `night_halt_charge`, `driver_allowance`
+) VALUES
+('sedan', 'Sedan', 4, 2, 1, '/cars/sedan.png', 'AC, Bottle Water, Music System', 'Comfortable sedan suitable for 4 passengers.', 1, 4200, 14, 700, 250),
+('ertiga', 'Ertiga', 6, 3, 1, '/cars/ertiga.png', 'AC, Bottle Water, Music System, Extra Legroom', 'Spacious SUV suitable for 6 passengers.', 1, 5400, 18, 1000, 250),
+('innova_crysta', 'Innova Crysta', 7, 4, 1, '/cars/innova.png', 'AC, Bottle Water, Music System, Extra Legroom, Charging Point', 'Premium SUV with ample space for 7 passengers.', 1, 6000, 20, 1000, 250),
+('tempo', 'Tempo Traveller', 12, 8, 1, '/cars/tempo.png', 'AC, Bottle Water, Music System, Extra Legroom, Charging Point', 'Spacious van suitable for group travel of up to 12 passengers.', 1, 9000, 22, 1500, 300),
+('luxury', 'Luxury Sedan', 4, 3, 1, '/cars/luxury.png', 'AC, Bottle Water, Music System, Premium Leather Seats, WiFi, Charging Points', 'Premium luxury sedan with high-end amenities for a comfortable journey.', 1, 10500, 25, 1500, 300);
+
+-- Insert data into vehicle_types table
+INSERT INTO `vehicle_types` (
+  `vehicle_id`, `name`, `capacity`, `luggage_capacity`, `ac`, `image`, 
+  `amenities`, `description`, `is_active`, `base_price`, `price_per_km`, 
+  `night_halt_charge`, `driver_allowance`
+) VALUES
+('sedan', 'Sedan', 4, 2, 1, '/cars/sedan.png', 'AC, Bottle Water, Music System', 'Comfortable sedan suitable for 4 passengers.', 1, 4200, 14, 700, 250),
+('ertiga', 'Ertiga', 6, 3, 1, '/cars/ertiga.png', 'AC, Bottle Water, Music System, Extra Legroom', 'Spacious SUV suitable for 6 passengers.', 1, 5400, 18, 1000, 250),
+('innova_crysta', 'Innova Crysta', 7, 4, 1, '/cars/innova.png', 'AC, Bottle Water, Music System, Extra Legroom, Charging Point', 'Premium SUV with ample space for 7 passengers.', 1, 6000, 20, 1000, 250),
+('tempo', 'Tempo Traveller', 12, 8, 1, '/cars/tempo.png', 'AC, Bottle Water, Music System, Extra Legroom, Charging Point', 'Spacious van suitable for group travel of up to 12 passengers.', 1, 9000, 22, 1500, 300),
+('luxury', 'Luxury Sedan', 4, 3, 1, '/cars/luxury.png', 'AC, Bottle Water, Music System, Premium Leather Seats, WiFi, Charging Points', 'Premium luxury sedan with high-end amenities for a comfortable journey.', 1, 10500, 25, 1500, 300);
 
 -- Insert default airport transfer fares
 INSERT INTO `airport_transfer_fares` (`vehicle_id`, `base_price`, `price_per_km`, `pickup_price`, `drop_price`, 
