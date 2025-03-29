@@ -42,7 +42,7 @@ export const createVehicle = async (vehicleData: any) => {
       
       if (responseData.status === 'success' || responseData.status === 'ok') {
         success = true;
-        await syncVehicleData(); // Sync data after successful creation
+        await syncVehicleData(true); // Sync data after successful creation with force refresh
       }
     } catch (error) {
       console.error('Error using direct endpoint for vehicle creation:', error);
@@ -62,14 +62,35 @@ export const createVehicle = async (vehicleData: any) => {
         
         if (responseData.status === 'success' || responseData.status === 'ok') {
           success = true;
-          await syncVehicleData(); // Sync data after successful creation
+          await syncVehicleData(true); // Sync data after successful creation with force refresh
         }
       } catch (error) {
         console.error('Error using standard endpoint for vehicle creation:', error);
       }
     }
     
-    // Approach 3: Try FormData as last resort
+    // Approach 3: Try using PHP vehicles.php endpoint
+    if (!success) {
+      try {
+        const response = await axios.post(
+          `${apiBaseUrl}/api/fares/vehicles.php`, 
+          normalizedData,
+          { headers: { ...getBypassHeaders(), 'Content-Type': 'application/json' } }
+        );
+        
+        responseData = response.data;
+        console.log('Vehicle creation response from PHP vehicles endpoint:', responseData);
+        
+        if (responseData.status === 'success' || responseData.status === 'ok') {
+          success = true;
+          await syncVehicleData(true); // Sync data after successful creation with force refresh
+        }
+      } catch (error) {
+        console.error('Error using PHP vehicles endpoint for vehicle creation:', error);
+      }
+    }
+    
+    // Approach 4: Try FormData as last resort
     if (!success) {
       try {
         const formData = new FormData();
@@ -88,7 +109,7 @@ export const createVehicle = async (vehicleData: any) => {
         
         if (responseData.status === 'success' || responseData.status === 'ok') {
           success = true;
-          await syncVehicleData(); // Sync data after successful creation
+          await syncVehicleData(true); // Sync data after successful creation with force refresh
         }
       } catch (error) {
         console.error('Error using FormData for vehicle creation:', error);
@@ -120,7 +141,7 @@ export const createVehicle = async (vehicleData: any) => {
           capacity: parseInt(normalizedData.capacity) || 4,
           luggageCapacity: parseInt(normalizedData.luggageCapacity) || 2,
           ac: true,
-          isActive: true, // Fixed: Using isActive property that matches CabType interface
+          isActive: true, // Using isActive property that matches CabType interface
           description: normalizedData.description || '',
           image: normalizedData.image || '',
           amenities: normalizedData.amenities || []
@@ -136,7 +157,12 @@ export const createVehicle = async (vehicleData: any) => {
         
         // Save updated vehicles
         localStorage.setItem('cachedVehicles', JSON.stringify(vehicles));
+        localStorage.setItem('localVehicles', JSON.stringify(vehicles));
         console.log('Updated vehicle cache in localStorage');
+        
+        // Clear session storage to force refresh
+        sessionStorage.removeItem('cabTypes');
+        sessionStorage.removeItem('cachedVehicles');
         
         // Dispatch event to notify other components
         window.dispatchEvent(new CustomEvent('vehicles-updated'));
@@ -450,7 +476,7 @@ export const updateVehicleFares = async (vehicleId: string, fareData: any, tripT
 /**
  * Synchronizes vehicle data between database and JSON file
  */
-export const syncVehicleData = async () => {
+export const syncVehicleData = async (forceRefresh = false) => {
   try {
     // Add a sync lock to prevent multiple simultaneous syncs
     if (window.isSyncingVehicleData) {
@@ -461,37 +487,81 @@ export const syncVehicleData = async () => {
     // Set sync lock
     window.isSyncingVehicleData = true;
     
-    console.log('Syncing vehicle data between database and JSON file...');
+    console.log('Syncing vehicle data between database and JSON file with forceRefresh =', forceRefresh);
+    
+    // Force cache refresh
+    if (forceRefresh) {
+      localStorage.removeItem('cachedVehicles');
+      localStorage.removeItem('fareCache');
+      sessionStorage.removeItem('cabTypes');
+      localStorage.setItem('forceCacheRefresh', 'true');
+      console.log('Cleared all vehicle and fare caches for forced refresh');
+    }
     
     // Try multiple approaches to ensure sync
     let success = false;
     let responseData = null;
+    let vehicles: CabType[] = [];
 
-    // Approach 1: Try using the vehicles-data.php endpoint
+    // Approach 1: Try using the direct PHP vehicles.php endpoint 
     try {
-      console.log('Attempting sync with vehicles-data.php endpoint');
+      console.log('Attempting sync with PHP vehicles.php endpoint (primary)');
       const response = await axios.get(
-        `${apiBaseUrl}/api/fares/vehicles-data.php?force_sync=true&_t=${Date.now()}`,
+        `${apiBaseUrl}/api/fares/vehicles.php?force=true&includeInactive=true&_t=${Date.now()}`,
         { 
           headers: getBypassHeaders(),
           params: {
-            sync: 'true',
-            force_sync: 'true'
+            force: 'true',
+            includeInactive: 'true'
           },
           timeout: 8000 // Add timeout to prevent hanging requests
         }
       );
       
-      if (response.data) {
-        console.log('Vehicle data sync response:', response.data);
+      if (response.data && response.data.vehicles) {
+        const fetchedVehicles = response.data.vehicles;
+        console.log('Vehicle data sync response from PHP endpoint:', 
+          {count: fetchedVehicles.length, vehicles: fetchedVehicles.map((v: any) => ({id: v.id, name: v.name}))});
+        
+        vehicles = fetchedVehicles;
         responseData = response.data;
         success = true;
       }
     } catch (error) {
-      console.error('Error syncing via vehicles-data.php:', error);
+      console.error('Error syncing via PHP vehicles.php:', error);
+    }
+
+    // Approach 2: Try using the vehicles-data.php endpoint
+    if (!success) {
+      try {
+        console.log('Attempting sync with vehicles-data.php endpoint');
+        const response = await axios.get(
+          `${apiBaseUrl}/api/fares/vehicles-data.php?force_sync=true&_t=${Date.now()}`,
+          { 
+            headers: getBypassHeaders(),
+            params: {
+              sync: 'true',
+              force_sync: 'true'
+            },
+            timeout: 8000 // Add timeout to prevent hanging requests
+          }
+        );
+        
+        if (response.data && response.data.vehicles) {
+          const fetchedVehicles = response.data.vehicles;
+          console.log('Vehicle data sync response:', 
+            {count: fetchedVehicles.length, vehicles: fetchedVehicles.map((v: any) => ({id: v.id, name: v.name}))});
+          
+          vehicles = fetchedVehicles;
+          responseData = response.data;
+          success = true;
+        }
+      } catch (error) {
+        console.error('Error syncing via vehicles-data.php:', error);
+      }
     }
     
-    // Approach 2: Try the direct vehicle creation endpoint with sync flag
+    // Approach 3: Try the direct vehicle creation endpoint with sync flag
     if (!success) {
       try {
         console.log('Attempting sync with direct-vehicle-create.php endpoint');
@@ -506,8 +576,12 @@ export const syncVehicleData = async () => {
           }
         );
         
-        if (response.data) {
-          console.log('Vehicle data sync response from direct endpoint:', response.data);
+        if (response.data && response.data.vehicles) {
+          const fetchedVehicles = response.data.vehicles;
+          console.log('Vehicle data sync response from direct endpoint:', 
+            {count: fetchedVehicles.length, vehicles: fetchedVehicles.map((v: any) => ({id: v.id, name: v.name}))});
+          
+          vehicles = fetchedVehicles;
           responseData = response.data;
           success = true;
         }
@@ -516,7 +590,7 @@ export const syncVehicleData = async () => {
       }
     }
     
-    // Approach 3: Try the vehicle admin endpoint
+    // Approach 4: Try the vehicle admin endpoint
     if (!success) {
       try {
         console.log('Attempting sync with vehicles-update.php endpoint');
@@ -531,8 +605,12 @@ export const syncVehicleData = async () => {
           }
         );
         
-        if (response.data) {
-          console.log('Vehicle data sync response from admin endpoint:', response.data);
+        if (response.data && response.data.vehicles) {
+          const fetchedVehicles = response.data.vehicles;
+          console.log('Vehicle data sync response from admin endpoint:', 
+            {count: fetchedVehicles.length, vehicles: fetchedVehicles.map((v: any) => ({id: v.id, name: v.name}))});
+          
+          vehicles = fetchedVehicles;
           responseData = response.data;
           success = true;
         }
@@ -542,24 +620,64 @@ export const syncVehicleData = async () => {
     }
     
     // Fall back to local data if all API calls fail
-    if (!success) {
-      console.log('All API sync attempts failed, using cached data as fallback');
+    if (!success || vehicles.length === 0) {
+      console.log('API sync attempts failed or returned empty vehicle list, using cached data as fallback');
       
       // Check if we have cached vehicles in localStorage
       const cachedVehicles = localStorage.getItem('cachedVehicles');
       
       if (cachedVehicles) {
         try {
-          const vehicles = JSON.parse(cachedVehicles);
+          const parsedVehicles = JSON.parse(cachedVehicles);
           
-          if (Array.isArray(vehicles) && vehicles.length > 0) {
-            console.log(`Using ${vehicles.length} vehicles from cache as fallback`);
+          if (Array.isArray(parsedVehicles) && parsedVehicles.length > 0) {
+            console.log(`Using ${parsedVehicles.length} vehicles from cache as fallback`);
+            vehicles = parsedVehicles;
             success = true;
           }
         } catch (e) {
           console.error('Error parsing cached vehicles:', e);
         }
       }
+      
+      // If no cached vehicles, check local vehicles
+      if (vehicles.length === 0) {
+        const localVehicles = localStorage.getItem('localVehicles');
+        if (localVehicles) {
+          try {
+            const parsedVehicles = JSON.parse(localVehicles);
+            
+            if (Array.isArray(parsedVehicles) && parsedVehicles.length > 0) {
+              console.log(`Using ${parsedVehicles.length} vehicles from local storage as fallback`);
+              vehicles = parsedVehicles;
+              success = true;
+            }
+          } catch (e) {
+            console.error('Error parsing local vehicles:', e);
+          }
+        }
+      }
+    }
+    
+    // Update local storage cache with the vehicles
+    if (vehicles.length > 0) {
+      // Clean up vehicle data to ensure it matches CabType
+      const normalizedVehicles = vehicles.map(vehicle => ({
+        id: vehicle.id,
+        vehicleId: vehicle.vehicleId || vehicle.id,
+        name: vehicle.name || vehicle.id,
+        capacity: typeof vehicle.capacity === 'number' ? vehicle.capacity : parseInt(vehicle.capacity as any) || 4,
+        luggageCapacity: typeof vehicle.luggageCapacity === 'number' ? vehicle.luggageCapacity : parseInt(vehicle.luggageCapacity as any) || 2,
+        ac: vehicle.ac !== false,
+        isActive: vehicle.isActive !== false,
+        description: vehicle.description || '',
+        image: vehicle.image || `/cars/sedan.png`,
+        amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC']
+      }));
+      
+      console.log('Saving normalized vehicles to localStorage:', normalizedVehicles.length);
+      localStorage.setItem('cachedVehicles', JSON.stringify(normalizedVehicles));
+      localStorage.setItem('localVehicles', JSON.stringify(normalizedVehicles));
     }
     
     // Dispatch event to notify components about potentially new data
@@ -567,34 +685,56 @@ export const syncVehicleData = async () => {
       detail: { 
         timestamp: Date.now(),
         syncSuccessful: success,
-        responseData: responseData
+        vehicleCount: vehicles.length,
+        forceRefresh: forceRefresh
       }
     }));
     
-    // Clear localStorage cache to force refresh, but only if we had a successful sync
+    // Add a small delay before removing the forceCacheRefresh flag
+    setTimeout(() => {
+      localStorage.removeItem('forceCacheRefresh');
+    }, 5000);
+    
     if (success) {
-      localStorage.removeItem('cachedVehicles');
-      localStorage.setItem('forceCacheRefresh', 'true');
+      console.log(`Vehicle sync completed successfully with ${vehicles.length} vehicles`);
       
-      // Add a small delay before removing the forceCacheRefresh flag
-      setTimeout(() => {
-        localStorage.removeItem('forceCacheRefresh');
-      }, 5000);
+      // Force a refresh of vehicle fare data in other components
+      window.dispatchEvent(new CustomEvent('trip-fares-updated', {
+        detail: { 
+          timestamp: Date.now(),
+          forceRefresh: true
+        }
+      }));
       
-      console.log('Vehicle sync completed successfully, cleared cache');
+      // Force a refresh of all vehicle data in components
+      window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
+        detail: { 
+          timestamp: Date.now(),
+          forceRefresh: true
+        }
+      }));
+      
+      if (forceRefresh) {
+        toast.success(`Successfully synchronized ${vehicles.length} vehicles`);
+      }
     } else {
       console.warn('Vehicle sync did not complete successfully');
+      toast.error('Failed to sync vehicles with the server');
     }
     
-    // Release sync lock
-    window.isSyncingVehicleData = false;
+    // Release sync lock after a short delay to prevent rapid re-syncing
+    setTimeout(() => {
+      window.isSyncingVehicleData = false;
+    }, 2000);
     
-    return { success, responseData };
+    return { success, responseData, vehicleCount: vehicles.length };
   } catch (error) {
     console.error('Vehicle data synchronization failed:', error);
     
     // Make sure to release sync lock even if there's an error
-    window.isSyncingVehicleData = false;
+    setTimeout(() => {
+      window.isSyncingVehicleData = false;
+    }, 2000);
     
     throw error;
   }

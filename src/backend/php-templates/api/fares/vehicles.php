@@ -723,6 +723,46 @@ try {
             
             // If no vehicles were found, return fallbacks
             if (empty($vehicles)) {
+                // Let's check for any vehicle types that might exist
+                $basicQuery = "SELECT * FROM vehicle_types";
+                $basicResult = $conn->query($basicQuery);
+                
+                if ($basicResult && $basicResult->num_rows > 0) {
+                    $basicVehicles = [];
+                    while ($row = $basicResult->fetch_assoc()) {
+                        $basicVehicles[] = [
+                            'id' => $row['vehicle_id'],
+                            'vehicleId' => $row['vehicle_id'],
+                            'name' => $row['name'],
+                            'capacity' => intval($row['capacity']),
+                            'luggageCapacity' => intval($row['luggage_capacity']),
+                            'price' => 0,
+                            'basePrice' => 0,
+                            'pricePerKm' => 0,
+                            'image' => $row['image'],
+                            'amenities' => [],
+                            'description' => $row['description'],
+                            'ac' => (bool)$row['ac'],
+                            'nightHaltCharge' => 0,
+                            'driverAllowance' => 0,
+                            'isActive' => (bool)$row['is_active']
+                        ];
+                    }
+                    
+                    if (!empty($basicVehicles)) {
+                        saveVehiclesToJson($basicVehicles);
+                        echo json_encode([
+                            'vehicles' => $basicVehicles,
+                            'timestamp' => time(),
+                            'cached' => false,
+                            'count' => count($basicVehicles),
+                            'notice' => 'Vehicles found without pricing data'
+                        ]);
+                        exit;
+                    }
+                }
+                
+                // No vehicles found in the database at all, return fallbacks
                 echo json_encode([
                     'vehicles' => $fallbackVehicles,
                     'timestamp' => time(),
