@@ -1,4 +1,3 @@
-
 import { CabType } from '@/types/cab';
 import { getVehicleData } from '@/services/vehicleDataService';
 
@@ -229,7 +228,7 @@ export const reloadCabTypes = async (): Promise<CabType[]> => {
       console.info('Fetching fresh vehicle data from primary API...');
       
       // Try API endpoint first for most up-to-date data
-      const freshVehicles = await getVehicleData(true, true); // The second 'true' forces a server-side refresh
+      const freshVehicles = await getVehicleData(true);
       
       if (Array.isArray(freshVehicles) && freshVehicles.length > 0) {
         console.log('Successfully loaded', freshVehicles.length, 'vehicles from primary API');

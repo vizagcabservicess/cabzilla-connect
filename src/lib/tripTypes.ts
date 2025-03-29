@@ -1,5 +1,5 @@
 
-export type TripType = 'outstation' | 'local' | 'airport' | 'tour';
+export type TripType = 'outstation' | 'local' | 'airport' | 'tour' | 'admin';
 export type TripMode = 'one-way' | 'round-trip';
 export type LocalTripPurpose = 'business' | 'personal' | 'city-tour';
 

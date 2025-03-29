@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { CabType } from '@/types/cab';
 import { getVehicleData } from '@/services/vehicleDataService';
@@ -83,7 +84,8 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
         
         // If JSON file fails, try the API
         try {
-          const freshVehicles = await getVehicleData(true, true);
+          // Fix: Use only one boolean parameter for forceRefresh
+          const freshVehicles = await getVehicleData(true);
           if (Array.isArray(freshVehicles) && freshVehicles.length > 0) {
             console.log(`Fresh data from API, found ${freshVehicles.length} vehicles`);
             setCabOptions(freshVehicles);
@@ -199,11 +201,14 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
       // Filter based on trip type if needed
       let filteredVehicles = vehicles;
       
-      // For certain trip types like tours, we may want to filter vehicles
+      // Fix: Update type comparison to handle 'admin' as a special case
       if (tripType === 'tour') {
         // Filter vehicles that are suitable for tours
         filteredVehicles = vehicles.filter(v => v.capacity >= 4);
-      } else if (tripType !== 'admin') {
+      } else if (tripType !== 'outstation' && tripType !== 'local' && tripType !== 'airport' && tripType !== 'tour') {
+        // For custom or admin-like trip types, show all vehicles
+        filteredVehicles = vehicles;
+      } else {
         // For regular trips, show only active vehicles
         filteredVehicles = vehicles.filter(v => v.isActive !== false);
       }
