@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { LocationInput } from './LocationInput';
 import { DateTimePicker } from './DateTimePicker';
@@ -12,7 +11,7 @@ import {
 import { convertToApiLocation, createLocationChangeHandler, isLocationInVizag } from '@/lib/locationUtils';
 import { cabTypes, formatPrice } from '@/lib/cabData';
 import { hourlyPackages, getLocalPackagePrice } from '@/lib/packageData';
-import { TripType, TripMode } from '@/lib/tripTypes';
+import { TripType, TripMode, ensureCustomerTripType } from '@/lib/tripTypes';
 import { CabType } from '@/types/cab';
 import { ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -426,7 +425,7 @@ export function Hero() {
             {currentStep === 1 && (
               <div className="bg-white rounded-xl shadow-card border p-8">
                 <TabTripSelector
-                  selectedTab={tripType}
+                  selectedTab={ensureCustomerTripType(tripType)}
                   tripMode={tripMode}
                   onTabChange={setTripType}
                   onTripModeChange={setTripMode}

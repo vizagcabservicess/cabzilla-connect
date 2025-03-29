@@ -16,4 +16,14 @@ export const isRegularTripType = (tripType: TripType): boolean => {
   return tripType === 'outstation' || tripType === 'local' || tripType === 'airport';
 };
 
-// Add any additional helper functions if needed
+// Helper to check if tripType is a customer-facing type (not admin)
+export const isCustomerTripType = (tripType: TripType): boolean => {
+  return tripType === 'outstation' || tripType === 'local' || tripType === 'airport' || tripType === 'tour';
+};
+
+// Function to ensure trip type is customer-facing for UI components
+export const ensureCustomerTripType = (tripType: TripType): 'outstation' | 'local' | 'airport' | 'tour' => {
+  return isCustomerTripType(tripType) 
+    ? tripType as 'outstation' | 'local' | 'airport' | 'tour'
+    : 'outstation'; // Default to outstation if admin type is passed
+};

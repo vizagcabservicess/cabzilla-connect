@@ -1,5 +1,3 @@
-
-// Only fixing line 277 with parameter count mismatch
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LocationInput } from "@/components/LocationInput";
@@ -22,7 +20,7 @@ import {
   formatPrice
 } from "@/lib/cabData";
 import { calculateFare } from "@/lib/fareCalculationService";
-import { TripType, TripMode } from "@/lib/tripTypes";
+import { TripType, TripMode, ensureCustomerTripType } from "@/lib/tripTypes";
 import { hourlyPackages } from "@/lib/packageData";
 import { CabType } from "@/types/cab";
 import { calculateDistanceMatrix } from "@/lib/distanceService";
@@ -446,7 +444,7 @@ const CabsPage = () => {
             <div className="bg-white rounded-lg shadow-md overflow-hidden">
               <div className="p-4">
                 <TabTripSelector 
-                  selectedTab={tripType}
+                  selectedTab={ensureCustomerTripType(tripType)}
                   tripMode={tripMode}
                   onTabChange={handleTripTypeChange}
                   onTripModeChange={setTripMode}
@@ -582,7 +580,7 @@ const CabsPage = () => {
                   selectedCab={selectedCab}
                   distance={distance}
                   totalPrice={totalPrice}
-                  tripType={tripType}
+                  tripType={ensureCustomerTripType(tripType)}
                   tripMode={tripMode}
                 />
               </div>

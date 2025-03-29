@@ -15,6 +15,13 @@ export {
 
 // Export types with the 'export type' syntax to avoid TypeScript errors
 export type { TripType, TripMode } from './tripTypes';
+export { 
+  ensureCustomerTripType,
+  isCustomerTripType,
+  isRegularTripType,
+  isAdminTripType,
+  isTourTripType
+} from './tripTypes';
 
 // Import and re-export from config instead of fareService
 export { 

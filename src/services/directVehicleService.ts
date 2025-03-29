@@ -1,4 +1,3 @@
-
 import { toast } from "sonner";
 import type { CabType } from '@/types/cab';
 import { reloadCabTypes } from '@/lib/cabData';
@@ -106,7 +105,7 @@ export const updateVehicle = async (vehicleData: any): Promise<boolean> => {
         '/api/admin/direct-vehicle-update'
       ];
       
-      const directResponse = await makeApiRequest(directEndpoints, 'POST', normalizedData, {
+      const directResponse = await makeApiRequest<VehicleOperationResponse>(directEndpoints, 'POST', normalizedData, {
         contentTypes: ['application/json', 'multipart/form-data'],
         retries: 2,
         notification: false
