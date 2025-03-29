@@ -120,7 +120,7 @@ export const createVehicle = async (vehicleData: any) => {
           capacity: parseInt(normalizedData.capacity) || 4,
           luggageCapacity: parseInt(normalizedData.luggageCapacity) || 2,
           ac: true,
-          is_active: true,
+          isActive: true, // Fixed: Changed from is_active to isActive to match CabType interface
           description: normalizedData.description || '',
           image: normalizedData.image || '',
           amenities: normalizedData.amenities || []
