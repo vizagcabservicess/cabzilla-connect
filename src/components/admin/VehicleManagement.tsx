@@ -27,6 +27,7 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { syncVehicleData } from '@/services/directVehicleService';
 
 interface ExtendedVehicleType {
   id: string;
@@ -80,13 +81,17 @@ export const VehicleManagement = () => {
       console.log("Loading vehicles for management UI", forceRefresh ? "(force refresh)" : "");
       
       if (forceRefresh) {
-        sessionStorage.removeItem('cabTypes');
+        sessionStorage.clear();
         localStorage.removeItem('cabTypes');
+        localStorage.removeItem('cachedVehicles');
         localStorage.setItem('forceCacheRefresh', 'true');
         console.log("Cleared vehicle cache before loading");
+        
+        const syncResult = await syncVehicleData(true);
+        console.log("Direct vehicle sync result:", syncResult);
       }
       
-      const vehicleList = await getVehicleTypes();
+      const vehicleList = await getVehicleTypes(true);
       
       if (vehicleList && Array.isArray(vehicleList) && vehicleList.length > 0) {
         console.log("Successfully loaded vehicles:", vehicleList);
@@ -103,17 +108,57 @@ export const VehicleManagement = () => {
           try {
             const parsedLocalVehicles = JSON.parse(localVehicles);
             if (Array.isArray(parsedLocalVehicles) && parsedLocalVehicles.length > 0) {
-              console.log("Found local vehicles:", parsedLocalVehicles);
+              console.log("Found local vehicles:", parsedLocalVehicles.length);
               
               const combinedVehicles = [...vehicleList];
+              let addedCount = 0;
               
               parsedLocalVehicles.forEach((localVeh: any) => {
-                if (!combinedVehicles.some(v => v.id === localVeh.id)) {
+                if (localVeh && localVeh.id && !combinedVehicles.some(v => v.id === localVeh.id)) {
                   combinedVehicles.push(localVeh);
+                  addedCount++;
                 }
               });
               
-              console.log("Combined vehicles:", combinedVehicles);
+              if (addedCount > 0) {
+                console.log(`Added ${addedCount} vehicles from local storage`);
+              }
+              
+              try {
+                const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+                const { getBypassHeaders } = await import('@/config/requestConfig');
+                const response = await fetch(`${apiBaseUrl}/api/admin/vehicle-pricing.php?t=${Date.now()}`, {
+                  headers: getBypassHeaders()
+                });
+                
+                if (response.ok) {
+                  const data = await response.json();
+                  if (data && data.status === 'success' && data.data && Array.isArray(data.data)) {
+                    console.log("Found vehicles in pricing API:", data.data.length);
+                    
+                    for (const item of data.data) {
+                      if (item && item.vehicleId && !combinedVehicles.some(v => 
+                          v.id === item.vehicleId || v.vehicleId === item.vehicleId
+                      )) {
+                        combinedVehicles.push({
+                          id: item.vehicleId,
+                          vehicleId: item.vehicleId,
+                          name: item.name || item.vehicleId,
+                          capacity: parseInt(item.capacity) || 4,
+                          luggageCapacity: parseInt(item.luggageCapacity) || 2,
+                          isActive: true,
+                          description: item.description || `${item.name || item.vehicleId} vehicle`,
+                          image: item.image || `/cars/sedan.png`
+                        });
+                      }
+                    }
+                  }
+                }
+              } catch (apiError) {
+                console.error("Error fetching from pricing API:", apiError);
+              }
+              
+              console.log("Final combined vehicles:", combinedVehicles.length);
               setVehicles(combinedVehicles);
             } else {
               setVehicles(vehicleList);
@@ -127,23 +172,29 @@ export const VehicleManagement = () => {
         }
       } else {
         console.warn("No vehicles returned from API");
-        toast.error("No vehicles found from API");
+        
+        await syncVehicleData(true);
         
         const localVehicles = localStorage.getItem('localVehicles');
         if (localVehicles) {
           try {
             const parsedLocalVehicles = JSON.parse(localVehicles);
             if (Array.isArray(parsedLocalVehicles) && parsedLocalVehicles.length > 0) {
-              console.log("Using vehicles from localStorage as fallback:", parsedLocalVehicles);
+              console.log("Using vehicles from localStorage as fallback:", parsedLocalVehicles.length);
               setVehicles(parsedLocalVehicles);
               
               if (forceRefresh) {
                 toast.success("Loaded vehicles from local storage");
               }
+            } else {
+              toast.error("No vehicles found");
             }
           } catch (e) {
             console.error("Error parsing local vehicles:", e);
+            toast.error("Failed to load vehicles");
           }
+        } else {
+          toast.error("No vehicles found from API or local storage");
         }
       }
     } catch (error) {
@@ -155,7 +206,7 @@ export const VehicleManagement = () => {
         try {
           const parsedLocalVehicles = JSON.parse(localVehicles);
           if (Array.isArray(parsedLocalVehicles) && parsedLocalVehicles.length > 0) {
-            console.log("Using vehicles from localStorage after error:", parsedLocalVehicles);
+            console.log("Using vehicles from localStorage after error:", parsedLocalVehicles.length);
             setVehicles(parsedLocalVehicles);
           }
         } catch (e) {
@@ -195,9 +246,16 @@ export const VehicleManagement = () => {
   }, [refreshTrigger, loadVehicles]);
   
   const handleRefresh = () => {
+    localStorage.removeItem('cachedVehicles');
+    localStorage.removeItem('localVehicles');
+    sessionStorage.removeItem('cabTypes');
+    localStorage.setItem('forceCacheRefresh', 'true');
+    
     loadVehicles(true);
-    reloadCabTypes().then(() => {
+    
+    reloadCabTypes(true).then(() => {
       console.log("Global cab types refreshed");
+      toast.success("Refreshed vehicle list");
     });
   };
   
@@ -379,22 +437,33 @@ export const VehicleManagement = () => {
       console.log("Creating new vehicle with data:", vehicleData);
       
       const { createVehicle } = await import('@/services/directVehicleService');
-      const success = await createVehicle(vehicleData);
+      const result = await createVehicle(vehicleData);
       
-      if (success) {
-        clearFareCache();
-        
+      if (result) {
         toast.success("Vehicle created successfully");
+        
+        setVehicles(prev => {
+          const updatedVehicles = [...prev];
+          const existingIndex = updatedVehicles.findIndex(v => v.id === vehicleId);
+          if (existingIndex >= 0) {
+            updatedVehicles.splice(existingIndex, 1);
+          }
+          updatedVehicles.push(vehicleData);
+          return updatedVehicles;
+        });
         
         try {
           const existingVehicles = JSON.parse(localStorage.getItem('localVehicles') || '[]');
           const updatedVehicles = existingVehicles.filter((v: any) => v.id !== vehicleId);
           updatedVehicles.push(vehicleData);
           localStorage.setItem('localVehicles', JSON.stringify(updatedVehicles));
+          localStorage.setItem('cachedVehicles', JSON.stringify(updatedVehicles));
+          sessionStorage.setItem('cabTypes', JSON.stringify(updatedVehicles));
         } catch (e) {
           console.error('Error storing vehicle in localStorage:', e);
         }
         
+        clearFareCache();
         localStorage.setItem('forceTripFaresRefresh', 'true');
         
         window.dispatchEvent(new CustomEvent('vehicle-created', {
@@ -409,20 +478,23 @@ export const VehicleManagement = () => {
           detail: {
             vehicleId: vehicleId,
             timestamp: Date.now(),
-            action: 'create'
+            action: 'create',
+            forceRefresh: true
           }
         }));
+        
+        await reloadCabTypes(true);
+        
+        setSelectedVehicle(vehicleId);
+        handleVehicleChange(vehicleId);
         
         setRefreshTrigger(prev => prev + 1);
         
         setAddVehicleOpen(false);
         
         resetNewVehicleForm();
-        
-        await reloadCabTypes();
-        
-        setSelectedVehicle(vehicleId);
-        handleVehicleChange(vehicleId);
+      } else {
+        throw new Error("Vehicle creation returned an empty result");
       }
     } catch (error) {
       console.error("Error creating vehicle:", error);
