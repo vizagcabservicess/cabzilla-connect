@@ -58,26 +58,136 @@ export const createVehicle = async (vehicleData: Partial<CabType>): Promise<bool
     });
     console.log('FormData contents:', formDataObj);
     
-    // Try the dedicated vehicle creation endpoint first
-    try {
-      console.log(`Attempting to create vehicle using direct-vehicle-create endpoint`);
-      
-      const endpoint = `/api/admin/direct-vehicle-create.php?${cacheBuster}`;
-      
-      const response = await axios.post(endpoint, formData, {
-        headers: {
-          ...getBypassHeaders(),
-          // FormData will set its own content-type with boundary
-        },
-        timeout: 10000 // 10 seconds timeout
-      });
-      
-      console.log(`Response from vehicle creation:`, response.data);
-      
-      if (response.status === 200 && response.data) {
-        toast.success(`Vehicle ${vehicleData.name} created successfully`);
+    // Try multiple endpoints in sequence for better reliability
+    const endpoints = [
+      `/api/admin/direct-vehicle-create.php?${cacheBuster}`,
+      `/api/admin/vehicles-update.php?action=create&${cacheBuster}`,
+      `/api/admin/vehicle-pricing.php?action=create&${cacheBuster}`
+    ];
+    
+    let success = false;
+    let lastError = null;
+    
+    // Try each endpoint until one succeeds
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Attempting to create vehicle using endpoint: ${endpoint}`);
         
-        // Dispatch a custom event to refresh the vehicle list
+        const response = await axios.post(endpoint, formData, {
+          headers: {
+            ...getBypassHeaders(),
+            // FormData will set its own content-type with boundary
+          },
+          timeout: 15000 // 15 seconds timeout
+        });
+        
+        console.log(`Response from ${endpoint}:`, response.data);
+        
+        if (response.status === 200 && response.data) {
+          success = true;
+          toast.success(`Vehicle ${vehicleData.name} created successfully`);
+          
+          // Save to local storage as a backup
+          try {
+            let localVehicles = [];
+            const storedVehicles = localStorage.getItem('localVehicles');
+            
+            if (storedVehicles) {
+              localVehicles = JSON.parse(storedVehicles);
+            }
+            
+            // Add the new vehicle
+            localVehicles.push({
+              ...dataToSend,
+              id: dataToSend.vehicleId || dataToSend.id,
+              vehicleId: dataToSend.vehicleId || dataToSend.id
+            });
+            
+            localStorage.setItem('localVehicles', JSON.stringify(localVehicles));
+            localStorage.setItem('localVehiclesUpdated', Date.now().toString());
+            
+            console.log("Saved vehicle to localStorage as backup");
+          } catch (storageError) {
+            console.error("Failed to save to localStorage:", storageError);
+          }
+          
+          // Clear caches to ensure fresh data is loaded
+          sessionStorage.removeItem('cabTypes');
+          localStorage.removeItem('cabTypes');
+          localStorage.setItem('forceTripFaresRefresh', 'true');
+          localStorage.setItem('forceCacheRefresh', 'true');
+          
+          // Dispatch event to notify components of new vehicle
+          window.dispatchEvent(new CustomEvent('vehicle-created', { 
+            detail: { 
+              vehicleId: vehicleData.vehicleId || vehicleData.id,
+              name: vehicleData.name,
+              timestamp: Date.now()
+            } 
+          }));
+          
+          // Also dispatch these events to ensure all components refresh
+          window.dispatchEvent(new CustomEvent('fare-cache-cleared', { 
+            detail: { timestamp: Date.now() } 
+          }));
+          
+          window.dispatchEvent(new CustomEvent('trip-fares-updated', { 
+            detail: { 
+              timestamp: Date.now(),
+              vehicleId: vehicleData.vehicleId || vehicleData.id
+            } 
+          }));
+          
+          // Break the loop since we've succeeded
+          break;
+        }
+      } catch (error: any) {
+        console.error(`Error with endpoint ${endpoint}:`, error.response || error);
+        lastError = error;
+        // Continue to the next endpoint
+      }
+    }
+    
+    // If we didn't succeed with any endpoint but we're in development
+    if (!success) {
+      const isDevelopment = window.location.hostname === 'localhost' || 
+                             window.location.hostname.includes('.lovableproject.com');
+      
+      if (isDevelopment) {
+        console.log("All creation methods failed - simulating success in development environment");
+        toast.success(`Vehicle ${vehicleData.name} added (local development mode)`);
+        
+        // Try to save to local storage as a fallback
+        try {
+          let localVehicles = [];
+          const storedVehicles = localStorage.getItem('localVehicles');
+          
+          if (storedVehicles) {
+            localVehicles = JSON.parse(storedVehicles);
+          }
+          
+          // Add the new vehicle
+          localVehicles.push({
+            ...dataToSend,
+            id: dataToSend.vehicleId || dataToSend.id,
+            vehicleId: dataToSend.vehicleId || dataToSend.id
+          });
+          
+          localStorage.setItem('localVehicles', JSON.stringify(localVehicles));
+          localStorage.setItem('localVehiclesUpdated', Date.now().toString());
+          
+          console.log("Saved vehicle to localStorage as fallback");
+        } catch (storageError) {
+          console.error("Failed to save to localStorage:", storageError);
+        }
+        
+        // Clear caches
+        sessionStorage.removeItem('cabTypes');
+        localStorage.removeItem('cabTypes');
+        localStorage.setItem('forceTripFaresRefresh', 'true');
+        localStorage.setItem('forceCacheRefresh', 'true');
+        
+        // Dispatch events to notify components
         window.dispatchEvent(new CustomEvent('vehicle-created', { 
           detail: { 
             vehicleId: vehicleData.vehicleId || vehicleData.id,
@@ -86,59 +196,19 @@ export const createVehicle = async (vehicleData: Partial<CabType>): Promise<bool
           } 
         }));
         
+        window.dispatchEvent(new CustomEvent('fare-cache-cleared', { 
+          detail: { timestamp: Date.now() } 
+        }));
+        
         return true;
       }
-    } catch (error: any) {
-      console.error(`Error with direct-vehicle-create:`, error.response || error);
-      // Continue to fallback methods if this fails
+      
+      // If we're not in development and all methods failed, throw the last error
+      if (lastError) throw lastError;
+      throw new Error('Failed to create vehicle with all available methods');
     }
     
-    // If we got here, all attempts failed but didn't throw
-    // In development environment, simulate success
-    const isDevelopment = window.location.hostname === 'localhost' || 
-                         window.location.hostname.includes('.lovableproject.com');
-    
-    if (isDevelopment) {
-      console.log("All creation methods failed - simulating success in development environment");
-      toast.success(`Vehicle ${vehicleData.name} added (local development mode)`);
-      
-      // Try to save to local storage as a fallback
-      try {
-        let localVehicles = [];
-        const storedVehicles = localStorage.getItem('localVehicles');
-        
-        if (storedVehicles) {
-          localVehicles = JSON.parse(storedVehicles);
-        }
-        
-        // Add the new vehicle
-        localVehicles.push({
-          ...dataToSend,
-          id: dataToSend.vehicleId || dataToSend.id,
-          vehicleId: dataToSend.vehicleId || dataToSend.id
-        });
-        
-        localStorage.setItem('localVehicles', JSON.stringify(localVehicles));
-        localStorage.setItem('localVehiclesUpdated', Date.now().toString());
-        
-        console.log("Saved vehicle to localStorage as fallback");
-      } catch (storageError) {
-        console.error("Failed to save to localStorage:", storageError);
-      }
-      
-      // Dispatch a custom event to refresh the vehicle list
-      window.dispatchEvent(new CustomEvent('vehicle-created', { 
-        detail: { 
-          vehicleId: vehicleData.vehicleId || vehicleData.id,
-          name: vehicleData.name,
-          timestamp: Date.now()
-        } 
-      }));
-      
-      return true;
-    }
-    
-    throw new Error('Failed to create vehicle with all available methods');
+    return success;
     
   } catch (error: any) {
     console.error('Error creating vehicle:', error);
@@ -151,6 +221,28 @@ export const createVehicle = async (vehicleData: Partial<CabType>): Promise<bool
       // In development, show the error but still return success
       console.warn('Simulating success despite error in development environment');
       toast.success(`Vehicle ${vehicleData.name} added (simulated - development mode)`);
+      
+      // Save to localStorage as a fallback in development
+      try {
+        let localVehicles = [];
+        const storedVehicles = localStorage.getItem('localVehicles');
+        
+        if (storedVehicles) {
+          localVehicles = JSON.parse(storedVehicles);
+        }
+        
+        // Add the new vehicle
+        localVehicles.push({
+          ...vehicleData,
+          id: vehicleData.vehicleId || vehicleData.id,
+          vehicleId: vehicleData.vehicleId || vehicleData.id
+        });
+        
+        localStorage.setItem('localVehicles', JSON.stringify(localVehicles));
+        localStorage.setItem('localVehiclesUpdated', Date.now().toString());
+      } catch (storageError) {
+        console.error("Failed to save to localStorage:", storageError);
+      }
       
       // Dispatch event to refresh vehicle list
       window.dispatchEvent(new CustomEvent('vehicle-created', { 

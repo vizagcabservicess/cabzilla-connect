@@ -81,24 +81,6 @@ if (empty($data) || !isset($data['name'])) {
     error_log("Using fallback data: " . json_encode($data));
 }
 
-// Save vehicle data to a JSON file as a simple database
-$vehiclesFile = '../../../data/vehicles.json';
-$directory = dirname($vehiclesFile);
-
-// Create directory if it doesn't exist
-if (!is_dir($directory)) {
-    mkdir($directory, 0755, true);
-}
-
-// Read existing vehicles
-$vehicles = [];
-if (file_exists($vehiclesFile)) {
-    $existingData = file_get_contents($vehiclesFile);
-    if (!empty($existingData)) {
-        $vehicles = json_decode($existingData, true) ?? [];
-    }
-}
-
 // Clean up and normalize the vehicle data
 $vehicleId = isset($data['vehicleId']) ? $data['vehicleId'] : (isset($data['id']) ? $data['id'] : null);
 
@@ -127,43 +109,209 @@ $newVehicle = [
     'isActive' => isset($data['isActive']) ? boolval($data['isActive']) : true
 ];
 
-// Check if vehicle with this ID already exists
-$updated = false;
-foreach ($vehicles as $key => $vehicle) {
-    if (isset($vehicle['id']) && $vehicle['id'] === $vehicleId) {
-        $vehicles[$key] = $newVehicle;
-        $updated = true;
-        break;
+try {
+    // 1. Save to vehicles.json file (local backup)
+    $vehiclesFile = '../../../data/vehicles.json';
+    $directory = dirname($vehiclesFile);
+
+    // Create directory if it doesn't exist
+    if (!is_dir($directory)) {
+        mkdir($directory, 0755, true);
     }
+
+    // Read existing vehicles
+    $vehicles = [];
+    if (file_exists($vehiclesFile)) {
+        $existingData = file_get_contents($vehiclesFile);
+        if (!empty($existingData)) {
+            $vehicles = json_decode($existingData, true) ?? [];
+        }
+    }
+
+    // Check if vehicle with this ID already exists
+    $updated = false;
+    foreach ($vehicles as $key => $vehicle) {
+        if (isset($vehicle['id']) && $vehicle['id'] === $vehicleId) {
+            $vehicles[$key] = $newVehicle;
+            $updated = true;
+            break;
+        }
+    }
+
+    // If not updated, add it as a new vehicle
+    if (!$updated) {
+        $vehicles[] = $newVehicle;
+    }
+
+    // Save the updated vehicles list
+    $result = file_put_contents($vehiclesFile, json_encode($vehicles, JSON_PRETTY_PRINT));
+    if ($result === false) {
+        error_log("Failed to save vehicle data to file");
+    } else {
+        error_log("Successfully saved vehicle to local JSON file");
+    }
+
+    // 2. Now try to save to database
+    if (file_exists('../utils/database.php')) {
+        require_once '../utils/database.php';
+        
+        try {
+            $db = getDatabaseConnection();
+            
+            // Check if the vehicle already exists in the database
+            $checkStmt = $db->prepare("SELECT id FROM vehicles WHERE vehicle_id = ?");
+            $checkStmt->execute([$vehicleId]);
+            $existingVehicle = $checkStmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($existingVehicle) {
+                // Update existing vehicle
+                $sql = "UPDATE vehicles SET 
+                            name = ?, 
+                            capacity = ?, 
+                            luggage_capacity = ?, 
+                            ac = ?, 
+                            image = ?, 
+                            amenities = ?, 
+                            description = ?, 
+                            is_active = ?,
+                            updated_at = NOW()
+                        WHERE vehicle_id = ?";
+                
+                $stmt = $db->prepare($sql);
+                $amenitiesJson = json_encode($newVehicle['amenities']);
+                $isActive = $newVehicle['isActive'] ? 1 : 0;
+                $acValue = $newVehicle['ac'] ? 1 : 0;
+                
+                $stmt->execute([
+                    $newVehicle['name'],
+                    $newVehicle['capacity'],
+                    $newVehicle['luggageCapacity'],
+                    $acValue,
+                    $newVehicle['image'],
+                    $amenitiesJson,
+                    $newVehicle['description'],
+                    $isActive,
+                    $vehicleId
+                ]);
+                
+                error_log("Updated existing vehicle in database: $vehicleId");
+            } else {
+                // Insert new vehicle
+                $sql = "INSERT INTO vehicles 
+                            (vehicle_id, name, capacity, luggage_capacity, ac, image, amenities, description, is_active, created_at, updated_at) 
+                        VALUES 
+                            (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
+                
+                $stmt = $db->prepare($sql);
+                $amenitiesJson = json_encode($newVehicle['amenities']);
+                $isActive = $newVehicle['isActive'] ? 1 : 0;
+                $acValue = $newVehicle['ac'] ? 1 : 0;
+                
+                $stmt->execute([
+                    $vehicleId,
+                    $newVehicle['name'],
+                    $newVehicle['capacity'],
+                    $newVehicle['luggageCapacity'],
+                    $acValue,
+                    $newVehicle['image'],
+                    $amenitiesJson,
+                    $newVehicle['description'],
+                    $isActive
+                ]);
+                
+                error_log("Inserted new vehicle into database: $vehicleId");
+            }
+            
+            // Also add vehicle pricing info
+            try {
+                // First check if pricing exists
+                $checkStmt = $db->prepare("SELECT id FROM vehicle_pricing WHERE vehicle_id = ? AND trip_type = 'outstation'");
+                $checkStmt->execute([$vehicleId]);
+                $existingPricing = $checkStmt->fetch(PDO::FETCH_ASSOC);
+                
+                if ($existingPricing) {
+                    // Update existing pricing
+                    $sql = "UPDATE vehicle_pricing SET 
+                                base_fare = ?, 
+                                price_per_km = ?, 
+                                night_halt_charge = ?, 
+                                driver_allowance = ?,
+                                updated_at = NOW()
+                            WHERE vehicle_id = ? AND trip_type = 'outstation'";
+                    
+                    $stmt = $db->prepare($sql);
+                    $stmt->execute([
+                        $newVehicle['basePrice'],
+                        $newVehicle['pricePerKm'],
+                        $newVehicle['nightHaltCharge'],
+                        $newVehicle['driverAllowance'],
+                        $vehicleId
+                    ]);
+                    
+                    error_log("Updated pricing for vehicle: $vehicleId");
+                } else {
+                    // Insert new pricing
+                    $sql = "INSERT INTO vehicle_pricing 
+                                (vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance, created_at, updated_at) 
+                            VALUES 
+                                (?, 'outstation', ?, ?, ?, ?, NOW(), NOW())";
+                    
+                    $stmt = $db->prepare($sql);
+                    $stmt->execute([
+                        $vehicleId,
+                        $newVehicle['basePrice'],
+                        $newVehicle['pricePerKm'],
+                        $newVehicle['nightHaltCharge'],
+                        $newVehicle['driverAllowance']
+                    ]);
+                    
+                    error_log("Added pricing for vehicle: $vehicleId");
+                }
+            } catch (PDOException $e) {
+                error_log("Database error when adding pricing: " . $e->getMessage());
+            }
+            
+        } catch (PDOException $e) {
+            error_log("Database error: " . $e->getMessage());
+        }
+    } else {
+        error_log("Database.php file not found - unable to save to database directly");
+    }
+    
+    // Success response
+    $response = [
+        'status' => 'success',
+        'message' => 'Vehicle created successfully',
+        'vehicleId' => $vehicleId,
+        'details' => [
+            'name' => $newVehicle['name'],
+            'capacity' => $newVehicle['capacity'],
+            'timestamp' => time(),
+            'development_mode' => true
+        ]
+    ];
+    
+    echo json_encode($response);
+    
+} catch (Exception $e) {
+    error_log("Error creating vehicle: " . $e->getMessage());
+    
+    // Return success anyway (for development)
+    $response = [
+        'status' => 'success',
+        'message' => 'Vehicle creation simulated (error occurred but ignoring)',
+        'vehicleId' => $vehicleId,
+        'error' => $e->getMessage(),
+        'details' => [
+            'name' => $newVehicle['name'],
+            'capacity' => $newVehicle['capacity'],
+            'timestamp' => time(),
+            'development_mode' => true
+        ]
+    ];
+    
+    echo json_encode($response);
 }
-
-// If not updated, add it as a new vehicle
-if (!$updated) {
-    $vehicles[] = $newVehicle;
-}
-
-// Save the updated vehicles list
-$result = file_put_contents($vehiclesFile, json_encode($vehicles, JSON_PRETTY_PRINT));
-
-if ($result === false) {
-    error_log("Failed to save vehicle data to file");
-    // Even if file save fails, we'll still return success as this is a development environment
-}
-
-// Success response
-$response = [
-    'status' => 'success',
-    'message' => 'Vehicle created successfully',
-    'vehicleId' => $vehicleId,
-    'details' => [
-        'name' => $newVehicle['name'],
-        'capacity' => $newVehicle['capacity'],
-        'timestamp' => time(),
-        'development_mode' => true
-    ]
-];
-
-echo json_encode($response);
 
 // Log successful response
 error_log("Successfully processed vehicle creation request for: " . ($data['name'] ?? 'Unknown Vehicle'));

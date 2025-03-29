@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,13 +10,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Trash2, PlusCircle, Car } from "lucide-react";
+import { Loader2, Trash2, PlusCircle, Car, RefreshCw } from "lucide-react";
 import { getVehicleTypes, updateVehicle, deleteVehicle } from "@/services/vehicleDataService";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { VehicleTripFaresForm } from './VehicleTripFaresForm';
 import { clearFareCache } from '@/lib/fareCalculationService';
+import { reloadCabTypes } from '@/lib/cabData';
 import { 
   Dialog,
   DialogContent,
@@ -30,6 +31,7 @@ export const VehicleManagement = () => {
   const [vehicles, setVehicles] = useState<{id: string, name: string}[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   const [addVehicleOpen, setAddVehicleOpen] = useState(false);
   
@@ -54,21 +56,123 @@ export const VehicleManagement = () => {
   const [activeTab, setActiveTab] = useState("basic");
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   
-  useEffect(() => {
-    loadVehicles();
-  }, [refreshTrigger]);
-  
-  const loadVehicles = async () => {
+  const loadVehicles = useCallback(async (forceRefresh = false) => {
     try {
-      console.log("Loading vehicles for management UI");
-      const vehicleList = await getVehicleTypes();
-      setVehicles(vehicleList);
+      setIsRefreshing(true);
+      console.log("Loading vehicles for management UI", forceRefresh ? "(force refresh)" : "");
       
-      console.log("Successfully loaded vehicles:", vehicleList);
+      // Clear any caches first if forcing refresh
+      if (forceRefresh) {
+        sessionStorage.removeItem('cabTypes');
+        localStorage.removeItem('cabTypes');
+        localStorage.setItem('forceCacheRefresh', 'true');
+        console.log("Cleared vehicle cache before loading");
+      }
+      
+      // Load vehicles with latest data
+      const vehicleList = await getVehicleTypes(forceRefresh);
+      
+      if (vehicleList && Array.isArray(vehicleList) && vehicleList.length > 0) {
+        setVehicles(vehicleList);
+        console.log("Successfully loaded vehicles:", vehicleList);
+        
+        // Check for local vehicles as a backup
+        const localVehicles = localStorage.getItem('localVehicles');
+        if (localVehicles) {
+          try {
+            const parsedLocalVehicles = JSON.parse(localVehicles);
+            if (Array.isArray(parsedLocalVehicles) && parsedLocalVehicles.length > 0) {
+              // Add any local vehicles that don't exist in the fetched list
+              const localOnlyVehicles = parsedLocalVehicles.filter(
+                localVeh => !vehicleList.some(v => v.id === localVeh.id)
+              );
+              
+              if (localOnlyVehicles.length > 0) {
+                console.log("Found additional vehicles in localStorage:", localOnlyVehicles);
+                setVehicles(prev => [...prev, ...localOnlyVehicles]);
+              }
+            }
+          } catch (e) {
+            console.error("Error parsing local vehicles:", e);
+          }
+        }
+      } else {
+        console.warn("No vehicles returned from API");
+        toast.error("No vehicles found");
+        
+        // Try to load from local storage as fallback
+        const localVehicles = localStorage.getItem('localVehicles');
+        if (localVehicles) {
+          try {
+            const parsedLocalVehicles = JSON.parse(localVehicles);
+            if (Array.isArray(parsedLocalVehicles) && parsedLocalVehicles.length > 0) {
+              console.log("Using vehicles from localStorage as fallback:", parsedLocalVehicles);
+              setVehicles(parsedLocalVehicles);
+              
+              if (forceRefresh) {
+                toast.success("Loaded vehicles from local storage");
+              }
+            }
+          } catch (e) {
+            console.error("Error parsing local vehicles:", e);
+          }
+        }
+      }
     } catch (error) {
       console.error("Error loading vehicles:", error);
       toast.error("Failed to load vehicles");
+      
+      // Try to load from local storage as fallback
+      const localVehicles = localStorage.getItem('localVehicles');
+      if (localVehicles) {
+        try {
+          const parsedLocalVehicles = JSON.parse(localVehicles);
+          if (Array.isArray(parsedLocalVehicles) && parsedLocalVehicles.length > 0) {
+            console.log("Using vehicles from localStorage after error:", parsedLocalVehicles);
+            setVehicles(parsedLocalVehicles);
+          }
+        } catch (e) {
+          console.error("Error parsing local vehicles:", e);
+        }
+      }
+    } finally {
+      setIsRefreshing(false);
+      localStorage.removeItem('forceCacheRefresh');
     }
+  }, []);
+  
+  useEffect(() => {
+    loadVehicles();
+    
+    // Set up listeners for vehicle creation/updates
+    const handleVehicleCreated = () => {
+      console.log("Vehicle created event detected, refreshing vehicle list");
+      setRefreshTrigger(prev => prev + 1);
+    };
+    
+    const handleFaresUpdated = () => {
+      console.log("Fares updated event detected, refreshing vehicle list");
+      setRefreshTrigger(prev => prev + 1);
+    };
+    
+    window.addEventListener('vehicle-created', handleVehicleCreated);
+    window.addEventListener('trip-fares-updated', handleFaresUpdated);
+    
+    return () => {
+      window.removeEventListener('vehicle-created', handleVehicleCreated);
+      window.removeEventListener('trip-fares-updated', handleFaresUpdated);
+    };
+  }, [loadVehicles]);
+  
+  useEffect(() => {
+    loadVehicles();
+  }, [refreshTrigger, loadVehicles]);
+  
+  const handleRefresh = () => {
+    loadVehicles(true);
+    reloadCabTypes().then(() => {
+      console.log("Global cab types refreshed");
+    });
   };
   
   const handleVehicleChange = (vehicleId: string) => {
@@ -92,6 +196,30 @@ export const VehicleManagement = () => {
       
       console.log(`Fetching details for vehicle: ${vehicleId}`);
       
+      // First check if we can find this vehicle in our list
+      const vehicle = vehicles.find(v => v.id === vehicleId);
+      
+      if (vehicle && typeof vehicle === 'object') {
+        // Check if we already have all the detailed fields
+        if (vehicle.capacity !== undefined && vehicle.basePrice !== undefined) {
+          console.log("Using existing vehicle data:", vehicle);
+          
+          setCapacity(String(vehicle.capacity || "4"));
+          setLuggageCapacity(String(vehicle.luggageCapacity || "2"));
+          setIsActive(Boolean(vehicle.isActive !== false));
+          setDescription(vehicle.description || "");
+          setImage(vehicle.image || "/cars/sedan.png");
+          setBasePrice(String(vehicle.basePrice || vehicle.price || "0"));
+          setPricePerKm(String(vehicle.pricePerKm || "0"));
+          setNightHaltCharge(String(vehicle.nightHaltCharge || "700"));
+          setDriverAllowance(String(vehicle.driverAllowance || "250"));
+          
+          return;
+        }
+      }
+      
+      // Otherwise use fallback data
+      console.log("Using fallback vehicle data");
       await new Promise(resolve => setTimeout(resolve, 500));
       
       const vehicleData = {
@@ -235,11 +363,29 @@ export const VehicleManagement = () => {
         
         localStorage.setItem('forceTripFaresRefresh', 'true');
         
+        // Add to local vehicles list immediately for UI feedback
+        try {
+          let localVehicles = [];
+          const storedVehicles = localStorage.getItem('localVehicles');
+          
+          if (storedVehicles) {
+            localVehicles = JSON.parse(storedVehicles);
+          }
+          
+          localVehicles.push(vehicleData);
+          localStorage.setItem('localVehicles', JSON.stringify(localVehicles));
+        } catch (e) {
+          console.error("Error saving to local storage:", e);
+        }
+        
         setRefreshTrigger(prev => prev + 1);
         
         setAddVehicleOpen(false);
         
         resetNewVehicleForm();
+        
+        // Force reload all cab data
+        await reloadCabTypes();
         
         setSelectedVehicle(vehicleId);
         handleVehicleChange(vehicleId);
@@ -272,6 +418,18 @@ export const VehicleManagement = () => {
         resetForm();
         setSelectedVehicle("");
         
+        // Remove from local vehicles list
+        try {
+          const storedVehicles = localStorage.getItem('localVehicles');
+          if (storedVehicles) {
+            let localVehicles = JSON.parse(storedVehicles);
+            localVehicles = localVehicles.filter((v: any) => v.id !== selectedVehicle);
+            localStorage.setItem('localVehicles', JSON.stringify(localVehicles));
+          }
+        } catch (e) {
+          console.error("Error updating local storage:", e);
+        }
+        
         setRefreshTrigger(prev => prev + 1);
       } else {
         throw new Error("Delete operation returned false");
@@ -303,20 +461,32 @@ export const VehicleManagement = () => {
     <div className="grid gap-6">
       <div className="flex flex-col gap-4">
         <div className="flex justify-between items-center">
-          <div className="w-3/4">
-            <label className="text-sm font-medium">Select Vehicle</label>
-            <Select value={selectedVehicle} onValueChange={handleVehicleChange}>
-              <SelectTrigger className="w-full mt-1">
-                <SelectValue placeholder="Select a vehicle" />
-              </SelectTrigger>
-              <SelectContent>
-                {vehicles.map((vehicle) => (
-                  <SelectItem key={vehicle.id} value={vehicle.id}>
-                    {vehicle.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="flex items-center gap-2">
+            <div className="w-3/4">
+              <label className="text-sm font-medium">Select Vehicle</label>
+              <Select value={selectedVehicle} onValueChange={handleVehicleChange}>
+                <SelectTrigger className="w-full mt-1">
+                  <SelectValue placeholder="Select a vehicle" />
+                </SelectTrigger>
+                <SelectContent>
+                  {vehicles.map((vehicle) => (
+                    <SelectItem key={vehicle.id} value={vehicle.id}>
+                      {vehicle.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button 
+              variant="outline" 
+              size="icon" 
+              className="self-end mb-[2px]" 
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+            >
+              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span className="sr-only">Refresh Vehicles</span>
+            </Button>
           </div>
           
           <Dialog open={addVehicleOpen} onOpenChange={setAddVehicleOpen}>
