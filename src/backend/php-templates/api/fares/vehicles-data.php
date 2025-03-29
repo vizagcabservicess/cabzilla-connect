@@ -1,4 +1,3 @@
-
 <?php
 // Set up error reporting and logging for debugging
 ini_set('display_errors', 0);
@@ -19,7 +18,7 @@ header('Expires: 0');
 
 // Add extra cache busting headers
 header('X-Cache-Timestamp: ' . time());
-header('X-API-Version: '.'1.0.4');
+header('X-API-Version: '.'1.0.5');
 
 // Respond to preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -36,6 +35,19 @@ $requestDetails = [
     'timestamp' => time()
 ];
 error_log("vehicles-data.php request details: " . json_encode($requestDetails), 3, __DIR__ . '/../../../error.log');
+
+// Check if cache was invalidated by looking for marker file
+$cacheMarkerFile = __DIR__ . '/../../../data/vehicle_cache_invalidated.txt';
+$cacheInvalidated = false;
+if (file_exists($cacheMarkerFile)) {
+    $lastInvalidated = (int)file_get_contents($cacheMarkerFile);
+    $currentTime = time();
+    // If invalidated in the last 5 minutes
+    if ($currentTime - $lastInvalidated < 300) {
+        $cacheInvalidated = true;
+        error_log("Cache was invalidated, forcing refresh");
+    }
+}
 
 // Global fallback vehicles to return in case of database issues
 $fallbackVehicles = [
@@ -199,22 +211,27 @@ function getSpecializedFareData($conn, $vehicleId) {
     return $fareData;
 }
 
-// Handle requests
-try {
-    // Connect to database
-    $conn = getDbConnection();
-
-    if (!$conn) {
-        error_log("Database connection failed in vehicles-data.php, using fallback vehicles");
-        echo json_encode([
-            'vehicles' => $fallbackVehicles,
-            'timestamp' => time(),
-            'cached' => false,
-            'fallback' => true
-        ]);
-        exit;
+// First, try to get vehicles from local JSON file for consistency
+function getVehiclesFromJson() {
+    $jsonFile = __DIR__ . '/../../../data/vehicles.json';
+    $vehicles = [];
+    
+    if (file_exists($jsonFile)) {
+        $content = file_get_contents($jsonFile);
+        if (!empty($content)) {
+            $jsonData = json_decode($content, true);
+            if (json_last_error() === JSON_ERROR_NONE && !empty($jsonData)) {
+                $vehicles = $jsonData;
+                error_log("Successfully loaded vehicles from JSON file: " . count($vehicles));
+            }
+        }
     }
     
+    return $vehicles;
+}
+
+// Handle requests
+try {
     // Check if we should include inactive vehicles (admin only)
     $includeInactive = isset($_GET['includeInactive']) && $_GET['includeInactive'] === 'true';
     error_log("Include inactive vehicles: " . ($includeInactive ? 'true' : 'false'));
@@ -223,58 +240,64 @@ try {
     $cacheBuster = isset($_GET['_t']) ? $_GET['_t'] : time();
     $forceRefresh = isset($_GET['force']) && $_GET['force'] === 'true';
     
-    error_log("vehicles-data.php GET request params: " . json_encode([
-        'includeInactive' => $includeInactive, 
-        'cacheBuster' => $cacheBuster,
-        'forceRefresh' => $forceRefresh
-    ]));
+    // If cache was invalidated or force refresh requested, skip JSON file
+    $skipJsonFile = $forceRefresh || $cacheInvalidated;
     
-    // Check if vehicle_types table exists, if not create it
-    if (!tableExists($conn, 'vehicle_types')) {
-        error_log("Creating vehicle_types table as it doesn't exist");
-        $conn->query("
-            CREATE TABLE IF NOT EXISTS vehicle_types (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                vehicle_id VARCHAR(50) NOT NULL UNIQUE,
-                name VARCHAR(100) NOT NULL,
-                capacity INT NOT NULL DEFAULT 4,
-                luggage_capacity INT NOT NULL DEFAULT 2,
-                ac TINYINT(1) NOT NULL DEFAULT 1,
-                image VARCHAR(255) DEFAULT '/cars/sedan.png',
-                amenities TEXT DEFAULT NULL,
-                description TEXT DEFAULT NULL,
-                is_active TINYINT(1) NOT NULL DEFAULT 1,
-                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-        ");
+    // Get vehicles from JSON file if applicable
+    $jsonVehicles = [];
+    if (!$skipJsonFile) {
+        $jsonVehicles = getVehiclesFromJson();
         
-        // Insert fallback vehicles
-        foreach ($fallbackVehicles as $vehicle) {
-            $stmt = $conn->prepare("
-                INSERT IGNORE INTO vehicle_types 
-                (vehicle_id, name, capacity, luggage_capacity, ac, image, amenities, description, is_active) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ");
+        // If we got vehicles from JSON and don't need to force refresh, return them
+        if (!empty($jsonVehicles) && !$forceRefresh) {
+            // Filter inactive vehicles if needed
+            if (!$includeInactive) {
+                $jsonVehicles = array_filter($jsonVehicles, function($vehicle) {
+                    return $vehicle['isActive'] ?? true;
+                });
+                // Re-index array after filtering
+                $jsonVehicles = array_values($jsonVehicles);
+            }
             
-            $amenities = json_encode($vehicle['amenities']);
-            $ac = $vehicle['ac'] ? 1 : 0;
-            $isActive = $vehicle['isActive'] ? 1 : 0;
-            
-            $stmt->bind_param("ssiissssi", 
-                $vehicle['id'],
-                $vehicle['name'],
-                $vehicle['capacity'],
-                $vehicle['luggageCapacity'],
-                $ac,
-                $vehicle['image'],
-                $amenities,
-                $vehicle['description'],
-                $isActive
-            );
-            
-            $stmt->execute();
+            error_log("Returning " . count($jsonVehicles) . " vehicles from JSON file");
+            echo json_encode([
+                'vehicles' => $jsonVehicles,
+                'timestamp' => time(),
+                'cached' => true,
+                'source' => 'json',
+                'version' => '1.0.5',
+                'includeInactive' => $includeInactive
+            ]);
+            exit;
         }
+    }
+    
+    // Connect to database
+    $conn = getDbConnection();
+
+    if (!$conn) {
+        error_log("Database connection failed in vehicles-data.php, using JSON or fallback vehicles");
+        
+        // If we have JSON vehicles but we needed a force refresh, still return them as fallback
+        if (!empty($jsonVehicles)) {
+            echo json_encode([
+                'vehicles' => $jsonVehicles,
+                'timestamp' => time(),
+                'cached' => true,
+                'source' => 'json-fallback',
+                'fallback' => true
+            ]);
+            exit;
+        }
+        
+        // Otherwise use hardcoded fallback vehicles
+        echo json_encode([
+            'vehicles' => $fallbackVehicles,
+            'timestamp' => time(),
+            'cached' => false,
+            'fallback' => true
+        ]);
+        exit;
     }
     
     // Initialize list of tables to check
@@ -290,6 +313,18 @@ try {
     }
     
     if (!$vehicleTableToUse) {
+        // No vehicle tables found, use JSON vehicles if available
+        if (!empty($jsonVehicles)) {
+            echo json_encode([
+                'vehicles' => $jsonVehicles,
+                'timestamp' => time(),
+                'cached' => true,
+                'source' => 'json-fallback',
+                'fallback' => true
+            ]);
+            exit;
+        }
+        
         throw new Exception("No vehicle tables found in database");
     }
     
@@ -360,20 +395,66 @@ try {
         // Include outstation fare data if available
         if ($fareData['outstation']) {
             $vehicle['outstationFares'] = $fareData['outstation'];
-            $vehicle['basePrice'] = floatval($fareData['outstation']['basePrice']);
-            $vehicle['price'] = floatval($fareData['outstation']['basePrice']);
-            $vehicle['pricePerKm'] = floatval($fareData['outstation']['pricePerKm']);
-            $vehicle['nightHaltCharge'] = floatval($fareData['outstation']['nightHaltCharge']);
-            $vehicle['driverAllowance'] = floatval($fareData['outstation']['driverAllowance']);
+            $vehicle['basePrice'] = floatval($fareData['outstation']['basePrice'] ?? 0);
+            $vehicle['price'] = floatval($fareData['outstation']['basePrice'] ?? 0);
+            $vehicle['pricePerKm'] = floatval($fareData['outstation']['pricePerKm'] ?? 0);
+            $vehicle['nightHaltCharge'] = floatval($fareData['outstation']['nightHaltCharge'] ?? 0);
+            $vehicle['driverAllowance'] = floatval($fareData['outstation']['driverAllowance'] ?? 0);
             
             error_log("Added outstation fares to vehicle $vehicleId: " . json_encode($fareData['outstation']));
         } else {
-            // Default values if no outstation fare data
-            $vehicle['basePrice'] = 2500;
-            $vehicle['price'] = 2500; 
-            $vehicle['pricePerKm'] = 14;
-            $vehicle['nightHaltCharge'] = 700;
-            $vehicle['driverAllowance'] = 250;
+            // Try to get pricing from vehicle_pricing table
+            try {
+                if (tableExists($conn, 'vehicle_pricing')) {
+                    $pricingQuery = $conn->prepare("
+                        SELECT 
+                            base_price as basePrice, 
+                            price_per_km as pricePerKm, 
+                            night_halt_charge as nightHaltCharge, 
+                            driver_allowance as driverAllowance
+                        FROM vehicle_pricing 
+                        WHERE vehicle_id = ?
+                    ");
+                    
+                    if ($pricingQuery) {
+                        $pricingQuery->bind_param("s", $vehicleId);
+                        $pricingQuery->execute();
+                        $pricingResult = $pricingQuery->get_result();
+                        
+                        if ($pricingResult && $pricingResult->num_rows > 0) {
+                            $pricing = $pricingResult->fetch_assoc();
+                            $vehicle['basePrice'] = floatval($pricing['basePrice'] ?? 0);
+                            $vehicle['price'] = floatval($pricing['basePrice'] ?? 0);
+                            $vehicle['pricePerKm'] = floatval($pricing['pricePerKm'] ?? 0);
+                            $vehicle['nightHaltCharge'] = floatval($pricing['nightHaltCharge'] ?? 0);
+                            $vehicle['driverAllowance'] = floatval($pricing['driverAllowance'] ?? 0);
+                            error_log("Added pricing from vehicle_pricing for $vehicleId: " . json_encode($pricing));
+                        } else {
+                            // Default values if no pricing data
+                            $vehicle['basePrice'] = 2500;
+                            $vehicle['price'] = 2500; 
+                            $vehicle['pricePerKm'] = 14;
+                            $vehicle['nightHaltCharge'] = 700;
+                            $vehicle['driverAllowance'] = 250;
+                        }
+                    }
+                } else {
+                    // Default values if no outstation fare data
+                    $vehicle['basePrice'] = 2500;
+                    $vehicle['price'] = 2500; 
+                    $vehicle['pricePerKm'] = 14;
+                    $vehicle['nightHaltCharge'] = 700;
+                    $vehicle['driverAllowance'] = 250;
+                }
+            } catch (Exception $e) {
+                error_log("Error fetching pricing data: " . $e->getMessage());
+                // Default values if error
+                $vehicle['basePrice'] = 2500;
+                $vehicle['price'] = 2500; 
+                $vehicle['pricePerKm'] = 14;
+                $vehicle['nightHaltCharge'] = 700;
+                $vehicle['driverAllowance'] = 250;
+            }
         }
         
         // Include local package fares if available
@@ -391,10 +472,30 @@ try {
         error_log("Added vehicle to response: $vehicleId - $name");
     }
 
-    // If no vehicles found in database, use fallback
+    // If no vehicles found in database, use JSON file as backup
     if (empty($vehicles)) {
-        error_log("No vehicles found in database, using fallback vehicles");
+        error_log("No vehicles found in database, checking JSON file");
+        
+        $jsonVehicles = getVehiclesFromJson();
+        if (!empty($jsonVehicles)) {
+            echo json_encode([
+                'vehicles' => $jsonVehicles,
+                'timestamp' => time(),
+                'cached' => true,
+                'source' => 'json-backup',
+                'includeInactive' => $includeInactive
+            ]);
+            exit;
+        }
+        
+        // If still empty, use fallback
+        error_log("No vehicles found in database or JSON, using fallback vehicles");
         $vehicles = $fallbackVehicles;
+    } else {
+        // Update the JSON file with the latest database data
+        $jsonFile = __DIR__ . '/../../../data/vehicles.json';
+        file_put_contents($jsonFile, json_encode($vehicles, JSON_PRETTY_PRINT));
+        error_log("Updated JSON file with " . count($vehicles) . " vehicles from database");
     }
 
     // Log success
@@ -405,7 +506,7 @@ try {
         'vehicles' => $vehicles,
         'timestamp' => time(),
         'cached' => false,
-        'version' => '1.0.4',
+        'version' => '1.0.5',
         'tableUsed' => $vehicleTableToUse,
         'includeInactive' => $includeInactive
     ]);
@@ -414,7 +515,20 @@ try {
 } catch (Exception $e) {
     error_log("Error in vehicles-data.php: " . $e->getMessage() . " at " . $e->getFile() . ":" . $e->getLine());
     
-    // Return fallback vehicles
+    // Try JSON file as backup
+    $jsonVehicles = getVehiclesFromJson();
+    if (!empty($jsonVehicles)) {
+        echo json_encode([
+            'vehicles' => $jsonVehicles,
+            'timestamp' => time(),
+            'cached' => true,
+            'source' => 'json-error-fallback',
+            'error' => $e->getMessage()
+        ]);
+        exit;
+    }
+    
+    // Return fallback vehicles if JSON file also fails
     echo json_encode([
         'vehicles' => $fallbackVehicles,
         'timestamp' => time(),
