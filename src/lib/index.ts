@@ -55,7 +55,7 @@ export {
   updateVehicle,
   deleteVehicle,
   updateVehicleFares,
-  syncVehicleData  // Added export for syncVehicleData
+  syncVehicleData
 } from '@/services/directVehicleService';
 
 // Re-export CabType from the types directly

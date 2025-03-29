@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +29,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { syncVehicleData } from '@/services/directVehicleService';
+import { CabType } from '@/types/cab';
 
 interface ExtendedVehicleType {
   id: string;
@@ -140,7 +142,7 @@ export const VehicleManagement = () => {
                       if (item && item.vehicleId && !combinedVehicles.some(v => 
                           v.id === item.vehicleId || v.vehicleId === item.vehicleId
                       )) {
-                        combinedVehicles.push({
+                        const newVehicle: CabType = {
                           id: item.vehicleId,
                           vehicleId: item.vehicleId,
                           name: item.name || item.vehicleId,
@@ -148,8 +150,11 @@ export const VehicleManagement = () => {
                           luggageCapacity: parseInt(item.luggageCapacity) || 2,
                           isActive: true,
                           description: item.description || `${item.name || item.vehicleId} vehicle`,
-                          image: item.image || `/cars/sedan.png`
-                        });
+                          image: item.image || `/cars/sedan.png`,
+                          amenities: ['AC', 'Bottle Water', 'Music System'],
+                          ac: true
+                        };
+                        combinedVehicles.push(newVehicle);
                       }
                     }
                   }
@@ -418,10 +423,9 @@ export const VehicleManagement = () => {
     try {
       const vehicleId = newVehicleId || newVehicleName.toLowerCase().replace(/\s+/g, '_');
       
-      const vehicleData = {
-        isNew: true,
-        vehicleId: vehicleId,
+      const vehicleData: CabType = {
         id: vehicleId,
+        vehicleId: vehicleId,
         name: newVehicleName,
         capacity: parseInt(newVehicleCapacity) || 4,
         luggageCapacity: parseInt(newVehicleLuggageCapacity) || 2,
@@ -429,6 +433,7 @@ export const VehicleManagement = () => {
         description: `${newVehicleName} vehicle`,
         image: newVehicleImage || "/cars/sedan.png",
         amenities: ["AC", "Bottle Water", "Music System"],
+        ac: true,
         price: 0,
         pricePerKm: 0,
         basePrice: 0

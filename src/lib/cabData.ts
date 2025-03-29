@@ -1,3 +1,4 @@
+
 import { CabType } from '@/types/cab';
 import { getVehicleData } from '@/services/vehicleDataService';
 
@@ -212,8 +213,8 @@ export const cabTypes: CabType[] = [
 })();
 
 // Force refresh cab types (ignore cache)
-export const reloadCabTypes = async (): Promise<CabType[]> => {
-  console.log('Force refreshing cab types...');
+export const reloadCabTypes = async (forceRefresh: boolean = false): Promise<CabType[]> => {
+  console.log('Force refreshing cab types...', forceRefresh ? '(force refresh)' : '');
   // Clear cache
   sessionStorage.removeItem('cabTypes');
   localStorage.removeItem('cabTypes');
@@ -221,6 +222,12 @@ export const reloadCabTypes = async (): Promise<CabType[]> => {
   // Add a timestamp marker to force server cache refreshes
   const cacheBuster = Date.now().toString();
   localStorage.setItem('cache_buster', cacheBuster);
+  
+  // Set force refresh flag if requested
+  if (forceRefresh) {
+    localStorage.setItem('forceCacheRefresh', 'true');
+    console.log('Set forceCacheRefresh flag to true');
+  }
   
   try {
     // First try API endpoints directly
@@ -244,7 +251,7 @@ export const reloadCabTypes = async (): Promise<CabType[]> => {
           image: vehicle.image || '/cars/sedan.png',
           amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC'],
           description: vehicle.description || '',
-          ac: Boolean(vehicle.ac),
+          ac: Boolean(vehicle.ac !== false),
           nightHaltCharge: Number(vehicle.nightHaltCharge) || 0,
           driverAllowance: Number(vehicle.driverAllowance) || 0,
           isActive: vehicle.isActive !== false, // Default to active if not specified
