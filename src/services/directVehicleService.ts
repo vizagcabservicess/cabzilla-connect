@@ -1,11 +1,8 @@
 
-import axios from 'axios';
 import { toast } from "sonner";
 import type { CabType } from '@/types/cab';
 import { reloadCabTypes } from '@/lib/cabData';
-
-// Base API URL if available
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+import { makeApiRequest, directVehicleOperation } from '@/utils/apiHelper';
 
 /**
  * Create a new vehicle using all available API endpoints and local storage fallback
@@ -35,168 +32,236 @@ export const createVehicle = async (vehicleData: any): Promise<boolean> => {
       description: vehicleData.description || `${vehicleData.name} vehicle`,
       nightHaltCharge: Number(vehicleData.nightHaltCharge) || 700,
       driverAllowance: Number(vehicleData.driverAllowance) || 250,
-      ac: vehicleData.ac !== false
+      ac: vehicleData.ac !== false,
+      timestamp: Date.now()
     };
     
-    // Cache the new vehicle in localStorage first as a fallback
-    try {
-      let localVehicles = [];
-      const storedVehicles = localStorage.getItem('localVehicles');
-      
-      if (storedVehicles) {
-        localVehicles = JSON.parse(storedVehicles);
-      }
-      
-      // Remove any existing vehicle with the same ID
-      localVehicles = localVehicles.filter((v: any) => v.id !== vehicleId);
-      
-      // Add the new vehicle
-      localVehicles.push(normalizedData);
-      
-      localStorage.setItem('localVehicles', JSON.stringify(localVehicles));
-      console.log('Saved vehicle to local storage as fallback');
-    } catch (e) {
-      console.error('Failed to save to local storage:', e);
-    }
-    
-    // Try multiple creation methods
-    const endpoints = [
-      // Try the new direct endpoint
-      `${apiBaseUrl}/api/admin/direct-vehicle-create.php`,
-      `/api/admin/direct-vehicle-create.php`,
-      // Try the fares/vehicles.php endpoint with PUT method
-      `${apiBaseUrl}/api/fares/vehicles.php`,
-      `/api/fares/vehicles.php`,
-      // Generic admin endpoints
-      `${apiBaseUrl}/api/admin/vehicles-update.php`,
-      `/api/admin/vehicles-update.php`
-    ];
-    
-    // Create FormData for better PHP compatibility
-    const formData = new FormData();
-    Object.entries(normalizedData).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        if (Array.isArray(value)) {
-          formData.append(key, JSON.stringify(value));
-        } else {
-          formData.append(key, String(value));
-        }
-      }
+    // Use the enhanced directVehicleOperation function
+    const response = await directVehicleOperation('create', normalizedData, {
+      notification: true,
+      localStorageFallback: true
     });
     
-    let success = false;
-    let errorMessage = '';
-    
-    // Try PUT method first (create)
-    for (const endpoint of endpoints) {
-      try {
-        console.log(`Trying to create vehicle using PUT to ${endpoint}`);
-        
-        const response = await fetch(endpoint, {
-          method: 'PUT',
-          body: formData,
-          headers: {
-            'X-Force-Refresh': 'true',
-            'X-Custom-Timestamp': Date.now().toString()
-          }
-        });
-        
-        const responseText = await response.text();
-        console.log(`Response from ${endpoint}:`, responseText);
-        
-        if (response.ok) {
-          success = true;
-          console.log('Successfully created vehicle via', endpoint);
-          break;
-        } else {
-          errorMessage = `Error ${response.status} from ${endpoint}`;
-        }
-      } catch (error) {
-        console.error(`Error creating vehicle at ${endpoint}:`, error);
-      }
-    }
-    
-    // If PUT failed, try POST method as fallback
-    if (!success) {
-      for (const endpoint of endpoints) {
-        try {
-          console.log(`Trying to create vehicle using POST to ${endpoint}`);
-          
-          const response = await fetch(endpoint, {
-            method: 'POST',
-            body: formData,
-            headers: {
-              'X-Action': 'create',
-              'X-Force-Refresh': 'true',
-              'X-Custom-Timestamp': Date.now().toString()
-            }
-          });
-          
-          const responseText = await response.text();
-          console.log(`Response from ${endpoint}:`, responseText);
-          
-          if (response.ok) {
-            success = true;
-            console.log('Successfully created vehicle via POST to', endpoint);
-            break;
-          }
-        } catch (error) {
-          console.error(`Error creating vehicle at ${endpoint} with POST:`, error);
-        }
-      }
-    }
-    
-    // Final fallback - try axios with JSON
-    if (!success) {
-      try {
-        const axiosResponse = await axios.post(`${apiBaseUrl}/api/fares/vehicles.php`, normalizedData, {
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Force-Refresh': 'true'
-          }
-        });
-        
-        if (axiosResponse.status === 200) {
-          success = true;
-          console.log('Successfully created vehicle via axios');
-        }
-      } catch (error) {
-        console.error('Axios error creating vehicle:', error);
-      }
-    }
+    console.log('Vehicle creation response:', response);
     
     // Clear any vehicle caches after creating
     localStorage.removeItem('cachedVehicles');
     sessionStorage.removeItem('cabTypes');
     
-    // Trigger refresh event
-    window.dispatchEvent(new CustomEvent('vehicle-created', {
-      detail: { 
-        timestamp: Date.now(),
-        vehicleId,
-        vehicleData: normalizedData
-      }
-    }));
-    
-    // If all API methods failed, we still have the local storage backup
-    if (!success) {
-      console.warn('All API endpoints failed, but vehicle saved to local storage');
-      toast.warning("Created vehicle in offline mode - some features may be limited", {
+    // If this is marked as offline operation, show a custom toast
+    if (response.offline) {
+      toast.warning("Created vehicle in offline mode - data will be saved locally until connection is restored", {
         duration: 5000
       });
     } else {
       toast.success("Vehicle created successfully");
-      
-      // Reload cab types to ensure new vehicle appears
-      await reloadCabTypes();
     }
     
-    // Return true even if API failed since we saved locally
+    // Reload cab types to ensure new vehicle appears
+    await reloadCabTypes();
+    
     return true;
     
   } catch (error) {
     console.error('Error in createVehicle:', error);
     toast.error(`Failed to create vehicle: ${(error as Error).message || 'Unknown error'}`);
+    return false;
+  }
+};
+
+/**
+ * Update an existing vehicle
+ */
+export const updateVehicle = async (vehicleData: any): Promise<boolean> => {
+  try {
+    console.log('Updating vehicle with data:', vehicleData);
+    
+    // Make sure we have a vehicle ID
+    const vehicleId = vehicleData.vehicleId || vehicleData.id;
+    if (!vehicleId) {
+      throw new Error('Vehicle ID is required for updating');
+    }
+    
+    // Add timestamp for cache busting
+    const normalizedData = {
+      ...vehicleData,
+      timestamp: Date.now()
+    };
+    
+    // Use the enhanced directVehicleOperation function
+    const response = await directVehicleOperation('update', normalizedData, {
+      notification: true,
+      localStorageFallback: true
+    });
+    
+    console.log('Vehicle update response:', response);
+    
+    // Clear any vehicle caches after updating
+    localStorage.removeItem('cachedVehicles');
+    sessionStorage.removeItem('cabTypes');
+    
+    // Show appropriate toast based on whether this was an offline operation
+    if (response.offline) {
+      toast.warning("Updated vehicle in offline mode - changes will be synced when connection is restored", {
+        duration: 5000
+      });
+    } else {
+      toast.success("Vehicle updated successfully");
+    }
+    
+    // Reload cab types to ensure updated vehicle appears
+    await reloadCabTypes();
+    
+    return true;
+    
+  } catch (error) {
+    console.error('Error in updateVehicle:', error);
+    toast.error(`Failed to update vehicle: ${(error as Error).message || 'Unknown error'}`);
+    return false;
+  }
+};
+
+/**
+ * Delete a vehicle
+ */
+export const deleteVehicle = async (vehicleId: string): Promise<boolean> => {
+  try {
+    console.log('Deleting vehicle with ID:', vehicleId);
+    
+    // Use the enhanced directVehicleOperation function
+    const response = await directVehicleOperation('delete', { vehicleId }, {
+      notification: true,
+      localStorageFallback: true
+    });
+    
+    console.log('Vehicle deletion response:', response);
+    
+    // Clear any vehicle caches after deleting
+    localStorage.removeItem('cachedVehicles');
+    sessionStorage.removeItem('cabTypes');
+    
+    // Show appropriate toast based on whether this was an offline operation
+    if (response.offline) {
+      toast.warning("Deleted vehicle in offline mode - changes will be synced when connection is restored", {
+        duration: 5000
+      });
+    } else {
+      toast.success("Vehicle deleted successfully");
+    }
+    
+    // Reload cab types to ensure deleted vehicle disappears
+    await reloadCabTypes();
+    
+    return true;
+    
+  } catch (error) {
+    console.error('Error in deleteVehicle:', error);
+    toast.error(`Failed to delete vehicle: ${(error as Error).message || 'Unknown error'}`);
+    return false;
+  }
+};
+
+/**
+ * Update fares for a vehicle
+ */
+export const updateVehicleFares = async (vehicleId: string, fareData: any, tripType: string = 'outstation'): Promise<boolean> => {
+  try {
+    console.log(`Updating ${tripType} fares for vehicle ${vehicleId}:`, fareData);
+    
+    // Determine endpoint based on trip type
+    const endpoints = [
+      `/api/admin/direct-fare-update.php?tripType=${tripType}`,
+      `/api/admin/vehicle-fares-update.php?tripType=${tripType}`,
+      `/api/fares/vehicle-fares.php?tripType=${tripType}`
+    ];
+    
+    // Add vehicle ID to data
+    const dataWithId = {
+      ...fareData,
+      vehicleId,
+      tripType,
+      timestamp: Date.now()
+    };
+    
+    // Make the API request
+    await makeApiRequest(endpoints, 'POST', dataWithId, {
+      contentTypes: ['multipart/form-data', 'application/json', 'application/x-www-form-urlencoded'],
+      retries: 2,
+      notification: true
+    });
+    
+    // Cache fares in localStorage as fallback
+    try {
+      const faresCacheKey = `vehicle_fares_${vehicleId}`;
+      const existingFares = JSON.parse(localStorage.getItem(faresCacheKey) || '{}');
+      
+      localStorage.setItem(faresCacheKey, JSON.stringify({
+        ...existingFares,
+        [tripType]: {
+          ...fareData,
+          updatedAt: new Date().toISOString()
+        }
+      }));
+      
+      console.log(`Cached ${tripType} fares for vehicle ${vehicleId} in localStorage`);
+    } catch (e) {
+      console.error('Error caching fares in localStorage:', e);
+    }
+    
+    // Clear fare caches
+    localStorage.removeItem('cachedFares');
+    sessionStorage.removeItem('fareCache');
+    
+    // Trigger refresh event
+    window.dispatchEvent(new CustomEvent('fares-data-changed', {
+      detail: { 
+        vehicleId,
+        tripType,
+        timestamp: Date.now()
+      }
+    }));
+    
+    toast.success(`${tripType.charAt(0).toUpperCase() + tripType.slice(1)} fares updated successfully`);
+    return true;
+    
+  } catch (error) {
+    console.error(`Error updating ${tripType} fares:`, error);
+    
+    // Try to save to localStorage as fallback
+    try {
+      const faresCacheKey = `vehicle_fares_${vehicleId}`;
+      const existingFares = JSON.parse(localStorage.getItem(faresCacheKey) || '{}');
+      
+      localStorage.setItem(faresCacheKey, JSON.stringify({
+        ...existingFares,
+        [tripType]: {
+          ...fareData,
+          updatedAt: new Date().toISOString(),
+          offline: true
+        }
+      }));
+      
+      console.log(`Saved ${tripType} fares for vehicle ${vehicleId} in offline mode`);
+      toast.warning(`Saved ${tripType} fares in offline mode - will be synced when connection is restored`, {
+        duration: 5000
+      });
+      
+      // Still trigger the refresh event
+      window.dispatchEvent(new CustomEvent('fares-data-changed', {
+        detail: { 
+          vehicleId,
+          tripType,
+          timestamp: Date.now(),
+          offline: true
+        }
+      }));
+      
+      return true;
+    } catch (e) {
+      console.error('Error saving fares in offline mode:', e);
+    }
+    
+    toast.error(`Failed to update ${tripType} fares: ${(error as Error).message || 'Unknown error'}`);
     return false;
   }
 };
