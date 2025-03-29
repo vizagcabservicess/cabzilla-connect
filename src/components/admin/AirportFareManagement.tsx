@@ -14,7 +14,7 @@ import { AlertCircle, RefreshCw, Save, Plane, Plus } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { loadCabTypes } from '@/lib/cabData';
 import { CabType } from '@/types/cab';
-import { fareService } from '@/services/fareService';
+import { fareService, syncVehicleData } from '@/lib';
 import { updateTripFares } from '@/services/vehicleDataService';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
@@ -89,6 +89,15 @@ export function AirportFareManagement() {
   
   useEffect(() => {
     loadData();
+    
+    // Add listeners for vehicle updates
+    window.addEventListener('vehicles-updated', loadData);
+    window.addEventListener('fare-cache-cleared', loadData);
+    
+    return () => {
+      window.removeEventListener('vehicles-updated', loadData);
+      window.removeEventListener('fare-cache-cleared', loadData);
+    };
   }, []);
   
   const loadData = async () => {
@@ -99,8 +108,15 @@ export function AirportFareManagement() {
       // Force clear caches to ensure we get fresh data
       fareService.clearCache();
       
+      // Force sync between database and JSON
+      try {
+        await syncVehicleData();
+      } catch (syncErr) {
+        console.warn("Failed to sync vehicle data:", syncErr);
+      }
+      
       // Load cab types
-      const types = await loadCabTypes();
+      const types = await loadCabTypes(true);
       console.log("Loaded cab types:", types);
       setCabTypes(types);
       
@@ -373,12 +389,18 @@ export function AirportFareManagement() {
           newVehicleForm.reset();
           setNewVehicleOpen(false);
           
+          // Force sync database with JSON
+          await syncVehicleData();
+          
           // Reload the data to include the new vehicle
           await loadData();
           
           // Set the new vehicle as selected in the dropdown
           form.setValue("cabType", vehicleId);
           handleCabTypeSelect(vehicleId);
+          
+          // Dispatch event to notify other components
+          window.dispatchEvent(new CustomEvent('vehicles-updated'));
         } else {
           toast.error("Failed to create vehicle");
           console.error("Failed to create vehicle:", responseData);

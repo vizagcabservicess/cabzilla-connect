@@ -13,7 +13,7 @@ import { AlertCircle, Database, RefreshCw, Save, RotateCw } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { loadCabTypes } from '@/lib/cabData';
 import { CabType } from '@/types/cab';
-import { fareService } from '@/services/fareService';
+import { fareService, syncVehicleData } from '@/lib';
 import { FareUpdateError } from '../cab-options/FareUpdateError';
 import axios from 'axios';
 
@@ -60,10 +60,12 @@ export function OutstationFareManagement() {
     
     window.addEventListener('trip-fares-updated', handleFareUpdate);
     window.addEventListener('fare-cache-cleared', handleFareUpdate);
+    window.addEventListener('vehicles-updated', handleFareUpdate);
     
     return () => {
       window.removeEventListener('trip-fares-updated', handleFareUpdate);
       window.removeEventListener('fare-cache-cleared', handleFareUpdate);
+      window.removeEventListener('vehicles-updated', handleFareUpdate);
     };
   }, []);
   
@@ -75,7 +77,15 @@ export function OutstationFareManagement() {
       // Clear cache before loading data
       fareService.clearCache();
       
-      // First try to load from local JSON
+      // First try to forcefully sync between database and JSON
+      try {
+        console.log("Syncing vehicle data between database and JSON...");
+        await syncVehicleData();
+      } catch (syncErr) {
+        console.warn("Failed to sync vehicle data:", syncErr);
+      }
+      
+      // Then try to load from local JSON
       try {
         const response = await axios.get('/data/vehicles.json', {
           params: { _t: Date.now() }, // Cache busting
@@ -319,7 +329,7 @@ export function OutstationFareManagement() {
         }
       }
       
-      // After updating, force sync between tables
+      // After updating, force sync between tables and also sync vehicle data
       try {
         console.log("Syncing outstation_fares with vehicle_pricing");
         const syncResponse = await axios.get(`${apiBaseUrl}/api/admin/sync-outstation-fares.php`, {
@@ -329,6 +339,9 @@ export function OutstationFareManagement() {
           headers: fareService.getBypassHeaders()
         });
         console.log('Sync response:', syncResponse.data);
+        
+        // Also sync vehicle data between database and JSON file
+        await syncVehicleData();
       } catch (syncError) {
         console.error('Error syncing tables after update:', syncError);
         // Continue anyway - this is just an additional step
@@ -345,6 +358,7 @@ export function OutstationFareManagement() {
           vehicleId: values.cabType
         }
       }));
+      window.dispatchEvent(new CustomEvent('vehicles-updated'));
       
       fareService.resetCabOptionsState();
       

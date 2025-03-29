@@ -28,13 +28,19 @@ RewriteRule ^api/vehicle-delete(/.*)?$ api/admin/direct-vehicle-delete.php [QSA,
 RewriteRule ^api/admin/vehicles/delete(/.*)?$ api/admin/direct-vehicle-delete.php [QSA,L]
 RewriteRule ^api/admin/vehicle/delete(/.*)?$ api/admin/direct-vehicle-delete.php [QSA,L]
 
-# Direct endpoint for vehicle update - highest priority
+# Direct endpoint for vehicle update - highest priority 
 RewriteRule ^api/admin/direct-vehicle-update$ api/admin/direct-vehicle-update.php [QSA,L]
 RewriteRule ^api/admin/direct-vehicle-update\.php$ api/admin/direct-vehicle-update.php [QSA,L]
 RewriteRule ^api/direct-vehicle-update$ api/admin/direct-vehicle-update.php [QSA,L]
 RewriteRule ^api/vehicles-update$ api/admin/direct-vehicle-update.php [QSA,L]
 RewriteRule ^api/admin/vehicles-update$ api/admin/direct-vehicle-update.php [QSA,L]
 RewriteRule ^api/admin/vehicles-update\.php$ api/admin/direct-vehicle-update.php [QSA,L]
+
+# New! Ensure vehicles-data.php is accessible for vehicle sync
+RewriteRule ^api/fares/vehicles-data$ api/fares/vehicles-data.php [QSA,L]
+RewriteRule ^api/fares/vehicles-data\.php$ api/fares/vehicles-data.php [QSA,L]
+RewriteRule ^api/vehicles-data$ api/fares/vehicles-data.php [QSA,L]
+RewriteRule ^api/vehicles-data\.php$ api/fares/vehicles-data.php [QSA,L]
 
 # HIGHEST PRIORITY - Ensure all fare updates go through our universal fare-update.php
 RewriteRule ^api/fare-update$ api/admin/fare-update.php [L,QSA]
