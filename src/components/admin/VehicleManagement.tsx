@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Trash2, PlusCircle, Car, RefreshCw } from "lucide-react";
+import { Loader2, Trash2, PlusCircle, Car, RefreshCw, RotateCw } from "lucide-react";
 import { getVehicleTypes, updateVehicle, deleteVehicle } from "@/services/vehicleDataService";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -25,8 +25,8 @@ import {
   DialogTitle,
   DialogTrigger,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
-import { CabType } from '@/types/cab';
 
 interface ExtendedVehicleType {
   id: string;
@@ -50,6 +50,8 @@ export const VehicleManagement = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   
   const [addVehicleOpen, setAddVehicleOpen] = useState(false);
+  const [debugOpen, setDebugOpen] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<any>(null);
   
   const [name, setName] = useState("");
   const [capacity, setCapacity] = useState("");
@@ -87,30 +89,45 @@ export const VehicleManagement = () => {
       const vehicleList = await getVehicleTypes();
       
       if (vehicleList && Array.isArray(vehicleList) && vehicleList.length > 0) {
-        setVehicles(vehicleList);
         console.log("Successfully loaded vehicles:", vehicleList);
+        
+        setDebugInfo({
+          timestamp: new Date().toISOString(),
+          vehicleCount: vehicleList.length,
+          vehicleIds: vehicleList.map(v => v.id),
+          vehicleNames: vehicleList.map(v => v.name)
+        });
         
         const localVehicles = localStorage.getItem('localVehicles');
         if (localVehicles) {
           try {
             const parsedLocalVehicles = JSON.parse(localVehicles);
             if (Array.isArray(parsedLocalVehicles) && parsedLocalVehicles.length > 0) {
-              const localOnlyVehicles = parsedLocalVehicles.filter(
-                localVeh => !vehicleList.some(v => v.id === localVeh.id)
-              );
+              console.log("Found local vehicles:", parsedLocalVehicles);
               
-              if (localOnlyVehicles.length > 0) {
-                console.log("Found additional vehicles in localStorage:", localOnlyVehicles);
-                setVehicles(prev => [...prev, ...localOnlyVehicles]);
-              }
+              const combinedVehicles = [...vehicleList];
+              
+              parsedLocalVehicles.forEach((localVeh: any) => {
+                if (!combinedVehicles.some(v => v.id === localVeh.id)) {
+                  combinedVehicles.push(localVeh);
+                }
+              });
+              
+              console.log("Combined vehicles:", combinedVehicles);
+              setVehicles(combinedVehicles);
+            } else {
+              setVehicles(vehicleList);
             }
           } catch (e) {
             console.error("Error parsing local vehicles:", e);
+            setVehicles(vehicleList);
           }
+        } else {
+          setVehicles(vehicleList);
         }
       } else {
         console.warn("No vehicles returned from API");
-        toast.error("No vehicles found");
+        toast.error("No vehicles found from API");
         
         const localVehicles = localStorage.getItem('localVehicles');
         if (localVehicles) {
@@ -185,17 +202,21 @@ export const VehicleManagement = () => {
   };
   
   const handleVehicleChange = (vehicleId: string) => {
+    console.log("Selected vehicle:", vehicleId);
     setSelectedVehicle(vehicleId);
     
     const vehicle = vehicles.find(v => v.id === vehicleId);
     
     if (vehicle) {
+      console.log("Found vehicle details:", vehicle);
       resetForm();
       
       setName(vehicle.name || "");
       setIsActive(vehicle.isActive !== false);
       
       fetchVehicleDetails(vehicleId);
+    } else {
+      console.warn(`Vehicle with ID ${vehicleId} not found in loaded vehicles`);
     }
   };
   
@@ -208,21 +229,19 @@ export const VehicleManagement = () => {
       const vehicle = vehicles.find(v => v.id === vehicleId);
       
       if (vehicle && typeof vehicle === 'object') {
-        if (vehicle.capacity !== undefined && vehicle.basePrice !== undefined) {
-          console.log("Using existing vehicle data:", vehicle);
-          
-          setCapacity(String(vehicle.capacity || "4"));
-          setLuggageCapacity(String(vehicle.luggageCapacity || "2"));
-          setIsActive(Boolean(vehicle.isActive !== false));
-          setDescription(vehicle.description || "");
-          setImage(vehicle.image || "/cars/sedan.png");
-          setBasePrice(String(vehicle.basePrice || vehicle.price || "0"));
-          setPricePerKm(String(vehicle.pricePerKm || "0"));
-          setNightHaltCharge(String(vehicle.nightHaltCharge || "700"));
-          setDriverAllowance(String(vehicle.driverAllowance || "250"));
-          
-          return;
-        }
+        console.log("Using existing vehicle data:", vehicle);
+        
+        setCapacity(String(vehicle.capacity || "4"));
+        setLuggageCapacity(String(vehicle.luggageCapacity || "2"));
+        setIsActive(Boolean(vehicle.isActive !== false));
+        setDescription(vehicle.description || "");
+        setImage(vehicle.image || "/cars/sedan.png");
+        setBasePrice(String(vehicle.basePrice || vehicle.price || "0"));
+        setPricePerKm(String(vehicle.pricePerKm || "0"));
+        setNightHaltCharge(String(vehicle.nightHaltCharge || "700"));
+        setDriverAllowance(String(vehicle.driverAllowance || "250"));
+        
+        return;
       }
       
       console.log("Using fallback vehicle data");
@@ -369,20 +388,6 @@ export const VehicleManagement = () => {
         
         localStorage.setItem('forceTripFaresRefresh', 'true');
         
-        try {
-          let localVehicles = [];
-          const storedVehicles = localStorage.getItem('localVehicles');
-          
-          if (storedVehicles) {
-            localVehicles = JSON.parse(storedVehicles);
-          }
-          
-          localVehicles.push(vehicleData);
-          localStorage.setItem('localVehicles', JSON.stringify(localVehicles));
-        } catch (e) {
-          console.error("Error saving to local storage:", e);
-        }
-        
         setRefreshTrigger(prev => prev + 1);
         
         setAddVehicleOpen(false);
@@ -472,11 +477,17 @@ export const VehicleManagement = () => {
                   <SelectValue placeholder="Select a vehicle" />
                 </SelectTrigger>
                 <SelectContent>
-                  {vehicles.map((vehicle) => (
-                    <SelectItem key={vehicle.id} value={vehicle.id}>
-                      {vehicle.name}
-                    </SelectItem>
-                  ))}
+                  {vehicles.length === 0 ? (
+                    <div className="p-2 text-center text-muted-foreground">
+                      No vehicles found
+                    </div>
+                  ) : (
+                    vehicles.map((vehicle) => (
+                      <SelectItem key={vehicle.id} value={vehicle.id}>
+                        {vehicle.name || vehicle.id}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -489,6 +500,15 @@ export const VehicleManagement = () => {
             >
               <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
               <span className="sr-only">Refresh Vehicles</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="self-end mb-[2px]"
+              onClick={() => setDebugOpen(true)}
+            >
+              <RotateCw className="h-4 w-4" />
+              <span className="sr-only">Debug</span>
             </Button>
           </div>
           
@@ -504,9 +524,9 @@ export const VehicleManagement = () => {
                 <DialogTitle className="flex items-center gap-2">
                   <Car className="h-5 w-5" /> Add New Vehicle
                 </DialogTitle>
-                <p id="vehicle-dialog-description" className="text-sm text-muted-foreground">
+                <DialogDescription id="vehicle-dialog-description">
                   Fill out the details below to add a new vehicle to your fleet.
-                </p>
+                </DialogDescription>
               </DialogHeader>
               
               <div className="grid gap-4 py-4">
@@ -577,6 +597,40 @@ export const VehicleManagement = () => {
                   )}
                 </Button>
               </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          
+          <Dialog open={debugOpen} onOpenChange={setDebugOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Vehicle Debug Information</DialogTitle>
+              </DialogHeader>
+              <div className="mt-4 text-sm border p-4 rounded bg-muted/30 overflow-auto max-h-96">
+                <pre className="whitespace-pre-wrap break-words">
+                  {JSON.stringify(debugInfo || {
+                    vehicles: vehicles.map(v => ({id: v.id, name: v.name})),
+                    selectedVehicle,
+                    localVehicles: "Check localStorage",
+                    timestamp: new Date().toISOString()
+                  }, null, 2)}
+                </pre>
+              </div>
+              <div className="flex justify-between mt-4">
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    localStorage.removeItem('cachedVehicles');
+                    localStorage.removeItem('localVehicles');
+                    sessionStorage.clear();
+                    toast.success("Cache cleared");
+                  }}
+                >
+                  Clear All Cache
+                </Button>
+                <Button onClick={() => window.location.reload()}>
+                  Reload Page
+                </Button>
+              </div>
             </DialogContent>
           </Dialog>
         </div>

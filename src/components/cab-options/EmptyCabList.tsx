@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, AlertCircle, Database, Car, Info } from 'lucide-react';
+import { RefreshCw, AlertCircle, Database, Car, Info, FileWarning } from 'lucide-react';
 
 interface EmptyCabListProps {
   onRefresh: () => void;
@@ -26,6 +26,7 @@ export function EmptyCabList({ onRefresh, isRefreshing }: EmptyCabListProps) {
           variant="outline"
           onClick={() => {
             localStorage.removeItem('cachedVehicles');
+            localStorage.removeItem('localVehicles');
             sessionStorage.clear();
             window.location.reload();
           }}
@@ -33,6 +34,16 @@ export function EmptyCabList({ onRefresh, isRefreshing }: EmptyCabListProps) {
         >
           <Database className="h-4 w-4 mr-2" />
           Clear Cache & Reload
+        </Button>
+        <Button 
+          variant="outline"
+          onClick={() => {
+            window.location.reload();
+          }}
+          className="flex items-center justify-center"
+        >
+          <FileWarning className="h-4 w-4 mr-2" />
+          Reload Page
         </Button>
         <Button 
           variant="default"
@@ -53,7 +64,8 @@ export function EmptyCabList({ onRefresh, isRefreshing }: EmptyCabListProps) {
               <li>Check if your PHP API server is running correctly</li>
               <li>Verify that your database connection is configured properly</li>
               <li>Make sure the vehicle_types table exists in your database</li>
-              <li>Try initializing the database tables from the admin panel</li>
+              <li>If you've created vehicles in the admin panel, try refreshing or clearing cache</li>
+              <li>Check the console logs for more specific error details</li>
             </ul>
           </div>
         </div>

@@ -1,269 +1,202 @@
 
 import axios from 'axios';
-import { formatDataForMultipart, getBypassHeaders } from '@/config/requestConfig';
-import { toast } from 'sonner';
-import { CabType } from '@/types/cab';
+import { toast } from "sonner";
+import type { CabType } from '@/types/cab';
+import { reloadCabTypes } from '@/lib/cabData';
+
+// Base API URL if available
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
 
 /**
- * Directly creates a new vehicle using a more reliable approach
- * This uses FormData instead of JSON which works better with PHP endpoints
+ * Create a new vehicle using all available API endpoints and local storage fallback
  */
-export const createVehicle = async (vehicleData: Partial<CabType>): Promise<boolean> => {
+export const createVehicle = async (vehicleData: any): Promise<boolean> => {
   try {
     console.log('Creating vehicle with data:', vehicleData);
     
-    // Clean and prepare the vehicle ID
-    if (vehicleData.vehicleId) {
-      vehicleData.vehicleId = String(vehicleData.vehicleId).replace(/\s+/g, '_').toLowerCase();
-      vehicleData.id = vehicleData.vehicleId;
-    } else if (vehicleData.name) {
-      // Generate a vehicleId from name if not provided
-      const generatedId = String(vehicleData.name).toLowerCase().replace(/\s+/g, '_');
-      vehicleData.vehicleId = generatedId;
-      vehicleData.id = generatedId;
-    }
+    // Normalize vehicle ID
+    const vehicleId = vehicleData.vehicleId || vehicleData.id || 
+                      vehicleData.name?.toLowerCase().replace(/\s+/g, '_') || 
+                      `vehicle_${Date.now()}`;
     
-    // Create a new object that can have any properties (beyond CabType)
-    const dataToSend: Record<string, any> = { 
-      ...vehicleData,
-      // Ensure these fields are present
-      name: vehicleData.name || 'Unknown Vehicle',
-      capacity: vehicleData.capacity || 4,
-      luggageCapacity: vehicleData.luggageCapacity || 2,
+    // Ensure all required fields are present
+    const normalizedData = {
+      vehicleId,
+      id: vehicleId,
+      name: vehicleData.name || 'New Vehicle',
+      capacity: Number(vehicleData.capacity) || 4,
+      luggageCapacity: Number(vehicleData.luggageCapacity) || 2,
+      price: Number(vehicleData.price || vehicleData.basePrice) || 0,
+      pricePerKm: Number(vehicleData.pricePerKm) || 0,
+      basePrice: Number(vehicleData.price || vehicleData.basePrice) || 0,
       image: vehicleData.image || '/cars/sedan.png',
-      description: vehicleData.description || `${vehicleData.name || 'New'} vehicle`
+      isActive: vehicleData.isActive !== false,
+      amenities: Array.isArray(vehicleData.amenities) ? vehicleData.amenities : ['AC'],
+      description: vehicleData.description || `${vehicleData.name} vehicle`,
+      nightHaltCharge: Number(vehicleData.nightHaltCharge) || 700,
+      driverAllowance: Number(vehicleData.driverAllowance) || 250,
+      ac: vehicleData.ac !== false
     };
     
-    // Convert amenities array to string for backend processing
-    if (Array.isArray(vehicleData.amenities)) {
-      dataToSend.amenitiesJson = JSON.stringify(vehicleData.amenities);
-    } else {
-      // Set default amenities if none provided
-      dataToSend.amenitiesJson = JSON.stringify(['AC', 'Bottle Water', 'Music System']);
+    // Cache the new vehicle in localStorage first as a fallback
+    try {
+      let localVehicles = [];
+      const storedVehicles = localStorage.getItem('localVehicles');
+      
+      if (storedVehicles) {
+        localVehicles = JSON.parse(storedVehicles);
+      }
+      
+      // Remove any existing vehicle with the same ID
+      localVehicles = localVehicles.filter((v: any) => v.id !== vehicleId);
+      
+      // Add the new vehicle
+      localVehicles.push(normalizedData);
+      
+      localStorage.setItem('localVehicles', JSON.stringify(localVehicles));
+      console.log('Saved vehicle to local storage as fallback');
+    } catch (e) {
+      console.error('Failed to save to local storage:', e);
     }
     
-    // Add a flag to indicate this is a new vehicle
-    dataToSend.isNew = true;
-    
-    // Add cache busting param
-    const cacheBuster = `_t=${Date.now()}`;
-    
-    // Create FormData for better PHP compatibility
-    const formData = formatDataForMultipart(dataToSend);
-    
-    // Log FormData content (debugging only)
-    const formDataObj: Record<string, any> = {};
-    formData.forEach((value, key) => {
-      formDataObj[key] = value;
-    });
-    console.log('FormData contents:', formDataObj);
-    
-    // Try multiple endpoints in sequence for better reliability
+    // Try multiple creation methods
     const endpoints = [
-      `/api/admin/direct-vehicle-create.php?${cacheBuster}`,
-      `/api/admin/vehicles-update.php?action=create&${cacheBuster}`,
-      `/api/admin/vehicle-pricing.php?action=create&${cacheBuster}`
+      // Try the new direct endpoint
+      `${apiBaseUrl}/api/admin/direct-vehicle-create.php`,
+      `/api/admin/direct-vehicle-create.php`,
+      // Try the fares/vehicles.php endpoint with PUT method
+      `${apiBaseUrl}/api/fares/vehicles.php`,
+      `/api/fares/vehicles.php`,
+      // Generic admin endpoints
+      `${apiBaseUrl}/api/admin/vehicles-update.php`,
+      `/api/admin/vehicles-update.php`
     ];
     
-    let success = false;
-    let lastError = null;
+    // Create FormData for better PHP compatibility
+    const formData = new FormData();
+    Object.entries(normalizedData).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        if (Array.isArray(value)) {
+          formData.append(key, JSON.stringify(value));
+        } else {
+          formData.append(key, String(value));
+        }
+      }
+    });
     
-    // Try each endpoint until one succeeds
+    let success = false;
+    let errorMessage = '';
+    
+    // Try PUT method first (create)
     for (const endpoint of endpoints) {
       try {
-        console.log(`Attempting to create vehicle using endpoint: ${endpoint}`);
+        console.log(`Trying to create vehicle using PUT to ${endpoint}`);
         
-        const response = await axios.post(endpoint, formData, {
+        const response = await fetch(endpoint, {
+          method: 'PUT',
+          body: formData,
           headers: {
-            ...getBypassHeaders(),
-            // FormData will set its own content-type with boundary
-          },
-          timeout: 15000 // 15 seconds timeout
+            'X-Force-Refresh': 'true',
+            'X-Custom-Timestamp': Date.now().toString()
+          }
         });
         
-        console.log(`Response from ${endpoint}:`, response.data);
+        const responseText = await response.text();
+        console.log(`Response from ${endpoint}:`, responseText);
         
-        if (response.status === 200 && response.data) {
+        if (response.ok) {
           success = true;
-          toast.success(`Vehicle ${vehicleData.name} created successfully`);
-          
-          // Save to local storage as a backup
-          try {
-            let localVehicles = [];
-            const storedVehicles = localStorage.getItem('localVehicles');
-            
-            if (storedVehicles) {
-              localVehicles = JSON.parse(storedVehicles);
-            }
-            
-            // Add the new vehicle
-            localVehicles.push({
-              ...dataToSend,
-              id: dataToSend.vehicleId || dataToSend.id,
-              vehicleId: dataToSend.vehicleId || dataToSend.id
-            });
-            
-            localStorage.setItem('localVehicles', JSON.stringify(localVehicles));
-            localStorage.setItem('localVehiclesUpdated', Date.now().toString());
-            
-            console.log("Saved vehicle to localStorage as backup");
-          } catch (storageError) {
-            console.error("Failed to save to localStorage:", storageError);
-          }
-          
-          // Clear caches to ensure fresh data is loaded
-          sessionStorage.removeItem('cabTypes');
-          localStorage.removeItem('cabTypes');
-          localStorage.setItem('forceTripFaresRefresh', 'true');
-          localStorage.setItem('forceCacheRefresh', 'true');
-          
-          // Dispatch event to notify components of new vehicle
-          window.dispatchEvent(new CustomEvent('vehicle-created', { 
-            detail: { 
-              vehicleId: vehicleData.vehicleId || vehicleData.id,
-              name: vehicleData.name,
-              timestamp: Date.now()
-            } 
-          }));
-          
-          // Also dispatch these events to ensure all components refresh
-          window.dispatchEvent(new CustomEvent('fare-cache-cleared', { 
-            detail: { timestamp: Date.now() } 
-          }));
-          
-          window.dispatchEvent(new CustomEvent('trip-fares-updated', { 
-            detail: { 
-              timestamp: Date.now(),
-              vehicleId: vehicleData.vehicleId || vehicleData.id
-            } 
-          }));
-          
-          // Break the loop since we've succeeded
+          console.log('Successfully created vehicle via', endpoint);
           break;
+        } else {
+          errorMessage = `Error ${response.status} from ${endpoint}`;
         }
-      } catch (error: any) {
-        console.error(`Error with endpoint ${endpoint}:`, error.response || error);
-        lastError = error;
-        // Continue to the next endpoint
+      } catch (error) {
+        console.error(`Error creating vehicle at ${endpoint}:`, error);
       }
     }
     
-    // If we didn't succeed with any endpoint but we're in development
+    // If PUT failed, try POST method as fallback
     if (!success) {
-      const isDevelopment = window.location.hostname === 'localhost' || 
-                             window.location.hostname.includes('.lovableproject.com');
-      
-      if (isDevelopment) {
-        console.log("All creation methods failed - simulating success in development environment");
-        toast.success(`Vehicle ${vehicleData.name} added (local development mode)`);
-        
-        // Try to save to local storage as a fallback
+      for (const endpoint of endpoints) {
         try {
-          let localVehicles = [];
-          const storedVehicles = localStorage.getItem('localVehicles');
+          console.log(`Trying to create vehicle using POST to ${endpoint}`);
           
-          if (storedVehicles) {
-            localVehicles = JSON.parse(storedVehicles);
-          }
-          
-          // Add the new vehicle
-          localVehicles.push({
-            ...dataToSend,
-            id: dataToSend.vehicleId || dataToSend.id,
-            vehicleId: dataToSend.vehicleId || dataToSend.id
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            body: formData,
+            headers: {
+              'X-Action': 'create',
+              'X-Force-Refresh': 'true',
+              'X-Custom-Timestamp': Date.now().toString()
+            }
           });
           
-          localStorage.setItem('localVehicles', JSON.stringify(localVehicles));
-          localStorage.setItem('localVehiclesUpdated', Date.now().toString());
+          const responseText = await response.text();
+          console.log(`Response from ${endpoint}:`, responseText);
           
-          console.log("Saved vehicle to localStorage as fallback");
-        } catch (storageError) {
-          console.error("Failed to save to localStorage:", storageError);
+          if (response.ok) {
+            success = true;
+            console.log('Successfully created vehicle via POST to', endpoint);
+            break;
+          }
+        } catch (error) {
+          console.error(`Error creating vehicle at ${endpoint} with POST:`, error);
         }
-        
-        // Clear caches
-        sessionStorage.removeItem('cabTypes');
-        localStorage.removeItem('cabTypes');
-        localStorage.setItem('forceTripFaresRefresh', 'true');
-        localStorage.setItem('forceCacheRefresh', 'true');
-        
-        // Dispatch events to notify components
-        window.dispatchEvent(new CustomEvent('vehicle-created', { 
-          detail: { 
-            vehicleId: vehicleData.vehicleId || vehicleData.id,
-            name: vehicleData.name,
-            timestamp: Date.now()
-          } 
-        }));
-        
-        window.dispatchEvent(new CustomEvent('fare-cache-cleared', { 
-          detail: { timestamp: Date.now() } 
-        }));
-        
-        return true;
       }
-      
-      // If we're not in development and all methods failed, throw the last error
-      if (lastError) throw lastError;
-      throw new Error('Failed to create vehicle with all available methods');
     }
     
-    return success;
-    
-  } catch (error: any) {
-    console.error('Error creating vehicle:', error);
-    
-    // Check if we're in a development environment
-    const isDevelopment = window.location.hostname === 'localhost' || 
-                         window.location.hostname.includes('.lovableproject.com');
-    
-    if (isDevelopment) {
-      // In development, show the error but still return success
-      console.warn('Simulating success despite error in development environment');
-      toast.success(`Vehicle ${vehicleData.name} added (simulated - development mode)`);
-      
-      // Save to localStorage as a fallback in development
+    // Final fallback - try axios with JSON
+    if (!success) {
       try {
-        let localVehicles = [];
-        const storedVehicles = localStorage.getItem('localVehicles');
-        
-        if (storedVehicles) {
-          localVehicles = JSON.parse(storedVehicles);
-        }
-        
-        // Add the new vehicle
-        localVehicles.push({
-          ...vehicleData,
-          id: vehicleData.vehicleId || vehicleData.id,
-          vehicleId: vehicleData.vehicleId || vehicleData.id
+        const axiosResponse = await axios.post(`${apiBaseUrl}/api/fares/vehicles.php`, normalizedData, {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Force-Refresh': 'true'
+          }
         });
         
-        localStorage.setItem('localVehicles', JSON.stringify(localVehicles));
-        localStorage.setItem('localVehiclesUpdated', Date.now().toString());
-      } catch (storageError) {
-        console.error("Failed to save to localStorage:", storageError);
+        if (axiosResponse.status === 200) {
+          success = true;
+          console.log('Successfully created vehicle via axios');
+        }
+      } catch (error) {
+        console.error('Axios error creating vehicle:', error);
       }
-      
-      // Dispatch event to refresh vehicle list
-      window.dispatchEvent(new CustomEvent('vehicle-created', { 
-        detail: { 
-          vehicleId: vehicleData.vehicleId || vehicleData.id,
-          name: vehicleData.name,
-          timestamp: Date.now()
-        } 
-      }));
-      
-      return true;
     }
     
-    let errorMessage = 'Failed to create vehicle';
-    if (error.response?.data?.message) {
-      errorMessage += `: ${error.response.data.message}`;
-    } else if (error.message) {
-      errorMessage += `: ${error.message}`;
+    // Clear any vehicle caches after creating
+    localStorage.removeItem('cachedVehicles');
+    sessionStorage.removeItem('cabTypes');
+    
+    // Trigger refresh event
+    window.dispatchEvent(new CustomEvent('vehicle-created', {
+      detail: { 
+        timestamp: Date.now(),
+        vehicleId,
+        vehicleData: normalizedData
+      }
+    }));
+    
+    // If all API methods failed, we still have the local storage backup
+    if (!success) {
+      console.warn('All API endpoints failed, but vehicle saved to local storage');
+      toast.warning("Created vehicle in offline mode - some features may be limited", {
+        duration: 5000
+      });
+    } else {
+      toast.success("Vehicle created successfully");
+      
+      // Reload cab types to ensure new vehicle appears
+      await reloadCabTypes();
     }
     
-    toast.error(errorMessage, { duration: 8000 });
+    // Return true even if API failed since we saved locally
+    return true;
+    
+  } catch (error) {
+    console.error('Error in createVehicle:', error);
+    toast.error(`Failed to create vehicle: ${(error as Error).message || 'Unknown error'}`);
     return false;
   }
 };

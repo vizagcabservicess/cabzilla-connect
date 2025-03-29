@@ -42,6 +42,9 @@ export {
   fareService
 } from '@/services/fareService';
 
+// Export vehicle service functions
+export { createVehicle } from '@/services/directVehicleService';
+
 // Re-export CabType from the types directly
 export type { 
   CabType, 
