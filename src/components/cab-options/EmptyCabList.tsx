@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, AlertCircle, Database, Car } from 'lucide-react';
+import { RefreshCw, AlertCircle, Database, Car, Info } from 'lucide-react';
 
 interface EmptyCabListProps {
   onRefresh: () => void;
@@ -24,11 +24,15 @@ export function EmptyCabList({ onRefresh, isRefreshing }: EmptyCabListProps) {
       <div className="flex flex-col sm:flex-row justify-center gap-3 mt-2">
         <Button 
           variant="outline"
-          onClick={() => window.location.reload()}
+          onClick={() => {
+            localStorage.removeItem('cachedVehicles');
+            sessionStorage.clear();
+            window.location.reload();
+          }}
           className="flex items-center justify-center"
         >
           <Database className="h-4 w-4 mr-2" />
-          Reload Page
+          Clear Cache & Reload
         </Button>
         <Button 
           variant="default"
@@ -40,8 +44,22 @@ export function EmptyCabList({ onRefresh, isRefreshing }: EmptyCabListProps) {
           {isRefreshing ? 'Refreshing...' : 'Refresh Vehicles'}
         </Button>
       </div>
+      <div className="mt-5 p-3 border border-yellow-300 bg-yellow-50 rounded-md">
+        <div className="flex items-start">
+          <Info className="h-5 w-5 text-yellow-500 mt-0.5 mr-2 flex-shrink-0" />
+          <div className="text-xs text-left text-yellow-800">
+            <p className="font-semibold mb-1">Troubleshooting Tips:</p>
+            <ul className="list-disc pl-4 space-y-1">
+              <li>Check if your PHP API server is running correctly</li>
+              <li>Verify that your database connection is configured properly</li>
+              <li>Make sure the vehicle_types table exists in your database</li>
+              <li>Try initializing the database tables from the admin panel</li>
+            </ul>
+          </div>
+        </div>
+      </div>
       <div className="mt-4 text-xs text-gray-400">
-        If the problem persists, please check your database connection or contact support.
+        If problems persist, please check server logs for errors or contact support.
       </div>
     </div>
   );
