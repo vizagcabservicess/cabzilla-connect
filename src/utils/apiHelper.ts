@@ -1,3 +1,4 @@
+
 import axios, { AxiosRequestConfig } from 'axios';
 import { toast } from 'sonner';
 
@@ -83,12 +84,23 @@ export const makeApiRequest = async <T>(
           if (method !== 'GET' && data) {
             if (contentType === 'application/json') {
               requestConfig.headers['Content-Type'] = contentType;
-              requestConfig.data = data;
+              
+              // Fix for vehicle_type issue: ensure we're using vehicle_id consistently
+              let processedData = { ...data };
+              if (processedData.vehicle_type && !processedData.vehicle_id) {
+                processedData.vehicle_id = processedData.vehicle_type;
+              }
+              
+              requestConfig.data = processedData;
             } else if (contentType === 'application/x-www-form-urlencoded') {
               requestConfig.headers['Content-Type'] = contentType;
               const params = new URLSearchParams();
               for (const key in data) {
                 if (data[key] !== undefined) {
+                  // Fix for vehicle_type issue
+                  if (key === 'vehicle_type' && !data['vehicle_id']) {
+                    params.append('vehicle_id', String(data[key]));
+                  }
                   params.append(key, String(data[key]));
                 }
               }
@@ -98,6 +110,11 @@ export const makeApiRequest = async <T>(
               const formData = new FormData();
               for (const key in data) {
                 if (data[key] !== undefined) {
+                  // Fix for vehicle_type issue
+                  if (key === 'vehicle_type' && !data['vehicle_id']) {
+                    formData.append('vehicle_id', String(data[key]));
+                  }
+                  
                   if (Array.isArray(data[key])) {
                     formData.append(key, JSON.stringify(data[key]));
                   } else {
@@ -124,11 +141,20 @@ export const makeApiRequest = async <T>(
             
             if (data) {
               if (contentType === 'application/json') {
-                fetchOptions.body = JSON.stringify(data);
+                // Fix for vehicle_type issue
+                let processedData = { ...data };
+                if (processedData.vehicle_type && !processedData.vehicle_id) {
+                  processedData.vehicle_id = processedData.vehicle_type;
+                }
+                fetchOptions.body = JSON.stringify(processedData);
               } else if (contentType === 'multipart/form-data') {
                 const formData = new FormData();
                 for (const key in data) {
                   if (data[key] !== undefined) {
+                    // Fix for vehicle_type issue
+                    if (key === 'vehicle_type' && !data['vehicle_id']) {
+                      formData.append('vehicle_id', String(data[key]));
+                    }
                     formData.append(key, String(data[key]));
                   }
                 }
@@ -137,6 +163,10 @@ export const makeApiRequest = async <T>(
                 const params = new URLSearchParams();
                 for (const key in data) {
                   if (data[key] !== undefined) {
+                    // Fix for vehicle_type issue
+                    if (key === 'vehicle_type' && !data['vehicle_id']) {
+                      params.append('vehicle_id', String(data[key]));
+                    }
                     params.append(key, String(data[key]));
                   }
                 }
@@ -422,4 +452,3 @@ export const directVehicleOperation = async <T>(
     throw error;
   }
 };
-
