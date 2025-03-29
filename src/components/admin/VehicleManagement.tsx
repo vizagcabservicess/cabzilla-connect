@@ -386,7 +386,32 @@ export const VehicleManagement = () => {
         
         toast.success("Vehicle created successfully");
         
+        try {
+          const existingVehicles = JSON.parse(localStorage.getItem('localVehicles') || '[]');
+          const updatedVehicles = existingVehicles.filter((v: any) => v.id !== vehicleId);
+          updatedVehicles.push(vehicleData);
+          localStorage.setItem('localVehicles', JSON.stringify(updatedVehicles));
+        } catch (e) {
+          console.error('Error storing vehicle in localStorage:', e);
+        }
+        
         localStorage.setItem('forceTripFaresRefresh', 'true');
+        
+        window.dispatchEvent(new CustomEvent('vehicle-created', {
+          detail: {
+            vehicleId: vehicleId,
+            name: newVehicleName,
+            timestamp: Date.now()
+          }
+        }));
+        
+        window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
+          detail: {
+            vehicleId: vehicleId,
+            timestamp: Date.now(),
+            action: 'create'
+          }
+        }));
         
         setRefreshTrigger(prev => prev + 1);
         

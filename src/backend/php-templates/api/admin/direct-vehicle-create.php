@@ -1,6 +1,7 @@
 
 <?php
-// direct-vehicle-create.php - A simplified endpoint for vehicle creation
+// direct-vehicle-create.php - A specialized endpoint for vehicle creation 
+// with maximum compatibility and robust error handling
 
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -9,7 +10,7 @@ header('Expires: 0');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh');
-header('X-API-Version: 1.0.6');
+header('X-API-Version: 1.0.7');
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -169,7 +170,7 @@ try {
                 try {
                     // Check if vehicle_types table exists, create if not
                     $tableCheckResult = $conn->query("SHOW TABLES LIKE 'vehicle_types'");
-                    if ($tableCheckResult->num_rows == 0) {
+                    if ($tableCheckResult === false || $tableCheckResult->num_rows == 0) {
                         // Table doesn't exist, create it
                         $conn->query("
                             CREATE TABLE IF NOT EXISTS vehicle_types (
@@ -252,116 +253,130 @@ try {
                     
                     // Check if vehicle_pricing table exists, create if not
                     $tableCheckResult = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'");
-                    if ($tableCheckResult->num_rows == 0) {
+                    if ($tableCheckResult === false || $tableCheckResult->num_rows == 0) {
                         // Table doesn't exist, create it
                         $conn->query("
                             CREATE TABLE IF NOT EXISTS vehicle_pricing (
                                 id INT AUTO_INCREMENT PRIMARY KEY,
-                                vehicle_id VARCHAR(50) NOT NULL UNIQUE,
-                                base_price DECIMAL(10,2) DEFAULT 0,
+                                vehicle_id VARCHAR(50) NOT NULL,
+                                base_fare DECIMAL(10,2) DEFAULT 0,
                                 price_per_km DECIMAL(10,2) DEFAULT 0,
                                 night_halt_charge DECIMAL(10,2) DEFAULT 0,
                                 driver_allowance DECIMAL(10,2) DEFAULT 0,
                                 trip_type VARCHAR(50) DEFAULT 'all',
                                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                                UNIQUE KEY unique_vehicle_trip (vehicle_id, trip_type)
                             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
                         ");
                         error_log("Created vehicle_pricing table");
                     }
                     
-                    // Check if pricing exists
-                    $checkPricingStmt = $conn->prepare("SELECT COUNT(*) as count FROM vehicle_pricing WHERE vehicle_id = ?");
-                    $checkPricingStmt->bind_param("s", $vehicleId);
-                    $checkPricingStmt->execute();
-                    $pricingResult = $checkPricingStmt->get_result();
-                    $pricingRow = $pricingResult->fetch_assoc();
+                    // Add default pricing for 'all' trip type
+                    $basePrice = $newVehicle['basePrice'];
+                    $pricePerKm = $newVehicle['pricePerKm'];
+                    $nightHaltCharge = $newVehicle['nightHaltCharge'];
+                    $driverAllowance = $newVehicle['driverAllowance'];
+                    $tripType = 'all';
                     
-                    if ($pricingRow['count'] > 0) {
-                        // Update existing pricing
-                        $updatePricingStmt = $conn->prepare("
-                            UPDATE vehicle_pricing 
-                            SET base_price = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?
-                            WHERE vehicle_id = ?
-                        ");
-                        
-                        $updatePricingStmt->bind_param(
-                            "dddds", 
-                            $newVehicle['basePrice'], 
-                            $newVehicle['pricePerKm'], 
-                            $newVehicle['nightHaltCharge'], 
-                            $newVehicle['driverAllowance'], 
-                            $vehicleId
-                        );
-                        
-                        $updatePricingStmt->execute();
-                        error_log("Updated vehicle pricing in database: " . $vehicleId);
-                    } else {
-                        // Insert new pricing
-                        $insertPricingStmt = $conn->prepare("
-                            INSERT INTO vehicle_pricing 
-                            (vehicle_id, base_price, price_per_km, night_halt_charge, driver_allowance, trip_type) 
-                            VALUES (?, ?, ?, ?, ?, 'all')
-                        ");
-                        
-                        $insertPricingStmt->bind_param(
-                            "sdddd", 
-                            $vehicleId, 
-                            $newVehicle['basePrice'], 
-                            $newVehicle['pricePerKm'], 
-                            $newVehicle['nightHaltCharge'], 
-                            $newVehicle['driverAllowance']
-                        );
-                        
-                        $insertPricingStmt->execute();
-                        error_log("Inserted new vehicle pricing in database: " . $vehicleId);
-                    }
+                    // Use prepared statement for INSERT ... ON DUPLICATE KEY UPDATE
+                    $pricingSql = "
+                        INSERT INTO vehicle_pricing 
+                        (vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance) 
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        ON DUPLICATE KEY UPDATE 
+                        base_fare = VALUES(base_fare),
+                        price_per_km = VALUES(price_per_km),
+                        night_halt_charge = VALUES(night_halt_charge),
+                        driver_allowance = VALUES(driver_allowance),
+                        updated_at = NOW()
+                    ";
+                    
+                    $pricingStmt = $conn->prepare($pricingSql);
+                    $pricingStmt->bind_param(
+                        "ssdddd",
+                        $vehicleId,
+                        $tripType,
+                        $basePrice,
+                        $pricePerKm,
+                        $nightHaltCharge,
+                        $driverAllowance
+                    );
+                    
+                    $pricingStmt->execute();
+                    error_log("Updated vehicle pricing in database: " . $vehicleId);
                     
                     // Also add to outstation_fares table if it exists
                     $tableCheckResult = $conn->query("SHOW TABLES LIKE 'outstation_fares'");
-                    if ($tableCheckResult->num_rows > 0) {
-                        $checkOutstationStmt = $conn->prepare("SELECT COUNT(*) as count FROM outstation_fares WHERE vehicle_id = ?");
-                        $checkOutstationStmt->bind_param("s", $vehicleId);
-                        $checkOutstationStmt->execute();
-                        $outstationResult = $checkOutstationStmt->get_result();
-                        $outstationRow = $outstationResult->fetch_assoc();
-                        
-                        if ($outstationRow['count'] > 0) {
-                            // Update existing outstation fare
-                            $updateOutstationStmt = $conn->prepare("
-                                UPDATE outstation_fares 
-                                SET base_fare = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?
-                                WHERE vehicle_id = ?
-                            ");
-                            
-                            $updateOutstationStmt->bind_param(
-                                "dddds", 
-                                $newVehicle['basePrice'], 
-                                $newVehicle['pricePerKm'], 
-                                $newVehicle['nightHaltCharge'], 
-                                $newVehicle['driverAllowance'], 
-                                $vehicleId
-                            );
-                            
-                            $updateOutstationStmt->execute();
-                        } else {
-                            // Insert new outstation fare
-                            $insertOutstationStmt = $conn->prepare("
+                    if ($tableCheckResult !== false && $tableCheckResult->num_rows > 0) {
+                        // Try direct query first for backward compatibility
+                        try {
+                            $outstationSql = "
                                 INSERT INTO outstation_fares 
-                                (vehicle_id, base_fare, price_per_km, night_halt_charge, driver_allowance) 
-                                VALUES (?, ?, ?, ?, ?)
-                            ");
+                                (vehicle_id, base_price, price_per_km, night_halt_charge, driver_allowance) 
+                                VALUES ('$vehicleId', $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance)
+                                ON DUPLICATE KEY UPDATE 
+                                base_price = VALUES(base_price),
+                                price_per_km = VALUES(price_per_km),
+                                night_halt_charge = VALUES(night_halt_charge),
+                                driver_allowance = VALUES(driver_allowance),
+                                updated_at = NOW()
+                            ";
                             
-                            $insertOutstationStmt->bind_param(
+                            $conn->query($outstationSql);
+                            error_log("Updated outstation_fares table for vehicle: $vehicleId");
+                        } catch (Exception $e) {
+                            error_log("Error with direct outstation fares update: " . $e->getMessage());
+                            
+                            // Fall back to checking if table has base_price or base_fare column
+                            $columnsResult = $conn->query("SHOW COLUMNS FROM outstation_fares LIKE 'base_%'");
+                            $hasBaseFare = false;
+                            $hasBasePrice = false;
+                            
+                            if ($columnsResult !== false) {
+                                while ($column = $columnsResult->fetch_assoc()) {
+                                    if ($column['Field'] === 'base_fare') $hasBaseFare = true;
+                                    if ($column['Field'] === 'base_price') $hasBasePrice = true;
+                                }
+                            }
+                            
+                            // Use appropriate column name based on what exists
+                            if ($hasBaseFare) {
+                                $sql = "
+                                    INSERT INTO outstation_fares 
+                                    (vehicle_id, base_fare, price_per_km, night_halt_charge, driver_allowance) 
+                                    VALUES (?, ?, ?, ?, ?)
+                                    ON DUPLICATE KEY UPDATE 
+                                    base_fare = VALUES(base_fare),
+                                    price_per_km = VALUES(price_per_km),
+                                    night_halt_charge = VALUES(night_halt_charge),
+                                    driver_allowance = VALUES(driver_allowance)
+                                ";
+                            } else {
+                                $sql = "
+                                    INSERT INTO outstation_fares 
+                                    (vehicle_id, base_price, price_per_km, night_halt_charge, driver_allowance) 
+                                    VALUES (?, ?, ?, ?, ?)
+                                    ON DUPLICATE KEY UPDATE 
+                                    base_price = VALUES(base_price),
+                                    price_per_km = VALUES(price_per_km),
+                                    night_halt_charge = VALUES(night_halt_charge),
+                                    driver_allowance = VALUES(driver_allowance)
+                                ";
+                            }
+                            
+                            $outstationStmt = $conn->prepare($sql);
+                            $outstationStmt->bind_param(
                                 "sdddd", 
                                 $vehicleId, 
-                                $newVehicle['basePrice'], 
-                                $newVehicle['pricePerKm'], 
-                                $newVehicle['nightHaltCharge'], 
-                                $newVehicle['driverAllowance']
+                                $basePrice, 
+                                $pricePerKm, 
+                                $nightHaltCharge, 
+                                $driverAllowance
                             );
                             
-                            $insertOutstationStmt->execute();
+                            $outstationStmt->execute();
+                            error_log("Updated outstation_fares table with prepared statement");
                         }
                     }
                     
@@ -424,3 +439,32 @@ try {
 
 // Log successful response
 error_log("Successfully processed vehicle creation request for: " . ($data['name'] ?? 'Unknown Vehicle'));
+
+// Add JavaScript to trigger event in parent window if in iframe
+echo "
+<script>
+try {
+    if (window.parent && window.parent.dispatchEvent) {
+        window.parent.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
+            detail: {
+                vehicleId: '$vehicleId',
+                timestamp: " . time() . ",
+                action: 'create'
+            }
+        }));
+        
+        window.parent.dispatchEvent(new CustomEvent('vehicle-created', {
+            detail: {
+                vehicleId: '$vehicleId',
+                name: '" . addslashes($newVehicle['name']) . "',
+                timestamp: " . time() . "
+            }
+        }));
+        
+        console.log('Vehicle creation events dispatched');
+    }
+} catch (e) {
+    console.error('Error dispatching vehicle creation events:', e);
+}
+</script>
+";
