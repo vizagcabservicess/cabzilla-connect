@@ -145,6 +145,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 UNIQUE KEY unique_vehicle_trip (vehicle_id, trip_type)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         ");
+        
+        // Also create with alternate column name for backwards compatibility
+        $conn->query("
+            ALTER TABLE vehicle_pricing 
+            ADD COLUMN IF NOT EXISTS base_fare DECIMAL(10,2) DEFAULT 0
+            AFTER trip_type
+        ");
+        
         $pricingTableExists = true;
         error_log("DIRECT VEHICLE PRICING: Created vehicle_pricing table");
     }
@@ -168,6 +176,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         ");
+        
+        // Add base_price column for backwards compatibility
+        $conn->query("
+            ALTER TABLE outstation_fares 
+            ADD COLUMN IF NOT EXISTS base_price DECIMAL(10,2) DEFAULT 0
+            AFTER vehicle_id
+        ");
+        
         $outstationTableExists = true;
         error_log("DIRECT VEHICLE PRICING: Created outstation_fares table");
     }
@@ -184,17 +200,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pricingRow = $pricingResult->fetch_assoc();
             
             if ($pricingRow['count'] > 0) {
-                // Update existing pricing
+                // Update existing pricing - use both base_price and base_fare
                 $updateStmt = $conn->prepare("
                     UPDATE vehicle_pricing 
-                    SET base_price = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?, updated_at = NOW() 
+                    SET base_price = ?, base_fare = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?, updated_at = NOW() 
                     WHERE vehicle_id = ? AND trip_type = 'all'
                 ");
                 
                 if (!$updateStmt) {
                     error_log("DIRECT VEHICLE PRICING: Update prepare failed for vehicle_pricing: " . $conn->error);
                 } else {
-                    $updateStmt->bind_param("dddds", $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, $vehicleId);
+                    $updateStmt->bind_param("ddddds", $basePrice, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, $vehicleId);
                     $success = $updateStmt->execute();
                     
                     if ($success) {
@@ -204,17 +220,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
             } else {
-                // Insert new pricing
+                // Insert new pricing - use both base_price and base_fare
                 $insertStmt = $conn->prepare("
                     INSERT INTO vehicle_pricing 
-                    (vehicle_id, base_price, price_per_km, night_halt_charge, driver_allowance, trip_type, created_at, updated_at) 
-                    VALUES (?, ?, ?, ?, ?, 'all', NOW(), NOW())
+                    (vehicle_id, base_price, base_fare, price_per_km, night_halt_charge, driver_allowance, trip_type, created_at, updated_at) 
+                    VALUES (?, ?, ?, ?, ?, ?, 'all', NOW(), NOW())
                 ");
                 
                 if (!$insertStmt) {
                     error_log("DIRECT VEHICLE PRICING: Insert prepare failed for vehicle_pricing: " . $conn->error);
                 } else {
-                    $insertStmt->bind_param("sdddd", $vehicleId, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
+                    $insertStmt->bind_param("sddddd", $vehicleId, $basePrice, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
                     $success = $insertStmt->execute();
                     
                     if ($success) {
@@ -235,17 +251,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $outstationRow = $outstationResult->fetch_assoc();
             
             if ($outstationRow['count'] > 0) {
-                // Update existing outstation fare using base_fare
+                // Update existing outstation fare - use both base_price and base_fare
                 $updateStmt = $conn->prepare("
                     UPDATE outstation_fares 
-                    SET base_fare = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?, updated_at = NOW() 
+                    SET base_fare = ?, base_price = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?, updated_at = NOW() 
                     WHERE vehicle_id = ?
                 ");
                 
                 if (!$updateStmt) {
                     error_log("DIRECT VEHICLE PRICING: Update prepare failed for outstation_fares: " . $conn->error);
                 } else {
-                    $updateStmt->bind_param("dddds", $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, $vehicleId);
+                    $updateStmt->bind_param("ddddds", $basePrice, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, $vehicleId);
                     $success = $updateStmt->execute();
                     
                     if ($success) {
@@ -255,17 +271,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
             } else {
-                // Insert new outstation fare using base_fare
+                // Insert new outstation fare - use both base_price and base_fare
                 $insertStmt = $conn->prepare("
                     INSERT INTO outstation_fares 
-                    (vehicle_id, base_fare, price_per_km, night_halt_charge, driver_allowance) 
-                    VALUES (?, ?, ?, ?, ?)
+                    (vehicle_id, base_fare, base_price, price_per_km, night_halt_charge, driver_allowance) 
+                    VALUES (?, ?, ?, ?, ?, ?)
                 ");
                 
                 if (!$insertStmt) {
                     error_log("DIRECT VEHICLE PRICING: Insert prepare failed for outstation_fares: " . $conn->error);
                 } else {
-                    $insertStmt->bind_param("sdddd", $vehicleId, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
+                    $insertStmt->bind_param("sddddd", $vehicleId, $basePrice, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
                     $success = $insertStmt->execute();
                     
                     if ($success) {
@@ -466,12 +482,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($pricingTableExists) {
                 $insertPricingStmt = $conn->prepare("
                     INSERT INTO vehicle_pricing 
-                    (vehicle_id, base_price, price_per_km, night_halt_charge, driver_allowance, trip_type) 
-                    VALUES (?, ?, ?, ?, ?, 'all')
+                    (vehicle_id, base_price, base_fare, price_per_km, night_halt_charge, driver_allowance, trip_type) 
+                    VALUES (?, ?, ?, ?, ?, ?, 'all')
                 ");
                 
                 if ($insertPricingStmt) {
-                    $insertPricingStmt->bind_param("sdddd", $vehicleId, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
+                    $insertPricingStmt->bind_param("sddddd", $vehicleId, $basePrice, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
                     $insertPricingStmt->execute();
                 }
             }
@@ -480,12 +496,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($outstationTableExists) {
                 $insertOutstationStmt = $conn->prepare("
                     INSERT INTO outstation_fares 
-                    (vehicle_id, base_fare, price_per_km, night_halt_charge, driver_allowance) 
-                    VALUES (?, ?, ?, ?, ?)
+                    (vehicle_id, base_fare, base_price, price_per_km, night_halt_charge, driver_allowance) 
+                    VALUES (?, ?, ?, ?, ?, ?)
                 ");
                 
                 if ($insertOutstationStmt) {
-                    $insertOutstationStmt->bind_param("sdddd", $vehicleId, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
+                    $insertOutstationStmt->bind_param("sddddd", $vehicleId, $basePrice, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
                     $insertOutstationStmt->execute();
                 }
             }
@@ -561,4 +577,3 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Close database connection
 $conn->close();
-

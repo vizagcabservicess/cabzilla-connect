@@ -26,6 +26,9 @@ if (!$data) {
     $data = $_POST;
 }
 
+// Write to debug log
+error_log("Direct vehicle update received data: " . print_r($data, true), 3, __DIR__ . '/../../error.log');
+
 // Ensure all fields are set to prevent database errors
 $vehicleId = $data['vehicleId'] ?? $data['id'] ?? null;
 
@@ -104,7 +107,7 @@ try {
         ");
         
         $updateStmt->bind_param(
-            "siisisisss", 
+            "siisisss", 
             $name, 
             $capacity, 
             $luggageCapacity, 
@@ -130,7 +133,7 @@ try {
         ");
         
         $insertStmt->bind_param(
-            "ssiisisis", 
+            "ssiisiss", 
             $vehicleId, 
             $name, 
             $capacity, 
@@ -148,6 +151,74 @@ try {
         
         $message = "Vehicle created successfully";
     }
+    
+    // Also ensure vehicle pricing exists for this vehicle in vehicle_pricing table
+    $conn->query("
+        CREATE TABLE IF NOT EXISTS vehicle_pricing (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            vehicle_id VARCHAR(50) NOT NULL,
+            trip_type VARCHAR(50) DEFAULT 'all',
+            base_fare DECIMAL(10,2) DEFAULT 0,
+            price_per_km DECIMAL(5,2) DEFAULT 0,
+            night_halt_charge DECIMAL(10,2) DEFAULT 0,
+            driver_allowance DECIMAL(10,2) DEFAULT 0,
+            local_package_4hr DECIMAL(10,2) DEFAULT 0,
+            local_package_8hr DECIMAL(10,2) DEFAULT 0,
+            local_package_10hr DECIMAL(10,2) DEFAULT 0,
+            extra_km_charge DECIMAL(5,2) DEFAULT 0,
+            extra_hour_charge DECIMAL(5,2) DEFAULT 0,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_vehicle_trip (vehicle_id, trip_type)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+    
+    // Check if pricing exists
+    $baseFare = isset($data['basePrice']) ? floatval($data['basePrice']) : (isset($data['price']) ? floatval($data['price']) : 0);
+    $pricePerKm = isset($data['pricePerKm']) ? floatval($data['pricePerKm']) : 0;
+    $nightHaltCharge = isset($data['nightHaltCharge']) ? floatval($data['nightHaltCharge']) : 700;
+    $driverAllowance = isset($data['driverAllowance']) ? floatval($data['driverAllowance']) : 250;
+    
+    // Insert or update pricing for 'all' trip type
+    $conn->query("
+        INSERT INTO vehicle_pricing 
+        (vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance) 
+        VALUES ('$vehicleId', 'all', $baseFare, $pricePerKm, $nightHaltCharge, $driverAllowance)
+        ON DUPLICATE KEY UPDATE 
+        base_fare = VALUES(base_fare),
+        price_per_km = VALUES(price_per_km),
+        night_halt_charge = VALUES(night_halt_charge),
+        driver_allowance = VALUES(driver_allowance),
+        updated_at = NOW()
+    ");
+    
+    // Also make sure outstation_fares table has an entry for this vehicle
+    $conn->query("
+        CREATE TABLE IF NOT EXISTS outstation_fares (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            vehicle_id VARCHAR(50) NOT NULL,
+            base_price DECIMAL(10,2) DEFAULT 0,
+            price_per_km DECIMAL(5,2) DEFAULT 0,
+            night_halt_charge DECIMAL(10,2) DEFAULT 0,
+            driver_allowance DECIMAL(10,2) DEFAULT 0,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY vehicle_id (vehicle_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+    
+    // Insert or update outstation_fares
+    $conn->query("
+        INSERT INTO outstation_fares 
+        (vehicle_id, base_price, price_per_km, night_halt_charge, driver_allowance) 
+        VALUES ('$vehicleId', $baseFare, $pricePerKm, $nightHaltCharge, $driverAllowance)
+        ON DUPLICATE KEY UPDATE 
+        base_price = VALUES(base_price),
+        price_per_km = VALUES(price_per_km),
+        night_halt_charge = VALUES(night_halt_charge),
+        driver_allowance = VALUES(driver_allowance),
+        updated_at = NOW()
+    ");
     
     // Also update the JSON file
     $jsonFile = __DIR__ . '/../../../data/vehicles.json';
@@ -172,31 +243,17 @@ try {
                 $vehicle['ac'] = (bool)$ac;
                 $vehicle['amenities'] = is_array($amenities) ? $amenities : [$amenities];
                 $vehicle['description'] = $description;
+                $vehicle['basePrice'] = $baseFare;
+                $vehicle['price'] = $baseFare;
+                $vehicle['pricePerKm'] = $pricePerKm;
+                $vehicle['nightHaltCharge'] = $nightHaltCharge;
+                $vehicle['driverAllowance'] = $driverAllowance;
                 $vehicleFound = true;
                 break;
             }
         }
         
         if (!$vehicleFound) {
-            // Get pricing data if available
-            $pricingData = [];
-            $pricingStmt = $conn->prepare("
-                SELECT base_price, price_per_km, night_halt_charge, driver_allowance 
-                FROM vehicle_pricing 
-                WHERE vehicle_id = ? AND trip_type = 'all'
-                LIMIT 1
-            ");
-            
-            if ($pricingStmt) {
-                $pricingStmt->bind_param("s", $vehicleId);
-                $pricingStmt->execute();
-                $pricingResult = $pricingStmt->get_result();
-                
-                if ($pricingResult->num_rows > 0) {
-                    $pricingData = $pricingResult->fetch_assoc();
-                }
-            }
-            
             // Add new vehicle to the array
             $vehicles[] = [
                 'id' => $vehicleId,
@@ -204,11 +261,11 @@ try {
                 'name' => $name,
                 'capacity' => $capacity,
                 'luggageCapacity' => $luggageCapacity,
-                'basePrice' => $pricingData['base_price'] ?? 0,
-                'price' => $pricingData['base_price'] ?? 0,
-                'pricePerKm' => $pricingData['price_per_km'] ?? 0,
-                'nightHaltCharge' => $pricingData['night_halt_charge'] ?? 0,
-                'driverAllowance' => $pricingData['driver_allowance'] ?? 0,
+                'basePrice' => $baseFare,
+                'price' => $baseFare,
+                'pricePerKm' => $pricePerKm,
+                'nightHaltCharge' => $nightHaltCharge,
+                'driverAllowance' => $driverAllowance,
                 'image' => $image,
                 'amenities' => is_array($amenities) ? $amenities : [$amenities],
                 'description' => $description,

@@ -45,6 +45,39 @@ export const createVehicle = async (vehicleData: any): Promise<boolean> => {
       timestamp: Date.now()
     };
     
+    // First try the direct endpoint which is most likely to work
+    try {
+      const directEndpoints = [
+        '/api/admin/direct-vehicle-update.php',
+        '/api/admin/direct-vehicle-update',
+        '/api/direct-vehicle-update',
+        '/api/admin/vehicles-update'
+      ];
+      
+      const directResponse = await makeApiRequest<VehicleOperationResponse>(directEndpoints, 'POST', normalizedData, {
+        contentTypes: ['application/json', 'multipart/form-data'],
+        retries: 2,
+        notification: false
+      });
+      
+      if (directResponse && directResponse.status === 'success') {
+        console.log('Successfully created vehicle using direct endpoint:', directResponse);
+        
+        // Clear any vehicle caches after creating
+        localStorage.removeItem('cachedVehicles');
+        sessionStorage.removeItem('cabTypes');
+        
+        toast.success("Vehicle created successfully");
+        
+        // Reload cab types
+        await reloadCabTypes();
+        
+        return true;
+      }
+    } catch (directError) {
+      console.warn('Direct vehicle creation failed, falling back to standard operation:', directError);
+    }
+    
     // Use the enhanced directVehicleOperation function
     const response = await directVehicleOperation<VehicleOperationResponse>('create', normalizedData, {
       notification: true,

@@ -13,6 +13,14 @@ RewriteRule ^api/init-database\.php$ api/admin/init-database.php [L,QSA]
 RewriteRule ^api/admin/init-database$ api/admin/init-database.php [L,QSA]
 RewriteRule ^api/admin/init-database\.php$ api/admin/init-database.php [L,QSA]
 
+# Direct endpoint for vehicle creation/update - highest priority
+RewriteRule ^api/admin/direct-vehicle-update$ api/admin/direct-vehicle-update.php [QSA,L]
+RewriteRule ^api/admin/direct-vehicle-update\.php$ api/admin/direct-vehicle-update.php [QSA,L]
+RewriteRule ^api/direct-vehicle-update$ api/admin/direct-vehicle-update.php [QSA,L]
+RewriteRule ^api/vehicles-update$ api/admin/direct-vehicle-update.php [QSA,L]
+RewriteRule ^api/admin/vehicles-update$ api/admin/direct-vehicle-update.php [QSA,L]
+RewriteRule ^api/admin/vehicles-update\.php$ api/admin/direct-vehicle-update.php [QSA,L]
+
 # Direct endpoint for vehicle creation - add this with highest priority
 RewriteRule ^api/admin/direct-vehicle-create$ api/admin/direct-vehicle-create.php [QSA,L]
 RewriteRule ^api/admin/direct-vehicle-create.php$ api/admin/direct-vehicle-create.php [QSA,L]
