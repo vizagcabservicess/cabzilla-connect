@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { updateAirportFaresForVehicle, getAirportFaresForVehicle } from '@/services/fareService';
+import { directFareUpdate, getAirportFaresForVehicle } from '@/services/fareService';
 import {
   Table,
   TableBody,
@@ -45,8 +45,8 @@ const AirportFareManagement: React.FC = () => {
             faresData[vehicle.id] = fares;
             
             // Set initial base fare values
-            if (fares && fares.baseFare) {
-              baseFaresData[vehicle.id] = fares.baseFare.toString();
+            if (fares && fares.basePrice) {
+              baseFaresData[vehicle.id] = fares.basePrice.toString();
             } else {
               baseFaresData[vehicle.id] = "0";
             }
@@ -95,12 +95,12 @@ const AirportFareManagement: React.FC = () => {
       const updatedFares = {
         ...existingFares,
         vehicleId: vehicleId,
-        baseFare: basePrice
+        basePrice: basePrice
       };
       
-      const result = await updateAirportFaresForVehicle(vehicleId, updatedFares);
+      const result = await directFareUpdate('airport', vehicleId, updatedFares);
       
-      if (result.success) {
+      if (result.status === 'success') {
         toast.success('Airport fares updated successfully');
         
         // Update local state

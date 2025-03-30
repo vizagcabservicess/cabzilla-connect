@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getOutstationFaresForVehicle, updateOutstationFares } from '@/services/fareService';
+import { directFareUpdate, getOutstationFaresForVehicle } from '@/services/fareService';
 import {
   Table,
   TableBody,
@@ -102,9 +102,9 @@ const OutstationFareManagement: React.FC = () => {
         driverAllowance: isNaN(driverAllowance) ? 0 : driverAllowance
       };
       
-      const result = await updateOutstationFares(vehicleId, fareData);
+      const result = await directFareUpdate('outstation', vehicleId, fareData);
       
-      if (result.success) {
+      if (result.status === 'success') {
         toast.success(`Outstation fares updated successfully for ${vehicleName}`);
         
         // Dispatch custom event to notify other components

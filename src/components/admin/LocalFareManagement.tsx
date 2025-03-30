@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getLocalFaresForVehicle, updateLocalFares } from '@/services/fareService';
+import { directFareUpdate, getLocalFaresForVehicle } from '@/services/fareService';
 import {
   Table,
   TableBody,
@@ -54,11 +54,15 @@ const LocalFareManagement: React.FC = () => {
           try {
             const fares = await getLocalFaresForVehicle(vehicle.id);
             
-            // Extract package prices if available
-            if (fares && fares.packagePrices) {
+            // Extract package prices based on property names that match our expected pattern
+            if (fares) {
               for (const pkg of packages) {
-                if (fares.packagePrices[pkg.id] !== undefined) {
-                  faresData[pkg.id][vehicle.id] = fares.packagePrices[pkg.id].toString();
+                if (pkg.id === '4hrs-40km' && (fares.price4hrs40km !== undefined || fares.package4hr40km !== undefined)) {
+                  faresData[pkg.id][vehicle.id] = (fares.price4hrs40km || fares.package4hr40km || 0).toString();
+                } else if (pkg.id === '8hrs-80km' && (fares.price8hrs80km !== undefined || fares.package8hr80km !== undefined)) {
+                  faresData[pkg.id][vehicle.id] = (fares.price8hrs80km || fares.package8hr80km || 0).toString();
+                } else if (pkg.id === '10hrs-100km' && (fares.price10hrs100km !== undefined || fares.package10hr100km !== undefined)) {
+                  faresData[pkg.id][vehicle.id] = (fares.price10hrs100km || fares.package10hr100km || 0).toString();
                 } else {
                   faresData[pkg.id][vehicle.id] = "0";
                 }
@@ -112,26 +116,33 @@ const LocalFareManagement: React.FC = () => {
       const vehicleName = vehicles.find(v => v.id === vehicleId)?.name;
       toast.info(`Updating ${packages.find(p => p.id === packageId)?.name} price for ${vehicleName}...`);
       
-      // Prepare price data for the specific vehicle and package
-      const priceData = {
-        vehicleId,
-        packageId,
-        price,
-        // Add more package data if needed
-        packages: {
-          [packageId]: price
-        }
-      };
+      // Prepare the updated fare data
+      let packageData: Record<string, any> = {};
       
-      // Update the fare using the updateLocalFares function
-      const result = await updateLocalFares(vehicleId, {
+      if (packageId === '4hrs-40km') {
+        packageData = {
+          price4hrs40km: price,
+          package4hr40km: price
+        };
+      } else if (packageId === '8hrs-80km') {
+        packageData = {
+          price8hrs80km: price,
+          package8hr80km: price
+        };
+      } else if (packageId === '10hrs-100km') {
+        packageData = {
+          price10hrs100km: price,
+          package10hr100km: price
+        };
+      }
+      
+      // Update the fare using the directFareUpdate function
+      const result = await directFareUpdate('local', vehicleId, {
         vehicleId,
-        packagePrices: {
-          [packageId]: price
-        }
+        ...packageData
       });
       
-      if (result.success) {
+      if (result.status === 'success') {
         toast.success(`${packages.find(p => p.id === packageId)?.name} price updated successfully for ${vehicleName}`);
         
         // Dispatch custom event to notify other components
@@ -140,9 +151,7 @@ const LocalFareManagement: React.FC = () => {
             vehicleId,
             packageId,
             price,
-            prices: {
-              [packageId]: price
-            },
+            prices: packageData,
             timestamp: Date.now()
           }
         }));
