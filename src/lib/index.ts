@@ -58,6 +58,14 @@ export {
   syncVehicleData
 } from '@/services/directVehicleService';
 
+// Make sure all specific cab-related exports are available
+export {
+  getCabTypes,
+  getCabTypeById,
+  reloadCabTypes,
+  clearCabTypesCache
+} from './cabData';
+
 // Re-export CabType from the types directly
 export type { 
   CabType, 
