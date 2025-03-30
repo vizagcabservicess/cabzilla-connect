@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { toast } from 'sonner';
 import { getBypassHeaders } from '@/config/requestConfig';
@@ -519,6 +518,74 @@ export const updateVehicleFares = async (vehicleId: string, fareData: any, tripT
   } catch (error) {
     console.error('Fare update failed:', error);
     throw error;
+  }
+};
+
+/**
+ * Get a vehicle by ID from server or local cache
+ */
+export const getVehicleById = async (vehicleId: string): Promise<CabType | null> => {
+  try {
+    console.log(`Getting vehicle by ID: ${vehicleId}`);
+    
+    // First try to get from localStorage cache for fastest response
+    const cachedVehicles = localStorage.getItem('cachedVehicles');
+    if (cachedVehicles) {
+      try {
+        const vehicles: CabType[] = JSON.parse(cachedVehicles);
+        const vehicle = vehicles.find(v => v.id === vehicleId || v.vehicleId === vehicleId);
+        if (vehicle) {
+          console.log(`Found vehicle in cache: ${vehicle.name}`);
+          return vehicle;
+        }
+      } catch (e) {
+        console.error('Error parsing cached vehicles:', e);
+      }
+    }
+    
+    // Try to get from API
+    try {
+      const response = await axios.get(
+        `${apiBaseUrl}/api/fares/vehicles.php?vehicleId=${vehicleId}`,
+        { 
+          headers: getBypassHeaders(),
+          params: { vehicleId }
+        }
+      );
+      
+      if (response.data && response.data.vehicles && Array.isArray(response.data.vehicles)) {
+        const vehicles = response.data.vehicles;
+        if (vehicles.length > 0) {
+          const vehicle = vehicles[0];
+          console.log(`Found vehicle from API: ${vehicle.name}`);
+          return vehicle;
+        }
+      }
+    } catch (error) {
+      console.error('Error getting vehicle from API:', error);
+    }
+    
+    // As a last resort, try using sessionStorage
+    const sessionVehicles = sessionStorage.getItem('cabTypes');
+    if (sessionVehicles) {
+      try {
+        const vehicles: CabType[] = JSON.parse(sessionVehicles);
+        const vehicle = vehicles.find(v => v.id === vehicleId || v.vehicleId === vehicleId);
+        if (vehicle) {
+          console.log(`Found vehicle in sessionStorage: ${vehicle.name}`);
+          return vehicle;
+        }
+      } catch (e) {
+        console.error('Error parsing session vehicles:', e);
+      }
+    }
+    
+    console.warn(`Vehicle not found with ID: ${vehicleId}`);
+    return null;
+    
+  } catch (error) {
+    console.error(`Error getting vehicle by ID ${vehicleId}:`, error);
+    return null;
   }
 };
 
