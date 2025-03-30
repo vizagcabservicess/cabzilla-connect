@@ -267,6 +267,10 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
         try {
           localStorage.setItem(`cabOptions_${tripType}`, JSON.stringify(filteredVehicles));
           localStorage.setItem(`cabOptions_${tripType}_timestamp`, now.toString());
+          
+          // Also cache as "all" for fallback
+          localStorage.setItem(`cabOptions_all`, JSON.stringify(vehicles));
+          localStorage.setItem(`cabOptions_all_timestamp`, now.toString());
         } catch (cacheError) {
           console.warn('Could not cache cab options:', cacheError);
         }
@@ -397,11 +401,13 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
     window.addEventListener('fare-cache-cleared', handleFareCacheCleared, { passive: true });
     window.addEventListener('vehicle-data-refreshed', handleDataRefreshed, { passive: true });
     window.addEventListener('fare-data-updated', handleFareDataUpdated, { passive: true });
+    window.addEventListener('vehicle-data-updated', handleFareDataUpdated, { passive: true });
     
     return () => {
       window.removeEventListener('fare-cache-cleared', handleFareCacheCleared);
       window.removeEventListener('vehicle-data-refreshed', handleDataRefreshed);
       window.removeEventListener('fare-data-updated', handleFareDataUpdated);
+      window.removeEventListener('vehicle-data-updated', handleFareDataUpdated);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -415,6 +421,12 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
       try {
         // For admin trip types, always force refresh
         const shouldForceRefresh = isAdminTripType(tripType);
+        
+        // Special handling for admin-related trip types
+        if (shouldForceRefresh) {
+          console.log("Admin trip type detected, forcing total refresh");
+          clearVehicleDataCache();
+        }
         
         // Load with filters based on trip type/mode
         await loadCabOptions(shouldForceRefresh);
