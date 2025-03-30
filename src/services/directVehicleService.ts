@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { toast } from 'sonner';
 import { getBypassHeaders } from '@/config/requestConfig';
@@ -195,7 +196,15 @@ export const updateVehicle = async (vehicleData: any) => {
     try {
       const response = await axios.post(
         `${apiBaseUrl}/api/admin/direct-vehicle-update.php`, 
-        { ...vehicleData, id: vehicleId, vehicleId, vehicle_id: vehicleId },
+        { 
+          ...vehicleData, 
+          id: vehicleId, 
+          vehicleId, 
+          vehicle_id: vehicleId,
+          // Convert boolean isActive to integer 0/1 for PHP
+          is_active: vehicleData.isActive === true || vehicleData.isActive === 1 ? 1 : 0,
+          isActive: vehicleData.isActive === true || vehicleData.isActive === 1 ? true : false 
+        },
         { headers: { ...getBypassHeaders(), 'Content-Type': 'application/json' } }
       );
       
@@ -215,7 +224,15 @@ export const updateVehicle = async (vehicleData: any) => {
       try {
         const response = await axios.post(
           `${apiBaseUrl}/api/admin/vehicles-update.php`, 
-          { ...vehicleData, id: vehicleId, vehicleId, vehicle_id: vehicleId },
+          { 
+            ...vehicleData, 
+            id: vehicleId, 
+            vehicleId, 
+            vehicle_id: vehicleId,
+            // Convert boolean isActive to integer 0/1 for PHP
+            is_active: vehicleData.isActive === true || vehicleData.isActive === 1 ? 1 : 0,
+            isActive: vehicleData.isActive === true || vehicleData.isActive === 1 ? true : false 
+          },
           { headers: { ...getBypassHeaders(), 'Content-Type': 'application/json' } }
         );
         
@@ -239,7 +256,7 @@ export const updateVehicle = async (vehicleData: any) => {
         
         if (existingVehicles) {
           const vehicles: CabType[] = JSON.parse(existingVehicles);
-          const index = vehicles.findIndex(v => v.id === vehicleId);
+          const index = vehicles.findIndex(v => v.id === vehicleId || v.vehicleId === vehicleId);
           
           if (index >= 0) {
             // Update existing vehicle
@@ -247,11 +264,37 @@ export const updateVehicle = async (vehicleData: any) => {
               ...vehicles[index], 
               ...vehicleData,
               id: vehicleId,
-              vehicleId: vehicleId 
+              vehicleId: vehicleId,
+              isActive: vehicleData.isActive === true || vehicleData.isActive === 1 ? true : false
             };
             
             localStorage.setItem('cachedVehicles', JSON.stringify(vehicles));
             console.log('Updated vehicle cache in localStorage');
+          }
+        }
+        
+        // Also update sessionStorage
+        const sessionVehicles = sessionStorage.getItem('cabTypes');
+        if (sessionVehicles) {
+          try {
+            const vehicles: CabType[] = JSON.parse(sessionVehicles);
+            const index = vehicles.findIndex(v => v.id === vehicleId || v.vehicleId === vehicleId);
+            
+            if (index >= 0) {
+              // Update existing vehicle
+              vehicles[index] = { 
+                ...vehicles[index], 
+                ...vehicleData,
+                id: vehicleId,
+                vehicleId: vehicleId,
+                isActive: vehicleData.isActive === true || vehicleData.isActive === 1 ? true : false
+              };
+              
+              sessionStorage.setItem('cabTypes', JSON.stringify(vehicles));
+              console.log('Updated vehicle cache in sessionStorage');
+            }
+          } catch (e) {
+            console.error('Error updating session storage vehicles:', e);
           }
         }
         
@@ -331,10 +374,24 @@ export const deleteVehicle = async (vehicleId: string) => {
         
         if (existingVehicles) {
           const vehicles: CabType[] = JSON.parse(existingVehicles);
-          const filteredVehicles = vehicles.filter(v => v.id !== vehicleId);
+          const filteredVehicles = vehicles.filter(v => v.id !== vehicleId && v.vehicleId !== vehicleId);
           
           localStorage.setItem('cachedVehicles', JSON.stringify(filteredVehicles));
           console.log('Updated vehicle cache in localStorage after deletion');
+        }
+        
+        // Also update sessionStorage
+        const sessionVehicles = sessionStorage.getItem('cabTypes');
+        if (sessionVehicles) {
+          try {
+            const vehicles: CabType[] = JSON.parse(sessionVehicles);
+            const filteredVehicles = vehicles.filter(v => v.id !== vehicleId && v.vehicleId !== vehicleId);
+            
+            sessionStorage.setItem('cabTypes', JSON.stringify(filteredVehicles));
+            console.log('Updated vehicle cache in sessionStorage after deletion');
+          } catch (e) {
+            console.error('Error updating session storage vehicles after deletion:', e);
+          }
         }
         
         // Dispatch event to notify other components
@@ -477,7 +534,12 @@ export const syncVehicleData = async (forceRefresh = false) => {
     // Check if sync is already in progress
     if (isSyncing) {
       console.log('Vehicle sync already in progress, skipping duplicate request');
-      return { success: false, alreadyInProgress: true, vehicleCount: 0, responseData: null };
+      return { 
+        success: false, 
+        alreadyInProgress: true,
+        vehicleCount: 0, 
+        responseData: null 
+      };
     }
     
     // If a sync is scheduled but not yet executed, clear it
@@ -498,11 +560,9 @@ export const syncVehicleData = async (forceRefresh = false) => {
           
           // Force cache refresh
           if (forceRefresh) {
-            localStorage.removeItem('cachedVehicles');
             localStorage.removeItem('fareCache');
-            sessionStorage.removeItem('cabTypes');
             localStorage.setItem('forceCacheRefresh', 'true');
-            console.log('Cleared all vehicle and fare caches for forced refresh');
+            console.log('Cleared fare caches for forced refresh');
           }
           
           // Try multiple approaches to ensure sync
@@ -535,7 +595,7 @@ export const syncVehicleData = async (forceRefresh = false) => {
                   capacity: parseInt(v.capacity) || 4,
                   luggageCapacity: parseInt(v.luggageCapacity) || 2,
                   ac: true,
-                  isActive: true,
+                  isActive: v.isActive === false || v.is_active === 0 ? false : true,
                   description: v.description || `${v.name || v.vehicleId} vehicle`,
                   image: v.image || `/cars/${v.vehicleId || 'sedan'}.png`,
                   amenities: ['AC', 'Bottle Water', 'Music System']
@@ -705,16 +765,25 @@ export const syncVehicleData = async (forceRefresh = false) => {
             toast.error('Failed to sync vehicles with the server');
           }
           
-          resolve({ success, responseData, vehicleCount: vehicles.length });
+          // Always include vehicleCount in return value
+          resolve({ 
+            success, 
+            responseData, 
+            vehicleCount: vehicles.length 
+          });
         } catch (error) {
           console.error('Vehicle data synchronization failed:', error);
-          resolve({ success: false, vehicleCount: 0, responseData: null });
+          resolve({ 
+            success: false, 
+            vehicleCount: 0, 
+            responseData: null 
+          });
         } finally {
           // Release sync flags after a short delay
           setTimeout(() => {
             isSyncing = false;
             window.isSyncingVehicleData = false;
-          }, 5000);
+          }, 3000); // Reduce from 5000 to 3000ms
         }
       }, 300); // 300ms debounce
     });
@@ -725,9 +794,13 @@ export const syncVehicleData = async (forceRefresh = false) => {
     setTimeout(() => {
       isSyncing = false;
       window.isSyncingVehicleData = false;
-    }, 5000);
+    }, 3000); // Reduce from 5000 to 3000ms
     
-    return { success: false, vehicleCount: 0, responseData: null };
+    return { 
+      success: false, 
+      vehicleCount: 0, 
+      responseData: null 
+    };
   }
 };
 

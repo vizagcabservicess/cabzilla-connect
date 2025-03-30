@@ -52,7 +52,30 @@ if (strpos($vehicleId, 'item-') === 0) {
 $name = $data['name'] ?? ucfirst(str_replace('_', ' ', $vehicleId));
 $capacity = (int)($data['capacity'] ?? 4);
 $luggageCapacity = (int)($data['luggageCapacity'] ?? 2);
-$isActive = isset($data['isActive']) ? (int)$data['isActive'] : 1;
+
+// Handle boolean or integer isActive values
+$isActive = 1; // Default to active
+if (isset($data['isActive']) || isset($data['is_active'])) {
+    if (isset($data['isActive'])) {
+        if (is_bool($data['isActive'])) {
+            $isActive = $data['isActive'] ? 1 : 0;
+        } else {
+            $isActive = ($data['isActive'] === 'true' || $data['isActive'] === '1' || $data['isActive'] === 1) ? 1 : 0;
+        }
+    } else if (isset($data['is_active'])) {
+        if (is_bool($data['is_active'])) {
+            $isActive = $data['is_active'] ? 1 : 0;
+        } else {
+            $isActive = ($data['is_active'] === 'true' || $data['is_active'] === '1' || $data['is_active'] === 1) ? 1 : 0;
+        }
+    }
+}
+
+// For debugging
+error_log("isActive raw value: " . (isset($data['isActive']) ? var_export($data['isActive'], true) : 'not set'), 3, __DIR__ . '/../../error.log');
+error_log("is_active raw value: " . (isset($data['is_active']) ? var_export($data['is_active'], true) : 'not set'), 3, __DIR__ . '/../../error.log');
+error_log("Final isActive value: $isActive", 3, __DIR__ . '/../../error.log');
+
 $image = $data['image'] ?? '/cars/sedan.png';
 $ac = isset($data['ac']) ? (int)$data['ac'] : 1;
 $description = $data['description'] ?? '';
@@ -290,7 +313,8 @@ try {
     echo json_encode([
         'status' => 'success',
         'message' => $message,
-        'vehicleId' => $vehicleId
+        'vehicleId' => $vehicleId,
+        'isActive' => (bool)$isActive
     ]);
     
     // Dispatch a vehicle refresh event

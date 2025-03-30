@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -220,7 +221,7 @@ const VehicleManagement = () => {
       const result = await syncVehicleData(true);
       
       if (result.success) {
-        const vehicleCount = 'vehicleCount' in result ? result.vehicleCount : 0;
+        const vehicleCount = result.vehicleCount !== undefined ? result.vehicleCount : 0;
         toast.success(`Successfully refreshed vehicle data (${vehicleCount} vehicles)`);
         await fetchVehicles();
       } else {
@@ -266,7 +267,7 @@ const VehicleManagement = () => {
         name: editVehicleName,
         capacity: parseInt(editVehicleCapacity) || 4,
         luggageCapacity: parseInt(editVehicleLuggageCapacity) || 2,
-        image: editVehicleImage,
+        image: editVehicleImage || "/cars/sedan.png",
         description: editVehicleDescription,
         isActive: editVehicleIsActive,
         vehicleId: selectedVehicle.id,
@@ -274,6 +275,8 @@ const VehicleManagement = () => {
         ac: true,
         amenities: selectedVehicle.amenities || ['AC', 'Bottle Water', 'Music System']
       };
+      
+      console.log('Updating vehicle with data:', vehicleData);
       
       const result = await updateVehicle(vehicleData);
       
@@ -287,15 +290,16 @@ const VehicleManagement = () => {
             name: editVehicleName,
             capacity: parseInt(editVehicleCapacity) || 4,
             luggageCapacity: parseInt(editVehicleLuggageCapacity) || 2,
-            image: editVehicleImage,
+            image: editVehicleImage || "/cars/sedan.png",
             description: editVehicleDescription,
             isActive: editVehicleIsActive
           } : v)
         );
         
+        // Add a small delay before syncing to avoid race conditions
         setTimeout(async () => {
           await syncVehicleData(true);
-        }, 2000);
+        }, 1000);
       } else {
         toast.error('Failed to update vehicle');
       }
@@ -317,9 +321,10 @@ const VehicleManagement = () => {
           
           setVehicles(prev => prev.filter(v => v.id !== vehicle.id));
           
+          // Add a small delay before syncing to avoid race conditions
           setTimeout(async () => {
             await syncVehicleData(true);
-          }, 2000);
+          }, 1000);
         } else {
           toast.error('Failed to delete vehicle');
         }
@@ -341,6 +346,8 @@ const VehicleManagement = () => {
         amenities: vehicle.amenities || ['AC', 'Bottle Water', 'Music System']
       };
       
+      console.log('Toggling vehicle active state:', updatedVehicle);
+      
       const result = await updateVehicle(updatedVehicle);
       
       if (result.status === 'success') {
@@ -349,6 +356,11 @@ const VehicleManagement = () => {
         setVehicles(prev => 
           prev.map(v => v.id === vehicle.id ? { ...v, isActive } : v)
         );
+        
+        // Add a small delay before syncing to avoid race conditions
+        setTimeout(async () => {
+          await syncVehicleData(true);
+        }, 1000);
       } else {
         toast.error(`Failed to ${isActive ? 'activate' : 'deactivate'} vehicle`);
       }
@@ -397,9 +409,10 @@ const VehicleManagement = () => {
           vehicleData as ExtendedVehicleType
         ]);
         
+        // Add a small delay before syncing to avoid race conditions
         setTimeout(async () => {
           await syncVehicleData(true);
-        }, 2000);
+        }, 1000);
       } else {
         toast.error('Failed to create vehicle');
       }
