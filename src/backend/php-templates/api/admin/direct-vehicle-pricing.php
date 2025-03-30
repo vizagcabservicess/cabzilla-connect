@@ -53,6 +53,21 @@ try {
     exit;
 }
 
+// Function to ensure table exists
+function ensureTableExists($conn, $tableName, $createSql) {
+    $result = $conn->query("SHOW TABLES LIKE '$tableName'");
+    if ($result && $result->num_rows == 0) {
+        // Table doesn't exist, create it
+        if (!$conn->query($createSql)) {
+            error_log("DIRECT VEHICLE PRICING: Failed to create $tableName table: " . $conn->error);
+            return false;
+        }
+        error_log("DIRECT VEHICLE PRICING: Created $tableName table");
+        return true;
+    }
+    return true;
+}
+
 // Handle POST request to update pricing
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Get raw POST data
@@ -102,193 +117,268 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $nightHaltCharge = isset($data['nightHaltCharge']) ? floatval($data['nightHaltCharge']) : 0;
     $driverAllowance = isset($data['driverAllowance']) ? floatval($data['driverAllowance']) : 0;
     
-    // Check if vehicle exists in vehicle_types
-    $checkStmt = $conn->prepare("SELECT COUNT(*) as count FROM vehicle_types WHERE vehicle_id = ? OR id = ?");
-    if (!$checkStmt) {
-        error_log("DIRECT VEHICLE PRICING: Prepare statement failed for vehicle_types: " . $conn->error);
-        // Try vehicles table instead
-        $checkStmt = $conn->prepare("SELECT COUNT(*) as count FROM vehicles WHERE id = ? OR vehicle_id = ?");
-        if (!$checkStmt) {
-            header('Content-Type: application/json');
-            echo json_encode([
-                'status' => 'error',
-                'message' => 'Database error: ' . $conn->error
-            ]);
-            exit;
+    // Ensure all tables exist before proceeding
+    $vehicle_types_sql = "
+        CREATE TABLE IF NOT EXISTS vehicle_types (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            vehicle_id VARCHAR(50) NOT NULL UNIQUE,
+            name VARCHAR(100) NOT NULL,
+            capacity INT NOT NULL DEFAULT 4,
+            luggage_capacity INT NOT NULL DEFAULT 2,
+            ac TINYINT(1) NOT NULL DEFAULT 1,
+            image VARCHAR(255) DEFAULT '/cars/sedan.png',
+            amenities TEXT DEFAULT NULL,
+            description TEXT DEFAULT NULL,
+            is_active TINYINT(1) NOT NULL DEFAULT 1,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ";
+    
+    $vehicles_sql = "
+        CREATE TABLE IF NOT EXISTS vehicles (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            vehicle_id VARCHAR(50) NOT NULL UNIQUE,
+            name VARCHAR(100) NOT NULL,
+            capacity INT NOT NULL DEFAULT 4,
+            luggage_capacity INT NOT NULL DEFAULT 2,
+            ac TINYINT(1) NOT NULL DEFAULT 1,
+            image VARCHAR(255) DEFAULT '/cars/sedan.png',
+            amenities TEXT DEFAULT NULL,
+            description TEXT DEFAULT NULL,
+            is_active TINYINT(1) NOT NULL DEFAULT 1,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ";
+    
+    $vehicle_pricing_sql = "
+        CREATE TABLE IF NOT EXISTS vehicle_pricing (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            vehicle_id VARCHAR(50) NOT NULL,
+            base_price DECIMAL(10,2) DEFAULT 0,
+            base_fare DECIMAL(10,2) DEFAULT 0,
+            price_per_km DECIMAL(10,2) DEFAULT 0,
+            night_halt_charge DECIMAL(10,2) DEFAULT 0,
+            driver_allowance DECIMAL(10,2) DEFAULT 0,
+            trip_type VARCHAR(50) DEFAULT 'all',
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_vehicle_trip (vehicle_id, trip_type)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ";
+    
+    $outstation_fares_sql = "
+        CREATE TABLE IF NOT EXISTS outstation_fares (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            vehicle_id VARCHAR(50) NOT NULL UNIQUE,
+            base_price DECIMAL(10,2) DEFAULT 0,
+            base_fare DECIMAL(10,2) DEFAULT 0,
+            price_per_km DECIMAL(10,2) DEFAULT 0,
+            night_halt_charge DECIMAL(10,2) DEFAULT 0,
+            driver_allowance DECIMAL(10,2) DEFAULT 0,
+            roundtrip_base_price DECIMAL(10,2) DEFAULT 0,
+            roundtrip_price_per_km DECIMAL(10,2) DEFAULT 0,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ";
+    
+    // Ensure all tables exist
+    ensureTableExists($conn, 'vehicle_types', $vehicle_types_sql);
+    ensureTableExists($conn, 'vehicles', $vehicles_sql);
+    ensureTableExists($conn, 'vehicle_pricing', $vehicle_pricing_sql);
+    ensureTableExists($conn, 'outstation_fares', $outstation_fares_sql);
+    
+    // Check if vehicle exists in both vehicle_types and vehicles tables
+    $checkVehicleTypeStmt = $conn->prepare("SELECT COUNT(*) as count FROM vehicle_types WHERE vehicle_id = ?");
+    $checkVehicleTypeStmt->bind_param("s", $vehicleId);
+    $checkVehicleTypeStmt->execute();
+    $vehicleTypeResult = $checkVehicleTypeStmt->get_result();
+    $vehicleTypeRow = $vehicleTypeResult->fetch_assoc();
+    $vehicleTypeExists = $vehicleTypeRow['count'] > 0;
+    
+    $checkVehicleStmt = $conn->prepare("SELECT COUNT(*) as count FROM vehicles WHERE vehicle_id = ?");
+    $checkVehicleStmt->bind_param("s", $vehicleId);
+    $checkVehicleStmt->execute();
+    $vehicleResult = $checkVehicleStmt->get_result();
+    $vehicleRow = $vehicleResult->fetch_assoc();
+    $vehicleExists = $vehicleRow['count'] > 0;
+    
+    $updates = [];
+    
+    if ($vehicleTypeExists || $vehicleExists) {
+        // Vehicle exists in at least one table, update all tables
+        
+        // Update vehicle_types table if it exists
+        if ($vehicleTypeExists) {
+            $updateStmt = $conn->prepare("
+                UPDATE vehicle_types 
+                SET updated_at = NOW() 
+                WHERE vehicle_id = ?
+            ");
+            
+            if ($updateStmt) {
+                $updateStmt->bind_param("s", $vehicleId);
+                $success = $updateStmt->execute();
+                
+                if ($success) {
+                    $updates[] = "vehicle_types";
+                }
+            }
+        } else {
+            // Insert into vehicle_types if not exists
+            $name = ucfirst(str_replace('_', ' ', $vehicleId));
+            $description = $name . " vehicle";
+            $amenities = json_encode(['AC', 'Bottle Water', 'Music System']);
+            
+            $insertStmt = $conn->prepare("
+                INSERT INTO vehicle_types 
+                (vehicle_id, name, capacity, luggage_capacity, ac, image, amenities, description, is_active) 
+                VALUES (?, ?, 4, 2, 1, '/cars/sedan.png', ?, ?, 1)
+            ");
+            
+            if ($insertStmt) {
+                $insertStmt->bind_param("ssss", $vehicleId, $name, $amenities, $description);
+                $success = $insertStmt->execute();
+                
+                if ($success) {
+                    $updates[] = "vehicle_types (new)";
+                }
+            }
         }
-    }
-    
-    $checkStmt->bind_param("ss", $vehicleId, $vehicleId);
-    $checkStmt->execute();
-    $checkResult = $checkStmt->get_result();
-    $row = $checkResult->fetch_assoc();
-    $vehicleExists = $row['count'] > 0;
-    
-    // Check if vehicle_pricing table exists and create if needed
-    $pricingTableExists = false;
-    $result = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'");
-    if ($result && $result->num_rows > 0) {
-        $pricingTableExists = true;
-    } else {
-        // Create vehicle_pricing table if it doesn't exist
-        $conn->query("
-            CREATE TABLE IF NOT EXISTS vehicle_pricing (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                vehicle_id VARCHAR(50) NOT NULL,
-                base_price DECIMAL(10,2) DEFAULT 0,
-                price_per_km DECIMAL(10,2) DEFAULT 0,
-                night_halt_charge DECIMAL(10,2) DEFAULT 0,
-                driver_allowance DECIMAL(10,2) DEFAULT 0,
-                trip_type VARCHAR(50) DEFAULT 'all',
-                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                UNIQUE KEY unique_vehicle_trip (vehicle_id, trip_type)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-        ");
         
-        // Also create with alternate column name for backwards compatibility
-        $conn->query("
-            ALTER TABLE vehicle_pricing 
-            ADD COLUMN IF NOT EXISTS base_fare DECIMAL(10,2) DEFAULT 0
-            AFTER trip_type
-        ");
+        // Update vehicles table if it exists
+        if ($vehicleExists) {
+            $updateStmt = $conn->prepare("
+                UPDATE vehicles 
+                SET updated_at = NOW() 
+                WHERE vehicle_id = ?
+            ");
+            
+            if ($updateStmt) {
+                $updateStmt->bind_param("s", $vehicleId);
+                $success = $updateStmt->execute();
+                
+                if ($success) {
+                    $updates[] = "vehicles";
+                }
+            }
+        } else {
+            // Insert into vehicles if not exists
+            $name = ucfirst(str_replace('_', ' ', $vehicleId));
+            $description = $name . " vehicle";
+            $amenities = json_encode(['AC', 'Bottle Water', 'Music System']);
+            
+            $insertStmt = $conn->prepare("
+                INSERT INTO vehicles 
+                (vehicle_id, name, capacity, luggage_capacity, ac, image, amenities, description, is_active) 
+                VALUES (?, ?, 4, 2, 1, '/cars/sedan.png', ?, ?, 1)
+            ");
+            
+            if ($insertStmt) {
+                $insertStmt->bind_param("ssss", $vehicleId, $name, $amenities, $description);
+                $success = $insertStmt->execute();
+                
+                if ($success) {
+                    $updates[] = "vehicles (new)";
+                }
+            }
+        }
         
-        $pricingTableExists = true;
-        error_log("DIRECT VEHICLE PRICING: Created vehicle_pricing table");
-    }
-    
-    // Check if outstation_fares table exists and create if needed
-    $outstationTableExists = false;
-    $result = $conn->query("SHOW TABLES LIKE 'outstation_fares'");
-    if ($result && $result->num_rows > 0) {
-        $outstationTableExists = true;
-    } else {
-        // Create outstation_fares table
-        $conn->query("
-            CREATE TABLE IF NOT EXISTS outstation_fares (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                vehicle_id VARCHAR(50) NOT NULL UNIQUE,
-                base_fare DECIMAL(10,2) DEFAULT 0,
-                price_per_km DECIMAL(10,2) DEFAULT 0,
-                night_halt_charge DECIMAL(10,2) DEFAULT 0,
-                driver_allowance DECIMAL(10,2) DEFAULT 0,
-                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-        ");
+        // Update vehicle_pricing table - 3 entries for outstation, local, airport
+        $tripTypes = ['outstation', 'local', 'airport'];
         
-        // Add base_price column for backwards compatibility
-        $conn->query("
-            ALTER TABLE outstation_fares 
-            ADD COLUMN IF NOT EXISTS base_price DECIMAL(10,2) DEFAULT 0
-            AFTER vehicle_id
-        ");
-        
-        $outstationTableExists = true;
-        error_log("DIRECT VEHICLE PRICING: Created outstation_fares table");
-    }
-    
-    if ($vehicleExists) {
-        $updates = [];
-        
-        // Update vehicle_pricing table
-        if ($pricingTableExists) {
-            $checkPricingStmt = $conn->prepare("SELECT COUNT(*) as count FROM vehicle_pricing WHERE vehicle_id = ? AND trip_type = 'all'");
-            $checkPricingStmt->bind_param("s", $vehicleId);
+        foreach ($tripTypes as $tripType) {
+            $checkPricingStmt = $conn->prepare("SELECT COUNT(*) as count FROM vehicle_pricing WHERE vehicle_id = ? AND trip_type = ?");
+            $checkPricingStmt->bind_param("ss", $vehicleId, $tripType);
             $checkPricingStmt->execute();
             $pricingResult = $checkPricingStmt->get_result();
             $pricingRow = $pricingResult->fetch_assoc();
             
             if ($pricingRow['count'] > 0) {
-                // Update existing pricing - use both base_price and base_fare
+                // Update existing pricing entry
                 $updateStmt = $conn->prepare("
                     UPDATE vehicle_pricing 
                     SET base_price = ?, base_fare = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?, updated_at = NOW() 
-                    WHERE vehicle_id = ? AND trip_type = 'all'
+                    WHERE vehicle_id = ? AND trip_type = ?
                 ");
                 
-                if (!$updateStmt) {
-                    error_log("DIRECT VEHICLE PRICING: Update prepare failed for vehicle_pricing: " . $conn->error);
-                } else {
-                    $updateStmt->bind_param("ddddds", $basePrice, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, $vehicleId);
+                if ($updateStmt) {
+                    $updateStmt->bind_param("dddddss", $basePrice, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, $vehicleId, $tripType);
                     $success = $updateStmt->execute();
                     
                     if ($success) {
-                        $updates[] = "vehicle_pricing";
-                    } else {
-                        error_log("DIRECT VEHICLE PRICING: Update execute failed for vehicle_pricing: " . $updateStmt->error);
+                        $updates[] = "vehicle_pricing ($tripType)";
                     }
                 }
             } else {
-                // Insert new pricing - use both base_price and base_fare
+                // Insert new pricing entry
                 $insertStmt = $conn->prepare("
                     INSERT INTO vehicle_pricing 
-                    (vehicle_id, base_price, base_fare, price_per_km, night_halt_charge, driver_allowance, trip_type, created_at, updated_at) 
-                    VALUES (?, ?, ?, ?, ?, ?, 'all', NOW(), NOW())
+                    (vehicle_id, base_price, base_fare, price_per_km, night_halt_charge, driver_allowance, trip_type) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                 ");
                 
-                if (!$insertStmt) {
-                    error_log("DIRECT VEHICLE PRICING: Insert prepare failed for vehicle_pricing: " . $conn->error);
-                } else {
-                    $insertStmt->bind_param("sddddd", $vehicleId, $basePrice, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
+                if ($insertStmt) {
+                    $insertStmt->bind_param("sddddds", $vehicleId, $basePrice, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, $tripType);
                     $success = $insertStmt->execute();
                     
                     if ($success) {
-                        $updates[] = "vehicle_pricing (new)";
-                    } else {
-                        error_log("DIRECT VEHICLE PRICING: Insert execute failed for vehicle_pricing: " . $insertStmt->error);
+                        $updates[] = "vehicle_pricing ($tripType) (new)";
                     }
                 }
             }
         }
         
-        // Update outstation_fares table if it exists
-        if ($outstationTableExists) {
-            $checkOutstationStmt = $conn->prepare("SELECT COUNT(*) as count FROM outstation_fares WHERE vehicle_id = ?");
-            $checkOutstationStmt->bind_param("s", $vehicleId);
-            $checkOutstationStmt->execute();
-            $outstationResult = $checkOutstationStmt->get_result();
-            $outstationRow = $outstationResult->fetch_assoc();
+        // Update outstation_fares table
+        $checkOutstationStmt = $conn->prepare("SELECT COUNT(*) as count FROM outstation_fares WHERE vehicle_id = ?");
+        $checkOutstationStmt->bind_param("s", $vehicleId);
+        $checkOutstationStmt->execute();
+        $outstationResult = $checkOutstationStmt->get_result();
+        $outstationRow = $outstationResult->fetch_assoc();
+        
+        if ($outstationRow['count'] > 0) {
+            // Update existing outstation fare
+            $updateStmt = $conn->prepare("
+                UPDATE outstation_fares 
+                SET base_fare = ?, base_price = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?, 
+                    roundtrip_base_price = ?, roundtrip_price_per_km = ?, updated_at = NOW() 
+                WHERE vehicle_id = ?
+            ");
             
-            if ($outstationRow['count'] > 0) {
-                // Update existing outstation fare - use both base_price and base_fare
-                $updateStmt = $conn->prepare("
-                    UPDATE outstation_fares 
-                    SET base_fare = ?, base_price = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?, updated_at = NOW() 
-                    WHERE vehicle_id = ?
-                ");
+            // Calculate roundtrip prices (slightly reduced)
+            $roundtripBasePrice = $basePrice * 0.95;
+            $roundtripPricePerKm = $pricePerKm * 0.85;
+            
+            if ($updateStmt) {
+                $updateStmt->bind_param("ddddddds", $basePrice, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, 
+                                      $roundtripBasePrice, $roundtripPricePerKm, $vehicleId);
+                $success = $updateStmt->execute();
                 
-                if (!$updateStmt) {
-                    error_log("DIRECT VEHICLE PRICING: Update prepare failed for outstation_fares: " . $conn->error);
-                } else {
-                    $updateStmt->bind_param("ddddds", $basePrice, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, $vehicleId);
-                    $success = $updateStmt->execute();
-                    
-                    if ($success) {
-                        $updates[] = "outstation_fares";
-                    } else {
-                        error_log("DIRECT VEHICLE PRICING: Update execute failed for outstation_fares: " . $updateStmt->error);
-                    }
+                if ($success) {
+                    $updates[] = "outstation_fares";
                 }
-            } else {
-                // Insert new outstation fare - use both base_price and base_fare
-                $insertStmt = $conn->prepare("
-                    INSERT INTO outstation_fares 
-                    (vehicle_id, base_fare, base_price, price_per_km, night_halt_charge, driver_allowance) 
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ");
+            }
+        } else {
+            // Insert new outstation fare
+            $insertStmt = $conn->prepare("
+                INSERT INTO outstation_fares 
+                (vehicle_id, base_fare, base_price, price_per_km, night_halt_charge, driver_allowance, roundtrip_base_price, roundtrip_price_per_km) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            
+            // Calculate roundtrip prices (slightly reduced)
+            $roundtripBasePrice = $basePrice * 0.95;
+            $roundtripPricePerKm = $pricePerKm * 0.85;
+            
+            if ($insertStmt) {
+                $insertStmt->bind_param("sddddddd", $vehicleId, $basePrice, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, 
+                                      $roundtripBasePrice, $roundtripPricePerKm);
+                $success = $insertStmt->execute();
                 
-                if (!$insertStmt) {
-                    error_log("DIRECT VEHICLE PRICING: Insert prepare failed for outstation_fares: " . $conn->error);
-                } else {
-                    $insertStmt->bind_param("sddddd", $vehicleId, $basePrice, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
-                    $success = $insertStmt->execute();
-                    
-                    if ($success) {
-                        $updates[] = "outstation_fares (new)";
-                    } else {
-                        error_log("DIRECT VEHICLE PRICING: Insert execute failed for outstation_fares: " . $insertStmt->error);
-                    }
+                if ($success) {
+                    $updates[] = "outstation_fares (new)";
                 }
             }
         }
@@ -318,6 +408,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $vehicle['pricePerKm'] = $pricePerKm;
                     $vehicle['nightHaltCharge'] = $nightHaltCharge;
                     $vehicle['driverAllowance'] = $driverAllowance;
+                    $vehicle['isActive'] = true;
                     $vehicleUpdated = true;
                     break;
                 }
@@ -325,52 +416,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             // If vehicle wasn't found in the array, get it from database and append
             if (!$vehicleUpdated) {
-                $getVehicleStmt = $conn->prepare("
-                    SELECT * FROM vehicle_types WHERE vehicle_id = ? OR id = ?
-                ");
+                // Create a default vehicle
+                $name = ucfirst(str_replace('_', ' ', $vehicleId));
                 
-                if ($getVehicleStmt) {
-                    $getVehicleStmt->bind_param("ss", $vehicleId, $vehicleId);
-                    $getVehicleStmt->execute();
-                    $vehicleResult = $getVehicleStmt->get_result();
-                    
-                    if ($vehicleResult && $vehicleResult->num_rows > 0) {
-                        $vehicleData = $vehicleResult->fetch_assoc();
-                        
-                        // Parse amenities
-                        $amenities = [];
-                        if (!empty($vehicleData['amenities'])) {
-                            $decoded = json_decode($vehicleData['amenities'], true);
-                            if (json_last_error() === JSON_ERROR_NONE) {
-                                $amenities = $decoded;
-                            } else {
-                                $amenities = array_map('trim', explode(',', $vehicleData['amenities']));
-                            }
-                        }
-                        
-                        // Create new vehicle entry
-                        $newVehicle = [
-                            'id' => $vehicleId,
-                            'vehicleId' => $vehicleId,
-                            'name' => $vehicleData['name'] ?? 'Unknown Vehicle',
-                            'capacity' => intval($vehicleData['capacity'] ?? 4),
-                            'luggageCapacity' => intval($vehicleData['luggage_capacity'] ?? 2),
-                            'basePrice' => $basePrice,
-                            'price' => $basePrice,
-                            'pricePerKm' => $pricePerKm,
-                            'nightHaltCharge' => $nightHaltCharge,
-                            'driverAllowance' => $driverAllowance,
-                            'image' => $vehicleData['image'] ?? '/cars/sedan.png',
-                            'amenities' => $amenities,
-                            'description' => $vehicleData['description'] ?? '',
-                            'ac' => (bool)($vehicleData['ac'] ?? 1),
-                            'isActive' => (bool)($vehicleData['is_active'] ?? 1)
-                        ];
-                        
-                        $vehicles[] = $newVehicle;
-                        $updates[] = "JSON file (new vehicle)";
-                    }
-                }
+                // Create new vehicle entry
+                $newVehicle = [
+                    'id' => $vehicleId,
+                    'vehicleId' => $vehicleId,
+                    'name' => $name,
+                    'capacity' => 4,
+                    'luggageCapacity' => 2,
+                    'basePrice' => $basePrice,
+                    'price' => $basePrice,
+                    'pricePerKm' => $pricePerKm,
+                    'nightHaltCharge' => $nightHaltCharge,
+                    'driverAllowance' => $driverAllowance,
+                    'image' => '/cars/sedan.png',
+                    'amenities' => ['AC', 'Bottle Water', 'Music System'],
+                    'description' => $name . ' vehicle',
+                    'ac' => true,
+                    'isActive' => true
+                ];
+                
+                $vehicles[] = $newVehicle;
+                $updates[] = "JSON file (new vehicle)";
             } else {
                 $updates[] = "JSON file (updated)";
             }
@@ -386,6 +455,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             error_log("DIRECT VEHICLE PRICING: Error updating JSON file: " . $e->getMessage());
         }
         
+        // Force sync with outstation_fares table
+        try {
+            $forceSyncUrl = str_replace('direct-vehicle-pricing.php', 'force-sync-outstation-fares.php', $_SERVER['PHP_SELF']);
+            $forceSyncUrl = str_replace($_SERVER['QUERY_STRING'], '', $forceSyncUrl);
+            $forceSyncUrl .= "?vehicle_id=$vehicleId&_t=" . time();
+            
+            error_log("DIRECT VEHICLE PRICING: Forcing sync with outstation_fares: $forceSyncUrl");
+            
+            $ch = curl_init($forceSyncUrl);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+            $syncResult = curl_exec($ch);
+            curl_close($ch);
+            
+            error_log("DIRECT VEHICLE PRICING: Sync result: $syncResult");
+            $updates[] = "Synced with outstation_fares";
+        } catch (Exception $e) {
+            error_log("DIRECT VEHICLE PRICING: Error syncing with outstation_fares: " . $e->getMessage());
+        }
+        
         // Trigger vehicle data refresh events
         try {
             // Dispatch a vehicle data refreshed event to notify the frontend
@@ -393,6 +482,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <script>
                     if (window.parent && window.parent.dispatchEvent) {
                         window.parent.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
+                            detail: {
+                                vehicleId: '$vehicleId',
+                                timestamp: " . time() . "
+                            }
+                        }));
+                        
+                        window.parent.dispatchEvent(new CustomEvent('fare-cache-cleared', {
+                            detail: {
+                                timestamp: " . time() . "
+                            }
+                        }));
+                        
+                        window.parent.dispatchEvent(new CustomEvent('fare-data-updated', {
                             detail: {
                                 vehicleId: '$vehicleId',
                                 timestamp: " . time() . "
@@ -417,153 +519,203 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'driverAllowance' => $driverAllowance
         ]);
     } else {
-        // Vehicle doesn't exist, create it in vehicle_types table
+        // Vehicle doesn't exist, create it in all tables
         $name = ucfirst(str_replace('_', ' ', $vehicleId));
+        $description = $name . " vehicle";
+        $amenities = json_encode(['AC', 'Bottle Water', 'Music System']);
         
-        // Check if vehicle_types table exists
-        $tableExists = false;
-        $result = $conn->query("SHOW TABLES LIKE 'vehicle_types'");
-        if ($result && $result->num_rows > 0) {
-            $tableExists = true;
+        // Insert into vehicle_types table
+        $insertVehicleTypeStmt = $conn->prepare("
+            INSERT INTO vehicle_types 
+            (vehicle_id, name, capacity, luggage_capacity, ac, image, amenities, description, is_active) 
+            VALUES (?, ?, 4, 2, 1, '/cars/sedan.png', ?, ?, 1)
+        ");
+        
+        if (!$insertVehicleTypeStmt) {
+            error_log("DIRECT VEHICLE PRICING: Insert prepare failed for vehicle_types: " . $conn->error);
         } else {
-            // Create vehicle_types table if it doesn't exist
-            $conn->query("
-                CREATE TABLE IF NOT EXISTS vehicle_types (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    vehicle_id VARCHAR(50) NOT NULL UNIQUE,
-                    name VARCHAR(100) NOT NULL,
-                    capacity INT NOT NULL DEFAULT 4,
-                    luggage_capacity INT NOT NULL DEFAULT 2,
-                    ac TINYINT(1) NOT NULL DEFAULT 1,
-                    image VARCHAR(255) DEFAULT '/cars/sedan.png',
-                    amenities TEXT DEFAULT NULL,
-                    description TEXT DEFAULT NULL,
-                    is_active TINYINT(1) NOT NULL DEFAULT 1,
-                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-            ");
-            $tableExists = true;
-            error_log("DIRECT VEHICLE PRICING: Created vehicle_types table");
+            $insertVehicleTypeStmt->bind_param("ssss", $vehicleId, $name, $amenities, $description);
+            $success = $insertVehicleTypeStmt->execute();
+            
+            if ($success) {
+                $updates[] = "vehicle_types";
+            } else {
+                error_log("DIRECT VEHICLE PRICING: Insert execute failed for vehicle_types: " . $insertVehicleTypeStmt->error);
+            }
         }
         
-        if ($tableExists) {
-            // Insert new vehicle
-            $insertStmt = $conn->prepare("
-                INSERT INTO vehicle_types 
-                (vehicle_id, name, capacity, luggage_capacity, ac, is_active) 
-                VALUES (?, ?, 4, 2, 1, 1)
+        // Insert into vehicles table
+        $insertVehicleStmt = $conn->prepare("
+            INSERT INTO vehicles 
+            (vehicle_id, name, capacity, luggage_capacity, ac, image, amenities, description, is_active) 
+            VALUES (?, ?, 4, 2, 1, '/cars/sedan.png', ?, ?, 1)
+        ");
+        
+        if (!$insertVehicleStmt) {
+            error_log("DIRECT VEHICLE PRICING: Insert prepare failed for vehicles: " . $conn->error);
+        } else {
+            $insertVehicleStmt->bind_param("ssss", $vehicleId, $name, $amenities, $description);
+            $success = $insertVehicleStmt->execute();
+            
+            if ($success) {
+                $updates[] = "vehicles";
+            } else {
+                error_log("DIRECT VEHICLE PRICING: Insert execute failed for vehicles: " . $insertVehicleStmt->error);
+            }
+        }
+        
+        // Insert into vehicle_pricing table - 3 entries for outstation, local, airport
+        $tripTypes = ['outstation', 'local', 'airport'];
+        
+        foreach ($tripTypes as $tripType) {
+            $insertPricingStmt = $conn->prepare("
+                INSERT INTO vehicle_pricing 
+                (vehicle_id, base_price, base_fare, price_per_km, night_halt_charge, driver_allowance, trip_type) 
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             ");
             
-            if (!$insertStmt) {
-                error_log("DIRECT VEHICLE PRICING: Insert prepare failed for vehicle_types: " . $conn->error);
-                header('Content-Type: application/json');
-                echo json_encode([
-                    'status' => 'error',
-                    'message' => 'Database error: ' . $conn->error
-                ]);
-                exit;
-            }
-            
-            $insertStmt->bind_param("ss", $vehicleId, $name);
-            $success = $insertStmt->execute();
-            
-            if (!$success) {
-                error_log("DIRECT VEHICLE PRICING: Insert execute failed for vehicle_types: " . $insertStmt->error);
-                header('Content-Type: application/json');
-                echo json_encode([
-                    'status' => 'error',
-                    'message' => 'Database error: ' . $insertStmt->error
-                ]);
-                exit;
-            }
-            
-            // Also insert pricing
-            if ($pricingTableExists) {
-                $insertPricingStmt = $conn->prepare("
-                    INSERT INTO vehicle_pricing 
-                    (vehicle_id, base_price, base_fare, price_per_km, night_halt_charge, driver_allowance, trip_type) 
-                    VALUES (?, ?, ?, ?, ?, ?, 'all')
-                ");
+            if ($insertPricingStmt) {
+                $insertPricingStmt->bind_param("sddddds", $vehicleId, $basePrice, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, $tripType);
+                $success = $insertPricingStmt->execute();
                 
-                if ($insertPricingStmt) {
-                    $insertPricingStmt->bind_param("sddddd", $vehicleId, $basePrice, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
-                    $insertPricingStmt->execute();
+                if ($success) {
+                    $updates[] = "vehicle_pricing ($tripType)";
                 }
             }
+        }
+        
+        // Insert into outstation_fares table
+        $insertOutstationStmt = $conn->prepare("
+            INSERT INTO outstation_fares 
+            (vehicle_id, base_fare, base_price, price_per_km, night_halt_charge, driver_allowance, roundtrip_base_price, roundtrip_price_per_km) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ");
+        
+        // Calculate roundtrip prices (slightly reduced)
+        $roundtripBasePrice = $basePrice * 0.95;
+        $roundtripPricePerKm = $pricePerKm * 0.85;
+        
+        if ($insertOutstationStmt) {
+            $insertOutstationStmt->bind_param("sddddddd", $vehicleId, $basePrice, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, 
+                                          $roundtripBasePrice, $roundtripPricePerKm);
+            $success = $insertOutstationStmt->execute();
             
-            // If outstation_fares exists, add there too
-            if ($outstationTableExists) {
-                $insertOutstationStmt = $conn->prepare("
-                    INSERT INTO outstation_fares 
-                    (vehicle_id, base_fare, base_price, price_per_km, night_halt_charge, driver_allowance) 
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ");
-                
-                if ($insertOutstationStmt) {
-                    $insertOutstationStmt->bind_param("sddddd", $vehicleId, $basePrice, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
-                    $insertOutstationStmt->execute();
-                }
+            if ($success) {
+                $updates[] = "outstation_fares";
             }
+        }
+        
+        // Also update JSON file
+        try {
+            $jsonFile = __DIR__ . '/../../../data/vehicles.json';
+            $vehicles = [];
             
-            // Also update JSON file
-            try {
-                $jsonFile = __DIR__ . '/../../../data/vehicles.json';
-                $vehicles = [];
-                
-                if (file_exists($jsonFile)) {
-                    $content = file_get_contents($jsonFile);
-                    if (!empty($content)) {
-                        $jsonData = json_decode($content, true);
-                        if (json_last_error() === JSON_ERROR_NONE && !empty($jsonData)) {
-                            $vehicles = $jsonData;
-                        }
+            if (file_exists($jsonFile)) {
+                $content = file_get_contents($jsonFile);
+                if (!empty($content)) {
+                    $jsonData = json_decode($content, true);
+                    if (json_last_error() === JSON_ERROR_NONE && !empty($jsonData)) {
+                        $vehicles = $jsonData;
                     }
                 }
-                
-                // Create new vehicle entry
-                $newVehicle = [
-                    'id' => $vehicleId,
-                    'vehicleId' => $vehicleId,
-                    'name' => $name,
-                    'capacity' => 4,
-                    'luggageCapacity' => 2,
-                    'basePrice' => $basePrice,
-                    'price' => $basePrice,
-                    'pricePerKm' => $pricePerKm,
-                    'nightHaltCharge' => $nightHaltCharge,
-                    'driverAllowance' => $driverAllowance,
-                    'image' => '/cars/sedan.png',
-                    'amenities' => ['AC', 'Bottle Water', 'Music System'],
-                    'description' => $name . ' vehicle',
-                    'ac' => true,
-                    'isActive' => true
-                ];
-                
-                $vehicles[] = $newVehicle;
-                
-                // Save the updated vehicles back to the JSON file
-                file_put_contents($jsonFile, json_encode($vehicles, JSON_PRETTY_PRINT));
-                
-                // Create/update the cache invalidation marker
-                $cacheMarkerFile = __DIR__ . '/../../../data/vehicle_cache_invalidated.txt';
-                file_put_contents($cacheMarkerFile, time());
-                
-            } catch (Exception $e) {
-                error_log("DIRECT VEHICLE PRICING: Error updating JSON file with new vehicle: " . $e->getMessage());
             }
             
-            header('Content-Type: application/json');
-            echo json_encode([
-                'status' => 'success',
-                'message' => 'New vehicle added successfully',
+            // Create new vehicle entry
+            $newVehicle = [
+                'id' => $vehicleId,
                 'vehicleId' => $vehicleId,
+                'name' => $name,
+                'capacity' => 4,
+                'luggageCapacity' => 2,
                 'basePrice' => $basePrice,
+                'price' => $basePrice,
                 'pricePerKm' => $pricePerKm,
                 'nightHaltCharge' => $nightHaltCharge,
-                'driverAllowance' => $driverAllowance
-            ]);
+                'driverAllowance' => $driverAllowance,
+                'image' => '/cars/sedan.png',
+                'amenities' => ['AC', 'Bottle Water', 'Music System'],
+                'description' => $name . ' vehicle',
+                'ac' => true,
+                'isActive' => true
+            ];
+            
+            $vehicles[] = $newVehicle;
+            
+            // Save the updated vehicles back to the JSON file
+            file_put_contents($jsonFile, json_encode($vehicles, JSON_PRETTY_PRINT));
+            
+            // Create/update the cache invalidation marker
+            $cacheMarkerFile = __DIR__ . '/../../../data/vehicle_cache_invalidated.txt';
+            file_put_contents($cacheMarkerFile, time());
+            
+            $updates[] = "JSON file";
+        } catch (Exception $e) {
+            error_log("DIRECT VEHICLE PRICING: Error updating JSON file with new vehicle: " . $e->getMessage());
         }
+        
+        // Force sync with outstation_fares table
+        try {
+            $forceSyncUrl = str_replace('direct-vehicle-pricing.php', 'force-sync-outstation-fares.php', $_SERVER['PHP_SELF']);
+            $forceSyncUrl = str_replace($_SERVER['QUERY_STRING'], '', $forceSyncUrl);
+            $forceSyncUrl .= "?vehicle_id=$vehicleId&_t=" . time();
+            
+            error_log("DIRECT VEHICLE PRICING: Forcing sync with outstation_fares: $forceSyncUrl");
+            
+            $ch = curl_init($forceSyncUrl);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+            $syncResult = curl_exec($ch);
+            curl_close($ch);
+            
+            error_log("DIRECT VEHICLE PRICING: Sync result: $syncResult");
+            $updates[] = "Synced with outstation_fares";
+        } catch (Exception $e) {
+            error_log("DIRECT VEHICLE PRICING: Error syncing with outstation_fares: " . $e->getMessage());
+        }
+        
+        // Trigger vehicle data refresh events
+        try {
+            // Dispatch a vehicle data refreshed event to notify the frontend
+            echo "
+                <script>
+                    if (window.parent && window.parent.dispatchEvent) {
+                        window.parent.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
+                            detail: {
+                                vehicleId: '$vehicleId',
+                                timestamp: " . time() . "
+                            }
+                        }));
+                        
+                        window.parent.dispatchEvent(new CustomEvent('fare-cache-cleared', {
+                            detail: {
+                                timestamp: " . time() . "
+                            }
+                        }));
+                        
+                        window.parent.dispatchEvent(new CustomEvent('fare-data-updated', {
+                            detail: {
+                                vehicleId: '$vehicleId',
+                                timestamp: " . time() . "
+                            }
+                        }));
+                    }
+                </script>
+            ";
+        } catch (Exception $e) {
+            error_log("DIRECT VEHICLE PRICING: Error dispatching event: " . $e->getMessage());
+        }
+        
+        header('Content-Type: application/json');
+        echo json_encode([
+            'status' => 'success',
+            'message' => 'New vehicle added successfully',
+            'vehicleId' => $vehicleId,
+            'basePrice' => $basePrice,
+            'pricePerKm' => $pricePerKm,
+            'nightHaltCharge' => $nightHaltCharge,
+            'driverAllowance' => $driverAllowance,
+            'updates' => $updates
+        ]);
     }
 } else {
     // Handle GET or other methods

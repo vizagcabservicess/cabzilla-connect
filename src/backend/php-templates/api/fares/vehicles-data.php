@@ -19,7 +19,7 @@ header('Expires: 0');
 
 // Add extra cache busting headers
 header('X-Cache-Timestamp: ' . time());
-header('X-API-Version: '.'1.0.8'); // Updated version number
+header('X-API-Version: '.'1.0.9'); // Updated version number
 
 // Respond to preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -30,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // Log the request for debugging
 $requestDetails = [
     'method' => $_SERVER['REQUEST_METHOD'],
-    'query_string' => $_SERVER['QUERY_STRING'],
+    'query_string' => $_SERVER['QUERY_STRING'] ?? '',
     'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown',
     'includeInactive' => isset($_GET['includeInactive']) ? $_GET['includeInactive'] : 'false',
     'timestamp' => time()
@@ -304,7 +304,7 @@ try {
                 'timestamp' => time(),
                 'cached' => true,
                 'source' => 'json',
-                'version' => '1.0.8', // Updated version
+                'version' => '1.0.9', // Updated version
                 'includeInactive' => $includeInactive
             ]);
             exit;
@@ -339,130 +339,103 @@ try {
         exit;
     }
     
-    // Initialize list of tables to check
-    $vehicleTables = ['vehicle_types', 'vehicles'];
-    $vehicleTableToUse = null;
+    // We'll gather vehicles from both vehicle_types and vehicles tables
+    $allVehicles = [];
+    $vehicleIds = [];
     
-    // Check which vehicle table exists and use that
-    foreach ($vehicleTables as $tableName) {
-        if (tableExists($conn, $tableName)) {
-            $vehicleTableToUse = $tableName;
-            break;
-        }
-    }
-    
-    if (!$vehicleTableToUse) {
-        // No vehicle tables found, use JSON vehicles if available
-        if (!empty($jsonVehicles)) {
-            echo json_encode([
-                'vehicles' => $jsonVehicles,
-                'timestamp' => time(),
-                'cached' => true,
-                'source' => 'json-fallback',
-                'fallback' => true
-            ]);
-            exit;
+    // First get vehicles from vehicle_types table
+    if (tableExists($conn, 'vehicle_types')) {
+        error_log("Getting vehicles from vehicle_types table");
+        
+        // Build query to get all vehicles or only active ones
+        $query = "SELECT * FROM vehicle_types";
+        
+        // Only add the WHERE clause if we're not including inactive vehicles
+        if (!$includeInactive && columnExists($conn, 'vehicle_types', 'is_active')) {
+            $query .= " WHERE is_active = 1";
         }
         
-        throw new Exception("No vehicle tables found in database");
-    }
-    
-    error_log("Using $vehicleTableToUse table for vehicle data");
-    
-    // Build query to get vehicle types based on which table exists
-    // Get all fields directly from the vehicle table instead of joining
-    $query = "SELECT * FROM $vehicleTableToUse";
-    
-    // Only add the WHERE clause if we're not including inactive vehicles
-    if (!$includeInactive && columnExists($conn, $vehicleTableToUse, 'is_active')) {
-        $query .= " WHERE is_active = 1";
-    }
-    
-    $query .= " ORDER BY name";
-    
-    error_log("vehicles-data.php query: " . $query);
-    
-    $result = $conn->query($query);
-    
-    if (!$result) {
-        throw new Exception("Database query failed: " . $conn->error);
-    }
-
-    $vehicles = [];
-    while ($row = $result->fetch_assoc()) {
-        // Get vehicle ID based on table schema
-        $vehicleId = $row['vehicle_id'] ?? $row['id'] ?? null;
+        $query .= " ORDER BY name";
         
-        if (!$vehicleId) {
-            error_log("Skipping vehicle with no valid ID: " . json_encode($row));
-            continue;
-        }
+        error_log("vehicle_types query: " . $query);
         
-        // Get specialized fare data for this vehicle
-        $fareData = getSpecializedFareData($conn, $vehicleId);
+        $result = $conn->query($query);
         
-        // Parse amenities from JSON string or comma-separated list
-        $amenities = [];
-        if (!empty($row['amenities'])) {
-            $decoded = json_decode($row['amenities'], true);
-            if (json_last_error() === JSON_ERROR_NONE) {
-                $amenities = $decoded;
-            } else {
-                $amenities = array_map('trim', explode(',', $row['amenities']));
-            }
-        }
-        
-        // Ensure name is always a string, use vehicle_id as fallback
-        $name = $row['name'] ?? '';
-        if (empty($name) || $name === '0') {
-            $name = "Vehicle ID: " . $vehicleId;
-        }
-        
-        // Ensure proper handling of is_active field
-        $isActive = true; // Default to active
-        if (isset($row['is_active'])) {
-            $isActive = (bool)(int)$row['is_active'];
-        }
-        
-        error_log("Vehicle $vehicleId ($name) is_active: " . ($isActive ? 'true' : 'false'));
-        
-        // Format vehicle data with consistent property names for frontend
-        $vehicle = [
-            'id' => (string)$vehicleId,
-            'name' => $name,
-            'capacity' => intval($row['capacity'] ?? $row['seats'] ?? 4),
-            'luggageCapacity' => intval($row['luggage_capacity'] ?? $row['luggage'] ?? 2),
-            'image' => normalizeImagePath($row['image'] ?? '/cars/sedan.png'),
-            'amenities' => $amenities,
-            'description' => $row['description'] ?? '',
-            'ac' => (bool)($row['ac'] ?? 1),
-            'isActive' => $isActive,
-            'vehicleId' => (string)$vehicleId
-        ];
-        
-        // Include outstation fare data if available
-        if ($fareData['outstation']) {
-            $vehicle['outstationFares'] = $fareData['outstation'];
-            $vehicle['basePrice'] = floatval($fareData['outstation']['basePrice'] ?? 0);
-            $vehicle['price'] = floatval($fareData['outstation']['basePrice'] ?? 0);
-            $vehicle['pricePerKm'] = floatval($fareData['outstation']['pricePerKm'] ?? 0);
-            $vehicle['nightHaltCharge'] = floatval($fareData['outstation']['nightHaltCharge'] ?? 0);
-            $vehicle['driverAllowance'] = floatval($fareData['outstation']['driverAllowance'] ?? 0);
-            
-            error_log("Added outstation fares to vehicle $vehicleId: " . json_encode($fareData['outstation']));
-        } else {
-            // Try to get pricing directly from the vehicle table
-            $vehicle['basePrice'] = floatval($row['base_price'] ?? 0);
-            $vehicle['price'] = floatval($row['base_price'] ?? $row['price'] ?? 0);
-            $vehicle['pricePerKm'] = floatval($row['price_per_km'] ?? 0);
-            $vehicle['nightHaltCharge'] = floatval($row['night_halt_charge'] ?? 0);
-            $vehicle['driverAllowance'] = floatval($row['driver_allowance'] ?? 0);
-            
-            // If values are still 0, try to get from vehicle_pricing table
-            if ($vehicle['basePrice'] == 0 || $vehicle['pricePerKm'] == 0) {
-                try {
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                // Get vehicle ID
+                $vehicleId = $row['vehicle_id'] ?? $row['id'] ?? null;
+                
+                if (!$vehicleId) {
+                    continue;
+                }
+                
+                // Add to vehicle IDs list
+                $vehicleIds[] = $vehicleId;
+                
+                // Get specialized fare data
+                $fareData = getSpecializedFareData($conn, $vehicleId);
+                
+                // Parse amenities from JSON string or comma-separated list
+                $amenities = [];
+                if (!empty($row['amenities'])) {
+                    $decoded = json_decode($row['amenities'], true);
+                    if (json_last_error() === JSON_ERROR_NONE) {
+                        $amenities = $decoded;
+                    } else {
+                        $amenities = array_map('trim', explode(',', $row['amenities']));
+                    }
+                }
+                
+                // Default amenities if empty
+                if (empty($amenities)) {
+                    $amenities = ['AC', 'Bottle Water', 'Music System'];
+                }
+                
+                // Ensure name is always a string, use vehicle_id as fallback
+                $name = $row['name'] ?? '';
+                if (empty($name) || $name === '0') {
+                    $name = ucfirst(str_replace('_', ' ', $vehicleId));
+                }
+                
+                // Ensure proper handling of is_active field
+                $isActive = true; // Default to active
+                if (isset($row['is_active'])) {
+                    $isActive = (bool)(int)$row['is_active'];
+                }
+                
+                // Format vehicle data with consistent property names for frontend
+                $vehicle = [
+                    'id' => (string)$vehicleId,
+                    'name' => $name,
+                    'capacity' => intval($row['capacity'] ?? $row['seats'] ?? 4),
+                    'luggageCapacity' => intval($row['luggage_capacity'] ?? $row['luggage'] ?? 2),
+                    'image' => normalizeImagePath($row['image'] ?? '/cars/sedan.png'),
+                    'amenities' => $amenities,
+                    'description' => $row['description'] ?? "$name vehicle",
+                    'ac' => (bool)($row['ac'] ?? 1),
+                    'isActive' => $isActive,
+                    'vehicleId' => (string)$vehicleId
+                ];
+                
+                // Include outstation fare data if available
+                if ($fareData['outstation']) {
+                    $vehicle['outstationFares'] = $fareData['outstation'];
+                    $vehicle['basePrice'] = floatval($fareData['outstation']['basePrice'] ?? 0);
+                    $vehicle['price'] = floatval($fareData['outstation']['basePrice'] ?? 0);
+                    $vehicle['pricePerKm'] = floatval($fareData['outstation']['pricePerKm'] ?? 0);
+                    $vehicle['nightHaltCharge'] = floatval($fareData['outstation']['nightHaltCharge'] ?? 0);
+                    $vehicle['driverAllowance'] = floatval($fareData['outstation']['driverAllowance'] ?? 0);
+                } else {
+                    // Try to get pricing from vehicle_pricing table
+                    $vehicle['basePrice'] = 0;
+                    $vehicle['price'] = 0;
+                    $vehicle['pricePerKm'] = 0;
+                    $vehicle['nightHaltCharge'] = 0;
+                    $vehicle['driverAllowance'] = 0;
+                    
+                    // Get pricing from vehicle_pricing table
                     if (tableExists($conn, 'vehicle_pricing')) {
-                        // Use base_fare and base_price to handle both column names
                         $pricingQuery = $conn->prepare("
                             SELECT 
                                 base_fare as baseFare, 
@@ -487,158 +460,192 @@ try {
                                 $vehicle['pricePerKm'] = floatval($pricing['pricePerKm'] ?? 0);
                                 $vehicle['nightHaltCharge'] = floatval($pricing['nightHaltCharge'] ?? 0);
                                 $vehicle['driverAllowance'] = floatval($pricing['driverAllowance'] ?? 0);
-                                error_log("Added pricing from vehicle_pricing for $vehicleId: " . json_encode($pricing));
-                            } else {
-                                // Fall back to general pricing query without trip_type constraint
-                                $generalPricingQuery = $conn->prepare("
-                                    SELECT 
-                                        base_fare as baseFare,
-                                        base_price as basePrice, 
-                                        price_per_km as pricePerKm, 
-                                        night_halt_charge as nightHaltCharge, 
-                                        driver_allowance as driverAllowance
-                                    FROM vehicle_pricing 
-                                    WHERE vehicle_id = ?
-                                    LIMIT 1
-                                ");
-                                
-                                if ($generalPricingQuery) {
-                                    $generalPricingQuery->bind_param("s", $vehicleId);
-                                    $generalPricingQuery->execute();
-                                    $generalPricingResult = $generalPricingQuery->get_result();
-                                    
-                                    if ($generalPricingResult && $generalPricingResult->num_rows > 0) {
-                                        $pricing = $generalPricingResult->fetch_assoc();
-                                        $vehicle['basePrice'] = floatval($pricing['basePrice'] ?? $pricing['baseFare'] ?? 0);
-                                        $vehicle['price'] = floatval($pricing['basePrice'] ?? $pricing['baseFare'] ?? 0);
-                                        $vehicle['pricePerKm'] = floatval($pricing['pricePerKm'] ?? 0);
-                                        $vehicle['nightHaltCharge'] = floatval($pricing['nightHaltCharge'] ?? 0);
-                                        $vehicle['driverAllowance'] = floatval($pricing['driverAllowance'] ?? 0);
-                                    } else {
-                                        // Default values if no pricing data
-                                        $vehicle['basePrice'] = $vehicle['basePrice'] ?: 2500;
-                                        $vehicle['price'] = $vehicle['price'] ?: 2500; 
-                                        $vehicle['pricePerKm'] = $vehicle['pricePerKm'] ?: 14;
-                                        $vehicle['nightHaltCharge'] = $vehicle['nightHaltCharge'] ?: 700;
-                                        $vehicle['driverAllowance'] = $vehicle['driverAllowance'] ?: 250;
-                                    }
-                                }
                             }
                         }
                     }
-                } catch (Exception $e) {
-                    error_log("Error fetching pricing data: " . $e->getMessage());
-                    // Default values if error
-                    $vehicle['basePrice'] = $vehicle['basePrice'] ?: 2500;
-                    $vehicle['price'] = $vehicle['price'] ?: 2500; 
-                    $vehicle['pricePerKm'] = $vehicle['pricePerKm'] ?: 14;
-                    $vehicle['nightHaltCharge'] = $vehicle['nightHaltCharge'] ?: 700;
-                    $vehicle['driverAllowance'] = $vehicle['driverAllowance'] ?: 250;
                 }
-            }
-        }
-        
-        // Include local package fares if available
-        if ($fareData['local']) {
-            $vehicle['localPackageFares'] = $fareData['local'];
-        }
-        
-        // Include airport transfer fares if available
-        if ($fareData['airport']) {
-            $vehicle['airportFares'] = $fareData['airport'];
-        }
-        
-        // Always add the vehicle if we're including inactive ones, or if it's active
-        if ($includeInactive || $isActive) {
-            $vehicles[] = $vehicle;
-            error_log("Added vehicle to response: $vehicleId - $name");
-        } else {
-            error_log("Skipping inactive vehicle: $vehicleId - $name");
-        }
-    }
-
-    // If no vehicles found in database, use JSON file as backup
-    if (empty($vehicles)) {
-        error_log("No vehicles found in database, checking JSON file");
-        
-        $jsonVehicles = getVehiclesFromJson();
-        if (!empty($jsonVehicles)) {
-            // Filter inactive vehicles if needed
-            if (!$includeInactive) {
-                $jsonVehicles = array_filter($jsonVehicles, function($vehicle) {
-                    return $vehicle['isActive'] ?? true;
-                });
-                // Re-index array after filtering
-                $jsonVehicles = array_values($jsonVehicles);
+                
+                // Add to all vehicles array
+                $allVehicles[] = $vehicle;
             }
             
-            echo json_encode([
-                'vehicles' => $jsonVehicles,
-                'timestamp' => time(),
-                'cached' => true,
-                'source' => 'json-backup',
-                'includeInactive' => $includeInactive
-            ]);
-            exit;
+            error_log("Got " . count($allVehicles) . " vehicles from vehicle_types table");
+        }
+    }
+    
+    // Then get vehicles from the vehicles table (if any aren't already included)
+    if (tableExists($conn, 'vehicles')) {
+        error_log("Getting vehicles from vehicles table");
+        
+        // Build query to get all vehicles or only active ones
+        $query = "SELECT * FROM vehicles";
+        
+        // Only add the WHERE clause if we're not including inactive vehicles
+        if (!$includeInactive && columnExists($conn, 'vehicles', 'is_active')) {
+            $query .= " WHERE is_active = 1";
         }
         
-        // If still empty, use fallback
-        error_log("No vehicles found in database or JSON, using fallback vehicles");
-        $vehicles = $fallbackVehicles;
-    } else {
-        // Update the JSON file with the latest database data
-        $jsonFile = __DIR__ . '/../../../data/vehicles.json';
-        file_put_contents($jsonFile, json_encode($vehicles, JSON_PRETTY_PRINT));
-        error_log("Updated JSON file with " . count($vehicles) . " vehicles from database");
+        $query .= " ORDER BY name";
+        
+        error_log("vehicles query: " . $query);
+        
+        $result = $conn->query($query);
+        
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                // Get vehicle ID
+                $vehicleId = $row['vehicle_id'] ?? $row['id'] ?? null;
+                
+                if (!$vehicleId) {
+                    continue;
+                }
+                
+                // Check if this vehicle is already included
+                if (in_array($vehicleId, $vehicleIds)) {
+                    continue;
+                }
+                
+                // Add to vehicle IDs list
+                $vehicleIds[] = $vehicleId;
+                
+                // Get specialized fare data
+                $fareData = getSpecializedFareData($conn, $vehicleId);
+                
+                // Parse amenities from JSON string or comma-separated list
+                $amenities = [];
+                if (!empty($row['amenities'])) {
+                    $decoded = json_decode($row['amenities'], true);
+                    if (json_last_error() === JSON_ERROR_NONE) {
+                        $amenities = $decoded;
+                    } else {
+                        $amenities = array_map('trim', explode(',', $row['amenities']));
+                    }
+                }
+                
+                // Default amenities if empty
+                if (empty($amenities)) {
+                    $amenities = ['AC', 'Bottle Water', 'Music System'];
+                }
+                
+                // Ensure name is always a string, use vehicle_id as fallback
+                $name = $row['name'] ?? '';
+                if (empty($name) || $name === '0') {
+                    $name = ucfirst(str_replace('_', ' ', $vehicleId));
+                }
+                
+                // Ensure proper handling of is_active field
+                $isActive = true; // Default to active
+                if (isset($row['is_active'])) {
+                    $isActive = (bool)(int)$row['is_active'];
+                }
+                
+                // Format vehicle data with consistent property names for frontend
+                $vehicle = [
+                    'id' => (string)$vehicleId,
+                    'name' => $name,
+                    'capacity' => intval($row['capacity'] ?? $row['seats'] ?? 4),
+                    'luggageCapacity' => intval($row['luggage_capacity'] ?? $row['luggage'] ?? 2),
+                    'image' => normalizeImagePath($row['image'] ?? '/cars/sedan.png'),
+                    'amenities' => $amenities,
+                    'description' => $row['description'] ?? "$name vehicle",
+                    'ac' => (bool)($row['ac'] ?? 1),
+                    'isActive' => $isActive,
+                    'vehicleId' => (string)$vehicleId
+                ];
+                
+                // Include outstation fare data if available
+                if ($fareData['outstation']) {
+                    $vehicle['outstationFares'] = $fareData['outstation'];
+                    $vehicle['basePrice'] = floatval($fareData['outstation']['basePrice'] ?? 0);
+                    $vehicle['price'] = floatval($fareData['outstation']['basePrice'] ?? 0);
+                    $vehicle['pricePerKm'] = floatval($fareData['outstation']['pricePerKm'] ?? 0);
+                    $vehicle['nightHaltCharge'] = floatval($fareData['outstation']['nightHaltCharge'] ?? 0);
+                    $vehicle['driverAllowance'] = floatval($fareData['outstation']['driverAllowance'] ?? 0);
+                } else {
+                    // Try to get pricing from vehicle_pricing table
+                    $vehicle['basePrice'] = 0;
+                    $vehicle['price'] = 0;
+                    $vehicle['pricePerKm'] = 0;
+                    $vehicle['nightHaltCharge'] = 0;
+                    $vehicle['driverAllowance'] = 0;
+                    
+                    // Get pricing from vehicle_pricing table
+                    if (tableExists($conn, 'vehicle_pricing')) {
+                        $pricingQuery = $conn->prepare("
+                            SELECT 
+                                base_fare as baseFare, 
+                                base_price as basePrice,
+                                price_per_km as pricePerKm, 
+                                night_halt_charge as nightHaltCharge, 
+                                driver_allowance as driverAllowance
+                            FROM vehicle_pricing 
+                            WHERE vehicle_id = ? AND (trip_type = 'outstation' OR trip_type = 'all')
+                            LIMIT 1
+                        ");
+                        
+                        if ($pricingQuery) {
+                            $pricingQuery->bind_param("s", $vehicleId);
+                            $pricingQuery->execute();
+                            $pricingResult = $pricingQuery->get_result();
+                            
+                            if ($pricingResult && $pricingResult->num_rows > 0) {
+                                $pricing = $pricingResult->fetch_assoc();
+                                $vehicle['basePrice'] = floatval($pricing['basePrice'] ?? $pricing['baseFare'] ?? 0);
+                                $vehicle['price'] = floatval($pricing['basePrice'] ?? $pricing['baseFare'] ?? 0);
+                                $vehicle['pricePerKm'] = floatval($pricing['pricePerKm'] ?? 0);
+                                $vehicle['nightHaltCharge'] = floatval($pricing['nightHaltCharge'] ?? 0);
+                                $vehicle['driverAllowance'] = floatval($pricing['driverAllowance'] ?? 0);
+                            }
+                        }
+                    }
+                }
+                
+                // Add to all vehicles array
+                $allVehicles[] = $vehicle;
+            }
+            
+            error_log("Added " . (count($allVehicles) - count($vehicleIds) + 1) . " more vehicles from vehicles table");
+        }
     }
-
-    // Log success
-    error_log("Vehicles data GET response: found " . count($vehicles) . " vehicles");
     
-    // Send response with cache busting timestamp
+    // If no vehicles found in DB, try to merge with JSON vehicles
+    if (empty($allVehicles) && !empty($jsonVehicles)) {
+        $allVehicles = $jsonVehicles;
+    }
+    
+    // If still no vehicles, use fallback
+    if (empty($allVehicles)) {
+        $allVehicles = $fallbackVehicles;
+    }
+    
+    // Save all vehicles to JSON file for caching
+    try {
+        $jsonFile = __DIR__ . '/../../../data/vehicles.json';
+        file_put_contents($jsonFile, json_encode($allVehicles, JSON_PRETTY_PRINT));
+        error_log("Saved " . count($allVehicles) . " vehicles to JSON file");
+    } catch (Exception $e) {
+        error_log("Error saving vehicles to JSON file: " . $e->getMessage());
+    }
+    
+    // Return the vehicles
     echo json_encode([
-        'vehicles' => $vehicles,
+        'vehicles' => $allVehicles,
         'timestamp' => time(),
         'cached' => false,
-        'version' => '1.0.8', // Updated version
-        'tableUsed' => $vehicleTableToUse,
+        'source' => 'database',
+        'count' => count($allVehicles),
         'includeInactive' => $includeInactive
     ]);
-    exit;
     
 } catch (Exception $e) {
-    error_log("Error in vehicles-data.php: " . $e->getMessage() . " at " . $e->getFile() . ":" . $e->getLine());
+    error_log("Error in vehicles-data.php: " . $e->getMessage());
     
-    // Try JSON file as backup
-    $jsonVehicles = getVehiclesFromJson();
-    if (!empty($jsonVehicles)) {
-        // Filter inactive vehicles if needed
-        if (!isset($_GET['includeInactive']) || $_GET['includeInactive'] !== 'true') {
-            $jsonVehicles = array_filter($jsonVehicles, function($vehicle) {
-                return $vehicle['isActive'] ?? true;
-            });
-            // Re-index array after filtering
-            $jsonVehicles = array_values($jsonVehicles);
-        }
-        
-        echo json_encode([
-            'vehicles' => $jsonVehicles,
-            'timestamp' => time(),
-            'cached' => true,
-            'source' => 'json-error-fallback',
-            'error' => $e->getMessage()
-        ]);
-        exit;
-    }
-    
-    // Return fallback vehicles if JSON file also fails
+    // Return fallback vehicles
     echo json_encode([
         'vehicles' => $fallbackVehicles,
         'timestamp' => time(),
         'cached' => false,
         'fallback' => true,
-        'error' => $e->getMessage(),
-        'errorLocation' => $e->getFile() . ':' . $e->getLine()
+        'error' => $e->getMessage()
     ]);
-    exit;
 }

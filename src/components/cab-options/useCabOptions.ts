@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { CabType } from '@/types/cab';
 import { getVehicleData } from '@/services/vehicleDataService';
@@ -20,12 +21,12 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
   const refreshCountRef = useRef<number>(0);
   const lastRefreshRef = useRef<number>(Date.now());
   const loadingRef = useRef<boolean>(false);
-  const maxRefreshesRef = useRef<number>(3); // Maximum 3 refreshes per session
+  const maxRefreshesRef = useRef<number>(5); // Increased from 3 to 5 for more refreshes
   const vehicleDataCache = useRef<Map<string, { data: CabType[], timestamp: number }>>(new Map());
   const eventThrottleTimestamps = useRef<Record<string, number>>({});
   
   // Add strong throttling for all refresh events - prevent infinite loops
-  const shouldThrottleEvent = (eventType: string, throttleDuration = 60000): boolean => {
+  const shouldThrottleEvent = (eventType: string, throttleDuration = 45000): boolean => {
     const now = Date.now();
     const lastTime = eventThrottleTimestamps.current[eventType] || 0;
     
@@ -45,16 +46,19 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
       return cabOptions; // Return existing options
     }
     
-    // Even more aggressive throttling for forced refreshes - prevent infinite loops
-    if (forceRefresh) {
-      if (shouldThrottleEvent('force-refresh', 15000)) { // Reduced from 30s to 15s for more frequent refreshes
+    // Less aggressive throttling for admin trip types - allow faster refreshes
+    const isAdminTrip = isAdminTripType(tripType);
+    const throttleDuration = isAdminTrip ? 10000 : 15000; // Shorter throttle for admin trips
+    
+    if (forceRefresh && !isAdminTrip) {
+      if (shouldThrottleEvent('force-refresh', throttleDuration)) {
         return cabOptions;
       }
       
       if (refreshCountRef.current >= maxRefreshesRef.current) {
         // Reset refresh count after a while to allow refreshes again
-        if (Date.now() - lastRefreshRef.current > 120000) { // 2 minutes
-          console.log('Resetting refresh count after 2 minutes');
+        if (Date.now() - lastRefreshRef.current > 60000) { // 1 minute
+          console.log('Resetting refresh count after 1 minute');
           refreshCountRef.current = 0;
         } else {
           console.log(`Reached maximum refresh count (${maxRefreshesRef.current}), not reloading`);
@@ -76,14 +80,17 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
       
       setError(null);
       
-      // For admin-related trip types, always force refresh to get the latest data
-      const shouldUseAdminRefresh = isAdminTripType(tripType);
+      // For admin-related trip types, always use includeInactive=true to get all vehicles
+      const shouldIncludeInactive = isAdminTripType(tripType);
       
-      // Try local cache first (30 seconds validity instead of 1 minute for more frequent refreshes)
+      // For admin trip types, use shorter cache validity
+      const cacheValidityDuration = isAdminTrip ? 5000 : 30000; // 5 seconds for admin, 30 seconds for others
+      
+      // Try local cache first with appropriate validity duration
       const cachedData = vehicleDataCache.current.get('json') || vehicleDataCache.current.get('api');
       const now = Date.now();
       
-      if (!forceRefresh && !shouldUseAdminRefresh && cachedData && now - cachedData.timestamp < 30000) {
+      if (!forceRefresh && !shouldIncludeInactive && cachedData && now - cachedData.timestamp < cacheValidityDuration) {
         console.log('Using in-memory cached vehicle data');
         const filteredVehicles = filterVehiclesByTripType(cachedData.data, tripType);
         setCabOptions(filteredVehicles);
@@ -92,8 +99,18 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
         return filteredVehicles;
       }
       
+      // For admin trips, check most recent cache with shorter validity
+      if (isAdminTrip && cachedData && now - cachedData.timestamp < 5000 && !forceRefresh) {
+        console.log('Using very fresh cached data for admin trip type');
+        const filteredVehicles = filterVehiclesByTripType(cachedData.data, tripType);
+        setCabOptions(filteredVehicles);
+        setIsLoading(false);
+        loadingRef.current = false;
+        return filteredVehicles;
+      }
+      
       // Use local cache if available (reduced from 5 minutes to 2 minutes validity)
-      if (!forceRefresh && !shouldUseAdminRefresh && tripType) {
+      if (!forceRefresh && !shouldIncludeInactive && tripType) {
         const cachedTimestamp = localStorage.getItem(`cabOptions_${tripType}_timestamp`);
         const cachedVehicles = localStorage.getItem(`cabOptions_${tripType}`);
         
@@ -118,15 +135,16 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
         }
       }
       
-      // Always force refresh for admin trip types
-      const actualForceRefresh = forceRefresh || shouldUseAdminRefresh;
+      // Always pass includeInactive=true for admin trip types
+      const includeInactive = shouldIncludeInactive;
+      console.log(`Getting vehicle data with includeInactive=${includeInactive}, forceRefresh=${forceRefresh}`);
       
       // Fetch vehicle data with a shorter timeout (5s)
       const timeoutPromise = new Promise<CabType[]>((_, reject) => {
         setTimeout(() => reject(new Error('Vehicle data fetch timeout')), 5000);
       });
       
-      const dataPromise = getVehicleData(actualForceRefresh); // Pass forceRefresh to bypass cache
+      const dataPromise = getVehicleData(forceRefresh, includeInactive); // Pass both parameters
       
       // Race the fetch against the timeout
       let vehicles: CabType[];
@@ -134,7 +152,7 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
         vehicles = await Promise.race([dataPromise, timeoutPromise]);
       } catch (e) {
         console.warn('Fetch with timeout failed, falling back to direct API call');
-        vehicles = await getVehicleData(true); // Force API call on error
+        vehicles = await getVehicleData(true, includeInactive); // Force API call on error with includeInactive
       }
       
       // Log received vehicles for debugging
