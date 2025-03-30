@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import { CabType } from '@/types/cab';
 import { reloadCabTypes } from '@/lib/cabData';
-import { getOutstationFaresForVehicle, updateOutstationFares } from '@/services/fareService';
+import { getOutstationFaresForVehicle, directFareUpdate } from '@/services/fareService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -64,7 +65,8 @@ const OutstationFareManagement = () => {
     setIsSaving(true);
     try {
       const fareData = outstationFares[vehicleId];
-      await updateOutstationFares(vehicleId, fareData);
+      // Use directFareUpdate instead of the missing updateOutstationFares
+      await directFareUpdate('outstation', vehicleId, fareData);
       toast({
         title: "Success",
         description: `Outstation fares for ${vehicles.find(v => v.id === vehicleId)?.name} updated successfully.`,

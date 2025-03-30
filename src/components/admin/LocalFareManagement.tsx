@@ -26,11 +26,9 @@ const LocalFareManagement = () => {
     const loadData = async () => {
       setIsLoading(true);
       try {
-        // Use reloadCabTypes instead of loadCabTypes
         const cabTypes = await reloadCabTypes(true);
         setVehicles(cabTypes);
 
-        // Fetch local fares data from API
         const response = await fetch('/api/fares/local.php');
         if (!response.ok) {
           throw new Error(`Failed to fetch local fares: ${response.status}`);
@@ -59,7 +57,6 @@ const LocalFareManagement = () => {
   const handleSave = async (vehicleId: string) => {
     setIsSaving(true);
     try {
-      // Prepare data for API
       const updatedFare = localFares[vehicleId];
       const response = await fetch('/api/fares/local.php', {
         method: 'POST',
@@ -73,7 +70,6 @@ const LocalFareManagement = () => {
         throw new Error(`Failed to update local fare: ${response.status}`);
       }
 
-      // Refresh data
       setEditableVehicleId(null);
       setRefreshKey(prevKey => prevKey + 1);
       toast({

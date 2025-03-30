@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import { CabType } from '@/types/cab';
 import { reloadCabTypes } from '@/lib/cabData';
-import { getAirportFaresForVehicle, updateAirportFaresForVehicle } from '@/services/fareService';
+import { getAirportFaresForVehicle, directFareUpdate } from '@/services/fareService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -62,7 +63,8 @@ const AirportFareManagement = () => {
     setIsSaving(true);
     try {
       const fareData = airportFares[vehicleId];
-      await updateAirportFaresForVehicle(vehicleId, fareData);
+      // Use directFareUpdate instead of the missing updateAirportFaresForVehicle
+      await directFareUpdate('airport', vehicleId, fareData);
       setEditableVehicleId(null);
       toast({
         title: "Success",
