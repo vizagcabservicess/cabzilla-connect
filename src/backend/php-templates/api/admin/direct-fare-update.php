@@ -50,6 +50,29 @@ function ensureTablesExist($conn) {
         error_log("Created vehicle_types table");
     }
 
+    // Check if vehicles table exists and create it if needed
+    $checkVehicles = $conn->query("SHOW TABLES LIKE 'vehicles'");
+    if ($checkVehicles->num_rows === 0) {
+        // Create vehicles table
+        $conn->query("
+            CREATE TABLE IF NOT EXISTS vehicles (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                vehicle_id VARCHAR(50) NOT NULL UNIQUE,
+                name VARCHAR(100) NOT NULL,
+                capacity INT NOT NULL DEFAULT 4,
+                luggage_capacity INT NOT NULL DEFAULT 2,
+                ac TINYINT(1) NOT NULL DEFAULT 1,
+                image VARCHAR(255) DEFAULT '/cars/sedan.png',
+                amenities TEXT DEFAULT NULL,
+                description TEXT DEFAULT NULL,
+                is_active TINYINT(1) NOT NULL DEFAULT 1,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        ");
+        error_log("Created vehicles table");
+    }
+
     // Check if outstation_fares table exists
     $checkOutstation = $conn->query("SHOW TABLES LIKE 'outstation_fares'");
     if ($checkOutstation->num_rows === 0) {
@@ -252,7 +275,7 @@ try {
         throw new Exception("Vehicle ID is required");
     }
     
-    // Create vehicle if it doesn't exist
+    // Create vehicle if it doesn't exist in vehicle_types
     $checkVehicleStmt = $conn->prepare("SELECT vehicle_id FROM vehicle_types WHERE vehicle_id = ?");
     $checkVehicleStmt->bind_param("s", $vehicleId);
     $checkVehicleStmt->execute();
@@ -267,7 +290,25 @@ try {
         ");
         $insertVehicleStmt->bind_param("ss", $vehicleId, $vehicleName);
         $insertVehicleStmt->execute();
-        error_log("Created new vehicle: $vehicleId");
+        error_log("Created new vehicle in vehicle_types: $vehicleId");
+    }
+    
+    // Also check and create in the vehicles table for compatibility
+    $checkVehiclesStmt = $conn->prepare("SELECT vehicle_id FROM vehicles WHERE vehicle_id = ?");
+    $checkVehiclesStmt->bind_param("s", $vehicleId);
+    $checkVehiclesStmt->execute();
+    $checkVehiclesResult = $checkVehiclesStmt->get_result();
+    
+    if ($checkVehiclesResult->num_rows === 0) {
+        // Format vehicle name from ID
+        $vehicleName = ucwords(str_replace('_', ' ', $vehicleId));
+        $insertVehiclesStmt = $conn->prepare("
+            INSERT INTO vehicles (vehicle_id, name, is_active) 
+            VALUES (?, ?, 1)
+        ");
+        $insertVehiclesStmt->bind_param("ss", $vehicleId, $vehicleName);
+        $insertVehiclesStmt->execute();
+        error_log("Created new vehicle in vehicles table: $vehicleId");
     }
     
     // Process based on trip type
@@ -293,6 +334,10 @@ try {
             }
             break;
     }
+    
+    // Create a cache invalidation marker to force refresh on next vehicle fetch
+    $cacheMarkerFile = __DIR__ . '/../../../data/vehicle_cache_invalidated.txt';
+    file_put_contents($cacheMarkerFile, time());
     
     echo json_encode([
         "status" => "success",
@@ -408,6 +453,32 @@ function handleOutstationFares($conn, $data, $vehicleId) {
         
         $stmtRoundTrip->execute();
         $stmtRoundTrip->close();
+        
+        // 4. Also update the more generic 'outstation' type for compatibility with some code
+        $tripTypeGeneric = 'outstation';
+        $stmtGeneric = $conn->prepare("
+            INSERT INTO vehicle_pricing 
+            (vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, NOW())
+            ON DUPLICATE KEY UPDATE 
+            base_fare = VALUES(base_fare),
+            price_per_km = VALUES(price_per_km),
+            night_halt_charge = VALUES(night_halt_charge),
+            driver_allowance = VALUES(driver_allowance),
+            updated_at = NOW()
+        ");
+        
+        $stmtGeneric->bind_param("ssdddd", 
+            $vehicleId,
+            $tripTypeGeneric,
+            $basePrice,
+            $pricePerKm,
+            $nightHaltCharge,
+            $driverAllowance
+        );
+        
+        $stmtGeneric->execute();
+        $stmtGeneric->close();
         
         // Commit transaction
         $conn->commit();

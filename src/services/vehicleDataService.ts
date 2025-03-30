@@ -1,5 +1,6 @@
+
 import { CabType } from '@/types/cab';
-import { apiBaseUrl } from '@/config/api';
+import { apiBaseUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
 import { OutstationFare, LocalFare, AirportFare } from '@/types/cab';
 
 const JSON_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
@@ -101,11 +102,7 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
     console.log(`Fetching vehicle data from API: ${url}`);
     
     const response = await fetch(url, {
-      headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'X-Force-Refresh': forceRefresh ? 'true' : 'false'
-      }
+      headers: forceRefresh ? forceRefreshHeaders : defaultHeaders
     });
     
     if (!response.ok) {
@@ -281,6 +278,15 @@ export const updateOutstationFares = async (vehicleId: string, fareData: Outstat
     if (directResponse.ok) {
       const result = await directResponse.json();
       console.log('Direct API response for outstation fares:', result);
+      
+      // Trigger event to update UI
+      window.dispatchEvent(new CustomEvent('fare-data-updated', { 
+        detail: { vehicleId, tripType: 'outstation' }
+      }));
+      
+      // Clear cache to ensure fresh data on next fetch
+      clearVehicleDataCache();
+      
       return true;
     }
     
@@ -293,6 +299,15 @@ export const updateOutstationFares = async (vehicleId: string, fareData: Outstat
     if (fallbackResponse.ok) {
       const result = await fallbackResponse.json();
       console.log('Fallback API response for outstation fares:', result);
+      
+      // Trigger event to update UI
+      window.dispatchEvent(new CustomEvent('fare-data-updated', { 
+        detail: { vehicleId, tripType: 'outstation' }
+      }));
+      
+      // Clear cache to ensure fresh data on next fetch
+      clearVehicleDataCache();
+      
       return true;
     }
     
@@ -364,6 +379,15 @@ export const updateLocalFares = async (vehicleId: string, fareData: LocalFare): 
     if (directResponse.ok) {
       const result = await directResponse.json();
       console.log('Direct API response for local fares:', result);
+      
+      // Trigger event to update UI
+      window.dispatchEvent(new CustomEvent('fare-data-updated', { 
+        detail: { vehicleId, tripType: 'local' }
+      }));
+      
+      // Clear cache to ensure fresh data on next fetch
+      clearVehicleDataCache();
+      
       return true;
     }
     
@@ -376,6 +400,15 @@ export const updateLocalFares = async (vehicleId: string, fareData: LocalFare): 
     if (fallbackResponse.ok) {
       const result = await fallbackResponse.json();
       console.log('Fallback API response for local fares:', result);
+      
+      // Trigger event to update UI
+      window.dispatchEvent(new CustomEvent('fare-data-updated', { 
+        detail: { vehicleId, tripType: 'local' }
+      }));
+      
+      // Clear cache to ensure fresh data on next fetch
+      clearVehicleDataCache();
+      
       return true;
     }
     
@@ -419,6 +452,15 @@ export const updateAirportFares = async (vehicleId: string, fareData: AirportFar
     if (directResponse.ok) {
       const result = await directResponse.json();
       console.log('Direct API response for airport fares:', result);
+      
+      // Trigger event to update UI
+      window.dispatchEvent(new CustomEvent('fare-data-updated', { 
+        detail: { vehicleId, tripType: 'airport' }
+      }));
+      
+      // Clear cache to ensure fresh data on next fetch
+      clearVehicleDataCache();
+      
       return true;
     }
     
@@ -431,6 +473,15 @@ export const updateAirportFares = async (vehicleId: string, fareData: AirportFar
     if (fallbackResponse.ok) {
       const result = await fallbackResponse.json();
       console.log('Fallback API response for airport fares:', result);
+      
+      // Trigger event to update UI
+      window.dispatchEvent(new CustomEvent('fare-data-updated', { 
+        detail: { vehicleId, tripType: 'airport' }
+      }));
+      
+      // Clear cache to ensure fresh data on next fetch
+      clearVehicleDataCache();
+      
       return true;
     }
     

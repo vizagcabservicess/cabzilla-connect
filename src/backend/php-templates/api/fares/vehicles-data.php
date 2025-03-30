@@ -1,4 +1,3 @@
-
 <?php
 // Set up error reporting and logging for debugging
 ini_set('display_errors', 0);
@@ -19,7 +18,7 @@ header('Expires: 0');
 
 // Add extra cache busting headers
 header('X-Cache-Timestamp: ' . time());
-header('X-API-Version: '.'1.0.9'); // Updated version number
+header('X-API-Version: '.'1.0.10'); // Updated version number
 
 // Respond to preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -138,7 +137,7 @@ function normalizeImagePath($imagePath) {
     return $imagePath;
 }
 
-// Function to get data from specific fare tables - PRIORITIZE outstation_fares
+// Function to get data from specific fare tables
 function getSpecializedFareData($conn, $vehicleId) {
     $fareData = [
         'outstation' => null,
@@ -146,7 +145,7 @@ function getSpecializedFareData($conn, $vehicleId) {
         'airport' => null
     ];
     
-    // First try to get outstation fares from outstation_fares table
+    // Try to get outstation fares from outstation_fares table
     try {
         if (tableExists($conn, 'outstation_fares')) {
             $outstationQuery = $conn->prepare("
@@ -230,6 +229,75 @@ function getSpecializedFareData($conn, $vehicleId) {
         error_log("Error fetching airport fares: " . $e->getMessage());
     }
     
+    // Also check vehicle_pricing table for additional fare data
+    try {
+        if (tableExists($conn, 'vehicle_pricing')) {
+            // First check for outstation data
+            $outstationQuery = $conn->prepare("
+                SELECT 
+                    base_fare AS basePrice,
+                    price_per_km AS pricePerKm,
+                    night_halt_charge AS nightHaltCharge,
+                    driver_allowance AS driverAllowance
+                FROM vehicle_pricing 
+                WHERE vehicle_id = ? AND trip_type = 'outstation'
+            ");
+            
+            if ($outstationQuery) {
+                $outstationQuery->bind_param("s", $vehicleId);
+                $outstationQuery->execute();
+                $result = $outstationQuery->get_result();
+                
+                if ($result && $result->num_rows > 0 && !$fareData['outstation']) {
+                    $fareData['outstation'] = $result->fetch_assoc();
+                }
+            }
+            
+            // Check for local data
+            $localQuery = $conn->prepare("
+                SELECT 
+                    local_package_4hr AS price4hrs40km,
+                    local_package_8hr AS price8hrs80km,
+                    local_package_10hr AS price10hrs100km,
+                    extra_km_charge AS priceExtraKm,
+                    extra_hour_charge AS priceExtraHour
+                FROM vehicle_pricing 
+                WHERE vehicle_id = ? AND trip_type = 'local'
+            ");
+            
+            if ($localQuery) {
+                $localQuery->bind_param("s", $vehicleId);
+                $localQuery->execute();
+                $result = $localQuery->get_result();
+                
+                if ($result && $result->num_rows > 0 && !$fareData['local']) {
+                    $fareData['local'] = $result->fetch_assoc();
+                }
+            }
+            
+            // Check for airport data
+            $airportQuery = $conn->prepare("
+                SELECT 
+                    base_fare AS basePrice,
+                    price_per_km AS pricePerKm
+                FROM vehicle_pricing 
+                WHERE vehicle_id = ? AND trip_type = 'airport'
+            ");
+            
+            if ($airportQuery) {
+                $airportQuery->bind_param("s", $vehicleId);
+                $airportQuery->execute();
+                $result = $airportQuery->get_result();
+                
+                if ($result && $result->num_rows > 0 && !$fareData['airport']) {
+                    $fareData['airport'] = $result->fetch_assoc();
+                }
+            }
+        }
+    } catch (Exception $e) {
+        error_log("Error fetching data from vehicle_pricing: " . $e->getMessage());
+    }
+    
     return $fareData;
 }
 
@@ -304,7 +372,7 @@ try {
                 'timestamp' => time(),
                 'cached' => true,
                 'source' => 'json',
-                'version' => '1.0.9', // Updated version
+                'version' => '1.0.10', // Updated version
                 'includeInactive' => $includeInactive
             ]);
             exit;
@@ -427,7 +495,7 @@ try {
                     $vehicle['nightHaltCharge'] = floatval($fareData['outstation']['nightHaltCharge'] ?? 0);
                     $vehicle['driverAllowance'] = floatval($fareData['outstation']['driverAllowance'] ?? 0);
                 } else {
-                    // Try to get pricing from vehicle_pricing table
+                    // Provide default pricing values
                     $vehicle['basePrice'] = 0;
                     $vehicle['price'] = 0;
                     $vehicle['pricePerKm'] = 0;
@@ -465,6 +533,16 @@ try {
                     }
                 }
                 
+                // Add local fare data if available
+                if ($fareData['local']) {
+                    $vehicle['localFares'] = $fareData['local'];
+                }
+                
+                // Add airport fare data if available
+                if ($fareData['airport']) {
+                    $vehicle['airportFares'] = $fareData['airport'];
+                }
+                
                 // Add to all vehicles array
                 $allVehicles[] = $vehicle;
             }
@@ -492,6 +570,8 @@ try {
         $result = $conn->query($query);
         
         if ($result) {
+            $vehiclesFromVehiclesTable = 0;  // Counter for logging
+            
             while ($row = $result->fetch_assoc()) {
                 // Get vehicle ID
                 $vehicleId = $row['vehicle_id'] ?? $row['id'] ?? null;
@@ -507,6 +587,7 @@ try {
                 
                 // Add to vehicle IDs list
                 $vehicleIds[] = $vehicleId;
+                $vehiclesFromVehiclesTable++;
                 
                 // Get specialized fare data
                 $fareData = getSpecializedFareData($conn, $vehicleId);
@@ -600,11 +681,88 @@ try {
                     }
                 }
                 
+                // Add local fare data if available
+                if ($fareData['local']) {
+                    $vehicle['localFares'] = $fareData['local'];
+                }
+                
+                // Add airport fare data if available
+                if ($fareData['airport']) {
+                    $vehicle['airportFares'] = $fareData['airport'];
+                }
+                
                 // Add to all vehicles array
                 $allVehicles[] = $vehicle;
             }
             
-            error_log("Added " . (count($allVehicles) - count($vehicleIds) + 1) . " more vehicles from vehicles table");
+            error_log("Added $vehiclesFromVehiclesTable more vehicles from vehicles table");
+        }
+    }
+    
+    // Also check vehicle_pricing for any vehicles that might be missing
+    if (tableExists($conn, 'vehicle_pricing') && empty($allVehicles)) {
+        error_log("No vehicles found, checking vehicle_pricing table");
+        
+        $query = "SELECT DISTINCT vehicle_id FROM vehicle_pricing";
+        $result = $conn->query($query);
+        
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $vehicleId = $row['vehicle_id'];
+                
+                // Skip if already included
+                if (in_array($vehicleId, $vehicleIds)) {
+                    continue;
+                }
+                
+                // Add vehicle ID to list
+                $vehicleIds[] = $vehicleId;
+                
+                // Format vehicle name from ID
+                $name = ucwords(str_replace('_', ' ', $vehicleId));
+                
+                // Get fare data
+                $fareData = getSpecializedFareData($conn, $vehicleId);
+                
+                // Create basic vehicle
+                $vehicle = [
+                    'id' => $vehicleId,
+                    'name' => $name,
+                    'capacity' => 4, // Default
+                    'luggageCapacity' => 2, // Default
+                    'image' => '/cars/sedan.png', // Default
+                    'amenities' => ['AC', 'Bottle Water', 'Music System'], // Default
+                    'description' => "$name vehicle", // Default
+                    'ac' => true, // Default
+                    'isActive' => true, // Default
+                    'vehicleId' => $vehicleId
+                ];
+                
+                // Include outstation fare data if available
+                if ($fareData['outstation']) {
+                    $vehicle['outstationFares'] = $fareData['outstation'];
+                    $vehicle['basePrice'] = floatval($fareData['outstation']['basePrice'] ?? 0);
+                    $vehicle['price'] = floatval($fareData['outstation']['basePrice'] ?? 0);
+                    $vehicle['pricePerKm'] = floatval($fareData['outstation']['pricePerKm'] ?? 0);
+                    $vehicle['nightHaltCharge'] = floatval($fareData['outstation']['nightHaltCharge'] ?? 0);
+                    $vehicle['driverAllowance'] = floatval($fareData['outstation']['driverAllowance'] ?? 0);
+                }
+                
+                // Add local fare data if available
+                if ($fareData['local']) {
+                    $vehicle['localFares'] = $fareData['local'];
+                }
+                
+                // Add airport fare data if available
+                if ($fareData['airport']) {
+                    $vehicle['airportFares'] = $fareData['airport'];
+                }
+                
+                // Add to vehicles array
+                $allVehicles[] = $vehicle;
+            }
+            
+            error_log("Added " . (count($vehicleIds) - count($allVehicles) + count($vehicleIds)) . " vehicles from vehicle_pricing table");
         }
     }
     
@@ -621,8 +779,15 @@ try {
     // Save all vehicles to JSON file for caching
     try {
         $jsonFile = __DIR__ . '/../../../data/vehicles.json';
+        // Ensure the directory exists
+        if (!file_exists(dirname($jsonFile))) {
+            mkdir(dirname($jsonFile), 0755, true);
+        }
         file_put_contents($jsonFile, json_encode($allVehicles, JSON_PRETTY_PRINT));
         error_log("Saved " . count($allVehicles) . " vehicles to JSON file");
+        
+        // Mark cache as updated
+        file_put_contents($cacheMarkerFile, time());
     } catch (Exception $e) {
         error_log("Error saving vehicles to JSON file: " . $e->getMessage());
     }

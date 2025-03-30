@@ -1,7 +1,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { CabType } from '@/types/cab';
-import { getVehicleData } from '@/services/vehicleDataService';
+import { getVehicleData, clearVehicleDataCache } from '@/services/vehicleDataService';
 import { TripType, TripMode, isAdminTripType, isTourTripType, isRegularTripType } from '@/lib/tripTypes';
 import { fareService } from '@/services/fareService';
 import { toast } from 'sonner';
@@ -21,7 +21,7 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
   const refreshCountRef = useRef<number>(0);
   const lastRefreshRef = useRef<number>(Date.now());
   const loadingRef = useRef<boolean>(false);
-  const maxRefreshesRef = useRef<number>(5); // Increased from 3 to 5 for more refreshes
+  const maxRefreshesRef = useRef<number>(5);
   const vehicleDataCache = useRef<Map<string, { data: CabType[], timestamp: number }>>(new Map());
   const eventThrottleTimestamps = useRef<Record<string, number>>({});
   
@@ -46,9 +46,14 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
       return cabOptions; // Return existing options
     }
     
-    // Less aggressive throttling for admin trip types - allow faster refreshes
+    // Always force refresh for admin trip types to ensure most recent data
     const isAdminTrip = isAdminTripType(tripType);
-    const throttleDuration = isAdminTrip ? 10000 : 15000; // Shorter throttle for admin trips
+    if (isAdminTrip) {
+      forceRefresh = true;
+      console.log('Admin trip type detected, forcing refresh');
+    }
+    
+    const throttleDuration = isAdminTrip ? 5000 : 15000; // Much shorter throttle for admin trips
     
     if (forceRefresh && !isAdminTrip) {
       if (shouldThrottleEvent('force-refresh', throttleDuration)) {
@@ -83,6 +88,29 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
       // For admin-related trip types, always use includeInactive=true to get all vehicles
       const shouldIncludeInactive = isAdminTripType(tripType);
       
+      // For admin trip types, always bypass cache
+      if (isAdminTrip) {
+        console.log('Admin trip - clearing cache and fetching fresh data');
+        clearVehicleDataCache(); // Clear cache for admin views to ensure fresh data
+        
+        // Force refresh with includeInactive=true for admin views
+        const vehicles = await getVehicleData(true, true);
+        
+        if (!vehicles || vehicles.length === 0) {
+          setError('No vehicles found. Please try refreshing the data.');
+          setIsLoading(false);
+          loadingRef.current = false;
+          return [];
+        }
+        
+        console.log(`Loaded ${vehicles.length} vehicles for admin view`);
+        setCabOptions(vehicles);
+        setIsLoading(false);
+        loadingRef.current = false;
+        return vehicles;
+      }
+      
+      // For non-admin trips, continue with regular caching logic
       // For admin trip types, use shorter cache validity
       const cacheValidityDuration = isAdminTrip ? 5000 : 30000; // 5 seconds for admin, 30 seconds for others
       
@@ -92,16 +120,6 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
       
       if (!forceRefresh && !shouldIncludeInactive && cachedData && now - cachedData.timestamp < cacheValidityDuration) {
         console.log('Using in-memory cached vehicle data');
-        const filteredVehicles = filterVehiclesByTripType(cachedData.data, tripType);
-        setCabOptions(filteredVehicles);
-        setIsLoading(false);
-        loadingRef.current = false;
-        return filteredVehicles;
-      }
-      
-      // For admin trips, check most recent cache with shorter validity
-      if (isAdminTrip && cachedData && now - cachedData.timestamp < 5000 && !forceRefresh) {
-        console.log('Using very fresh cached data for admin trip type');
         const filteredVehicles = filterVehiclesByTripType(cachedData.data, tripType);
         setCabOptions(filteredVehicles);
         setIsLoading(false);
@@ -237,20 +255,6 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
         console.log('Using default vehicles:', vehicles.length);
       }
       
-      // Cache the raw vehicle data
-      try {
-        localStorage.setItem(`cabOptions_all`, JSON.stringify(vehicles));
-        localStorage.setItem(`cabOptions_all_timestamp`, now.toString());
-        
-        // Update our in-memory cache
-        vehicleDataCache.current.set('latest', {
-          data: vehicles,
-          timestamp: now
-        });
-      } catch (cacheError) {
-        console.warn('Error caching raw vehicle data:', cacheError);
-      }
-      
       // Filter based on trip type
       const filteredVehicles = filterVehiclesByTripType(vehicles, tripType);
       
@@ -310,6 +314,7 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
       return vehicles.filter(v => v.capacity >= 4);
     } else if (isAdminTripType(tripType)) {
       // For admin trip types, show all vehicles including inactive ones
+      console.log(`Showing all ${vehicles.length} vehicles for admin trip type`);
       return vehicles;
     } else if (!isRegularTripType(tripType)) {
       // For custom or other non-regular trip types, show all active vehicles
@@ -323,7 +328,11 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
   // Initial load
   useEffect(() => {
     // Initial load should only happen once
-    loadCabOptions();
+    const isAdmin = isAdminTripType(tripType);
+    console.log(`Initial load for tripType ${tripType}, isAdmin=${isAdmin}`);
+    
+    // For admin pages, always force refresh to get the latest data
+    loadCabOptions(isAdmin);
     
     // Setup event handlers with extreme throttling to prevent infinite loops
     const handleFareCacheCleared = () => {
