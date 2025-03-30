@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +20,19 @@ import {
   SelectValue 
 } from "@/components/ui/select";
 import { 
+  Tabs, 
+  TabsContent, 
+  TabsList, 
+  TabsTrigger 
+} from "@/components/ui/tabs";
+import { 
+  createVehicle, 
+  updateVehicle, 
+  deleteVehicle,
+  syncVehicleData 
+} from '@/services/directVehicleService';
+import { reloadCabTypes } from '@/lib/cabData';
+import { 
   Dialog,
   DialogTrigger,
   DialogContent,
@@ -29,17 +41,23 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { 
-  createVehicle, 
-  updateVehicle, 
-  deleteVehicle,
-  syncVehicleData 
-} from '@/services/directVehicleService';
-import { getCabTypes, reloadCabTypes, clearCabTypesCache } from '@/lib/cabData';
 import { CabType } from '@/types/cab';
 
-interface ExtendedVehicleType extends CabType {
+interface ExtendedVehicleType {
+  id: string;
   vehicleId?: string;
+  name: string;
+  capacity: number;
+  luggageCapacity: number;
+  ac?: boolean;
+  isActive?: boolean;
+  image?: string;
+  description?: string;
+  amenities?: string[];
+  basePrice?: number;
+  pricePerKm?: number;
+  nightHaltCharge?: number;
+  driverAllowance?: number;
 }
 
 // VehicleManagement component
@@ -47,8 +65,6 @@ const VehicleManagement = () => {
   const [vehicles, setVehicles] = useState<ExtendedVehicleType[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedVehicle, setSelectedVehicle] = useState<ExtendedVehicleType | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const refreshTimeoutRef = useRef<number | null>(null);
   
   // New vehicle form state
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -68,94 +84,105 @@ const VehicleManagement = () => {
   const [editVehicleIsActive, setEditVehicleIsActive] = useState(true);
   
   const fetchVehicles = useCallback(async () => {
-    if (refreshing) {
-      console.log('Already refreshing vehicles, skipping redundant fetch');
-      return;
-    }
-    
     setLoading(true);
-    setRefreshing(true);
-    
     try {
-      // Get vehicles with cached data first for quick display
-      let cabData = await getCabTypes(false);
+      // Call reloadCabTypes with forceRefresh=true to ensure fresh data
+      await reloadCabTypes(true);
       
-      if (cabData && cabData.length > 0) {
-        setVehicles(cabData as ExtendedVehicleType[]);
-      }
+      // Get cached vehicles from session/local storage
+      const cachedVehicles = sessionStorage.getItem('cabTypes');
+      const localStorageVehicles = localStorage.getItem('cachedVehicles');
       
-      // Then try to get fresh data
-      cabData = await reloadCabTypes(true);
+      const combinedVehicles: ExtendedVehicleType[] = [];
       
-      if (cabData && cabData.length > 0) {
-        // Process and sort vehicles
-        const processedVehicles = cabData.map(vehicle => ({
-          ...vehicle,
-          id: vehicle.id || vehicle.vehicleId || '',
-          vehicleId: vehicle.vehicleId || vehicle.id || '',
-          isActive: vehicle.isActive !== false,
-          amenities: vehicle.amenities || ['AC', 'Bottle Water', 'Music System'],
-          ac: vehicle.ac !== false
-        }));
-        
-        // Sort vehicles by name
-        processedVehicles.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-        
-        setVehicles(processedVehicles as ExtendedVehicleType[]);
-        console.log(`Loaded ${processedVehicles.length} vehicles`);
-      } else {
-        console.warn('No vehicles returned from reloadCabTypes');
-        
-        // Try to get vehicles from local storage as a last resort
+      // Process cached vehicles first
+      if (cachedVehicles) {
         try {
-          const cached = localStorage.getItem('cachedVehicles');
-          if (cached) {
-            const parsedVehicles = JSON.parse(cached);
-            if (Array.isArray(parsedVehicles) && parsedVehicles.length > 0) {
-              setVehicles(parsedVehicles);
-              console.log(`Loaded ${parsedVehicles.length} vehicles from local storage`);
-            }
+          const parsed = JSON.parse(cachedVehicles);
+          
+          if (Array.isArray(parsed)) {
+            parsed.forEach(vehicle => {
+              if (!combinedVehicles.some(v => v.id === vehicle.id)) {
+                combinedVehicles.push(vehicle);
+              }
+            });
           }
         } catch (e) {
-          console.error('Error loading from local storage:', e);
+          console.error('Error parsing cached vehicles:', e);
         }
       }
+      
+      // Add vehicles from local storage if they don't exist in combined list
+      if (localStorageVehicles) {
+        try {
+          const parsed = JSON.parse(localStorageVehicles);
+          
+          if (Array.isArray(parsed)) {
+            parsed.forEach(vehicle => {
+              if (!combinedVehicles.some(v => 
+                v.id === vehicle.id || v.id === vehicle.vehicleId
+              )) {
+                combinedVehicles.push(vehicle);
+              }
+            });
+          }
+        } catch (e) {
+          console.error('Error parsing local storage vehicles:', e);
+        }
+      }
+      
+      // If we have pricing data, try to include those vehicles too
+      try {
+        const pricingData = localStorage.getItem('vehiclePricing');
+        if (pricingData) {
+          const pricing = JSON.parse(pricingData);
+          
+          if (pricing && pricing.data && Array.isArray(pricing.data)) {
+            for (const item of pricing.data) {
+              if (item && item.vehicleId && !combinedVehicles.some(v => 
+                  v.id === item.vehicleId || v.vehicleId === item.vehicleId
+              )) {
+                const newVehicle: CabType = {
+                  id: item.vehicleId,
+                  vehicleId: item.vehicleId,
+                  name: item.name || item.vehicleId,
+                  capacity: parseInt(item.capacity) || 4,
+                  luggageCapacity: parseInt(item.luggageCapacity) || 2,
+                  isActive: true,
+                  description: item.description || `${item.name || item.vehicleId} vehicle`,
+                  image: item.image || `/cars/sedan.png`,
+                  amenities: ['AC', 'Bottle Water', 'Music System'],
+                  ac: true
+                };
+                combinedVehicles.push(newVehicle);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Error processing pricing data:', e);
+      }
+      
+      // Sort vehicles by name
+      combinedVehicles.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      
+      setVehicles(combinedVehicles);
+      console.log(`Loaded ${combinedVehicles.length} vehicles`);
     } catch (error) {
       console.error('Error fetching vehicles:', error);
       toast.error('Failed to load vehicles');
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
-  }, [refreshing]);
+  }, []);
   
   useEffect(() => {
     fetchVehicles();
     
-    // Clean up any pending timeouts
-    return () => {
-      if (refreshTimeoutRef.current) {
-        window.clearTimeout(refreshTimeoutRef.current);
-      }
-    };
-  }, [fetchVehicles]);
-  
-  // Set up event listeners for vehicle updates
-  useEffect(() => {
+    // Listen for vehicle updates
     const handleVehicleUpdates = () => {
-      console.log('Detected vehicle updates, scheduling refresh...');
-      
-      // Clear any existing timeout
-      if (refreshTimeoutRef.current) {
-        window.clearTimeout(refreshTimeoutRef.current);
-      }
-      
-      // Schedule a refresh after a delay to prevent multiple rapid refreshes
-      refreshTimeoutRef.current = window.setTimeout(() => {
-        console.log('Executing scheduled refresh');
-        clearCabTypesCache();
-        fetchVehicles();
-      }, 2000);
+      console.log('Detected vehicle updates, refreshing data...');
+      fetchVehicles();
     };
     
     window.addEventListener('vehicles-updated', handleVehicleUpdates);
@@ -164,26 +191,13 @@ const VehicleManagement = () => {
     return () => {
       window.removeEventListener('vehicles-updated', handleVehicleUpdates);
       window.removeEventListener('vehicle-data-refreshed', handleVehicleUpdates);
-      
-      if (refreshTimeoutRef.current) {
-        window.clearTimeout(refreshTimeoutRef.current);
-      }
     };
   }, [fetchVehicles]);
   
   const handleRefreshData = useCallback(async () => {
-    if (refreshing) {
-      toast.info('Refresh already in progress, please wait');
-      return;
-    }
-    
     toast.info('Refreshing vehicle data...');
-    setRefreshing(true);
     
     try {
-      // Clear the cache to force a fresh load
-      clearCabTypesCache();
-      
       // Use the syncVehicleData function with forceRefresh=true
       const result = await syncVehicleData(true);
       
@@ -200,10 +214,8 @@ const VehicleManagement = () => {
     } catch (error) {
       console.error('Error refreshing vehicles:', error);
       toast.error('Error refreshing vehicle data');
-    } finally {
-      setRefreshing(false);
     }
-  }, [fetchVehicles, refreshing]);
+  }, [fetchVehicles]);
   
   const handleEditVehicle = (vehicle: ExtendedVehicleType) => {
     setSelectedVehicle(vehicle);
@@ -222,7 +234,7 @@ const VehicleManagement = () => {
     try {
       toast.info(`Updating vehicle: ${editVehicleName}`);
       
-      const vehicleData: CabType = {
+      const vehicleData = {
         ...selectedVehicle,
         name: editVehicleName,
         capacity: parseInt(editVehicleCapacity) || 4,
@@ -230,15 +242,13 @@ const VehicleManagement = () => {
         image: editVehicleImage,
         description: editVehicleDescription,
         isActive: editVehicleIsActive,
+        // Make sure we're using the correct ID field
+        vehicleId: selectedVehicle.id,
         id: selectedVehicle.id,
-        ac: selectedVehicle.ac !== false,
+        // Include required fields for CabType compatibility
+        ac: true,
         amenities: selectedVehicle.amenities || ['AC', 'Bottle Water', 'Music System']
       };
-      
-      // If vehicleId is defined, make sure we include it
-      if (selectedVehicle.vehicleId) {
-        (vehicleData as ExtendedVehicleType).vehicleId = selectedVehicle.vehicleId;
-      }
       
       // First try direct update
       const result = await updateVehicle(vehicleData);
@@ -246,9 +256,7 @@ const VehicleManagement = () => {
       if (result.status === 'success') {
         toast.success(`Vehicle ${editVehicleName} updated successfully`);
         setIsEditDialogOpen(false);
-        
-        // Clear cache and fetch fresh data
-        clearCabTypesCache();
+        await syncVehicleData(true);
         await fetchVehicles();
       } else {
         toast.error('Failed to update vehicle');
@@ -268,9 +276,6 @@ const VehicleManagement = () => {
         
         if (result.status === 'success') {
           toast.success(`Vehicle ${vehicle.name} deleted successfully`);
-          
-          // Clear cache and fetch fresh data
-          clearCabTypesCache();
           await fetchVehicles();
         } else {
           toast.error('Failed to delete vehicle');
@@ -286,10 +291,11 @@ const VehicleManagement = () => {
     try {
       toast.info(`${isActive ? 'Activating' : 'Deactivating'} vehicle: ${vehicle.name}`);
       
-      const updatedVehicle: CabType = {
+      const updatedVehicle = {
         ...vehicle,
         isActive,
-        ac: vehicle.ac !== false,
+        // Include required fields for CabType compatibility
+        ac: true,
         amenities: vehicle.amenities || ['AC', 'Bottle Water', 'Music System']
       };
       
@@ -298,14 +304,10 @@ const VehicleManagement = () => {
       if (result.status === 'success') {
         toast.success(`Vehicle ${vehicle.name} ${isActive ? 'activated' : 'deactivated'} successfully`);
         
-        // Update the local state to reflect the change immediately
+        // Update the local state to reflect the change
         setVehicles(prev => 
           prev.map(v => v.id === vehicle.id ? { ...v, isActive } : v)
         );
-        
-        // Also update the cache
-        clearCabTypesCache();
-        setTimeout(() => fetchVehicles(), 1000);
       } else {
         toast.error(`Failed to ${isActive ? 'activate' : 'deactivate'} vehicle`);
       }
@@ -321,6 +323,7 @@ const VehicleManagement = () => {
       
       const vehicleData: CabType = {
         id: vehicleId,
+        vehicleId: vehicleId,
         name: newVehicleName,
         capacity: parseInt(newVehicleCapacity) || 4,
         luggageCapacity: parseInt(newVehicleLuggageCapacity) || 2,
@@ -349,8 +352,14 @@ const VehicleManagement = () => {
         setNewVehicleImage('');
         setIsAddDialogOpen(false);
         
-        // Clear cache and fetch fresh data
-        clearCabTypesCache();
+        // Update vehicles list with new vehicle
+        setVehicles(prev => [
+          ...prev, 
+          vehicleData as ExtendedVehicleType
+        ]);
+        
+        // Force vehicle data sync
+        await syncVehicleData(true);
         await fetchVehicles();
       } else {
         toast.error('Failed to create vehicle');
@@ -379,14 +388,13 @@ const VehicleManagement = () => {
     }
   }, [newVehicleName, newVehicleId]);
   
-  // Rendering starts here
   return (
     <div className="container p-4">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Vehicle Management</h1>
         <div className="flex space-x-2">
-          <Button onClick={handleRefreshData} variant="outline" disabled={refreshing}>
-            {refreshing ? 'Refreshing...' : 'Refresh Data'}
+          <Button onClick={handleRefreshData} variant="outline">
+            Refresh Data
           </Button>
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
@@ -492,7 +500,7 @@ const VehicleManagement = () => {
                     </Label>
                     <Switch
                       id={`active-${vehicle.id}`}
-                      checked={vehicle.isActive !== false}
+                      checked={vehicle.isActive ?? true}
                       onCheckedChange={(checked) => handleToggleVehicleActive(vehicle, checked)}
                     />
                   </div>
