@@ -19,7 +19,7 @@ header('Expires: 0');
 
 // Add extra cache busting headers
 header('X-Cache-Timestamp: ' . time());
-header('X-API-Version: '.'1.0.7'); // Updated version number
+header('X-API-Version: '.'1.0.8'); // Updated version number
 
 // Respond to preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -248,11 +248,22 @@ function getVehiclesFromJson() {
                     if (isset($vehicle['image'])) {
                         $vehicle['image'] = normalizeImagePath($vehicle['image']);
                     }
+                    
+                    // Ensure all required fields exist
+                    $vehicle['id'] = $vehicle['id'] ?? $vehicle['vehicleId'] ?? 'unknown';
+                    $vehicle['vehicleId'] = $vehicle['vehicleId'] ?? $vehicle['id'] ?? 'unknown';
+                    $vehicle['isActive'] = isset($vehicle['isActive']) ? (bool)$vehicle['isActive'] : true;
                 }
                 $vehicles = $jsonData;
-                error_log("Successfully loaded vehicles from JSON file: " . count($vehicles));
+                error_log("Successfully loaded " . count($vehicles) . " vehicles from JSON file");
+            } else {
+                error_log("Error parsing JSON file: " . json_last_error_msg());
             }
+        } else {
+            error_log("JSON file exists but is empty");
         }
+    } else {
+        error_log("JSON file does not exist: " . $jsonFile);
     }
     
     return $vehicles;
@@ -293,7 +304,7 @@ try {
                 'timestamp' => time(),
                 'cached' => true,
                 'source' => 'json',
-                'version' => '1.0.7', // Updated version
+                'version' => '1.0.8', // Updated version
                 'includeInactive' => $includeInactive
             ]);
             exit;
@@ -407,6 +418,14 @@ try {
             $name = "Vehicle ID: " . $vehicleId;
         }
         
+        // Ensure proper handling of is_active field
+        $isActive = true; // Default to active
+        if (isset($row['is_active'])) {
+            $isActive = (bool)(int)$row['is_active'];
+        }
+        
+        error_log("Vehicle $vehicleId ($name) is_active: " . ($isActive ? 'true' : 'false'));
+        
         // Format vehicle data with consistent property names for frontend
         $vehicle = [
             'id' => (string)$vehicleId,
@@ -417,7 +436,7 @@ try {
             'amenities' => $amenities,
             'description' => $row['description'] ?? '',
             'ac' => (bool)($row['ac'] ?? 1),
-            'isActive' => (bool)($row['is_active'] ?? 1),
+            'isActive' => $isActive,
             'vehicleId' => (string)$vehicleId
         ];
         
@@ -452,7 +471,7 @@ try {
                                 night_halt_charge as nightHaltCharge, 
                                 driver_allowance as driverAllowance
                             FROM vehicle_pricing 
-                            WHERE vehicle_id = ? AND trip_type = 'outstation'
+                            WHERE vehicle_id = ? AND (trip_type = 'outstation' OR trip_type = 'all')
                             LIMIT 1
                         ");
                         
@@ -530,8 +549,12 @@ try {
         }
         
         // Always add the vehicle if we're including inactive ones, or if it's active
-        $vehicles[] = $vehicle;
-        error_log("Added vehicle to response: $vehicleId - $name");
+        if ($includeInactive || $isActive) {
+            $vehicles[] = $vehicle;
+            error_log("Added vehicle to response: $vehicleId - $name");
+        } else {
+            error_log("Skipping inactive vehicle: $vehicleId - $name");
+        }
     }
 
     // If no vehicles found in database, use JSON file as backup
@@ -540,6 +563,15 @@ try {
         
         $jsonVehicles = getVehiclesFromJson();
         if (!empty($jsonVehicles)) {
+            // Filter inactive vehicles if needed
+            if (!$includeInactive) {
+                $jsonVehicles = array_filter($jsonVehicles, function($vehicle) {
+                    return $vehicle['isActive'] ?? true;
+                });
+                // Re-index array after filtering
+                $jsonVehicles = array_values($jsonVehicles);
+            }
+            
             echo json_encode([
                 'vehicles' => $jsonVehicles,
                 'timestamp' => time(),
@@ -568,7 +600,7 @@ try {
         'vehicles' => $vehicles,
         'timestamp' => time(),
         'cached' => false,
-        'version' => '1.0.7', // Updated version
+        'version' => '1.0.8', // Updated version
         'tableUsed' => $vehicleTableToUse,
         'includeInactive' => $includeInactive
     ]);
@@ -580,6 +612,15 @@ try {
     // Try JSON file as backup
     $jsonVehicles = getVehiclesFromJson();
     if (!empty($jsonVehicles)) {
+        // Filter inactive vehicles if needed
+        if (!isset($_GET['includeInactive']) || $_GET['includeInactive'] !== 'true') {
+            $jsonVehicles = array_filter($jsonVehicles, function($vehicle) {
+                return $vehicle['isActive'] ?? true;
+            });
+            // Re-index array after filtering
+            $jsonVehicles = array_values($jsonVehicles);
+        }
+        
         echo json_encode([
             'vehicles' => $jsonVehicles,
             'timestamp' => time(),

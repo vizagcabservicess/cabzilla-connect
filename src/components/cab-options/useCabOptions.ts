@@ -357,10 +357,6 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
     return () => {
       window.removeEventListener('fare-cache-cleared', handleFareCacheCleared);
       window.removeEventListener('vehicle-data-refreshed', handleDataRefreshed);
-      
-      if (refreshTimeoutRef.current) {
-        clearTimeout(refreshTimeoutRef.current);
-      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

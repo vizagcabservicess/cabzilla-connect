@@ -55,8 +55,12 @@ export {
   updateVehicle,
   deleteVehicle,
   updateVehicleFares,
-  syncVehicleData
+  syncVehicleData,
+  getVehicleById
 } from '@/services/directVehicleService';
+
+// Export getData function from vehicleDataService
+export { getVehicleData } from '@/services/vehicleDataService';
 
 // Re-export CabType from the types directly
 export type { 

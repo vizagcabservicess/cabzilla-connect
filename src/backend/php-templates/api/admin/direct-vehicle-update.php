@@ -55,23 +55,36 @@ $luggageCapacity = (int)($data['luggageCapacity'] ?? 2);
 
 // Handle boolean or integer isActive values - fixed to ensure proper conversion
 $isActive = 1; // Default to active
+
+// Debug isActive handling
+error_log("Processing isActive field");
+
 if (isset($data['isActive'])) {
     if (is_bool($data['isActive'])) {
         $isActive = $data['isActive'] ? 1 : 0;
+        error_log("isActive (bool): " . ($data['isActive'] ? 'true' : 'false') . " => $isActive");
     } else if (is_string($data['isActive'])) {
-        $isActive = ($data['isActive'] === 'true' || $data['isActive'] === '1') ? 1 : 0;
+        $isActive = (strtolower($data['isActive']) === 'true' || $data['isActive'] === '1') ? 1 : 0;
+        error_log("isActive (string): " . $data['isActive'] . " => $isActive");
     } else {
-        $isActive = (int)$data['isActive']; // Convert to integer
+        $isActive = (int)$data['isActive'];
+        error_log("isActive (other): " . $data['isActive'] . " => $isActive");
     }
 } else if (isset($data['is_active'])) {
     if (is_bool($data['is_active'])) {
         $isActive = $data['is_active'] ? 1 : 0;
+        error_log("is_active (bool): " . ($data['is_active'] ? 'true' : 'false') . " => $isActive");
     } else if (is_string($data['is_active'])) {
-        $isActive = ($data['is_active'] === 'true' || $data['is_active'] === '1') ? 1 : 0;
+        $isActive = (strtolower($data['is_active']) === 'true' || $data['is_active'] === '1') ? 1 : 0;
+        error_log("is_active (string): " . $data['is_active'] . " => $isActive");
     } else {
-        $isActive = (int)$data['is_active']; // Convert to integer
+        $isActive = (int)$data['is_active'];
+        error_log("is_active (other): " . $data['is_active'] . " => $isActive");
     }
 }
+
+// Ensure value is definitely 0 or 1
+$isActive = $isActive ? 1 : 0;
 
 // For debugging
 error_log("isActive raw value: " . (isset($data['isActive']) ? var_export($data['isActive'], true) : 'not set'), 3, __DIR__ . '/../../error.log');
@@ -280,7 +293,7 @@ try {
                 $vehicle['name'] = $name;
                 $vehicle['capacity'] = $capacity;
                 $vehicle['luggageCapacity'] = $luggageCapacity;
-                $vehicle['isActive'] = (bool)$isActive;
+                $vehicle['isActive'] = (bool)$isActive; 
                 $vehicle['image'] = $image;
                 $vehicle['ac'] = (bool)$ac;
                 $vehicle['amenities'] = is_array($amenities) ? $amenities : [$amenities];
@@ -322,8 +335,8 @@ try {
         // Update cache invalidation marker
         file_put_contents(__DIR__ . '/../../../data/vehicle_cache_invalidated.txt', time());
         
-        // Force clear all caches
-        error_log("Clearing all localStorage and sessionStorage caches");
+        // Log success of JSON update
+        error_log("Successfully updated JSON file with " . count($vehicles) . " vehicles");
         
     } catch (Exception $e) {
         error_log("Error updating JSON file: " . $e->getMessage());
@@ -337,8 +350,6 @@ try {
         'isActive' => (bool)$isActive,
         'timestamp' => time()
     ]);
-    
-    // Update: Removed JavaScript event dispatch that was causing refreshing loops
     
 } catch (Exception $e) {
     http_response_code(500);
