@@ -245,6 +245,10 @@ export function FareManagement() {
     }
   };
   
+  const handleRefreshClick = () => {
+    fetchTourFares(true);
+  };
+  
   const handleTourSelect = (tourId: string) => {
     const selectedTour = tourFares.find(fare => fare.tourId === tourId);
     if (selectedTour) {
@@ -281,7 +285,7 @@ export function FareManagement() {
               <Button 
                 variant="outline" 
                 size="sm" 
-                onClick={fetchTourFares} 
+                onClick={handleRefreshClick} 
                 disabled={isRefreshing}
               >
                 <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -574,7 +578,7 @@ export function FareManagement() {
               <Button 
                 variant="outline" 
                 size="sm" 
-                onClick={fetchTourFares} 
+                onClick={handleRefreshClick} 
                 disabled={isRefreshing}
               >
                 <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
