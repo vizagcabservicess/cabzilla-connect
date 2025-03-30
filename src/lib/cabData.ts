@@ -1,4 +1,3 @@
-
 // Import necessary types and utilities
 import { CabType } from '@/types/cab';
 
@@ -10,6 +9,16 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 // Track ongoing fetch operations
 let isFetchingCabTypes = false;
 let pendingForceRefresh = false;
+
+/**
+ * Format a price for display with the ₹ symbol and thousands separators
+ * @param price The price to format
+ * @returns Formatted price string
+ */
+export function formatPrice(price: number): string {
+  // Return a properly formatted price with ₹ symbol
+  return `₹${price.toLocaleString('en-IN')}`;
+}
 
 /**
  * Get all cab types, with optional force refresh
@@ -240,3 +249,9 @@ export async function getCabTypeById(id: string): Promise<CabType | undefined> {
   // Find the cab with the matching ID
   return types.find(cab => cab.id === id || cab.vehicleId === id);
 }
+
+/**
+ * Export the cab types directly for components that need immediate access
+ * without waiting for an async function
+ */
+export { cabTypes };

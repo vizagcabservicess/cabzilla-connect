@@ -63,7 +63,9 @@ export {
   getCabTypes,
   getCabTypeById,
   reloadCabTypes,
-  clearCabTypesCache
+  clearCabTypesCache,
+  formatPrice,
+  cabTypes
 } from './cabData';
 
 // Re-export CabType from the types directly
