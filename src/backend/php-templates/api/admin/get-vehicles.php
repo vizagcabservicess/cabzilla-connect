@@ -16,7 +16,7 @@ header('Expires: 0');
 
 // Add debugging headers
 header('X-Debug-File: get-vehicles.php');
-header('X-API-Version: 1.0.1');
+header('X-API-Version: 1.0.2');
 header('X-Timestamp: ' . time());
 
 // Handle preflight OPTIONS request
@@ -36,9 +36,15 @@ try {
     // Get additional parameters
     $includeInactive = isset($_GET['includeInactive']) && $_GET['includeInactive'] === 'true';
     $fullSync = isset($_GET['fullSync']) && $_GET['fullSync'] === 'true';
+    $isAdminMode = isset($_SERVER['HTTP_X_ADMIN_MODE']) && $_SERVER['HTTP_X_ADMIN_MODE'] === 'true';
+    
+    // For admin views, always include inactive vehicles
+    if ($isAdminMode) {
+        $includeInactive = true;
+    }
     
     // Log the operation start
-    error_log("Starting get-vehicles operation with includeInactive=" . ($includeInactive ? 'true' : 'false') . ", fullSync=" . ($fullSync ? 'true' : 'false') . " at " . date('Y-m-d H:i:s'));
+    error_log("Starting get-vehicles operation with includeInactive=" . ($includeInactive ? 'true' : 'false') . ", fullSync=" . ($fullSync ? 'true' : 'false') . ", isAdminMode=" . ($isAdminMode ? 'true' : 'false') . " at " . date('Y-m-d H:i:s'));
     
     // First check if tables exist and create them if needed
     $tables = [
@@ -65,7 +71,8 @@ try {
     // First get from vehicle_types table (primary table)
     if (in_array('vehicle_types', $existingTables)) {
         $vehicleTypesQuery = "SELECT * FROM vehicle_types";
-        if (!$includeInactive && !$fullSync) {
+        // For admin views, always include all vehicles
+        if (!$includeInactive && !$fullSync && !$isAdminMode) {
             $vehicleTypesQuery .= " WHERE is_active = 1";
         }
         
@@ -97,7 +104,8 @@ try {
     // Then get from vehicles table (if exists)
     if (in_array('vehicles', $existingTables)) {
         $vehiclesQuery = "SELECT * FROM vehicles";
-        if (!$includeInactive && !$fullSync) {
+        // For admin views, always include all vehicles
+        if (!$includeInactive && !$fullSync && !$isAdminMode) {
             $vehiclesQuery .= " WHERE is_active = 1 OR is_active IS NULL";
         }
         
@@ -248,6 +256,11 @@ try {
         if (!isset($vehicle['ac'])) $vehiclesArray[$key]['ac'] = true;
         if (!isset($vehicle['isActive'])) $vehiclesArray[$key]['isActive'] = true;
         
+        // Ensure description field is set (even if empty)
+        if (!isset($vehicle['description'])) {
+            $vehiclesArray[$key]['description'] = ucwords(str_replace('_', ' ', $vehicle['id'] ?? '')) . ' vehicle';
+        }
+        
         // Set price defaults if missing
         if (!isset($vehicle['price']) || $vehicle['price'] == 0) {
             $vehiclesArray[$key]['price'] = $vehicle['basePrice'] ?? 2500;
@@ -265,9 +278,21 @@ try {
             $vehiclesArray[$key]['driverAllowance'] = 300;
         }
         
-        // Set image
+        // Set image - critical for vehicle management
         if (!isset($vehicle['image']) || empty($vehicle['image'])) {
-            $vehiclesArray[$key]['image'] = '/cars/sedan.png';
+            // Based on vehicle type, assign appropriate image
+            $vehicleName = strtolower($vehiclesArray[$key]['name']);
+            if (strpos($vehicleName, 'sedan') !== false || strpos($vehicleName, 'dzire') !== false) {
+                $vehiclesArray[$key]['image'] = '/cars/sedan.png';
+            } else if (strpos($vehicleName, 'ertiga') !== false) {
+                $vehiclesArray[$key]['image'] = '/cars/ertiga.png';
+            } else if (strpos($vehicleName, 'innova') !== false) {
+                $vehiclesArray[$key]['image'] = '/cars/innova.png';
+            } else if (strpos($vehicleName, 'tempo') !== false) {
+                $vehiclesArray[$key]['image'] = '/cars/tempo.png';
+            } else {
+                $vehiclesArray[$key]['image'] = '/cars/sedan.png';
+            }
         }
     }
     
@@ -284,6 +309,7 @@ try {
         'source' => 'direct-db-query',
         'tables' => $existingTables,
         'includeInactive' => $includeInactive,
+        'isAdminMode' => $isAdminMode,
         'fullSync' => $fullSync,
         'vehicleCount' => count($vehiclesArray),
         'timestamp' => time()

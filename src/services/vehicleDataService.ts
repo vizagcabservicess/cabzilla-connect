@@ -259,6 +259,20 @@ function filterVehicles(vehicles: CabType[], includeInactive: boolean): CabType[
 // Helper function to process vehicle data to ensure consistent format
 function processVehicles(vehicles: any[]): CabType[] {
   return vehicles.map(vehicle => {
+    // Get default image based on vehicle type
+    const vehicleName = (vehicle.name || '').toLowerCase();
+    let defaultImage = '/cars/sedan.png';
+    
+    if (vehicleName.includes('ertiga')) {
+      defaultImage = '/cars/ertiga.png';
+    } else if (vehicleName.includes('innova')) {
+      defaultImage = '/cars/innova.png';
+    } else if (vehicleName.includes('tempo')) {
+      defaultImage = '/cars/tempo.png';
+    } else if (vehicleName.includes('dzire')) {
+      defaultImage = '/cars/sedan.png';
+    }
+    
     // Ensure all properties have appropriate defaults
     return {
       id: String(vehicle.id || vehicle.vehicleId || vehicle.vehicle_id || ''),
@@ -269,7 +283,7 @@ function processVehicles(vehicles: any[]): CabType[] {
       basePrice: parseFloat(vehicle.basePrice || vehicle.base_price || vehicle.price || '0'),
       price: parseFloat(vehicle.price || vehicle.basePrice || vehicle.base_price || '0'),
       pricePerKm: parseFloat(vehicle.pricePerKm || vehicle.price_per_km || '0'),
-      image: vehicle.image || '/cars/sedan.png',
+      image: vehicle.image || defaultImage, // Use the calculated default image if not provided
       amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC'],
       description: vehicle.description || '',
       ac: vehicle.ac === undefined ? true : Boolean(vehicle.ac),

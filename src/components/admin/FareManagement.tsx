@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -62,6 +62,8 @@ export function FareManagement() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [addTourDialogOpen, setAddTourDialogOpen] = useState(false);
   const { toast: uiToast } = useToast();
+  const lastFetchTime = useRef<number>(0);
+  const isInitialLoad = useRef<boolean>(true);
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -105,7 +107,7 @@ export function FareManagement() {
       console.log("Fare update response:", data);
       
       toast.success("Tour fare updated successfully");
-      await fetchTourFares();
+      await fetchTourFares(true);
     } catch (error) {
       console.error("Error updating fare:", error);
       toast.error("Failed to update fare");
@@ -142,7 +144,7 @@ export function FareManagement() {
       console.log("New tour added:", data);
       
       toast.success("New tour added successfully");
-      await fetchTourFares();
+      await fetchTourFares(true);
       setAddTourDialogOpen(false);
       newTourForm.reset();
     } catch (error) {
@@ -173,7 +175,7 @@ export function FareManagement() {
       console.log("Tour deleted:", data);
       
       toast.success("Tour deleted successfully");
-      await fetchTourFares();
+      await fetchTourFares(true);
     } catch (error) {
       console.error("Error deleting tour:", error);
       toast.error("Failed to delete tour");
@@ -183,37 +185,61 @@ export function FareManagement() {
   };
   
   useEffect(() => {
-    fetchTourFares();
+    fetchTourFares(false);
+    
+    return () => {
+      isInitialLoad.current = true;
+    };
   }, []);
   
-  const fetchTourFares = async () => {
+  const fetchTourFares = async (forceRefresh = false) => {
+    const now = Date.now();
+    const minTimeBetweenFetches = 10000; // 10 seconds minimum between fetches
+    
+    if (!forceRefresh && !isInitialLoad.current && now - lastFetchTime.current < minTimeBetweenFetches) {
+      console.log(`Throttling fare fetch: last fetch was ${(now - lastFetchTime.current) / 1000}s ago`);
+      return;
+    }
+    
     try {
       setIsRefreshing(true);
       setError(null);
-      console.log("Manually refreshing tour fares...");
+      console.log("Fetching tour fares...");
       
-      localStorage.removeItem('cabFares');
-      localStorage.removeItem('tourFares');
-      sessionStorage.removeItem('cabFares');
-      sessionStorage.removeItem('tourFares');
-      sessionStorage.removeItem('calculatedFares');
-      
-      await reloadCabTypes();
+      if (forceRefresh || isInitialLoad.current) {
+        localStorage.removeItem('cabFares');
+        localStorage.removeItem('tourFares');
+        sessionStorage.removeItem('cabFares');
+        sessionStorage.removeItem('tourFares');
+        sessionStorage.removeItem('calculatedFares');
+        
+        if (forceRefresh) {
+          await reloadCabTypes();
+        }
+      }
       
       const data = await fareAPI.getTourFares();
       
       if (Array.isArray(data) && data.length > 0) {
         console.log("Fetched tour fares:", data);
         setTourFares(data);
-        toast.success("Tour fares refreshed");
+        
+        if (forceRefresh) {
+          toast.success("Tour fares refreshed");
+        }
       } else {
         console.warn("Empty or invalid tour fares data:", data);
         setError("No tour fares data available. The API may be down or returned an empty result.");
       }
+      
+      lastFetchTime.current = now;
+      isInitialLoad.current = false;
     } catch (error) {
       console.error("Error refreshing tour fares:", error);
       setError("Failed to refresh tour fares. Please try again.");
-      toast.error("Failed to refresh tour fares");
+      if (forceRefresh) {
+        toast.error("Failed to refresh tour fares");
+      }
     } finally {
       setIsRefreshing(false);
     }
