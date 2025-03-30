@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { toast } from 'sonner';
 import { getBypassHeaders } from '@/config/requestConfig';
@@ -478,7 +477,7 @@ export const syncVehicleData = async (forceRefresh = false) => {
     // Check if sync is already in progress
     if (isSyncing) {
       console.log('Vehicle sync already in progress, skipping duplicate request');
-      return { success: false, alreadyInProgress: true };
+      return { success: false, alreadyInProgress: true, vehicleCount: 0, responseData: null };
     }
     
     // If a sync is scheduled but not yet executed, clear it
@@ -709,7 +708,7 @@ export const syncVehicleData = async (forceRefresh = false) => {
           resolve({ success, responseData, vehicleCount: vehicles.length });
         } catch (error) {
           console.error('Vehicle data synchronization failed:', error);
-          resolve({ success: false, vehicleCount: 0 });
+          resolve({ success: false, vehicleCount: 0, responseData: null });
         } finally {
           // Release sync flags after a short delay
           setTimeout(() => {
@@ -728,7 +727,7 @@ export const syncVehicleData = async (forceRefresh = false) => {
       window.isSyncingVehicleData = false;
     }, 5000);
     
-    throw error;
+    return { success: false, vehicleCount: 0, responseData: null };
   }
 };
 

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,7 +60,6 @@ interface ExtendedVehicleType {
   driverAllowance?: number;
 }
 
-// VehicleManagement component
 const VehicleManagement = () => {
   const [vehicles, setVehicles] = useState<ExtendedVehicleType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,7 +67,6 @@ const VehicleManagement = () => {
   const [refreshInProgress, setRefreshInProgress] = useState(false);
   const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
-  // New vehicle form state
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newVehicleName, setNewVehicleName] = useState('');
   const [newVehicleId, setNewVehicleId] = useState('');
@@ -77,7 +74,6 @@ const VehicleManagement = () => {
   const [newVehicleLuggageCapacity, setNewVehicleLuggageCapacity] = useState('2');
   const [newVehicleImage, setNewVehicleImage] = useState('');
   
-  // Edit vehicle form state
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editVehicleName, setEditVehicleName] = useState('');
   const [editVehicleCapacity, setEditVehicleCapacity] = useState('');
@@ -86,9 +82,7 @@ const VehicleManagement = () => {
   const [editVehicleDescription, setEditVehicleDescription] = useState('');
   const [editVehicleIsActive, setEditVehicleIsActive] = useState(true);
   
-  // Debounce the fetchVehicles function to prevent infinite loops
   const fetchVehicles = useCallback(async () => {
-    // Skip if a refresh is already in progress
     if (refreshInProgress) {
       console.log('Skipping vehicle fetch - refresh already in progress');
       return;
@@ -98,16 +92,13 @@ const VehicleManagement = () => {
     setRefreshInProgress(true);
     
     try {
-      // Call reloadCabTypes with forceRefresh=true to ensure fresh data
       await reloadCabTypes(true);
       
-      // Get cached vehicles from session/local storage
       const cachedVehicles = sessionStorage.getItem('cabTypes');
       const localStorageVehicles = localStorage.getItem('cachedVehicles');
       
       const combinedVehicles: ExtendedVehicleType[] = [];
       
-      // Process cached vehicles first
       if (cachedVehicles) {
         try {
           const parsed = JSON.parse(cachedVehicles);
@@ -124,7 +115,6 @@ const VehicleManagement = () => {
         }
       }
       
-      // Add vehicles from local storage if they don't exist in combined list
       if (localStorageVehicles) {
         try {
           const parsed = JSON.parse(localStorageVehicles);
@@ -143,7 +133,6 @@ const VehicleManagement = () => {
         }
       }
       
-      // If we have pricing data, try to include those vehicles too
       try {
         const pricingData = localStorage.getItem('vehiclePricing');
         if (pricingData) {
@@ -175,7 +164,6 @@ const VehicleManagement = () => {
         console.error('Error processing pricing data:', e);
       }
       
-      // Sort vehicles by name
       combinedVehicles.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
       
       setVehicles(combinedVehicles);
@@ -186,23 +174,20 @@ const VehicleManagement = () => {
     } finally {
       setLoading(false);
       
-      // Set a timeout to allow refreshing again after a delay
       if (refreshTimeoutRef.current) {
         clearTimeout(refreshTimeoutRef.current);
       }
       
       refreshTimeoutRef.current = setTimeout(() => {
         setRefreshInProgress(false);
-      }, 5000); // 5 seconds cooldown before allowing another refresh
+      }, 5000);
     }
   }, [refreshInProgress]);
   
   useEffect(() => {
     fetchVehicles();
     
-    // Listen for vehicle updates
     const handleVehicleUpdates = () => {
-      // Only trigger a refresh if one isn't already in progress
       if (!refreshInProgress) {
         console.log('Detected vehicle updates, refreshing data...');
         fetchVehicles();
@@ -216,7 +201,6 @@ const VehicleManagement = () => {
       window.removeEventListener('vehicles-updated', handleVehicleUpdates);
       window.removeEventListener('vehicle-data-refreshed', handleVehicleUpdates);
       
-      // Clean up timeout
       if (refreshTimeoutRef.current) {
         clearTimeout(refreshTimeoutRef.current);
       }
@@ -224,7 +208,6 @@ const VehicleManagement = () => {
   }, [fetchVehicles, refreshInProgress]);
   
   const handleRefreshData = useCallback(async () => {
-    // Skip if a refresh is already in progress
     if (refreshInProgress) {
       toast.info('Data refresh already in progress, please wait...');
       return;
@@ -234,11 +217,11 @@ const VehicleManagement = () => {
     setRefreshInProgress(true);
     
     try {
-      // Use the syncVehicleData function with forceRefresh=true
       const result = await syncVehicleData(true);
       
       if (result.success) {
-        toast.success(`Successfully refreshed vehicle data (${result.vehicleCount} vehicles)`);
+        const vehicleCount = 'vehicleCount' in result ? result.vehicleCount : 0;
+        toast.success(`Successfully refreshed vehicle data (${vehicleCount} vehicles)`);
         await fetchVehicles();
       } else {
         if (result.alreadyInProgress) {
@@ -251,14 +234,13 @@ const VehicleManagement = () => {
       console.error('Error refreshing vehicles:', error);
       toast.error('Error refreshing vehicle data');
     } finally {
-      // Set a timeout to allow refreshing again after a delay
       if (refreshTimeoutRef.current) {
         clearTimeout(refreshTimeoutRef.current);
       }
       
       refreshTimeoutRef.current = setTimeout(() => {
         setRefreshInProgress(false);
-      }, 5000); // 5 seconds cooldown
+      }, 5000);
     }
   }, [fetchVehicles, refreshInProgress]);
   
@@ -287,22 +269,18 @@ const VehicleManagement = () => {
         image: editVehicleImage,
         description: editVehicleDescription,
         isActive: editVehicleIsActive,
-        // Make sure we're using the correct ID field
         vehicleId: selectedVehicle.id,
         id: selectedVehicle.id,
-        // Include required fields for CabType compatibility
         ac: true,
         amenities: selectedVehicle.amenities || ['AC', 'Bottle Water', 'Music System']
       };
       
-      // First try direct update
       const result = await updateVehicle(vehicleData);
       
       if (result.status === 'success') {
         toast.success(`Vehicle ${editVehicleName} updated successfully`);
         setIsEditDialogOpen(false);
         
-        // Update the vehicle in the local state to avoid unnecessary refresh
         setVehicles(prev => 
           prev.map(v => v.id === selectedVehicle.id ? {
             ...v,
@@ -315,7 +293,6 @@ const VehicleManagement = () => {
           } : v)
         );
         
-        // Schedule a sync after a short delay
         setTimeout(async () => {
           await syncVehicleData(true);
         }, 2000);
@@ -338,10 +315,8 @@ const VehicleManagement = () => {
         if (result.status === 'success') {
           toast.success(`Vehicle ${vehicle.name} deleted successfully`);
           
-          // Remove the vehicle from the local state
           setVehicles(prev => prev.filter(v => v.id !== vehicle.id));
           
-          // Schedule a sync after a short delay
           setTimeout(async () => {
             await syncVehicleData(true);
           }, 2000);
@@ -362,7 +337,6 @@ const VehicleManagement = () => {
       const updatedVehicle = {
         ...vehicle,
         isActive,
-        // Include required fields for CabType compatibility
         ac: true,
         amenities: vehicle.amenities || ['AC', 'Bottle Water', 'Music System']
       };
@@ -372,7 +346,6 @@ const VehicleManagement = () => {
       if (result.status === 'success') {
         toast.success(`Vehicle ${vehicle.name} ${isActive ? 'activated' : 'deactivated'} successfully`);
         
-        // Update the local state to reflect the change
         setVehicles(prev => 
           prev.map(v => v.id === vehicle.id ? { ...v, isActive } : v)
         );
@@ -412,7 +385,6 @@ const VehicleManagement = () => {
       if (result.status === 'success') {
         toast.success(`Vehicle ${newVehicleName} created successfully`);
         
-        // Reset form
         setNewVehicleName('');
         setNewVehicleId('');
         setNewVehicleCapacity('4');
@@ -420,13 +392,11 @@ const VehicleManagement = () => {
         setNewVehicleImage('');
         setIsAddDialogOpen(false);
         
-        // Add the new vehicle to the local state
         setVehicles(prev => [
           ...prev, 
           vehicleData as ExtendedVehicleType
         ]);
         
-        // Schedule a sync after a short delay
         setTimeout(async () => {
           await syncVehicleData(true);
         }, 2000);
@@ -439,7 +409,6 @@ const VehicleManagement = () => {
     }
   };
   
-  // Reset new vehicle form when dialog is closed
   useEffect(() => {
     if (!isAddDialogOpen) {
       setNewVehicleName('');
@@ -450,7 +419,6 @@ const VehicleManagement = () => {
     }
   }, [isAddDialogOpen]);
   
-  // Auto-generate vehicle ID based on name
   useEffect(() => {
     if (newVehicleName && !newVehicleId) {
       setNewVehicleId(newVehicleName.toLowerCase().replace(/\s+/g, '_'));
@@ -628,7 +596,6 @@ const VehicleManagement = () => {
         </div>
       )}
       
-      {/* Edit Vehicle Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
