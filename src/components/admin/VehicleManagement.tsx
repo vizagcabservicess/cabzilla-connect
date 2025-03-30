@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,10 +65,6 @@ const VehicleManagement = () => {
   const [vehicles, setVehicles] = useState<ExtendedVehicleType[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedVehicle, setSelectedVehicle] = useState<ExtendedVehicleType | null>(null);
-  const [skipInitialFetch, setSkipInitialFetch] = useState(false);
-  const refreshInProgressRef = useRef(false);
-  const lastRefreshTimeRef = useRef(0);
-  const eventHandlerAttachedRef = useRef(false);
   
   // New vehicle form state
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -88,40 +83,11 @@ const VehicleManagement = () => {
   const [editVehicleDescription, setEditVehicleDescription] = useState('');
   const [editVehicleIsActive, setEditVehicleIsActive] = useState(true);
   
-  const fetchVehicles = useCallback(async (forceRefresh = false) => {
-    // Throttle refreshes to prevent infinite loops
-    const now = Date.now();
-    const minTimeBetweenRefreshes = 10000; // 10 seconds
-    
-    if (refreshInProgressRef.current) {
-      console.log('Refresh already in progress, skipping this fetch request');
-      return;
-    }
-    
-    if (!forceRefresh && now - lastRefreshTimeRef.current < minTimeBetweenRefreshes) {
-      console.log('Throttling fetch request - too soon after last refresh');
-      return;
-    }
-    
-    // Set the refresh flag and update timestamp
-    refreshInProgressRef.current = true;
-    lastRefreshTimeRef.current = now;
-    
+  const fetchVehicles = useCallback(async () => {
     setLoading(true);
     try {
-      console.log('Fetching vehicles...');
-      
-      // If forceRefresh, reload from API, otherwise try to use cached data first
-      if (forceRefresh) {
-        // Use reloadCabTypes with a try/catch to handle errors gracefully
-        try {
-          console.log('Force reloading cab types...');
-          await reloadCabTypes(false); // Use false to avoid infinite refresh cycles
-        } catch (reloadError) {
-          console.error('Error during reloadCabTypes:', reloadError);
-          // Continue with cached data if reload fails
-        }
-      }
+      // Call reloadCabTypes with forceRefresh=true to ensure fresh data
+      await reloadCabTypes(true);
       
       // Get cached vehicles from session/local storage
       const cachedVehicles = sessionStorage.getItem('cabTypes');
@@ -207,70 +173,37 @@ const VehicleManagement = () => {
       toast.error('Failed to load vehicles');
     } finally {
       setLoading(false);
-      
-      // Set a timeout to reset the refresh flag
-      setTimeout(() => {
-        refreshInProgressRef.current = false;
-      }, 5000); // Wait 5 seconds before allowing another refresh
     }
   }, []);
   
   useEffect(() => {
-    // Only fetch on initial mount if not skipping
-    if (!skipInitialFetch) {
-      fetchVehicles(false);
-      setSkipInitialFetch(true);
-    }
+    fetchVehicles();
     
-    // Prevent duplicate event handlers by using a ref
-    if (!eventHandlerAttachedRef.current) {
-      eventHandlerAttachedRef.current = true;
-      
-      // Create debounced event handler to prevent rapid successive calls
-      let debounceTimeout: number | null = null;
-      const handleVehicleUpdates = () => {
-        if (debounceTimeout) {
-          clearTimeout(debounceTimeout);
-        }
-        
-        debounceTimeout = window.setTimeout(() => {
-          console.log('Detected vehicle updates, refreshing data...');
-          fetchVehicles(false);
-        }, 2000); // Debounce for 2 seconds
-      };
-      
-      window.addEventListener('vehicles-updated', handleVehicleUpdates);
-      window.addEventListener('vehicle-data-refreshed', handleVehicleUpdates);
-      
-      return () => {
-        if (debounceTimeout) {
-          clearTimeout(debounceTimeout);
-        }
-        window.removeEventListener('vehicles-updated', handleVehicleUpdates);
-        window.removeEventListener('vehicle-data-refreshed', handleVehicleUpdates);
-        eventHandlerAttachedRef.current = false;
-      };
-    }
+    // Listen for vehicle updates
+    const handleVehicleUpdates = () => {
+      console.log('Detected vehicle updates, refreshing data...');
+      fetchVehicles();
+    };
     
-    return undefined;
-  }, [fetchVehicles, skipInitialFetch]);
+    window.addEventListener('vehicles-updated', handleVehicleUpdates);
+    window.addEventListener('vehicle-data-refreshed', handleVehicleUpdates);
+    
+    return () => {
+      window.removeEventListener('vehicles-updated', handleVehicleUpdates);
+      window.removeEventListener('vehicle-data-refreshed', handleVehicleUpdates);
+    };
+  }, [fetchVehicles]);
   
   const handleRefreshData = useCallback(async () => {
-    // Prevent multiple refreshes in quick succession
-    if (refreshInProgressRef.current) {
-      toast.info('Refresh already in progress, please wait');
-      return;
-    }
-    
     toast.info('Refreshing vehicle data...');
     
     try {
-      // Use syncVehicleData with force=false to avoid refresh loops
-      const result = await syncVehicleData(false);
+      // Use the syncVehicleData function with forceRefresh=true
+      const result = await syncVehicleData(true);
       
       if (result.success) {
         toast.success(`Successfully refreshed vehicle data (${result.vehicleCount} vehicles)`);
-        await fetchVehicles(false);
+        await fetchVehicles();
       } else {
         if (result.alreadyInProgress) {
           toast.info('Vehicle sync already in progress, please wait');
@@ -317,22 +250,14 @@ const VehicleManagement = () => {
         amenities: selectedVehicle.amenities || ['AC', 'Bottle Water', 'Music System']
       };
       
-      // Use updateVehicle with a direct flag to avoid triggering automatic refreshes
+      // First try direct update
       const result = await updateVehicle(vehicleData);
       
       if (result.status === 'success') {
         toast.success(`Vehicle ${editVehicleName} updated successfully`);
         setIsEditDialogOpen(false);
-        
-        // Update the local vehicle list to avoid unnecessary refresh
-        setVehicles(prev => 
-          prev.map(v => v.id === selectedVehicle.id ? { ...v, ...vehicleData } : v)
-        );
-        
-        // Delayed refresh to ensure server has processed the update
-        setTimeout(() => {
-          fetchVehicles(false);
-        }, 1000);
+        await syncVehicleData(true);
+        await fetchVehicles();
       } else {
         toast.error('Failed to update vehicle');
       }
@@ -351,14 +276,7 @@ const VehicleManagement = () => {
         
         if (result.status === 'success') {
           toast.success(`Vehicle ${vehicle.name} deleted successfully`);
-          
-          // Update local state to avoid unnecessary refresh
-          setVehicles(prev => prev.filter(v => v.id !== vehicle.id));
-          
-          // Delayed refresh to ensure server has processed the deletion
-          setTimeout(() => {
-            fetchVehicles(false);
-          }, 1000);
+          await fetchVehicles();
         } else {
           toast.error('Failed to delete vehicle');
         }
@@ -440,10 +358,9 @@ const VehicleManagement = () => {
           vehicleData as ExtendedVehicleType
         ]);
         
-        // Delayed refresh to ensure server has processed the creation
-        setTimeout(() => {
-          fetchVehicles(true);
-        }, 1000);
+        // Force vehicle data sync
+        await syncVehicleData(true);
+        await fetchVehicles();
       } else {
         toast.error('Failed to create vehicle');
       }
