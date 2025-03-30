@@ -31,7 +31,6 @@ import {
   deleteVehicle,
   syncVehicleData 
 } from '@/services/directVehicleService';
-import { getVehicleData, clearVehicleDataCache } from '@/services/vehicleDataService';
 import { reloadCabTypes } from '@/lib/cabData';
 import { 
   Dialog,
@@ -43,8 +42,6 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { CabType } from '@/types/cab';
-import { CabLoading } from '../cab-options/CabLoading';
-import { apiBaseUrl } from '@/config/api';
 
 interface ExtendedVehicleType {
   id: string;
@@ -133,65 +130,98 @@ const VehicleManagement = () => {
         console.error('Error parsing cached vehicles:', e);
       }
       
-      console.log('Fetching vehicles from backend with admin mode...');
-      const cacheBuster = `_t=${Date.now()}`;
-      const url = `${apiBaseUrl}/api/admin/get-vehicles.php?${cacheBuster}&includeInactive=true&fullSync=true`;
+      console.log('Reloading cab types...');
+      await reloadCabTypes(true);
       
-      const response = await fetch(url, {
-        headers: {
-          'X-Force-Refresh': 'true',
-          'X-Admin-Mode': 'true',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache'
-        },
-        mode: 'cors',
-        cache: 'no-store'
-      });
+      const cachedVehicles = sessionStorage.getItem('cabTypes');
+      const localStorageVehicles = localStorage.getItem('cachedVehicles');
       
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status} ${response.statusText}`);
-      }
+      const combinedVehicles: ExtendedVehicleType[] = [];
       
-      const data = await response.json();
-      
-      if (data && data.status === 'success' && Array.isArray(data.vehicles)) {
-        const fetchedVehicles = data.vehicles;
-        console.log(`Loaded ${fetchedVehicles.length} vehicles from API`);
-        
+      if (cachedVehicles) {
         try {
-          localStorage.setItem('cachedVehicles', JSON.stringify(fetchedVehicles));
-          localStorage.setItem('cachedVehiclesTimestamp', Date.now().toString());
+          const parsed = JSON.parse(cachedVehicles);
+          
+          if (Array.isArray(parsed)) {
+            parsed.forEach(vehicle => {
+              if (!combinedVehicles.some(v => v.id === vehicle.id)) {
+                combinedVehicles.push(vehicle);
+              }
+            });
+          }
         } catch (e) {
-          console.error('Error caching vehicles:', e);
+          console.error('Error parsing cached vehicles:', e);
         }
-        
-        setVehicles(fetchedVehicles);
-        
-        clearVehicleDataCache();
-        
-        await getVehicleData(true, true);
-        
-        await reloadCabTypes(true);
-      } else {
-        console.warn('API returned invalid data:', data);
-        
-        console.log('Falling back to standard vehicle data retrieval...');
-        const vehicles = await getVehicleData(true, true);
-        setVehicles(vehicles);
       }
+      
+      if (localStorageVehicles) {
+        try {
+          const parsed = JSON.parse(localStorageVehicles);
+          
+          if (Array.isArray(parsed)) {
+            parsed.forEach(vehicle => {
+              if (!combinedVehicles.some(v => 
+                v.id === vehicle.id || v.id === vehicle.vehicleId
+              )) {
+                combinedVehicles.push(vehicle);
+              }
+            });
+          }
+        } catch (e) {
+          console.error('Error parsing local storage vehicles:', e);
+        }
+      }
+      
+      try {
+        const pricingData = localStorage.getItem('vehiclePricing');
+        if (pricingData) {
+          const pricing = JSON.parse(pricingData);
+          
+          if (pricing && pricing.data && Array.isArray(pricing.data)) {
+            for (const item of pricing.data) {
+              if (item && item.vehicleId && !combinedVehicles.some(v => 
+                  v.id === item.vehicleId || v.vehicleId === item.vehicleId
+              )) {
+                const newVehicle: CabType = {
+                  id: item.vehicleId,
+                  vehicleId: item.vehicleId,
+                  name: item.name || item.vehicleId,
+                  capacity: parseInt(item.capacity) || 4,
+                  luggageCapacity: parseInt(item.luggageCapacity) || 2,
+                  isActive: true,
+                  description: item.description || `${item.name || item.vehicleId} vehicle`,
+                  image: item.image || `/cars/sedan.png`,
+                  amenities: ['AC', 'Bottle Water', 'Music System'],
+                  ac: true
+                };
+                combinedVehicles.push(newVehicle);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Error processing pricing data:', e);
+      }
+      
+      if (combinedVehicles.length === 0 && localVehicles.length > 0) {
+        console.warn('No vehicles found from API or localStorage, using previously cached vehicles');
+        combinedVehicles.push(...localVehicles);
+      }
+      
+      combinedVehicles.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      
+      try {
+        localStorage.setItem('cachedVehicles', JSON.stringify(combinedVehicles));
+        localStorage.setItem('cachedVehiclesTimestamp', Date.now().toString());
+      } catch (e) {
+        console.error('Error caching combined vehicles:', e);
+      }
+      
+      setVehicles(combinedVehicles);
+      console.log(`Loaded ${combinedVehicles.length} vehicles`);
     } catch (error) {
       console.error('Error fetching vehicles:', error);
       toast.error('Failed to load vehicles');
-      
-      try {
-        const vehicles = await getVehicleData(true, true);
-        if (vehicles.length > 0) {
-          setVehicles(vehicles);
-          console.log(`Loaded ${vehicles.length} vehicles from data service fallback`);
-        }
-      } catch (fallbackError) {
-        console.error('Fallback also failed:', fallbackError);
-      }
     } finally {
       setLoading(false);
       
@@ -700,9 +730,7 @@ const VehicleManagement = () => {
       </div>
       
       {loading ? (
-        <div className="text-center p-4">
-          <CabLoading />
-        </div>
+        <div className="text-center p-4">Loading vehicles...</div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {vehicles.length === 0 ? (

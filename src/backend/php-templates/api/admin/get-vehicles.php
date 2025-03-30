@@ -16,7 +16,7 @@ header('Expires: 0');
 
 // Add debugging headers
 header('X-Debug-File: get-vehicles.php');
-header('X-API-Version: 1.0.1');
+header('X-API-Version: 1.0.0');
 header('X-Timestamp: ' . time());
 
 // Handle preflight OPTIONS request
@@ -35,10 +35,9 @@ try {
     
     // Get additional parameters
     $includeInactive = isset($_GET['includeInactive']) && $_GET['includeInactive'] === 'true';
-    $fullSync = isset($_GET['fullSync']) && $_GET['fullSync'] === 'true';
     
     // Log the operation start
-    error_log("Starting get-vehicles operation with includeInactive=" . ($includeInactive ? 'true' : 'false') . ", fullSync=" . ($fullSync ? 'true' : 'false') . " at " . date('Y-m-d H:i:s'));
+    error_log("Starting get-vehicles operation with includeInactive=" . ($includeInactive ? 'true' : 'false') . " at " . date('Y-m-d H:i:s'));
     
     // First check if tables exist and create them if needed
     $tables = [
@@ -65,7 +64,7 @@ try {
     // First get from vehicle_types table (primary table)
     if (in_array('vehicle_types', $existingTables)) {
         $vehicleTypesQuery = "SELECT * FROM vehicle_types";
-        if (!$includeInactive && !$fullSync) {
+        if (!$includeInactive) {
             $vehicleTypesQuery .= " WHERE is_active = 1";
         }
         
@@ -97,7 +96,7 @@ try {
     // Then get from vehicles table (if exists)
     if (in_array('vehicles', $existingTables)) {
         $vehiclesQuery = "SELECT * FROM vehicles";
-        if (!$includeInactive && !$fullSync) {
+        if (!$includeInactive) {
             $vehiclesQuery .= " WHERE is_active = 1 OR is_active IS NULL";
         }
         
@@ -202,30 +201,6 @@ try {
                         $allVehicles[$vehicleId]['nightHaltCharge'] = $row['night_halt_charge'];
                         $allVehicles[$vehicleId]['night_halt_charge'] = $row['night_halt_charge'];
                     }
-                } else {
-                    // Create a new vehicle entry if it doesn't exist yet
-                    $newVehicle = [
-                        'id' => $row['vehicle_id'],
-                        'vehicleId' => $row['vehicle_id'],
-                        'name' => ucwords(str_replace('_', ' ', $row['vehicle_id'])),
-                        'capacity' => 4,
-                        'luggageCapacity' => 2,
-                        'basePrice' => $row['base_price'],
-                        'base_price' => $row['base_price'],
-                        'pricePerKm' => $row['price_per_km'],
-                        'price_per_km' => $row['price_per_km'],
-                        'driverAllowance' => $row['driver_allowance'],
-                        'driver_allowance' => $row['driver_allowance'],
-                        'nightHaltCharge' => $row['night_halt_charge'],
-                        'night_halt_charge' => $row['night_halt_charge'],
-                        'isActive' => true,
-                        'image' => '/cars/sedan.png',
-                        'amenities' => ['AC'],
-                        'description' => ucwords(str_replace('_', ' ', $row['vehicle_id'])) . ' vehicle'
-                    ];
-                    
-                    $allVehicles[$row['vehicle_id']] = $newVehicle;
-                    $vehicleIds[] = "'" . $conn->real_escape_string($row['vehicle_id']) . "'";
                 }
             }
         }
@@ -284,8 +259,6 @@ try {
         'source' => 'direct-db-query',
         'tables' => $existingTables,
         'includeInactive' => $includeInactive,
-        'fullSync' => $fullSync,
-        'vehicleCount' => count($vehiclesArray),
         'timestamp' => time()
     ]);
     
