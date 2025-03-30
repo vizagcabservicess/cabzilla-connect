@@ -73,3 +73,6 @@ export type {
   LocalFare,
   AirportFare
 } from '@/types/cab';
+
+// Add formatPrice export from cabData
+export { formatPrice } from './cabData';
