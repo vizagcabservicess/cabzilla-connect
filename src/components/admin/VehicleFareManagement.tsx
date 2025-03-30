@@ -79,7 +79,8 @@ export function VehicleFareManagement() {
   const loadAvailableVehicles = async () => {
     try {
       console.log("Loading available vehicles for dropdown...");
-      const vehicles = await getVehicleData(true);
+      // Force true to include inactive vehicles in admin view and bypass cache
+      const vehicles = await getVehicleData(true, true);
       
       if (vehicles && Array.isArray(vehicles)) {
         const vehicleOptions = vehicles.map(v => ({
@@ -89,6 +90,9 @@ export function VehicleFareManagement() {
         
         console.log("Available vehicles loaded:", vehicleOptions);
         setAvailableVehicles(vehicleOptions);
+      } else {
+        console.warn("No vehicles found or invalid response format");
+        toast.error("Could not load vehicle options");
       }
     } catch (error) {
       console.error("Error loading available vehicles:", error);
@@ -194,6 +198,9 @@ export function VehicleFareManagement() {
       
       toast.success("Vehicle pricing updated successfully");
       await fetchVehiclePricing();
+      
+      // Dispatch event to notify other components that fare data has been updated
+      window.dispatchEvent(new CustomEvent('fare-data-updated', { detail: { vehicleType: values.vehicleType } }));
     } catch (error) {
       console.error("Error updating vehicle pricing:", error);
       toast.error("Failed to update vehicle pricing");
@@ -269,7 +276,10 @@ export function VehicleFareManagement() {
               <Button 
                 variant="outline" 
                 size="sm" 
-                onClick={fetchVehiclePricing} 
+                onClick={() => {
+                  fetchVehiclePricing();
+                  loadAvailableVehicles();
+                }} 
                 disabled={isRefreshing}
               >
                 <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />

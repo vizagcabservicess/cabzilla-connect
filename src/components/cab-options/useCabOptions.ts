@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { CabType } from '@/types/cab';
 import { getVehicleData } from '@/services/vehicleDataService';
@@ -124,7 +125,7 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
         setTimeout(() => reject(new Error('Vehicle data fetch timeout')), 5000);
       });
       
-      const dataPromise = getVehicleData(false);
+      const dataPromise = getVehicleData(forceRefresh); // Pass forceRefresh to bypass cache
       
       // Race the fetch against the timeout
       let vehicles: CabType[];
@@ -132,7 +133,7 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
         vehicles = await Promise.race([dataPromise, timeoutPromise]);
       } catch (e) {
         console.warn('Fetch with timeout failed, falling back to direct API call');
-        vehicles = await getVehicleData(true);
+        vehicles = await getVehicleData(true); // Force API call on error
       }
       
       // Ensure we have at least one vehicle
@@ -347,16 +348,26 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
       }
     };
     
+    // Listen for fare-data-updated event for immediate UI updates
+    const handleFareDataUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      
+      if (shouldThrottleEvent('fare-data-updated', 60000)) return; // 1 minute throttle
+      
+      console.log('Fare data has been updated, refreshing cab options', customEvent.detail);
+      // Use a shorter delay to ensure the backend has had time to update
+      setTimeout(() => loadCabOptions(true), 1000);
+    };
+    
     // Use passive event listeners to reduce performance impact
     window.addEventListener('fare-cache-cleared', handleFareCacheCleared, { passive: true });
     window.addEventListener('vehicle-data-refreshed', handleDataRefreshed, { passive: true });
-    
-    // Drastically reduce the number of event listeners to prevent loop situations
-    // Only listen for the most critical event (vehicle-data-refreshed)
+    window.addEventListener('fare-data-updated', handleFareDataUpdated, { passive: true });
     
     return () => {
       window.removeEventListener('fare-cache-cleared', handleFareCacheCleared);
       window.removeEventListener('vehicle-data-refreshed', handleDataRefreshed);
+      window.removeEventListener('fare-data-updated', handleFareDataUpdated);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
