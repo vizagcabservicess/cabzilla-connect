@@ -53,21 +53,23 @@ $name = $data['name'] ?? ucfirst(str_replace('_', ' ', $vehicleId));
 $capacity = (int)($data['capacity'] ?? 4);
 $luggageCapacity = (int)($data['luggageCapacity'] ?? 2);
 
-// Handle boolean or integer isActive values
+// Handle boolean or integer isActive values - fixed to ensure proper conversion
 $isActive = 1; // Default to active
-if (isset($data['isActive']) || isset($data['is_active'])) {
-    if (isset($data['isActive'])) {
-        if (is_bool($data['isActive'])) {
-            $isActive = $data['isActive'] ? 1 : 0;
-        } else {
-            $isActive = ($data['isActive'] === 'true' || $data['isActive'] === '1' || $data['isActive'] === 1) ? 1 : 0;
-        }
-    } else if (isset($data['is_active'])) {
-        if (is_bool($data['is_active'])) {
-            $isActive = $data['is_active'] ? 1 : 0;
-        } else {
-            $isActive = ($data['is_active'] === 'true' || $data['is_active'] === '1' || $data['is_active'] === 1) ? 1 : 0;
-        }
+if (isset($data['isActive'])) {
+    if (is_bool($data['isActive'])) {
+        $isActive = $data['isActive'] ? 1 : 0;
+    } else if (is_string($data['isActive'])) {
+        $isActive = ($data['isActive'] === 'true' || $data['isActive'] === '1') ? 1 : 0;
+    } else {
+        $isActive = (int)$data['isActive']; // Convert to integer
+    }
+} else if (isset($data['is_active'])) {
+    if (is_bool($data['is_active'])) {
+        $isActive = $data['is_active'] ? 1 : 0;
+    } else if (is_string($data['is_active'])) {
+        $isActive = ($data['is_active'] === 'true' || $data['is_active'] === '1') ? 1 : 0;
+    } else {
+        $isActive = (int)$data['is_active']; // Convert to integer
     }
 }
 
@@ -76,7 +78,13 @@ error_log("isActive raw value: " . (isset($data['isActive']) ? var_export($data[
 error_log("is_active raw value: " . (isset($data['is_active']) ? var_export($data['is_active'], true) : 'not set'), 3, __DIR__ . '/../../error.log');
 error_log("Final isActive value: $isActive", 3, __DIR__ . '/../../error.log');
 
+// Ensure image has proper URL
 $image = $data['image'] ?? '/cars/sedan.png';
+// Fix image path if needed
+if (strpos($image, 'http') === false && strpos($image, '/cars/') === false) {
+    $image = '/cars/' . basename($image);
+}
+
 $ac = isset($data['ac']) ? (int)$data['ac'] : 1;
 $description = $data['description'] ?? '';
 
@@ -324,6 +332,7 @@ try {
             window.parent.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
                 detail: {
                     vehicleId: '$vehicleId',
+                    isActive: " . ($isActive ? 'true' : 'false') . ",
                     timestamp: " . time() . "
                 }
             }));

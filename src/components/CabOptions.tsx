@@ -52,6 +52,8 @@ export function CabOptions({
   const lastTripTypeRef = useRef<string>(tripType);
   const lastTripModeRef = useRef<string>(tripMode);
   const lastDistanceRef = useRef<number>(distance);
+  const refreshInProgressRef = useRef<boolean>(false); // Added to prevent duplicate refreshes
+  const lastRefreshTimeRef = useRef<number>(Date.now());
 
   const { 
     cabOptions, 
@@ -66,10 +68,21 @@ export function CabOptions({
   });
 
   const forceRefreshAll = async () => {
-    if (isRefreshingCabs) {
+    // Check if refresh is already in progress
+    if (isRefreshingCabs || refreshInProgressRef.current) {
       console.log('Already refreshing, skipping duplicate request');
       return;
     }
+    
+    // Check if refresh has been done recently (throttle to prevent too many refreshes)
+    const now = Date.now();
+    if (now - lastRefreshTimeRef.current < 10000) { // 10 seconds throttle
+      console.log('Refresh throttled - last refresh was too recent');
+      return;
+    }
+    
+    refreshInProgressRef.current = true;
+    lastRefreshTimeRef.current = now;
     
     console.log('Starting complete fare data refresh');
     setIsRefreshingCabs(true);
@@ -96,6 +109,7 @@ export function CabOptions({
       setRefreshSuccessful(false);
     } finally {
       setIsRefreshingCabs(false);
+      refreshInProgressRef.current = false; // Reset the flag
       localStorage.removeItem('forceCacheRefresh');
       setTimeout(() => {
         localStorage.removeItem('forceTripFaresRefresh');
@@ -206,7 +220,7 @@ export function CabOptions({
   useEffect(() => {
     if (cabOptions.length > 0) {
       calculateAttemptsRef.current = 0;
-      calculateFares(cabOptions, true);
+      calculateFares(cabOptions, false); // Changed to false to prevent infinite refreshes
     }
   }, [cabOptions, distance, tripType, tripMode, hourlyPackage]);
 
@@ -248,7 +262,7 @@ export function CabOptions({
 
   useEffect(() => {
     let lastEventTime = 0;
-    const throttleTime = 30000;
+    const throttleTime = 30000; // 30 seconds
     
     const handleCacheCleared = () => {
       const now = Date.now();
@@ -382,12 +396,18 @@ export function CabOptions({
   };
 
   useEffect(() => {
-    console.log('CabOptions component mounted, force refreshing fare data');
+    // Only refresh on first mount, not on every render
     const hasRefreshedOnMount = sessionStorage.getItem('cabOptionsRefreshedOnMount');
     if (!hasRefreshedOnMount) {
+      console.log('CabOptions component mounted, refreshing fare data once');
       forceRefreshAll();
       sessionStorage.setItem('cabOptionsRefreshedOnMount', 'true');
     }
+    
+    // Clean up on unmount
+    return () => {
+      // No need to clear the session flag on unmount to prevent multiple refreshes
+    };
   }, []);
 
   if (isLoadingCabs) {
