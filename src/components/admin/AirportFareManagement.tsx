@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { CabType } from '@/types/cab';
 import { reloadCabTypes } from '@/lib/cabData';
-import { getAirportFaresForVehicle, directFareUpdate } from '@/services/fareService';
+import { getAirportFaresForVehicle, directFareUpdate } from '@/lib';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -63,13 +63,20 @@ const AirportFareManagement = () => {
     setIsSaving(true);
     try {
       const fareData = airportFares[vehicleId];
-      // Use directFareUpdate instead of the missing updateAirportFaresForVehicle
-      await directFareUpdate('airport', vehicleId, fareData);
-      setEditableVehicleId(null);
-      toast({
-        title: "Success",
-        description: `Airport fares for ${vehicles.find(v => v.id === vehicleId)?.name} updated successfully.`,
-      });
+      // Use directFareUpdate instead of updateAirportFaresForVehicle
+      const result = await directFareUpdate('airport', vehicleId, fareData);
+      
+      if (result && result.status === 'success') {
+        setEditableVehicleId(null);
+        toast({
+          title: "Success",
+          description: `Airport fares for ${vehicles.find(v => v.id === vehicleId)?.name} updated successfully.`,
+        });
+        // Refresh the data
+        setRefreshKey(prevKey => prevKey + 1);
+      } else {
+        throw new Error("Failed to update airport fare");
+      }
     } catch (error) {
       console.error('Error updating airport fares:', error);
       toast({
@@ -102,10 +109,10 @@ const AirportFareManagement = () => {
 
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Airport Fare Management</h1>
-      <Button onClick={handleRefresh} className="mb-4">
-        Refresh Data
-      </Button>
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-2xl font-bold">Airport Fare Management</h1>
+        <Button onClick={handleRefresh} variant="outline">Refresh Data</Button>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {vehicles.map(vehicle => (
           <div key={vehicle.id} className="bg-white shadow rounded-lg p-4">
@@ -199,11 +206,12 @@ const AirportFareManagement = () => {
                 <p>Tier 2 Price (10-20km): {airportFares[vehicle.id]?.tier2Price}</p>
                 <p>Tier 3 Price (20-30km): {airportFares[vehicle.id]?.tier3Price}</p>
                 <p>Tier 4 Price (30km+): {airportFares[vehicle.id]?.tier4Price}</p>
-                 <p>Extra KM Charge (Above Tier 4): {airportFares[vehicle.id]?.extraKmCharge}</p>
+                <p>Extra KM Charge (Above Tier 4): {airportFares[vehicle.id]?.extraKmCharge}</p>
                 <p>Driver Allowance: {airportFares[vehicle.id]?.driverAllowance}</p>
                 <Button
                   size="sm"
                   onClick={() => setEditableVehicleId(vehicle.id)}
+                  className="mt-2"
                 >
                   Edit
                 </Button>

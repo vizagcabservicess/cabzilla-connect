@@ -2,10 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { CabType } from '@/types/cab';
 import { reloadCabTypes } from '@/lib/cabData';
-import { getOutstationFaresForVehicle, directFareUpdate } from '@/services/fareService';
+import { getOutstationFaresForVehicle, directFareUpdate } from '@/lib';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 
 const OutstationFareManagement = () => {
@@ -65,14 +64,19 @@ const OutstationFareManagement = () => {
     setIsSaving(true);
     try {
       const fareData = outstationFares[vehicleId];
-      // Use directFareUpdate instead of the missing updateOutstationFares
-      await directFareUpdate('outstation', vehicleId, fareData);
-      toast({
-        title: "Success",
-        description: `Outstation fares for ${vehicles.find(v => v.id === vehicleId)?.name} updated successfully.`,
-      });
-      setEditableVehicleId(null);
-      setRefreshKey(prevKey => prevKey + 1); // Refresh data
+      // Use directFareUpdate instead of updateOutstationFares
+      const result = await directFareUpdate('outstation', vehicleId, fareData);
+      
+      if (result && result.status === 'success') {
+        toast({
+          title: "Success",
+          description: `Outstation fares for ${vehicles.find(v => v.id === vehicleId)?.name} updated successfully.`,
+        });
+        setEditableVehicleId(null);
+        setRefreshKey(prevKey => prevKey + 1); // Refresh data
+      } else {
+        throw new Error("Failed to update outstation fare");
+      }
     } catch (error) {
       console.error("Failed to update outstation fares:", error);
       toast({
@@ -101,7 +105,15 @@ const OutstationFareManagement = () => {
 
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Outstation Fare Management</h1>
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-2xl font-bold">Outstation Fare Management</h1>
+        <Button
+          variant="outline"
+          onClick={() => setRefreshKey(prevKey => prevKey + 1)}
+        >
+          Refresh
+        </Button>
+      </div>
       <div className="overflow-x-auto">
         <table className="min-w-full bg-white border border-gray-200">
           <thead>
@@ -200,13 +212,6 @@ const OutstationFareManagement = () => {
           </tbody>
         </table>
       </div>
-      <Button
-        variant="outline"
-        className="mt-4"
-        onClick={() => setRefreshKey(prevKey => prevKey + 1)}
-      >
-        Refresh
-      </Button>
     </div>
   );
 };

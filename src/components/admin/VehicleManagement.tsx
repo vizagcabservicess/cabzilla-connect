@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +48,7 @@ const VehicleManagement = () => {
   const [selectedVehicle, setSelectedVehicle] = useState<ExtendedVehicleType | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const refreshTimeoutRef = useRef<number | null>(null);
+  const initialLoadCompleted = useRef(false);
   
   // New vehicle form state
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -67,7 +67,8 @@ const VehicleManagement = () => {
   const [editVehicleDescription, setEditVehicleDescription] = useState('');
   const [editVehicleIsActive, setEditVehicleIsActive] = useState(true);
   
-  const fetchVehicles = useCallback(async () => {
+  const fetchVehicles = useCallback(async (forceRefresh = false) => {
+    // Prevent redundant fetches
     if (refreshing) {
       console.log('Already refreshing vehicles, skipping redundant fetch');
       return;
@@ -84,40 +85,54 @@ const VehicleManagement = () => {
         setVehicles(cabData as ExtendedVehicleType[]);
       }
       
-      // Then try to get fresh data
-      cabData = await reloadCabTypes(true);
-      
-      if (cabData && cabData.length > 0) {
-        // Process and sort vehicles
-        const processedVehicles = cabData.map(vehicle => ({
-          ...vehicle,
-          id: vehicle.id || vehicle.vehicleId || '',
-          vehicleId: vehicle.vehicleId || vehicle.id || '',
-          isActive: vehicle.isActive !== false,
-          amenities: vehicle.amenities || ['AC', 'Bottle Water', 'Music System'],
-          ac: vehicle.ac !== false
-        }));
+      // Only get fresh data if forcing refresh or initial load
+      if (forceRefresh || !initialLoadCompleted.current) {
+        console.log('Performing full refresh of vehicle data');
         
-        // Sort vehicles by name
-        processedVehicles.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        // Mark initial load as completed
+        initialLoadCompleted.current = true;
         
-        setVehicles(processedVehicles as ExtendedVehicleType[]);
-        console.log(`Loaded ${processedVehicles.length} vehicles`);
-      } else {
-        console.warn('No vehicles returned from reloadCabTypes');
+        cabData = await reloadCabTypes(true);
         
-        // Try to get vehicles from local storage as a last resort
-        try {
-          const cached = localStorage.getItem('cachedVehicles');
-          if (cached) {
-            const parsedVehicles = JSON.parse(cached);
-            if (Array.isArray(parsedVehicles) && parsedVehicles.length > 0) {
-              setVehicles(parsedVehicles);
-              console.log(`Loaded ${parsedVehicles.length} vehicles from local storage`);
-            }
+        if (cabData && cabData.length > 0) {
+          // Process and sort vehicles
+          const processedVehicles = cabData.map(vehicle => ({
+            ...vehicle,
+            id: vehicle.id || vehicle.vehicleId || '',
+            vehicleId: vehicle.vehicleId || vehicle.id || '',
+            isActive: vehicle.isActive !== false,
+            amenities: vehicle.amenities || ['AC', 'Bottle Water', 'Music System'],
+            ac: vehicle.ac !== false
+          }));
+          
+          // Sort vehicles by name
+          processedVehicles.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+          
+          setVehicles(processedVehicles as ExtendedVehicleType[]);
+          console.log(`Loaded ${processedVehicles.length} vehicles`);
+          
+          // Save vehicles to local storage for fallback
+          try {
+            localStorage.setItem('cachedVehicles', JSON.stringify(processedVehicles));
+          } catch (e) {
+            console.error('Error saving to local storage:', e);
           }
-        } catch (e) {
-          console.error('Error loading from local storage:', e);
+        } else {
+          console.warn('No vehicles returned from reloadCabTypes');
+          
+          // Try to get vehicles from local storage as a last resort
+          try {
+            const cached = localStorage.getItem('cachedVehicles');
+            if (cached) {
+              const parsedVehicles = JSON.parse(cached);
+              if (Array.isArray(parsedVehicles) && parsedVehicles.length > 0) {
+                setVehicles(parsedVehicles);
+                console.log(`Loaded ${parsedVehicles.length} vehicles from local storage`);
+              }
+            }
+          } catch (e) {
+            console.error('Error loading from local storage:', e);
+          }
         }
       }
     } catch (error) {
@@ -140,7 +155,7 @@ const VehicleManagement = () => {
     };
   }, [fetchVehicles]);
   
-  // Set up event listeners for vehicle updates
+  // Set up event listeners for vehicle updates - with debouncing
   useEffect(() => {
     const handleVehicleUpdates = () => {
       console.log('Detected vehicle updates, scheduling refresh...');
@@ -154,7 +169,7 @@ const VehicleManagement = () => {
       refreshTimeoutRef.current = window.setTimeout(() => {
         console.log('Executing scheduled refresh');
         clearCabTypesCache();
-        fetchVehicles();
+        fetchVehicles(true); // Force refresh to get fresh data
       }, 2000);
     };
     
@@ -178,30 +193,19 @@ const VehicleManagement = () => {
     }
     
     toast.info('Refreshing vehicle data...');
-    setRefreshing(true);
     
     try {
       // Clear the cache to force a fresh load
       clearCabTypesCache();
       
-      // Use the syncVehicleData function with forceRefresh=true
-      const result = await syncVehicleData(true);
+      // Force refresh the vehicles directly instead of using syncVehicleData
+      // This prevents potential infinite loops
+      await fetchVehicles(true);
       
-      if (result.success) {
-        toast.success(`Successfully refreshed vehicle data (${result.vehicleCount} vehicles)`);
-        await fetchVehicles();
-      } else {
-        if (result.alreadyInProgress) {
-          toast.info('Vehicle sync already in progress, please wait');
-        } else {
-          toast.error('Failed to refresh vehicle data');
-        }
-      }
+      toast.success('Successfully refreshed vehicle data');
     } catch (error) {
       console.error('Error refreshing vehicles:', error);
       toast.error('Error refreshing vehicle data');
-    } finally {
-      setRefreshing(false);
     }
   }, [fetchVehicles, refreshing]);
   
@@ -240,16 +244,17 @@ const VehicleManagement = () => {
         (vehicleData as ExtendedVehicleType).vehicleId = selectedVehicle.vehicleId;
       }
       
-      // First try direct update
       const result = await updateVehicle(vehicleData);
       
       if (result.status === 'success') {
         toast.success(`Vehicle ${editVehicleName} updated successfully`);
         setIsEditDialogOpen(false);
         
-        // Clear cache and fetch fresh data
-        clearCabTypesCache();
-        await fetchVehicles();
+        // Clear cache and fetch fresh data, but with a delay to prevent race conditions
+        setTimeout(() => {
+          clearCabTypesCache();
+          fetchVehicles(true);
+        }, 1000);
       } else {
         toast.error('Failed to update vehicle');
       }
@@ -269,9 +274,14 @@ const VehicleManagement = () => {
         if (result.status === 'success') {
           toast.success(`Vehicle ${vehicle.name} deleted successfully`);
           
-          // Clear cache and fetch fresh data
-          clearCabTypesCache();
-          await fetchVehicles();
+          // Update local state immediately
+          setVehicles(prev => prev.filter(v => v.id !== vehicle.id));
+          
+          // Clear cache and fetch fresh data, but with a delay
+          setTimeout(() => {
+            clearCabTypesCache();
+            fetchVehicles(true);
+          }, 1000);
         } else {
           toast.error('Failed to delete vehicle');
         }
@@ -303,9 +313,11 @@ const VehicleManagement = () => {
           prev.map(v => v.id === vehicle.id ? { ...v, isActive } : v)
         );
         
-        // Also update the cache
-        clearCabTypesCache();
-        setTimeout(() => fetchVehicles(), 1000);
+        // Also update the cache, but with a delay
+        setTimeout(() => {
+          clearCabTypesCache();
+          fetchVehicles(true);
+        }, 1000);
       } else {
         toast.error(`Failed to ${isActive ? 'activate' : 'deactivate'} vehicle`);
       }
@@ -349,9 +361,11 @@ const VehicleManagement = () => {
         setNewVehicleImage('');
         setIsAddDialogOpen(false);
         
-        // Clear cache and fetch fresh data
-        clearCabTypesCache();
-        await fetchVehicles();
+        // Clear cache and fetch fresh data, but with a delay
+        setTimeout(() => {
+          clearCabTypesCache();
+          fetchVehicles(true);
+        }, 1000);
       } else {
         toast.error('Failed to create vehicle');
       }
