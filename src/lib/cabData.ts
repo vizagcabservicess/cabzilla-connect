@@ -12,15 +12,6 @@ let isFetchingCabTypes = false;
 let pendingForceRefresh = false;
 
 /**
- * Format price with Indian Rupee format
- * @param price The price to format
- * @returns Formatted price string
- */
-export function formatPrice(price: number): string {
-  return `₹${price.toLocaleString('en-IN')}`;
-}
-
-/**
  * Get all cab types, with optional force refresh
  * @param forceRefresh Force a refresh of cab types from server
  * @returns Array of cab types
@@ -249,7 +240,3 @@ export async function getCabTypeById(id: string): Promise<CabType | undefined> {
   // Find the cab with the matching ID
   return types.find(cab => cab.id === id || cab.vehicleId === id);
 }
-
-// Export cab types array so components can access it directly
-export { cabTypes };
-

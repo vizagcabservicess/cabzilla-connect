@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { TripType, TripMode } from '@/lib/tripTypes';
 import { LocalFare, OutstationFare, AirportFare } from '@/types/cab';
@@ -826,15 +827,6 @@ async function getAirportFaresForVehicle(vehicleId: string): Promise<AirportFare
   }
 }
 
-// Add the missing update functions for outstation and airport fares
-async function updateOutstationFares(vehicleId: string, fareData: OutstationFare) {
-  return directFareUpdate('outstation', vehicleId, fareData);
-}
-
-async function updateAirportFaresForVehicle(vehicleId: string, fareData: AirportFare) {
-  return directFareUpdate('airport', vehicleId, fareData);
-}
-
 // Create the fareService object with all methods
 export const fareService = {
   clearCache: clearFareCache,
@@ -852,9 +844,7 @@ export const fareService = {
   getOutstationFaresForVehicle,
   getLocalFaresForVehicle,
   getAirportFaresForVehicle,
-  getFaresByTripType,
-  updateOutstationFares,
-  updateAirportFaresForVehicle
+  getFaresByTripType
 };
 
 // Export individual functions for direct imports
@@ -874,7 +864,5 @@ export {
   getOutstationFaresForVehicle,
   getLocalFaresForVehicle,
   getAirportFaresForVehicle,
-  getFaresByTripType,
-  updateOutstationFares,
-  updateAirportFaresForVehicle
+  getFaresByTripType
 };

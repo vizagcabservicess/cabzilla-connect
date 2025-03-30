@@ -1,12 +1,13 @@
+
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { FareManagement } from "@/components/admin/FareManagement";
-import AirportFareManagement from "@/components/admin/AirportFareManagement";
-import LocalFareManagement from "@/components/admin/LocalFareManagement";
-import OutstationFareManagement from "@/components/admin/OutstationFareManagement";
+import { AirportFareManagement } from "@/components/admin/AirportFareManagement";
+import { LocalFareManagement } from "@/components/admin/LocalFareManagement";
+import { OutstationFareManagement } from "@/components/admin/OutstationFareManagement";
 import { DashboardMetrics } from "@/components/admin/DashboardMetrics";
 import { AdminBookingsList } from "@/components/admin/AdminBookingsList";
 import VehicleManagement from "@/components/admin/VehicleManagement";

@@ -1,3 +1,4 @@
+
 // Re-export all cab-related types and functions for easier imports
 export * from './cabData';
 
@@ -45,9 +46,7 @@ export {
   clearFareCache as clearFareServiceCache,
   resetCabOptionsState,
   syncLocalFareTables,
-  fareService,
-  updateOutstationFares,
-  updateAirportFaresForVehicle
+  fareService
 } from '@/services/fareService';
 
 // Export vehicle service functions
@@ -64,9 +63,7 @@ export {
   getCabTypes,
   getCabTypeById,
   reloadCabTypes,
-  clearCabTypesCache,
-  formatPrice,
-  cabTypes
+  clearCabTypesCache
 } from './cabData';
 
 // Re-export CabType from the types directly
