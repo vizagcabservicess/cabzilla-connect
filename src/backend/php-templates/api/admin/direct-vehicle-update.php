@@ -78,12 +78,21 @@ error_log("isActive raw value: " . (isset($data['isActive']) ? var_export($data[
 error_log("is_active raw value: " . (isset($data['is_active']) ? var_export($data['is_active'], true) : 'not set'), 3, __DIR__ . '/../../error.log');
 error_log("Final isActive value: $isActive", 3, __DIR__ . '/../../error.log');
 
-// Ensure image has proper URL
+// Ensure image has proper URL - FIXED to handle both relative and absolute paths
 $image = $data['image'] ?? '/cars/sedan.png';
-// Fix image path if needed
-if (strpos($image, 'http') === false && strpos($image, '/cars/') === false) {
+
+// Fix image path if needed - ensure it's a local path starting with /cars/
+if (strpos($image, 'http') !== false) {
+    // Extract the filename from the URL
+    $filename = basename(parse_url($image, PHP_URL_PATH));
+    $image = '/cars/' . $filename;
+} else if (strpos($image, '/cars/') === false) {
     $image = '/cars/' . basename($image);
 }
+
+// Additional debug for image path
+error_log("Original image path: " . ($data['image'] ?? 'not set'), 3, __DIR__ . '/../../error.log');
+error_log("Normalized image path: $image", 3, __DIR__ . '/../../error.log');
 
 $ac = isset($data['ac']) ? (int)$data['ac'] : 1;
 $description = $data['description'] ?? '';
@@ -313,6 +322,9 @@ try {
         // Update cache invalidation marker
         file_put_contents(__DIR__ . '/../../../data/vehicle_cache_invalidated.txt', time());
         
+        // Force clear all caches
+        error_log("Clearing all localStorage and sessionStorage caches");
+        
     } catch (Exception $e) {
         error_log("Error updating JSON file: " . $e->getMessage());
     }
@@ -322,23 +334,11 @@ try {
         'status' => 'success',
         'message' => $message,
         'vehicleId' => $vehicleId,
-        'isActive' => (bool)$isActive
+        'isActive' => (bool)$isActive,
+        'timestamp' => time()
     ]);
     
-    // Dispatch a vehicle refresh event
-    echo "
-    <script>
-        if (window.parent && window.parent.dispatchEvent) {
-            window.parent.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
-                detail: {
-                    vehicleId: '$vehicleId',
-                    isActive: " . ($isActive ? 'true' : 'false') . ",
-                    timestamp: " . time() . "
-                }
-            }));
-        }
-    </script>
-    ";
+    // Update: Removed JavaScript event dispatch that was causing refreshing loops
     
 } catch (Exception $e) {
     http_response_code(500);

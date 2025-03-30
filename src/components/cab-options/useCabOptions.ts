@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { CabType } from '@/types/cab';
 import { getVehicleData } from '@/services/vehicleDataService';
@@ -23,25 +22,41 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
   const loadingRef = useRef<boolean>(false);
   const maxRefreshesRef = useRef<number>(3); // Maximum 3 refreshes per session
   const vehicleDataCache = useRef<Map<string, { data: CabType[], timestamp: number }>>(new Map());
+  const eventThrottleTimestamps = useRef<Record<string, number>>({});
+  
+  // Add strong throttling for all refresh events - prevent infinite loops
+  const shouldThrottleEvent = (eventType: string, throttleDuration = 60000): boolean => {
+    const now = Date.now();
+    const lastTime = eventThrottleTimestamps.current[eventType] || 0;
+    
+    if (now - lastTime < throttleDuration) {
+      console.log(`useCabOptions: Throttling ${eventType} event (last occurred ${Math.round((now - lastTime)/1000)}s ago)`);
+      return true;
+    }
+    
+    eventThrottleTimestamps.current[eventType] = now;
+    return false;
+  };
   
   const loadCabOptions = async (forceRefresh = false) => {
-    // Prevent multiple simultaneous loads and throttle forced refreshes
+    // IMPORTANT: Prevent multiple simultaneous loads and throttle forced refreshes
     if (loadingRef.current) {
       console.log('Already loading cab options, skipping');
       return cabOptions; // Return existing options
     }
     
-    // Skip if we've hit the maximum refresh count
-    if (refreshCountRef.current >= maxRefreshesRef.current && forceRefresh) {
-      console.log(`Reached maximum refresh count (${maxRefreshesRef.current}), not reloading`);
-      return cabOptions; // Return existing options
-    }
-    
-    // Throttle forced refreshes to once every 10 seconds maximum (reduced from 30s)
-    const now = Date.now();
-    if (forceRefresh && now - lastRefreshRef.current < 10000) {
-      console.log('Throttling forced refresh - last refresh was too recent');
-      return cabOptions; // Return existing options
+    // Even more aggressive throttling for forced refreshes - prevent infinite loops
+    if (forceRefresh) {
+      const now = Date.now();
+      if (shouldThrottleEvent('force-refresh', 30000)) { // 30 second throttling for force refresh
+        return cabOptions;
+      }
+      
+      // Skip if we've hit the maximum refresh count
+      if (refreshCountRef.current >= maxRefreshesRef.current) {
+        console.log(`Reached maximum refresh count (${maxRefreshesRef.current}), not reloading`);
+        return cabOptions;
+      }
     }
     
     try {
@@ -49,78 +64,19 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
       
       if (forceRefresh) {
         setIsLoading(true);
-        // Only increment refresh count for forced refreshes
         refreshCountRef.current += 1;
-        // Update the timestamp
-        lastRefreshRef.current = now;
-        setLastRefreshTime(now);
-        localStorage.setItem('cabOptionsLastRefreshed', now.toString());
+        lastRefreshRef.current = Date.now();
+        setLastRefreshTime(Date.now());
+        localStorage.setItem('cabOptionsLastRefreshed', Date.now().toString());
       }
       
       setError(null);
       
-      // Try to get fresh data first if force refreshing
-      if (forceRefresh) {
-        try {
-          // First, try the JSON file for faster loading
-          const jsonResponse = await fetch(`/data/vehicles.json?_t=${now}`, {
-            headers: {
-              'Cache-Control': 'no-cache',
-              'Pragma': 'no-cache',
-              'Expires': '0',
-              'X-Force-Refresh': 'true'
-            }
-          });
-          
-          if (jsonResponse.ok) {
-            const jsonData = await jsonResponse.json();
-            if (Array.isArray(jsonData) && jsonData.length > 0) {
-              console.log(`Using JSON data, found ${jsonData.length} vehicles`);
-              
-              // Cache the data
-              vehicleDataCache.current.set('json', {
-                data: jsonData,
-                timestamp: now
-              });
-              
-              const filteredVehicles = filterVehiclesByTripType(jsonData, tripType);
-              setCabOptions(filteredVehicles);
-              setIsLoading(false);
-              loadingRef.current = false;
-              return filteredVehicles;
-            }
-          }
-        } catch (jsonError) {
-          console.warn('Could not load from JSON file:', jsonError);
-        }
-        
-        // If JSON file fails, try the API
-        try {
-          // Fix: Use only one boolean parameter for forceRefresh
-          const freshVehicles = await getVehicleData(true);
-          if (Array.isArray(freshVehicles) && freshVehicles.length > 0) {
-            console.log(`Fresh data from API, found ${freshVehicles.length} vehicles`);
-            
-            // Cache the data
-            vehicleDataCache.current.set('api', {
-              data: freshVehicles,
-              timestamp: now
-            });
-            
-            const filteredVehicles = filterVehiclesByTripType(freshVehicles, tripType);
-            setCabOptions(filteredVehicles);
-            setIsLoading(false);
-            loadingRef.current = false;
-            return filteredVehicles;
-          }
-        } catch (apiError) {
-          console.warn('Could not load from API with force refresh:', apiError);
-        }
-      }
-      
-      // Check our in-memory cache first
+      // Try local cache first (1 minute validity)
       const cachedData = vehicleDataCache.current.get('json') || vehicleDataCache.current.get('api');
-      if (cachedData && now - cachedData.timestamp < 120000) { // 2 minutes
+      const now = Date.now();
+      
+      if (!forceRefresh && cachedData && now - cachedData.timestamp < 60000) {
         console.log('Using in-memory cached vehicle data');
         const filteredVehicles = filterVehiclesByTripType(cachedData.data, tripType);
         setCabOptions(filteredVehicles);
@@ -129,14 +85,13 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
         return filteredVehicles;
       }
       
-      // Use local cache if available and not doing a forced refresh
+      // Use local cache if available (5 minute validity)
       if (!forceRefresh && tripType) {
         const cachedTimestamp = localStorage.getItem(`cabOptions_${tripType}_timestamp`);
         const cachedVehicles = localStorage.getItem(`cabOptions_${tripType}`);
         
         if (cachedTimestamp && cachedVehicles) {
           const timestamp = parseInt(cachedTimestamp, 10);
-          const now = Date.now();
           const fiveMinutes = 5 * 60 * 1000;
           
           if (now - timestamp < fiveMinutes) {
@@ -164,9 +119,9 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
         return cabOptions;
       }
       
-      // Fetch vehicle data with a timeout - reduced from 15s to 8s for faster loading
+      // Fetch vehicle data with a shorter timeout (5s)
       const timeoutPromise = new Promise<CabType[]>((_, reject) => {
-        setTimeout(() => reject(new Error('Vehicle data fetch timeout')), 8000);
+        setTimeout(() => reject(new Error('Vehicle data fetch timeout')), 5000);
       });
       
       const dataPromise = getVehicleData(false);
@@ -344,17 +299,9 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
     // Initial load should only happen once
     loadCabOptions();
     
-    // Set up event listeners for fare updates with strict throttling
-    const lastEventTimes = new Map<string, number>();
-    const throttleDuration = 60000; // 60 seconds throttle period
-    
+    // Setup event handlers with extreme throttling to prevent infinite loops
     const handleFareCacheCleared = () => {
-      const now = Date.now();
-      if (lastEventTimes.get('fare-cache-cleared') && 
-          now - lastEventTimes.get('fare-cache-cleared')! < throttleDuration) {
-        console.log('useCabOptions: Ignoring fare cache cleared event (throttled)');
-        return;
-      }
+      if (shouldThrottleEvent('fare-cache-cleared', 120000)) return; // 2 minutes throttle
       
       // Only respond if we haven't reached max refreshes
       if (refreshCountRef.current >= maxRefreshesRef.current) {
@@ -362,25 +309,16 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
         return;
       }
       
-      lastEventTimes.set('fare-cache-cleared', now);
       console.log('useCabOptions: Detected fare cache cleared event');
-      
-      // Force a refresh rather than just updating timestamp
-      refreshCountRef.current = 0; // Reset the refresh counter for this important event
       loadCabOptions(true);
     };
     
-    const handleFareUpdated = (event: Event) => {
+    const handleDataRefreshed = (event: Event) => {
       const customEvent = event as CustomEvent;
       const eventType = event.type;
-      const now = Date.now();
       
-      // Strict throttling - only one event of each type per minute
-      if (lastEventTimes.get(eventType) && 
-          now - lastEventTimes.get(eventType)! < throttleDuration) {
-        console.log(`useCabOptions: Ignoring ${eventType} event (throttled):`, customEvent.detail);
-        return;
-      }
+      // Ultra-strong throttling - 2 minutes between each event type
+      if (shouldThrottleEvent(eventType, 120000)) return;
       
       // Only respond if we haven't reached max refreshes
       if (refreshCountRef.current >= maxRefreshesRef.current) {
@@ -388,86 +326,41 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
         return;
       }
       
-      lastEventTimes.set(eventType, now);
       console.log(`useCabOptions: Detected ${eventType} event:`, customEvent.detail);
       
-      // Listen for vehicle data refreshed events specifically
+      // Reset the refresh counter for vehicle-data-refreshed events only
       if (eventType === 'vehicle-data-refreshed') {
-        refreshCountRef.current = 0; // Reset the refresh counter
-        loadCabOptions(true);
-        return;
-      }
-      
-      // For local-fares-updated events, update the localPackagePriceMatrix in localStorage
-      if (eventType === 'local-fares-updated' && customEvent.detail && customEvent.detail.prices) {
-        try {
-          // Get the price matrix from localStorage
-          const storedMatrix = localStorage.getItem('localPackagePriceMatrix');
-          let matrix = storedMatrix ? JSON.parse(storedMatrix) : {};
-          
-          // Initialize the matrix structure if it doesn't exist
-          if (!matrix) matrix = {};
-          ['4hrs-40km', '8hrs-80km', '10hrs-100km'].forEach(pkg => {
-            if (!matrix[pkg]) matrix[pkg] = {};
-          });
-          
-          // Extract the vehicle ID and prices from the event
-          const { vehicleId, prices } = customEvent.detail;
-          if (vehicleId && prices) {
-            // Normalize vehicle ID to lowercase for consistency
-            const normalizedVehicleId = vehicleId.toLowerCase();
-            
-            // Update the prices in the matrix
-            Object.keys(prices).forEach(pkg => {
-              if (matrix[pkg]) {
-                matrix[pkg][normalizedVehicleId] = prices[pkg];
-              }
-            });
-            
-            // Handle vehicle ID variations - create aliases for common vehicle types
-            if (normalizedVehicleId === 'innova_crysta' || normalizedVehicleId === 'innova crysta') {
-              Object.keys(prices).forEach(pkg => {
-                if (matrix[pkg]) {
-                  matrix[pkg]['innova'] = prices[pkg];
-                }
-              });
-            }
-            
-            if (normalizedVehicleId === 'luxury') {
-              Object.keys(prices).forEach(pkg => {
-                if (matrix[pkg]) {
-                  matrix[pkg]['luxury sedan'] = prices[pkg];
-                }
-              });
-            }
-            
-            // Save the updated matrix back to localStorage
-            localStorage.setItem('localPackagePriceMatrix', JSON.stringify(matrix));
-            localStorage.setItem('localPackagePriceMatrixUpdated', now.toString());
-            
-            console.log('Updated localPackagePriceMatrix in localStorage:', matrix);
-          }
-        } catch (error) {
-          console.error('Error updating localPackagePriceMatrix:', error);
+        refreshCountRef.current = Math.max(refreshCountRef.current - 1, 0);
+        
+        // Use local storage to avoid multiple component instances all refreshing
+        const lastRefreshKey = `vehicle-refresh-${eventType}`;
+        const lastRefresh = localStorage.getItem(lastRefreshKey);
+        const now = Date.now();
+        
+        if (lastRefresh && now - parseInt(lastRefresh, 10) < 30000) {
+          console.log(`Another instance already processed this ${eventType} event recently`);
+          return;
         }
+        
+        localStorage.setItem(lastRefreshKey, now.toString());
+        loadCabOptions(true);
       }
-      
-      // Don't force a refresh of cab options for every fare update - this was causing infinite loops
-      // Instead, we'll let the regular poll handle this or user can manually refresh
     };
     
+    // Use passive event listeners to reduce performance impact
     window.addEventListener('fare-cache-cleared', handleFareCacheCleared, { passive: true });
-    window.addEventListener('local-fares-updated', handleFareUpdated, { passive: true });
-    window.addEventListener('trip-fares-updated', handleFareUpdated, { passive: true });
-    window.addEventListener('airport-fares-updated', handleFareUpdated, { passive: true });
-    window.addEventListener('vehicle-data-refreshed', handleFareUpdated, { passive: true });
+    window.addEventListener('vehicle-data-refreshed', handleDataRefreshed, { passive: true });
+    
+    // Drastically reduce the number of event listeners to prevent loop situations
+    // Only listen for the most critical event (vehicle-data-refreshed)
     
     return () => {
       window.removeEventListener('fare-cache-cleared', handleFareCacheCleared);
-      window.removeEventListener('local-fares-updated', handleFareUpdated);
-      window.removeEventListener('trip-fares-updated', handleFareUpdated);
-      window.removeEventListener('airport-fares-updated', handleFareUpdated);
-      window.removeEventListener('vehicle-data-refreshed', handleFareUpdated);
+      window.removeEventListener('vehicle-data-refreshed', handleDataRefreshed);
+      
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

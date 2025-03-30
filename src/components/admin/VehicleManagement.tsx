@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,6 +66,7 @@ const VehicleManagement = () => {
   const [selectedVehicle, setSelectedVehicle] = useState<ExtendedVehicleType | null>(null);
   const [refreshInProgress, setRefreshInProgress] = useState(false);
   const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastRefreshTimeRef = useRef<number>(Date.now());
   
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newVehicleName, setNewVehicleName] = useState('');
@@ -83,9 +83,28 @@ const VehicleManagement = () => {
   const [editVehicleDescription, setEditVehicleDescription] = useState('');
   const [editVehicleIsActive, setEditVehicleIsActive] = useState(true);
   
+  const shouldThrottleRefresh = (): boolean => {
+    const now = Date.now();
+    const timeSinceLastRefresh = now - lastRefreshTimeRef.current;
+    const minimumInterval = 10000; // 10 seconds
+    
+    if (timeSinceLastRefresh < minimumInterval) {
+      console.log(`Throttling refresh (last occurred ${Math.round(timeSinceLastRefresh/1000)}s ago)`);
+      return true;
+    }
+    
+    lastRefreshTimeRef.current = now;
+    return false;
+  };
+  
   const fetchVehicles = useCallback(async () => {
     if (refreshInProgress) {
       console.log('Skipping vehicle fetch - refresh already in progress');
+      return;
+    }
+    
+    if (shouldThrottleRefresh()) {
+      console.log('Refresh throttled - too soon since last refresh');
       return;
     }
     
@@ -93,6 +112,25 @@ const VehicleManagement = () => {
     setRefreshInProgress(true);
     
     try {
+      let localVehicles: ExtendedVehicleType[] = [];
+      
+      try {
+        const storedVehicles = localStorage.getItem('cachedVehicles');
+        if (storedVehicles) {
+          const parsedVehicles = JSON.parse(storedVehicles);
+          if (Array.isArray(parsedVehicles) && parsedVehicles.length > 0) {
+            console.log('Using locally cached vehicles:', parsedVehicles.length);
+            localVehicles = parsedVehicles;
+            
+            setVehicles(localVehicles);
+            setLoading(false);
+          }
+        }
+      } catch (e) {
+        console.error('Error parsing cached vehicles:', e);
+      }
+      
+      console.log('Reloading cab types...');
       await reloadCabTypes(true);
       
       const cachedVehicles = sessionStorage.getItem('cabTypes');
@@ -165,7 +203,19 @@ const VehicleManagement = () => {
         console.error('Error processing pricing data:', e);
       }
       
+      if (combinedVehicles.length === 0 && localVehicles.length > 0) {
+        console.warn('No vehicles found from API or localStorage, using previously cached vehicles');
+        combinedVehicles.push(...localVehicles);
+      }
+      
       combinedVehicles.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      
+      try {
+        localStorage.setItem('cachedVehicles', JSON.stringify(combinedVehicles));
+        localStorage.setItem('cachedVehiclesTimestamp', Date.now().toString());
+      } catch (e) {
+        console.error('Error caching combined vehicles:', e);
+      }
       
       setVehicles(combinedVehicles);
       console.log(`Loaded ${combinedVehicles.length} vehicles`);
@@ -181,7 +231,7 @@ const VehicleManagement = () => {
       
       refreshTimeoutRef.current = setTimeout(() => {
         setRefreshInProgress(false);
-      }, 5000);
+      }, 3000);
     }
   }, [refreshInProgress]);
   
@@ -189,7 +239,7 @@ const VehicleManagement = () => {
     fetchVehicles();
     
     const handleVehicleUpdates = () => {
-      if (!refreshInProgress) {
+      if (!refreshInProgress && !shouldThrottleRefresh()) {
         console.log('Detected vehicle updates, refreshing data...');
         fetchVehicles();
       }
@@ -214,6 +264,11 @@ const VehicleManagement = () => {
       return;
     }
     
+    if (shouldThrottleRefresh()) {
+      toast.info('Please wait a moment before refreshing again');
+      return;
+    }
+    
     toast.info('Refreshing vehicle data...');
     setRefreshInProgress(true);
     
@@ -223,25 +278,29 @@ const VehicleManagement = () => {
       if (result.success) {
         const vehicleCount = result.vehicleCount !== undefined ? result.vehicleCount : 0;
         toast.success(`Successfully refreshed vehicle data (${vehicleCount} vehicles)`);
-        await fetchVehicles();
+        
+        setTimeout(() => {
+          setRefreshInProgress(false);
+          fetchVehicles();
+        }, 1000);
       } else {
         if (result.alreadyInProgress) {
           toast.info('Vehicle sync already in progress, please wait');
         } else {
           toast.error('Failed to refresh vehicle data');
         }
+        
+        setTimeout(() => {
+          setRefreshInProgress(false);
+        }, 3000);
       }
     } catch (error) {
       console.error('Error refreshing vehicles:', error);
       toast.error('Error refreshing vehicle data');
-    } finally {
-      if (refreshTimeoutRef.current) {
-        clearTimeout(refreshTimeoutRef.current);
-      }
       
-      refreshTimeoutRef.current = setTimeout(() => {
+      setTimeout(() => {
         setRefreshInProgress(false);
-      }, 5000);
+      }, 3000);
     }
   }, [fetchVehicles, refreshInProgress]);
   
@@ -262,12 +321,19 @@ const VehicleManagement = () => {
     try {
       toast.info(`Updating vehicle: ${editVehicleName}`);
       
+      let imagePath = editVehicleImage || "/cars/sedan.png";
+      if (imagePath.includes('/')) {
+        imagePath = '/cars/' + imagePath.split('/').pop();
+      } else {
+        imagePath = '/cars/' + imagePath;
+      }
+      
       const vehicleData = {
         ...selectedVehicle,
         name: editVehicleName,
         capacity: parseInt(editVehicleCapacity) || 4,
         luggageCapacity: parseInt(editVehicleLuggageCapacity) || 2,
-        image: editVehicleImage || "/cars/sedan.png",
+        image: imagePath,
         description: editVehicleDescription,
         isActive: editVehicleIsActive,
         vehicleId: selectedVehicle.id,
@@ -290,15 +356,61 @@ const VehicleManagement = () => {
             name: editVehicleName,
             capacity: parseInt(editVehicleCapacity) || 4,
             luggageCapacity: parseInt(editVehicleLuggageCapacity) || 2,
-            image: editVehicleImage || "/cars/sedan.png",
+            image: imagePath,
             description: editVehicleDescription,
             isActive: editVehicleIsActive
           } : v)
         );
         
-        // Add a small delay before syncing to avoid race conditions
+        try {
+          const cachedVehicles = localStorage.getItem('cachedVehicles');
+          if (cachedVehicles) {
+            const parsed = JSON.parse(cachedVehicles);
+            const updated = parsed.map((v: any) => 
+              v.id === selectedVehicle.id || v.vehicleId === selectedVehicle.id
+                ? {
+                    ...v,
+                    name: editVehicleName,
+                    capacity: parseInt(editVehicleCapacity) || 4,
+                    luggageCapacity: parseInt(editVehicleLuggageCapacity) || 2,
+                    image: imagePath,
+                    description: editVehicleDescription,
+                    isActive: editVehicleIsActive
+                  }
+                : v
+            );
+            localStorage.setItem('cachedVehicles', JSON.stringify(updated));
+          }
+          
+          const sessionVehicles = sessionStorage.getItem('cabTypes');
+          if (sessionVehicles) {
+            const parsed = JSON.parse(sessionVehicles);
+            const updated = parsed.map((v: any) => 
+              v.id === selectedVehicle.id || v.vehicleId === selectedVehicle.id
+                ? {
+                    ...v,
+                    name: editVehicleName,
+                    capacity: parseInt(editVehicleCapacity) || 4,
+                    luggageCapacity: parseInt(editVehicleLuggageCapacity) || 2,
+                    image: imagePath,
+                    description: editVehicleDescription,
+                    isActive: editVehicleIsActive
+                  }
+                : v
+            );
+            sessionStorage.setItem('cabTypes', JSON.stringify(updated));
+          }
+        } catch (e) {
+          console.error('Error updating cache after vehicle update:', e);
+        }
+        
         setTimeout(async () => {
-          await syncVehicleData(true);
+          try {
+            await syncVehicleData(true);
+            fetchVehicles();
+          } catch (e) {
+            console.error('Error syncing after update:', e);
+          }
         }, 1000);
       } else {
         toast.error('Failed to update vehicle');
@@ -321,9 +433,35 @@ const VehicleManagement = () => {
           
           setVehicles(prev => prev.filter(v => v.id !== vehicle.id));
           
-          // Add a small delay before syncing to avoid race conditions
+          try {
+            const cachedVehicles = localStorage.getItem('cachedVehicles');
+            if (cachedVehicles) {
+              const parsed = JSON.parse(cachedVehicles);
+              const filtered = parsed.filter((v: any) => 
+                v.id !== vehicle.id && v.vehicleId !== vehicle.id
+              );
+              localStorage.setItem('cachedVehicles', JSON.stringify(filtered));
+            }
+            
+            const sessionVehicles = sessionStorage.getItem('cabTypes');
+            if (sessionVehicles) {
+              const parsed = JSON.parse(sessionVehicles);
+              const filtered = parsed.filter((v: any) => 
+                v.id !== vehicle.id && v.vehicleId !== vehicle.id
+              );
+              sessionStorage.setItem('cabTypes', JSON.stringify(filtered));
+            }
+          } catch (e) {
+            console.error('Error updating cache after vehicle deletion:', e);
+          }
+          
           setTimeout(async () => {
-            await syncVehicleData(true);
+            try {
+              await syncVehicleData(true);
+              fetchVehicles();
+            } catch (e) {
+              console.error('Error syncing after delete:', e);
+            }
           }, 1000);
         } else {
           toast.error('Failed to delete vehicle');
@@ -341,7 +479,7 @@ const VehicleManagement = () => {
       
       const updatedVehicle = {
         ...vehicle,
-        isActive,
+        isActive: Boolean(isActive),
         ac: true,
         amenities: vehicle.amenities || ['AC', 'Bottle Water', 'Music System']
       };
@@ -357,9 +495,39 @@ const VehicleManagement = () => {
           prev.map(v => v.id === vehicle.id ? { ...v, isActive } : v)
         );
         
-        // Add a small delay before syncing to avoid race conditions
+        try {
+          const cachedVehicles = localStorage.getItem('cachedVehicles');
+          if (cachedVehicles) {
+            const parsed = JSON.parse(cachedVehicles);
+            const updated = parsed.map((v: any) => 
+              v.id === vehicle.id || v.vehicleId === vehicle.id
+                ? { ...v, isActive }
+                : v
+            );
+            localStorage.setItem('cachedVehicles', JSON.stringify(updated));
+          }
+          
+          const sessionVehicles = sessionStorage.getItem('cabTypes');
+          if (sessionVehicles) {
+            const parsed = JSON.parse(sessionVehicles);
+            const updated = parsed.map((v: any) => 
+              v.id === vehicle.id || v.vehicleId === vehicle.id
+                ? { ...v, isActive }
+                : v
+            );
+            sessionStorage.setItem('cabTypes', JSON.stringify(updated));
+          }
+        } catch (e) {
+          console.error('Error updating cache after toggling active state:', e);
+        }
+        
         setTimeout(async () => {
-          await syncVehicleData(true);
+          try {
+            await syncVehicleData(true);
+            fetchVehicles();
+          } catch (e) {
+            console.error('Error syncing after toggle:', e);
+          }
         }, 1000);
       } else {
         toast.error(`Failed to ${isActive ? 'activate' : 'deactivate'} vehicle`);
@@ -372,7 +540,17 @@ const VehicleManagement = () => {
   
   const handleAddNewVehicle = async () => {
     try {
+      if (!newVehicleName) {
+        toast.error('Vehicle name is required');
+        return;
+      }
+      
       const vehicleId = newVehicleId || newVehicleName.toLowerCase().replace(/\s+/g, '_');
+      
+      let imagePath = newVehicleImage || "/cars/sedan.png";
+      if (imagePath && !imagePath.startsWith('/cars/')) {
+        imagePath = '/cars/' + imagePath.split('/').pop();
+      }
       
       const vehicleData: CabType = {
         id: vehicleId,
@@ -382,7 +560,7 @@ const VehicleManagement = () => {
         luggageCapacity: parseInt(newVehicleLuggageCapacity) || 2,
         isActive: true,
         description: `${newVehicleName} vehicle`,
-        image: newVehicleImage || "/cars/sedan.png",
+        image: imagePath,
         amenities: ["AC", "Bottle Water", "Music System"],
         ac: true,
         price: 0,
@@ -404,14 +582,33 @@ const VehicleManagement = () => {
         setNewVehicleImage('');
         setIsAddDialogOpen(false);
         
-        setVehicles(prev => [
-          ...prev, 
-          vehicleData as ExtendedVehicleType
-        ]);
+        setVehicles(prev => [...prev, vehicleData]);
         
-        // Add a small delay before syncing to avoid race conditions
+        try {
+          const cachedVehicles = localStorage.getItem('cachedVehicles');
+          if (cachedVehicles) {
+            const parsed = JSON.parse(cachedVehicles);
+            parsed.push(vehicleData);
+            localStorage.setItem('cachedVehicles', JSON.stringify(parsed));
+          }
+          
+          const sessionVehicles = sessionStorage.getItem('cabTypes');
+          if (sessionVehicles) {
+            const parsed = JSON.parse(sessionVehicles);
+            parsed.push(vehicleData);
+            sessionStorage.setItem('cabTypes', JSON.stringify(parsed));
+          }
+        } catch (e) {
+          console.error('Error updating cache after vehicle creation:', e);
+        }
+        
         setTimeout(async () => {
-          await syncVehicleData(true);
+          try {
+            await syncVehicleData(true);
+            fetchVehicles();
+          } catch (e) {
+            console.error('Error syncing after creation:', e);
+          }
         }, 1000);
       } else {
         toast.error('Failed to create vehicle');

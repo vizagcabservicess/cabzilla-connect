@@ -19,7 +19,7 @@ header('Expires: 0');
 
 // Add extra cache busting headers
 header('X-Cache-Timestamp: ' . time());
-header('X-API-Version: '.'1.0.6'); // Updated version number
+header('X-API-Version: '.'1.0.7'); // Updated version number
 
 // Respond to preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -115,6 +115,27 @@ function tableExists($conn, $tableName) {
 function columnExists($conn, $tableName, $columnName) {
     $result = $conn->query("SHOW COLUMNS FROM `$tableName` LIKE '$columnName'");
     return $result && $result->num_rows > 0;
+}
+
+// Helper function to normalize image paths
+function normalizeImagePath($imagePath) {
+    // Return default if empty
+    if (empty($imagePath)) {
+        return '/cars/sedan.png';
+    }
+    
+    // If it's a URL, extract just the filename
+    if (strpos($imagePath, 'http') === 0) {
+        $filename = basename(parse_url($imagePath, PHP_URL_PATH));
+        return '/cars/' . $filename;
+    }
+    
+    // If it doesn't have /cars/ prefix, add it
+    if (strpos($imagePath, '/cars/') === false) {
+        return '/cars/' . basename($imagePath);
+    }
+    
+    return $imagePath;
 }
 
 // Function to get data from specific fare tables - PRIORITIZE outstation_fares
@@ -222,6 +243,12 @@ function getVehiclesFromJson() {
         if (!empty($content)) {
             $jsonData = json_decode($content, true);
             if (json_last_error() === JSON_ERROR_NONE && !empty($jsonData)) {
+                // Normalize image paths in the JSON data
+                foreach ($jsonData as &$vehicle) {
+                    if (isset($vehicle['image'])) {
+                        $vehicle['image'] = normalizeImagePath($vehicle['image']);
+                    }
+                }
                 $vehicles = $jsonData;
                 error_log("Successfully loaded vehicles from JSON file: " . count($vehicles));
             }
@@ -266,7 +293,7 @@ try {
                 'timestamp' => time(),
                 'cached' => true,
                 'source' => 'json',
-                'version' => '1.0.6', // Updated version
+                'version' => '1.0.7', // Updated version
                 'includeInactive' => $includeInactive
             ]);
             exit;
@@ -386,7 +413,7 @@ try {
             'name' => $name,
             'capacity' => intval($row['capacity'] ?? $row['seats'] ?? 4),
             'luggageCapacity' => intval($row['luggage_capacity'] ?? $row['luggage'] ?? 2),
-            'image' => $row['image'] ?? '/cars/sedan.png',
+            'image' => normalizeImagePath($row['image'] ?? '/cars/sedan.png'),
             'amenities' => $amenities,
             'description' => $row['description'] ?? '',
             'ac' => (bool)($row['ac'] ?? 1),
@@ -541,7 +568,7 @@ try {
         'vehicles' => $vehicles,
         'timestamp' => time(),
         'cached' => false,
-        'version' => '1.0.6', // Updated version
+        'version' => '1.0.7', // Updated version
         'tableUsed' => $vehicleTableToUse,
         'includeInactive' => $includeInactive
     ]);
