@@ -1,5 +1,6 @@
 import { CabType } from '@/types/cab';
 import { apiBaseUrl } from '@/config/api';
+import { OutstationFare, LocalFare, AirportFare } from '@/types/cab';
 
 const JSON_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
 const API_CACHE_DURATION = 2 * 60 * 1000; // 2 minutes in milliseconds
@@ -226,4 +227,242 @@ export const clearVehicleDataCache = () => {
   window.dispatchEvent(new CustomEvent('vehicle-data-cache-cleared', {
     detail: { timestamp: Date.now() }
   }));
+};
+
+/**
+ * Get vehicle types for dropdowns
+ */
+export const getVehicleTypes = async (): Promise<{id: string, name: string}[]> => {
+  try {
+    const vehicles = await getVehicleData(false, true);
+    
+    return vehicles.map(vehicle => ({
+      id: vehicle.id,
+      name: vehicle.name
+    }));
+  } catch (error) {
+    console.error("Error fetching vehicle types:", error);
+    return [];
+  }
+};
+
+/**
+ * Update outstation fares for a vehicle
+ */
+export const updateOutstationFares = async (vehicleId: string, fareData: OutstationFare): Promise<boolean> => {
+  try {
+    // Create FormData for better compatibility with server
+    const formData = new FormData();
+    formData.append('vehicleId', vehicleId);
+    formData.append('vehicle_id', vehicleId);
+    formData.append('tripType', 'outstation');
+    formData.append('trip_type', 'outstation');
+    
+    // Add all fare data with all possible field names for compatibility
+    Object.entries(fareData).forEach(([key, value]) => {
+      formData.append(key, value.toString());
+    });
+    
+    // Add nightHalt for backward compatibility
+    if (fareData.nightHaltCharge) {
+      formData.append('nightHalt', fareData.nightHaltCharge.toString());
+    }
+    
+    // Try the direct API endpoint first
+    const directResponse = await fetch(`${apiBaseUrl}/api/direct-fare-update.php`, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'X-Force-Refresh': 'true',
+        'Cache-Control': 'no-cache'
+      }
+    });
+    
+    if (directResponse.ok) {
+      const result = await directResponse.json();
+      console.log('Direct API response for outstation fares:', result);
+      return true;
+    }
+    
+    // Try the fallback endpoint
+    const fallbackResponse = await fetch(`${apiBaseUrl}/api/admin/outstation-fares-update.php`, {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (fallbackResponse.ok) {
+      const result = await fallbackResponse.json();
+      console.log('Fallback API response for outstation fares:', result);
+      return true;
+    }
+    
+    throw new Error('Failed to update outstation fares');
+  } catch (error) {
+    console.error('Error updating outstation fares:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update local fares for a vehicle
+ */
+export const updateLocalFares = async (vehicleId: string, fareData: LocalFare): Promise<boolean> => {
+  try {
+    // Create FormData for better compatibility with server
+    const formData = new FormData();
+    formData.append('vehicleId', vehicleId);
+    formData.append('vehicle_id', vehicleId);
+    formData.append('tripType', 'local');
+    formData.append('trip_type', 'local');
+    
+    // Add all naming conventions for local package fare fields
+    if (fareData.price4hrs40km !== undefined) {
+      formData.append('package4hr40km', fareData.price4hrs40km.toString());
+      formData.append('price4hrs40km', fareData.price4hrs40km.toString());
+      formData.append('hr4km40Price', fareData.price4hrs40km.toString());
+      formData.append('local_package_4hr', fareData.price4hrs40km.toString());
+    }
+    
+    if (fareData.price8hrs80km !== undefined) {
+      formData.append('package8hr80km', fareData.price8hrs80km.toString());
+      formData.append('price8hrs80km', fareData.price8hrs80km.toString());
+      formData.append('hr8km80Price', fareData.price8hrs80km.toString());
+      formData.append('local_package_8hr', fareData.price8hrs80km.toString());
+    }
+    
+    if (fareData.price10hrs100km !== undefined) {
+      formData.append('package10hr100km', fareData.price10hrs100km.toString());
+      formData.append('price10hrs100km', fareData.price10hrs100km.toString());
+      formData.append('hr10km100Price', fareData.price10hrs100km.toString());
+      formData.append('local_package_10hr', fareData.price10hrs100km.toString());
+    }
+    
+    if (fareData.priceExtraKm !== undefined) {
+      formData.append('extraKmRate', fareData.priceExtraKm.toString());
+      formData.append('priceExtraKm', fareData.priceExtraKm.toString());
+      formData.append('extra_km_charge', fareData.priceExtraKm.toString());
+      formData.append('extra_km_rate', fareData.priceExtraKm.toString());
+    }
+    
+    if (fareData.priceExtraHour !== undefined) {
+      formData.append('extraHourRate', fareData.priceExtraHour.toString());
+      formData.append('priceExtraHour', fareData.priceExtraHour.toString());
+      formData.append('extra_hour_charge', fareData.priceExtraHour.toString());
+      formData.append('extra_hour_rate', fareData.priceExtraHour.toString());
+    }
+    
+    // Try the direct API endpoint first
+    const directResponse = await fetch(`${apiBaseUrl}/api/direct-fare-update.php`, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'X-Force-Refresh': 'true',
+        'Cache-Control': 'no-cache'
+      }
+    });
+    
+    if (directResponse.ok) {
+      const result = await directResponse.json();
+      console.log('Direct API response for local fares:', result);
+      return true;
+    }
+    
+    // Try the fallback endpoint
+    const fallbackResponse = await fetch(`${apiBaseUrl}/api/admin/local-fares-update.php`, {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (fallbackResponse.ok) {
+      const result = await fallbackResponse.json();
+      console.log('Fallback API response for local fares:', result);
+      return true;
+    }
+    
+    throw new Error('Failed to update local fares');
+  } catch (error) {
+    console.error('Error updating local fares:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update airport fares for a vehicle
+ */
+export const updateAirportFares = async (vehicleId: string, fareData: AirportFare): Promise<boolean> => {
+  try {
+    // Create FormData for better compatibility with server
+    const formData = new FormData();
+    formData.append('vehicleId', vehicleId);
+    formData.append('vehicle_id', vehicleId);
+    formData.append('tripType', 'airport');
+    formData.append('trip_type', 'airport');
+    
+    // Add all fare data with all possible field names for compatibility
+    Object.entries(fareData).forEach(([key, value]) => {
+      formData.append(key, value.toString());
+      
+      // Add with airport_ prefix for compatibility
+      formData.append(`airport_${key}`, value.toString());
+    });
+    
+    // Try the direct API endpoint first
+    const directResponse = await fetch(`${apiBaseUrl}/api/direct-fare-update.php`, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'X-Force-Refresh': 'true',
+        'Cache-Control': 'no-cache'
+      }
+    });
+    
+    if (directResponse.ok) {
+      const result = await directResponse.json();
+      console.log('Direct API response for airport fares:', result);
+      return true;
+    }
+    
+    // Try the fallback endpoint
+    const fallbackResponse = await fetch(`${apiBaseUrl}/api/admin/airport-fares-update.php`, {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (fallbackResponse.ok) {
+      const result = await fallbackResponse.json();
+      console.log('Fallback API response for airport fares:', result);
+      return true;
+    }
+    
+    throw new Error('Failed to update airport fares');
+  } catch (error) {
+    console.error('Error updating airport fares:', error);
+    throw error;
+  }
+};
+
+/**
+ * Generic function to update trip fares for a vehicle
+ */
+export const updateTripFares = async (
+  vehicleId: string, 
+  tripType: 'outstation' | 'local' | 'airport', 
+  fareData: OutstationFare | LocalFare | AirportFare
+): Promise<boolean> => {
+  try {
+    // Choose the appropriate update function based on trip type
+    switch (tripType) {
+      case 'outstation':
+        return await updateOutstationFares(vehicleId, fareData as OutstationFare);
+      case 'local':
+        return await updateLocalFares(vehicleId, fareData as LocalFare);
+      case 'airport':
+        return await updateAirportFares(vehicleId, fareData as AirportFare);
+      default:
+        throw new Error(`Unsupported trip type: ${tripType}`);
+    }
+  } catch (error) {
+    console.error(`Error updating ${tripType} fares:`, error);
+    throw error;
+  }
 };
