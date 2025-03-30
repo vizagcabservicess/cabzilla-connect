@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,7 +54,7 @@ interface ExtendedVehicleType {
   luggageCapacity: number;
   ac?: boolean;
   isActive?: boolean;
-  image: string; // Changed from optional to required to match CabType
+  image?: string;
   description?: string;
   amenities?: string[];
   basePrice?: number;
@@ -77,7 +76,7 @@ const VehicleManagement = () => {
   const [newVehicleId, setNewVehicleId] = useState('');
   const [newVehicleCapacity, setNewVehicleCapacity] = useState('4');
   const [newVehicleLuggageCapacity, setNewVehicleLuggageCapacity] = useState('2');
-  const [newVehicleImage, setNewVehicleImage] = useState('/cars/sedan.png');
+  const [newVehicleImage, setNewVehicleImage] = useState('');
   
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editVehicleName, setEditVehicleName] = useState('');
@@ -124,11 +123,7 @@ const VehicleManagement = () => {
           const parsedVehicles = JSON.parse(storedVehicles);
           if (Array.isArray(parsedVehicles) && parsedVehicles.length > 0) {
             console.log('Using locally cached vehicles:', parsedVehicles.length);
-            // Ensure all vehicles have required properties
-            localVehicles = parsedVehicles.map(v => ({
-              ...v,
-              image: v.image || '/cars/sedan.png' // Ensure image is always set
-            }));
+            localVehicles = parsedVehicles;
             
             setVehicles(localVehicles);
             setLoading(false);
@@ -160,10 +155,7 @@ const VehicleManagement = () => {
       const data = await response.json();
       
       if (data && data.status === 'success' && Array.isArray(data.vehicles)) {
-        const fetchedVehicles = data.vehicles.map((v: any) => ({
-          ...v,
-          image: v.image || '/cars/sedan.png' // Ensure image is always set
-        }));
+        const fetchedVehicles = data.vehicles;
         console.log(`Loaded ${fetchedVehicles.length} vehicles from API`);
         
         try {
@@ -175,25 +167,17 @@ const VehicleManagement = () => {
         
         setVehicles(fetchedVehicles);
         
-        // Clear cache to ensure fresh data for other components
         clearVehicleDataCache();
         
-        // Also update the vehicle data in the service
         await getVehicleData(true, true);
         
-        // Reload cab types to ensure consistency across the app
         await reloadCabTypes(true);
       } else {
         console.warn('API returned invalid data:', data);
         
         console.log('Falling back to standard vehicle data retrieval...');
         const vehicles = await getVehicleData(true, true);
-        // Ensure all vehicles have required properties
-        const processedVehicles = vehicles.map(v => ({
-          ...v,
-          image: v.image || '/cars/sedan.png' // Ensure image is always set
-        }));
-        setVehicles(processedVehicles);
+        setVehicles(vehicles);
       }
     } catch (error) {
       console.error('Error fetching vehicles:', error);
@@ -202,12 +186,7 @@ const VehicleManagement = () => {
       try {
         const vehicles = await getVehicleData(true, true);
         if (vehicles.length > 0) {
-          // Ensure all vehicles have required properties
-          const processedVehicles = vehicles.map(v => ({
-            ...v,
-            image: v.image || '/cars/sedan.png' // Ensure image is always set
-          }));
-          setVehicles(processedVehicles);
+          setVehicles(vehicles);
           console.log(`Loaded ${vehicles.length} vehicles from data service fallback`);
         }
       } catch (fallbackError) {
@@ -300,7 +279,7 @@ const VehicleManagement = () => {
     setEditVehicleName(vehicle.name || '');
     setEditVehicleCapacity(String(vehicle.capacity) || '4');
     setEditVehicleLuggageCapacity(String(vehicle.luggageCapacity) || '2');
-    setEditVehicleImage(vehicle.image || '/cars/sedan.png');
+    setEditVehicleImage(vehicle.image || '');
     setEditVehicleDescription(vehicle.description || '');
     setEditVehicleIsActive(vehicle.isActive !== false);
     setIsEditDialogOpen(true);
@@ -313,13 +292,13 @@ const VehicleManagement = () => {
       toast.info(`Updating vehicle: ${editVehicleName}`);
       
       let imagePath = editVehicleImage || "/cars/sedan.png";
-      if (imagePath.includes('/') && !imagePath.startsWith('/cars/')) {
+      if (imagePath.includes('/')) {
         imagePath = '/cars/' + imagePath.split('/').pop();
-      } else if (!imagePath.includes('/')) {
+      } else {
         imagePath = '/cars/' + imagePath;
       }
       
-      const vehicleData: CabType = {
+      const vehicleData = {
         ...selectedVehicle,
         name: editVehicleName,
         capacity: parseInt(editVehicleCapacity) || 4,
@@ -468,7 +447,7 @@ const VehicleManagement = () => {
     try {
       toast.info(`${isActive ? 'Activating' : 'Deactivating'} vehicle: ${vehicle.name}`);
       
-      const updatedVehicle: CabType = {
+      const updatedVehicle = {
         ...vehicle,
         isActive: Boolean(isActive),
         ac: true,
@@ -570,7 +549,7 @@ const VehicleManagement = () => {
         setNewVehicleId('');
         setNewVehicleCapacity('4');
         setNewVehicleLuggageCapacity('2');
-        setNewVehicleImage('/cars/sedan.png');
+        setNewVehicleImage('');
         setIsAddDialogOpen(false);
         
         setVehicles(prev => [...prev, vehicleData]);
@@ -616,7 +595,7 @@ const VehicleManagement = () => {
       setNewVehicleId('');
       setNewVehicleCapacity('4');
       setNewVehicleLuggageCapacity('2');
-      setNewVehicleImage('/cars/sedan.png');
+      setNewVehicleImage('');
     }
   }, [isAddDialogOpen]);
   
