@@ -1,3 +1,4 @@
+
 <?php
 require_once '../../config.php';
 
@@ -95,6 +96,10 @@ function saveVehiclesToJson($vehicles) {
         // Write to file
         if (file_put_contents($jsonFile, $jsonData)) {
             error_log("Successfully saved vehicles to JSON file: $jsonFile");
+            
+            // Create a trigger file to indicate fresh data
+            touch($dir . '/vehicles_updated.flag');
+            
             return true;
         } else {
             error_log("Failed to write vehicles to JSON file: $jsonFile");
@@ -167,7 +172,7 @@ function tableExists($conn, $table) {
 
 // Normalize image path to ensure consistent format
 function normalizeImagePath($path) {
-    if (empty($path)) return '';
+    if (empty($path)) return '/cars/sedan.png'; // Default image
     
     // Fix paths that don't have correct prefix
     if (strpos($path, '/cars/') === 0) {
@@ -199,8 +204,8 @@ try {
     }
     
     // Check if required tables exist, if not use fallback
-    if (!tableExists($conn, 'vehicle_types')) {
-        error_log("Required table vehicle_types doesn't exist in the database, using fallback vehicles");
+    if (!tableExists($conn, 'vehicle_types') && !tableExists($conn, 'vehicles')) {
+        error_log("Required tables don't exist in the database, using fallback vehicles");
         echo json_encode([
             'vehicles' => $fallbackVehicles,
             'timestamp' => time(),
@@ -339,8 +344,8 @@ try {
         // Get the JSON data from the request
         $input = getRequestData();
         
-        // Log the input data
-        error_log("Vehicle pricing update request: " . json_encode($input));
+        // Detailed logging for debugging
+        error_log("Vehicle create/update request: " . json_encode($input));
         
         // Validate input
         if (!$input || !isset($input['vehicleId'])) {
@@ -359,7 +364,7 @@ try {
         $capacity = isset($input['capacity']) ? intval($input['capacity']) : 4;
         $luggageCapacity = isset($input['luggageCapacity']) ? intval($input['luggageCapacity']) : 2;
         $ac = isset($input['ac']) ? ($input['ac'] ? 1 : 0) : 1;
-        $image = isset($input['image']) ? normalizeImagePath($input['image']) : '';
+        $image = isset($input['image']) ? normalizeImagePath($input['image']) : '/cars/sedan.png';
         $description = isset($input['description']) ? $input['description'] : '';
         
         // Process amenities - convert array to JSON or keep string
@@ -386,48 +391,144 @@ try {
             }
         }
         
+        error_log("Processed input data: " . json_encode([
+            "vehicleId" => $vehicleId,
+            "name" => $name,
+            "basePrice" => $basePrice,
+            "pricePerKm" => $pricePerKm,
+            "isActive" => $isActive,
+            "image" => $image
+        ]));
+        
         // Begin transaction
         $conn->begin_transaction();
         
         try {
-            // First check if vehicle type exists
-            $checkStmt = $conn->prepare("SELECT COUNT(*) as count FROM vehicle_types WHERE vehicle_id = ?");
+            // First check if the vehicles table exists
+            $vehicleTable = tableExists($conn, 'vehicles') ? 'vehicles' : 'vehicle_types';
+            error_log("Using vehicle table: $vehicleTable");
+            
+            // Check if vehicle exists in the selected table
+            $checkStmt = $conn->prepare("SELECT COUNT(*) as count FROM $vehicleTable WHERE vehicle_id = ?");
             if (!$checkStmt) {
                 throw new Exception("Database prepare error on check: " . $conn->error);
             }
             
             $checkStmt->bind_param("s", $vehicleId);
             if (!$checkStmt->execute()) {
-                throw new Exception("Failed to check vehicle type: " . $checkStmt->error);
+                throw new Exception("Failed to check vehicle: " . $checkStmt->error);
             }
             
             $result = $checkStmt->get_result();
             $row = $result->fetch_assoc();
             
-            // If vehicle type doesn't exist, create it
+            // If vehicle doesn't exist, create it
             if ($row['count'] == 0) {
+                // Also check the alternate table if both exist
+                if ($vehicleTable === 'vehicles' && tableExists($conn, 'vehicle_types')) {
+                    $altCheckStmt = $conn->prepare("SELECT COUNT(*) as count FROM vehicle_types WHERE vehicle_id = ?");
+                    $altCheckStmt->bind_param("s", $vehicleId);
+                    $altCheckStmt->execute();
+                    $altResult = $altCheckStmt->get_result();
+                    $altRow = $altResult->fetch_assoc();
+                    
+                    if ($altRow['count'] > 0) {
+                        // Vehicle exists in the alternate table, so update it there first
+                        $updateAltStmt = $conn->prepare("
+                            UPDATE vehicle_types 
+                            SET name = ?, capacity = ?, luggage_capacity = ?, ac = ?, image = ?, 
+                                description = ?, amenities = ?, is_active = ?,
+                                base_price = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?
+                            WHERE vehicle_id = ?
+                        ");
+                        
+                        $updateAltStmt->bind_param(
+                            "siiisssiiddds",
+                            $name, $capacity, $luggageCapacity, $ac, $image, 
+                            $description, $amenities, $isActive,
+                            $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance,
+                            $vehicleId
+                        );
+                        
+                        $updateAltStmt->execute();
+                        error_log("Updated vehicle in alternate table: vehicle_types");
+                    }
+                }
+                
                 // INSERT operation (completely new vehicle)
                 $insertVehicleStmt = $conn->prepare("
-                    INSERT INTO vehicle_types (vehicle_id, name, capacity, luggage_capacity, ac, image, description, amenities, is_active) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO $vehicleTable (
+                        vehicle_id, name, capacity, luggage_capacity, ac, image, 
+                        description, amenities, is_active, base_price, price_per_km, 
+                        night_halt_charge, driver_allowance
+                    ) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ");
                 
                 if (!$insertVehicleStmt) {
                     throw new Exception("Database prepare error on insert vehicle: " . $conn->error);
                 }
                 
-                $insertVehicleStmt->bind_param("ssiisssis", $vehicleId, $name, $capacity, $luggageCapacity, $ac, $image, $description, $amenities, $isActive);
+                $insertVehicleStmt->bind_param(
+                    "siiissssiiddd",
+                    $vehicleId, $name, $capacity, $luggageCapacity, $ac, $image, 
+                    $description, $amenities, $isActive, $basePrice, $pricePerKm, 
+                    $nightHaltCharge, $driverAllowance
+                );
                 
                 if (!$insertVehicleStmt->execute()) {
-                    throw new Exception("Failed to insert vehicle type: " . $insertVehicleStmt->error);
+                    throw new Exception("Failed to insert vehicle: " . $insertVehicleStmt->error);
                 }
                 
-                error_log("Created new vehicle type: " . $vehicleId . " with isActive=" . $isActive);
+                error_log("Created new vehicle: " . $vehicleId . " with isActive=" . $isActive);
+                
+                // If we have both tables, add to the other one too for consistency
+                if ($vehicleTable === 'vehicles' && tableExists($conn, 'vehicle_types') && $altRow['count'] == 0) {
+                    $insertAltStmt = $conn->prepare("
+                        INSERT INTO vehicle_types (
+                            vehicle_id, name, capacity, luggage_capacity, ac, image, 
+                            description, amenities, is_active, base_price, price_per_km, 
+                            night_halt_charge, driver_allowance
+                        ) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ");
+                    
+                    $insertAltStmt->bind_param(
+                        "siiissssiiddd",
+                        $vehicleId, $name, $capacity, $luggageCapacity, $ac, $image, 
+                        $description, $amenities, $isActive, $basePrice, $pricePerKm, 
+                        $nightHaltCharge, $driverAllowance
+                    );
+                    
+                    $insertAltStmt->execute();
+                    error_log("Also created vehicle in alternate table: vehicle_types");
+                } else if ($vehicleTable === 'vehicle_types' && tableExists($conn, 'vehicles')) {
+                    $insertAltStmt = $conn->prepare("
+                        INSERT INTO vehicles (
+                            vehicle_id, name, capacity, luggage_capacity, ac, image, 
+                            description, amenities, is_active, base_price, price_per_km, 
+                            night_halt_charge, driver_allowance
+                        ) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ");
+                    
+                    $insertAltStmt->bind_param(
+                        "siiissssiiddd",
+                        $vehicleId, $name, $capacity, $luggageCapacity, $ac, $image, 
+                        $description, $amenities, $isActive, $basePrice, $pricePerKm, 
+                        $nightHaltCharge, $driverAllowance
+                    );
+                    
+                    $insertAltStmt->execute();
+                    error_log("Also created vehicle in alternate table: vehicles");
+                }
             } else {
                 // UPDATE operation (updating existing vehicle)
                 $updateVehicleStmt = $conn->prepare("
-                    UPDATE vehicle_types 
-                    SET name = ?, capacity = ?, luggage_capacity = ?, ac = ?, image = ?, description = ?, amenities = ?, is_active = ?
+                    UPDATE $vehicleTable 
+                    SET name = ?, capacity = ?, luggage_capacity = ?, ac = ?, image = ?, 
+                        description = ?, amenities = ?, is_active = ?,
+                        base_price = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?
                     WHERE vehicle_id = ?
                 ");
                 
@@ -435,13 +536,60 @@ try {
                     throw new Exception("Database prepare error on update vehicle: " . $conn->error);
                 }
                 
-                $updateVehicleStmt->bind_param("siiisssis", $name, $capacity, $luggageCapacity, $ac, $image, $description, $amenities, $isActive, $vehicleId);
+                $updateVehicleStmt->bind_param(
+                    "siiisssiiddds",
+                    $name, $capacity, $luggageCapacity, $ac, $image, 
+                    $description, $amenities, $isActive,
+                    $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance,
+                    $vehicleId
+                );
                 
                 if (!$updateVehicleStmt->execute()) {
-                    throw new Exception("Failed to update vehicle type: " . $updateVehicleStmt->error);
+                    throw new Exception("Failed to update vehicle: " . $updateVehicleStmt->error);
                 }
                 
-                error_log("Updated vehicle type: " . $vehicleId . " with isActive=" . $isActive);
+                error_log("Updated vehicle: " . $vehicleId . " with isActive=" . $isActive);
+                
+                // Update the other table too if it exists
+                if ($vehicleTable === 'vehicles' && tableExists($conn, 'vehicle_types')) {
+                    $updateAltStmt = $conn->prepare("
+                        UPDATE vehicle_types 
+                        SET name = ?, capacity = ?, luggage_capacity = ?, ac = ?, image = ?, 
+                            description = ?, amenities = ?, is_active = ?,
+                            base_price = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?
+                        WHERE vehicle_id = ?
+                    ");
+                    
+                    $updateAltStmt->bind_param(
+                        "siiisssiiddds",
+                        $name, $capacity, $luggageCapacity, $ac, $image, 
+                        $description, $amenities, $isActive,
+                        $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance,
+                        $vehicleId
+                    );
+                    
+                    $updateAltStmt->execute();
+                    error_log("Also updated vehicle in alternate table: vehicle_types");
+                } else if ($vehicleTable === 'vehicle_types' && tableExists($conn, 'vehicles')) {
+                    $updateAltStmt = $conn->prepare("
+                        UPDATE vehicles 
+                        SET name = ?, capacity = ?, luggage_capacity = ?, ac = ?, image = ?, 
+                            description = ?, amenities = ?, is_active = ?,
+                            base_price = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?
+                        WHERE vehicle_id = ?
+                    ");
+                    
+                    $updateAltStmt->bind_param(
+                        "siiisssiiddds",
+                        $name, $capacity, $luggageCapacity, $ac, $image, 
+                        $description, $amenities, $isActive,
+                        $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance,
+                        $vehicleId
+                    );
+                    
+                    $updateAltStmt->execute();
+                    error_log("Also updated vehicle in alternate table: vehicles");
+                }
             }
             
             // Update pricing if vehicle_pricing table exists
@@ -486,28 +634,156 @@ try {
                     
                     error_log("Vehicle pricing updated for: " . $vehicleId);
                 } else {
-                    // Insert new record in vehicle_pricing
-                    $insertStmt = $conn->prepare("
-                        INSERT INTO vehicle_pricing (vehicle_id, $baseColumn, price_per_km, night_halt_charge, driver_allowance, trip_type, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, 'all', NOW(), NOW())
-                    ");
+                    // Insert new record in vehicle_pricing for each trip type
+                    $tripTypes = ['outstation', 'local', 'airport'];
                     
-                    if (!$insertStmt) {
-                        throw new Exception("Database prepare error on insert: " . $conn->error);
+                    foreach($tripTypes as $tripType) {
+                        $insertStmt = $conn->prepare("
+                            INSERT INTO vehicle_pricing (vehicle_id, $baseColumn, price_per_km, night_halt_charge, driver_allowance, trip_type, created_at, updated_at)
+                            VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
+                        ");
+                        
+                        if (!$insertStmt) {
+                            throw new Exception("Database prepare error on insert: " . $conn->error);
+                        }
+                        
+                        $insertStmt->bind_param("sdddss", $vehicleId, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, $tripType);
+                        
+                        if (!$insertStmt->execute()) {
+                            throw new Exception("Failed to insert vehicle pricing for $tripType: " . $insertStmt->error);
+                        }
+                        
+                        error_log("Vehicle pricing created for $tripType: " . $vehicleId);
                     }
-                    
-                    $insertStmt->bind_param("sdddd", $vehicleId, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
-                    
-                    if (!$insertStmt->execute()) {
-                        throw new Exception("Failed to insert vehicle pricing: " . $insertStmt->error);
-                    }
-                    
-                    error_log("Vehicle pricing created for: " . $vehicleId);
                 }
             }
             
+            // Update outstation_fares if it exists
+            if (tableExists($conn, 'outstation_fares')) {
+                $checkFaresStmt = $conn->prepare("SELECT COUNT(*) as count FROM outstation_fares WHERE vehicle_id = ?");
+                $checkFaresStmt->bind_param("s", $vehicleId);
+                $checkFaresStmt->execute();
+                $faresResult = $checkFaresStmt->get_result();
+                $faresRow = $faresResult->fetch_assoc();
+                
+                if ($faresRow['count'] > 0) {
+                    // Update existing record
+                    $updateFaresStmt = $conn->prepare("
+                        UPDATE outstation_fares 
+                        SET base_price = ?, price_per_km = ?, night_halt_charge = ?, driver_allowance = ?,
+                            roundtrip_base_price = ?, roundtrip_price_per_km = ?
+                        WHERE vehicle_id = ?
+                    ");
+                    
+                    $roundtripBasePrice = $basePrice * 0.95; // 5% discount for round trips
+                    $roundtripPricePerKm = $pricePerKm * 0.9; // 10% discount per km for round trips
+                    
+                    $updateFaresStmt->bind_param(
+                        "dddddds",
+                        $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance,
+                        $roundtripBasePrice, $roundtripPricePerKm,
+                        $vehicleId
+                    );
+                    
+                    $updateFaresStmt->execute();
+                    error_log("Updated outstation_fares for: " . $vehicleId);
+                } else {
+                    // Insert new record
+                    $insertFaresStmt = $conn->prepare("
+                        INSERT INTO outstation_fares (
+                            vehicle_id, base_price, price_per_km, night_halt_charge, driver_allowance,
+                            roundtrip_base_price, roundtrip_price_per_km
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ");
+                    
+                    $roundtripBasePrice = $basePrice * 0.95; // 5% discount for round trips
+                    $roundtripPricePerKm = $pricePerKm * 0.9; // 10% discount per km for round trips
+                    
+                    $insertFaresStmt->bind_param(
+                        "sdddddd",
+                        $vehicleId, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance,
+                        $roundtripBasePrice, $roundtripPricePerKm
+                    );
+                    
+                    $insertFaresStmt->execute();
+                    error_log("Created outstation_fares for: " . $vehicleId);
+                }
+            }
+            
+            // Update other fare tables (local_package_fares, airport_transfer_fares) similarly
+            
             // Commit transaction
             $conn->commit();
+            
+            // Get updated vehicle list for caching
+            $query = "SELECT * FROM $vehicleTable";
+            $result = $conn->query($query);
+            
+            $updatedVehicles = [];
+            if ($result) {
+                while ($row = $result->fetch_assoc()) {
+                    // Create basic vehicle object
+                    $vehicle = [
+                        'id' => $row['vehicle_id'],
+                        'vehicleId' => $row['vehicle_id'],
+                        'name' => $row['name'],
+                        'capacity' => intval($row['capacity']),
+                        'luggageCapacity' => intval($row['luggage_capacity']),
+                        'image' => normalizeImagePath($row['image']),
+                        'description' => $row['description'] ?: '',
+                        'ac' => (bool)$row['ac'],
+                        'isActive' => (bool)$row['is_active'],
+                        'basePrice' => floatval($row['base_price']),
+                        'price' => floatval($row['base_price']),
+                        'pricePerKm' => floatval($row['price_per_km']),
+                        'nightHaltCharge' => floatval($row['night_halt_charge']),
+                        'driverAllowance' => floatval($row['driver_allowance'])
+                    ];
+                    
+                    // Try to parse amenities from JSON
+                    $amenities = [];
+                    if (!empty($row['amenities'])) {
+                        try {
+                            $amenitiesData = json_decode($row['amenities'], true);
+                            if (is_array($amenitiesData)) {
+                                $amenities = $amenitiesData;
+                            } else {
+                                $amenities = [$row['amenities']];
+                            }
+                        } catch (Exception $e) {
+                            $amenities = [$row['amenities']];
+                        }
+                        $vehicle['amenities'] = $amenities;
+                    } else {
+                        $vehicle['amenities'] = ['AC'];
+                    }
+                    
+                    $updatedVehicles[] = $vehicle;
+                }
+                
+                // Save updated vehicles to JSON
+                saveVehiclesToJson($updatedVehicles);
+            }
+            
+            // Create the vehicle object to return in the response
+            $responseVehicle = [
+                'id' => $vehicleId,
+                'vehicleId' => $vehicleId,
+                'name' => $name,
+                'capacity' => $capacity,
+                'luggageCapacity' => $luggageCapacity,
+                'price' => $basePrice,
+                'basePrice' => $basePrice,
+                'pricePerKm' => $pricePerKm,
+                'image' => $image,
+                'amenities' => is_array($input['amenities'] ?? null) ? $input['amenities'] : json_decode($amenities, true),
+                'description' => $description,
+                'ac' => (bool)$ac,
+                'nightHaltCharge' => $nightHaltCharge,
+                'driverAllowance' => $driverAllowance,
+                'isActive' => (bool)$isActive
+            ];
             
             // Return success with a complete vehicle object
             echo json_encode([
@@ -518,23 +794,8 @@ try {
                 'pricePerKm' => $pricePerKm,
                 'isActive' => (bool)$isActive,
                 'timestamp' => time(),
-                'vehicle' => [
-                    'id' => $vehicleId,
-                    'vehicleId' => $vehicleId,
-                    'name' => $name,
-                    'capacity' => $capacity,
-                    'luggageCapacity' => $luggageCapacity,
-                    'price' => $basePrice,
-                    'basePrice' => $basePrice,
-                    'pricePerKm' => $pricePerKm,
-                    'image' => $image,
-                    'amenities' => is_array($input['amenities']) ? $input['amenities'] : json_decode($amenities, true),
-                    'description' => $description,
-                    'ac' => (bool)$ac,
-                    'nightHaltCharge' => $nightHaltCharge,
-                    'driverAllowance' => $driverAllowance,
-                    'isActive' => (bool)$isActive
-                ]
+                'vehicle' => $responseVehicle,
+                'vehicles' => $updatedVehicles  // Return all vehicles for immediate update
             ]);
         } catch (Exception $e) {
             // Rollback on error
@@ -565,12 +826,15 @@ try {
         ]));
         
         try {
+            // Determine which table to use
+            $vehicleTable = tableExists($conn, 'vehicles') ? 'vehicles' : 'vehicle_types';
+            
             // Build the base query
             $baseQuery = "
                 SELECT 
                     vt.* 
                 FROM 
-                    vehicle_types vt 
+                    $vehicleTable vt 
             ";
             
             // Add filter for active/inactive status
@@ -607,13 +871,24 @@ try {
                     'image' => normalizeImagePath($row['image']),
                     'description' => $row['description'] ?: '',
                     'ac' => (bool)$row['ac'],
-                    'isActive' => (bool)$row['is_active'],
-                    'price' => 0,
-                    'basePrice' => 0,
-                    'pricePerKm' => 0,
-                    'nightHaltCharge' => 0,
-                    'driverAllowance' => 0
+                    'isActive' => (bool)$row['is_active']
                 ];
+                
+                // Add pricing fields if available directly in the vehicle table
+                if (isset($row['base_price']) && isset($row['price_per_km'])) {
+                    $vehicle['price'] = floatval($row['base_price']);
+                    $vehicle['basePrice'] = floatval($row['base_price']);
+                    $vehicle['pricePerKm'] = floatval($row['price_per_km']);
+                    $vehicle['nightHaltCharge'] = isset($row['night_halt_charge']) ? floatval($row['night_halt_charge']) : 0;
+                    $vehicle['driverAllowance'] = isset($row['driver_allowance']) ? floatval($row['driver_allowance']) : 0;
+                } else {
+                    // Default values in case not available
+                    $vehicle['price'] = 0;
+                    $vehicle['basePrice'] = 0;
+                    $vehicle['pricePerKm'] = 0;
+                    $vehicle['nightHaltCharge'] = 0;
+                    $vehicle['driverAllowance'] = 0;
+                }
                 
                 // Try to parse amenities from JSON
                 $amenities = [];
@@ -633,8 +908,9 @@ try {
                     $vehicle['amenities'] = ['AC'];
                 }
                 
-                // Add pricing info if available
-                if (tableExists($conn, 'vehicle_pricing')) {
+                // Add pricing info from vehicle_pricing if available and not already set
+                if (tableExists($conn, 'vehicle_pricing') && 
+                    (!isset($row['base_price']) || !isset($row['price_per_km']))) {
                     $pricingQuery = "SELECT * FROM vehicle_pricing WHERE vehicle_id = ?";
                     $stmt = $conn->prepare($pricingQuery);
                     if ($stmt) {

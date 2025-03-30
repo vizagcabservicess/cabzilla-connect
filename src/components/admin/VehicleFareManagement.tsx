@@ -79,8 +79,8 @@ export function VehicleFareManagement() {
   const loadAvailableVehicles = async () => {
     try {
       console.log("Loading available vehicles for dropdown...");
-      // Force true to include inactive vehicles in admin view and bypass cache
-      const vehicles = await getVehicleData(true, true);
+      // Pass single forceRefresh parameter to load all vehicles including inactive ones
+      const vehicles = await getVehicleData(true);
       
       if (vehicles && Array.isArray(vehicles)) {
         const vehicleOptions = vehicles.map(v => ({
