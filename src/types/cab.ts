@@ -5,7 +5,7 @@ export interface CabType {
   luggageCapacity: number;
   image: string;
   amenities: string[];
-  description: string;
+  description?: string;
   ac: boolean;
   price?: number;
   pricePerKm?: number;
@@ -70,7 +70,6 @@ export interface AirportFare {
   extraKmCharge: number;
 }
 
-// Additional interfaces needed for the application
 export interface FareCalculationParams {
   cabType: CabType;
   distance: number;
