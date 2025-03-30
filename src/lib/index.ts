@@ -46,7 +46,10 @@ export {
   clearFareCache as clearFareServiceCache,
   resetCabOptionsState,
   syncLocalFareTables,
-  fareService
+  fareService,
+  updateOutstationFares,
+  updateLocalFares,
+  updateAirportFaresForVehicle
 } from '@/services/fareService';
 
 // Export vehicle service functions
