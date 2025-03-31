@@ -75,6 +75,86 @@ function ensureTablesExist($conn) {
             ");
             error_log("Created airport_transfer_fares table");
         }
+        
+        // Check if vehicle_pricing table exists
+        $checkVehiclePricing = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'");
+        if ($checkVehiclePricing->num_rows === 0) {
+            // Create vehicle_pricing table
+            $conn->query("
+                CREATE TABLE IF NOT EXISTS vehicle_pricing (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    vehicle_id VARCHAR(50) NOT NULL,
+                    trip_type VARCHAR(20) NOT NULL DEFAULT 'outstation',
+                    base_fare DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
+                    night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 700,
+                    driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 300,
+                    airport_base_price DECIMAL(10,2) DEFAULT 0,
+                    airport_price_per_km DECIMAL(5,2) DEFAULT 0,
+                    airport_pickup_price DECIMAL(10,2) DEFAULT 0,
+                    airport_drop_price DECIMAL(10,2) DEFAULT 0,
+                    airport_tier1_price DECIMAL(10,2) DEFAULT 0,
+                    airport_tier2_price DECIMAL(10,2) DEFAULT 0,
+                    airport_tier3_price DECIMAL(10,2) DEFAULT 0,
+                    airport_tier4_price DECIMAL(10,2) DEFAULT 0,
+                    airport_extra_km_charge DECIMAL(5,2) DEFAULT 0,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    UNIQUE KEY unique_vehicle_trip (vehicle_id, trip_type)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            ");
+            error_log("Created vehicle_pricing table");
+        }
+        else {
+            // Check if the column vehicle_type exists, if so add vehicle_id column
+            $checkVehicleTypeColumn = $conn->query("SHOW COLUMNS FROM vehicle_pricing LIKE 'vehicle_type'");
+            if ($checkVehicleTypeColumn->num_rows > 0) {
+                // Add vehicle_id column if it doesn't exist
+                $checkVehicleIdColumn = $conn->query("SHOW COLUMNS FROM vehicle_pricing LIKE 'vehicle_id'");
+                if ($checkVehicleIdColumn->num_rows === 0) {
+                    $conn->query("ALTER TABLE vehicle_pricing ADD COLUMN vehicle_id VARCHAR(50) NOT NULL AFTER id");
+                    error_log("Added vehicle_id column to vehicle_pricing table");
+                    
+                    // Copy data from vehicle_type to vehicle_id
+                    $conn->query("UPDATE vehicle_pricing SET vehicle_id = vehicle_type");
+                    error_log("Copied data from vehicle_type to vehicle_id");
+                }
+            }
+            
+            // Check if airport columns exist in vehicle_pricing, add them if they don't
+            $columns = [
+                'airport_base_price' => 'DECIMAL(10,2) DEFAULT 0',
+                'airport_price_per_km' => 'DECIMAL(5,2) DEFAULT 0',
+                'airport_pickup_price' => 'DECIMAL(10,2) DEFAULT 0',
+                'airport_drop_price' => 'DECIMAL(10,2) DEFAULT 0',
+                'airport_tier1_price' => 'DECIMAL(10,2) DEFAULT 0',
+                'airport_tier2_price' => 'DECIMAL(10,2) DEFAULT 0',
+                'airport_tier3_price' => 'DECIMAL(10,2) DEFAULT 0',
+                'airport_tier4_price' => 'DECIMAL(10,2) DEFAULT 0',
+                'airport_extra_km_charge' => 'DECIMAL(5,2) DEFAULT 0'
+            ];
+            
+            foreach ($columns as $column => $definition) {
+                $checkColumn = $conn->query("SHOW COLUMNS FROM vehicle_pricing LIKE '$column'");
+                if ($checkColumn->num_rows === 0) {
+                    $conn->query("ALTER TABLE vehicle_pricing ADD COLUMN $column $definition");
+                    error_log("Added $column column to vehicle_pricing table");
+                }
+            }
+            
+            // Make sure unique key exists
+            $checkUniqueKey = $conn->query("SHOW INDEX FROM vehicle_pricing WHERE Key_name = 'unique_vehicle_trip'");
+            if ($checkUniqueKey->num_rows === 0) {
+                // If no unique key, try to create it
+                try {
+                    $conn->query("ALTER TABLE vehicle_pricing ADD CONSTRAINT unique_vehicle_trip UNIQUE (vehicle_id, trip_type)");
+                    error_log("Added unique constraint to vehicle_pricing table");
+                } catch (Exception $e) {
+                    // If constraint creation fails, it might be due to duplicates
+                    error_log("Failed to add unique constraint to vehicle_pricing: " . $e->getMessage());
+                }
+            }
+        }
 
         return true;
     } catch (Exception $e) {
@@ -199,34 +279,66 @@ try {
         $stmt->execute();
         $stmt->close();
         
-        // 2. Update vehicle_pricing table for AIRPORT trips (for backward compatibility)
-        // First check if table exists
-        $tableCheck = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'");
-        if ($tableCheck && $tableCheck->num_rows > 0) {
-            $tripType = 'airport';
-            $stmt = $conn->prepare("
+        // 2. Update vehicle_pricing table with 'airport' trip type
+        $tripType = 'airport';
+        
+        // Check if already exists in vehicle_pricing
+        $checkStmt = $conn->prepare("SELECT id FROM vehicle_pricing WHERE vehicle_id = ? AND trip_type = ?");
+        $checkStmt->bind_param("ss", $vehicleId, $tripType);
+        $checkStmt->execute();
+        $checkResult = $checkStmt->get_result();
+        $checkStmt->close();
+        
+        if ($checkResult->num_rows > 0) {
+            // Update existing record
+            $updateStmt = $conn->prepare("
+                UPDATE vehicle_pricing 
+                SET base_fare = ?,
+                    price_per_km = ?,
+                    airport_base_price = ?,
+                    airport_price_per_km = ?,
+                    airport_pickup_price = ?,
+                    airport_drop_price = ?,
+                    airport_tier1_price = ?,
+                    airport_tier2_price = ?,
+                    airport_tier3_price = ?,
+                    airport_tier4_price = ?,
+                    airport_extra_km_charge = ?,
+                    updated_at = NOW()
+                WHERE vehicle_id = ? AND trip_type = ?
+            ");
+            
+            $updateStmt->bind_param("dddddddddddss", 
+                $basePrice,
+                $pricePerKm,
+                $basePrice,
+                $pricePerKm,
+                $pickupPrice,
+                $dropPrice,
+                $tier1Price,
+                $tier2Price,
+                $tier3Price,
+                $tier4Price,
+                $extraKmCharge,
+                $vehicleId,
+                $tripType
+            );
+            
+            $updateStmt->execute();
+            $updateStmt->close();
+            error_log("Updated existing record in vehicle_pricing for $vehicleId with trip_type $tripType");
+        } else {
+            // Insert new record
+            $insertStmt = $conn->prepare("
                 INSERT INTO vehicle_pricing 
                 (vehicle_id, trip_type, base_fare, price_per_km, 
                  airport_base_price, airport_price_per_km, airport_pickup_price, airport_drop_price,
                  airport_tier1_price, airport_tier2_price, airport_tier3_price, airport_tier4_price, 
-                 airport_extra_km_charge, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-                ON DUPLICATE KEY UPDATE 
-                base_fare = VALUES(base_fare),
-                price_per_km = VALUES(price_per_km),
-                airport_base_price = VALUES(airport_base_price),
-                airport_price_per_km = VALUES(airport_price_per_km),
-                airport_pickup_price = VALUES(airport_pickup_price),
-                airport_drop_price = VALUES(airport_drop_price),
-                airport_tier1_price = VALUES(airport_tier1_price),
-                airport_tier2_price = VALUES(airport_tier2_price),
-                airport_tier3_price = VALUES(airport_tier3_price),
-                airport_tier4_price = VALUES(airport_tier4_price),
-                airport_extra_km_charge = VALUES(airport_extra_km_charge),
-                updated_at = NOW()
+                 airport_extra_km_charge, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
             ");
             
-            $stmt->bind_param("ssddddddddddd", 
+            $insertStmt->bind_param("ssddddddddddd", 
                 $vehicleId,
                 $tripType,
                 $basePrice,
@@ -242,8 +354,9 @@ try {
                 $extraKmCharge
             );
             
-            $stmt->execute();
-            $stmt->close();
+            $insertStmt->execute();
+            $insertStmt->close();
+            error_log("Inserted new record in vehicle_pricing for $vehicleId with trip_type $tripType");
         }
         
         // Commit transaction
