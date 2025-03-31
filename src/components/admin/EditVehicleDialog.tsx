@@ -11,6 +11,7 @@ import { CabType } from "@/types/cab";
 import { updateVehicle } from "@/services/directVehicleService";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 
 interface EditVehicleDialogProps {
   open: boolean;
@@ -28,6 +29,7 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState<VehicleFormData>({});
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [updateAttempts, setUpdateAttempts] = useState(0);
 
   useEffect(() => {
     if (vehicle) {
@@ -44,6 +46,7 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
       
       // Clear any previous error
       setErrorMessage(null);
+      setUpdateAttempts(0);
     }
   }, [vehicle]);
 
@@ -75,6 +78,7 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
     try {
       setIsSubmitting(true);
       setErrorMessage(null);
+      setUpdateAttempts(prev => prev + 1);
       
       // Format the data
       const vehicleData: CabType = {
@@ -109,6 +113,11 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
       
       // Show toast notification
       toast.error("Failed to update vehicle. Please see details in the form.");
+      
+      // If multiple attempts, provide more guidance
+      if (updateAttempts > 1) {
+        setErrorMessage(prev => `${prev || ""}\n\nTry refreshing the page or check if the server is accessible.`);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -116,7 +125,7 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isSubmitting && !isOpen && onClose()}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Vehicle</DialogTitle>
           <DialogDescription>
@@ -127,7 +136,7 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
         {errorMessage && (
           <Alert variant="destructive" className="mb-4">
             <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>{errorMessage}</AlertDescription>
+            <AlertDescription className="whitespace-pre-line">{errorMessage}</AlertDescription>
           </Alert>
         )}
         
@@ -135,12 +144,19 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="id">Vehicle ID</Label>
-              <Input
-                id="id"
-                value={vehicle.id}
-                disabled
-                className="bg-gray-100"
-              />
+              <div className="flex items-center gap-2">
+                <Input
+                  id="id"
+                  value={vehicle.id}
+                  disabled
+                  className="bg-gray-100"
+                />
+                {vehicle.isActive ? (
+                  <Badge variant="default" className="bg-green-500">Active</Badge>
+                ) : (
+                  <Badge variant="secondary" className="bg-gray-400">Inactive</Badge>
+                )}
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="name">Vehicle Name</Label>
@@ -275,11 +291,11 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
             <Label htmlFor="isActive">Active Status</Label>
           </div>
           
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
+          <DialogFooter className="flex flex-col sm:flex-row gap-2 pt-4">
+            <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting} className="w-full sm:w-auto">
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

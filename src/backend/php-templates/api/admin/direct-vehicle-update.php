@@ -1,9 +1,8 @@
-
 <?php
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Admin-Mode, X-Force-Refresh');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
@@ -17,6 +16,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // Include configuration
 require_once __DIR__ . '/../../config.php';
 
+// Create logs directory if it doesn't exist
+if (!is_dir(__DIR__ . '/../../logs')) {
+    mkdir(__DIR__ . '/../../logs', 0755, true);
+}
+
 // Parse input data
 $rawData = file_get_contents('php://input');
 $data = json_decode($rawData, true);
@@ -26,11 +30,12 @@ if (!$data) {
     $data = $_POST;
 }
 
-// Write to debug log
-error_log("Direct vehicle update received data: " . print_r($data, true), 3, __DIR__ . '/../../error.log');
+// Write to debug log with timestamp
+$logFile = __DIR__ . '/../../logs/vehicle_update_' . date('Y-m-d') . '.log';
+file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Direct vehicle update received data: " . print_r($data, true) . "\n", FILE_APPEND);
 
 // Ensure all fields are set to prevent database errors
-$vehicleId = $data['vehicleId'] ?? $data['id'] ?? null;
+$vehicleId = $data['vehicleId'] ?? $data['vehicle_id'] ?? $data['id'] ?? null;
 
 // Validate vehicle ID
 if (!$vehicleId) {
@@ -57,29 +62,29 @@ $luggageCapacity = (int)($data['luggageCapacity'] ?? 2);
 $isActive = 1; // Default to active
 
 // Debug isActive handling
-error_log("Processing isActive field");
+file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Processing isActive field\n", FILE_APPEND);
 
 if (isset($data['isActive'])) {
     if (is_bool($data['isActive'])) {
         $isActive = $data['isActive'] ? 1 : 0;
-        error_log("isActive (bool): " . ($data['isActive'] ? 'true' : 'false') . " => $isActive");
+        file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "isActive (bool): " . ($data['isActive'] ? 'true' : 'false') . " => $isActive\n", FILE_APPEND);
     } else if (is_string($data['isActive'])) {
         $isActive = (strtolower($data['isActive']) === 'true' || $data['isActive'] === '1') ? 1 : 0;
-        error_log("isActive (string): " . $data['isActive'] . " => $isActive");
+        file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "isActive (string): " . $data['isActive'] . " => $isActive\n", FILE_APPEND);
     } else {
         $isActive = (int)$data['isActive'];
-        error_log("isActive (other): " . $data['isActive'] . " => $isActive");
+        file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "isActive (other): " . $data['isActive'] . " => $isActive\n", FILE_APPEND);
     }
 } else if (isset($data['is_active'])) {
     if (is_bool($data['is_active'])) {
         $isActive = $data['is_active'] ? 1 : 0;
-        error_log("is_active (bool): " . ($data['is_active'] ? 'true' : 'false') . " => $isActive");
+        file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "is_active (bool): " . ($data['is_active'] ? 'true' : 'false') . " => $isActive\n", FILE_APPEND);
     } else if (is_string($data['is_active'])) {
         $isActive = (strtolower($data['is_active']) === 'true' || $data['is_active'] === '1') ? 1 : 0;
-        error_log("is_active (string): " . $data['is_active'] . " => $isActive");
+        file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "is_active (string): " . $data['is_active'] . " => $isActive\n", FILE_APPEND);
     } else {
         $isActive = (int)$data['is_active'];
-        error_log("is_active (other): " . $data['is_active'] . " => $isActive");
+        file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "is_active (other): " . $data['is_active'] . " => $isActive\n", FILE_APPEND);
     }
 }
 
@@ -87,9 +92,9 @@ if (isset($data['isActive'])) {
 $isActive = $isActive ? 1 : 0;
 
 // For debugging
-error_log("isActive raw value: " . (isset($data['isActive']) ? var_export($data['isActive'], true) : 'not set'), 3, __DIR__ . '/../../error.log');
-error_log("is_active raw value: " . (isset($data['is_active']) ? var_export($data['is_active'], true) : 'not set'), 3, __DIR__ . '/../../error.log');
-error_log("Final isActive value: $isActive", 3, __DIR__ . '/../../error.log');
+file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "isActive raw value: " . (isset($data['isActive']) ? var_export($data['isActive'], true) : 'not set') . "\n", FILE_APPEND);
+file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "is_active raw value: " . (isset($data['is_active']) ? var_export($data['is_active'], true) : 'not set') . "\n", FILE_APPEND);
+file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Final isActive value: $isActive\n", FILE_APPEND);
 
 // Ensure image has proper URL - FIXED to handle both relative and absolute paths
 $image = $data['image'] ?? '/cars/sedan.png';
@@ -104,8 +109,8 @@ if (strpos($image, 'http') !== false) {
 }
 
 // Additional debug for image path
-error_log("Original image path: " . ($data['image'] ?? 'not set'), 3, __DIR__ . '/../../error.log');
-error_log("Normalized image path: $image", 3, __DIR__ . '/../../error.log');
+file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Original image path: " . ($data['image'] ?? 'not set') . "\n", FILE_APPEND);
+file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Normalized image path: $image\n", FILE_APPEND);
 
 $ac = isset($data['ac']) ? (int)$data['ac'] : 1;
 $description = $data['description'] ?? '';
@@ -126,6 +131,8 @@ try {
         throw new Exception("Database connection failed: " . $conn->connect_error);
     }
     
+    file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Database connection established\n", FILE_APPEND);
+    
     // Check if vehicle_types table exists
     $conn->query("
         CREATE TABLE IF NOT EXISTS vehicle_types (
@@ -144,11 +151,19 @@ try {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
     
+    file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Ensured vehicle_types table exists\n", FILE_APPEND);
+    
     // Check if vehicle already exists
     $checkStmt = $conn->prepare("SELECT id FROM vehicle_types WHERE vehicle_id = ?");
+    if (!$checkStmt) {
+        throw new Exception("Prepare statement failed: " . $conn->error);
+    }
+    
     $checkStmt->bind_param("s", $vehicleId);
     $checkStmt->execute();
     $result = $checkStmt->get_result();
+    
+    file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Checked if vehicle exists. Found: " . ($result->num_rows > 0 ? 'yes' : 'no') . "\n", FILE_APPEND);
     
     if ($result->num_rows > 0) {
         // Update existing vehicle
@@ -159,8 +174,12 @@ try {
             WHERE vehicle_id = ?
         ");
         
+        if (!$updateStmt) {
+            throw new Exception("Prepare update statement failed: " . $conn->error);
+        }
+        
         $updateStmt->bind_param(
-            "siisisss", 
+            "siisiss", 
             $name, 
             $capacity, 
             $luggageCapacity, 
@@ -177,6 +196,7 @@ try {
         }
         
         $message = "Vehicle updated successfully";
+        file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Vehicle updated successfully\n", FILE_APPEND);
     } else {
         // Insert new vehicle
         $insertStmt = $conn->prepare("
@@ -184,6 +204,10 @@ try {
             (vehicle_id, name, capacity, luggage_capacity, is_active, image, ac, amenities, description) 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
+        
+        if (!$insertStmt) {
+            throw new Exception("Prepare insert statement failed: " . $conn->error);
+        }
         
         $insertStmt->bind_param(
             "ssiisiss", 
@@ -203,6 +227,7 @@ try {
         }
         
         $message = "Vehicle created successfully";
+        file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "New vehicle created successfully\n", FILE_APPEND);
     }
     
     // Also ensure vehicle pricing exists for this vehicle in vehicle_pricing table
@@ -233,7 +258,7 @@ try {
     $driverAllowance = isset($data['driverAllowance']) ? floatval($data['driverAllowance']) : 250;
     
     // Insert or update pricing for 'all' trip type
-    $conn->query("
+    $pricingUpdateResult = $conn->query("
         INSERT INTO vehicle_pricing 
         (vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance) 
         VALUES ('$vehicleId', 'all', $baseFare, $pricePerKm, $nightHaltCharge, $driverAllowance)
@@ -244,6 +269,12 @@ try {
         driver_allowance = VALUES(driver_allowance),
         updated_at = NOW()
     ");
+    
+    if (!$pricingUpdateResult) {
+        file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Error updating vehicle_pricing: " . $conn->error . "\n", FILE_APPEND);
+    } else {
+        file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Updated vehicle_pricing table\n", FILE_APPEND);
+    }
     
     // Also make sure outstation_fares table has an entry for this vehicle
     $conn->query("
@@ -263,7 +294,7 @@ try {
     ");
     
     // Insert or update outstation_fares
-    $conn->query("
+    $osUpdateResult = $conn->query("
         INSERT INTO outstation_fares 
         (vehicle_id, base_price, price_per_km, night_halt_charge, driver_allowance) 
         VALUES ('$vehicleId', $baseFare, $pricePerKm, $nightHaltCharge, $driverAllowance)
@@ -274,6 +305,12 @@ try {
         driver_allowance = VALUES(driver_allowance),
         updated_at = NOW()
     ");
+    
+    if (!$osUpdateResult) {
+        file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Error updating outstation_fares: " . $conn->error . "\n", FILE_APPEND);
+    } else {
+        file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Updated outstation_fares table\n", FILE_APPEND);
+    }
     
     // Also update the JSON file
     $jsonFile = __DIR__ . '/../../../data/vehicles.json';
@@ -336,10 +373,10 @@ try {
         file_put_contents(__DIR__ . '/../../../data/vehicle_cache_invalidated.txt', time());
         
         // Log success of JSON update
-        error_log("Successfully updated JSON file with " . count($vehicles) . " vehicles");
+        file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Successfully updated JSON file with " . count($vehicles) . " vehicles\n", FILE_APPEND);
         
     } catch (Exception $e) {
-        error_log("Error updating JSON file: " . $e->getMessage());
+        file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Error updating JSON file: " . $e->getMessage() . "\n", FILE_APPEND);
     }
     
     // Return success response
@@ -352,10 +389,13 @@ try {
     ]);
     
 } catch (Exception $e) {
+    // Log detailed error information
+    file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "ERROR: " . $e->getMessage() . "\n" . $e->getTraceAsString() . "\n", FILE_APPEND);
+    
     http_response_code(500);
     echo json_encode([
         'status' => 'error',
-        'message' => $e->getMessage()
+        'message' => $e->getMessage(),
+        'trace' => $e->getTraceAsString()
     ]);
-    error_log("Direct vehicle update error: " . $e->getMessage());
 }

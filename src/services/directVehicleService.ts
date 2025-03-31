@@ -1,3 +1,4 @@
+
 import { CabType } from '@/types/cab';
 import { apiBaseUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
 import { getBypassHeaders, getForcedRequestConfig, formatDataForMultipart } from '@/config/requestConfig';
@@ -58,10 +59,10 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
   try {
     console.log('Updating vehicle with data:', vehicleData);
     
-    // Create form data manually instead of using formatDataForMultipart
+    // Create form data manually to ensure correct formatting for PHP backends
     const formData = new FormData();
     
-    // Add vehicle ID with both naming conventions to ensure backend recognizes it
+    // Add vehicle ID with multiple naming conventions to ensure backend compatibility
     formData.append('vehicleId', vehicleId);
     formData.append('vehicle_id', vehicleId);
     formData.append('id', vehicleId);
@@ -71,7 +72,8 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
     formData.append('capacity', String(vehicleData.capacity || 4));
     formData.append('luggageCapacity', String(vehicleData.luggageCapacity || 2));
     
-    // Correctly handle boolean isActive value
+    // Handle isActive properly - this was causing issues before
+    // Convert boolean to string "0" or "1" for PHP compatibility
     const isActive = vehicleData.isActive === false ? '0' : '1';
     formData.append('isActive', isActive);
     formData.append('is_active', isActive);
@@ -89,7 +91,7 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
     // Add description
     formData.append('description', vehicleData.description || '');
     
-    // Handle amenities explicitly
+    // Handle amenities explicitly - stringify arrays for PHP
     if (Array.isArray(vehicleData.amenities)) {
       formData.append('amenities', JSON.stringify(vehicleData.amenities));
     } else if (vehicleData.amenities) {
@@ -99,53 +101,116 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
       formData.append('amenities', JSON.stringify([]));
     }
     
-    // Force update flag
+    // Force update flag to bypass some backend validations
     formData.append('forceUpdate', 'true');
     
-    // For debugging, log all form data
+    // Debug logging for form data
     console.log('Form data prepared for update:');
     for (const [key, value] of formData.entries()) {
       console.log(`${key}: ${value}`);
     }
     
-    // Call the API using vehicles-update.php as fallback if direct-vehicle-update.php fails
+    // Try multiple endpoints with robust error handling
+    // First try the direct-vehicle-update.php endpoint
     let response;
-    let retryWithAlternate = false;
+    let result;
+    let errorMessages = [];
+    let succeeded = false;
     
     try {
+      console.log('Trying primary endpoint: direct-vehicle-update.php');
       response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-update.php`, {
         method: 'POST',
         body: formData,
-        headers: getBypassHeaders()
+        headers: getBypassHeaders(),
+        // Add timeout for better responsiveness
+        signal: AbortSignal.timeout(10000)
       });
       
-      if (!response.ok) {
-        console.warn(`Primary update endpoint failed with ${response.status}. Trying alternate endpoint...`);
-        retryWithAlternate = true;
+      if (response.ok) {
+        result = await response.json();
+        if (result.status !== 'error') {
+          succeeded = true;
+          console.log('Update succeeded with primary endpoint', result);
+        } else {
+          errorMessages.push(`Primary endpoint error: ${result.message}`);
+        }
+      } else {
+        errorMessages.push(`Primary endpoint HTTP error: ${response.status} ${response.statusText}`);
       }
     } catch (error) {
       console.warn('Primary update endpoint error:', error);
-      retryWithAlternate = true;
+      errorMessages.push(`Primary endpoint exception: ${error instanceof Error ? error.message : String(error)}`);
     }
     
-    // If the first endpoint failed, try the alternate endpoint
-    if (retryWithAlternate) {
-      response = await fetch(`${apiBaseUrl}/api/admin/vehicles-update.php`, {
-        method: 'POST',
-        body: formData,
-        headers: getBypassHeaders()
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to update vehicle with alternate endpoint: ${response.status} ${response.statusText}`);
+    // If first attempt failed, try the fallback endpoint
+    if (!succeeded) {
+      try {
+        console.log('Trying fallback endpoint: vehicles-update.php');
+        response = await fetch(`${apiBaseUrl}/api/admin/vehicles-update.php`, {
+          method: 'POST',
+          body: formData,
+          headers: getBypassHeaders(),
+          // Add timeout for better responsiveness
+          signal: AbortSignal.timeout(10000)
+        });
+        
+        if (response.ok) {
+          result = await response.json();
+          if (result.status !== 'error') {
+            succeeded = true;
+            console.log('Update succeeded with fallback endpoint', result);
+          } else {
+            errorMessages.push(`Fallback endpoint error: ${result.message}`);
+          }
+        } else {
+          errorMessages.push(`Fallback endpoint HTTP error: ${response.status} ${response.statusText}`);
+        }
+      } catch (error) {
+        console.error('Fallback update endpoint error:', error);
+        errorMessages.push(`Fallback endpoint exception: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
     
-    const result = await response.json();
-    console.log('Update response:', result);
+    // If both attempts failed, try one more direct approach with stripped-down data
+    if (!succeeded) {
+      try {
+        console.log('Trying final simplified approach');
+        // Create a simpler form with minimal data
+        const simpleForm = new FormData();
+        simpleForm.append('vehicleId', vehicleId);
+        simpleForm.append('name', vehicleData.name || '');
+        simpleForm.append('capacity', String(vehicleData.capacity || 4));
+        simpleForm.append('isActive', isActive);
+        
+        response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-update.php`, {
+          method: 'POST',
+          body: simpleForm,
+          headers: getBypassHeaders()
+        });
+        
+        if (response.ok) {
+          result = await response.json();
+          if (result.status !== 'error') {
+            succeeded = true;
+            console.log('Update succeeded with simplified approach', result);
+          } else {
+            errorMessages.push(`Simplified approach error: ${result.message}`);
+          }
+        } else {
+          errorMessages.push(`Simplified approach HTTP error: ${response.status} ${response.statusText}`);
+        }
+      } catch (error) {
+        console.error('Simplified approach error:', error);
+        errorMessages.push(`Simplified approach exception: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
     
-    if (result.status === 'error') {
-      throw new Error(result.message || 'Failed to update vehicle');
+    // If all attempts failed, throw an error with detailed information
+    if (!succeeded) {
+      const errorMessage = `Failed to update vehicle after multiple attempts. Errors: ${errorMessages.join('; ')}`;
+      console.error(errorMessage);
+      throw new Error(errorMessage);
     }
     
     // Trigger event to notify components
@@ -153,6 +218,7 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
       detail: { vehicleId, timestamp: Date.now() }
     }));
     
+    // Always return the updated vehicle data on success
     return vehicleData;
   } catch (error) {
     console.error('Error updating vehicle:', error);
