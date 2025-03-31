@@ -146,6 +146,12 @@ try {
     while ($retries < $maxRetries && !$conn) {
         try {
             // Use global variables defined in config.php instead of constants
+            global $db_host, $db_user, $db_pass, $db_name;
+            
+            if (empty($db_host) || empty($db_user) || empty($db_name)) {
+                throw new Exception("Database configuration not properly set. Please check config.php");
+            }
+            
             $conn = new mysqli($db_host, $db_user, $db_pass, $db_name);
             
             if ($conn->connect_error) {
@@ -219,7 +225,7 @@ try {
         }
         
         $updateStmt->bind_param(
-            "siisisiis", 
+            "siisisss", 
             $name, 
             $capacity, 
             $luggageCapacity, 
@@ -250,7 +256,7 @@ try {
         }
         
         $insertStmt->bind_param(
-            "ssiisisis", 
+            "siiisisss", 
             $vehicleId, 
             $name, 
             $capacity, 
@@ -425,6 +431,7 @@ try {
         'message' => $message,
         'vehicleId' => $vehicleId,
         'isActive' => (bool)$isActive,
+        'description' => $description,
         'timestamp' => time()
     ]);
     

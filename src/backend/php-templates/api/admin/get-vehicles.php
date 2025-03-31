@@ -16,7 +16,7 @@ header('Expires: 0');
 
 // Add debugging headers
 header('X-Debug-File: get-vehicles.php');
-header('X-API-Version: 1.0.1');
+header('X-API-Version: 1.0.2');
 header('X-Timestamp: ' . time());
 
 // Handle preflight OPTIONS request
@@ -26,11 +26,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 try {
-    $conn = getDbConnection();
+    // Use global variables from config.php
+    global $db_host, $db_user, $db_pass, $db_name;
+    
+    if (empty($db_host) || empty($db_user) || empty($db_name)) {
+        throw new Exception("Database configuration not properly set. Please check config.php");
+    }
+    
+    $conn = new mysqli($db_host, $db_user, $db_pass, $db_name);
     
     // Check if the connection was successful
-    if (!$conn) {
-        throw new Exception("Database connection failed");
+    if ($conn->connect_error) {
+        throw new Exception("Database connection failed: " . $conn->connect_error);
     }
     
     // Get additional parameters
@@ -125,7 +132,10 @@ try {
                     $allVehicles[$vehicleId] = $camelCaseRow;
                     $vehicleIds[] = "'" . $conn->real_escape_string($vehicleId) . "'";
                 } else {
-                    // Merge with existing vehicle data
+                    // Merge with existing vehicle data - but preserve description if already set
+                    if (empty($allVehicles[$vehicleId]['description']) && !empty($camelCaseRow['description'])) {
+                        $allVehicles[$vehicleId]['description'] = $camelCaseRow['description'];
+                    }
                     $allVehicles[$vehicleId] = array_merge($allVehicles[$vehicleId], $camelCaseRow);
                 }
             }
@@ -215,7 +225,7 @@ try {
         $vehiclesArray[$key]['id'] = $vehicle['id'] ?? $vehicle['vehicleId'] ?? $vehicle['vehicle_id'] ?? '';
         $vehiclesArray[$key]['vehicleId'] = $vehicle['vehicleId'] ?? $vehicle['id'] ?? $vehicle['vehicle_id'] ?? '';
         $vehiclesArray[$key]['name'] = $vehicle['name'] ?? ucwords(str_replace('_', ' ', $vehicle['id'] ?? 'Unknown'));
-        $vehiclesArray[$key]['description'] = $vehicle['description'] ?? $vehicle['name'] . ' vehicle';
+        $vehiclesArray[$key]['description'] = $vehicle['description'] ?? '';
         
         // Set defaults for missing fields
         if (!isset($vehicle['capacity'])) $vehiclesArray[$key]['capacity'] = 4;

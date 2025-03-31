@@ -42,10 +42,23 @@ export default function VehicleManagement() {
       console.log(`Loaded ${fetchedVehicles.length} vehicles for admin view:`, fetchedVehicles);
       
       if (fetchedVehicles && fetchedVehicles.length > 0) {
-        // Deduplicate vehicles by id
-        const uniqueVehicles = Array.from(
-          new Map(fetchedVehicles.map(vehicle => [vehicle.id, vehicle])).values()
-        );
+        // Fix for duplicate vehicles - deduplicate by id
+        const uniqueVehiclesMap = new Map<string, CabType>();
+        
+        fetchedVehicles.forEach(vehicle => {
+          // Ensure vehicle has an id
+          if (!vehicle.id) {
+            vehicle.id = vehicle.vehicleId || `vehicle_${Math.random().toString(36).substring(2, 9)}`;
+          }
+          
+          // Only add or replace if this vehicle has more complete data
+          if (!uniqueVehiclesMap.has(vehicle.id) || 
+              (uniqueVehiclesMap.get(vehicle.id)?.description === '' && vehicle.description)) {
+            uniqueVehiclesMap.set(vehicle.id, vehicle);
+          }
+        });
+        
+        const uniqueVehicles = Array.from(uniqueVehiclesMap.values());
         setVehicles(uniqueVehicles);
       } else if (retryCount < 3) {
         console.log("No vehicles returned, clearing cache and retrying...");
@@ -73,10 +86,12 @@ export default function VehicleManagement() {
     
     window.addEventListener('vehicle-data-updated', handleVehicleDataUpdated);
     window.addEventListener('vehicle-data-refreshed', handleVehicleDataUpdated);
+    window.addEventListener('vehicle-data-cache-cleared', handleVehicleDataUpdated);
     
     return () => {
       window.removeEventListener('vehicle-data-updated', handleVehicleDataUpdated);
       window.removeEventListener('vehicle-data-refreshed', handleVehicleDataUpdated);
+      window.removeEventListener('vehicle-data-cache-cleared', handleVehicleDataUpdated);
     };
   }, [loadVehicles, retryCount]);
 
@@ -95,22 +110,50 @@ export default function VehicleManagement() {
   };
 
   const handleAddVehicle = (newVehicle: CabType) => {
-    setVehicles((prev) => [...prev, newVehicle]);
+    // Ensure the new vehicle doesn't already exist
+    if (!vehicles.some(v => v.id === newVehicle.id)) {
+      setVehicles((prev) => [...prev, newVehicle]);
+    }
     toast.success(`Vehicle ${newVehicle.name} added successfully`);
+    
+    // Refresh data to ensure consistency
+    setTimeout(() => {
+      clearVehicleDataCache();
+      loadVehicles();
+    }, 1000);
   };
 
   const handleEditVehicle = (updatedVehicle: CabType) => {
     setVehicles((prev) =>
       prev.map((vehicle) =>
-        vehicle.id === updatedVehicle.id ? updatedVehicle : vehicle
+        vehicle.id === updatedVehicle.id ? {
+          ...updatedVehicle,
+          // Ensure description is properly updated
+          description: updatedVehicle.description || vehicle.description || ''
+        } : vehicle
       )
     );
     toast.success(`Vehicle ${updatedVehicle.name} updated successfully`);
+    
+    // Clear the selected vehicle
+    setSelectedVehicle(null);
+    
+    // Refresh data to ensure consistency
+    setTimeout(() => {
+      clearVehicleDataCache();
+      loadVehicles();
+    }, 1000);
   };
 
   const handleDeleteVehicle = (vehicleId: string) => {
     setVehicles((prev) => prev.filter((vehicle) => vehicle.id !== vehicleId));
     toast.success("Vehicle deleted successfully");
+    
+    // Refresh data to ensure consistency
+    setTimeout(() => {
+      clearVehicleDataCache();
+      loadVehicles();
+    }, 1000);
   };
 
   const filteredVehicles = vehicles.filter((vehicle) =>
@@ -185,6 +228,7 @@ export default function VehicleManagement() {
               key={vehicle.id}
               vehicle={vehicle}
               onEdit={() => {
+                // Make sure to select the complete vehicle object
                 setSelectedVehicle(vehicle);
                 setIsEditDialogOpen(true);
               }}

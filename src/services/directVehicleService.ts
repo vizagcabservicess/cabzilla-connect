@@ -92,8 +92,9 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
     // Add ac flag
     formData.append('ac', vehicleData.ac === false ? '0' : '1');
     
-    // Add description
-    formData.append('description', vehicleData.description || '');
+    // Make sure to include description
+    const description = vehicleData.description !== undefined ? vehicleData.description : '';
+    formData.append('description', description);
     
     // Add pricing fields
     formData.append('basePrice', String(vehicleData.basePrice || vehicleData.price || 0));
@@ -124,12 +125,25 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
         console.log('Vehicle update API response:', result);
         
         if (result.status === 'success') {
+          // Fix: Ensure updated data includes any changes
+          const updatedVehicle = {
+            ...vehicleData,
+            id: vehicleId,
+            vehicleId: vehicleId,
+            description: description // Ensure description is properly set
+          };
+          
           // Trigger event to notify components
           window.dispatchEvent(new CustomEvent('vehicle-data-updated', {
             detail: { vehicleId, timestamp: Date.now() }
           }));
           
-          return vehicleData;
+          // Clear cache to ensure fresh data
+          window.dispatchEvent(new CustomEvent('vehicle-data-cache-cleared', {
+            detail: { timestamp: Date.now() }
+          }));
+          
+          return updatedVehicle;
         }
       }
       
@@ -146,6 +160,8 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
         ...vehicleData,
         id: vehicleId,
         vehicleId: vehicleId,
+        // Ensure description is included
+        description: description,
         // Ensure booleans are handled correctly
         isActive: vehicleData.isActive === false ? false : vehicleData.isActive || true,
         // Ensure these fields are always strings for PHP backend
@@ -167,7 +183,12 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
     }));
     
     // Always return the updated vehicle data on success
-    return vehicleData;
+    return {
+      ...vehicleData,
+      id: vehicleId,
+      vehicleId: vehicleId,
+      description: description // Ensure description is properly set
+    };
   } catch (error) {
     console.error('Error updating vehicle:', error);
     throw error;
