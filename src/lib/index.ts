@@ -62,7 +62,8 @@ export {
 // Export getData function from vehicleDataService
 export { 
   getVehicleData,
-  clearVehicleDataCache
+  clearVehicleDataCache,
+  getVehicleTypes
 } from '@/services/vehicleDataService';
 
 // Re-export CabType from the types directly
