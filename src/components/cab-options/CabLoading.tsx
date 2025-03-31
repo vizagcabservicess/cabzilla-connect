@@ -8,7 +8,10 @@ export function CabLoading() {
         <h3 className="text-lg font-semibold text-gray-800">Loading cab options...</h3>
       </div>
       <div className="flex justify-center py-8">
-        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      </div>
+      <div className="text-center text-gray-600 text-sm">
+        Please wait while we fetch the latest vehicle data
       </div>
     </div>
   );
