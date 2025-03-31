@@ -1,3 +1,4 @@
+
 <?php
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
@@ -34,16 +35,23 @@ if (!$data) {
 $logFile = __DIR__ . '/../../logs/vehicle_update_' . date('Y-m-d') . '.log';
 file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Direct vehicle update received data: " . print_r($data, true) . "\n", FILE_APPEND);
 
+// Check for XDebug and disable it to prevent memory issues
+if (function_exists('xdebug_disable')) {
+    xdebug_disable();
+}
+
 // Ensure all fields are set to prevent database errors
 $vehicleId = $data['vehicleId'] ?? $data['vehicle_id'] ?? $data['id'] ?? null;
 
-// Validate vehicle ID
+// Send detailed error back if no vehicle ID
 if (!$vehicleId) {
     http_response_code(400);
     echo json_encode([
         'status' => 'error',
         'message' => 'Vehicle ID is required',
-        'data' => $data
+        'data' => $data,
+        'endpoint' => 'direct-vehicle-update.php',
+        'timestamp' => date('Y-m-d H:i:s')
     ]);
     exit;
 }
@@ -120,21 +128,48 @@ $amenities = $data['amenities'] ?? ['AC', 'Bottle Water', 'Music System'];
 if (is_array($amenities)) {
     $amenitiesJson = json_encode($amenities);
 } else {
-    $amenitiesJson = $amenities;
+    if (is_string($amenities) && substr($amenities, 0, 1) === '[') {
+        // Already a JSON string
+        $amenitiesJson = $amenities;
+    } else {
+        // Single item, convert to json array
+        $amenitiesJson = json_encode([$amenities]);
+    }
 }
 
-// Establish DB connection
+// Establish DB connection with error handling
 try {
-    $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+    $retries = 0;
+    $maxRetries = 3;
+    $conn = null;
     
-    if ($conn->connect_error) {
-        throw new Exception("Database connection failed: " . $conn->connect_error);
+    while ($retries < $maxRetries && !$conn) {
+        try {
+            $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+            
+            if ($conn->connect_error) {
+                throw new Exception("Database connection failed: " . $conn->connect_error);
+            }
+            
+            file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Database connection established after $retries retries\n", FILE_APPEND);
+        } catch (Exception $e) {
+            $retries++;
+            file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Database connection attempt $retries failed: " . $e->getMessage() . "\n", FILE_APPEND);
+            
+            if ($retries >= $maxRetries) {
+                throw $e;
+            }
+            
+            // Wait before retrying
+            sleep(1);
+        }
     }
     
-    file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Database connection established\n", FILE_APPEND);
+    // Set the connection mode to ensure stricter SQL
+    $conn->query("SET SESSION sql_mode = 'STRICT_ALL_TABLES'");
     
     // Check if vehicle_types table exists
-    $conn->query("
+    $tableResult = $conn->query("
         CREATE TABLE IF NOT EXISTS vehicle_types (
             id INT AUTO_INCREMENT PRIMARY KEY,
             vehicle_id VARCHAR(50) NOT NULL UNIQUE,
@@ -150,6 +185,10 @@ try {
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
+    
+    if (!$tableResult) {
+        throw new Exception("Error creating vehicle_types table: " . $conn->error);
+    }
     
     file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Ensured vehicle_types table exists\n", FILE_APPEND);
     
@@ -396,6 +435,11 @@ try {
     echo json_encode([
         'status' => 'error',
         'message' => $e->getMessage(),
-        'trace' => $e->getTraceAsString()
+        'trace' => $e->getTraceAsString(),
+        'endpoint' => 'direct-vehicle-update.php',
+        'requestMethod' => $_SERVER['REQUEST_METHOD'],
+        'requestHeaders' => getallheaders(),
+        'phpVersion' => PHP_VERSION,
+        'timestamp' => date('Y-m-d H:i:s')
     ]);
 }

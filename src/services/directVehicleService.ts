@@ -1,7 +1,7 @@
-
 import { CabType } from '@/types/cab';
 import { apiBaseUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
 import { getBypassHeaders, getForcedRequestConfig, formatDataForMultipart } from '@/config/requestConfig';
+import { directVehicleOperation } from '@/utils/apiHelper';
 
 /**
  * Creates a new vehicle
@@ -59,159 +59,28 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
   try {
     console.log('Updating vehicle with data:', vehicleData);
     
-    // Create form data manually to ensure correct formatting for PHP backends
-    const formData = new FormData();
-    
-    // Add vehicle ID with multiple naming conventions to ensure backend compatibility
-    formData.append('vehicleId', vehicleId);
-    formData.append('vehicle_id', vehicleId);
-    formData.append('id', vehicleId);
-    
-    // Add basic vehicle info
-    formData.append('name', vehicleData.name || '');
-    formData.append('capacity', String(vehicleData.capacity || 4));
-    formData.append('luggageCapacity', String(vehicleData.luggageCapacity || 2));
-    
-    // Handle isActive properly - this was causing issues before
-    // Convert boolean to string "0" or "1" for PHP compatibility
-    const isActive = vehicleData.isActive === false ? '0' : '1';
-    formData.append('isActive', isActive);
-    formData.append('is_active', isActive);
-    
-    // Add price information
-    formData.append('price', String(vehicleData.price || 0));
-    formData.append('basePrice', String(vehicleData.price || 0));
-    formData.append('pricePerKm', String(vehicleData.pricePerKm || 0));
-    formData.append('nightHaltCharge', String(vehicleData.nightHaltCharge || 0));
-    formData.append('driverAllowance', String(vehicleData.driverAllowance || 0));
-    
-    // Handle image path
-    formData.append('image', vehicleData.image || '/cars/sedan.png');
-    
-    // Add description
-    formData.append('description', vehicleData.description || '');
-    
-    // Handle amenities explicitly - stringify arrays for PHP
-    if (Array.isArray(vehicleData.amenities)) {
-      formData.append('amenities', JSON.stringify(vehicleData.amenities));
-    } else if (vehicleData.amenities) {
-      // Handle case where amenities might be a string
-      formData.append('amenities', JSON.stringify([vehicleData.amenities]));
-    } else {
-      formData.append('amenities', JSON.stringify([]));
-    }
-    
-    // Force update flag to bypass some backend validations
-    formData.append('forceUpdate', 'true');
-    
-    // Debug logging for form data
-    console.log('Form data prepared for update:');
-    for (const [key, value] of formData.entries()) {
-      console.log(`${key}: ${value}`);
-    }
-    
-    // Try multiple endpoints with robust error handling
-    // First try the direct-vehicle-update.php endpoint
-    let response;
-    let result;
-    let errorMessages = [];
-    let succeeded = false;
-    
-    try {
-      console.log('Trying primary endpoint: direct-vehicle-update.php');
-      response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-update.php`, {
-        method: 'POST',
-        body: formData,
-        headers: getBypassHeaders(),
-        // Add timeout for better responsiveness
-        signal: AbortSignal.timeout(10000)
-      });
-      
-      if (response.ok) {
-        result = await response.json();
-        if (result.status !== 'error') {
-          succeeded = true;
-          console.log('Update succeeded with primary endpoint', result);
-        } else {
-          errorMessages.push(`Primary endpoint error: ${result.message}`);
-        }
-      } else {
-        errorMessages.push(`Primary endpoint HTTP error: ${response.status} ${response.statusText}`);
+    // Use a simplified implementation that uses the directVehicleOperation helper
+    // from apiHelper.ts which has more robust error handling and retry logic
+    const result = await directVehicleOperation<any>(
+      'update',
+      {
+        ...vehicleData,
+        id: vehicleId,
+        vehicleId: vehicleId,
+        // Ensure booleans are handled correctly
+        isActive: vehicleData.isActive === false ? false : vehicleData.isActive || true,
+        // Ensure these fields are always strings for PHP backend
+        vehicle_id: vehicleId,
+        name: vehicleData.name || ''
+      },
+      {
+        notification: true,
+        localStorageFallback: true
       }
-    } catch (error) {
-      console.warn('Primary update endpoint error:', error);
-      errorMessages.push(`Primary endpoint exception: ${error instanceof Error ? error.message : String(error)}`);
-    }
+    );
     
-    // If first attempt failed, try the fallback endpoint
-    if (!succeeded) {
-      try {
-        console.log('Trying fallback endpoint: vehicles-update.php');
-        response = await fetch(`${apiBaseUrl}/api/admin/vehicles-update.php`, {
-          method: 'POST',
-          body: formData,
-          headers: getBypassHeaders(),
-          // Add timeout for better responsiveness
-          signal: AbortSignal.timeout(10000)
-        });
-        
-        if (response.ok) {
-          result = await response.json();
-          if (result.status !== 'error') {
-            succeeded = true;
-            console.log('Update succeeded with fallback endpoint', result);
-          } else {
-            errorMessages.push(`Fallback endpoint error: ${result.message}`);
-          }
-        } else {
-          errorMessages.push(`Fallback endpoint HTTP error: ${response.status} ${response.statusText}`);
-        }
-      } catch (error) {
-        console.error('Fallback update endpoint error:', error);
-        errorMessages.push(`Fallback endpoint exception: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-    
-    // If both attempts failed, try one more direct approach with stripped-down data
-    if (!succeeded) {
-      try {
-        console.log('Trying final simplified approach');
-        // Create a simpler form with minimal data
-        const simpleForm = new FormData();
-        simpleForm.append('vehicleId', vehicleId);
-        simpleForm.append('name', vehicleData.name || '');
-        simpleForm.append('capacity', String(vehicleData.capacity || 4));
-        simpleForm.append('isActive', isActive);
-        
-        response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-update.php`, {
-          method: 'POST',
-          body: simpleForm,
-          headers: getBypassHeaders()
-        });
-        
-        if (response.ok) {
-          result = await response.json();
-          if (result.status !== 'error') {
-            succeeded = true;
-            console.log('Update succeeded with simplified approach', result);
-          } else {
-            errorMessages.push(`Simplified approach error: ${result.message}`);
-          }
-        } else {
-          errorMessages.push(`Simplified approach HTTP error: ${response.status} ${response.statusText}`);
-        }
-      } catch (error) {
-        console.error('Simplified approach error:', error);
-        errorMessages.push(`Simplified approach exception: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-    
-    // If all attempts failed, throw an error with detailed information
-    if (!succeeded) {
-      const errorMessage = `Failed to update vehicle after multiple attempts. Errors: ${errorMessages.join('; ')}`;
-      console.error(errorMessage);
-      throw new Error(errorMessage);
-    }
+    // If we get here, the operation succeeded
+    console.log('Vehicle update succeeded:', result);
     
     // Trigger event to notify components
     window.dispatchEvent(new CustomEvent('vehicle-data-updated', {

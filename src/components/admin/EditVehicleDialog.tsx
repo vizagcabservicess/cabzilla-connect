@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, AlertTriangle } from "lucide-react";
+import { Loader2, AlertTriangle, RefreshCw } from "lucide-react";
 import { CabType } from "@/types/cab";
 import { updateVehicle } from "@/services/directVehicleService";
 import { toast } from "sonner";
@@ -30,6 +30,7 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
   const [formData, setFormData] = useState<VehicleFormData>({});
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [updateAttempts, setUpdateAttempts] = useState(0);
+  const [retrying, setRetrying] = useState(false);
 
   useEffect(() => {
     if (vehicle) {
@@ -47,6 +48,7 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
       // Clear any previous error
       setErrorMessage(null);
       setUpdateAttempts(0);
+      setRetrying(false);
     }
   }, [vehicle]);
 
@@ -79,6 +81,7 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
       setIsSubmitting(true);
       setErrorMessage(null);
       setUpdateAttempts(prev => prev + 1);
+      setRetrying(false);
       
       // Format the data
       const vehicleData: CabType = {
@@ -123,9 +126,28 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
     }
   };
 
+  const handleRetry = async () => {
+    setRetrying(true);
+    try {
+      // Try to invalidate any cache and reset state
+      window.dispatchEvent(new CustomEvent('vehicle-data-cache-cleared', {
+        detail: { timestamp: Date.now() }
+      }));
+      
+      // Wait a moment to ensure cache is cleared
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Retry submission
+      handleSubmit(new Event('submit') as any);
+    } catch (error) {
+      console.error("Error during retry:", error);
+      setRetrying(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isSubmitting && !isOpen && onClose()}>
-      <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Vehicle</DialogTitle>
           <DialogDescription>
@@ -137,6 +159,19 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
           <Alert variant="destructive" className="mb-4">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription className="whitespace-pre-line">{errorMessage}</AlertDescription>
+            
+            <div className="mt-3">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleRetry} 
+                disabled={retrying || isSubmitting}
+                className="flex items-center gap-1"
+              >
+                {retrying ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                Retry
+              </Button>
+            </div>
           </Alert>
         )}
         
@@ -151,7 +186,7 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
                   disabled
                   className="bg-gray-100"
                 />
-                {vehicle.isActive ? (
+                {formData.isActive ? (
                   <Badge variant="default" className="bg-green-500">Active</Badge>
                 ) : (
                   <Badge variant="secondary" className="bg-gray-400">Inactive</Badge>
@@ -291,7 +326,7 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
             <Label htmlFor="isActive">Active Status</Label>
           </div>
           
-          <DialogFooter className="flex flex-col sm:flex-row gap-2 pt-4">
+          <DialogFooter className="flex justify-end pt-4 gap-2">
             <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting} className="w-full sm:w-auto">
               Cancel
             </Button>
