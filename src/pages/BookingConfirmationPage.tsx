@@ -2,19 +2,33 @@
 import { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { useNavigate, useLocation } from 'react-router-dom';
-import { MapPin, Calendar, Car, CircleDollarSign, CheckCircle2, ArrowRight, Mail } from 'lucide-react';
+import { MapPin, Calendar, Car, CircleDollarSign, CheckCircle2, ArrowRight, Mail, AlertTriangle } from 'lucide-react';
 import { Navbar } from '@/components/Navbar';
+import { toast } from "sonner";
 
 export default function BookingConfirmationPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [bookingDetails, setBookingDetails] = useState<any>(null);
   const [secondsRemaining, setSecondsRemaining] = useState(10);
+  const [emailStatus, setEmailStatus] = useState<'sent' | 'failed' | 'unknown'>('unknown');
 
   // Check if this is a new booking, which would trigger automatic redirect
   const isNewBooking = location.state?.newBooking === true;
+  const emailSent = location.state?.emailSent === true;
 
   useEffect(() => {
+    // Check email status from location state
+    if (isNewBooking) {
+      if (emailSent) {
+        setEmailStatus('sent');
+        toast.success("Booking confirmation email sent successfully!");
+      } else if (emailSent === false) {
+        setEmailStatus('failed');
+        toast.error("Failed to send confirmation email. We'll try again later.");
+      }
+    }
+
     const bookingDetailsFromStorage = sessionStorage.getItem('bookingDetails');
     if (bookingDetailsFromStorage) {
       try {
@@ -24,7 +38,7 @@ export default function BookingConfirmationPage() {
         console.error('Error parsing booking details:', error);
       }
     }
-  }, []);
+  }, [isNewBooking, emailSent]);
 
   // Auto redirect after 10 seconds if it's a new booking
   useEffect(() => {
@@ -154,15 +168,47 @@ export default function BookingConfirmationPage() {
                   </div>
                 </div>
                 
-                <div className="flex items-start mt-4 p-3 bg-blue-50 rounded-md border border-blue-100">
-                  <Mail className="h-5 w-5 mr-3 text-blue-500 mt-1" />
+                <div className={`flex items-start mt-4 p-3 rounded-md border ${
+                  emailStatus === 'sent' 
+                    ? 'bg-blue-50 border-blue-100' 
+                    : emailStatus === 'failed' 
+                      ? 'bg-amber-50 border-amber-100' 
+                      : 'bg-gray-50 border-gray-100'
+                }`}>
+                  {emailStatus === 'sent' ? (
+                    <Mail className="h-5 w-5 mr-3 text-blue-500 mt-1" />
+                  ) : emailStatus === 'failed' ? (
+                    <AlertTriangle className="h-5 w-5 mr-3 text-amber-500 mt-1" />
+                  ) : (
+                    <Mail className="h-5 w-5 mr-3 text-gray-500 mt-1" />
+                  )}
+                  
                   <div>
-                    <p className="text-sm font-medium text-blue-800">Email Confirmation</p>
-                    <p className="text-sm text-blue-600">
-                      A confirmation has been sent to your email{' '}
-                      {bookingDetails.guestDetails?.email && (
-                        <span className="font-medium">{bookingDetails.guestDetails.email}</span>
-                      )}
+                    <p className={`text-sm font-medium ${
+                      emailStatus === 'sent' 
+                        ? 'text-blue-800' 
+                        : emailStatus === 'failed' 
+                          ? 'text-amber-800' 
+                          : 'text-gray-800'
+                    }`}>
+                      {emailStatus === 'sent' 
+                        ? 'Email Confirmation Sent' 
+                        : emailStatus === 'failed' 
+                          ? 'Email Sending Failed' 
+                          : 'Email Confirmation'}
+                    </p>
+                    <p className={`text-sm ${
+                      emailStatus === 'sent' 
+                        ? 'text-blue-600' 
+                        : emailStatus === 'failed' 
+                          ? 'text-amber-600' 
+                          : 'text-gray-600'
+                    }`}>
+                      {emailStatus === 'sent' 
+                        ? `A confirmation has been sent to ${bookingDetails.guestDetails?.email || 'your email'}`
+                        : emailStatus === 'failed' 
+                          ? 'We could not send an email confirmation at this time. Please contact support.'
+                          : 'Please check your email for booking details'}
                     </p>
                   </div>
                 </div>

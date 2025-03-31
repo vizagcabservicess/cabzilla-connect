@@ -187,7 +187,8 @@ try {
         
         logError("Guest booking - binding values to SQL statement", [
             'booking_number' => $bookingNumber,
-            'passenger_details' => $passengerName . ' / ' . $passengerPhone
+            'passenger_details' => $passengerName . ' / ' . $passengerPhone,
+            'passenger_email' => $passengerEmail
         ]);
         
         $stmt->bind_param(
@@ -231,7 +232,8 @@ try {
         logError("Authenticated booking - binding values to SQL statement", [
             'user_id' => $userId,
             'booking_number' => $bookingNumber,
-            'passenger_details' => $passengerName . ' / ' . $passengerPhone
+            'passenger_details' => $passengerName . ' / ' . $passengerPhone,
+            'passenger_email' => $passengerEmail
         ]);
         
         $stmt->bind_param(
@@ -293,10 +295,42 @@ try {
         'updatedAt' => $booking['updated_at']
     ];
     
-    // Send confirmation emails
-    $emailSuccess = [];
-    $emailSuccess['customer'] = sendBookingConfirmationEmail($formattedBooking);
-    $emailSuccess['admin'] = sendAdminNotificationEmail($formattedBooking);
+    // Send confirmation emails with detailed error logging
+    logError("Attempting to send confirmation emails", [
+        'booking_id' => $bookingId,
+        'passenger_email' => $booking['passenger_email']
+    ]);
+    
+    // Initialize email results array
+    $emailSuccess = ['customer' => false, 'admin' => false];
+    
+    // Wrap email sending in try-catch for better error handling
+    try {
+        $emailSuccess['customer'] = sendBookingConfirmationEmail($formattedBooking);
+        logError("Customer email sending attempt completed", [
+            'result' => $emailSuccess['customer'] ? 'success' : 'failed',
+            'email' => $booking['passenger_email']
+        ]);
+    } catch (Exception $e) {
+        logError("Exception while sending customer email", [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        $emailSuccess['customer'] = false;
+    }
+    
+    try {
+        $emailSuccess['admin'] = sendAdminNotificationEmail($formattedBooking);
+        logError("Admin email sending attempt completed", [
+            'result' => $emailSuccess['admin'] ? 'success' : 'failed'
+        ]);
+    } catch (Exception $e) {
+        logError("Exception while sending admin email", [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        $emailSuccess['admin'] = false;
+    }
     
     logError("Email sending results", [
         'customer_email_sent' => $emailSuccess['customer'] ? 'yes' : 'no',
@@ -304,12 +338,13 @@ try {
         'booking_id' => $bookingId
     ]);
 
-    // Send response
+    // Send response including email status
     sendJsonResponse([
         'status' => 'success',
         'message' => 'Booking created successfully',
         'data' => $formattedBooking,
-        'emailSent' => $emailSuccess['customer']
+        'emailSent' => $emailSuccess['customer'],
+        'adminEmailSent' => $emailSuccess['admin']
     ], 201);
 
 } catch (Exception $e) {

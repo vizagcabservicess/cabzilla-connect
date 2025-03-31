@@ -1,10 +1,9 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
 
 /**
- * Send an email using PHP's mail function
+ * Send an email using PHP's mail function with improved error handling and debugging
  * 
  * @param string $to Recipient email address
  * @param string $subject Email subject
@@ -64,14 +63,58 @@ function sendEmail($to, $subject, $htmlBody, $textBody = '', $headers = []) {
     
     $message .= "--$boundary--";
     
-    // Attempt to send the email
-    $success = mail($to, $subject, $message, $headersStr);
+    // Attempt to send email with better error capture
+    $success = false;
+    
+    // Clear any existing errors
+    if (function_exists('error_clear_last')) {
+        error_clear_last();
+    }
+    
+    try {
+        // Try native mail function first
+        $success = mail($to, $subject, $message, $headersStr);
+        $mailError = error_get_last();
+        
+        if (!$success) {
+            logError("Native mail() function failed", [
+                'error' => $mailError ? $mailError['message'] : 'Unknown error',
+                'to' => $to
+            ]);
+            
+            // Try alternative approach if native mail fails
+            // This falls back to sending via direct SMTP if configured in php.ini
+            $success = @mail($to, $subject, $message, $headersStr, "-f$from");
+            $fallbackError = error_get_last();
+            
+            if (!$success) {
+                logError("Fallback mail sending failed", [
+                    'error' => $fallbackError ? $fallbackError['message'] : 'Unknown error'
+                ]);
+            }
+        }
+    } catch (Exception $e) {
+        logError("Exception during mail sending", [
+            'exception' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        $success = false;
+    }
     
     // Log the result
     if ($success) {
-        logError("Email sent successfully", ['to' => $to, 'subject' => $subject]);
+        logError("Email sent successfully", [
+            'to' => $to, 
+            'subject' => $subject,
+            'method' => 'PHP mail()'
+        ]);
     } else {
-        logError("Failed to send email", ['to' => $to, 'subject' => $subject, 'error' => error_get_last()]);
+        $lastError = error_get_last();
+        logError("Failed to send email", [
+            'to' => $to, 
+            'subject' => $subject, 
+            'error' => $lastError ? $lastError['message'] : 'Unknown error'
+        ]);
     }
     
     return $success;
@@ -442,14 +485,14 @@ HTML;
 }
 
 /**
- * Send booking confirmation email to the customer
+ * Send booking confirmation email to the customer with improved error handling
  * 
  * @param array $booking Booking details
  * @return bool True if the email was sent successfully, false otherwise
  */
 function sendBookingConfirmationEmail($booking) {
     if (empty($booking['passengerEmail'])) {
-        logError("Cannot send confirmation email - no passenger email provided", ['booking' => $booking]);
+        logError("Cannot send confirmation email - no passenger email provided", ['booking_id' => $booking['id'] ?? 'unknown']);
         return false;
     }
     
@@ -457,19 +500,59 @@ function sendBookingConfirmationEmail($booking) {
     $subject = "Booking Confirmation - #" . $booking['bookingNumber'];
     $htmlBody = generateBookingConfirmationEmail($booking);
     
-    return sendEmail($to, $subject, $htmlBody);
+    // Add high importance headers
+    $headers = [
+        'X-Priority' => '1',
+        'X-MSMail-Priority' => 'High',
+        'Importance' => 'High'
+    ];
+    
+    logError("Sending booking confirmation email", [
+        'to' => $to,
+        'booking_number' => $booking['bookingNumber']
+    ]);
+    
+    $result = sendEmail($to, $subject, $htmlBody, '', $headers);
+    
+    logError("Booking confirmation email result", [
+        'success' => $result ? 'yes' : 'no',
+        'booking_number' => $booking['bookingNumber']
+    ]);
+    
+    return $result;
 }
 
 /**
- * Send booking notification email to admin
+ * Send booking notification email to admin with improved error handling
  * 
  * @param array $booking Booking details
  * @return bool True if the email was sent successfully, false otherwise
  */
 function sendAdminNotificationEmail($booking) {
-    $to = 'info@vizagtaxihub.com'; // Admin email
+    // Admin email - should be a valid, existing email
+    $to = 'info@vizagtaxihub.com';
+    
     $subject = "New Booking - #" . $booking['bookingNumber'];
     $htmlBody = generateAdminNotificationEmail($booking);
     
-    return sendEmail($to, $subject, $htmlBody);
+    // Add high importance headers
+    $headers = [
+        'X-Priority' => '1',
+        'X-MSMail-Priority' => 'High',
+        'Importance' => 'High'
+    ];
+    
+    logError("Sending admin notification email", [
+        'to' => $to,
+        'booking_number' => $booking['bookingNumber']
+    ]);
+    
+    $result = sendEmail($to, $subject, $htmlBody, '', $headers);
+    
+    logError("Admin notification email result", [
+        'success' => $result ? 'yes' : 'no',
+        'booking_number' => $booking['bookingNumber']
+    ]);
+    
+    return $result;
 }
