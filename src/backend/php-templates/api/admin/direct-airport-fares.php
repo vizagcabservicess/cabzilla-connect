@@ -25,26 +25,68 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+// Log all received data for debugging
+$rawInput = file_get_contents('php://input');
+$postData = $_POST;
+error_log("Direct airport fares raw input: " . $rawInput);
+error_log("Direct airport fares POST data: " . print_r($postData, true));
+
 try {
     // Get database connection
     $conn = getDbConnection();
 
-    // Get POST data with multiple field name fallbacks
-    $vehicleId = isset($_POST['vehicleId']) ? $_POST['vehicleId'] : (isset($_POST['vehicle_id']) ? $_POST['vehicle_id'] : null);
-    $basePrice = isset($_POST['basePrice']) ? floatval($_POST['basePrice']) : (isset($_POST['base_price']) ? floatval($_POST['base_price']) : 0);
-    $pricePerKm = isset($_POST['pricePerKm']) ? floatval($_POST['pricePerKm']) : (isset($_POST['price_per_km']) ? floatval($_POST['price_per_km']) : 0);
-    $pickupPrice = isset($_POST['pickupPrice']) ? floatval($_POST['pickupPrice']) : (isset($_POST['pickup_price']) ? floatval($_POST['pickup_price']) : 0);
-    $dropPrice = isset($_POST['dropPrice']) ? floatval($_POST['dropPrice']) : (isset($_POST['drop_price']) ? floatval($_POST['drop_price']) : 0);
-    $tier1Price = isset($_POST['tier1Price']) ? floatval($_POST['tier1Price']) : (isset($_POST['tier1_price']) ? floatval($_POST['tier1_price']) : 0);
-    $tier2Price = isset($_POST['tier2Price']) ? floatval($_POST['tier2Price']) : (isset($_POST['tier2_price']) ? floatval($_POST['tier2_price']) : 0);
-    $tier3Price = isset($_POST['tier3Price']) ? floatval($_POST['tier3Price']) : (isset($_POST['tier3_price']) ? floatval($_POST['tier3_price']) : 0);
-    $tier4Price = isset($_POST['tier4Price']) ? floatval($_POST['tier4Price']) : (isset($_POST['tier4_price']) ? floatval($_POST['tier4_price']) : 0);
-    $extraKmCharge = isset($_POST['extraKmCharge']) ? floatval($_POST['extraKmCharge']) : (isset($_POST['extra_km_charge']) ? floatval($_POST['extra_km_charge']) : 0);
-
+    // Parse JSON input if content-type is application/json
+    $contentType = isset($_SERVER['CONTENT_TYPE']) ? $_SERVER['CONTENT_TYPE'] : '';
+    $data = [];
+    
+    if (strpos($contentType, 'application/json') !== false) {
+        $jsonInput = json_decode($rawInput, true);
+        if (json_last_error() === JSON_ERROR_NONE) {
+            $data = $jsonInput;
+        } else {
+            error_log("JSON parsing error: " . json_last_error_msg());
+        }
+    } else {
+        // Use POST data
+        $data = $_POST;
+    }
+    
+    // Get vehicleId from multiple possible sources and formats
+    $vehicleId = null;
+    $possibleKeys = ['vehicleId', 'vehicle_id', 'vehicle-id', 'vehicleType', 'vehicle_type', 'cabType', 'cab_type'];
+    
+    foreach ($possibleKeys as $key) {
+        if (isset($data[$key]) && !empty($data[$key])) {
+            $vehicleId = $data[$key];
+            break;
+        }
+    }
+    
+    // Try to get from URL parameters if not found in post data
+    if (!$vehicleId && isset($_GET['vehicleId'])) {
+        $vehicleId = $_GET['vehicleId'];
+    }
+    
+    // Clean up vehicle ID if it has a prefix like 'item-'
+    if ($vehicleId && strpos($vehicleId, 'item-') === 0) {
+        $vehicleId = substr($vehicleId, 5);
+    }
+    
     // Validate required fields
     if (!$vehicleId) {
-        throw new Exception('Vehicle ID is required');
+        throw new Exception('Vehicle ID is required. Please check your request and ensure a valid vehicle ID is provided.');
     }
+
+    // Get POST data with multiple field name fallbacks
+    $basePrice = isset($data['basePrice']) ? floatval($data['basePrice']) : (isset($data['base_price']) ? floatval($data['base_price']) : 0);
+    $pricePerKm = isset($data['pricePerKm']) ? floatval($data['pricePerKm']) : (isset($data['price_per_km']) ? floatval($data['price_per_km']) : 0);
+    $pickupPrice = isset($data['pickupPrice']) ? floatval($data['pickupPrice']) : (isset($data['pickup_price']) ? floatval($data['pickup_price']) : 0);
+    $dropPrice = isset($data['dropPrice']) ? floatval($data['dropPrice']) : (isset($data['drop_price']) ? floatval($data['drop_price']) : 0);
+    $tier1Price = isset($data['tier1Price']) ? floatval($data['tier1Price']) : (isset($data['tier1_price']) ? floatval($data['tier1_price']) : 0);
+    $tier2Price = isset($data['tier2Price']) ? floatval($data['tier2Price']) : (isset($data['tier2_price']) ? floatval($data['tier2_price']) : 0);
+    $tier3Price = isset($data['tier3Price']) ? floatval($data['tier3Price']) : (isset($data['tier3_price']) ? floatval($data['tier3_price']) : 0);
+    $tier4Price = isset($data['tier4Price']) ? floatval($data['tier4Price']) : (isset($data['tier4_price']) ? floatval($data['tier4_price']) : 0);
+    $extraKmCharge = isset($data['extraKmCharge']) ? floatval($data['extraKmCharge']) : (isset($data['extra_km_charge']) ? floatval($data['extra_km_charge']) : 0);
 
     // Log the request details
     error_log("Updating airport fares for vehicle $vehicleId: basePrice=$basePrice, pricePerKm=$pricePerKm, pickupPrice=$pickupPrice, dropPrice=$dropPrice, tierPrices=$tier1Price/$tier2Price/$tier3Price/$tier4Price, extraKmCharge=$extraKmCharge");
@@ -56,6 +98,30 @@ try {
     $tableCheckQuery = "SHOW TABLES LIKE 'airport_transfer_fares'";
     $tableCheckResult = $conn->query($tableCheckQuery);
     $tableExists = $tableCheckResult && $tableCheckResult->num_rows > 0;
+
+    if (!$tableExists) {
+        // Create the table if it doesn't exist
+        $conn->query("
+            CREATE TABLE airport_transfer_fares (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                vehicle_id VARCHAR(50) NOT NULL,
+                base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
+                pickup_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                drop_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier1_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier2_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier3_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                tier4_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                extra_km_charge DECIMAL(5,2) NOT NULL DEFAULT 0,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY vehicle_id (vehicle_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        ");
+        $tableExists = true;
+        error_log("Created airport_transfer_fares table");
+    }
 
     if ($tableExists) {
         // Check if the vehicle already exists in the specialized table
@@ -115,9 +181,38 @@ try {
     $checkVehiclePricingResult = $conn->query($checkVehiclePricingQuery);
     $vehiclePricingExists = $checkVehiclePricingResult && $checkVehiclePricingResult->num_rows > 0;
 
+    if (!$vehiclePricingExists) {
+        // Create the vehicle_pricing table if it doesn't exist
+        $conn->query("
+            CREATE TABLE vehicle_pricing (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                vehicle_id VARCHAR(50) NOT NULL,
+                trip_type VARCHAR(20) NOT NULL DEFAULT 'outstation',
+                base_fare DECIMAL(10,2) NOT NULL DEFAULT 0,
+                price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
+                night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 700,
+                driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 300,
+                airport_base_price DECIMAL(10,2) DEFAULT 0,
+                airport_price_per_km DECIMAL(5,2) DEFAULT 0,
+                airport_pickup_price DECIMAL(10,2) DEFAULT 0,
+                airport_drop_price DECIMAL(10,2) DEFAULT 0,
+                airport_tier1_price DECIMAL(10,2) DEFAULT 0,
+                airport_tier2_price DECIMAL(10,2) DEFAULT 0,
+                airport_tier3_price DECIMAL(10,2) DEFAULT 0,
+                airport_tier4_price DECIMAL(10,2) DEFAULT 0,
+                airport_extra_km_charge DECIMAL(5,2) DEFAULT 0,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_vehicle_trip (vehicle_id, trip_type)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        ");
+        $vehiclePricingExists = true;
+        error_log("Created vehicle_pricing table");
+    }
+
     if ($vehiclePricingExists) {
-        // Check if the vehicle already exists in vehicle_pricing
-        $checkVpQuery = "SELECT id FROM vehicle_pricing WHERE vehicle_type = ? AND trip_type = 'airport'";
+        // Check if the vehicle already exists in vehicle_pricing with 'airport' trip_type
+        $checkVpQuery = "SELECT id FROM vehicle_pricing WHERE vehicle_id = ? AND trip_type = 'airport'";
         $checkVpStmt = $conn->prepare($checkVpQuery);
         $checkVpStmt->bind_param('s', $vehicleId);
         $checkVpStmt->execute();
@@ -127,7 +222,9 @@ try {
             // Update existing record
             $updateVpQuery = "
                 UPDATE vehicle_pricing
-                SET airport_base_price = ?,
+                SET base_fare = ?,
+                    price_per_km = ?,
+                    airport_base_price = ?,
                     airport_price_per_km = ?,
                     airport_pickup_price = ?,
                     airport_drop_price = ?,
@@ -137,11 +234,11 @@ try {
                     airport_tier4_price = ?,
                     airport_extra_km_charge = ?,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE vehicle_type = ? AND trip_type = 'airport'
+                WHERE vehicle_id = ? AND trip_type = 'airport'
             ";
             
             $updateVpStmt = $conn->prepare($updateVpQuery);
-            $updateVpStmt->bind_param('ddddddddds', $basePrice, $pricePerKm, $pickupPrice, $dropPrice, $tier1Price, $tier2Price, $tier3Price, $tier4Price, $extraKmCharge, $vehicleId);
+            $updateVpStmt->bind_param('dddddddddddss', $basePrice, $pricePerKm, $basePrice, $pricePerKm, $pickupPrice, $dropPrice, $tier1Price, $tier2Price, $tier3Price, $tier4Price, $extraKmCharge, $vehicleId);
             
             if (!$updateVpStmt->execute()) {
                 throw new Exception("Failed to update vehicle_pricing: " . $conn->error);
@@ -152,20 +249,50 @@ try {
             // Insert new record
             $insertVpQuery = "
                 INSERT INTO vehicle_pricing (
-                    vehicle_type, trip_type, airport_base_price, airport_price_per_km, 
-                    airport_pickup_price, airport_drop_price, airport_tier1_price, airport_tier2_price, 
-                    airport_tier3_price, airport_tier4_price, airport_extra_km_charge
-                ) VALUES (?, 'airport', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    vehicle_id, trip_type, base_fare, price_per_km, 
+                    airport_base_price, airport_price_per_km, airport_pickup_price, airport_drop_price, 
+                    airport_tier1_price, airport_tier2_price, airport_tier3_price, airport_tier4_price, 
+                    airport_extra_km_charge
+                ) VALUES (?, 'airport', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ";
             
             $insertVpStmt = $conn->prepare($insertVpQuery);
-            $insertVpStmt->bind_param('sddddddddd', $vehicleId, $basePrice, $pricePerKm, $pickupPrice, $dropPrice, $tier1Price, $tier2Price, $tier3Price, $tier4Price, $extraKmCharge);
+            $insertVpStmt->bind_param('sddddddddddd', $vehicleId, $basePrice, $pricePerKm, $basePrice, $pricePerKm, $pickupPrice, $dropPrice, $tier1Price, $tier2Price, $tier3Price, $tier4Price, $extraKmCharge);
             
             if (!$insertVpStmt->execute()) {
                 throw new Exception("Failed to insert into vehicle_pricing: " . $conn->error);
             }
             
             error_log("Inserted new record in vehicle_pricing for $vehicleId");
+        }
+    }
+    
+    // Check if vehicle exists in vehicle_types table, insert if not
+    $checkVehicleTypeQuery = "SELECT id FROM vehicle_types WHERE vehicle_id = ?";
+    $checkVehicleTypeStmt = $conn->prepare($checkVehicleTypeQuery);
+    $checkVehicleTypeStmt->bind_param('s', $vehicleId);
+    $checkVehicleTypeStmt->execute();
+    $checkVehicleTypeResult = $checkVehicleTypeStmt->get_result();
+    
+    if ($checkVehicleTypeResult->num_rows === 0) {
+        // Format vehicle name from ID
+        $vehicleName = ucwords(str_replace('_', ' ', $vehicleId));
+        
+        // Insert into vehicle_types
+        $insertVehicleTypeQuery = "
+            INSERT INTO vehicle_types (
+                vehicle_id, name, is_active
+            ) VALUES (?, ?, 1)
+        ";
+        
+        $insertVehicleTypeStmt = $conn->prepare($insertVehicleTypeQuery);
+        $insertVehicleTypeStmt->bind_param('ss', $vehicleId, $vehicleName);
+        
+        if (!$insertVehicleTypeStmt->execute()) {
+            error_log("Warning: Failed to insert into vehicle_types: " . $conn->error);
+            // Continue anyway - not critical
+        } else {
+            error_log("Inserted new vehicle in vehicle_types: $vehicleId");
         }
     }
 
@@ -199,9 +326,17 @@ try {
         $conn->rollback();
     }
     
+    error_log("Error in direct-airport-fares.php: " . $e->getMessage());
     http_response_code(500);
     echo json_encode([
         'status' => 'error',
-        'message' => $e->getMessage()
+        'message' => $e->getMessage(),
+        'debug_info' => [
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'vehicleId' => $vehicleId ?? 'not set',
+            'rawInput' => $rawInput ?? '',
+            'postData' => $postData ?? []
+        ]
     ]);
 }

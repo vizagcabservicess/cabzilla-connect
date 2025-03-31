@@ -35,6 +35,30 @@ try {
         ]
     ];
     
+    // First check if an admin_settings table exists and set a flag to prevent future prompts
+    $adminSettingsExists = $conn->query("SHOW TABLES LIKE 'admin_settings'")->num_rows > 0;
+    
+    if (!$adminSettingsExists) {
+        $conn->query("
+            CREATE TABLE admin_settings (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                setting_key VARCHAR(50) NOT NULL UNIQUE,
+                setting_value TEXT NOT NULL,
+                description VARCHAR(255) NULL,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        ");
+        $response["details"]["tables_fixed"][] = "admin_settings (created)";
+    }
+    
+    // Insert or update the database_fix_prompted setting to prevent continuous prompts
+    $conn->query("
+        INSERT INTO admin_settings (setting_key, setting_value, description)
+        VALUES ('database_fix_prompted', 'fixed', 'Flag to prevent continuous database fix prompts')
+        ON DUPLICATE KEY UPDATE setting_value = 'fixed', updated_at = NOW()
+    ");
+    $response["details"]["settings_updated"][] = "database_fix_prompted flag set to 'fixed'";
+    
     // 1. Check and fix vehicle_types table
     $response["details"]["tables_checked"][] = "vehicle_types";
     $tableExists = $conn->query("SHOW TABLES LIKE 'vehicle_types'")->num_rows > 0;
@@ -264,10 +288,48 @@ try {
         $response["details"]["tables_fixed"][] = "vehicle_types (added missing vehicle $vehicleId)";
     }
     
-    // 8. Clear any previously created "once" field from database to prevent infinite loop
-    if ($conn->query("SHOW TABLES LIKE 'admin_settings'")->num_rows > 0) {
-        $conn->query("DELETE FROM admin_settings WHERE setting_key = 'database_fix_prompted'");
+    // 8. Check if vehicles have airport_transfer_fares entries
+    $result = $conn->query("SELECT vehicle_id FROM vehicle_types WHERE is_active = 1");
+    while ($vehicle = $result->fetch_assoc()) {
+        $vehicleId = $vehicle['vehicle_id'];
+        
+        $checkStmt = $conn->prepare("SELECT id FROM airport_transfer_fares WHERE vehicle_id = ?");
+        $checkStmt->bind_param("s", $vehicleId);
+        $checkStmt->execute();
+        
+        if ($checkStmt->get_result()->num_rows === 0) {
+            // Default values for airport transfer fares
+            $basePrice = 3000;
+            $pricePerKm = 15;
+            $pickupPrice = 800;
+            $dropPrice = 800;
+            $tier1Price = 600;
+            $tier2Price = 800;
+            $tier3Price = 1000;
+            $tier4Price = 1200;
+            $extraKmCharge = 15;
+            
+            $insertStmt = $conn->prepare("
+                INSERT INTO airport_transfer_fares 
+                (vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
+                 tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            $insertStmt->bind_param("sddddddddd", $vehicleId, $basePrice, $pricePerKm, $pickupPrice, $dropPrice, 
+                                 $tier1Price, $tier2Price, $tier3Price, $tier4Price, $extraKmCharge);
+            $insertStmt->execute();
+            
+            $response["details"]["tables_fixed"][] = "airport_transfer_fares (added entry for $vehicleId)";
+        }
+        $checkStmt->close();
     }
+    
+    // Clear the database_fix_prompted flag to prevent future unwanted prompts
+    $conn->query("
+        INSERT INTO admin_settings (setting_key, setting_value, description)
+        VALUES ('database_fix_prompted', 'fixed', 'Flag to prevent continuous database fix prompts')
+        ON DUPLICATE KEY UPDATE setting_value = 'fixed', updated_at = NOW()
+    ");
     
     echo json_encode($response);
     
