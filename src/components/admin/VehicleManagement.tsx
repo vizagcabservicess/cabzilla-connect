@@ -1,9 +1,8 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Loader2, Plus, RefreshCw, Search } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Search, Tool } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { VehicleCard } from "./VehicleCard";
 import { CabType } from "@/types/cab";
@@ -11,17 +10,42 @@ import { AddVehicleDialog } from "./AddVehicleDialog";
 import { EditVehicleDialog } from "./EditVehicleDialog";
 import { getVehicleData, clearVehicleDataCache } from "@/services/vehicleDataService";
 import { Skeleton } from "@/components/ui/skeleton";
+import { apiBaseUrl } from '@/config/api';
 
 export default function VehicleManagement() {
   const [isLoading, setIsLoading] = useState(true);
   const [vehicles, setVehicles] = useState<CabType[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isFixingDb, setIsFixingDb] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState<CabType | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
+
+  const fixDatabase = async () => {
+    setIsFixingDb(true);
+    
+    try {
+      // Call the database fix endpoint
+      const response = await fetch(`${apiBaseUrl}/api/admin/fix-vehicle-tables.php`);
+      const data = await response.json();
+      
+      if (data.status === 'success') {
+        toast.success("Database tables fixed successfully");
+        // Refresh the vehicle data
+        await handleRefreshData();
+      } else {
+        toast.error("Failed to fix database tables: " + (data.message || "Unknown error"));
+      }
+    } catch (error) {
+      console.error("Error fixing database:", error);
+      toast.error("Failed to fix database tables. Please check server logs.");
+    } finally {
+      setIsFixingDb(false);
+    }
+  };
 
   const loadVehicles = useCallback(async () => {
     const now = Date.now();
@@ -55,18 +79,21 @@ export default function VehicleManagement() {
             luggageCapacity: Number(vehicle.luggageCapacity || 2),
             price: Number(vehicle.price || vehicle.basePrice || 0), 
             pricePerKm: Number(vehicle.pricePerKm || 0),
-            amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC']
+            amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC'],
+            nightHaltCharge: Number(vehicle.nightHaltCharge || 700),
+            driverAllowance: Number(vehicle.driverAllowance || 300)
           };
           
           if (deduplicatedVehicles[normalizedId]) {
             const existing = deduplicatedVehicles[normalizedId];
             
-            // Merge the records, prioritizing longer description/name values
             deduplicatedVehicles[normalizedId] = {
               ...existing,
               ...normalizedVehicle,
               description: normalizedVehicle.description || existing.description || '',
-              name: normalizedVehicle.name || existing.name || ''
+              name: normalizedVehicle.name || existing.name || '',
+              nightHaltCharge: normalizedVehicle.nightHaltCharge || existing.nightHaltCharge || 700,
+              driverAllowance: normalizedVehicle.driverAllowance || existing.driverAllowance || 300
             };
           } else {
             deduplicatedVehicles[normalizedId] = normalizedVehicle;
@@ -89,7 +116,6 @@ export default function VehicleManagement() {
       console.error("Error loading vehicles:", error);
       toast.error("Failed to load vehicles. Please try refreshing the page.");
       
-      // Try to recover from local storage cache if API fails
       try {
         const cachedVehiclesString = localStorage.getItem('cachedVehicles');
         if (cachedVehiclesString) {
@@ -112,7 +138,6 @@ export default function VehicleManagement() {
     
     const handleVehicleDataUpdated = () => {
       console.log("Vehicle data updated event received");
-      // Delay reload slightly to ensure data is updated on server
       setTimeout(() => loadVehicles(), 500);
     };
     
@@ -142,13 +167,11 @@ export default function VehicleManagement() {
   };
 
   const handleAddVehicle = (newVehicle: CabType) => {
-    // Ensure the vehicle isn't already in the list by ID
     if (!vehicles.some(v => v.id === newVehicle.id)) {
       setVehicles((prev) => [...prev, newVehicle]);
     }
     toast.success(`Vehicle ${newVehicle.name} added successfully`);
     
-    // Clear cache and reload after a short delay to ensure server has processed the update
     setTimeout(() => {
       clearVehicleDataCache();
       loadVehicles();
@@ -158,13 +181,11 @@ export default function VehicleManagement() {
   const handleEditVehicle = (updatedVehicle: CabType) => {
     console.log("Handling edit vehicle callback with data:", updatedVehicle);
     
-    // Update the vehicle in the list
     setVehicles((prev) =>
       prev.map((vehicle) =>
         vehicle.id === updatedVehicle.id ? {
           ...vehicle,
           ...updatedVehicle,
-          // Explicitly ensure description is updated
           description: updatedVehicle.description 
         } : vehicle
       )
@@ -174,7 +195,6 @@ export default function VehicleManagement() {
     
     setSelectedVehicle(null);
     
-    // Clear cache and reload after a short delay to ensure server has processed the update
     setTimeout(() => {
       clearVehicleDataCache();
       loadVehicles();
@@ -185,7 +205,6 @@ export default function VehicleManagement() {
     setVehicles((prev) => prev.filter((vehicle) => vehicle.id !== vehicleId));
     toast.success("Vehicle deleted successfully");
     
-    // Clear cache and reload after a delay
     setTimeout(() => {
       clearVehicleDataCache();
       loadVehicles();
@@ -203,6 +222,24 @@ export default function VehicleManagement() {
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-2xl font-bold">Vehicle Management</h2>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={fixDatabase}
+            disabled={isFixingDb}
+            className="flex items-center gap-2"
+          >
+            {isFixingDb ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Fixing Database...
+              </>
+            ) : (
+              <>
+                <Tool className="h-4 w-4" />
+                Fix Database
+              </>
+            )}
+          </Button>
           <Button
             variant="outline"
             onClick={handleRefreshData}
@@ -265,7 +302,7 @@ export default function VehicleManagement() {
               vehicle={vehicle}
               onEdit={() => {
                 console.log("Selected vehicle for editing:", vehicle);
-                setSelectedVehicle({...vehicle}); // Clone to avoid reference issues
+                setSelectedVehicle({...vehicle});
                 setIsEditDialogOpen(true);
               }}
               onDelete={handleDeleteVehicle}

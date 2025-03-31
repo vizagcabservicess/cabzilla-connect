@@ -103,7 +103,10 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
         description: formData.description || '', // Explicitly set description, don't use originalVehicle.description as fallback
         // Explicitly set pricing fields to resolve the 'base_price' error
         basePrice: formData.price || originalVehicle?.price || 0,
-        price: formData.price || originalVehicle?.price || 0
+        price: formData.price || originalVehicle?.price || 0,
+        // Make sure these fields have default values to prevent database errors
+        nightHaltCharge: formData.nightHaltCharge || originalVehicle?.nightHaltCharge || 700,
+        driverAllowance: formData.driverAllowance || originalVehicle?.driverAllowance || 300
       };
       
       // Remove amenitiesString as it's not part of CabType
@@ -137,7 +140,7 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
       
       // If multiple attempts, provide more guidance
       if (updateAttempts > 1) {
-        setErrorMessage(prev => `${prev || ""}\n\nTry refreshing the page or check if the server is accessible.`);
+        setErrorMessage(prev => `${prev || ""}\n\nTry refreshing the page or check if the server is accessible. The database may be missing required columns.`);
       }
     } finally {
       setIsSubmitting(false);
@@ -283,7 +286,7 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
                 id="nightHaltCharge"
                 name="nightHaltCharge"
                 type="number"
-                value={formData.nightHaltCharge || 0}
+                value={formData.nightHaltCharge || 700}
                 onChange={handleChange}
                 min={0}
               />
@@ -294,7 +297,7 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
                 id="driverAllowance"
                 name="driverAllowance"
                 type="number"
-                value={formData.driverAllowance || 0}
+                value={formData.driverAllowance || 300}
                 onChange={handleChange}
                 min={0}
               />

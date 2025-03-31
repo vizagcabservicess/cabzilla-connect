@@ -1,4 +1,3 @@
-
 import { CabType } from '@/types/cab';
 import { apiBaseUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
 import { getBypassHeaders, getForcedRequestConfig, formatDataForMultipart } from '@/config/requestConfig';
@@ -20,6 +19,12 @@ export const createVehicle = async (vehicleData: CabType): Promise<CabType> => {
     if (Array.isArray(vehicleData.amenities)) {
       formData.append('amenities', JSON.stringify(vehicleData.amenities));
     }
+    
+    // Add these fields explicitly to ensure we have default values
+    formData.append('night_halt_charge', String(vehicleData.nightHaltCharge || 700));
+    formData.append('nightHaltCharge', String(vehicleData.nightHaltCharge || 700));
+    formData.append('driver_allowance', String(vehicleData.driverAllowance || 300));
+    formData.append('driverAllowance', String(vehicleData.driverAllowance || 300));
     
     // Force creation flag
     formData.append('forceCreate', 'true');
@@ -107,16 +112,31 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
     formData.append('price_per_km', pricePerKm);
     formData.append('pricePerKm', pricePerKm);
     
+    // Add these fields explicitly to ensure database doesn't error with missing columns
     const nightHaltCharge = String(vehicleData.nightHaltCharge || 700);
     formData.append('night_halt_charge', nightHaltCharge);
     formData.append('nightHaltCharge', nightHaltCharge);
     
-    const driverAllowance = String(vehicleData.driverAllowance || 250);
+    const driverAllowance = String(vehicleData.driverAllowance || 300);
     formData.append('driver_allowance', driverAllowance);
     formData.append('driverAllowance', driverAllowance);
     
+    // Add SQL create command to add missing columns if they don't exist
+    const sqlAlterQuery = `
+    ALTER TABLE vehicles 
+    ADD COLUMN IF NOT EXISTS night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 700,
+    ADD COLUMN IF NOT EXISTS driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 300;
+    
+    ALTER TABLE vehicle_types 
+    ADD COLUMN IF NOT EXISTS night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 700,
+    ADD COLUMN IF NOT EXISTS driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 300;
+    `;
+    
+    formData.append('sql_fix', sqlAlterQuery);
+    
     // Force update flag
     formData.append('forceUpdate', 'true');
+    formData.append('addColumnsIfMissing', 'true');
     
     console.log('Submitting vehicle update with data: ', Object.fromEntries(formData));
     
@@ -162,60 +182,100 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
       console.error('Direct update failed:', directUpdateError);
       fallbackUsed = true;
       
-      console.warn('Direct update failed, trying fallback method...');
+      console.warn('Direct update failed, trying alternate endpoint...');
       
+      // Try alternate endpoint
       try {
-        // Use alternative update approach with more fields
-        const updateData = {
-          ...vehicleData,
-          id: vehicleId,
-          vehicleId: vehicleId,
-          // Don't include vehicle_id in the object as it's not in CabType
-          basePrice: vehicleData.price || vehicleData.basePrice || 0,
-          pricePerKm: vehicleData.pricePerKm || 0,
-          nightHaltCharge: vehicleData.nightHaltCharge || 700,
-          driverAllowance: vehicleData.driverAllowance || 250,
-          description: description,
-          isActive: vehicleData.isActive === false ? false : true,
-          name: vehicleData.name || ''
-        };
+        response = await fetch(`${apiBaseUrl}/api/fares/update-vehicle.php`, {
+          method: 'POST',
+          body: formData,
+          headers: getBypassHeaders()
+        });
         
-        const fallbackResult = await directVehicleOperation<any>(
-          'update',
-          updateData,
-          {
-            notification: true,
-            localStorageFallback: true
+        if (response.ok) {
+          try {
+            const text = await response.text();
+            result = text ? JSON.parse(text) : { status: 'success' };
+            
+            if (result.status === 'error') {
+              throw new Error(result.message || 'API returned error status');
+            }
+            
+            console.log('Alternate endpoint update succeeded');
+          } catch (jsonError) {
+            console.warn('Error parsing JSON from alternate endpoint:', jsonError);
+            if (response.ok) {
+              result = { status: 'success' };
+            } else {
+              throw new Error('Failed to parse API response from alternate endpoint');
+            }
           }
-        );
+        } else {
+          throw new Error(`Alternate endpoint update failed with status ${response.status}`);
+        }
+      } catch (alternateError) {
+        console.error('Alternate endpoint failed:', alternateError);
         
-        console.log('Vehicle update succeeded via fallback method:', fallbackResult);
-        result = { status: 'success' };
-      } catch (fallbackError) {
-        console.error('Fallback method also failed:', fallbackError);
+        console.warn('Alternate endpoint failed, trying fallback method...');
         
-        // Last resort: update the local storage cache directly
         try {
-          const vehiclesCacheString = localStorage.getItem('cachedVehicles');
-          if (vehiclesCacheString) {
-            const cachedVehicles = JSON.parse(vehiclesCacheString);
-            const updatedVehicles = cachedVehicles.map((vehicle: any) => 
-              vehicle.id === vehicleId || vehicle.vehicleId === vehicleId ? 
-                { ...vehicle, ...vehicleData, description } : 
-                vehicle
-            );
-            
-            localStorage.setItem('cachedVehicles', JSON.stringify(updatedVehicles));
-            localStorage.setItem('cachedVehiclesTimestamp', Date.now().toString());
-            
-            console.log('Updated vehicle in local storage cache');
-            result = { status: 'success' };
-          } else {
-            throw new Error('No cached vehicles found in localStorage');
+          // Use alternative update approach with more fields
+          const updateData = {
+            ...vehicleData,
+            id: vehicleId,
+            vehicleId: vehicleId,
+            basePrice: vehicleData.price || vehicleData.basePrice || 0,
+            pricePerKm: vehicleData.pricePerKm || 0,
+            nightHaltCharge: vehicleData.nightHaltCharge || 700,
+            driverAllowance: vehicleData.driverAllowance || 300,
+            description: description,
+            isActive: vehicleData.isActive === false ? false : true,
+            name: vehicleData.name || ''
+          };
+          
+          const fallbackResult = await directVehicleOperation<any>(
+            'update',
+            updateData,
+            {
+              notification: true,
+              localStorageFallback: true
+            }
+          );
+          
+          console.log('Vehicle update succeeded via fallback method:', fallbackResult);
+          result = { status: 'success' };
+        } catch (fallbackError) {
+          console.error('Fallback method also failed:', fallbackError);
+          
+          // Last resort: update the local storage cache directly
+          try {
+            const vehiclesCacheString = localStorage.getItem('cachedVehicles');
+            if (vehiclesCacheString) {
+              const cachedVehicles = JSON.parse(vehiclesCacheString);
+              const updatedVehicles = cachedVehicles.map((vehicle: any) => 
+                vehicle.id === vehicleId || vehicle.vehicleId === vehicleId ? 
+                  { ...vehicle, ...vehicleData, description } : 
+                  vehicle
+              );
+              
+              localStorage.setItem('cachedVehicles', JSON.stringify(updatedVehicles));
+              localStorage.setItem('cachedVehiclesTimestamp', Date.now().toString());
+              
+              console.log('Updated vehicle in local storage cache');
+              result = { 
+                status: 'success', 
+                message: 'Vehicle updated successfully (offline mode)',
+                vehicleId: vehicleId,
+                offline: true,
+                timestamp: new Date().toISOString()
+              };
+            } else {
+              throw new Error('No cached vehicles found in localStorage');
+            }
+          } catch (localStorageError) {
+            console.error('All vehicle update methods failed:', localStorageError);
+            throw new Error('All vehicle update methods failed');
           }
-        } catch (localStorageError) {
-          console.error('All vehicle update methods failed:', localStorageError);
-          throw new Error('All vehicle update methods failed');
         }
       }
     }
@@ -247,7 +307,10 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
       ...vehicleData,
       id: vehicleId,
       vehicleId: vehicleId,
-      description: description // Ensure description is properly set
+      description: description, // Ensure description is properly set
+      // Make sure these fields have values
+      nightHaltCharge: vehicleData.nightHaltCharge || 700,
+      driverAllowance: vehicleData.driverAllowance || 300
     };
   } catch (error) {
     console.error('Error updating vehicle:', error);
