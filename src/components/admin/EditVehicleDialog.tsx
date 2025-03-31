@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -100,12 +99,10 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
           : originalVehicle?.amenities || [],
         id: vehicle.id, // Ensure ID remains unchanged
         vehicleId: vehicle.id, // Ensure vehicleId is also set correctly
-        vehicle_id: vehicle.id, // Add snake_case version too
         description: formData.description || '', // Explicitly set description, don't use originalVehicle.description as fallback
         // Explicitly set pricing fields to resolve the 'base_price' error
         basePrice: formData.price || originalVehicle?.price || 0,
-        price: formData.price || originalVehicle?.price || 0,
-        base_price: formData.price || originalVehicle?.price || 0
+        price: formData.price || originalVehicle?.price || 0
       };
       
       // Remove amenitiesString as it's not part of CabType

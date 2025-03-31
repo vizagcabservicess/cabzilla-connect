@@ -1,4 +1,3 @@
-
 import { CabType } from '@/types/cab';
 import { apiBaseUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
 import { getBypassHeaders, getForcedRequestConfig, formatDataForMultipart } from '@/config/requestConfig';
@@ -165,7 +164,6 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
           ...vehicleData,
           id: vehicleId,
           vehicleId: vehicleId,
-          vehicle_id: vehicleId,
           base_price: vehicleData.price || vehicleData.basePrice || 0,
           price_per_km: vehicleData.pricePerKm || 0,
           night_halt_charge: vehicleData.nightHaltCharge || 700,
