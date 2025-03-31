@@ -11,6 +11,7 @@ import { AddVehicleDialog } from "./AddVehicleDialog";
 import { EditVehicleDialog } from "./EditVehicleDialog";
 import { getVehicleData, clearVehicleDataCache } from "@/services/vehicleDataService";
 import { Skeleton } from "@/components/ui/skeleton";
+import { syncVehicleData } from "@/services/directVehicleService";
 
 export default function VehicleManagement() {
   const [isLoading, setIsLoading] = useState(true);
@@ -22,6 +23,26 @@ export default function VehicleManagement() {
   const [selectedVehicle, setSelectedVehicle] = useState<CabType | null>(null);
   const [retryCount, setRetryCount] = useState(0);
 
+  // Setup listener for cache invalidation events
+  useEffect(() => {
+    const handleCacheInvalidated = () => {
+      console.log("Vehicle cache invalidated, reloading vehicles");
+      setRetryCount(prev => prev + 1);
+    };
+    
+    window.addEventListener('vehicle-cache-invalidated', handleCacheInvalidated);
+    window.addEventListener('vehicle-data-cache-cleared', handleCacheInvalidated);
+    window.addEventListener('vehicle-data-updated', handleCacheInvalidated);
+    window.addEventListener('vehicle-data-refreshed', handleCacheInvalidated);
+    
+    return () => {
+      window.removeEventListener('vehicle-cache-invalidated', handleCacheInvalidated);
+      window.removeEventListener('vehicle-data-cache-cleared', handleCacheInvalidated);
+      window.removeEventListener('vehicle-data-updated', handleCacheInvalidated);
+      window.removeEventListener('vehicle-data-refreshed', handleCacheInvalidated);
+    };
+  }, []);
+
   useEffect(() => {
     loadVehicles();
   }, [retryCount]);
@@ -30,6 +51,9 @@ export default function VehicleManagement() {
     try {
       setIsLoading(true);
       console.log("Admin: Fetching all vehicles...");
+      
+      // Always clear cache first to ensure fresh data
+      clearVehicleDataCache();
       
       // Always include inactive vehicles for admin view
       const fetchedVehicles = await getVehicleData(true, true);
@@ -55,7 +79,18 @@ export default function VehicleManagement() {
   const handleRefreshData = async () => {
     try {
       setIsRefreshing(true);
+      
+      // Clear all caches
       clearVehicleDataCache();
+      
+      // Also try to sync data on the server
+      try {
+        await syncVehicleData();
+      } catch (syncError) {
+        console.warn("Could not sync vehicle data:", syncError);
+      }
+      
+      // Reload vehicles with fresh data
       await loadVehicles();
       toast.success("Vehicle data refreshed successfully");
     } catch (error) {
@@ -67,22 +102,40 @@ export default function VehicleManagement() {
   };
 
   const handleAddVehicle = (newVehicle: CabType) => {
+    // Add the new vehicle to the list
     setVehicles((prev) => [...prev, newVehicle]);
     toast.success(`Vehicle ${newVehicle.name} added successfully`);
+    
+    // Also refresh all data to ensure consistency
+    setTimeout(() => {
+      handleRefreshData();
+    }, 1000);
   };
 
   const handleEditVehicle = (updatedVehicle: CabType) => {
+    // Update the vehicle in the list
     setVehicles((prev) =>
       prev.map((vehicle) =>
         vehicle.id === updatedVehicle.id ? updatedVehicle : vehicle
       )
     );
     toast.success(`Vehicle ${updatedVehicle.name} updated successfully`);
+    
+    // Also refresh all data to ensure consistency
+    setTimeout(() => {
+      handleRefreshData();
+    }, 1000);
   };
 
   const handleDeleteVehicle = (vehicleId: string) => {
+    // Remove the vehicle from the list
     setVehicles((prev) => prev.filter((vehicle) => vehicle.id !== vehicleId));
     toast.success("Vehicle deleted successfully");
+    
+    // Also refresh all data to ensure consistency
+    setTimeout(() => {
+      handleRefreshData();
+    }, 1000);
   };
 
   const filteredVehicles = vehicles.filter((vehicle) =>
