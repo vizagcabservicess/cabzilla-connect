@@ -45,6 +45,9 @@ export const createVehicle = async (vehicleData: CabType): Promise<CabType> => {
     window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
       detail: { vehicleId: vehicleData.id, timestamp: Date.now() }
     }));
+    
+    // We need to wait a moment to ensure the cache is cleared properly
+    await new Promise(resolve => setTimeout(resolve, 200));
 
     // Also clear any cached data
     clearVehicleCache();
@@ -65,6 +68,9 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
     
     // Delete any potential cache first
     clearVehicleCache();
+    
+    // Add a delay before update to ensure cache is fully cleared
+    await new Promise(resolve => setTimeout(resolve, 300));
     
     // Try multiple update methods for resilience
     const results = await Promise.allSettled([
@@ -106,8 +112,17 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
       throw firstRejection.reason;
     }
     
+    // We need to wait a moment to ensure the data is properly synced
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
     // Trigger multiple events to ensure all components are notified
     triggerVehicleUpdatedEvents(vehicleId);
+    
+    // Add extra delay to ensure cache is fully cleared
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    // Clear cache again to ensure fresh data
+    clearVehicleCache();
     
     return vehicleData;
   } catch (error) {
@@ -116,6 +131,9 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
     try {
       console.log('Attempting fallback update method...');
       const result = await updateVehicleFallback(vehicleId, vehicleData);
+      
+      // We need to wait a moment to ensure the data is properly synced
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       // Clear cache and trigger events
       clearVehicleCache();
@@ -285,6 +303,8 @@ function clearVehicleCache() {
     localStorage.removeItem('vehicleData');
     localStorage.removeItem('vehicleDataTimestamp');
     localStorage.removeItem('vehicleDataActive');
+    localStorage.removeItem('cachedVehicles');
+    localStorage.removeItem('cachedVehiclesTimestamp');
     
     // Set an invalidation marker
     localStorage.setItem('vehicleCacheInvalidated', Date.now().toString());

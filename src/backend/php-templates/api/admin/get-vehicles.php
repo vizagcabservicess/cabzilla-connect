@@ -1,4 +1,3 @@
-
 <?php
 /**
  * This API endpoint retrieves all vehicles from multiple tables and merges the data
@@ -16,7 +15,7 @@ header('Expires: 0');
 
 // Add debugging headers
 header('X-Debug-File: get-vehicles.php');
-header('X-API-Version: 1.0.1');
+header('X-API-Version: 1.0.2');
 header('X-Timestamp: ' . time());
 
 // Handle preflight OPTIONS request
@@ -26,11 +25,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 try {
-    $conn = getDbConnection();
+    // Check if config constants are defined and use them or fallback to environment variables
+    $dbHost = defined('DB_HOST') ? DB_HOST : getenv('DB_HOST');
+    $dbUser = defined('DB_USER') ? DB_USER : getenv('DB_USER');
+    $dbPass = defined('DB_PASS') ? DB_PASS : getenv('DB_PASS');
+    $dbName = defined('DB_NAME') ? DB_NAME : getenv('DB_NAME');
+    
+    // Make sure we have the necessary database credentials
+    if (empty($dbHost) || empty($dbUser) || empty($dbName)) {
+        throw new Exception("Database configuration is missing. Please check your config.php file.");
+    }
+    
+    // Get database connection
+    $conn = mysqli_connect($dbHost, $dbUser, $dbPass, $dbName);
     
     // Check if the connection was successful
     if (!$conn) {
-        throw new Exception("Database connection failed");
+        throw new Exception("Database connection failed: " . mysqli_connect_error());
     }
     
     // Get additional parameters
@@ -250,14 +261,26 @@ try {
         if (empty($vehiclesArray[$key]['id'])) $vehiclesArray[$key]['id'] = 'vehicle_' . $key;
     }
     
+    // Deduplicate vehicles by ID to ensure uniqueness
+    $uniqueVehicles = [];
+    $seenIds = [];
+    
+    foreach ($vehiclesArray as $vehicle) {
+        $vehicleId = $vehicle['id'] ?? '';
+        if (!empty($vehicleId) && !in_array($vehicleId, $seenIds)) {
+            $uniqueVehicles[] = $vehicle;
+            $seenIds[] = $vehicleId;
+        }
+    }
+    
     // Sort vehicles by name
-    usort($vehiclesArray, function($a, $b) {
+    usort($uniqueVehicles, function($a, $b) {
         return strcmp($a['name'], $b['name']);
     });
     
     // If no vehicles found, provide default vehicles
-    if (empty($vehiclesArray)) {
-        $vehiclesArray = [
+    if (empty($uniqueVehicles)) {
+        $uniqueVehicles = [
             [
                 'id' => 'sedan',
                 'vehicleId' => 'sedan',
@@ -313,11 +336,12 @@ try {
     echo json_encode([
         'status' => 'success',
         'message' => 'Vehicles retrieved successfully',
-        'vehicles' => $vehiclesArray,
+        'vehicles' => $uniqueVehicles,
         'source' => 'direct-db-query',
         'tables' => $existingTables,
         'includeInactive' => $includeInactive,
-        'timestamp' => time()
+        'timestamp' => time(),
+        'deduplication' => true // Indicate that deduplication was performed
     ]);
     
 } catch (Exception $e) {

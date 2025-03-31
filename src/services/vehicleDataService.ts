@@ -1,11 +1,10 @@
-
 import { CabType } from '@/types/cab';
 import { apiBaseUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
 import { OutstationFare, LocalFare, AirportFare } from '@/types/cab';
 
 // Reduced cache durations to ensure fresher data
-const JSON_CACHE_DURATION = 30 * 1000; // 30 seconds in milliseconds (reduced significantly)
-const API_CACHE_DURATION = 15 * 1000; // 15 seconds in milliseconds (reduced significantly)
+const JSON_CACHE_DURATION = 20 * 1000; // 20 seconds in milliseconds (reduced significantly)
+const API_CACHE_DURATION = 10 * 1000; // 10 seconds in milliseconds (reduced significantly)
 
 // Store fetched vehicle data in memory to reduce API calls
 let cachedVehicles: {
@@ -133,7 +132,8 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
     const fetchPromise = fetch(url, {
       headers: {
         ...forceRefreshHeaders,
-        'X-Admin-Mode': includeInactive ? 'true' : 'false' // Add admin mode header
+        'X-Admin-Mode': includeInactive ? 'true' : 'false',
+        'X-Cache-Buster': now.toString()
       },
       mode: 'cors',
       cache: 'no-store'
@@ -141,7 +141,7 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
     
     // Add timeout to the fetch
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Direct API request timeout')), 3000);
+      setTimeout(() => reject(new Error('Direct API request timeout')), 5000);
     });
     
     // Race the fetch against the timeout
@@ -159,15 +159,26 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
       // Process vehicle data to ensure correct format
       const processedVehicles = processVehicles(data.vehicles);
       
+      // Deduplicate vehicles by ID
+      const vehicleMap = new Map<string, CabType>();
+      processedVehicles.forEach(vehicle => {
+        if (!vehicleMap.has(vehicle.id)) {
+          vehicleMap.set(vehicle.id, vehicle);
+        }
+      });
+      
+      const uniqueVehicles = Array.from(vehicleMap.values());
+      console.log(`Deduplicated to ${uniqueVehicles.length} unique vehicles`);
+      
       // Cache the processed data
       cachedVehicles.api = {
-        data: processedVehicles,
+        data: uniqueVehicles,
         timestamp: now
       };
       
       // Cache to localStorage for persistence
       try {
-        localStorage.setItem('cachedVehicles', JSON.stringify(processedVehicles));
+        localStorage.setItem('cachedVehicles', JSON.stringify(uniqueVehicles));
         localStorage.setItem('cachedVehiclesTimestamp', now.toString());
       } catch (e) {
         console.error('Error caching vehicles to localStorage:', e);
@@ -176,13 +187,13 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
       // Dispatch event to notify components about the refresh
       window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
         detail: { 
-          count: processedVehicles.length,
+          count: uniqueVehicles.length,
           timestamp: now,
           isAdminView: includeInactive
         }
       }));
       
-      return filterVehicles(processedVehicles, includeInactive);
+      return filterVehicles(uniqueVehicles, includeInactive);
     } else {
       console.warn('Direct API returned empty or invalid vehicles array:', data);
       throw new Error('Direct API returned empty or invalid vehicles array');
@@ -204,7 +215,7 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
       const fetchPromise = fetch(url, {
         headers: forceRefresh ? {
           ...forceRefreshHeaders,
-          'X-Admin-Mode': includeInactive ? 'true' : 'false' // Add admin mode header
+          'X-Admin-Mode': includeInactive ? 'true' : 'false'
         } : defaultHeaders,
         mode: 'cors',
         cache: 'no-store'
@@ -389,6 +400,11 @@ export const clearVehicleDataCache = () => {
   try {
     localStorage.removeItem('cachedVehicles');
     localStorage.removeItem('cachedVehiclesTimestamp');
+    localStorage.removeItem('vehicleData');
+    localStorage.removeItem('vehicleDataTimestamp');
+    localStorage.removeItem('vehicleDataActive');
+    localStorage.removeItem('fareCache');
+    localStorage.setItem('vehicleCacheInvalidated', Date.now().toString());
   } catch (e) {
     console.error('Error clearing localStorage cache:', e);
   }

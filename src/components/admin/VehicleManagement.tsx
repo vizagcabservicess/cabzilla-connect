@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -60,7 +59,19 @@ export default function VehicleManagement() {
       console.log(`Loaded ${fetchedVehicles.length} vehicles for admin view:`, fetchedVehicles);
       
       if (fetchedVehicles && fetchedVehicles.length > 0) {
-        setVehicles(fetchedVehicles);
+        // Remove duplicate vehicles by ID - keep only the first occurrence of each vehicle ID
+        const uniqueVehiclesMap = new Map<string, CabType>();
+        
+        fetchedVehicles.forEach(vehicle => {
+          if (!uniqueVehiclesMap.has(vehicle.id)) {
+            uniqueVehiclesMap.set(vehicle.id, vehicle);
+          }
+        });
+        
+        const uniqueVehicles = Array.from(uniqueVehiclesMap.values());
+        console.log(`Filtered to ${uniqueVehicles.length} unique vehicles`);
+        
+        setVehicles(uniqueVehicles);
       } else if (retryCount < 3) {
         console.log("No vehicles returned, clearing cache and retrying...");
         clearVehicleDataCache();
