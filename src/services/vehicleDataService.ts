@@ -1,10 +1,11 @@
+
 import { CabType } from '@/types/cab';
 import { apiBaseUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
 import { OutstationFare, LocalFare, AirportFare } from '@/types/cab';
 
 // Reduced cache durations to ensure fresher data
-const JSON_CACHE_DURATION = 20 * 1000; // 20 seconds in milliseconds (reduced significantly)
-const API_CACHE_DURATION = 10 * 1000; // 10 seconds in milliseconds (reduced significantly)
+const JSON_CACHE_DURATION = 30 * 1000; // 30 seconds in milliseconds (reduced significantly)
+const API_CACHE_DURATION = 15 * 1000; // 15 seconds in milliseconds (reduced significantly)
 
 // Store fetched vehicle data in memory to reduce API calls
 let cachedVehicles: {
@@ -72,63 +73,37 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
   const now = Date.now();
   const cacheBuster = `_t=${now}`;
   
-  // Added longer cache durations to prevent excessive API calls
-  const EXTENDED_JSON_CACHE_DURATION = 30 * 1000; // 30 seconds in milliseconds
-  const EXTENDED_API_CACHE_DURATION = 20 * 1000; // 20 seconds in milliseconds
-  
-  // Use LS key based on admin view for separate caching
-  const cacheKey = includeInactive ? 'cachedAdminVehicles' : 'cachedVehicles';
-  const timestampKey = includeInactive ? 'cachedAdminVehiclesTimestamp' : 'cachedVehiclesTimestamp';
-  
-  // Create request tracking key to prevent duplicates
-  const requestInProgressKey = `vehicleRequest_${includeInactive ? 'admin' : 'user'}_inProgress`;
-  
-  // Check if we're already fetching this data
-  const requestInProgress = sessionStorage.getItem(requestInProgressKey);
-  if (requestInProgress && now - parseInt(requestInProgress, 10) < 5000) {
-    console.log("Vehicle data request already in progress, using cached data");
-    forceRefresh = false; // Don't force refresh if we're already fetching
-  }
-  
-  // Always force refresh for admin views when includeInactive is true, but don't do this more than once every 30 seconds
+  // Always force refresh for admin views when includeInactive is true
   if (includeInactive) {
-    const lastAdminRefresh = localStorage.getItem('lastAdminVehicleRefresh');
-    const shouldForceAdminRefresh = !lastAdminRefresh || now - parseInt(lastAdminRefresh, 10) > 30000;
-    forceRefresh = shouldForceAdminRefresh;
-    
-    if (forceRefresh) {
-      localStorage.setItem('lastAdminVehicleRefresh', now.toString());
-      console.log("Admin view detected, forcing refresh after 30s timeout");
-    } else {
-      console.log("Admin view detected, but skipping refresh due to timeout");
-    }
+    forceRefresh = true;
+    console.log("Admin view detected (includeInactive=true), forcing refresh");
   }
   
   // If not forcing refresh, try to use cached data
   if (!forceRefresh) {
     // First try API cache if it's recent
-    if (cachedVehicles.api && now - cachedVehicles.api.timestamp < EXTENDED_API_CACHE_DURATION) {
+    if (cachedVehicles.api && now - cachedVehicles.api.timestamp < API_CACHE_DURATION) {
       console.log('Using cached API vehicle data');
       return filterVehicles(cachedVehicles.api.data, includeInactive);
     }
     
     // Then try JSON cache if it's recent
-    if (cachedVehicles.json && now - cachedVehicles.json.timestamp < EXTENDED_JSON_CACHE_DURATION) {
+    if (cachedVehicles.json && now - cachedVehicles.json.timestamp < JSON_CACHE_DURATION) {
       console.log('Using cached JSON vehicle data');
       return filterVehicles(cachedVehicles.json.data, includeInactive);
     }
     
     // Try to load from localStorage as another cache layer
     try {
-      const cachedVehiclesString = localStorage.getItem(cacheKey);
-      const cachedVehiclesTimestamp = localStorage.getItem(timestampKey);
+      const cachedVehiclesString = localStorage.getItem('cachedVehicles');
+      const cachedVehiclesTimestamp = localStorage.getItem('cachedVehiclesTimestamp');
       
       if (cachedVehiclesString && cachedVehiclesTimestamp) {
         const timestamp = parseInt(cachedVehiclesTimestamp, 10);
         
-        // Use localStorage cache if it's less than 2 minutes old
-        if (now - timestamp < 120000) {
-          console.log(`Using localStorage cached vehicle data (${includeInactive ? 'admin' : 'user'} view)`);
+        // Use localStorage cache if it's less than 60 seconds old
+        if (now - timestamp < 60000) {
+          console.log('Using localStorage cached vehicle data');
           const vehicles = JSON.parse(cachedVehiclesString);
           
           // Cache the parsed data in memory too
@@ -147,9 +122,7 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
     console.log('Force refresh requested, skipping cache');
   }
   
-  // Mark that we're starting a request
-  sessionStorage.setItem(requestInProgressKey, now.toString());
-  
+  // Try to fetch from direct DB API first (with error handling)
   try {
     // Build the URL with includeInactive parameter
     const includeInactiveParam = includeInactive ? 'true' : 'false';
@@ -160,8 +133,7 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
     const fetchPromise = fetch(url, {
       headers: {
         ...forceRefreshHeaders,
-        'X-Admin-Mode': includeInactive ? 'true' : 'false',
-        'X-Cache-Buster': now.toString()
+        'X-Admin-Mode': includeInactive ? 'true' : 'false' // Add admin mode header
       },
       mode: 'cors',
       cache: 'no-store'
@@ -169,7 +141,7 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
     
     // Add timeout to the fetch
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Direct API request timeout')), 5000);
+      setTimeout(() => reject(new Error('Direct API request timeout')), 3000);
     });
     
     // Race the fetch against the timeout
@@ -187,48 +159,30 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
       // Process vehicle data to ensure correct format
       const processedVehicles = processVehicles(data.vehicles);
       
-      // Deduplicate vehicles by ID
-      const vehicleMap = new Map<string, CabType>();
-      processedVehicles.forEach(vehicle => {
-        if (!vehicleMap.has(vehicle.id)) {
-          vehicleMap.set(vehicle.id, vehicle);
-        }
-      });
-      
-      const uniqueVehicles = Array.from(vehicleMap.values());
-      console.log(`Deduplicated to ${uniqueVehicles.length} unique vehicles`);
-      
       // Cache the processed data
       cachedVehicles.api = {
-        data: uniqueVehicles,
+        data: processedVehicles,
         timestamp: now
       };
       
       // Cache to localStorage for persistence
       try {
-        localStorage.setItem(cacheKey, JSON.stringify(uniqueVehicles));
-        localStorage.setItem(timestampKey, now.toString());
+        localStorage.setItem('cachedVehicles', JSON.stringify(processedVehicles));
+        localStorage.setItem('cachedVehiclesTimestamp', now.toString());
       } catch (e) {
         console.error('Error caching vehicles to localStorage:', e);
       }
       
-      // Dispatch event to notify components about the refresh - only do this once every 10 seconds
-      const lastEventTime = sessionStorage.getItem('lastVehicleDataRefreshEvent');
-      if (!lastEventTime || now - parseInt(lastEventTime, 10) > 10000) {
-        window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
-          detail: { 
-            count: uniqueVehicles.length,
-            timestamp: now,
-            isAdminView: includeInactive
-          }
-        }));
-        sessionStorage.setItem('lastVehicleDataRefreshEvent', now.toString());
-      }
+      // Dispatch event to notify components about the refresh
+      window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
+        detail: { 
+          count: processedVehicles.length,
+          timestamp: now,
+          isAdminView: includeInactive
+        }
+      }));
       
-      // Clear the in-progress flag
-      sessionStorage.removeItem(requestInProgressKey);
-      
-      return filterVehicles(uniqueVehicles, includeInactive);
+      return filterVehicles(processedVehicles, includeInactive);
     } else {
       console.warn('Direct API returned empty or invalid vehicles array:', data);
       throw new Error('Direct API returned empty or invalid vehicles array');
@@ -250,7 +204,7 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
       const fetchPromise = fetch(url, {
         headers: forceRefresh ? {
           ...forceRefreshHeaders,
-          'X-Admin-Mode': includeInactive ? 'true' : 'false'
+          'X-Admin-Mode': includeInactive ? 'true' : 'false' // Add admin mode header
         } : defaultHeaders,
         mode: 'cors',
         cache: 'no-store'
@@ -285,27 +239,20 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
         
         // Cache to localStorage for persistence
         try {
-          localStorage.setItem(cacheKey, JSON.stringify(processedVehicles));
-          localStorage.setItem(timestampKey, now.toString());
+          localStorage.setItem('cachedVehicles', JSON.stringify(processedVehicles));
+          localStorage.setItem('cachedVehiclesTimestamp', now.toString());
         } catch (e) {
           console.error('Error caching vehicles to localStorage:', e);
         }
         
-        // Dispatch event to notify components about the refresh - only do this once every 10 seconds
-        const lastEventTime = sessionStorage.getItem('lastVehicleDataRefreshEvent');
-        if (!lastEventTime || now - parseInt(lastEventTime, 10) > 10000) {
-          window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
-            detail: { 
-              count: processedVehicles.length,
-              timestamp: now,
-              isAdminView: includeInactive
-            }
-          }));
-          sessionStorage.setItem('lastVehicleDataRefreshEvent', now.toString());
-        }
-        
-        // Clear the in-progress flag
-        sessionStorage.removeItem(requestInProgressKey);
+        // Dispatch event to notify components about the refresh
+        window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
+          detail: { 
+            count: processedVehicles.length,
+            timestamp: now,
+            isAdminView: includeInactive
+          }
+        }));
         
         return filterVehicles(processedVehicles, includeInactive);
       } else {
@@ -366,9 +313,6 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
     }
   }
   
-  // Clear the in-progress flag since we're done with attempts
-  sessionStorage.removeItem(requestInProgressKey);
-  
   // Check for fallback data from previous requests
   if (cachedVehicles.fallback && cachedVehicles.fallback.data.length > 0) {
     console.log('Using fallback cached vehicles data');
@@ -380,8 +324,8 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
   
   // Cache the defaults so they can be reused
   try {
-    localStorage.setItem(cacheKey, JSON.stringify(DEFAULT_VEHICLES));
-    localStorage.setItem(timestampKey, now.toString());
+    localStorage.setItem('cachedVehicles', JSON.stringify(DEFAULT_VEHICLES));
+    localStorage.setItem('cachedVehiclesTimestamp', now.toString());
   } catch (e) {
     console.error('Error caching default vehicles to localStorage:', e);
   }
@@ -391,19 +335,15 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
     timestamp: now
   };
   
-  // Dispatch event to notify components that we're using default vehicles - limit frequency
-  const lastEventTime = sessionStorage.getItem('lastVehicleDataRefreshEvent');
-  if (!lastEventTime || now - parseInt(lastEventTime, 10) > 10000) {
-    window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
-      detail: { 
-        count: DEFAULT_VEHICLES.length,
-        timestamp: now,
-        isAdminView: includeInactive,
-        isDefault: true
-      }
-    }));
-    sessionStorage.setItem('lastVehicleDataRefreshEvent', now.toString());
-  }
+  // Dispatch event to notify components that we're using default vehicles
+  window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
+    detail: { 
+      count: DEFAULT_VEHICLES.length,
+      timestamp: now,
+      isAdminView: includeInactive,
+      isDefault: true
+    }
+  }));
   
   return filterVehicles(DEFAULT_VEHICLES, includeInactive);
 };
@@ -443,45 +383,20 @@ function processVehicles(vehicles: any[]): CabType[] {
 // Function to directly clear vehicle data cache
 export const clearVehicleDataCache = () => {
   console.log('Clearing vehicle data cache');
-  
-  // Track when we last cleared cache to avoid doing it too often
-  const now = Date.now();
-  const lastCacheClear = sessionStorage.getItem('lastCacheClearTime');
-  
-  // Don't clear cache more often than every 5 seconds
-  if (lastCacheClear && now - parseInt(lastCacheClear, 10) < 5000) {
-    console.log('Cache was cleared recently, skipping duplicate clear');
-    return;
-  }
-  
   cachedVehicles = {};
-  
-  // Record this cache clear
-  sessionStorage.setItem('lastCacheClearTime', now.toString());
   
   // Clear localStorage cache too
   try {
     localStorage.removeItem('cachedVehicles');
     localStorage.removeItem('cachedVehiclesTimestamp');
-    localStorage.removeItem('cachedAdminVehicles');
-    localStorage.removeItem('cachedAdminVehiclesTimestamp');
-    localStorage.removeItem('vehicleData');
-    localStorage.removeItem('vehicleDataTimestamp');
-    localStorage.removeItem('vehicleDataActive');
-    localStorage.removeItem('fareCache');
-    localStorage.setItem('vehicleCacheInvalidated', now.toString());
   } catch (e) {
     console.error('Error clearing localStorage cache:', e);
   }
   
-  // Dispatch event to notify components - but limit this to once every 5 seconds
-  const lastEventTime = sessionStorage.getItem('lastCacheInvalidatedEvent');
-  if (!lastEventTime || now - parseInt(lastEventTime, 10) > 5000) {
-    window.dispatchEvent(new CustomEvent('vehicle-data-cache-cleared', {
-      detail: { timestamp: now }
-    }));
-    sessionStorage.setItem('lastCacheInvalidatedEvent', now.toString());
-  }
+  // Dispatch event to notify components
+  window.dispatchEvent(new CustomEvent('vehicle-data-cache-cleared', {
+    detail: { timestamp: Date.now() }
+  }));
 };
 
 /**

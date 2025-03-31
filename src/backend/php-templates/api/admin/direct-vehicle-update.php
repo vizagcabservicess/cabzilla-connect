@@ -145,8 +145,7 @@ try {
     
     while ($retries < $maxRetries && !$conn) {
         try {
-            // Fixed: Use the global DB_ constants from config.php instead of undefined DB_USER constant
-            $conn = new mysqli(DB_HOST, DB_USERNAME, DB_PASSWORD, DB_DATABASE);
+            $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
             
             if ($conn->connect_error) {
                 throw new Exception("Database connection failed: " . $conn->connect_error);

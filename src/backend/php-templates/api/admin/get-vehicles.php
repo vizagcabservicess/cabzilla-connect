@@ -2,93 +2,35 @@
 <?php
 /**
  * This API endpoint retrieves all vehicles from multiple tables and merges the data
- * Enhanced with better cache control and error handling
  */
 require_once '../../config.php';
 
-// Get start time for performance tracking
-$startTime = microtime(true);
-
-// Set headers for CORS with better cache control
+// Set headers for CORS
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Force-Refresh, X-Admin-Mode, X-Cache-Buster');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Force-Refresh, X-Admin-Mode');
 header('Content-Type: application/json');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 
 // Add debugging headers
 header('X-Debug-File: get-vehicles.php');
-header('X-API-Version: 1.0.3');
+header('X-API-Version: 1.0.1');
 header('X-Timestamp: ' . time());
-header('X-Response-Time: ' . (microtime(true) - $startTime));
 
-// Handle preflight OPTIONS request with a 200 OK
+// Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
 
-// Check for rate limiting - use visitor IP as key
-$visitorIP = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-$rateLimitKey = 'rate_limit_' . md5($visitorIP);
-$rateLimitTime = 5; // 5 seconds between requests
-$rateLimitFile = sys_get_temp_dir() . '/' . $rateLimitKey;
-
-// Check if rate limit file exists and is recent
-if (file_exists($rateLimitFile)) {
-    $lastRequestTime = file_get_contents($rateLimitFile);
-    if (time() - $lastRequestTime < $rateLimitTime) {
-        // Rate limited - tell client to use cached data
-        header('HTTP/1.1 429 Too Many Requests');
-        header('Retry-After: ' . $rateLimitTime);
-        echo json_encode([
-            'status' => 'rate_limited',
-            'message' => 'Too many requests. Please wait a few seconds before trying again.',
-            'retry_after' => $rateLimitTime,
-            'timestamp' => time()
-        ]);
-        exit;
-    }
-}
-
-// Update rate limit file
-file_put_contents($rateLimitFile, time());
-
 try {
-    // Check if config constants are defined and use them or fallback to environment variables
-    $dbHost = defined('DB_HOST') ? DB_HOST : getenv('DB_HOST');
-    $dbUser = defined('DB_USER') ? DB_USER : getenv('DB_USER');
-    $dbPass = defined('DB_PASS') ? DB_PASS : getenv('DB_PASS');
-    $dbName = defined('DB_NAME') ? DB_NAME : getenv('DB_NAME');
+    $conn = getDbConnection();
     
-    // Check for config values
-    if (empty($dbHost) || empty($dbUser) || empty($dbName)) {
-        // Try to get from various sources
-        $dbHost = $dbHost ?: $_ENV['DB_HOST'] ?? $_SERVER['DB_HOST'] ?? 'localhost';
-        $dbUser = $dbUser ?: $_ENV['DB_USER'] ?? $_SERVER['DB_USER'] ?? 'root';
-        $dbPass = $dbPass ?: $_ENV['DB_PASS'] ?? $_SERVER['DB_PASS'] ?? '';
-        $dbName = $dbName ?: $_ENV['DB_NAME'] ?? $_SERVER['DB_NAME'] ?? 'cabs_db';
-        
-        // Log the issue
-        error_log("Database configuration is incomplete in get-vehicles.php. Using fallbacks.");
-    }
-    
-    // Get database connection with retry logic
-    $conn = null;
-    $retries = 3;
-    
-    while ($retries > 0 && !$conn) {
-        try {
-            $conn = mysqli_connect($dbHost, $dbUser, $dbPass, $dbName);
-            if (!$conn) {
-                throw new Exception(mysqli_connect_error());
-            }
-        } catch (Exception $e) {
-            $retries--;
-            if ($retries === 0) {
-                throw $e; // Rethrow if all retries failed
-            }
-            usleep(500000); // Wait 0.5 seconds before retry
-        }
+    // Check if the connection was successful
+    if (!$conn) {
+        throw new Exception("Database connection failed");
     }
     
     // Get additional parameters
@@ -264,12 +206,12 @@ try {
         }
     }
     
-    // Convert to array and ensure uniqueness by ID
+    // Convert to array
     $vehiclesArray = array_values($allVehicles);
     
-    // Ensure each vehicle has required fields and IDs are properly set
+    // Ensure each vehicle has required fields
     foreach ($vehiclesArray as $key => $vehicle) {
-        // Ensure each vehicle has required fields
+        // Make sure essential fields exist
         $vehiclesArray[$key]['id'] = $vehicle['id'] ?? $vehicle['vehicleId'] ?? $vehicle['vehicle_id'] ?? '';
         $vehiclesArray[$key]['vehicleId'] = $vehicle['vehicleId'] ?? $vehicle['id'] ?? $vehicle['vehicle_id'] ?? '';
         $vehiclesArray[$key]['name'] = $vehicle['name'] ?? ucwords(str_replace('_', ' ', $vehicle['id'] ?? 'Unknown'));
@@ -313,21 +255,9 @@ try {
         return strcmp($a['name'], $b['name']);
     });
     
-    // Deduplicate vehicles by ID
-    $uniqueVehicles = [];
-    $seenIds = [];
-    
-    foreach ($vehiclesArray as $vehicle) {
-        $vehicleId = $vehicle['id'] ?? '';
-        if (!empty($vehicleId) && !in_array($vehicleId, $seenIds)) {
-            $uniqueVehicles[] = $vehicle;
-            $seenIds[] = $vehicleId;
-        }
-    }
-    
     // If no vehicles found, provide default vehicles
-    if (empty($uniqueVehicles)) {
-        $uniqueVehicles = [
+    if (empty($vehiclesArray)) {
+        $vehiclesArray = [
             [
                 'id' => 'sedan',
                 'vehicleId' => 'sedan',
@@ -379,85 +309,25 @@ try {
         ];
     }
     
-    // Return success response with execution time
-    $executionTime = microtime(true) - $startTime;
-    header('X-Execution-Time: ' . round($executionTime * 1000, 2) . 'ms');
-    
+    // Return success response
     echo json_encode([
         'status' => 'success',
         'message' => 'Vehicles retrieved successfully',
-        'vehicles' => $uniqueVehicles,
+        'vehicles' => $vehiclesArray,
         'source' => 'direct-db-query',
         'tables' => $existingTables,
         'includeInactive' => $includeInactive,
-        'timestamp' => time(),
-        'deduplication' => true,
-        'execution_time_ms' => round($executionTime * 1000, 2)
+        'timestamp' => time()
     ]);
     
 } catch (Exception $e) {
     error_log("Error in get-vehicles.php: " . $e->getMessage());
-    
-    // Return default vehicles as fallback with error status
-    $defaultVehicles = [
-        [
-            'id' => 'sedan',
-            'vehicleId' => 'sedan',
-            'name' => 'Sedan',
-            'capacity' => 4,
-            'luggageCapacity' => 2,
-            'price' => 2500,
-            'pricePerKm' => 14,
-            'image' => '/cars/sedan.png',
-            'amenities' => ['AC', 'Bottle Water', 'Music System'],
-            'description' => 'Comfortable sedan suitable for 4 passengers.',
-            'ac' => true,
-            'nightHaltCharge' => 700,
-            'driverAllowance' => 250,
-            'isActive' => true
-        ],
-        [
-            'id' => 'ertiga',
-            'vehicleId' => 'ertiga',
-            'name' => 'Ertiga',
-            'capacity' => 6,
-            'luggageCapacity' => 3,
-            'price' => 3200,
-            'pricePerKm' => 18,
-            'image' => '/cars/ertiga.png',
-            'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
-            'description' => 'Spacious SUV suitable for 6 passengers.',
-            'ac' => true,
-            'nightHaltCharge' => 1000,
-            'driverAllowance' => 250,
-            'isActive' => true
-        ],
-        [
-            'id' => 'innova_crysta',
-            'vehicleId' => 'innova_crysta',
-            'name' => 'Innova Crysta',
-            'capacity' => 7,
-            'luggageCapacity' => 4,
-            'price' => 3800,
-            'pricePerKm' => 20,
-            'image' => '/cars/innova.png',
-            'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
-            'description' => 'Premium SUV with ample space for 7 passengers.',
-            'ac' => true,
-            'nightHaltCharge' => 1000,
-            'driverAllowance' => 250,
-            'isActive' => true
-        ]
-    ];
-    
-    http_response_code(200); // Return 200 OK with fallback data instead of 500
+    http_response_code(500);
     echo json_encode([
-        'status' => 'success',
-        'message' => 'Error in database query, using fallback data',
-        'error' => $e->getMessage(),
-        'vehicles' => $defaultVehicles,
-        'source' => 'fallback',
+        'status' => 'error',
+        'message' => $e->getMessage(),
         'timestamp' => time(),
-        'execution_time_ms' => round((microtime(true) - $startTime) * 1000, 2)
+        'file' => 'get-vehicles.php',
+        'trace' => $e->getTraceAsString()
     ]);
 }
