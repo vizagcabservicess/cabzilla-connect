@@ -80,3 +80,6 @@ export type {
 
 // Add formatPrice export from cabData
 export { formatPrice } from './cabData';
+
+// Export the CabLoading component 
+export { CabLoading } from '@/components/cab-options/CabLoading';

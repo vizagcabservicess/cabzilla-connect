@@ -212,9 +212,10 @@ try {
     // Ensure each vehicle has required fields
     foreach ($vehiclesArray as $key => $vehicle) {
         // Make sure essential fields exist
-        $vehiclesArray[$key]['id'] = $vehicle['id'] ?? $vehicle['vehicleId'] ?? $vehicle['vehicle_id'];
-        $vehiclesArray[$key]['vehicleId'] = $vehicle['vehicleId'] ?? $vehicle['id'] ?? $vehicle['vehicle_id'];
-        $vehiclesArray[$key]['name'] = $vehicle['name'] ?? ucwords(str_replace('_', ' ', $vehicle['id']));
+        $vehiclesArray[$key]['id'] = $vehicle['id'] ?? $vehicle['vehicleId'] ?? $vehicle['vehicle_id'] ?? '';
+        $vehiclesArray[$key]['vehicleId'] = $vehicle['vehicleId'] ?? $vehicle['id'] ?? $vehicle['vehicle_id'] ?? '';
+        $vehiclesArray[$key]['name'] = $vehicle['name'] ?? ucwords(str_replace('_', ' ', $vehicle['id'] ?? 'Unknown'));
+        $vehiclesArray[$key]['description'] = $vehicle['description'] ?? $vehicle['name'] . ' vehicle';
         
         // Set defaults for missing fields
         if (!isset($vehicle['capacity'])) $vehiclesArray[$key]['capacity'] = 4;
@@ -244,6 +245,9 @@ try {
         if (!isset($vehicle['image']) || empty($vehicle['image'])) {
             $vehiclesArray[$key]['image'] = '/cars/sedan.png';
         }
+        
+        // Ensure required fields to fix errors
+        if (empty($vehiclesArray[$key]['id'])) $vehiclesArray[$key]['id'] = 'vehicle_' . $key;
     }
     
     // Sort vehicles by name

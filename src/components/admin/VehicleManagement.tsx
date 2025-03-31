@@ -31,6 +31,7 @@ import {
   deleteVehicle,
   syncVehicleData 
 } from '@/services/directVehicleService';
+import { getVehicleData } from '@/services/vehicleDataService';
 import { reloadCabTypes } from '@/lib/cabData';
 import { 
   Dialog,
@@ -42,6 +43,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { CabType } from '@/types/cab';
+import { CabLoading } from '@/components/cab-options/CabLoading';
 
 interface ExtendedVehicleType {
   id: string;
@@ -112,7 +114,24 @@ const VehicleManagement = () => {
     setRefreshInProgress(true);
     
     try {
-      let localVehicles: ExtendedVehicleType[] = [];
+      console.log('Fetching vehicles for admin view');
+      const directVehicles = await getVehicleData(true, true);
+      
+      if (directVehicles && directVehicles.length > 0) {
+        console.log(`Loaded ${directVehicles.length} vehicles directly from API/cache`);
+        setVehicles(directVehicles);
+        
+        try {
+          localStorage.setItem('cachedVehicles', JSON.stringify(directVehicles));
+          localStorage.setItem('cachedVehiclesTimestamp', Date.now().toString());
+        } catch (e) {
+          console.error('Error caching vehicles to localStorage:', e);
+        }
+        
+        setLoading(false);
+        setRefreshInProgress(false);
+        return;
+      }
       
       try {
         const storedVehicles = localStorage.getItem('cachedVehicles');
@@ -120,9 +139,7 @@ const VehicleManagement = () => {
           const parsedVehicles = JSON.parse(storedVehicles);
           if (Array.isArray(parsedVehicles) && parsedVehicles.length > 0) {
             console.log('Using locally cached vehicles:', parsedVehicles.length);
-            localVehicles = parsedVehicles;
-            
-            setVehicles(localVehicles);
+            setVehicles(parsedVehicles);
             setLoading(false);
           }
         }
@@ -203,9 +220,56 @@ const VehicleManagement = () => {
         console.error('Error processing pricing data:', e);
       }
       
-      if (combinedVehicles.length === 0 && localVehicles.length > 0) {
-        console.warn('No vehicles found from API or localStorage, using previously cached vehicles');
-        combinedVehicles.push(...localVehicles);
+      if (combinedVehicles.length === 0) {
+        console.log('No vehicles found - using default vehicles');
+        const defaultVehicles = [
+          {
+            id: 'sedan',
+            name: 'Sedan',
+            capacity: 4,
+            luggageCapacity: 2,
+            price: 2500,
+            pricePerKm: 14,
+            image: '/cars/sedan.png',
+            amenities: ['AC', 'Bottle Water', 'Music System'],
+            description: 'Comfortable sedan suitable for 4 passengers.',
+            ac: true,
+            nightHaltCharge: 700,
+            driverAllowance: 250,
+            isActive: true
+          },
+          {
+            id: 'ertiga',
+            name: 'Ertiga',
+            capacity: 6,
+            luggageCapacity: 3,
+            price: 3200,
+            pricePerKm: 18,
+            image: '/cars/ertiga.png',
+            amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
+            description: 'Spacious SUV suitable for 6 passengers.',
+            ac: true,
+            nightHaltCharge: 1000,
+            driverAllowance: 250,
+            isActive: true
+          },
+          {
+            id: 'innova_crysta',
+            name: 'Innova Crysta',
+            capacity: 7,
+            luggageCapacity: 4,
+            price: 3800,
+            pricePerKm: 20,
+            image: '/cars/innova.png',
+            amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
+            description: 'Premium SUV with ample space for 7 passengers.',
+            ac: true,
+            nightHaltCharge: 1000,
+            driverAllowance: 250,
+            isActive: true
+          }
+        ];
+        combinedVehicles.push(...defaultVehicles);
       }
       
       combinedVehicles.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
@@ -222,6 +286,60 @@ const VehicleManagement = () => {
     } catch (error) {
       console.error('Error fetching vehicles:', error);
       toast.error('Failed to load vehicles');
+      
+      try {
+        const defaultVehicles = [
+          {
+            id: 'sedan',
+            name: 'Sedan',
+            capacity: 4,
+            luggageCapacity: 2,
+            price: 2500,
+            pricePerKm: 14,
+            image: '/cars/sedan.png',
+            amenities: ['AC', 'Bottle Water', 'Music System'],
+            description: 'Comfortable sedan suitable for 4 passengers.',
+            ac: true,
+            nightHaltCharge: 700,
+            driverAllowance: 250,
+            isActive: true
+          },
+          {
+            id: 'ertiga',
+            name: 'Ertiga',
+            capacity: 6,
+            luggageCapacity: 3,
+            price: 3200,
+            pricePerKm: 18,
+            image: '/cars/ertiga.png',
+            amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
+            description: 'Spacious SUV suitable for 6 passengers.',
+            ac: true,
+            nightHaltCharge: 1000,
+            driverAllowance: 250,
+            isActive: true
+          },
+          {
+            id: 'innova_crysta',
+            name: 'Innova Crysta',
+            capacity: 7,
+            luggageCapacity: 4,
+            price: 3800,
+            pricePerKm: 20,
+            image: '/cars/innova.png',
+            amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
+            description: 'Premium SUV with ample space for 7 passengers.',
+            ac: true,
+            nightHaltCharge: 1000,
+            driverAllowance: 250,
+            isActive: true
+          }
+        ];
+        setVehicles(defaultVehicles);
+        localStorage.setItem('cachedVehicles', JSON.stringify(defaultVehicles));
+      } catch (e) {
+        console.error('Error setting default vehicles:', e);
+      }
     } finally {
       setLoading(false);
       
@@ -234,29 +352,6 @@ const VehicleManagement = () => {
       }, 3000);
     }
   }, [refreshInProgress]);
-  
-  useEffect(() => {
-    fetchVehicles();
-    
-    const handleVehicleUpdates = () => {
-      if (!refreshInProgress && !shouldThrottleRefresh()) {
-        console.log('Detected vehicle updates, refreshing data...');
-        fetchVehicles();
-      }
-    };
-    
-    window.addEventListener('vehicles-updated', handleVehicleUpdates);
-    window.addEventListener('vehicle-data-refreshed', handleVehicleUpdates);
-    
-    return () => {
-      window.removeEventListener('vehicles-updated', handleVehicleUpdates);
-      window.removeEventListener('vehicle-data-refreshed', handleVehicleUpdates);
-      
-      if (refreshTimeoutRef.current) {
-        clearTimeout(refreshTimeoutRef.current);
-      }
-    };
-  }, [fetchVehicles, refreshInProgress]);
   
   const handleRefreshData = useCallback(async () => {
     if (refreshInProgress) {
@@ -635,6 +730,29 @@ const VehicleManagement = () => {
     }
   }, [newVehicleName, newVehicleId]);
   
+  useEffect(() => {
+    fetchVehicles();
+    
+    const handleVehicleUpdates = () => {
+      if (!refreshInProgress && !shouldThrottleRefresh()) {
+        console.log('Detected vehicle updates, refreshing data...');
+        fetchVehicles();
+      }
+    };
+    
+    window.addEventListener('vehicles-updated', handleVehicleUpdates);
+    window.addEventListener('vehicle-data-refreshed', handleVehicleUpdates);
+    
+    return () => {
+      window.removeEventListener('vehicles-updated', handleVehicleUpdates);
+      window.removeEventListener('vehicle-data-refreshed', handleVehicleUpdates);
+      
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
+    };
+  }, [fetchVehicles, refreshInProgress]);
+  
   return (
     <div className="container p-4">
       <div className="flex justify-between items-center mb-6">
@@ -730,7 +848,7 @@ const VehicleManagement = () => {
       </div>
       
       {loading ? (
-        <div className="text-center p-4">Loading vehicles...</div>
+        <CabLoading />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {vehicles.length === 0 ? (
@@ -739,11 +857,11 @@ const VehicleManagement = () => {
             </div>
           ) : (
             vehicles.map((vehicle) => (
-              <Card key={vehicle.id} className={!vehicle.isActive ? "opacity-60" : ""}>
+              <Card key={vehicle.id || vehicle.vehicleId} className={!vehicle.isActive ? "opacity-60" : ""}>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <div>
                     <CardTitle>{vehicle.name}</CardTitle>
-                    <CardDescription>ID: {vehicle.id}</CardDescription>
+                    <CardDescription>ID: {vehicle.id || vehicle.vehicleId}</CardDescription>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Label htmlFor={`active-${vehicle.id}`} className="text-sm">

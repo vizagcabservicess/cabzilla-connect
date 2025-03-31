@@ -190,6 +190,14 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
           timestamp: now
         };
         
+        // Update localStorage for VehicleManagement component
+        try {
+          localStorage.setItem('cachedVehicles', JSON.stringify(processedVehicles));
+          localStorage.setItem('cachedVehiclesTimestamp', now.toString());
+        } catch (e) {
+          console.error('Error caching vehicles to localStorage:', e);
+        }
+        
         // Dispatch event to notify components
         window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
           detail: { 
@@ -239,6 +247,15 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
     
     // Last resort: use default vehicles
     console.log('Using default vehicles as last resort');
+    
+    // Cache the defaults so they can be reused
+    try {
+      localStorage.setItem('cachedVehicles', JSON.stringify(DEFAULT_VEHICLES));
+      localStorage.setItem('cachedVehiclesTimestamp', now.toString());
+    } catch (e) {
+      console.error('Error caching default vehicles to localStorage:', e);
+    }
+    
     cachedVehicles.fallback = {
       data: [...DEFAULT_VEHICLES],
       timestamp: now
@@ -271,7 +288,7 @@ function processVehicles(vehicles: any[]): CabType[] {
       pricePerKm: parseFloat(vehicle.pricePerKm || vehicle.price_per_km || '0'),
       image: vehicle.image || '/cars/sedan.png',
       amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC'],
-      description: vehicle.description || '',
+      description: vehicle.description || `${vehicle.name || 'Unknown'} vehicle`,
       ac: vehicle.ac === undefined ? true : Boolean(vehicle.ac),
       nightHaltCharge: parseFloat(vehicle.nightHaltCharge || vehicle.night_halt_charge || '0'),
       driverAllowance: parseFloat(vehicle.driverAllowance || vehicle.driver_allowance || '0'),
