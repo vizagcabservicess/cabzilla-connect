@@ -21,9 +21,28 @@ if (!function_exists('getDbConnection')) {
     require_once __DIR__ . '/../../config.php';
 }
 
-// Get raw input
-$raw_input = file_get_contents('php://input');
-error_log("Raw input for airport fare update: $raw_input", 3, __DIR__ . '/../../error.log');
+// Debugging - Log request details
+$requestMethod = $_SERVER['REQUEST_METHOD'];
+$requestHeaders = getallheaders();
+$rawInput = file_get_contents('php://input');
+error_log("Airport fare update request: Method=$requestMethod, Headers=" . json_encode($requestHeaders) . ", Raw input: $rawInput", 3, __DIR__ . '/../../error.log');
+
+// Try to extract request data from multiple sources
+$data = [];
+$json_data = json_decode($rawInput, true);
+if (json_last_error() === JSON_ERROR_NONE && !empty($json_data)) {
+    $data = $json_data;
+} else {
+    parse_str($rawInput, $form_data);
+    if (!empty($form_data)) {
+        $data = $form_data;
+    } else {
+        $data = $_POST ?: $_REQUEST ?: [];
+    }
+}
+
+// Log the request data
+error_log("Airport fare update request data: " . print_r($data, true), 3, __DIR__ . '/../../error.log');
 
 // Function to ensure tables exist
 function ensureTablesExist($conn) {
@@ -163,23 +182,6 @@ function ensureTablesExist($conn) {
     }
 }
 
-// Try to extract request data from multiple sources
-$data = [];
-$json_data = json_decode($raw_input, true);
-if (json_last_error() === JSON_ERROR_NONE && !empty($json_data)) {
-    $data = $json_data;
-} else {
-    parse_str($raw_input, $form_data);
-    if (!empty($form_data)) {
-        $data = $form_data;
-    } else {
-        $data = $_POST ?: $_REQUEST ?: [];
-    }
-}
-
-// Log the request data
-error_log("Airport fare update request data: " . print_r($data, true), 3, __DIR__ . '/../../error.log');
-
 // Establish database connection
 try {
     $conn = getDbConnection();
@@ -199,7 +201,9 @@ try {
     }
     
     if (empty($vehicleId)) {
-        throw new Exception("Vehicle ID is required");
+        // Log error and respond with detailed message about missing vehicle ID
+        error_log("Vehicle ID is required. Data received: " . json_encode($data));
+        throw new Exception("Vehicle ID is required. Please check form data and ensure 'vehicleId' field is present.");
     }
     
     // Check if vehicle exists in vehicle_types
@@ -357,6 +361,39 @@ try {
             $insertStmt->execute();
             $insertStmt->close();
             error_log("Inserted new record in vehicle_pricing for $vehicleId with trip_type $tripType");
+        }
+        
+        // Insert default records for other trip types if they don't exist
+        $otherTripTypes = ['outstation', 'local'];
+        foreach ($otherTripTypes as $otherTripType) {
+            $checkOtherStmt = $conn->prepare("SELECT id FROM vehicle_pricing WHERE vehicle_id = ? AND trip_type = ?");
+            $checkOtherStmt->bind_param("ss", $vehicleId, $otherTripType);
+            $checkOtherStmt->execute();
+            $checkOtherResult = $checkOtherStmt->get_result();
+            $checkOtherStmt->close();
+            
+            if ($checkOtherResult->num_rows === 0) {
+                // Default values for each trip type
+                $defaultBaseFare = ($otherTripType === 'outstation') ? 2000 : 1000;
+                $defaultPricePerKm = ($otherTripType === 'outstation') ? 15 : 12;
+                
+                $insertOtherStmt = $conn->prepare("
+                    INSERT INTO vehicle_pricing 
+                    (vehicle_id, trip_type, base_fare, price_per_km, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, NOW(), NOW())
+                ");
+                
+                $insertOtherStmt->bind_param("ssdd", 
+                    $vehicleId,
+                    $otherTripType,
+                    $defaultBaseFare,
+                    $defaultPricePerKm
+                );
+                
+                $insertOtherStmt->execute();
+                $insertOtherStmt->close();
+                error_log("Created default pricing for $vehicleId with trip_type $otherTripType");
+            }
         }
         
         // Commit transaction

@@ -5,12 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Database, FileWarning, HardDrive, RefreshCw, Check } from 'lucide-react';
+import { Loader2, Database, FileWarning, HardDrive, RefreshCw, Check, Wrench } from 'lucide-react';
 import { fareService } from '@/services/fareService';
 import { FareUpdateError } from '@/components/cab-options/FareUpdateError';
+import axios from 'axios';
+import { API_BASE_URL } from '@/config/api';
 
 export default function AdminDatabasePage() {
   const [isInitializing, setIsInitializing] = useState(false);
+  const [isFixing, setIsFixing] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<Error | null>(null);
   const [forceRecreate, setForceRecreate] = useState(false);
@@ -27,8 +30,7 @@ export default function AdminDatabasePage() {
       }
       params.append('verbose', 'true');
       
-      // Fixed: Call initializeDatabase without the forceRecreate parameter
-      // The initializeDatabase function implementation will handle the forceRecreate flag internally
+      // Call initializeDatabase
       const result = await fareService.initializeDatabase();
       setResult(result);
       
@@ -47,6 +49,38 @@ export default function AdminDatabasePage() {
     }
   };
 
+  const fixDatabaseTables = async () => {
+    setIsFixing(true);
+    setError(null);
+    
+    try {
+      // Call the new fix-database-tables.php endpoint
+      const response = await axios.get(`${API_BASE_URL}/admin/fix-database-tables.php`);
+      
+      if (response.data.status === 'success') {
+        toast.success('Database tables fixed successfully');
+        // Set result to show details of fixes
+        setResult({
+          status: 'success',
+          message: 'Database tables fixed successfully',
+          ...response.data
+        });
+        
+        // Clear any cached data
+        await fareService.clearFareCache();
+      } else {
+        toast.error('Database fix had issues');
+        setError(new Error('Database fix failed: ' + (response.data?.message || 'Unknown error')));
+      }
+    } catch (err) {
+      console.error('Error fixing database tables:', err);
+      setError(err instanceof Error ? err : new Error('Unknown error occurred'));
+      toast.error('Failed to fix database tables');
+    } finally {
+      setIsFixing(false);
+    }
+  };
+
   return (
     <div className="container mx-auto py-8">
       <h1 className="text-3xl font-bold mb-6">Database Management</h1>
@@ -54,6 +88,7 @@ export default function AdminDatabasePage() {
       <Tabs defaultValue="initialize">
         <TabsList className="mb-4">
           <TabsTrigger value="initialize">Initialize Database</TabsTrigger>
+          <TabsTrigger value="fix">Fix Database Issues</TabsTrigger>
           <TabsTrigger value="backup">Backup & Restore</TabsTrigger>
         </TabsList>
         
@@ -119,63 +154,47 @@ export default function AdminDatabasePage() {
               )}
             </CardFooter>
           </Card>
-          
-          {result && (
-            <Card className="mt-4">
-              <CardHeader>
-                <CardTitle className="text-lg">Initialization Results</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="bg-gray-50 p-4 rounded-md">
-                  <h3 className="font-medium mb-2">Status: {result.status}</h3>
-                  <p className="mb-2">{result.message}</p>
-                  
-                  {result.tables_created && result.tables_created.length > 0 && (
-                    <div className="mb-2">
-                      <h4 className="font-medium text-green-700">Tables Created:</h4>
-                      <ul className="list-disc pl-5">
-                        {result.tables_created.map((table: string, index: number) => (
-                          <li key={index}>{table}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  
-                  {result.tables_failed && result.tables_failed.length > 0 && (
-                    <div className="mb-2">
-                      <h4 className="font-medium text-red-700">Tables Failed:</h4>
-                      <ul className="list-disc pl-5">
-                        {result.tables_failed.map((table: string, index: number) => (
-                          <li key={index}>{table}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  
-                  {result.messages && result.messages.length > 0 && (
-                    <div>
-                      <h4 className="font-medium">Details:</h4>
-                      <ul className="list-disc pl-5">
-                        {result.messages.map((message: string, index: number) => (
-                          <li key={index}>{message}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-          
-          {error && (
-            <div className="mt-4">
-              <FareUpdateError 
-                error={error} 
-                title="Database Initialization Failed"
-                onRetry={initializeDatabase}
-              />
-            </div>
-          )}
+        </TabsContent>
+        
+        <TabsContent value="fix">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Wrench className="h-5 w-5" />
+                Fix Database Issues
+              </CardTitle>
+              <CardDescription>
+                Fix common database schema issues and ensure all tables have the required columns. Use this if you're experiencing problems with fare updates or missing data.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Alert className="mb-4">
+                <AlertTitle>Information</AlertTitle>
+                <AlertDescription>
+                  This will fix schema issues, add missing columns, and ensure all vehicles have proper pricing entries. It will not delete any data.
+                </AlertDescription>
+              </Alert>
+            </CardContent>
+            <CardFooter>
+              <Button
+                onClick={fixDatabaseTables}
+                disabled={isFixing}
+                className="bg-yellow-600 hover:bg-yellow-700"
+              >
+                {isFixing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Fixing...
+                  </>
+                ) : (
+                  <>
+                    <Wrench className="mr-2 h-4 w-4" />
+                    Fix Database Issues
+                  </>
+                )}
+              </Button>
+            </CardFooter>
+          </Card>
         </TabsContent>
         
         <TabsContent value="backup">
@@ -192,6 +211,111 @@ export default function AdminDatabasePage() {
           </Card>
         </TabsContent>
       </Tabs>
+      
+      {result && (
+        <Card className="mt-4">
+          <CardHeader>
+            <CardTitle className="text-lg">Operation Results</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="bg-gray-50 p-4 rounded-md">
+              <h3 className="font-medium mb-2">Status: {result.status}</h3>
+              <p className="mb-2">{result.message}</p>
+              
+              {result.details && (
+                <>
+                  {result.details.tables_fixed && result.details.tables_fixed.length > 0 && (
+                    <div className="mb-2">
+                      <h4 className="font-medium text-green-700">Tables Fixed:</h4>
+                      <ul className="list-disc pl-5">
+                        {result.details.tables_fixed.map((table: string, index: number) => (
+                          <li key={index}>{table}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  
+                  {result.details.vehicle_pricing_entries && result.details.vehicle_pricing_entries.length > 0 && (
+                    <div className="mb-2">
+                      <h4 className="font-medium text-green-700">Vehicle Pricing Entries:</h4>
+                      <ul className="list-disc pl-5">
+                        {result.details.vehicle_pricing_entries.map((entry: string, index: number) => (
+                          <li key={index}>{entry}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  
+                  {result.details.tables_failed && result.details.tables_failed.length > 0 && (
+                    <div className="mb-2">
+                      <h4 className="font-medium text-red-700">Tables Failed:</h4>
+                      <ul className="list-disc pl-5">
+                        {result.details.tables_failed.map((table: string, index: number) => (
+                          <li key={index}>{table}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  
+                  {result.details.errors && result.details.errors.length > 0 && (
+                    <div className="mb-2">
+                      <h4 className="font-medium text-red-700">Errors:</h4>
+                      <ul className="list-disc pl-5">
+                        {result.details.errors.map((error: string, index: number) => (
+                          <li key={index}>{error}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              )}
+              
+              {result.tables_created && result.tables_created.length > 0 && (
+                <div className="mb-2">
+                  <h4 className="font-medium text-green-700">Tables Created:</h4>
+                  <ul className="list-disc pl-5">
+                    {result.tables_created.map((table: string, index: number) => (
+                      <li key={index}>{table}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              
+              {result.tables_failed && result.tables_failed.length > 0 && (
+                <div className="mb-2">
+                  <h4 className="font-medium text-red-700">Tables Failed:</h4>
+                  <ul className="list-disc pl-5">
+                    {result.tables_failed.map((table: string, index: number) => (
+                      <li key={index}>{table}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              
+              {result.messages && result.messages.length > 0 && (
+                <div>
+                  <h4 className="font-medium">Details:</h4>
+                  <ul className="list-disc pl-5">
+                    {result.messages.map((message: string, index: number) => (
+                      <li key={index}>{message}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      
+      {error && (
+        <div className="mt-4">
+          <FareUpdateError 
+            error={error} 
+            title="Operation Failed"
+            onRetry={isInitializing ? initializeDatabase : fixDatabaseTables}
+          />
+        </div>
+      )}
     </div>
   );
 }
