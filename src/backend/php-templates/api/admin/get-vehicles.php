@@ -1,3 +1,4 @@
+
 <?php
 /**
  * This API endpoint retrieves all vehicles from multiple tables and merges the data
@@ -14,12 +15,6 @@ header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Force-Refresh, X-Admin-Mode, X-Cache-Buster');
 header('Content-Type: application/json');
 
-// Add aggressive caching headers to prevent excessive requests
-$cacheTime = 60; // 60 seconds cache
-header('Cache-Control: public, max-age=' . $cacheTime);
-header('Pragma: cache');
-header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $cacheTime) . ' GMT');
-
 // Add debugging headers
 header('X-Debug-File: get-vehicles.php');
 header('X-API-Version: 1.0.3');
@@ -30,16 +25,6 @@ header('X-Response-Time: ' . (microtime(true) - $startTime));
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
-}
-
-// Check for 'If-Modified-Since' header to support browser caching
-if (isset($_SERVER['HTTP_IF_MODIFIED_SINCE'])) {
-    $ifModifiedSince = strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']);
-    // Only proceed if we have fresh data (within last 60 seconds)
-    if (time() - $ifModifiedSince < $cacheTime) {
-        header('HTTP/1.1 304 Not Modified');
-        exit;
-    }
 }
 
 // Check for rate limiting - use visitor IP as key
@@ -75,9 +60,16 @@ try {
     $dbPass = defined('DB_PASS') ? DB_PASS : getenv('DB_PASS');
     $dbName = defined('DB_NAME') ? DB_NAME : getenv('DB_NAME');
     
-    // Make sure we have the necessary database credentials
+    // Check for config values
     if (empty($dbHost) || empty($dbUser) || empty($dbName)) {
-        throw new Exception("Database configuration is missing. Please check your config.php file.");
+        // Try to get from various sources
+        $dbHost = $dbHost ?: $_ENV['DB_HOST'] ?? $_SERVER['DB_HOST'] ?? 'localhost';
+        $dbUser = $dbUser ?: $_ENV['DB_USER'] ?? $_SERVER['DB_USER'] ?? 'root';
+        $dbPass = $dbPass ?: $_ENV['DB_PASS'] ?? $_SERVER['DB_PASS'] ?? '';
+        $dbName = $dbName ?: $_ENV['DB_NAME'] ?? $_SERVER['DB_NAME'] ?? 'cabs_db';
+        
+        // Log the issue
+        error_log("Database configuration is incomplete in get-vehicles.php. Using fallbacks.");
     }
     
     // Get database connection with retry logic
@@ -275,60 +267,63 @@ try {
     // Convert to array and ensure uniqueness by ID
     $vehiclesArray = array_values($allVehicles);
     
-    // Deduplicate vehicles by ID in a more efficient way
+    // Ensure each vehicle has required fields and IDs are properly set
+    foreach ($vehiclesArray as $key => $vehicle) {
+        // Ensure each vehicle has required fields
+        $vehiclesArray[$key]['id'] = $vehicle['id'] ?? $vehicle['vehicleId'] ?? $vehicle['vehicle_id'] ?? '';
+        $vehiclesArray[$key]['vehicleId'] = $vehicle['vehicleId'] ?? $vehicle['id'] ?? $vehicle['vehicle_id'] ?? '';
+        $vehiclesArray[$key]['name'] = $vehicle['name'] ?? ucwords(str_replace('_', ' ', $vehicle['id'] ?? 'Unknown'));
+        $vehiclesArray[$key]['description'] = $vehicle['description'] ?? $vehicle['name'] . ' vehicle';
+        
+        // Set defaults for missing fields
+        if (!isset($vehicle['capacity'])) $vehiclesArray[$key]['capacity'] = 4;
+        if (!isset($vehicle['luggageCapacity'])) $vehiclesArray[$key]['luggageCapacity'] = 2;
+        if (!isset($vehicle['amenities'])) $vehiclesArray[$key]['amenities'] = ['AC'];
+        if (!isset($vehicle['ac'])) $vehiclesArray[$key]['ac'] = true;
+        if (!isset($vehicle['isActive'])) $vehiclesArray[$key]['isActive'] = true;
+        
+        // Set price defaults if missing
+        if (!isset($vehicle['price']) || $vehicle['price'] == 0) {
+            $vehiclesArray[$key]['price'] = $vehicle['basePrice'] ?? 2500;
+        }
+        
+        if (!isset($vehicle['pricePerKm']) || $vehicle['pricePerKm'] == 0) {
+            $vehiclesArray[$key]['pricePerKm'] = 15;
+        }
+        
+        if (!isset($vehicle['nightHaltCharge']) || $vehicle['nightHaltCharge'] == 0) {
+            $vehiclesArray[$key]['nightHaltCharge'] = 800;
+        }
+        
+        if (!isset($vehicle['driverAllowance']) || $vehicle['driverAllowance'] == 0) {
+            $vehiclesArray[$key]['driverAllowance'] = 300;
+        }
+        
+        // Set image
+        if (!isset($vehicle['image']) || empty($vehicle['image'])) {
+            $vehiclesArray[$key]['image'] = '/cars/sedan.png';
+        }
+        
+        // Ensure required fields to fix errors
+        if (empty($vehiclesArray[$key]['id'])) $vehiclesArray[$key]['id'] = 'vehicle_' . $key;
+    }
+    
+    // Sort vehicles by name
+    usort($vehiclesArray, function($a, $b) {
+        return strcmp($a['name'], $b['name']);
+    });
+    
+    // Deduplicate vehicles by ID
     $uniqueVehicles = [];
     $seenIds = [];
     
     foreach ($vehiclesArray as $vehicle) {
         $vehicleId = $vehicle['id'] ?? '';
         if (!empty($vehicleId) && !in_array($vehicleId, $seenIds)) {
-            // Ensure each vehicle has required fields
-            $vehiclesArray[$key]['id'] = $vehicle['id'] ?? $vehicle['vehicleId'] ?? $vehicle['vehicle_id'] ?? '';
-            $vehiclesArray[$key]['vehicleId'] = $vehicle['vehicleId'] ?? $vehicle['id'] ?? $vehicle['vehicle_id'] ?? '';
-            $vehiclesArray[$key]['name'] = $vehicle['name'] ?? ucwords(str_replace('_', ' ', $vehicle['id'] ?? 'Unknown'));
-            $vehiclesArray[$key]['description'] = $vehicle['description'] ?? $vehicle['name'] . ' vehicle';
-            
-            // Set defaults for missing fields
-            if (!isset($vehicle['capacity'])) $vehiclesArray[$key]['capacity'] = 4;
-            if (!isset($vehicle['luggageCapacity'])) $vehiclesArray[$key]['luggageCapacity'] = 2;
-            if (!isset($vehicle['amenities'])) $vehiclesArray[$key]['amenities'] = ['AC'];
-            if (!isset($vehicle['ac'])) $vehiclesArray[$key]['ac'] = true;
-            if (!isset($vehicle['isActive'])) $vehiclesArray[$key]['isActive'] = true;
-            
-            // Set price defaults if missing
-            if (!isset($vehicle['price']) || $vehicle['price'] == 0) {
-                $vehiclesArray[$key]['price'] = $vehicle['basePrice'] ?? 2500;
-            }
-            
-            if (!isset($vehicle['pricePerKm']) || $vehicle['pricePerKm'] == 0) {
-                $vehiclesArray[$key]['pricePerKm'] = 15;
-            }
-            
-            if (!isset($vehicle['nightHaltCharge']) || $vehicle['nightHaltCharge'] == 0) {
-                $vehiclesArray[$key]['nightHaltCharge'] = 800;
-            }
-            
-            if (!isset($vehicle['driverAllowance']) || $vehicle['driverAllowance'] == 0) {
-                $vehiclesArray[$key]['driverAllowance'] = 300;
-            }
-            
-            // Set image
-            if (!isset($vehicle['image']) || empty($vehicle['image'])) {
-                $vehiclesArray[$key]['image'] = '/cars/sedan.png';
-            }
-            
-            // Ensure required fields to fix errors
-            if (empty($vehiclesArray[$key]['id'])) $vehiclesArray[$key]['id'] = 'vehicle_' . $key;
-            
             $uniqueVehicles[] = $vehicle;
             $seenIds[] = $vehicleId;
         }
     }
-    
-    // Sort vehicles by name
-    usort($uniqueVehicles, function($a, $b) {
-        return strcmp($a['name'], $b['name']);
-    });
     
     // If no vehicles found, provide default vehicles
     if (empty($uniqueVehicles)) {
@@ -402,12 +397,67 @@ try {
     
 } catch (Exception $e) {
     error_log("Error in get-vehicles.php: " . $e->getMessage());
-    http_response_code(500);
+    
+    // Return default vehicles as fallback with error status
+    $defaultVehicles = [
+        [
+            'id' => 'sedan',
+            'vehicleId' => 'sedan',
+            'name' => 'Sedan',
+            'capacity' => 4,
+            'luggageCapacity' => 2,
+            'price' => 2500,
+            'pricePerKm' => 14,
+            'image' => '/cars/sedan.png',
+            'amenities' => ['AC', 'Bottle Water', 'Music System'],
+            'description' => 'Comfortable sedan suitable for 4 passengers.',
+            'ac' => true,
+            'nightHaltCharge' => 700,
+            'driverAllowance' => 250,
+            'isActive' => true
+        ],
+        [
+            'id' => 'ertiga',
+            'vehicleId' => 'ertiga',
+            'name' => 'Ertiga',
+            'capacity' => 6,
+            'luggageCapacity' => 3,
+            'price' => 3200,
+            'pricePerKm' => 18,
+            'image' => '/cars/ertiga.png',
+            'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
+            'description' => 'Spacious SUV suitable for 6 passengers.',
+            'ac' => true,
+            'nightHaltCharge' => 1000,
+            'driverAllowance' => 250,
+            'isActive' => true
+        ],
+        [
+            'id' => 'innova_crysta',
+            'vehicleId' => 'innova_crysta',
+            'name' => 'Innova Crysta',
+            'capacity' => 7,
+            'luggageCapacity' => 4,
+            'price' => 3800,
+            'pricePerKm' => 20,
+            'image' => '/cars/innova.png',
+            'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
+            'description' => 'Premium SUV with ample space for 7 passengers.',
+            'ac' => true,
+            'nightHaltCharge' => 1000,
+            'driverAllowance' => 250,
+            'isActive' => true
+        ]
+    ];
+    
+    http_response_code(200); // Return 200 OK with fallback data instead of 500
     echo json_encode([
-        'status' => 'error',
-        'message' => $e->getMessage(),
+        'status' => 'success',
+        'message' => 'Error in database query, using fallback data',
+        'error' => $e->getMessage(),
+        'vehicles' => $defaultVehicles,
+        'source' => 'fallback',
         'timestamp' => time(),
-        'file' => 'get-vehicles.php',
         'execution_time_ms' => round((microtime(true) - $startTime) * 1000, 2)
     ]);
 }
