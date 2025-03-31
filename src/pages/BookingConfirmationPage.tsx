@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { useNavigate, useLocation } from 'react-router-dom';
-import { MapPin, Calendar, Car, CircleDollarSign, CheckCircle2, ArrowRight } from 'lucide-react';
+import { MapPin, Calendar, Car, CircleDollarSign, CheckCircle2, ArrowRight, Mail } from 'lucide-react';
 import { Navbar } from '@/components/Navbar';
 
 export default function BookingConfirmationPage() {
@@ -151,6 +151,19 @@ export default function BookingConfirmationPage() {
                   <div>
                     <p className="text-sm text-gray-500">Total Amount</p>
                     <p className="font-bold text-lg">₹{bookingDetails.totalPrice?.toLocaleString('en-IN')}</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start mt-4 p-3 bg-blue-50 rounded-md border border-blue-100">
+                  <Mail className="h-5 w-5 mr-3 text-blue-500 mt-1" />
+                  <div>
+                    <p className="text-sm font-medium text-blue-800">Email Confirmation</p>
+                    <p className="text-sm text-blue-600">
+                      A confirmation has been sent to your email{' '}
+                      {bookingDetails.guestDetails?.email && (
+                        <span className="font-medium">{bookingDetails.guestDetails.email}</span>
+                      )}
+                    </p>
                   </div>
                 </div>
               </div>

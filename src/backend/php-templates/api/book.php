@@ -2,6 +2,7 @@
 <?php
 // Adjust the path to config.php correctly
 require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/utils/email.php';
 
 // For CORS preflight request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -291,12 +292,24 @@ try {
         'createdAt' => $booking['created_at'],
         'updatedAt' => $booking['updated_at']
     ];
+    
+    // Send confirmation emails
+    $emailSuccess = [];
+    $emailSuccess['customer'] = sendBookingConfirmationEmail($formattedBooking);
+    $emailSuccess['admin'] = sendAdminNotificationEmail($formattedBooking);
+    
+    logError("Email sending results", [
+        'customer_email_sent' => $emailSuccess['customer'] ? 'yes' : 'no',
+        'admin_email_sent' => $emailSuccess['admin'] ? 'yes' : 'no',
+        'booking_id' => $bookingId
+    ]);
 
     // Send response
     sendJsonResponse([
         'status' => 'success',
         'message' => 'Booking created successfully',
-        'data' => $formattedBooking
+        'data' => $formattedBooking,
+        'emailSent' => $emailSuccess['customer']
     ], 201);
 
 } catch (Exception $e) {
@@ -314,4 +327,3 @@ try {
         'message' => 'Failed to create booking: ' . $e->getMessage()
     ], 500);
 }
-
