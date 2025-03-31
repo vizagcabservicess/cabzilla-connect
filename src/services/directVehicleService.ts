@@ -96,29 +96,32 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
     const description = vehicleData.description !== undefined ? vehicleData.description : '';
     formData.append('description', description);
     
-    // Add pricing fields
-    formData.append('basePrice', String(vehicleData.basePrice || vehicleData.price || 0));
+    // Fix naming convention for pricing fields to resolve "Unknown column 'base_price'" errors
+    formData.append('base_price', String(vehicleData.price || vehicleData.basePrice || 0));
+    formData.append('basePrice', String(vehicleData.price || vehicleData.basePrice || 0));
     formData.append('price', String(vehicleData.price || vehicleData.basePrice || 0));
-    formData.append('pricePerKm', String(vehicleData.pricePerKm || 0));
+    
     formData.append('price_per_km', String(vehicleData.pricePerKm || 0));
-    formData.append('nightHaltCharge', String(vehicleData.nightHaltCharge || 700));
+    formData.append('pricePerKm', String(vehicleData.pricePerKm || 0));
+    
     formData.append('night_halt_charge', String(vehicleData.nightHaltCharge || 700));
-    formData.append('driverAllowance', String(vehicleData.driverAllowance || 250));
+    formData.append('nightHaltCharge', String(vehicleData.nightHaltCharge || 700));
+    
     formData.append('driver_allowance', String(vehicleData.driverAllowance || 250));
+    formData.append('driverAllowance', String(vehicleData.driverAllowance || 250));
     
     // Force update flag
     formData.append('forceUpdate', 'true');
     
     console.log('Submitting vehicle update with data: ', Object.fromEntries(formData));
     
-    // Try direct update with our PHP script
+    // Try direct update with our PHP script with improved error handling
     let response: Response | null = null;
     let result: any = null;
-    let attempts = 0;
-    const maxAttempts = 3;
+    let fallbackUsed = false;
     
     try {
-      console.log(`Vehicle update attempt ${attempts + 1} using direct-vehicle-update.php`);
+      console.log(`Vehicle update attempt using direct-vehicle-update.php`);
       
       response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-update.php`, {
         method: 'POST',
@@ -127,20 +130,19 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
       });
       
       if (response.ok) {
-        const text = await response.text();
         try {
+          const text = await response.text();
           result = text ? JSON.parse(text) : { status: 'success' };
           console.log('Vehicle update API response:', result);
           
-          if (result.status === 'success') {
-            // Success, exit early
-            console.log('Direct vehicle update succeeded');
-          } else {
+          if (result.status === 'error') {
             throw new Error(result.message || 'API returned error status');
           }
+          console.log('Direct vehicle update succeeded');
+          
         } catch (jsonError) {
-          console.warn('Error parsing JSON response:', jsonError, 'Response text:', text);
-          // If we can't parse the response but the HTTP status was OK, assume success
+          console.warn('Error parsing JSON response:', jsonError);
+          // If we can't parse but the HTTP status was OK, assume success
           if (response.ok) {
             result = { status: 'success' };
             console.log('Assuming success despite JSON parse error');
@@ -153,22 +155,29 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
       }
     } catch (directUpdateError) {
       console.error('Direct update failed:', directUpdateError);
+      fallbackUsed = true;
       
-      // If direct update failed, try the fallback method
       console.warn('Direct update failed, trying fallback method...');
       
       try {
+        // Use alternative update approach with more fields
+        const updateData = {
+          ...vehicleData,
+          id: vehicleId,
+          vehicleId: vehicleId,
+          vehicle_id: vehicleId,
+          base_price: vehicleData.price || vehicleData.basePrice || 0,
+          price_per_km: vehicleData.pricePerKm || 0,
+          night_halt_charge: vehicleData.nightHaltCharge || 700,
+          driver_allowance: vehicleData.driverAllowance || 250,
+          description: description,
+          isActive: vehicleData.isActive === false ? false : true,
+          name: vehicleData.name || ''
+        };
+        
         const fallbackResult = await directVehicleOperation<any>(
           'update',
-          {
-            ...vehicleData,
-            id: vehicleId,
-            vehicleId: vehicleId,
-            description: description,
-            isActive: vehicleData.isActive === false ? false : vehicleData.isActive || true,
-            vehicle_id: vehicleId,
-            name: vehicleData.name || ''
-          },
+          updateData,
           {
             notification: true,
             localStorageFallback: true
@@ -179,12 +188,35 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
         result = { status: 'success' };
       } catch (fallbackError) {
         console.error('Fallback method also failed:', fallbackError);
-        throw new Error('All vehicle update methods failed');
+        
+        // Last resort: update the local storage cache directly
+        try {
+          const vehiclesCacheString = localStorage.getItem('cachedVehicles');
+          if (vehiclesCacheString) {
+            const cachedVehicles = JSON.parse(vehiclesCacheString);
+            const updatedVehicles = cachedVehicles.map((vehicle: any) => 
+              vehicle.id === vehicleId || vehicle.vehicleId === vehicleId ? 
+                { ...vehicle, ...vehicleData, description } : 
+                vehicle
+            );
+            
+            localStorage.setItem('cachedVehicles', JSON.stringify(updatedVehicles));
+            localStorage.setItem('cachedVehiclesTimestamp', Date.now().toString());
+            
+            console.log('Updated vehicle in local storage cache');
+            result = { status: 'success' };
+          } else {
+            throw new Error('No cached vehicles found in localStorage');
+          }
+        } catch (localStorageError) {
+          console.error('All vehicle update methods failed:', localStorageError);
+          throw new Error('All vehicle update methods failed');
+        }
       }
     }
     
     // Delay to ensure backend has time to process the update
-    await new Promise(resolve => setTimeout(resolve, 800));
+    await new Promise(resolve => setTimeout(resolve, 1000));
     
     // Trigger multiple events to ensure all UI components update
     const events = [

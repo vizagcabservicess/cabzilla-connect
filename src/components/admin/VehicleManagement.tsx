@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -24,7 +25,7 @@ export default function VehicleManagement() {
 
   const loadVehicles = useCallback(async () => {
     const now = Date.now();
-    if (now - lastRefreshTime < 3000 && lastRefreshTime !== 0) {
+    if (now - lastRefreshTime < 1000 && lastRefreshTime !== 0) {
       console.log("Refresh throttled, skipping...");
       return;
     }
@@ -60,18 +61,13 @@ export default function VehicleManagement() {
           if (deduplicatedVehicles[normalizedId]) {
             const existing = deduplicatedVehicles[normalizedId];
             
-            if (
-              (!existing.description && normalizedVehicle.description) ||
-              (!existing.name && normalizedVehicle.name) ||
-              (existing.name && normalizedVehicle.name && existing.name.length < normalizedVehicle.name.length)
-            ) {
-              deduplicatedVehicles[normalizedId] = {
-                ...existing,
-                ...normalizedVehicle,
-                description: normalizedVehicle.description || existing.description || '',
-                name: normalizedVehicle.name || existing.name || ''
-              };
-            }
+            // Merge the records, prioritizing longer description/name values
+            deduplicatedVehicles[normalizedId] = {
+              ...existing,
+              ...normalizedVehicle,
+              description: normalizedVehicle.description || existing.description || '',
+              name: normalizedVehicle.name || existing.name || ''
+            };
           } else {
             deduplicatedVehicles[normalizedId] = normalizedVehicle;
           }
@@ -85,12 +81,27 @@ export default function VehicleManagement() {
         console.log("No vehicles returned, clearing cache and retrying...");
         clearVehicleDataCache();
         setRetryCount(prev => prev + 1);
+        setTimeout(() => loadVehicles(), 800); // Retry after a short delay
       } else {
         toast.error("Failed to load vehicles. Please try refreshing the page.");
       }
     } catch (error) {
       console.error("Error loading vehicles:", error);
       toast.error("Failed to load vehicles. Please try refreshing the page.");
+      
+      // Try to recover from local storage cache if API fails
+      try {
+        const cachedVehiclesString = localStorage.getItem('cachedVehicles');
+        if (cachedVehiclesString) {
+          const cachedVehicles = JSON.parse(cachedVehiclesString);
+          if (Array.isArray(cachedVehicles) && cachedVehicles.length > 0) {
+            console.log("Recovered vehicles from localStorage cache");
+            setVehicles(cachedVehicles);
+          }
+        }
+      } catch (cacheError) {
+        console.error("Error recovering from cache:", cacheError);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -101,7 +112,8 @@ export default function VehicleManagement() {
     
     const handleVehicleDataUpdated = () => {
       console.log("Vehicle data updated event received");
-      loadVehicles();
+      // Delay reload slightly to ensure data is updated on server
+      setTimeout(() => loadVehicles(), 500);
     };
     
     window.addEventListener('vehicle-data-updated', handleVehicleDataUpdated);
@@ -130,11 +142,13 @@ export default function VehicleManagement() {
   };
 
   const handleAddVehicle = (newVehicle: CabType) => {
+    // Ensure the vehicle isn't already in the list by ID
     if (!vehicles.some(v => v.id === newVehicle.id)) {
       setVehicles((prev) => [...prev, newVehicle]);
     }
     toast.success(`Vehicle ${newVehicle.name} added successfully`);
     
+    // Clear cache and reload after a short delay to ensure server has processed the update
     setTimeout(() => {
       clearVehicleDataCache();
       loadVehicles();
@@ -142,12 +156,16 @@ export default function VehicleManagement() {
   };
 
   const handleEditVehicle = (updatedVehicle: CabType) => {
+    console.log("Handling edit vehicle callback with data:", updatedVehicle);
+    
+    // Update the vehicle in the list
     setVehicles((prev) =>
       prev.map((vehicle) =>
         vehicle.id === updatedVehicle.id ? {
           ...vehicle,
           ...updatedVehicle,
-          description: updatedVehicle.description || vehicle.description || ''
+          // Explicitly ensure description is updated
+          description: updatedVehicle.description 
         } : vehicle
       )
     );
@@ -156,6 +174,7 @@ export default function VehicleManagement() {
     
     setSelectedVehicle(null);
     
+    // Clear cache and reload after a short delay to ensure server has processed the update
     setTimeout(() => {
       clearVehicleDataCache();
       loadVehicles();
@@ -166,6 +185,7 @@ export default function VehicleManagement() {
     setVehicles((prev) => prev.filter((vehicle) => vehicle.id !== vehicleId));
     toast.success("Vehicle deleted successfully");
     
+    // Clear cache and reload after a delay
     setTimeout(() => {
       clearVehicleDataCache();
       loadVehicles();
@@ -245,7 +265,7 @@ export default function VehicleManagement() {
               vehicle={vehicle}
               onEdit={() => {
                 console.log("Selected vehicle for editing:", vehicle);
-                setSelectedVehicle(vehicle);
+                setSelectedVehicle({...vehicle}); // Clone to avoid reference issues
                 setIsEditDialogOpen(true);
               }}
               onDelete={handleDeleteVehicle}

@@ -137,6 +137,12 @@ if (is_array($amenities)) {
     }
 }
 
+// Determine pricing fields, ensuring both base_price and price are available
+$baseFare = $data['base_price'] ?? $data['basePrice'] ?? $data['price'] ?? 0;
+$pricePerKm = $data['pricePerKm'] ?? $data['price_per_km'] ?? 0;
+$nightHaltCharge = $data['nightHaltCharge'] ?? $data['night_halt_charge'] ?? 700;
+$driverAllowance = $data['driverAllowance'] ?? $data['driver_allowance'] ?? 250;
+
 // Establish DB connection with error handling
 try {
     $retries = 0;
@@ -178,7 +184,7 @@ try {
     // Set the connection mode to ensure stricter SQL
     $conn->query("SET SESSION sql_mode = 'STRICT_ALL_TABLES'");
     
-    // Check if vehicle_types table exists
+    // Check if vehicle_types table exists and create it if it doesn't with base_price included
     $tableResult = $conn->query("
         CREATE TABLE IF NOT EXISTS vehicle_types (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -191,6 +197,10 @@ try {
             amenities TEXT DEFAULT NULL,
             description TEXT DEFAULT NULL,
             is_active TINYINT(1) NOT NULL DEFAULT 1,
+            base_price DECIMAL(10,2) DEFAULT 0,
+            price_per_km DECIMAL(5,2) DEFAULT 0,
+            night_halt_charge DECIMAL(10,2) DEFAULT 700,
+            driver_allowance DECIMAL(10,2) DEFAULT 250,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
@@ -200,7 +210,29 @@ try {
         throw new Exception("Error creating vehicle_types table: " . $conn->error);
     }
     
-    file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Ensured vehicle_types table exists\n", FILE_APPEND);
+    // Check if the base_price column exists, add it if not
+    $checkBasePrice = $conn->query("SHOW COLUMNS FROM vehicle_types LIKE 'base_price'");
+    if ($checkBasePrice->num_rows === 0) {
+        $addBasePriceResult = $conn->query("ALTER TABLE vehicle_types ADD COLUMN base_price DECIMAL(10,2) DEFAULT 0 AFTER is_active");
+        if (!$addBasePriceResult) {
+            file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Error adding base_price column: " . $conn->error . "\n", FILE_APPEND);
+        } else {
+            file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Added base_price column to vehicle_types table\n", FILE_APPEND);
+        }
+    }
+    
+    // Also check for price_per_km column
+    $checkPricePerKm = $conn->query("SHOW COLUMNS FROM vehicle_types LIKE 'price_per_km'");
+    if ($checkPricePerKm->num_rows === 0) {
+        $addPricePerKmResult = $conn->query("ALTER TABLE vehicle_types ADD COLUMN price_per_km DECIMAL(5,2) DEFAULT 0 AFTER base_price");
+        if (!$addPricePerKmResult) {
+            file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Error adding price_per_km column: " . $conn->error . "\n", FILE_APPEND);
+        } else {
+            file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Added price_per_km column to vehicle_types table\n", FILE_APPEND);
+        }
+    }
+    
+    file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Ensured vehicle_types table exists with required columns\n", FILE_APPEND);
     
     // Check if vehicle already exists
     $checkStmt = $conn->prepare("SELECT id FROM vehicle_types WHERE vehicle_id = ?");
@@ -215,11 +247,14 @@ try {
     file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Checked if vehicle exists. Found: " . ($result->num_rows > 0 ? 'yes' : 'no') . "\n", FILE_APPEND);
     
     if ($result->num_rows > 0) {
-        // Update existing vehicle
+        // Update existing vehicle - include base_price and other price fields in the update
         $updateStmt = $conn->prepare("
             UPDATE vehicle_types 
             SET name = ?, capacity = ?, luggage_capacity = ?, is_active = ?, 
-                image = ?, ac = ?, amenities = ?, description = ?, updated_at = NOW() 
+                image = ?, ac = ?, amenities = ?, description = ?, 
+                base_price = ?, price_per_km = ?, 
+                night_halt_charge = ?, driver_allowance = ?,
+                updated_at = NOW() 
             WHERE vehicle_id = ?
         ");
         
@@ -228,7 +263,7 @@ try {
         }
         
         $updateStmt->bind_param(
-            "siiisisss", 
+            "siiisissddddss", 
             $name, 
             $capacity, 
             $luggageCapacity, 
@@ -236,7 +271,11 @@ try {
             $image, 
             $ac, 
             $amenitiesJson, 
-            $description, 
+            $description,
+            $baseFare,
+            $pricePerKm,
+            $nightHaltCharge,
+            $driverAllowance,
             $vehicleId
         );
         
@@ -247,11 +286,12 @@ try {
         $message = "Vehicle updated successfully";
         file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Vehicle updated successfully\n", FILE_APPEND);
     } else {
-        // Insert new vehicle
+        // Insert new vehicle - include base_price and other price fields in the insert
         $insertStmt = $conn->prepare("
             INSERT INTO vehicle_types 
-            (vehicle_id, name, capacity, luggage_capacity, is_active, image, ac, amenities, description) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (vehicle_id, name, capacity, luggage_capacity, is_active, image, ac, amenities, description,
+             base_price, price_per_km, night_halt_charge, driver_allowance) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
         
         if (!$insertStmt) {
@@ -259,7 +299,7 @@ try {
         }
         
         $insertStmt->bind_param(
-            "siiisiss", 
+            "siiisissdddd", 
             $vehicleId, 
             $name, 
             $capacity, 
@@ -268,7 +308,11 @@ try {
             $image, 
             $ac, 
             $amenitiesJson, 
-            $description
+            $description,
+            $baseFare,
+            $pricePerKm,
+            $nightHaltCharge,
+            $driverAllowance
         );
         
         if (!$insertStmt->execute()) {
@@ -299,12 +343,6 @@ try {
             UNIQUE KEY unique_vehicle_trip (vehicle_id, trip_type)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
-    
-    // Check if pricing exists
-    $baseFare = isset($data['basePrice']) ? floatval($data['basePrice']) : (isset($data['price']) ? floatval($data['price']) : 0);
-    $pricePerKm = isset($data['pricePerKm']) ? floatval($data['pricePerKm']) : 0;
-    $nightHaltCharge = isset($data['nightHaltCharge']) ? floatval($data['nightHaltCharge']) : 700;
-    $driverAllowance = isset($data['driverAllowance']) ? floatval($data['driverAllowance']) : 250;
     
     // Insert or update pricing for 'all' trip type
     $pricingUpdateResult = $conn->query("
@@ -386,9 +424,13 @@ try {
                 $vehicle['description'] = $description;
                 $vehicle['basePrice'] = $baseFare;
                 $vehicle['price'] = $baseFare;
+                $vehicle['base_price'] = $baseFare;
                 $vehicle['pricePerKm'] = $pricePerKm;
+                $vehicle['price_per_km'] = $pricePerKm;
                 $vehicle['nightHaltCharge'] = $nightHaltCharge;
+                $vehicle['night_halt_charge'] = $nightHaltCharge;
                 $vehicle['driverAllowance'] = $driverAllowance;
+                $vehicle['driver_allowance'] = $driverAllowance;
                 $vehicleFound = true;
                 break;
             }
@@ -403,10 +445,14 @@ try {
                 'capacity' => $capacity,
                 'luggageCapacity' => $luggageCapacity,
                 'basePrice' => $baseFare,
+                'base_price' => $baseFare,
                 'price' => $baseFare,
                 'pricePerKm' => $pricePerKm,
+                'price_per_km' => $pricePerKm,
                 'nightHaltCharge' => $nightHaltCharge,
+                'night_halt_charge' => $nightHaltCharge,
                 'driverAllowance' => $driverAllowance,
+                'driver_allowance' => $driverAllowance,
                 'image' => $image,
                 'amenities' => is_array($amenities) ? $amenities : [$amenities],
                 'description' => $description,

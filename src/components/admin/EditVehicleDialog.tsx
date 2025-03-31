@@ -35,8 +35,10 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
 
   useEffect(() => {
     if (vehicle) {
+      console.log("Selected vehicle for editing:", vehicle);
+      
       // Store the original vehicle for later comparison
-      setOriginalVehicle(vehicle);
+      setOriginalVehicle({...vehicle});
       
       // Convert amenities array to comma-separated string for the form input
       const amenitiesString = Array.isArray(vehicle.amenities) 
@@ -98,7 +100,12 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
           : originalVehicle?.amenities || [],
         id: vehicle.id, // Ensure ID remains unchanged
         vehicleId: vehicle.id, // Ensure vehicleId is also set correctly
-        description: formData.description || originalVehicle?.description || '' // Ensure description is always set
+        vehicle_id: vehicle.id, // Add snake_case version too
+        description: formData.description || '', // Explicitly set description, don't use originalVehicle.description as fallback
+        // Explicitly set pricing fields to resolve the 'base_price' error
+        basePrice: formData.price || originalVehicle?.price || 0,
+        price: formData.price || originalVehicle?.price || 0,
+        base_price: formData.price || originalVehicle?.price || 0
       };
       
       // Remove amenitiesString as it's not part of CabType
