@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Loader2, Plus, RefreshCw, Search, Tool } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Search, Wrench } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { VehicleCard } from "./VehicleCard";
 import { CabType } from "@/types/cab";
@@ -28,13 +28,11 @@ export default function VehicleManagement() {
     setIsFixingDb(true);
     
     try {
-      // Call the database fix endpoint
       const response = await fetch(`${apiBaseUrl}/api/admin/fix-vehicle-tables.php`);
       const data = await response.json();
       
       if (data.status === 'success') {
         toast.success("Database tables fixed successfully");
-        // Refresh the vehicle data
         await handleRefreshData();
       } else {
         toast.error("Failed to fix database tables: " + (data.message || "Unknown error"));
@@ -108,7 +106,7 @@ export default function VehicleManagement() {
         console.log("No vehicles returned, clearing cache and retrying...");
         clearVehicleDataCache();
         setRetryCount(prev => prev + 1);
-        setTimeout(() => loadVehicles(), 800); // Retry after a short delay
+        setTimeout(() => loadVehicles(), 800);
       } else {
         toast.error("Failed to load vehicles. Please try refreshing the page.");
       }
@@ -235,7 +233,7 @@ export default function VehicleManagement() {
               </>
             ) : (
               <>
-                <Tool className="h-4 w-4" />
+                <Wrench className="h-4 w-4" />
                 Fix Database
               </>
             )}
