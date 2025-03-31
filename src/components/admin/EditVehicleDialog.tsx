@@ -83,7 +83,7 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
       setUpdateAttempts(prev => prev + 1);
       setRetrying(false);
       
-      // Format the data
+      // Format the data - Ensure we're not sending duplicate or conflicting fields
       const vehicleData: CabType = {
         ...vehicle,
         ...formData,
@@ -91,16 +91,23 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
         amenities: formData.amenitiesString 
           ? formData.amenitiesString.split(',').map(item => item.trim()) 
           : vehicle.amenities,
-        id: vehicle.id // Ensure ID remains unchanged
+        id: vehicle.id, // Ensure ID remains unchanged
+        description: formData.description || vehicle.description || '' // Ensure description is always set
       };
+      
+      // Remove amenitiesString as it's not part of CabType
+      delete (vehicleData as any).amenitiesString;
       
       console.log('Submitting vehicle update with data:', vehicleData);
       
       // Update the vehicle
-      await updateVehicle(vehicle.id, vehicleData);
+      const updatedVehicle = await updateVehicle(vehicle.id, vehicleData);
+      
+      // Ensure description is properly preserved in the result
+      updatedVehicle.description = vehicleData.description;
       
       // Notify parent component
-      onEditVehicle(vehicleData);
+      onEditVehicle(updatedVehicle);
       
       // Success message
       toast.success(`Vehicle ${vehicleData.name} updated successfully`);

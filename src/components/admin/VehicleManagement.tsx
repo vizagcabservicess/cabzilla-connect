@@ -23,7 +23,7 @@ export default function VehicleManagement() {
   const [retryCount, setRetryCount] = useState(0);
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
 
-  // Debounced loadVehicles function to prevent excessive API calls
+  // Improved loadVehicles function to handle deduplication better
   const loadVehicles = useCallback(async () => {
     // Debounce: Only allow refresh every 5 seconds
     const now = Date.now();
@@ -42,23 +42,53 @@ export default function VehicleManagement() {
       console.log(`Loaded ${fetchedVehicles.length} vehicles for admin view:`, fetchedVehicles);
       
       if (fetchedVehicles && fetchedVehicles.length > 0) {
-        // Fix for duplicate vehicles - deduplicate by id
-        const uniqueVehiclesMap = new Map<string, CabType>();
+        // Improved deduplication - prefer entries with descriptions
+        const deduplicatedVehicles: Record<string, CabType> = {};
         
+        // First pass - add all vehicles to the map and normalize IDs
         fetchedVehicles.forEach(vehicle => {
-          // Ensure vehicle has an id
-          if (!vehicle.id) {
-            vehicle.id = vehicle.vehicleId || `vehicle_${Math.random().toString(36).substring(2, 9)}`;
-          }
+          // Normalize the ID and ensure it exists
+          const normalizedId = String(vehicle.id || vehicle.vehicleId || '').trim();
+          if (!normalizedId) return; // Skip vehicles with no ID
           
-          // Only add or replace if this vehicle has more complete data
-          if (!uniqueVehiclesMap.has(vehicle.id) || 
-              (uniqueVehiclesMap.get(vehicle.id)?.description === '' && vehicle.description)) {
-            uniqueVehiclesMap.set(vehicle.id, vehicle);
+          // Create a normalized vehicle object with consistent properties
+          const normalizedVehicle: CabType = {
+            ...vehicle,
+            id: normalizedId,
+            vehicleId: normalizedId,
+            description: vehicle.description || '', // Ensure description exists
+            isActive: vehicle.isActive === false ? false : true, // Normalize boolean
+            capacity: Number(vehicle.capacity || 4),
+            luggageCapacity: Number(vehicle.luggageCapacity || 2),
+            price: Number(vehicle.price || vehicle.basePrice || 0), 
+            pricePerKm: Number(vehicle.pricePerKm || 0),
+            amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC']
+          };
+          
+          // If this ID already exists in our map, choose the "better" entry
+          if (deduplicatedVehicles[normalizedId]) {
+            const existing = deduplicatedVehicles[normalizedId];
+            
+            // Only replace if this vehicle has more complete data
+            if (!existing.description && normalizedVehicle.description) {
+              deduplicatedVehicles[normalizedId] = normalizedVehicle;
+            } else if (!existing.name && normalizedVehicle.name) {
+              deduplicatedVehicles[normalizedId] = normalizedVehicle;
+            } else if (existing.name && normalizedVehicle.name && 
+                     existing.name.length < normalizedVehicle.name.length) {
+              // Prefer longer names as they're likely more complete
+              deduplicatedVehicles[normalizedId] = normalizedVehicle;
+            }
+          } else {
+            // First time seeing this ID, just add it
+            deduplicatedVehicles[normalizedId] = normalizedVehicle;
           }
         });
         
-        const uniqueVehicles = Array.from(uniqueVehiclesMap.values());
+        // Convert map back to array
+        const uniqueVehicles = Object.values(deduplicatedVehicles);
+        
+        console.log(`Deduplicated to ${uniqueVehicles.length} unique vehicles`);
         setVehicles(uniqueVehicles);
       } else if (retryCount < 3) {
         console.log("No vehicles returned, clearing cache and retrying...");
@@ -124,25 +154,28 @@ export default function VehicleManagement() {
   };
 
   const handleEditVehicle = (updatedVehicle: CabType) => {
+    // Preserve updates more carefully
     setVehicles((prev) =>
       prev.map((vehicle) =>
         vehicle.id === updatedVehicle.id ? {
-          ...updatedVehicle,
-          // Ensure description is properly updated
+          ...vehicle, // Start with the existing vehicle
+          ...updatedVehicle, // Apply all updates
+          // Extra safeguard for description
           description: updatedVehicle.description || vehicle.description || ''
         } : vehicle
       )
     );
+    
     toast.success(`Vehicle ${updatedVehicle.name} updated successfully`);
     
     // Clear the selected vehicle
     setSelectedVehicle(null);
     
-    // Refresh data to ensure consistency
+    // Refresh data to ensure consistency but with a longer delay
     setTimeout(() => {
       clearVehicleDataCache();
       loadVehicles();
-    }, 1000);
+    }, 1500);
   };
 
   const handleDeleteVehicle = (vehicleId: string) => {
@@ -157,8 +190,8 @@ export default function VehicleManagement() {
   };
 
   const filteredVehicles = vehicles.filter((vehicle) =>
-    vehicle.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    vehicle.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    vehicle.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    vehicle.id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (vehicle.description && vehicle.description.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
@@ -229,6 +262,7 @@ export default function VehicleManagement() {
               vehicle={vehicle}
               onEdit={() => {
                 // Make sure to select the complete vehicle object
+                console.log("Selected vehicle for editing:", vehicle);
                 setSelectedVehicle(vehicle);
                 setIsEditDialogOpen(true);
               }}

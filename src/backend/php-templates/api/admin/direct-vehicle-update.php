@@ -64,7 +64,7 @@ if (strpos($vehicleId, 'item-') === 0) {
 // Prepare the update data
 $name = $data['name'] ?? ucfirst(str_replace('_', ' ', $vehicleId));
 $capacity = (int)($data['capacity'] ?? 4);
-$luggageCapacity = (int)($data['luggageCapacity'] ?? 2);
+$luggageCapacity = (int)($data['luggageCapacity'] ?? $data['luggage_capacity'] ?? 2);
 
 // Handle boolean or integer isActive values - fixed to ensure proper conversion
 $isActive = 1; // Default to active
@@ -152,6 +152,9 @@ try {
                 throw new Exception("Database configuration not properly set. Please check config.php");
             }
             
+            // Log database connection attempt
+            file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Connecting to database: host=$db_host, user=$db_user, db=$db_name\n", FILE_APPEND);
+            
             $conn = new mysqli($db_host, $db_user, $db_pass, $db_name);
             
             if ($conn->connect_error) {
@@ -225,7 +228,7 @@ try {
         }
         
         $updateStmt->bind_param(
-            "siisisss", 
+            "siiisisss", 
             $name, 
             $capacity, 
             $luggageCapacity, 
@@ -256,7 +259,7 @@ try {
         }
         
         $insertStmt->bind_param(
-            "siiisisss", 
+            "siiisiss", 
             $vehicleId, 
             $name, 
             $capacity, 

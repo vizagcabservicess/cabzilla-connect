@@ -92,7 +92,7 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
     // Add ac flag
     formData.append('ac', vehicleData.ac === false ? '0' : '1');
     
-    // Make sure to include description
+    // Explicitly add description - ensure it's not undefined
     const description = vehicleData.description !== undefined ? vehicleData.description : '';
     formData.append('description', description);
     
@@ -111,78 +111,135 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
     
     console.log('Submitting vehicle update with data: ', Object.fromEntries(formData));
     
-    // First attempt - direct update
-    try {
-      const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-update.php`, {
-        method: 'POST',
-        body: formData,
-        headers: getBypassHeaders()
-      });
+    // Try 3 times with different content types
+    let response: Response | null = null;
+    let result: any = null;
+    let attempts = 0;
+    const maxAttempts = 3;
+    const contentTypes = [
+      'multipart/form-data',  // Default for FormData
+      'application/json',     // JSON format
+      'application/x-www-form-urlencoded' // URL encoded format
+    ];
+    
+    while (attempts < maxAttempts && (!result || result.status === 'error')) {
+      const contentType = contentTypes[attempts % contentTypes.length];
+      attempts++;
       
-      // Check if response is successful
-      if (response.ok) {
-        const result = await response.json();
-        console.log('Vehicle update API response:', result);
+      try {
+        let requestHeaders = getBypassHeaders();
+        let requestBody: any = formData;
         
-        if (result.status === 'success') {
-          // Fix: Ensure updated data includes any changes
-          const updatedVehicle = {
+        // For non-multipart requests, convert to appropriate format
+        if (contentType === 'application/json') {
+          const jsonData = Object.fromEntries(formData.entries());
+          requestBody = JSON.stringify(jsonData);
+          requestHeaders = {
+            ...requestHeaders,
+            'Content-Type': 'application/json'
+          };
+        } else if (contentType === 'application/x-www-form-urlencoded') {
+          const params = new URLSearchParams();
+          for (const [key, value] of formData.entries()) {
+            params.append(key, value as string);
+          }
+          requestBody = params;
+          requestHeaders = {
+            ...requestHeaders,
+            'Content-Type': 'application/x-www-form-urlencoded'
+          };
+        }
+        
+        console.log(`Vehicle update attempt ${attempts} using content-type: ${contentType}`);
+        
+        response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-update.php`, {
+          method: 'POST',
+          body: requestBody,
+          headers: requestHeaders
+        });
+        
+        if (response.ok) {
+          const text = await response.text();
+          try {
+            result = text ? JSON.parse(text) : { status: 'success' };
+            console.log('Vehicle update API response:', result);
+            
+            if (result.status === 'success') {
+              break; // Success, exit the loop
+            }
+          } catch (jsonError) {
+            console.warn('Error parsing JSON response:', jsonError, 'Response text:', text);
+            // If we can't parse the response but the HTTP status was OK, assume success
+            if (response.ok) {
+              result = { status: 'success' };
+              break;
+            }
+          }
+        } else {
+          console.warn(`Update attempt ${attempts} failed with status ${response.status}`);
+        }
+      } catch (requestError) {
+        console.error(`Update attempt ${attempts} error:`, requestError);
+      }
+      
+      // Short delay before retry
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    
+    // If we couldn't get a successful response after all attempts
+    if (!result || result.status !== 'success') {
+      // Try the directVehicleOperation helper as a last resort
+      console.warn('All direct update attempts failed, trying fallback method...');
+      
+      try {
+        const fallbackResult = await directVehicleOperation<any>(
+          'update',
+          {
             ...vehicleData,
             id: vehicleId,
             vehicleId: vehicleId,
-            description: description // Ensure description is properly set
-          };
-          
-          // Trigger event to notify components
-          window.dispatchEvent(new CustomEvent('vehicle-data-updated', {
-            detail: { vehicleId, timestamp: Date.now() }
-          }));
-          
-          // Clear cache to ensure fresh data
-          window.dispatchEvent(new CustomEvent('vehicle-data-cache-cleared', {
-            detail: { timestamp: Date.now() }
-          }));
-          
-          return updatedVehicle;
-        }
+            description: description,
+            isActive: vehicleData.isActive === false ? false : vehicleData.isActive || true,
+            vehicle_id: vehicleId,
+            name: vehicleData.name || ''
+          },
+          {
+            notification: true,
+            localStorageFallback: true
+          }
+        );
+        
+        console.log('Vehicle update succeeded via fallback method:', fallbackResult);
+        result = { status: 'success' };
+      } catch (fallbackError) {
+        console.error('Fallback method also failed:', fallbackError);
+        throw new Error('All vehicle update methods failed');
       }
-      
-      // If we get here, there was an error but we'll try the backup method
-      console.warn('Primary update method failed, trying fallback method...');
-    } catch (primaryError) {
-      console.error('Error in primary vehicle update method:', primaryError);
     }
     
-    // Fallback to the directVehicleOperation helper
-    const result = await directVehicleOperation<any>(
-      'update',
-      {
-        ...vehicleData,
-        id: vehicleId,
-        vehicleId: vehicleId,
-        // Ensure description is included
-        description: description,
-        // Ensure booleans are handled correctly
-        isActive: vehicleData.isActive === false ? false : vehicleData.isActive || true,
-        // Ensure these fields are always strings for PHP backend
-        vehicle_id: vehicleId,
-        name: vehicleData.name || ''
-      },
-      {
-        notification: true,
-        localStorageFallback: true
-      }
-    );
+    // Delay to ensure backend has time to process the update
+    await new Promise(resolve => setTimeout(resolve, 800));
     
-    // If we get here, the operation succeeded
-    console.log('Vehicle update succeeded via fallback method:', result);
+    // Trigger multiple events to ensure all UI components update
+    const events = [
+      new CustomEvent('vehicle-data-updated', {
+        detail: { vehicleId, timestamp: Date.now() }
+      }),
+      new CustomEvent('vehicle-data-cache-cleared', {
+        detail: { timestamp: Date.now() }
+      }),
+      new CustomEvent('vehicle-data-refreshed', {
+        detail: { vehicleId, timestamp: Date.now() }
+      })
+    ];
     
-    // Trigger event to notify components
-    window.dispatchEvent(new CustomEvent('vehicle-data-updated', {
-      detail: { vehicleId, timestamp: Date.now() }
-    }));
+    // Dispatch all events with slight delays between them
+    for (const event of events) {
+      window.dispatchEvent(event);
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
     
-    // Always return the updated vehicle data on success
+    // Return the updated vehicle data with confirmed description
     return {
       ...vehicleData,
       id: vehicleId,
