@@ -31,9 +31,13 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [updateAttempts, setUpdateAttempts] = useState(0);
   const [retrying, setRetrying] = useState(false);
+  const [originalVehicle, setOriginalVehicle] = useState<CabType | null>(null);
 
   useEffect(() => {
     if (vehicle) {
+      // Store the original vehicle for later comparison
+      setOriginalVehicle(vehicle);
+      
       // Convert amenities array to comma-separated string for the form input
       const amenitiesString = Array.isArray(vehicle.amenities) 
         ? vehicle.amenities.join(', ') 
@@ -84,15 +88,17 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
       setRetrying(false);
       
       // Format the data - Ensure we're not sending duplicate or conflicting fields
+      // Start with the original vehicle to preserve all fields
       const vehicleData: CabType = {
-        ...vehicle,
+        ...originalVehicle,
         ...formData,
         // Convert the amenitiesString back to an array
         amenities: formData.amenitiesString 
           ? formData.amenitiesString.split(',').map(item => item.trim()) 
-          : vehicle.amenities,
+          : originalVehicle?.amenities || [],
         id: vehicle.id, // Ensure ID remains unchanged
-        description: formData.description || vehicle.description || '' // Ensure description is always set
+        vehicleId: vehicle.id, // Ensure vehicleId is also set correctly
+        description: formData.description || originalVehicle?.description || '' // Ensure description is always set
       };
       
       // Remove amenitiesString as it's not part of CabType

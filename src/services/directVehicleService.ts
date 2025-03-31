@@ -111,85 +111,51 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
     
     console.log('Submitting vehicle update with data: ', Object.fromEntries(formData));
     
-    // Try 3 times with different content types
+    // Try direct update with our PHP script
     let response: Response | null = null;
     let result: any = null;
     let attempts = 0;
     const maxAttempts = 3;
-    const contentTypes = [
-      'multipart/form-data',  // Default for FormData
-      'application/json',     // JSON format
-      'application/x-www-form-urlencoded' // URL encoded format
-    ];
     
-    while (attempts < maxAttempts && (!result || result.status === 'error')) {
-      const contentType = contentTypes[attempts % contentTypes.length];
-      attempts++;
+    try {
+      console.log(`Vehicle update attempt ${attempts + 1} using direct-vehicle-update.php`);
       
-      try {
-        let requestHeaders = getBypassHeaders();
-        let requestBody: any = formData;
-        
-        // For non-multipart requests, convert to appropriate format
-        if (contentType === 'application/json') {
-          const jsonData = Object.fromEntries(formData.entries());
-          requestBody = JSON.stringify(jsonData);
-          requestHeaders = {
-            ...requestHeaders,
-            'Content-Type': 'application/json'
-          };
-        } else if (contentType === 'application/x-www-form-urlencoded') {
-          const params = new URLSearchParams();
-          for (const [key, value] of formData.entries()) {
-            params.append(key, value as string);
+      response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-update.php`, {
+        method: 'POST',
+        body: formData,
+        headers: getBypassHeaders()
+      });
+      
+      if (response.ok) {
+        const text = await response.text();
+        try {
+          result = text ? JSON.parse(text) : { status: 'success' };
+          console.log('Vehicle update API response:', result);
+          
+          if (result.status === 'success') {
+            // Success, exit early
+            console.log('Direct vehicle update succeeded');
+          } else {
+            throw new Error(result.message || 'API returned error status');
           }
-          requestBody = params;
-          requestHeaders = {
-            ...requestHeaders,
-            'Content-Type': 'application/x-www-form-urlencoded'
-          };
-        }
-        
-        console.log(`Vehicle update attempt ${attempts} using content-type: ${contentType}`);
-        
-        response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-update.php`, {
-          method: 'POST',
-          body: requestBody,
-          headers: requestHeaders
-        });
-        
-        if (response.ok) {
-          const text = await response.text();
-          try {
-            result = text ? JSON.parse(text) : { status: 'success' };
-            console.log('Vehicle update API response:', result);
-            
-            if (result.status === 'success') {
-              break; // Success, exit the loop
-            }
-          } catch (jsonError) {
-            console.warn('Error parsing JSON response:', jsonError, 'Response text:', text);
-            // If we can't parse the response but the HTTP status was OK, assume success
-            if (response.ok) {
-              result = { status: 'success' };
-              break;
-            }
+        } catch (jsonError) {
+          console.warn('Error parsing JSON response:', jsonError, 'Response text:', text);
+          // If we can't parse the response but the HTTP status was OK, assume success
+          if (response.ok) {
+            result = { status: 'success' };
+            console.log('Assuming success despite JSON parse error');
+          } else {
+            throw new Error('Failed to parse API response');
           }
-        } else {
-          console.warn(`Update attempt ${attempts} failed with status ${response.status}`);
         }
-      } catch (requestError) {
-        console.error(`Update attempt ${attempts} error:`, requestError);
+      } else {
+        throw new Error(`Update failed with status ${response.status}`);
       }
+    } catch (directUpdateError) {
+      console.error('Direct update failed:', directUpdateError);
       
-      // Short delay before retry
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-    
-    // If we couldn't get a successful response after all attempts
-    if (!result || result.status !== 'success') {
-      // Try the directVehicleOperation helper as a last resort
-      console.warn('All direct update attempts failed, trying fallback method...');
+      // If direct update failed, try the fallback method
+      console.warn('Direct update failed, trying fallback method...');
       
       try {
         const fallbackResult = await directVehicleOperation<any>(

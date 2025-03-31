@@ -145,7 +145,7 @@ try {
     
     while ($retries < $maxRetries && !$conn) {
         try {
-            // Use global variables defined in config.php instead of constants
+            // Use global variables defined in config.php
             global $db_host, $db_user, $db_pass, $db_name;
             
             if (empty($db_host) || empty($db_user) || empty($db_name)) {
