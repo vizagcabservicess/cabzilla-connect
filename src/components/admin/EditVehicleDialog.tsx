@@ -24,9 +24,15 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
 
   useEffect(() => {
     if (vehicle) {
+      // Convert amenities array to comma-separated string for the form input
+      const amenitiesString = Array.isArray(vehicle.amenities) 
+        ? vehicle.amenities.join(', ') 
+        : '';
+        
       setFormData({
         ...vehicle,
-        amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities.join(', ') : ''
+        // Store amenities as a string in a separate property for form handling
+        amenitiesString: amenitiesString
       });
     }
   }, [vehicle]);
@@ -63,9 +69,10 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
       const vehicleData: CabType = {
         ...vehicle,
         ...formData,
-        amenities: typeof formData.amenities === 'string' 
-          ? formData.amenities.split(',').map(item => item.trim()) 
-          : formData.amenities || vehicle.amenities,
+        // Convert the amenitiesString back to an array
+        amenities: formData.amenitiesString 
+          ? (formData.amenitiesString as string).split(',').map(item => item.trim()) 
+          : vehicle.amenities,
         id: vehicle.id // Ensure ID remains unchanged
       };
       
@@ -198,11 +205,11 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="amenities">Amenities (comma separated)</Label>
+            <Label htmlFor="amenitiesString">Amenities (comma separated)</Label>
             <Input
-              id="amenities"
-              name="amenities"
-              value={formData.amenities || ''}
+              id="amenitiesString"
+              name="amenitiesString"
+              value={formData.amenitiesString || ''}
               onChange={handleChange}
               placeholder="AC, Bottle Water, Music System"
             />
