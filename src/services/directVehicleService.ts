@@ -1,3 +1,4 @@
+
 import { CabType } from '@/types/cab';
 import { apiBaseUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
 import { getBypassHeaders, getForcedRequestConfig, formatDataForMultipart } from '@/config/requestConfig';
@@ -96,18 +97,23 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
     formData.append('description', description);
     
     // Fix naming convention for pricing fields to resolve "Unknown column 'base_price'" errors
-    formData.append('base_price', String(vehicleData.price || vehicleData.basePrice || 0));
-    formData.append('basePrice', String(vehicleData.price || vehicleData.basePrice || 0));
-    formData.append('price', String(vehicleData.price || vehicleData.basePrice || 0));
+    // Add both camelCase and snake_case versions to ensure compatibility
+    const basePrice = String(vehicleData.price || vehicleData.basePrice || 0);
+    formData.append('base_price', basePrice);
+    formData.append('basePrice', basePrice);
+    formData.append('price', basePrice);
     
-    formData.append('price_per_km', String(vehicleData.pricePerKm || 0));
-    formData.append('pricePerKm', String(vehicleData.pricePerKm || 0));
+    const pricePerKm = String(vehicleData.pricePerKm || 0);
+    formData.append('price_per_km', pricePerKm);
+    formData.append('pricePerKm', pricePerKm);
     
-    formData.append('night_halt_charge', String(vehicleData.nightHaltCharge || 700));
-    formData.append('nightHaltCharge', String(vehicleData.nightHaltCharge || 700));
+    const nightHaltCharge = String(vehicleData.nightHaltCharge || 700);
+    formData.append('night_halt_charge', nightHaltCharge);
+    formData.append('nightHaltCharge', nightHaltCharge);
     
-    formData.append('driver_allowance', String(vehicleData.driverAllowance || 250));
-    formData.append('driverAllowance', String(vehicleData.driverAllowance || 250));
+    const driverAllowance = String(vehicleData.driverAllowance || 250);
+    formData.append('driver_allowance', driverAllowance);
+    formData.append('driverAllowance', driverAllowance);
     
     // Force update flag
     formData.append('forceUpdate', 'true');
@@ -164,10 +170,11 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
           ...vehicleData,
           id: vehicleId,
           vehicleId: vehicleId,
-          base_price: vehicleData.price || vehicleData.basePrice || 0,
-          price_per_km: vehicleData.pricePerKm || 0,
-          night_halt_charge: vehicleData.nightHaltCharge || 700,
-          driver_allowance: vehicleData.driverAllowance || 250,
+          // Don't include vehicle_id in the object as it's not in CabType
+          basePrice: vehicleData.price || vehicleData.basePrice || 0,
+          pricePerKm: vehicleData.pricePerKm || 0,
+          nightHaltCharge: vehicleData.nightHaltCharge || 700,
+          driverAllowance: vehicleData.driverAllowance || 250,
           description: description,
           isActive: vehicleData.isActive === false ? false : true,
           name: vehicleData.name || ''

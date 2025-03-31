@@ -16,7 +16,7 @@ header('Expires: 0');
 
 // Add debugging headers
 header('X-Debug-File: get-vehicles.php');
-header('X-API-Version: 1.0.2');
+header('X-API-Version: 1.0.3');
 header('X-Timestamp: ' . time());
 
 // Handle preflight OPTIONS request
@@ -56,6 +56,29 @@ try {
         'airport_transfer_fares'
     ];
     
+    // Check for base_price column in tables and add if missing
+    $checkTables = ["vehicles", "vehicle_types"];
+    foreach ($checkTables as $table) {
+        $result = $conn->query("SHOW TABLES LIKE '$table'");
+        if ($result && $result->num_rows > 0) {
+            // Check if base_price column exists
+            $columnsResult = $conn->query("SHOW COLUMNS FROM `$table` LIKE 'base_price'");
+            if ($columnsResult && $columnsResult->num_rows == 0) {
+                // Add base_price column if it doesn't exist
+                $conn->query("ALTER TABLE `$table` ADD COLUMN `base_price` DECIMAL(10,2) DEFAULT 0");
+                error_log("Added base_price column to $table table");
+            }
+            
+            // Check if price_per_km column exists
+            $columnsResult = $conn->query("SHOW COLUMNS FROM `$table` LIKE 'price_per_km'");
+            if ($columnsResult && $columnsResult->num_rows == 0) {
+                // Add price_per_km column if it doesn't exist
+                $conn->query("ALTER TABLE `$table` ADD COLUMN `price_per_km` DECIMAL(5,2) DEFAULT 0");
+                error_log("Added price_per_km column to $table table");
+            }
+        }
+    }
+    
     $existingTables = [];
     foreach ($tables as $table) {
         $result = $conn->query("SHOW TABLES LIKE '$table'");
@@ -68,39 +91,7 @@ try {
     $allVehicles = [];
     $vehicleIds = [];
     
-    // First get from vehicle_types table (primary table)
-    if (in_array('vehicle_types', $existingTables)) {
-        $vehicleTypesQuery = "SELECT * FROM vehicle_types";
-        if (!$includeInactive) {
-            $vehicleTypesQuery .= " WHERE is_active = 1";
-        }
-        
-        $vehicleTypesResult = $conn->query($vehicleTypesQuery);
-        
-        if ($vehicleTypesResult) {
-            while ($row = $vehicleTypesResult->fetch_assoc()) {
-                // Convert snake_case to camelCase
-                $camelCaseRow = [];
-                foreach ($row as $key => $value) {
-                    // Convert snake_case to camelCase
-                    $camelKey = preg_replace_callback('/_([a-z])/', function($matches) {
-                        return ucfirst($matches[1]);
-                    }, $key);
-                    
-                    $camelCaseRow[$camelKey] = $value;
-                }
-                
-                // Add special key mappings
-                $camelCaseRow['vehicleId'] = $row['vehicle_id'];
-                $camelCaseRow['isActive'] = (bool)$row['is_active'];
-                
-                $allVehicles[$row['vehicle_id']] = $camelCaseRow;
-                $vehicleIds[] = "'" . $conn->real_escape_string($row['vehicle_id']) . "'";
-            }
-        }
-    }
-    
-    // Then get from vehicles table (if exists)
+    // First get from vehicles table (primary source)
     if (in_array('vehicles', $existingTables)) {
         $vehiclesQuery = "SELECT * FROM vehicles";
         if (!$includeInactive) {
@@ -126,56 +117,81 @@ try {
                 
                 // Add special key mappings
                 $camelCaseRow['vehicleId'] = $vehicleId;
+                $camelCaseRow['id'] = $vehicleId;
+                $camelCaseRow['isActive'] = isset($row['is_active']) ? (bool)$row['is_active'] : true;
+                
+                $allVehicles[$vehicleId] = $camelCaseRow;
+                $vehicleIds[] = "'" . $conn->real_escape_string($vehicleId) . "'";
+            }
+        }
+    }
+    
+    // Then get from vehicle_types table to merge or add entries
+    if (in_array('vehicle_types', $existingTables)) {
+        $vehicleTypesQuery = "SELECT * FROM vehicle_types";
+        if (!$includeInactive) {
+            $vehicleTypesQuery .= " WHERE is_active = 1 OR is_active IS NULL";
+        }
+        
+        $vehicleTypesResult = $conn->query($vehicleTypesQuery);
+        
+        if ($vehicleTypesResult) {
+            while ($row = $vehicleTypesResult->fetch_assoc()) {
+                $vehicleId = $row['vehicle_id'];
+                
+                // Convert snake_case to camelCase
+                $camelCaseRow = [];
+                foreach ($row as $key => $value) {
+                    // Convert snake_case to camelCase
+                    $camelKey = preg_replace_callback('/_([a-z])/', function($matches) {
+                        return ucfirst($matches[1]);
+                    }, $key);
+                    
+                    $camelCaseRow[$camelKey] = $value;
+                }
+                
+                // Add special key mappings
+                $camelCaseRow['vehicleId'] = $vehicleId;
+                $camelCaseRow['id'] = $vehicleId;
                 $camelCaseRow['isActive'] = isset($row['is_active']) ? (bool)$row['is_active'] : true;
                 
                 if (!isset($allVehicles[$vehicleId])) {
                     $allVehicles[$vehicleId] = $camelCaseRow;
                     $vehicleIds[] = "'" . $conn->real_escape_string($vehicleId) . "'";
                 } else {
-                    // Merge with existing vehicle data - but preserve description if already set
+                    // Merge with existing vehicle data (prioritize longer description/name values)
                     if (empty($allVehicles[$vehicleId]['description']) && !empty($camelCaseRow['description'])) {
                         $allVehicles[$vehicleId]['description'] = $camelCaseRow['description'];
                     }
-                    $allVehicles[$vehicleId] = array_merge($allVehicles[$vehicleId], $camelCaseRow);
-                }
-            }
-        }
-    }
-    
-    // Get pricing data from vehicle_pricing table (if exists)
-    if (in_array('vehicle_pricing', $existingTables) && count($vehicleIds) > 0) {
-        $vehicleIdsString = implode(',', $vehicleIds);
-        $pricingQuery = "
-            SELECT vp.vehicle_id, vp.trip_type, vp.base_fare, vp.price_per_km, 
-                   vp.driver_allowance, vp.night_halt_charge
-            FROM vehicle_pricing vp
-            WHERE vp.vehicle_id IN ($vehicleIdsString) AND vp.trip_type = 'outstation'
-        ";
-        
-        $pricingResult = $conn->query($pricingQuery);
-        
-        if ($pricingResult) {
-            while ($row = $pricingResult->fetch_assoc()) {
-                $vehicleId = $row['vehicle_id'];
-                
-                if (isset($allVehicles[$vehicleId])) {
-                    // Add pricing data
-                    $allVehicles[$vehicleId]['basePrice'] = $row['base_fare'];
-                    $allVehicles[$vehicleId]['pricePerKm'] = $row['price_per_km'];
-                    $allVehicles[$vehicleId]['driverAllowance'] = $row['driver_allowance'];
-                    $allVehicles[$vehicleId]['nightHaltCharge'] = $row['night_halt_charge'];
                     
-                    // Also add snake_case versions
-                    $allVehicles[$vehicleId]['base_price'] = $row['base_fare'];
-                    $allVehicles[$vehicleId]['price_per_km'] = $row['price_per_km'];
-                    $allVehicles[$vehicleId]['driver_allowance'] = $row['driver_allowance'];
-                    $allVehicles[$vehicleId]['night_halt_charge'] = $row['night_halt_charge'];
+                    if (empty($allVehicles[$vehicleId]['basePrice']) && !empty($camelCaseRow['basePrice'])) {
+                        $allVehicles[$vehicleId]['basePrice'] = $camelCaseRow['basePrice'];
+                    }
+                    
+                    if (empty($allVehicles[$vehicleId]['pricePerKm']) && !empty($camelCaseRow['pricePerKm'])) {
+                        $allVehicles[$vehicleId]['pricePerKm'] = $camelCaseRow['pricePerKm'];
+                    }
+                    
+                    // Merge other fields with priority to non-empty values from vehicle_types
+                    foreach ($camelCaseRow as $key => $value) {
+                        // Skip id and vehicleId fields
+                        if ($key === 'id' || $key === 'vehicleId') continue;
+                        
+                        // If the value is not empty and different from the existing value
+                        if (!empty($value) && 
+                            (empty($allVehicles[$vehicleId][$key]) || 
+                             $allVehicles[$vehicleId][$key] === '0' || 
+                             $allVehicles[$vehicleId][$key] === 0 || 
+                             $allVehicles[$vehicleId][$key] === '')) {
+                            $allVehicles[$vehicleId][$key] = $value;
+                        }
+                    }
                 }
             }
         }
     }
     
-    // Get outstation fares if available
+    // Get pricing data from outstation_fares table (if exists)
     if (in_array('outstation_fares', $existingTables) && count($vehicleIds) > 0) {
         $vehicleIdsString = implode(',', $vehicleIds);
         $outstationQuery = "
@@ -192,22 +208,67 @@ try {
                 
                 if (isset($allVehicles[$vehicleId])) {
                     // Update prices if not already set
-                    if (!isset($allVehicles[$vehicleId]['basePrice']) || $allVehicles[$vehicleId]['basePrice'] == 0) {
+                    if (empty($allVehicles[$vehicleId]['basePrice']) || $allVehicles[$vehicleId]['basePrice'] == 0) {
                         $allVehicles[$vehicleId]['basePrice'] = $row['base_price'];
                         $allVehicles[$vehicleId]['base_price'] = $row['base_price'];
                     }
                     
-                    if (!isset($allVehicles[$vehicleId]['pricePerKm']) || $allVehicles[$vehicleId]['pricePerKm'] == 0) {
+                    if (empty($allVehicles[$vehicleId]['pricePerKm']) || $allVehicles[$vehicleId]['pricePerKm'] == 0) {
                         $allVehicles[$vehicleId]['pricePerKm'] = $row['price_per_km'];
                         $allVehicles[$vehicleId]['price_per_km'] = $row['price_per_km'];
                     }
                     
-                    if (!isset($allVehicles[$vehicleId]['driverAllowance']) || $allVehicles[$vehicleId]['driverAllowance'] == 0) {
+                    if (empty($allVehicles[$vehicleId]['driverAllowance']) || $allVehicles[$vehicleId]['driverAllowance'] == 0) {
                         $allVehicles[$vehicleId]['driverAllowance'] = $row['driver_allowance'];
                         $allVehicles[$vehicleId]['driver_allowance'] = $row['driver_allowance'];
                     }
                     
-                    if (!isset($allVehicles[$vehicleId]['nightHaltCharge']) || $allVehicles[$vehicleId]['nightHaltCharge'] == 0) {
+                    if (empty($allVehicles[$vehicleId]['nightHaltCharge']) || $allVehicles[$vehicleId]['nightHaltCharge'] == 0) {
+                        $allVehicles[$vehicleId]['nightHaltCharge'] = $row['night_halt_charge'];
+                        $allVehicles[$vehicleId]['night_halt_charge'] = $row['night_halt_charge'];
+                    }
+                }
+            }
+        }
+    }
+    
+    // Get pricing data from vehicle_pricing table (if exists)
+    if (in_array('vehicle_pricing', $existingTables) && count($vehicleIds) > 0) {
+        $vehicleIdsString = implode(',', $vehicleIds);
+        $pricingQuery = "
+            SELECT vp.vehicle_id, vp.trip_type, vp.base_fare, vp.price_per_km, 
+                   vp.driver_allowance, vp.night_halt_charge, vp.base_price
+            FROM vehicle_pricing vp
+            WHERE vp.vehicle_id IN ($vehicleIdsString) AND vp.trip_type = 'outstation'
+        ";
+        
+        $pricingResult = $conn->query($pricingQuery);
+        
+        if ($pricingResult) {
+            while ($row = $pricingResult->fetch_assoc()) {
+                $vehicleId = $row['vehicle_id'];
+                
+                if (isset($allVehicles[$vehicleId])) {
+                    // Add pricing data - use base_price or base_fare
+                    $basePrice = !empty($row['base_price']) ? $row['base_price'] : $row['base_fare'];
+                    
+                    if (empty($allVehicles[$vehicleId]['basePrice']) || $allVehicles[$vehicleId]['basePrice'] == 0) {
+                        $allVehicles[$vehicleId]['basePrice'] = $basePrice;
+                        $allVehicles[$vehicleId]['base_price'] = $basePrice;
+                        $allVehicles[$vehicleId]['price'] = $basePrice;
+                    }
+                    
+                    if (empty($allVehicles[$vehicleId]['pricePerKm']) || $allVehicles[$vehicleId]['pricePerKm'] == 0) {
+                        $allVehicles[$vehicleId]['pricePerKm'] = $row['price_per_km'];
+                        $allVehicles[$vehicleId]['price_per_km'] = $row['price_per_km'];
+                    }
+                    
+                    if (empty($allVehicles[$vehicleId]['driverAllowance']) || $allVehicles[$vehicleId]['driverAllowance'] == 0) {
+                        $allVehicles[$vehicleId]['driverAllowance'] = $row['driver_allowance'];
+                        $allVehicles[$vehicleId]['driver_allowance'] = $row['driver_allowance'];
+                    }
+                    
+                    if (empty($allVehicles[$vehicleId]['nightHaltCharge']) || $allVehicles[$vehicleId]['nightHaltCharge'] == 0) {
                         $allVehicles[$vehicleId]['nightHaltCharge'] = $row['night_halt_charge'];
                         $allVehicles[$vehicleId]['night_halt_charge'] = $row['night_halt_charge'];
                     }
@@ -237,6 +298,10 @@ try {
         // Set price defaults if missing
         if (!isset($vehicle['price']) || $vehicle['price'] == 0) {
             $vehiclesArray[$key]['price'] = $vehicle['basePrice'] ?? 2500;
+        }
+        
+        if (!isset($vehicle['basePrice']) || $vehicle['basePrice'] == 0) {
+            $vehiclesArray[$key]['basePrice'] = $vehicle['price'] ?? 2500;
         }
         
         if (!isset($vehicle['pricePerKm']) || $vehicle['pricePerKm'] == 0) {
@@ -275,6 +340,7 @@ try {
                 'capacity' => 4,
                 'luggageCapacity' => 2,
                 'price' => 2500,
+                'basePrice' => 2500,
                 'pricePerKm' => 14,
                 'image' => '/cars/sedan.png',
                 'amenities' => ['AC', 'Bottle Water', 'Music System'],
@@ -291,6 +357,7 @@ try {
                 'capacity' => 6,
                 'luggageCapacity' => 3,
                 'price' => 3200,
+                'basePrice' => 3200,
                 'pricePerKm' => 18,
                 'image' => '/cars/ertiga.png',
                 'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
@@ -307,6 +374,7 @@ try {
                 'capacity' => 7,
                 'luggageCapacity' => 4,
                 'price' => 3800,
+                'basePrice' => 3800,
                 'pricePerKm' => 20,
                 'image' => '/cars/innova.png',
                 'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
