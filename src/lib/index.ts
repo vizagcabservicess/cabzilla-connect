@@ -84,5 +84,5 @@ export type {
 // Add formatPrice export from cabData
 export { formatPrice } from './cabData';
 
-// Export the CabLoading component 
+// Export the CabLoading component from the correct path
 export { CabLoading } from '@/components/cab-options/CabLoading';
