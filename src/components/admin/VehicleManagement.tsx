@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -21,12 +21,43 @@ export default function VehicleManagement() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState<CabType | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  
+  // Added to prevent continuous refreshes
+  const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastRefreshTimeRef = useRef<number>(0);
+  const isMountedRef = useRef<boolean>(true);
 
-  // Setup listener for cache invalidation events
+  // Setup listener for cache invalidation events - with debouncing
   useEffect(() => {
+    const MIN_REFRESH_INTERVAL = 5000; // 5 seconds minimum between refreshes
+    
     const handleCacheInvalidated = () => {
-      console.log("Vehicle cache invalidated, reloading vehicles");
-      setRetryCount(prev => prev + 1);
+      const now = Date.now();
+      const timeSinceLastRefresh = now - lastRefreshTimeRef.current;
+      
+      console.log(`Cache invalidation event received, time since last refresh: ${timeSinceLastRefresh}ms`);
+      
+      // Clear any pending refresh timeout
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
+      
+      // If enough time has passed, refresh immediately
+      if (timeSinceLastRefresh > MIN_REFRESH_INTERVAL) {
+        if (isMountedRef.current) {
+          setRetryCount(prev => prev + 1);
+          lastRefreshTimeRef.current = now;
+        }
+      } else {
+        // Otherwise, schedule a refresh after the minimum interval has elapsed
+        console.log("Debouncing refresh request");
+        refreshTimeoutRef.current = setTimeout(() => {
+          if (isMountedRef.current) {
+            setRetryCount(prev => prev + 1);
+            lastRefreshTimeRef.current = Date.now();
+          }
+        }, MIN_REFRESH_INTERVAL - timeSinceLastRefresh);
+      }
     };
     
     window.addEventListener('vehicle-cache-invalidated', handleCacheInvalidated);
@@ -34,7 +65,18 @@ export default function VehicleManagement() {
     window.addEventListener('vehicle-data-updated', handleCacheInvalidated);
     window.addEventListener('vehicle-data-refreshed', handleCacheInvalidated);
     
+    // Set the component as mounted
+    isMountedRef.current = true;
+    
     return () => {
+      // Set the component as unmounted to prevent state updates
+      isMountedRef.current = false;
+      
+      // Clear any pending refresh timeout
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
+      
       window.removeEventListener('vehicle-cache-invalidated', handleCacheInvalidated);
       window.removeEventListener('vehicle-data-cache-cleared', handleCacheInvalidated);
       window.removeEventListener('vehicle-data-updated', handleCacheInvalidated);
@@ -43,19 +85,24 @@ export default function VehicleManagement() {
   }, []);
 
   useEffect(() => {
-    loadVehicles();
+    if (isMountedRef.current) {
+      loadVehicles();
+    }
   }, [retryCount]);
 
   const loadVehicles = async () => {
+    // Avoid duplicate loads
+    if (isLoading || isRefreshing) return;
+    
     try {
       setIsLoading(true);
       console.log("Admin: Fetching all vehicles...");
       
-      // Always clear cache first to ensure fresh data
-      clearVehicleDataCache();
+      // Don't clear cache on every load, only when explicitly refreshing
+      // Removed: clearVehicleDataCache();
       
       // Always include inactive vehicles for admin view
-      const fetchedVehicles = await getVehicleData(true, true);
+      const fetchedVehicles = await getVehicleData(false, true);
       console.log(`Loaded ${fetchedVehicles.length} vehicles for admin view:`, fetchedVehicles);
       
       if (fetchedVehicles && fetchedVehicles.length > 0) {
@@ -71,11 +118,16 @@ export default function VehicleManagement() {
         const uniqueVehicles = Array.from(uniqueVehiclesMap.values());
         console.log(`Filtered to ${uniqueVehicles.length} unique vehicles`);
         
-        setVehicles(uniqueVehicles);
+        if (isMountedRef.current) {
+          setVehicles(uniqueVehicles);
+          lastRefreshTimeRef.current = Date.now();
+        }
       } else if (retryCount < 3) {
         console.log("No vehicles returned, clearing cache and retrying...");
         clearVehicleDataCache();
-        setRetryCount(prev => prev + 1);
+        if (isMountedRef.current) {
+          setRetryCount(prev => prev + 1);
+        }
       } else {
         toast.error("Failed to load vehicles. Please try refreshing the page.");
       }
@@ -83,11 +135,19 @@ export default function VehicleManagement() {
       console.error("Error loading vehicles:", error);
       toast.error("Failed to load vehicles. Please try refreshing the page.");
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 
   const handleRefreshData = async () => {
+    // Prevent rapid refreshing
+    if (isRefreshing || Date.now() - lastRefreshTimeRef.current < 5000) {
+      toast.info("Please wait a moment before refreshing again");
+      return;
+    }
+    
     try {
       setIsRefreshing(true);
       
@@ -104,6 +164,7 @@ export default function VehicleManagement() {
       // Reload vehicles with fresh data
       await loadVehicles();
       toast.success("Vehicle data refreshed successfully");
+      lastRefreshTimeRef.current = Date.now();
     } catch (error) {
       console.error("Error refreshing vehicle data:", error);
       toast.error("Failed to refresh vehicle data");

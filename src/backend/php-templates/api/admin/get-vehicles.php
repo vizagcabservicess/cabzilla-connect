@@ -1,28 +1,72 @@
 <?php
 /**
  * This API endpoint retrieves all vehicles from multiple tables and merges the data
+ * Enhanced with better cache control and error handling
  */
 require_once '../../config.php';
 
-// Set headers for CORS
+// Get start time for performance tracking
+$startTime = microtime(true);
+
+// Set headers for CORS with better cache control
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Force-Refresh, X-Admin-Mode');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Force-Refresh, X-Admin-Mode, X-Cache-Buster');
 header('Content-Type: application/json');
-header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-header('Pragma: no-cache');
-header('Expires: 0');
+
+// Add aggressive caching headers to prevent excessive requests
+$cacheTime = 60; // 60 seconds cache
+header('Cache-Control: public, max-age=' . $cacheTime);
+header('Pragma: cache');
+header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $cacheTime) . ' GMT');
 
 // Add debugging headers
 header('X-Debug-File: get-vehicles.php');
-header('X-API-Version: 1.0.2');
+header('X-API-Version: 1.0.3');
 header('X-Timestamp: ' . time());
+header('X-Response-Time: ' . (microtime(true) - $startTime));
 
-// Handle preflight OPTIONS request
+// Handle preflight OPTIONS request with a 200 OK
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
+
+// Check for 'If-Modified-Since' header to support browser caching
+if (isset($_SERVER['HTTP_IF_MODIFIED_SINCE'])) {
+    $ifModifiedSince = strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']);
+    // Only proceed if we have fresh data (within last 60 seconds)
+    if (time() - $ifModifiedSince < $cacheTime) {
+        header('HTTP/1.1 304 Not Modified');
+        exit;
+    }
+}
+
+// Check for rate limiting - use visitor IP as key
+$visitorIP = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+$rateLimitKey = 'rate_limit_' . md5($visitorIP);
+$rateLimitTime = 5; // 5 seconds between requests
+$rateLimitFile = sys_get_temp_dir() . '/' . $rateLimitKey;
+
+// Check if rate limit file exists and is recent
+if (file_exists($rateLimitFile)) {
+    $lastRequestTime = file_get_contents($rateLimitFile);
+    if (time() - $lastRequestTime < $rateLimitTime) {
+        // Rate limited - tell client to use cached data
+        header('HTTP/1.1 429 Too Many Requests');
+        header('Retry-After: ' . $rateLimitTime);
+        echo json_encode([
+            'status' => 'rate_limited',
+            'message' => 'Too many requests. Please wait a few seconds before trying again.',
+            'retry_after' => $rateLimitTime,
+            'timestamp' => time()
+        ]);
+        exit;
+    }
+}
+
+// Update rate limit file
+file_put_contents($rateLimitFile, time());
 
 try {
     // Check if config constants are defined and use them or fallback to environment variables
@@ -36,12 +80,23 @@ try {
         throw new Exception("Database configuration is missing. Please check your config.php file.");
     }
     
-    // Get database connection
-    $conn = mysqli_connect($dbHost, $dbUser, $dbPass, $dbName);
+    // Get database connection with retry logic
+    $conn = null;
+    $retries = 3;
     
-    // Check if the connection was successful
-    if (!$conn) {
-        throw new Exception("Database connection failed: " . mysqli_connect_error());
+    while ($retries > 0 && !$conn) {
+        try {
+            $conn = mysqli_connect($dbHost, $dbUser, $dbPass, $dbName);
+            if (!$conn) {
+                throw new Exception(mysqli_connect_error());
+            }
+        } catch (Exception $e) {
+            $retries--;
+            if ($retries === 0) {
+                throw $e; // Rethrow if all retries failed
+            }
+            usleep(500000); // Wait 0.5 seconds before retry
+        }
     }
     
     // Get additional parameters
@@ -217,57 +272,54 @@ try {
         }
     }
     
-    // Convert to array
+    // Convert to array and ensure uniqueness by ID
     $vehiclesArray = array_values($allVehicles);
     
-    // Ensure each vehicle has required fields
-    foreach ($vehiclesArray as $key => $vehicle) {
-        // Make sure essential fields exist
-        $vehiclesArray[$key]['id'] = $vehicle['id'] ?? $vehicle['vehicleId'] ?? $vehicle['vehicle_id'] ?? '';
-        $vehiclesArray[$key]['vehicleId'] = $vehicle['vehicleId'] ?? $vehicle['id'] ?? $vehicle['vehicle_id'] ?? '';
-        $vehiclesArray[$key]['name'] = $vehicle['name'] ?? ucwords(str_replace('_', ' ', $vehicle['id'] ?? 'Unknown'));
-        $vehiclesArray[$key]['description'] = $vehicle['description'] ?? $vehicle['name'] . ' vehicle';
-        
-        // Set defaults for missing fields
-        if (!isset($vehicle['capacity'])) $vehiclesArray[$key]['capacity'] = 4;
-        if (!isset($vehicle['luggageCapacity'])) $vehiclesArray[$key]['luggageCapacity'] = 2;
-        if (!isset($vehicle['amenities'])) $vehiclesArray[$key]['amenities'] = ['AC'];
-        if (!isset($vehicle['ac'])) $vehiclesArray[$key]['ac'] = true;
-        if (!isset($vehicle['isActive'])) $vehiclesArray[$key]['isActive'] = true;
-        
-        // Set price defaults if missing
-        if (!isset($vehicle['price']) || $vehicle['price'] == 0) {
-            $vehiclesArray[$key]['price'] = $vehicle['basePrice'] ?? 2500;
-        }
-        
-        if (!isset($vehicle['pricePerKm']) || $vehicle['pricePerKm'] == 0) {
-            $vehiclesArray[$key]['pricePerKm'] = 15;
-        }
-        
-        if (!isset($vehicle['nightHaltCharge']) || $vehicle['nightHaltCharge'] == 0) {
-            $vehiclesArray[$key]['nightHaltCharge'] = 800;
-        }
-        
-        if (!isset($vehicle['driverAllowance']) || $vehicle['driverAllowance'] == 0) {
-            $vehiclesArray[$key]['driverAllowance'] = 300;
-        }
-        
-        // Set image
-        if (!isset($vehicle['image']) || empty($vehicle['image'])) {
-            $vehiclesArray[$key]['image'] = '/cars/sedan.png';
-        }
-        
-        // Ensure required fields to fix errors
-        if (empty($vehiclesArray[$key]['id'])) $vehiclesArray[$key]['id'] = 'vehicle_' . $key;
-    }
-    
-    // Deduplicate vehicles by ID to ensure uniqueness
+    // Deduplicate vehicles by ID in a more efficient way
     $uniqueVehicles = [];
     $seenIds = [];
     
     foreach ($vehiclesArray as $vehicle) {
         $vehicleId = $vehicle['id'] ?? '';
         if (!empty($vehicleId) && !in_array($vehicleId, $seenIds)) {
+            // Ensure each vehicle has required fields
+            $vehiclesArray[$key]['id'] = $vehicle['id'] ?? $vehicle['vehicleId'] ?? $vehicle['vehicle_id'] ?? '';
+            $vehiclesArray[$key]['vehicleId'] = $vehicle['vehicleId'] ?? $vehicle['id'] ?? $vehicle['vehicle_id'] ?? '';
+            $vehiclesArray[$key]['name'] = $vehicle['name'] ?? ucwords(str_replace('_', ' ', $vehicle['id'] ?? 'Unknown'));
+            $vehiclesArray[$key]['description'] = $vehicle['description'] ?? $vehicle['name'] . ' vehicle';
+            
+            // Set defaults for missing fields
+            if (!isset($vehicle['capacity'])) $vehiclesArray[$key]['capacity'] = 4;
+            if (!isset($vehicle['luggageCapacity'])) $vehiclesArray[$key]['luggageCapacity'] = 2;
+            if (!isset($vehicle['amenities'])) $vehiclesArray[$key]['amenities'] = ['AC'];
+            if (!isset($vehicle['ac'])) $vehiclesArray[$key]['ac'] = true;
+            if (!isset($vehicle['isActive'])) $vehiclesArray[$key]['isActive'] = true;
+            
+            // Set price defaults if missing
+            if (!isset($vehicle['price']) || $vehicle['price'] == 0) {
+                $vehiclesArray[$key]['price'] = $vehicle['basePrice'] ?? 2500;
+            }
+            
+            if (!isset($vehicle['pricePerKm']) || $vehicle['pricePerKm'] == 0) {
+                $vehiclesArray[$key]['pricePerKm'] = 15;
+            }
+            
+            if (!isset($vehicle['nightHaltCharge']) || $vehicle['nightHaltCharge'] == 0) {
+                $vehiclesArray[$key]['nightHaltCharge'] = 800;
+            }
+            
+            if (!isset($vehicle['driverAllowance']) || $vehicle['driverAllowance'] == 0) {
+                $vehiclesArray[$key]['driverAllowance'] = 300;
+            }
+            
+            // Set image
+            if (!isset($vehicle['image']) || empty($vehicle['image'])) {
+                $vehiclesArray[$key]['image'] = '/cars/sedan.png';
+            }
+            
+            // Ensure required fields to fix errors
+            if (empty($vehiclesArray[$key]['id'])) $vehiclesArray[$key]['id'] = 'vehicle_' . $key;
+            
             $uniqueVehicles[] = $vehicle;
             $seenIds[] = $vehicleId;
         }
@@ -332,7 +384,10 @@ try {
         ];
     }
     
-    // Return success response
+    // Return success response with execution time
+    $executionTime = microtime(true) - $startTime;
+    header('X-Execution-Time: ' . round($executionTime * 1000, 2) . 'ms');
+    
     echo json_encode([
         'status' => 'success',
         'message' => 'Vehicles retrieved successfully',
@@ -341,7 +396,8 @@ try {
         'tables' => $existingTables,
         'includeInactive' => $includeInactive,
         'timestamp' => time(),
-        'deduplication' => true // Indicate that deduplication was performed
+        'deduplication' => true,
+        'execution_time_ms' => round($executionTime * 1000, 2)
     ]);
     
 } catch (Exception $e) {
@@ -352,6 +408,6 @@ try {
         'message' => $e->getMessage(),
         'timestamp' => time(),
         'file' => 'get-vehicles.php',
-        'trace' => $e->getTraceAsString()
+        'execution_time_ms' => round((microtime(true) - $startTime) * 1000, 2)
     ]);
 }
