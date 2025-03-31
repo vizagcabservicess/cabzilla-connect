@@ -6,10 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertTriangle } from "lucide-react";
 import { CabType } from "@/types/cab";
 import { updateVehicle } from "@/services/directVehicleService";
 import { toast } from "sonner";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface EditVehicleDialogProps {
   open: boolean;
@@ -26,6 +27,7 @@ interface VehicleFormData extends Partial<CabType> {
 export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: EditVehicleDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState<VehicleFormData>({});
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (vehicle) {
@@ -39,6 +41,9 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
         // Store amenities as a string in a separate property for form handling
         amenitiesString: amenitiesString
       });
+      
+      // Clear any previous error
+      setErrorMessage(null);
     }
   }, [vehicle]);
 
@@ -69,6 +74,7 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
     
     try {
       setIsSubmitting(true);
+      setErrorMessage(null);
       
       // Format the data
       const vehicleData: CabType = {
@@ -81,18 +87,28 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
         id: vehicle.id // Ensure ID remains unchanged
       };
       
+      console.log('Submitting vehicle update with data:', vehicleData);
+      
       // Update the vehicle
       await updateVehicle(vehicle.id, vehicleData);
       
       // Notify parent component
       onEditVehicle(vehicleData);
       
+      // Success message
+      toast.success(`Vehicle ${vehicleData.name} updated successfully`);
+      
       // Close dialog
       onClose();
       
     } catch (error) {
       console.error("Error updating vehicle:", error);
-      toast.error("Failed to update vehicle. Please try again.");
+      
+      // Set error message for display
+      setErrorMessage(error instanceof Error ? error.message : "Failed to update vehicle. Please try again.");
+      
+      // Show toast notification
+      toast.error("Failed to update vehicle. Please see details in the form.");
     } finally {
       setIsSubmitting(false);
     }
@@ -107,6 +123,13 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
             Update the vehicle information. ID cannot be changed.
           </DialogDescription>
         </DialogHeader>
+        
+        {errorMessage && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>{errorMessage}</AlertDescription>
+          </Alert>
+        )}
         
         <form onSubmit={handleSubmit} className="space-y-4 pt-4">
           <div className="grid grid-cols-2 gap-4">

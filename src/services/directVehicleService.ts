@@ -1,4 +1,3 @@
-
 import { CabType } from '@/types/cab';
 import { apiBaseUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
 import { getBypassHeaders, getForcedRequestConfig, formatDataForMultipart } from '@/config/requestConfig';
@@ -57,33 +56,93 @@ export const createVehicle = async (vehicleData: CabType): Promise<CabType> => {
  */
 export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Promise<CabType> => {
   try {
-    // Format data for multipart submission
-    const formData = formatDataForMultipart(vehicleData);
+    console.log('Updating vehicle with data:', vehicleData);
     
-    // Add vehicle ID with both naming conventions
+    // Create form data manually instead of using formatDataForMultipart
+    const formData = new FormData();
+    
+    // Add vehicle ID with both naming conventions to ensure backend recognizes it
     formData.append('vehicleId', vehicleId);
     formData.append('vehicle_id', vehicleId);
+    formData.append('id', vehicleId);
     
-    // Add amenities with proper format if it's an array
+    // Add basic vehicle info
+    formData.append('name', vehicleData.name || '');
+    formData.append('capacity', String(vehicleData.capacity || 4));
+    formData.append('luggageCapacity', String(vehicleData.luggageCapacity || 2));
+    
+    // Correctly handle boolean isActive value
+    const isActive = vehicleData.isActive === false ? '0' : '1';
+    formData.append('isActive', isActive);
+    formData.append('is_active', isActive);
+    
+    // Add price information
+    formData.append('price', String(vehicleData.price || 0));
+    formData.append('basePrice', String(vehicleData.price || 0));
+    formData.append('pricePerKm', String(vehicleData.pricePerKm || 0));
+    formData.append('nightHaltCharge', String(vehicleData.nightHaltCharge || 0));
+    formData.append('driverAllowance', String(vehicleData.driverAllowance || 0));
+    
+    // Handle image path
+    formData.append('image', vehicleData.image || '/cars/sedan.png');
+    
+    // Add description
+    formData.append('description', vehicleData.description || '');
+    
+    // Handle amenities explicitly
     if (Array.isArray(vehicleData.amenities)) {
       formData.append('amenities', JSON.stringify(vehicleData.amenities));
+    } else if (vehicleData.amenities) {
+      // Handle case where amenities might be a string
+      formData.append('amenities', JSON.stringify([vehicleData.amenities]));
+    } else {
+      formData.append('amenities', JSON.stringify([]));
     }
     
     // Force update flag
     formData.append('forceUpdate', 'true');
     
-    // Call the API
-    const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-update.php`, {
-      method: 'POST',
-      body: formData,
-      headers: getBypassHeaders()
-    });
+    // For debugging, log all form data
+    console.log('Form data prepared for update:');
+    for (const [key, value] of formData.entries()) {
+      console.log(`${key}: ${value}`);
+    }
     
-    if (!response.ok) {
-      throw new Error(`Failed to update vehicle: ${response.status} ${response.statusText}`);
+    // Call the API using vehicles-update.php as fallback if direct-vehicle-update.php fails
+    let response;
+    let retryWithAlternate = false;
+    
+    try {
+      response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-update.php`, {
+        method: 'POST',
+        body: formData,
+        headers: getBypassHeaders()
+      });
+      
+      if (!response.ok) {
+        console.warn(`Primary update endpoint failed with ${response.status}. Trying alternate endpoint...`);
+        retryWithAlternate = true;
+      }
+    } catch (error) {
+      console.warn('Primary update endpoint error:', error);
+      retryWithAlternate = true;
+    }
+    
+    // If the first endpoint failed, try the alternate endpoint
+    if (retryWithAlternate) {
+      response = await fetch(`${apiBaseUrl}/api/admin/vehicles-update.php`, {
+        method: 'POST',
+        body: formData,
+        headers: getBypassHeaders()
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to update vehicle with alternate endpoint: ${response.status} ${response.statusText}`);
+      }
     }
     
     const result = await response.json();
+    console.log('Update response:', result);
     
     if (result.status === 'error') {
       throw new Error(result.message || 'Failed to update vehicle');
