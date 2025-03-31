@@ -18,9 +18,14 @@ interface EditVehicleDialogProps {
   vehicle: CabType;
 }
 
+// Create a new interface that extends CabType to include amenitiesString
+interface VehicleFormData extends Partial<CabType> {
+  amenitiesString?: string;
+}
+
 export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: EditVehicleDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState<Partial<CabType>>({});
+  const [formData, setFormData] = useState<VehicleFormData>({});
 
   useEffect(() => {
     if (vehicle) {
@@ -71,7 +76,7 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
         ...formData,
         // Convert the amenitiesString back to an array
         amenities: formData.amenitiesString 
-          ? (formData.amenitiesString as string).split(',').map(item => item.trim()) 
+          ? formData.amenitiesString.split(',').map(item => item.trim()) 
           : vehicle.amenities,
         id: vehicle.id // Ensure ID remains unchanged
       };
