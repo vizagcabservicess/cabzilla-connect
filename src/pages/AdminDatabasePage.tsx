@@ -9,7 +9,7 @@ import { Loader2, Database, FileWarning, HardDrive, RefreshCw, Check, Wrench } f
 import { fareService } from '@/services/fareService';
 import { FareUpdateError } from '@/components/cab-options/FareUpdateError';
 import axios from 'axios';
-import { API_BASE_URL } from '@/config/api';
+import { apiBaseUrl } from '@/config/api';
 
 export default function AdminDatabasePage() {
   const [isInitializing, setIsInitializing] = useState(false);
@@ -55,7 +55,7 @@ export default function AdminDatabasePage() {
     
     try {
       // Call the new fix-database-tables.php endpoint
-      const response = await axios.get(`${API_BASE_URL}/admin/fix-database-tables.php`);
+      const response = await axios.get(`${apiBaseUrl}/admin/fix-database-tables.php`);
       
       if (response.data.status === 'success') {
         toast.success('Database tables fixed successfully');
@@ -67,7 +67,7 @@ export default function AdminDatabasePage() {
         });
         
         // Clear any cached data
-        await fareService.clearFareCache();
+        await fareService.clearCache();
       } else {
         toast.error('Database fix had issues');
         setError(new Error('Database fix failed: ' + (response.data?.message || 'Unknown error')));
