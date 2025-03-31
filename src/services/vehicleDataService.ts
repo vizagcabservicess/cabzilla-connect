@@ -122,7 +122,7 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
     console.log('Force refresh requested, skipping cache');
   }
   
-  // Try to fetch from direct DB API first
+  // Try to fetch from direct DB API first (with error handling)
   try {
     // Build the URL with includeInactive parameter
     const includeInactiveParam = includeInactive ? 'true' : 'false';
@@ -130,7 +130,7 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
     
     console.log(`Fetching vehicle data from direct API: ${url}`);
     
-    const response = await fetch(url, {
+    const fetchPromise = fetch(url, {
       headers: {
         ...forceRefreshHeaders,
         'X-Admin-Mode': includeInactive ? 'true' : 'false' // Add admin mode header
@@ -138,6 +138,14 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
       mode: 'cors',
       cache: 'no-store'
     });
+    
+    // Add timeout to the fetch
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Direct API request timeout')), 3000);
+    });
+    
+    // Race the fetch against the timeout
+    const response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
     
     if (!response.ok) {
       throw new Error(`Direct API response not OK: ${response.status} ${response.statusText}`);
@@ -182,7 +190,7 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
   } catch (directApiError) {
     console.error('Error fetching vehicles from direct API:', directApiError);
     
-    // Now try the vehicles-data.php endpoint
+    // Now try the vehicles-data.php endpoint (with error handling)
     try {
       const includeInactiveParam = includeInactive ? 'true' : 'false';
       let url = `${apiBaseUrl}/api/fares/vehicles-data.php?${cacheBuster}&includeInactive=${includeInactiveParam}`;
@@ -193,7 +201,7 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
       
       console.log(`Fetching vehicle data from API: ${url}`);
       
-      const response = await fetch(url, {
+      const fetchPromise = fetch(url, {
         headers: forceRefresh ? {
           ...forceRefreshHeaders,
           'X-Admin-Mode': includeInactive ? 'true' : 'false' // Add admin mode header
@@ -201,6 +209,14 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
         mode: 'cors',
         cache: 'no-store'
       });
+      
+      // Add timeout to the fetch
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('API request timeout')), 3000);
+      });
+      
+      // Race the fetch against the timeout
+      const response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
       
       if (!response.ok) {
         console.error(`API response not OK: ${response.status} ${response.statusText}`);
@@ -246,21 +262,28 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
     } catch (apiError) {
       console.error('Error fetching vehicles from API:', apiError);
       
-      // Try fallback to local JSON file
+      // Try local JSON file with better error handling
       try {
         console.log('Fetching from vehicles.json fallback');
-        const response = await fetch(`/data/vehicles.json?${cacheBuster}`, {
+        const jsonResponse = await fetch(`/data/vehicles.json?${cacheBuster}`, {
           headers: {
             'Cache-Control': 'no-cache, no-store, must-revalidate',
             'Pragma': 'no-cache'
           }
         });
         
-        if (!response.ok) {
-          throw new Error(`Failed to fetch JSON data: ${response.status}`);
+        if (!jsonResponse.ok) {
+          throw new Error(`Failed to fetch JSON data: ${jsonResponse.status}`);
         }
         
-        const jsonData = await response.json();
+        // Check content type to avoid parsing HTML as JSON
+        const contentType = jsonResponse.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          console.warn('Response is not JSON, skipping JSON parsing');
+          throw new Error('Response is not JSON');
+        }
+        
+        const jsonData = await jsonResponse.json();
         
         if (Array.isArray(jsonData) && jsonData.length > 0) {
           console.log(`Loaded ${jsonData.length} vehicles from JSON file`);
@@ -281,6 +304,8 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
           }
           
           return filterVehicles(processedVehicles, includeInactive);
+        } else {
+          throw new Error('JSON data is empty or invalid');
         }
       } catch (jsonError) {
         console.error('Error loading from local JSON, using default vehicles:', jsonError);
@@ -289,7 +314,7 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
   }
   
   // Check for fallback data from previous requests
-  if (cachedVehicles.fallback) {
+  if (cachedVehicles.fallback && cachedVehicles.fallback.data.length > 0) {
     console.log('Using fallback cached vehicles data');
     return filterVehicles(cachedVehicles.fallback.data, includeInactive);
   }
@@ -309,6 +334,16 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
     data: [...DEFAULT_VEHICLES],
     timestamp: now
   };
+  
+  // Dispatch event to notify components that we're using default vehicles
+  window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
+    detail: { 
+      count: DEFAULT_VEHICLES.length,
+      timestamp: now,
+      isAdminView: includeInactive,
+      isDefault: true
+    }
+  }));
   
   return filterVehicles(DEFAULT_VEHICLES, includeInactive);
 };
