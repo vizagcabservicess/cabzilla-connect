@@ -72,6 +72,9 @@ try {
         $vehicleId = substr($vehicleId, 5);
     }
     
+    // Further debug logging for vehicle ID
+    error_log("Final vehicleId determined: " . ($vehicleId ?: 'NOT FOUND'));
+    
     // Validate required fields
     if (!$vehicleId) {
         throw new Exception('Vehicle ID is required. Please check your request and ensure a valid vehicle ID is provided.');
@@ -238,7 +241,7 @@ try {
             ";
             
             $updateVpStmt = $conn->prepare($updateVpQuery);
-            $updateVpStmt->bind_param('dddddddddddss', $basePrice, $pricePerKm, $basePrice, $pricePerKm, $pickupPrice, $dropPrice, $tier1Price, $tier2Price, $tier3Price, $tier4Price, $extraKmCharge, $vehicleId);
+            $updateVpStmt->bind_param('ddddddddddds', $basePrice, $pricePerKm, $basePrice, $pricePerKm, $pickupPrice, $dropPrice, $tier1Price, $tier2Price, $tier3Price, $tier4Price, $extraKmCharge, $vehicleId);
             
             if (!$updateVpStmt->execute()) {
                 throw new Exception("Failed to update vehicle_pricing: " . $conn->error);
@@ -293,6 +296,41 @@ try {
             // Continue anyway - not critical
         } else {
             error_log("Inserted new vehicle in vehicle_types: $vehicleId");
+        }
+    }
+
+    // Also update vehicle entry in vehicles table if necessary
+    $checkVehiclesQuery = "SHOW TABLES LIKE 'vehicles'";
+    $checkVehiclesResult = $conn->query($checkVehiclesQuery);
+    $vehiclesTableExists = $checkVehiclesResult && $checkVehiclesResult->num_rows > 0;
+    
+    if ($vehiclesTableExists) {
+        $checkVehicleQuery = "SELECT id FROM vehicles WHERE vehicle_id = ?";
+        $checkVehicleStmt = $conn->prepare($checkVehicleQuery);
+        $checkVehicleStmt->bind_param('s', $vehicleId);
+        $checkVehicleStmt->execute();
+        $checkVehicleResult = $checkVehicleStmt->get_result();
+        
+        if ($checkVehicleResult->num_rows === 0) {
+            // Format vehicle name from ID
+            $vehicleName = ucwords(str_replace('_', ' ', $vehicleId));
+            
+            // Insert into vehicles table
+            $insertVehicleQuery = "
+                INSERT INTO vehicles (
+                    vehicle_id, name, is_active, capacity, type, image_url
+                ) VALUES (?, ?, 1, 4, 'standard', 'default-car.png')
+            ";
+            
+            $insertVehicleStmt = $conn->prepare($insertVehicleQuery);
+            $insertVehicleStmt->bind_param('ss', $vehicleId, $vehicleName);
+            
+            if (!$insertVehicleStmt->execute()) {
+                error_log("Warning: Failed to insert into vehicles: " . $conn->error);
+                // Continue anyway - not critical
+            } else {
+                error_log("Inserted new entry in vehicles: $vehicleId");
+            }
         }
     }
 
