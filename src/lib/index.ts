@@ -85,4 +85,7 @@ export type {
 export { formatPrice } from './cabData';
 
 // Export the CabLoading component from the correct path
-export { CabLoading } from '@/components/cab-options/CabLoading';
+export { CabLoading, CabRefreshing } from '@/components/cab-options/CabLoading';
+
+// Export the Skeleton component
+export { Skeleton } from '@/components/ui/skeleton';

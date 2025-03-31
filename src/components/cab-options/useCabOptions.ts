@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { CabType } from '@/types/cab';
 import { getVehicleData, clearVehicleDataCache } from '@/services/vehicleDataService';
@@ -24,7 +23,27 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
   const maxRefreshesRef = useRef<number>(5);
   const vehicleDataCache = useRef<Map<string, { data: CabType[], timestamp: number }>>(new Map());
   const eventThrottleTimestamps = useRef<Record<string, number>>({});
-  
+  const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (isLoading) {
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+      }
+      loadingTimeoutRef.current = setTimeout(() => {
+        console.log('Loading timeout reached, forcing loading state to complete');
+        setIsLoading(false);
+        loadingRef.current = false;
+      }, 8000);
+    }
+
+    return () => {
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+      }
+    };
+  }, [isLoading]);
+
   const shouldThrottleEvent = (eventType: string, throttleDuration = 45000): boolean => {
     const now = Date.now();
     const lastTime = eventThrottleTimestamps.current[eventType] || 0;
@@ -37,7 +56,7 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
     eventThrottleTimestamps.current[eventType] = now;
     return false;
   };
-  
+
   const loadCabOptions = async (forceRefresh = false) => {
     if (loadingRef.current) {
       console.log('Already loading cab options, skipping');
@@ -274,7 +293,7 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
       return [];
     }
   };
-  
+
   const filterVehiclesByTripType = (vehicles: CabType[], tripType: TripType): CabType[] => {
     if (isTourTripType(tripType)) {
       return vehicles.filter(v => v.capacity >= 4);
@@ -287,7 +306,7 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
       return vehicles.filter(v => v.isActive !== false);
     }
   };
-  
+
   useEffect(() => {
     const isAdmin = isAdminTripType(tripType);
     console.log(`Initial load for tripType ${tripType}, isAdmin=${isAdmin}`);
@@ -357,7 +376,7 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
       window.removeEventListener('vehicle-data-updated', handleFareDataUpdated);
     };
   }, []);
-  
+
   useEffect(() => {
     const handleTripChange = async () => {
       setFilterLoading(true);
@@ -381,13 +400,13 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
     
     handleTripChange();
   }, [tripType, tripMode]);
-  
+
   const refresh = () => {
     console.log("Manual refresh triggered");
     setIsLoading(true);
     return loadCabOptions(true);
   };
-  
+
   return {
     cabOptions,
     isLoading,

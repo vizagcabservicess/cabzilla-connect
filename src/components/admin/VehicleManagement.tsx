@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/dialog";
 import { CabType } from '@/types/cab';
 import { CabLoading } from '@/components/cab-options/CabLoading';
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface ExtendedVehicleType {
   id: string;
@@ -283,6 +284,7 @@ const VehicleManagement = () => {
       
       setVehicles(combinedVehicles);
       console.log(`Loaded ${combinedVehicles.length} vehicles`);
+      setLoading(false);
     } catch (error) {
       console.error('Error fetching vehicles:', error);
       toast.error('Failed to load vehicles');
@@ -336,9 +338,11 @@ const VehicleManagement = () => {
           }
         ];
         setVehicles(defaultVehicles);
+        setLoading(false);
         localStorage.setItem('cachedVehicles', JSON.stringify(defaultVehicles));
       } catch (e) {
         console.error('Error setting default vehicles:', e);
+        setLoading(false);
       }
     } finally {
       setLoading(false);
@@ -753,6 +757,21 @@ const VehicleManagement = () => {
     };
   }, [fetchVehicles, refreshInProgress]);
   
+  useEffect(() => {
+    let loadingTimer: NodeJS.Timeout | null = null;
+    
+    if (loading) {
+      loadingTimer = setTimeout(() => {
+        console.log('Loading timeout reached, forcing loading state to complete');
+        setLoading(false);
+      }, 5000);
+    }
+    
+    return () => {
+      if (loadingTimer) clearTimeout(loadingTimer);
+    };
+  }, [loading]);
+  
   return (
     <div className="container p-4">
       <div className="flex justify-between items-center mb-6">
@@ -847,7 +866,7 @@ const VehicleManagement = () => {
         </div>
       </div>
       
-      {loading ? (
+      {loading && vehicles.length === 0 ? (
         <CabLoading />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
