@@ -1,3 +1,4 @@
+
 import { CabType } from '@/types/cab';
 import { apiBaseUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
 import { getBypassHeaders, getForcedRequestConfig, formatDataForMultipart } from '@/config/requestConfig';
@@ -59,8 +60,86 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
   try {
     console.log('Updating vehicle with data:', vehicleData);
     
-    // Use a simplified implementation that uses the directVehicleOperation helper
-    // from apiHelper.ts which has more robust error handling and retry logic
+    // Create FormData object for multipart submission 
+    const formData = new FormData();
+    
+    // Add all vehicle data fields with proper naming conventions
+    formData.append('id', vehicleId);
+    formData.append('vehicleId', vehicleId);
+    formData.append('vehicle_id', vehicleId);
+    formData.append('name', vehicleData.name || '');
+    formData.append('capacity', String(vehicleData.capacity || 4));
+    formData.append('luggageCapacity', String(vehicleData.luggageCapacity || 2));
+    formData.append('luggage_capacity', String(vehicleData.luggageCapacity || 2));
+    
+    // Handle boolean isActive correctly
+    const isActive = vehicleData.isActive === false ? '0' : '1';
+    formData.append('isActive', isActive);
+    formData.append('is_active', isActive);
+    
+    // Add image path
+    formData.append('image', vehicleData.image || '/cars/sedan.png');
+    
+    // Handle amenities
+    if (Array.isArray(vehicleData.amenities)) {
+      formData.append('amenities', JSON.stringify(vehicleData.amenities));
+    } else if (vehicleData.amenities) {
+      formData.append('amenities', JSON.stringify([vehicleData.amenities]));
+    } else {
+      formData.append('amenities', JSON.stringify(['AC', 'Bottle Water', 'Music System']));
+    }
+    
+    // Add ac flag
+    formData.append('ac', vehicleData.ac === false ? '0' : '1');
+    
+    // Add description
+    formData.append('description', vehicleData.description || '');
+    
+    // Add pricing fields
+    formData.append('basePrice', String(vehicleData.basePrice || vehicleData.price || 0));
+    formData.append('price', String(vehicleData.price || vehicleData.basePrice || 0));
+    formData.append('pricePerKm', String(vehicleData.pricePerKm || 0));
+    formData.append('price_per_km', String(vehicleData.pricePerKm || 0));
+    formData.append('nightHaltCharge', String(vehicleData.nightHaltCharge || 700));
+    formData.append('night_halt_charge', String(vehicleData.nightHaltCharge || 700));
+    formData.append('driverAllowance', String(vehicleData.driverAllowance || 250));
+    formData.append('driver_allowance', String(vehicleData.driverAllowance || 250));
+    
+    // Force update flag
+    formData.append('forceUpdate', 'true');
+    
+    console.log('Submitting vehicle update with data: ', Object.fromEntries(formData));
+    
+    // First attempt - direct update
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-update.php`, {
+        method: 'POST',
+        body: formData,
+        headers: getBypassHeaders()
+      });
+      
+      // Check if response is successful
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Vehicle update API response:', result);
+        
+        if (result.status === 'success') {
+          // Trigger event to notify components
+          window.dispatchEvent(new CustomEvent('vehicle-data-updated', {
+            detail: { vehicleId, timestamp: Date.now() }
+          }));
+          
+          return vehicleData;
+        }
+      }
+      
+      // If we get here, there was an error but we'll try the backup method
+      console.warn('Primary update method failed, trying fallback method...');
+    } catch (primaryError) {
+      console.error('Error in primary vehicle update method:', primaryError);
+    }
+    
+    // Fallback to the directVehicleOperation helper
     const result = await directVehicleOperation<any>(
       'update',
       {
@@ -80,7 +159,7 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
     );
     
     // If we get here, the operation succeeded
-    console.log('Vehicle update succeeded:', result);
+    console.log('Vehicle update succeeded via fallback method:', result);
     
     // Trigger event to notify components
     window.dispatchEvent(new CustomEvent('vehicle-data-updated', {

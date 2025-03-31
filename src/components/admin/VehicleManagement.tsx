@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -21,14 +21,20 @@ export default function VehicleManagement() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState<CabType | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [lastRefreshTime, setLastRefreshTime] = useState(0);
 
-  useEffect(() => {
-    loadVehicles();
-  }, [retryCount]);
+  // Debounced loadVehicles function to prevent excessive API calls
+  const loadVehicles = useCallback(async () => {
+    // Debounce: Only allow refresh every 5 seconds
+    const now = Date.now();
+    if (now - lastRefreshTime < 5000 && lastRefreshTime !== 0) {
+      console.log("Refresh throttled, skipping...");
+      return;
+    }
 
-  const loadVehicles = async () => {
     try {
       setIsLoading(true);
+      setLastRefreshTime(now);
       console.log("Admin: Fetching all vehicles...");
       
       // Always include inactive vehicles for admin view
@@ -36,7 +42,11 @@ export default function VehicleManagement() {
       console.log(`Loaded ${fetchedVehicles.length} vehicles for admin view:`, fetchedVehicles);
       
       if (fetchedVehicles && fetchedVehicles.length > 0) {
-        setVehicles(fetchedVehicles);
+        // Deduplicate vehicles by id
+        const uniqueVehicles = Array.from(
+          new Map(fetchedVehicles.map(vehicle => [vehicle.id, vehicle])).values()
+        );
+        setVehicles(uniqueVehicles);
       } else if (retryCount < 3) {
         console.log("No vehicles returned, clearing cache and retrying...");
         clearVehicleDataCache();
@@ -50,7 +60,25 @@ export default function VehicleManagement() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [retryCount, lastRefreshTime]);
+
+  useEffect(() => {
+    loadVehicles();
+    
+    // Add event listener for vehicle data updates
+    const handleVehicleDataUpdated = () => {
+      console.log("Vehicle data updated event received");
+      loadVehicles();
+    };
+    
+    window.addEventListener('vehicle-data-updated', handleVehicleDataUpdated);
+    window.addEventListener('vehicle-data-refreshed', handleVehicleDataUpdated);
+    
+    return () => {
+      window.removeEventListener('vehicle-data-updated', handleVehicleDataUpdated);
+      window.removeEventListener('vehicle-data-refreshed', handleVehicleDataUpdated);
+    };
+  }, [loadVehicles, retryCount]);
 
   const handleRefreshData = async () => {
     try {

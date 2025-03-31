@@ -145,7 +145,8 @@ try {
     
     while ($retries < $maxRetries && !$conn) {
         try {
-            $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+            // Use global variables defined in config.php instead of constants
+            $conn = new mysqli($db_host, $db_user, $db_pass, $db_name);
             
             if ($conn->connect_error) {
                 throw new Exception("Database connection failed: " . $conn->connect_error);
@@ -218,7 +219,7 @@ try {
         }
         
         $updateStmt->bind_param(
-            "siisiss", 
+            "siisisiis", 
             $name, 
             $capacity, 
             $luggageCapacity, 
@@ -249,7 +250,7 @@ try {
         }
         
         $insertStmt->bind_param(
-            "ssiisiss", 
+            "ssiisisis", 
             $vehicleId, 
             $name, 
             $capacity, 
