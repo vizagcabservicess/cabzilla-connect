@@ -30,6 +30,16 @@ export {
   formatDataForMultipart
 } from '@/config/requestConfig';
 
+// Re-export api configuration 
+export {
+  apiBaseUrl,
+  apiTimeout,
+  defaultHeaders,
+  forceRefreshHeaders,
+  corsHeaders,
+  createDirectApiUrl
+} from '@/config/api';
+
 // Re-export all methods from fareService
 export { 
   directFareUpdate,  

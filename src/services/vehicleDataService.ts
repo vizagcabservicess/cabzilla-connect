@@ -1,6 +1,6 @@
 
 import { CabType } from '@/types/cab';
-import { apiBaseUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
+import { apiBaseUrl, defaultHeaders, forceRefreshHeaders, createDirectApiUrl } from '@/config/api';
 import { OutstationFare, LocalFare, AirportFare } from '@/types/cab';
 
 // Reduced cache durations to ensure fresher data
@@ -122,18 +122,65 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
     console.log('Force refresh requested, skipping cache');
   }
   
-  // Try to fetch from direct DB API first (with error handling)
+  // First, try local JSON file (because server is giving 500 errors)
+  try {
+    console.log('Fetching from local vehicles.json data file');
+    const jsonResponse = await fetch(`/data/vehicles.json?${cacheBuster}`, {
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      }
+    });
+    
+    if (!jsonResponse.ok) {
+      throw new Error(`Failed to fetch JSON data: ${jsonResponse.status}`);
+    }
+    
+    // Check content type to avoid parsing HTML as JSON
+    const contentType = jsonResponse.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      const jsonData = await jsonResponse.json();
+      
+      if (Array.isArray(jsonData) && jsonData.length > 0) {
+        console.log(`Loaded ${jsonData.length} vehicles from local JSON file`);
+        
+        // Process and cache
+        const processedVehicles = processVehicles(jsonData);
+        cachedVehicles.json = {
+          data: processedVehicles,
+          timestamp: now
+        };
+        
+        // Cache to localStorage
+        try {
+          localStorage.setItem('cachedVehicles', JSON.stringify(processedVehicles));
+          localStorage.setItem('cachedVehiclesTimestamp', now.toString());
+        } catch (e) {
+          console.error('Error caching JSON vehicles to localStorage:', e);
+        }
+        
+        return filterVehicles(processedVehicles, includeInactive);
+      }
+    } else {
+      console.warn('Response is not JSON, skipping JSON parsing');
+    }
+  } catch (jsonError) {
+    console.error('Error loading from local JSON file:', jsonError);
+  }
+  
+  // Then try to fetch from direct DB API (with error handling)
   try {
     // Build the URL with includeInactive parameter
     const includeInactiveParam = includeInactive ? 'true' : 'false';
-    let url = `${apiBaseUrl}/api/admin/get-vehicles.php?${cacheBuster}&includeInactive=${includeInactiveParam}`;
+    let url = createDirectApiUrl(`/api/admin/get-vehicles.php?${cacheBuster}&includeInactive=${includeInactiveParam}`);
     
     console.log(`Fetching vehicle data from direct API: ${url}`);
     
     const fetchPromise = fetch(url, {
       headers: {
         ...forceRefreshHeaders,
-        'X-Admin-Mode': includeInactive ? 'true' : 'false' // Add admin mode header
+        'X-Admin-Mode': includeInactive ? 'true' : 'false',
+        'Access-Control-Allow-Origin': '*'
       },
       mode: 'cors',
       cache: 'no-store'
@@ -193,7 +240,7 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
     // Now try the vehicles-data.php endpoint (with error handling)
     try {
       const includeInactiveParam = includeInactive ? 'true' : 'false';
-      let url = `${apiBaseUrl}/api/fares/vehicles-data.php?${cacheBuster}&includeInactive=${includeInactiveParam}`;
+      let url = createDirectApiUrl(`/api/fares/vehicles-data.php?${cacheBuster}&includeInactive=${includeInactiveParam}`);
       
       if (forceRefresh) {
         url += '&force=true';
@@ -204,8 +251,12 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
       const fetchPromise = fetch(url, {
         headers: forceRefresh ? {
           ...forceRefreshHeaders,
-          'X-Admin-Mode': includeInactive ? 'true' : 'false' // Add admin mode header
-        } : defaultHeaders,
+          'X-Admin-Mode': includeInactive ? 'true' : 'false',
+          'Access-Control-Allow-Origin': '*'
+        } : {
+          ...defaultHeaders,
+          'Access-Control-Allow-Origin': '*'
+        },
         mode: 'cors',
         cache: 'no-store'
       });
@@ -261,55 +312,6 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
       }
     } catch (apiError) {
       console.error('Error fetching vehicles from API:', apiError);
-      
-      // Try local JSON file with better error handling
-      try {
-        console.log('Fetching from vehicles.json fallback');
-        const jsonResponse = await fetch(`/data/vehicles.json?${cacheBuster}`, {
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache'
-          }
-        });
-        
-        if (!jsonResponse.ok) {
-          throw new Error(`Failed to fetch JSON data: ${jsonResponse.status}`);
-        }
-        
-        // Check content type to avoid parsing HTML as JSON
-        const contentType = jsonResponse.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-          console.warn('Response is not JSON, skipping JSON parsing');
-          throw new Error('Response is not JSON');
-        }
-        
-        const jsonData = await jsonResponse.json();
-        
-        if (Array.isArray(jsonData) && jsonData.length > 0) {
-          console.log(`Loaded ${jsonData.length} vehicles from JSON file`);
-          
-          // Process and cache
-          const processedVehicles = processVehicles(jsonData);
-          cachedVehicles.json = {
-            data: processedVehicles,
-            timestamp: now
-          };
-          
-          // Cache to localStorage
-          try {
-            localStorage.setItem('cachedVehicles', JSON.stringify(processedVehicles));
-            localStorage.setItem('cachedVehiclesTimestamp', now.toString());
-          } catch (e) {
-            console.error('Error caching JSON vehicles to localStorage:', e);
-          }
-          
-          return filterVehicles(processedVehicles, includeInactive);
-        } else {
-          throw new Error('JSON data is empty or invalid');
-        }
-      } catch (jsonError) {
-        console.error('Error loading from local JSON, using default vehicles:', jsonError);
-      }
     }
   }
   
@@ -335,7 +337,7 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
     timestamp: now
   };
   
-  // Dispatch event to notify components that we're using default vehicles
+  // Dispatch event to notify components about the refresh
   window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
     detail: { 
       count: DEFAULT_VEHICLES.length,

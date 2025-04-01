@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,7 +11,9 @@ import { AddVehicleDialog } from "./AddVehicleDialog";
 import { EditVehicleDialog } from "./EditVehicleDialog";
 import { getVehicleData, clearVehicleDataCache } from "@/services/vehicleDataService";
 import { Skeleton } from "@/components/ui/skeleton";
-import { apiBaseUrl } from '@/config/api';
+import { apiBaseUrl, createDirectApiUrl } from '@/config/api';
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 export default function VehicleManagement() {
   const [isLoading, setIsLoading] = useState(true);
@@ -23,12 +26,25 @@ export default function VehicleManagement() {
   const [selectedVehicle, setSelectedVehicle] = useState<CabType | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const fixDatabase = async () => {
     setIsFixingDb(true);
+    setErrorMessage(null);
     
     try {
-      const response = await fetch(`${apiBaseUrl}/api/admin/fix-vehicle-tables.php`);
+      const fixUrl = createDirectApiUrl('/api/admin/fix-vehicle-tables.php');
+      const response = await fetch(fixUrl, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'X-Force-Refresh': 'true'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Server responded with status: ${response.status}`);
+      }
+      
       const data = await response.json();
       
       if (data.status === 'success') {
@@ -36,10 +52,12 @@ export default function VehicleManagement() {
         await handleRefreshData();
       } else {
         toast.error("Failed to fix database tables: " + (data.message || "Unknown error"));
+        setErrorMessage(`Failed to fix database tables: ${data.message || "Unknown error"}`);
       }
     } catch (error) {
       console.error("Error fixing database:", error);
       toast.error("Failed to fix database tables. Please check server logs.");
+      setErrorMessage("Network or server error while fixing database tables. Please try again later.");
     } finally {
       setIsFixingDb(false);
     }
@@ -55,6 +73,7 @@ export default function VehicleManagement() {
     try {
       setIsLoading(true);
       setLastRefreshTime(now);
+      setErrorMessage(null);
       console.log("Admin: Fetching all vehicles...");
       
       const fetchedVehicles = await getVehicleData(true, true);
@@ -108,11 +127,13 @@ export default function VehicleManagement() {
         setRetryCount(prev => prev + 1);
         setTimeout(() => loadVehicles(), 800);
       } else {
-        toast.error("Failed to load vehicles. Please try refreshing the page.");
+        setErrorMessage("Failed to load vehicles from the API. Using fallback data.");
+        toast.error("Failed to load vehicles. Using fallback data.");
       }
     } catch (error) {
       console.error("Error loading vehicles:", error);
-      toast.error("Failed to load vehicles. Please try refreshing the page.");
+      setErrorMessage("Error loading vehicles. Using fallback data.");
+      toast.error("Failed to load vehicles. Using fallback data.");
       
       try {
         const cachedVehiclesString = localStorage.getItem('cachedVehicles');
@@ -153,12 +174,14 @@ export default function VehicleManagement() {
   const handleRefreshData = async () => {
     try {
       setIsRefreshing(true);
+      setErrorMessage(null);
       clearVehicleDataCache();
       await loadVehicles();
       toast.success("Vehicle data refreshed successfully");
     } catch (error) {
       console.error("Error refreshing vehicle data:", error);
       toast.error("Failed to refresh vehicle data");
+      setErrorMessage("Failed to refresh vehicle data. Please try again.");
     } finally {
       setIsRefreshing(false);
     }
@@ -265,6 +288,13 @@ export default function VehicleManagement() {
           </Button>
         </div>
       </div>
+
+      {errorMessage && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{errorMessage}</AlertDescription>
+        </Alert>
+      )}
 
       <div className="relative mb-4">
         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />

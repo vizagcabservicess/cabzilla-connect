@@ -18,3 +18,24 @@ export const forceRefreshHeaders = {
   ...defaultHeaders,
   'X-Force-Refresh': 'true'
 };
+
+// Add CORS headers to help with cross-domain requests
+export const corsHeaders = {
+  ...defaultHeaders,
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Force-Refresh, X-Admin-Mode'
+};
+
+// Create a direct connection endpoint 
+export const createDirectApiUrl = (endpoint: string) => {
+  const baseUrl = apiBaseUrl.endsWith('/')
+    ? apiBaseUrl.slice(0, -1)
+    : apiBaseUrl;
+  
+  const formattedEndpoint = endpoint.startsWith('/')
+    ? endpoint
+    : `/${endpoint}`;
+  
+  return `${baseUrl}${formattedEndpoint}`;
+};
