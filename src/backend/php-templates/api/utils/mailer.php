@@ -82,29 +82,37 @@ function sendSmtpEmail($to, $subject, $htmlBody) {
         'server_info' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown'
     ]);
     
-    // SMTP credentials for Hostinger
+    // SMTP credentials for Hostinger - explicitly set
     $smtpHost = 'smtp.hostinger.com';
-    $smtpPort = 465; // SSL
+    $smtpPort = 465; // SSL preferred for Hostinger
     $smtpUsername = 'info@vizagtaxihub.com';
     $smtpPassword = 'James!5544';
-    $smtpEncryption = 'ssl'; // Use 'tls' for port 587
+    $smtpEncryption = 'ssl'; // Use SSL for port 465
     
-    // From details
+    // From details - Using verified Hostinger domain email is crucial for deliverability
     $from = 'info@vizagtaxihub.com';
     $fromName = 'Vizag Taxi Hub';
     
-    // Generate a unique boundary for multipart message
-    $boundary = md5(uniqid());
+    // Prepare full email headers for better deliverability
+    $headers = [
+        'MIME-Version: 1.0',
+        'Content-Type: text/html; charset=UTF-8',
+        'From: ' . $fromName . ' <' . $from . '>',
+        'Reply-To: ' . $from,
+        'Return-Path: ' . $from,
+        'X-Mailer: PHP/' . phpversion(),
+        'X-Priority: 1',
+        'X-MSMail-Priority: High',
+        'Importance: High',
+        'X-Sender: ' . $from,
+        // SPF hint
+        'X-SPF: pass',
+        // Avoid auto-responses
+        'X-Auto-Response-Suppress: OOF, DR, RN, NRN, AutoReply',
+        'Precedence: bulk'
+    ];
     
-    // Prepare email headers with specific ordering and format for better deliverability
-    $headers = [];
-    $headers[] = "From: $fromName <$from>";
-    $headers[] = "Reply-To: $from";
-    $headers[] = "MIME-Version: 1.0";
-    $headers[] = "Content-Type: text/html; charset=UTF-8";
-    $headers[] = "X-Mailer: PHP/" . phpversion();
-    
-    // Try using socket connection with proper SSL/TLS context options
+    // Prepare context options for SSL connection
     $context = stream_context_create([
         'ssl' => [
             'verify_peer' => false,
@@ -113,10 +121,20 @@ function sendSmtpEmail($to, $subject, $htmlBody) {
         ]
     ]);
     
+    // Connect to SMTP server
     $errno = 0;
     $errstr = '';
+    
+    // Create connection with proper SSL prefix for port 465
+    $socketAddress = 'ssl://' . $smtpHost . ':' . $smtpPort;
+    
+    logError("Attempting SMTP connection", [
+        'socket' => $socketAddress,
+        'encryption' => $smtpEncryption
+    ]);
+    
     $socket = @stream_socket_client(
-        ($smtpEncryption == 'ssl' ? 'ssl://' : '') . $smtpHost . ':' . $smtpPort,
+        $socketAddress,
         $errno,
         $errstr,
         30,
@@ -128,8 +146,7 @@ function sendSmtpEmail($to, $subject, $htmlBody) {
         logError("SMTP connection failed", [
             'error' => "$errno: $errstr",
             'server' => $smtpHost,
-            'port' => $smtpPort,
-            'encryption' => $smtpEncryption
+            'port' => $smtpPort
         ]);
         return false;
     }
@@ -137,159 +154,143 @@ function sendSmtpEmail($to, $subject, $htmlBody) {
     // Set socket timeout to prevent hanging
     stream_set_timeout($socket, 30);
     
-    // Read server greeting
-    $response = fgets($socket, 515);
-    if (substr($response, 0, 3) != '220') {
-        logError("Invalid SMTP greeting", ['response' => $response]);
-        fclose($socket);
-        return false;
-    }
-    
-    // Send EHLO command
-    fputs($socket, "EHLO vizagtaxihub.com\r\n");
-    $response = fgets($socket, 515);
-    if (substr($response, 0, 3) != '250') {
-        logError("EHLO command failed", ['response' => $response]);
-        fclose($socket);
-        return false;
-    }
-    
-    // Clear any remaining EHLO response lines
-    while (substr($response, 3, 1) == '-') {
-        $response = fgets($socket, 515);
-    }
-    
-    // Start TLS if needed
-    if ($smtpEncryption == 'tls') {
-        fputs($socket, "STARTTLS\r\n");
+    try {
+        // Read server greeting
         $response = fgets($socket, 515);
         if (substr($response, 0, 3) != '220') {
-            logError("STARTTLS failed", ['response' => $response]);
+            logError("Invalid SMTP greeting", ['response' => $response]);
             fclose($socket);
             return false;
         }
         
-        // Enable crypto on the connection
-        if (!stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) {
-            logError("Failed to enable TLS encryption");
-            fclose($socket);
-            return false;
-        }
-        
-        // Send EHLO again after TLS
+        // Send EHLO command - using the domain for proper identification
         fputs($socket, "EHLO vizagtaxihub.com\r\n");
         $response = fgets($socket, 515);
         if (substr($response, 0, 3) != '250') {
-            logError("EHLO after TLS failed", ['response' => $response]);
+            logError("EHLO command failed", ['response' => $response]);
             fclose($socket);
             return false;
         }
         
-        // Clear remaining EHLO response lines
+        // Clear any remaining EHLO response lines
         while (substr($response, 3, 1) == '-') {
             $response = fgets($socket, 515);
         }
-    }
-    
-    // Authenticate
-    fputs($socket, "AUTH LOGIN\r\n");
-    $response = fgets($socket, 515);
-    if (substr($response, 0, 3) != '334') {
-        logError("AUTH command failed", ['response' => $response]);
+        
+        // Authenticate using clear AUTH LOGIN
+        fputs($socket, "AUTH LOGIN\r\n");
+        $response = fgets($socket, 515);
+        if (substr($response, 0, 3) != '334') {
+            logError("AUTH command failed", ['response' => $response]);
+            fclose($socket);
+            return false;
+        }
+        
+        // Send username as base64
+        fputs($socket, base64_encode($smtpUsername) . "\r\n");
+        $response = fgets($socket, 515);
+        if (substr($response, 0, 3) != '334') {
+            logError("Username not accepted", ['response' => $response]);
+            fclose($socket);
+            return false;
+        }
+        
+        // Send password as base64
+        fputs($socket, base64_encode($smtpPassword) . "\r\n");
+        $response = fgets($socket, 515);
+        if (substr($response, 0, 3) != '235') {
+            logError("Authentication failed", ['response' => $response]);
+            fclose($socket);
+            return false;
+        }
+        
+        // Set envelope sender
+        fputs($socket, "MAIL FROM:<$from>\r\n");
+        $response = fgets($socket, 515);
+        if (substr($response, 0, 3) != '250') {
+            logError("MAIL FROM command failed", ['response' => $response]);
+            fclose($socket);
+            return false;
+        }
+        
+        // Set recipient
+        fputs($socket, "RCPT TO:<$to>\r\n");
+        $response = fgets($socket, 515);
+        if (substr($response, 0, 3) != '250') {
+            logError("RCPT TO command failed", ['response' => $response, 'recipient' => $to]);
+            fclose($socket);
+            return false;
+        }
+        
+        // Start data
+        fputs($socket, "DATA\r\n");
+        $response = fgets($socket, 515);
+        if (substr($response, 0, 3) != '354') {
+            logError("DATA command failed", ['response' => $response]);
+            fclose($socket);
+            return false;
+        }
+        
+        // Calculate message ID using domain
+        $messageId = '<' . md5(uniqid(time())) . '@vizagtaxihub.com>';
+        $date = date('r');
+        
+        // Add headers to email content
+        $message = "";
+        $message .= "Date: $date\r\n";
+        $message .= "To: $to\r\n";
+        $message .= "Subject: $subject\r\n";
+        $message .= "Message-ID: $messageId\r\n";
+        
+        // Add all headers
+        foreach ($headers as $header) {
+            $message .= $header . "\r\n";
+        }
+        
+        // Add empty line to separate headers from body
+        $message .= "\r\n";
+        
+        // Add HTML body
+        $message .= $htmlBody;
+        
+        // End message with single dot on a line
+        $message .= "\r\n.\r\n";
+        
+        // Send message data
+        fputs($socket, $message);
+        $response = fgets($socket, 515);
+        if (substr($response, 0, 3) != '250') {
+            logError("Message sending failed", ['response' => $response]);
+            fclose($socket);
+            return false;
+        }
+        
+        // Properly close connection
+        fputs($socket, "QUIT\r\n");
         fclose($socket);
+        
+        logError("Email sent successfully via SMTP", [
+            'to' => $to,
+            'subject' => $subject,
+            'host' => $smtpHost,
+            'port' => $smtpPort,
+            'messageId' => $messageId
+        ]);
+        
+        return true;
+    }
+    catch (Exception $e) {
+        logError("Exception in SMTP email sending", [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        
+        if ($socket) {
+            fclose($socket);
+        }
+        
         return false;
     }
-    
-    // Send username
-    fputs($socket, base64_encode($smtpUsername) . "\r\n");
-    $response = fgets($socket, 515);
-    if (substr($response, 0, 3) != '334') {
-        logError("Username not accepted", ['response' => $response]);
-        fclose($socket);
-        return false;
-    }
-    
-    // Send password
-    fputs($socket, base64_encode($smtpPassword) . "\r\n");
-    $response = fgets($socket, 515);
-    if (substr($response, 0, 3) != '235') {
-        logError("Authentication failed", ['response' => $response]);
-        fclose($socket);
-        return false;
-    }
-    
-    // Set sender
-    fputs($socket, "MAIL FROM:<$from>\r\n");
-    $response = fgets($socket, 515);
-    if (substr($response, 0, 3) != '250') {
-        logError("MAIL FROM command failed", ['response' => $response]);
-        fclose($socket);
-        return false;
-    }
-    
-    // Set recipient
-    fputs($socket, "RCPT TO:<$to>\r\n");
-    $response = fgets($socket, 515);
-    if (substr($response, 0, 3) != '250') {
-        logError("RCPT TO command failed", ['response' => $response, 'recipient' => $to]);
-        fclose($socket);
-        return false;
-    }
-    
-    // Start data
-    fputs($socket, "DATA\r\n");
-    $response = fgets($socket, 515);
-    if (substr($response, 0, 3) != '354') {
-        logError("DATA command failed", ['response' => $response]);
-        fclose($socket);
-        return false;
-    }
-    
-    // Prepare full email content
-    $date = date('r');
-    $messageId = '<' . md5(uniqid()) . '@vizagtaxihub.com>';
-    
-    // Construct email with proper headers for better deliverability
-    $message = "";
-    $message .= "Date: $date\r\n";
-    $message .= "To: $to\r\n";
-    $message .= "Subject: $subject\r\n";
-    $message .= "Message-ID: $messageId\r\n";
-    $message .= "From: $fromName <$from>\r\n";
-    $message .= "Reply-To: $from\r\n";
-    $message .= "Return-Path: $from\r\n";
-    $message .= "MIME-Version: 1.0\r\n";
-    $message .= "Content-Type: text/html; charset=UTF-8\r\n";
-    $message .= "X-Mailer: PHP/" . phpversion() . "\r\n";
-    // Avoid Precedence header which can trigger auto-responses
-    $message .= "Precedence: bulk\r\n";
-    // Add more deliverability headers
-    $message .= "X-Auto-Response-Suppress: DR, RN, NRN, OOF, AutoReply\r\n";
-    $message .= "\r\n";
-    $message .= $htmlBody;
-    $message .= "\r\n.\r\n";
-    
-    // Send message data
-    fputs($socket, $message);
-    $response = fgets($socket, 515);
-    if (substr($response, 0, 3) != '250') {
-        logError("Message sending failed", ['response' => $response]);
-        fclose($socket);
-        return false;
-    }
-    
-    // Quit
-    fputs($socket, "QUIT\r\n");
-    fclose($socket);
-    
-    logError("Email sent successfully via SMTP", [
-        'to' => $to,
-        'subject' => $subject,
-        'host' => $smtpHost,
-        'port' => $smtpPort
-    ]);
-    
-    return true;
 }
 
 // Function to send email using Hostinger-recommended methods with improved error handling
@@ -711,41 +712,75 @@ function sendBookingStatusUpdateEmail($to, $subject, $message) {
 // New helper function to try all available email methods sequentially
 function sendEmailAllMethods($to, $subject, $htmlBody) {
     // First try direct SMTP connection (most reliable)
-    logError("Attempting email delivery via SMTP", ['to' => $to]);
+    logError("Attempting email delivery via SMTP", [
+        'to' => $to,
+        'subject' => $subject,
+        'timestamp' => date('Y-m-d H:i:s')
+    ]);
+    
     $result = sendSmtpEmail($to, $subject, $htmlBody);
     
     if ($result) {
-        logError("Email successfully sent via SMTP", ['to' => $to]);
+        logError("Email successfully sent via SMTP", [
+            'to' => $to,
+            'timestamp' => date('Y-m-d H:i:s')
+        ]);
         return true;
     }
     
     // Next try SendGrid API
-    logError("SMTP failed, trying SendGrid", ['to' => $to]);
+    logError("SMTP failed, trying SendGrid", [
+        'to' => $to,
+        'timestamp' => date('Y-m-d H:i:s')
+    ]);
+    
     $result = sendSendGridEmail($to, $subject, $htmlBody);
     
     if ($result) {
-        logError("Email successfully sent via SendGrid", ['to' => $to]);
+        logError("Email successfully sent via SendGrid", [
+            'to' => $to,
+            'timestamp' => date('Y-m-d H:i:s')
+        ]);
         return true;
     }
     
     // Then try Hostinger's specific method
-    logError("SendGrid failed, trying Hostinger method", ['to' => $to]);
+    logError("SendGrid failed, trying Hostinger method", [
+        'to' => $to,
+        'timestamp' => date('Y-m-d H:i:s')
+    ]);
+    
     $result = sendHostingerMail($to, $subject, $htmlBody);
     
     if ($result) {
-        logError("Email successfully sent via Hostinger method", ['to' => $to]);
+        logError("Email successfully sent via Hostinger method", [
+            'to' => $to,
+            'timestamp' => date('Y-m-d H:i:s')
+        ]);
         return true;
     }
     
     // Finally, fall back to PHP's mail function
-    logError("Hostinger method failed, trying PHP mail", ['to' => $to]);
+    logError("Hostinger method failed, trying PHP mail", [
+        'to' => $to,
+        'timestamp' => date('Y-m-d H:i:s')
+    ]);
+    
     $result = sendMailReliable($to, $subject, $htmlBody);
     
     if ($result) {
-        logError("Email successfully sent via PHP mail", ['to' => $to]);
+        logError("Email successfully sent via PHP mail", [
+            'to' => $to,
+            'timestamp' => date('Y-m-d H:i:s')
+        ]);
         return true;
     }
     
-    logError("All email methods failed", ['to' => $to, 'subject' => $subject]);
+    logError("All email methods failed", [
+        'to' => $to, 
+        'subject' => $subject,
+        'timestamp' => date('Y-m-d H:i:s')
+    ]);
+    
     return false;
 }

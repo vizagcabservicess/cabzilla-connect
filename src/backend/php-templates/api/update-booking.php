@@ -241,7 +241,8 @@ try {
         logError("Sending booking status update email", [
             'booking_id' => $bookingId,
             'new_status' => 'confirmed',
-            'passenger_email' => $updatedBooking['passenger_email']
+            'passenger_email' => $updatedBooking['passenger_email'],
+            'timestamp' => date('Y-m-d H:i:s')
         ]);
         
         try {
@@ -254,19 +255,31 @@ try {
                     " and vehicle " . ($updatedBooking['vehicle_number'] ? $updatedBooking['vehicle_number'] : "details will be shared soon") . 
                     ". Thank you for choosing Vizag Taxi Hub.";
                 
-                // First, try all methods through our helper
-                $emailSuccess = sendEmailAllMethods(
+                // Try direct SMTP first (most reliable)
+                logError("First attempting SMTP for status update email", [
+                    'recipient' => $updatedBooking['passenger_email'],
+                    'booking_id' => $bookingId,
+                    'timestamp' => date('Y-m-d H:i:s')
+                ]);
+                
+                $emailSuccess = sendSmtpEmail(
                     $updatedBooking['passenger_email'],
                     $emailSubject,
-                    $emailMessage
+                    generateConfirmationEmailHtml($emailSubject, $emailMessage)
                 );
                 
-                // If the helper fails, try the specialized function as backup
                 if (!$emailSuccess) {
-                    $emailSuccess = sendBookingStatusUpdateEmail(
+                    // Try with all methods through our helper
+                    logError("SMTP failed, trying all available methods", [
+                        'recipient' => $updatedBooking['passenger_email'],
+                        'booking_id' => $bookingId,
+                        'timestamp' => date('Y-m-d H:i:s')
+                    ]);
+                    
+                    $emailSuccess = sendEmailAllMethods(
                         $updatedBooking['passenger_email'],
                         $emailSubject,
-                        $emailMessage
+                        generateConfirmationEmailHtml($emailSubject, $emailMessage)
                     );
                 }
                 
@@ -275,14 +288,16 @@ try {
                     'success' => $emailSuccess ? 'yes' : 'no',
                     'booking_id' => $bookingId,
                     'recipient' => $updatedBooking['passenger_email'],
-                    'methods_tried' => 'all available methods'
+                    'methods_tried' => 'all available methods',
+                    'timestamp' => date('Y-m-d H:i:s')
                 ]);
             }
         } catch (Exception $e) {
             logError("Error sending status update email", [
                 'error' => $e->getMessage(),
                 'booking_id' => $bookingId,
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
+                'timestamp' => date('Y-m-d H:i:s')
             ]);
         }
     }
@@ -290,6 +305,46 @@ try {
     sendJsonResponse(['status' => 'success', 'message' => 'Booking updated successfully', 'data' => $booking]);
     
 } catch (Exception $e) {
-    logError("Update booking error", ['message' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+    logError("Update booking error", [
+        'message' => $e->getMessage(), 
+        'trace' => $e->getTraceAsString(),
+        'timestamp' => date('Y-m-d H:i:s')
+    ]);
     sendJsonResponse(['status' => 'error', 'message' => 'Failed to update booking: ' . $e->getMessage()], 500);
+}
+
+// Helper function to generate HTML email for confirmation
+function generateConfirmationEmailHtml($subject, $message) {
+    return '<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>'.$subject.'</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+        .content { background-color: #f9f9f9; padding: 20px; border-radius: 0 0 5px 5px; border: 1px solid #ddd; }
+        .footer { margin-top: 20px; text-align: center; color: #777; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>'.$subject.'</h1>
+        </div>
+        <div class="content">
+            <p>'.$message.'</p>
+            <p>If you have any questions, please contact our customer support:</p>
+            <p>Phone: +91 9966363662</p>
+            <p>Email: info@vizagtaxihub.com</p>
+        </div>
+        <div class="footer">
+            <p>Thank you for choosing Vizag Taxi Hub!</p>
+            <p>© ' . date('Y') . ' Vizag Taxi Hub. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>';
 }
