@@ -28,7 +28,7 @@ export const defaultHeaders = {
   'Cache-Control': 'no-cache, no-store, must-revalidate',
   'Pragma': 'no-cache',
   'Expires': '0',
-  'Origin': window.location.origin,
+  'Origin': typeof window !== 'undefined' ? window.location.origin : '*',
   'X-Requested-With': 'XMLHttpRequest',
   'Accept': '*/*'
 };
@@ -39,3 +39,25 @@ export const forceRefreshHeaders = {
   'X-Force-Refresh': 'true',
   'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0'
 };
+
+// Direct vehicle API headers - more aggressive CORS settings
+export const directVehicleHeaders = {
+  ...forceRefreshHeaders,
+  'X-Admin-Mode': 'true', 
+  'Origin': typeof window !== 'undefined' ? window.location.origin : '*',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Request-Method': 'POST, GET, OPTIONS',
+  'Access-Control-Request-Headers': 'Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh'
+};
+
+// Check if we should use the CORS fix endpoint
+export const useCorsFixEndpoint = import.meta.env.VITE_USE_CORS_FIX === 'true';
+
+// Check if we should use direct vehicle API
+export const useDirectVehicleApi = import.meta.env.VITE_USE_DIRECT_VEHICLE_API === 'true';
+
+// Maximum vehicle retry attempts
+export const maxVehicleRetries = Number(import.meta.env.VITE_MAX_VEHICLE_RETRIES || 3);
+
+// Enable offline fallback for vehicle operations
+export const enableOfflineFallback = import.meta.env.VITE_ENABLE_OFFLINE_FALLBACK === 'true';

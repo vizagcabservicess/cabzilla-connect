@@ -1,17 +1,17 @@
 
 import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, AlertTriangle, RefreshCw } from "lucide-react";
-import { CabType } from "@/types/cab";
-import { updateVehicle } from "@/services/directVehicleService";
-import { toast } from "sonner";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { updateVehicle } from '@/services/directVehicleService';
+import { CabType } from '@/types/cab';
+import { AlertCircle, Loader2 } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { fixDatabaseTables } from '@/utils/apiHelper';
+import { toast } from 'sonner';
 
 interface EditVehicleDialogProps {
   open: boolean;
@@ -20,224 +20,173 @@ interface EditVehicleDialogProps {
   vehicle: CabType;
 }
 
-// Create a new interface that extends CabType to include amenitiesString
-interface VehicleFormData extends Partial<CabType> {
-  amenitiesString?: string;
-}
-
 export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: EditVehicleDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState<VehicleFormData>({});
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [updateAttempts, setUpdateAttempts] = useState(0);
-  const [retrying, setRetrying] = useState(false);
-  const [originalVehicle, setOriginalVehicle] = useState<CabType | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isFixingDatabase, setIsFixingDatabase] = useState(false);
+  const [formData, setFormData] = useState<CabType>(vehicle);
 
+  // Update form data when the vehicle prop changes
   useEffect(() => {
-    if (vehicle) {
-      console.log("Selected vehicle for editing:", vehicle);
-      
-      // Store the original vehicle for later comparison
-      setOriginalVehicle({...vehicle});
-      
-      // Convert amenities array to comma-separated string for the form input
-      const amenitiesString = Array.isArray(vehicle.amenities) 
-        ? vehicle.amenities.join(', ') 
-        : '';
-        
-      setFormData({
-        ...vehicle,
-        // Store amenities as a string in a separate property for form handling
-        amenitiesString: amenitiesString
-      });
-      
-      // Clear any previous error
-      setErrorMessage(null);
-      setUpdateAttempts(0);
-      setRetrying(false);
-    }
+    setFormData(vehicle);
   }, [vehicle]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: name === 'capacity' || name === 'luggageCapacity' || name === 'pricePerKm' || name === 'price' || name === 'nightHaltCharge' || name === 'driverAllowance'
-        ? Number(value)
+      [name]: name === 'capacity' || name === 'luggageCapacity' || 
+              name === 'basePrice' || name === 'pricePerKm' ||
+              name === 'nightHaltCharge' || name === 'driverAllowance' 
+        ? Number(value) 
         : value
     }));
   };
 
-  const handleSwitchChange = (checked: boolean) => {
+  const handleSwitchChange = (name: string, checked: boolean) => {
     setFormData((prev) => ({
       ...prev,
-      isActive: checked
+      [name]: checked
+    }));
+  };
+
+  const handleAmenitiesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    const amenitiesList = value.split(',').map(item => item.trim());
+    setFormData((prev) => ({
+      ...prev,
+      amenities: amenitiesList
     }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!formData.name) {
-      toast.error("Vehicle name is required");
-      return;
-    }
+    setIsSubmitting(true);
+    setError(null);
     
     try {
-      setIsSubmitting(true);
-      setErrorMessage(null);
-      setUpdateAttempts(prev => prev + 1);
-      setRetrying(false);
+      // Validate required fields
+      if (!formData.id && !formData.vehicleId) {
+        throw new Error('Vehicle ID is required');
+      }
       
-      // Format the data - Ensure we're not sending duplicate or conflicting fields
-      // Start with the original vehicle to preserve all fields
-      const vehicleData: CabType = {
-        ...originalVehicle,
+      if (!formData.name) {
+        throw new Error('Name is required');
+      }
+
+      // Make sure vehicle has an ID
+      const vehicleToUpdate: CabType = {
         ...formData,
-        // Convert the amenitiesString back to an array
-        amenities: formData.amenitiesString 
-          ? formData.amenitiesString.split(',').map(item => item.trim()) 
-          : originalVehicle?.amenities || [],
-        id: vehicle.id, // Ensure ID remains unchanged
-        vehicleId: vehicle.id, // Ensure vehicleId is also set correctly
-        description: formData.description || '', // Explicitly set description, don't use originalVehicle.description as fallback
-        // Explicitly set pricing fields to resolve the 'base_price' error
-        basePrice: formData.price || originalVehicle?.price || 0,
-        price: formData.price || originalVehicle?.price || 0,
-        // Make sure these fields have default values to prevent database errors
-        nightHaltCharge: formData.nightHaltCharge || originalVehicle?.nightHaltCharge || 700,
-        driverAllowance: formData.driverAllowance || originalVehicle?.driverAllowance || 300
+        id: formData.id || formData.vehicleId || '',
+        vehicleId: formData.vehicleId || formData.id || ''
       };
-      
-      // Remove amenitiesString as it's not part of CabType
-      delete (vehicleData as any).amenitiesString;
-      
-      console.log('Submitting vehicle update with data:', vehicleData);
-      
+
       // Update the vehicle
-      const updatedVehicle = await updateVehicle(vehicle.id, vehicleData);
+      const updatedVehicle = await updateVehicle(vehicleToUpdate);
       
-      // Ensure description is properly preserved in the result
-      updatedVehicle.description = vehicleData.description;
-      
-      // Notify parent component
+      // Notify the parent component
       onEditVehicle(updatedVehicle);
-      
-      // Success message
-      toast.success(`Vehicle ${vehicleData.name} updated successfully`);
       
       // Close dialog
       onClose();
-      
-    } catch (error) {
-      console.error("Error updating vehicle:", error);
-      
-      // Set error message for display
-      setErrorMessage(error instanceof Error ? error.message : "Failed to update vehicle. Please try again.");
-      
-      // Show toast notification
-      toast.error("Failed to update vehicle. Please see details in the form.");
-      
-      // If multiple attempts, provide more guidance
-      if (updateAttempts > 1) {
-        setErrorMessage(prev => `${prev || ""}\n\nTry refreshing the page or check if the server is accessible. The database may be missing required columns.`);
-      }
+    } catch (err) {
+      console.error('Error updating vehicle:', err);
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
     } finally {
       setIsSubmitting(false);
     }
   };
-
-  const handleRetry = async () => {
-    setRetrying(true);
+  
+  const handleFixDatabase = async () => {
+    setIsFixingDatabase(true);
     try {
-      // Try to invalidate any cache and reset state
-      window.dispatchEvent(new CustomEvent('vehicle-data-cache-cleared', {
-        detail: { timestamp: Date.now() }
-      }));
-      
-      // Wait a moment to ensure cache is cleared
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Retry submission
-      handleSubmit(new Event('submit') as any);
-    } catch (error) {
-      console.error("Error during retry:", error);
-      setRetrying(false);
+      const success = await fixDatabaseTables();
+      if (success) {
+        toast.success('Database tables fixed successfully');
+        setError(null);
+      } else {
+        toast.error('Failed to fix database tables');
+      }
+    } catch (err) {
+      console.error('Error fixing database:', err);
+    } finally {
+      setIsFixingDatabase(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => !isSubmitting && !isOpen && onClose()}>
-      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle>Edit Vehicle</DialogTitle>
           <DialogDescription>
-            Update the vehicle information. ID cannot be changed.
+            Update the vehicle information.
           </DialogDescription>
         </DialogHeader>
-        
-        {errorMessage && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription className="whitespace-pre-line">{errorMessage}</AlertDescription>
-            
-            <div className="mt-3">
+
+        {error && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription className="flex flex-col gap-2">
+              <span>{error}</span>
               <Button 
                 variant="outline" 
                 size="sm" 
-                onClick={handleRetry} 
-                disabled={retrying || isSubmitting}
-                className="flex items-center gap-1"
+                onClick={handleFixDatabase}
+                disabled={isFixingDatabase}
               >
-                {retrying ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-                Retry
+                {isFixingDatabase ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Fixing database...
+                  </>
+                ) : (
+                  'Fix Database Tables'
+                )}
               </Button>
-            </div>
+            </AlertDescription>
           </Alert>
         )}
-        
-        <form onSubmit={handleSubmit} className="space-y-4 pt-4">
+
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="id">Vehicle ID</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  id="id"
-                  value={vehicle.id}
-                  disabled
-                  className="bg-gray-100"
-                />
-                {formData.isActive ? (
-                  <Badge variant="default" className="bg-green-500">Active</Badge>
-                ) : (
-                  <Badge variant="secondary" className="bg-gray-400">Inactive</Badge>
-                )}
-              </div>
+              <Label htmlFor="vehicleId">Vehicle ID</Label>
+              <Input
+                id="vehicleId"
+                name="vehicleId"
+                placeholder="sedan, suv, etc."
+                value={formData.vehicleId || formData.id || ''}
+                onChange={handleChange}
+                disabled
+              />
+              <p className="text-xs text-gray-500">
+                ID cannot be changed
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="name">Vehicle Name</Label>
               <Input
                 id="name"
                 name="name"
+                placeholder="Sedan, SUV, etc."
                 value={formData.name || ''}
                 onChange={handleChange}
-                placeholder="Sedan"
-                required
               />
             </div>
           </div>
-          
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="capacity">Seating Capacity</Label>
+              <Label htmlFor="capacity">Passenger Capacity</Label>
               <Input
                 id="capacity"
                 name="capacity"
                 type="number"
-                value={formData.capacity || 0}
+                min="1"
+                value={formData.capacity || 4}
                 onChange={handleChange}
-                min={1}
-                max={20}
               />
             </div>
             <div className="space-y-2">
@@ -246,24 +195,24 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
                 id="luggageCapacity"
                 name="luggageCapacity"
                 type="number"
-                value={formData.luggageCapacity || 0}
+                min="0"
+                value={formData.luggageCapacity || 2}
                 onChange={handleChange}
-                min={0}
-                max={10}
               />
             </div>
           </div>
-          
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="price">Base Price (₹)</Label>
+              <Label htmlFor="basePrice">Base Price (₹)</Label>
               <Input
-                id="price"
-                name="price"
+                id="basePrice"
+                name="basePrice"
                 type="number"
-                value={formData.price || 0}
+                min="0"
+                step="10"
+                value={formData.basePrice || formData.price || 0}
                 onChange={handleChange}
-                min={0}
               />
             </div>
             <div className="space-y-2">
@@ -272,13 +221,14 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
                 id="pricePerKm"
                 name="pricePerKm"
                 type="number"
+                min="0"
+                step="0.5"
                 value={formData.pricePerKm || 0}
                 onChange={handleChange}
-                min={0}
               />
             </div>
           </div>
-          
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="nightHaltCharge">Night Halt Charge (₹)</Label>
@@ -286,9 +236,10 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
                 id="nightHaltCharge"
                 name="nightHaltCharge"
                 type="number"
+                min="0"
+                step="50"
                 value={formData.nightHaltCharge || 700}
                 onChange={handleChange}
-                min={0}
               />
             </div>
             <div className="space-y-2">
@@ -297,68 +248,83 @@ export function EditVehicleDialog({ open, onClose, onEditVehicle, vehicle }: Edi
                 id="driverAllowance"
                 name="driverAllowance"
                 type="number"
-                value={formData.driverAllowance || 300}
+                min="0"
+                step="10"
+                value={formData.driverAllowance || 250}
                 onChange={handleChange}
-                min={0}
               />
             </div>
           </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="amenitiesString">Amenities (comma separated)</Label>
-            <Input
-              id="amenitiesString"
-              name="amenitiesString"
-              value={formData.amenitiesString || ''}
-              onChange={handleChange}
-              placeholder="AC, Bottle Water, Music System"
-            />
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
-            <Textarea
-              id="description"
-              name="description"
-              value={formData.description || ''}
-              onChange={handleChange}
-              placeholder="Comfortable sedan suitable for 4 passengers."
-              rows={3}
-            />
-          </div>
-          
+
           <div className="space-y-2">
             <Label htmlFor="image">Image URL</Label>
             <Input
               id="image"
               name="image"
-              value={formData.image || ''}
-              onChange={handleChange}
               placeholder="/cars/sedan.png"
+              value={formData.image || '/cars/sedan.png'}
+              onChange={handleChange}
+            />
+            <p className="text-xs text-gray-500">
+              Path to vehicle image (e.g., /cars/sedan.png)
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="amenities">Amenities</Label>
+            <Input
+              id="amenities"
+              name="amenities"
+              placeholder="AC, Bottle Water, Music System"
+              value={Array.isArray(formData.amenities) ? formData.amenities.join(', ') : 'AC'}
+              onChange={handleAmenitiesChange}
+            />
+            <p className="text-xs text-gray-500">
+              Comma-separated list of amenities
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              name="description"
+              placeholder="Describe the vehicle..."
+              value={formData.description || ''}
+              onChange={handleChange}
             />
           </div>
-          
+
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="ac"
+              checked={!!formData.ac}
+              onCheckedChange={(checked) => handleSwitchChange('ac', checked)}
+            />
+            <Label htmlFor="ac">Air Conditioned</Label>
+          </div>
+
           <div className="flex items-center space-x-2">
             <Switch
               id="isActive"
-              checked={formData.isActive ?? vehicle.isActive ?? true}
-              onCheckedChange={handleSwitchChange}
+              checked={!!formData.isActive}
+              onCheckedChange={(checked) => handleSwitchChange('isActive', checked)}
             />
-            <Label htmlFor="isActive">Active Status</Label>
+            <Label htmlFor="isActive">Active</Label>
           </div>
-          
-          <DialogFooter className="flex justify-end pt-4 gap-2">
-            <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting} className="w-full sm:w-auto">
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
+            <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Updating...
                 </>
               ) : (
-                "Update Vehicle"
+                'Save Changes'
               )}
             </Button>
           </DialogFooter>
