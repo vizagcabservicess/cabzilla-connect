@@ -1,3 +1,4 @@
+
 import { toast } from 'sonner';
 import { apiBaseUrl, directVehicleHeaders, apiTimeout } from '@/config/api';
 import { formatDataForMultipart } from '@/config/requestConfig';
@@ -119,7 +120,7 @@ export const fixDatabaseTables = async (): Promise<boolean> => {
   try {
     console.log('Attempting to fix database tables...');
     
-    const url = `${apiBaseUrl}/api/admin/fix-database-tables.php?_t=${Date.now()}`;
+    const url = `${apiBaseUrl}/api/admin/fix-vehicle-tables.php?_t=${Date.now()}`;
     
     const response = await fetch(url, {
       method: 'GET',

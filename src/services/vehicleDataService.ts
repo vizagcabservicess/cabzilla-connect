@@ -1,6 +1,8 @@
+
 import { CabType } from '@/types/cab';
 import { apiBaseUrl, getApiUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
 import { OutstationFare, LocalFare, AirportFare } from '@/types/cab';
+import { toast } from 'sonner';
 
 // Reduced cache durations to ensure fresher data
 const JSON_CACHE_DURATION = 30 * 1000; // 30 seconds in milliseconds (reduced significantly)
@@ -141,7 +143,7 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
     
     // Add timeout to the fetch
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Direct API request timeout')), 5000); // Increased timeout
+      setTimeout(() => reject(new Error('Direct API request timeout')), 8000); // Increased timeout
     });
     
     // Race the fetch against the timeout
@@ -185,6 +187,53 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
       return filterVehicles(processedVehicles, includeInactive);
     } else {
       console.warn('Direct API returned empty or invalid vehicles array:', data);
+      
+      // Try the fix-vehicle-tables endpoint to repair database
+      try {
+        toast.info("Attempting to fix vehicle database tables");
+        const fixResponse = await fetch(`${apiBaseUrl}/api/admin/fix-vehicle-tables.php?${cacheBuster}`, {
+          headers: forceRefreshHeaders,
+          mode: 'cors',
+          cache: 'no-store'
+        });
+        
+        if (fixResponse.ok) {
+          // Try fetching vehicles again
+          const retryResponse = await fetch(url, {
+            headers: forceRefreshHeaders,
+            mode: 'cors',
+            cache: 'no-store'
+          });
+          
+          if (retryResponse.ok) {
+            const retryData = await retryResponse.json();
+            
+            if (retryData && retryData.status === 'success' && Array.isArray(retryData.vehicles) && retryData.vehicles.length > 0) {
+              console.log(`Received ${retryData.vehicles.length} vehicles after fixing database`);
+              
+              // Process vehicle data to ensure correct format
+              const processedVehicles = processVehicles(retryData.vehicles);
+              
+              // Cache the processed data
+              cachedVehicles.api = {
+                data: processedVehicles,
+                timestamp: now
+              };
+              
+              // Cache to localStorage for persistence
+              localStorage.setItem('cachedVehicles', JSON.stringify(processedVehicles));
+              localStorage.setItem('cachedVehiclesTimestamp', now.toString());
+              
+              toast.success(`Successfully retrieved ${processedVehicles.length} vehicles after database fix`);
+              
+              return filterVehicles(processedVehicles, includeInactive);
+            }
+          }
+        }
+      } catch (fixError) {
+        console.error('Error fixing database:', fixError);
+      }
+      
       throw new Error('Direct API returned empty or invalid vehicles array');
     }
   } catch (directApiError) {
@@ -212,7 +261,7 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
       
       // Add timeout to the fetch
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('API request timeout')), 5000); // Increased timeout
+        setTimeout(() => reject(new Error('API request timeout')), 8000); // Increased timeout
       });
       
       // Race the fetch against the timeout
@@ -375,7 +424,10 @@ function processVehicles(vehicles: any[]): CabType[] {
       ac: vehicle.ac === undefined ? true : Boolean(vehicle.ac),
       nightHaltCharge: parseFloat(vehicle.nightHaltCharge || vehicle.night_halt_charge || '0'),
       driverAllowance: parseFloat(vehicle.driverAllowance || vehicle.driver_allowance || '0'),
-      isActive: vehicle.is_active === undefined ? (vehicle.isActive === undefined ? true : Boolean(vehicle.isActive)) : Boolean(vehicle.is_active)
+      isActive: vehicle.is_active === undefined ? (vehicle.isActive === undefined ? true : Boolean(vehicle.isActive)) : Boolean(vehicle.is_active),
+      local: vehicle.local || {},
+      airport: vehicle.airport || {},
+      outstation: vehicle.outstation || {}
     };
   });
 }
@@ -455,8 +507,8 @@ export const updateOutstationFares = async (vehicleId: string, fareData: Outstat
     formData.append('forceSync', 'true');
     formData.append('force_sync', 'true');
     
-    // Try direct airport fares endpoint
-    const directResponse = await fetch(getApiUrl('/api/direct-fare-update.php'), {
+    // Try direct outstation fares endpoint
+    const directResponse = await fetch(getApiUrl('/api/admin/direct-outstation-fares.php'), {
       method: 'POST',
       body: formData,
       headers: {
@@ -469,16 +521,13 @@ export const updateOutstationFares = async (vehicleId: string, fareData: Outstat
       const result = await directResponse.json();
       console.log('Direct API response for outstation fares:', result);
       
-      // Trigger a sync between tables
-      await syncVehicleTables(vehicleId);
+      // Clear cache to ensure fresh data on next fetch
+      clearVehicleDataCache();
       
       // Trigger event to update UI
       window.dispatchEvent(new CustomEvent('fare-data-updated', { 
         detail: { vehicleId, tripType: 'outstation' }
       }));
-      
-      // Clear cache to ensure fresh data on next fetch
-      clearVehicleDataCache();
       
       return true;
     }
@@ -493,16 +542,13 @@ export const updateOutstationFares = async (vehicleId: string, fareData: Outstat
       const result = await fallbackResponse.json();
       console.log('Fallback API response for outstation fares:', result);
       
-      // Trigger a sync between tables
-      await syncVehicleTables(vehicleId);
+      // Clear cache to ensure fresh data on next fetch
+      clearVehicleDataCache();
       
       // Trigger event to update UI
       window.dispatchEvent(new CustomEvent('fare-data-updated', { 
         detail: { vehicleId, tripType: 'outstation' }
       }));
-      
-      // Clear cache to ensure fresh data on next fetch
-      clearVehicleDataCache();
       
       return true;
     }
@@ -549,25 +595,21 @@ export const updateLocalFares = async (vehicleId: string, fareData: LocalFare): 
     }
     
     if (fareData.priceExtraKm !== undefined) {
-      formData.append('extraKmRate', fareData.priceExtraKm.toString());
       formData.append('priceExtraKm', fareData.priceExtraKm.toString());
+      formData.append('price_extra_km', fareData.priceExtraKm.toString());
+      formData.append('extraKmPrice', fareData.priceExtraKm.toString());
       formData.append('extra_km_charge', fareData.priceExtraKm.toString());
-      formData.append('extra_km_rate', fareData.priceExtraKm.toString());
     }
     
     if (fareData.priceExtraHour !== undefined) {
-      formData.append('extraHourRate', fareData.priceExtraHour.toString());
       formData.append('priceExtraHour', fareData.priceExtraHour.toString());
+      formData.append('price_extra_hour', fareData.priceExtraHour.toString());
+      formData.append('extraHourPrice', fareData.priceExtraHour.toString());
       formData.append('extra_hour_charge', fareData.priceExtraHour.toString());
-      formData.append('extra_hour_rate', fareData.priceExtraHour.toString());
     }
     
-    // Force create/update the vehicle in all tables
-    formData.append('forceSync', 'true');
-    formData.append('force_sync', 'true');
-    
-    // Try the direct API endpoint first
-    const directResponse = await fetch(getApiUrl('/api/direct-fare-update.php'), {
+    // Try direct local fares endpoint
+    const directResponse = await fetch(getApiUrl('/api/direct-local-fares.php'), {
       method: 'POST',
       body: formData,
       headers: {
@@ -580,16 +622,13 @@ export const updateLocalFares = async (vehicleId: string, fareData: LocalFare): 
       const result = await directResponse.json();
       console.log('Direct API response for local fares:', result);
       
-      // Trigger a sync between tables
-      await syncVehicleTables(vehicleId);
+      // Clear cache to ensure fresh data on next fetch
+      clearVehicleDataCache();
       
       // Trigger event to update UI
       window.dispatchEvent(new CustomEvent('fare-data-updated', { 
         detail: { vehicleId, tripType: 'local' }
       }));
-      
-      // Clear cache to ensure fresh data on next fetch
-      clearVehicleDataCache();
       
       return true;
     }
@@ -604,16 +643,13 @@ export const updateLocalFares = async (vehicleId: string, fareData: LocalFare): 
       const result = await fallbackResponse.json();
       console.log('Fallback API response for local fares:', result);
       
-      // Trigger a sync between tables
-      await syncVehicleTables(vehicleId);
+      // Clear cache to ensure fresh data on next fetch
+      clearVehicleDataCache();
       
       // Trigger event to update UI
       window.dispatchEvent(new CustomEvent('fare-data-updated', { 
         detail: { vehicleId, tripType: 'local' }
       }));
-      
-      // Clear cache to ensure fresh data on next fetch
-      clearVehicleDataCache();
       
       return true;
     }
@@ -641,23 +677,20 @@ export const updateAirportFares = async (vehicleId: string, fareData: AirportFar
     Object.entries(fareData).forEach(([key, value]) => {
       formData.append(key, value.toString());
       
-      // Add with airport_ prefix for compatibility
-      formData.append(`airport_${key}`, value.toString());
-      
-      // Add snake case version
+      // Add with alternative naming conventions
       const snakeCaseKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
       if (snakeCaseKey !== key) {
         formData.append(snakeCaseKey, value.toString());
-        formData.append(`airport_${snakeCaseKey}`, value.toString());
+      }
+      
+      const camelCaseKey = key.replace(/_([a-z])/g, (_, p1) => p1.toUpperCase());
+      if (camelCaseKey !== key) {
+        formData.append(camelCaseKey, value.toString());
       }
     });
     
-    // Force create/update the vehicle in all tables
-    formData.append('forceSync', 'true');
-    formData.append('force_sync', 'true');
-    
-    // Try the direct airport fares endpoint first
-    const directResponse = await fetch(getApiUrl('/api/direct-airport-fares.php'), {
+    // Try direct airport fares endpoint
+    const directResponse = await fetch(getApiUrl('/api/admin/direct-airport-fares.php'), {
       method: 'POST',
       body: formData,
       headers: {
@@ -668,46 +701,15 @@ export const updateAirportFares = async (vehicleId: string, fareData: AirportFar
     
     if (directResponse.ok) {
       const result = await directResponse.json();
-      console.log('Direct airport API response:', result);
+      console.log('Direct API response for airport fares:', result);
       
-      // Trigger a sync between tables
-      await syncVehicleTables(vehicleId);
+      // Clear cache to ensure fresh data on next fetch
+      clearVehicleDataCache();
       
       // Trigger event to update UI
       window.dispatchEvent(new CustomEvent('fare-data-updated', { 
         detail: { vehicleId, tripType: 'airport' }
       }));
-      
-      // Clear cache to ensure fresh data on next fetch
-      clearVehicleDataCache();
-      
-      return true;
-    }
-    
-    // Try the general fare update endpoint
-    const generalResponse = await fetch(getApiUrl('/api/direct-fare-update.php'), {
-      method: 'POST',
-      body: formData,
-      headers: {
-        'X-Force-Refresh': 'true',
-        'Cache-Control': 'no-cache'
-      }
-    });
-    
-    if (generalResponse.ok) {
-      const result = await generalResponse.json();
-      console.log('General fare update API response for airport fares:', result);
-      
-      // Trigger a sync between tables
-      await syncVehicleTables(vehicleId);
-      
-      // Trigger event to update UI
-      window.dispatchEvent(new CustomEvent('fare-data-updated', { 
-        detail: { vehicleId, tripType: 'airport' }
-      }));
-      
-      // Clear cache to ensure fresh data on next fetch
-      clearVehicleDataCache();
       
       return true;
     }
@@ -722,16 +724,13 @@ export const updateAirportFares = async (vehicleId: string, fareData: AirportFar
       const result = await fallbackResponse.json();
       console.log('Fallback API response for airport fares:', result);
       
-      // Trigger a sync between tables
-      await syncVehicleTables(vehicleId);
+      // Clear cache to ensure fresh data on next fetch
+      clearVehicleDataCache();
       
       // Trigger event to update UI
       window.dispatchEvent(new CustomEvent('fare-data-updated', { 
         detail: { vehicleId, tripType: 'airport' }
       }));
-      
-      // Clear cache to ensure fresh data on next fetch
-      clearVehicleDataCache();
       
       return true;
     }
@@ -739,72 +738,6 @@ export const updateAirportFares = async (vehicleId: string, fareData: AirportFar
     throw new Error('Failed to update airport fares');
   } catch (error) {
     console.error('Error updating airport fares:', error);
-    throw error;
-  }
-};
-
-/**
- * Helper function to sync vehicle tables after updates
- */
-async function syncVehicleTables(vehicleId?: string): Promise<void> {
-  try {
-    // Build the sync URL
-    let endpoint = `/api/admin/force-sync-outstation-fares.php?_t=${Date.now()}`;
-    
-    if (vehicleId) {
-      endpoint += `&vehicle_id=${vehicleId}`;
-    }
-    
-    const url = getApiUrl(endpoint);
-    
-    // Call the sync endpoint
-    const response = await fetch(url, {
-      headers: {
-        'X-Force-Refresh': 'true',
-        'Cache-Control': 'no-cache'
-      }
-    });
-    
-    const result = await response.json();
-    console.log('Vehicle tables sync result:', result);
-    
-    // Clear caches after sync
-    clearVehicleDataCache();
-    
-    // Dispatch vehicle data updated event
-    window.dispatchEvent(new CustomEvent('vehicle-data-updated', {
-      detail: { 
-        vehicleId, 
-        timestamp: Date.now() 
-      }
-    }));
-  } catch (error) {
-    console.error('Error syncing vehicle tables:', error);
-  }
-}
-
-/**
- * Generic function to update trip fares for a vehicle
- */
-export const updateTripFares = async (
-  vehicleId: string, 
-  tripType: 'outstation' | 'local' | 'airport', 
-  fareData: OutstationFare | LocalFare | AirportFare
-): Promise<boolean> => {
-  try {
-    // Choose the appropriate update function based on trip type
-    switch (tripType) {
-      case 'outstation':
-        return await updateOutstationFares(vehicleId, fareData as OutstationFare);
-      case 'local':
-        return await updateLocalFares(vehicleId, fareData as LocalFare);
-      case 'airport':
-        return await updateAirportFares(vehicleId, fareData as AirportFare);
-      default:
-        throw new Error(`Unsupported trip type: ${tripType}`);
-    }
-  } catch (error) {
-    console.error(`Error updating ${tripType} fares:`, error);
     throw error;
   }
 };

@@ -6,7 +6,7 @@
 import { CabType } from '@/types/cab';
 import { apiBaseUrl } from '@/config/api';
 import { getBypassHeaders, safeFetch } from '@/config/requestConfig';
-import { directVehicleOperation, checkApiHealth } from '@/utils/apiHelper';
+import { directVehicleOperation, checkApiHealth, fixDatabaseTables } from '@/utils/apiHelper';
 import { toast } from 'sonner';
 
 /**
@@ -150,19 +150,14 @@ export const syncVehicleData = async (): Promise<boolean> => {
     }
     
     // Try to fix database tables
-    const fixUrl = `${apiBaseUrl}/api/admin/fix-vehicle-tables.php`;
-    const fixResponse = await fetch(fixUrl, {
-      method: 'GET',
-      headers: getBypassHeaders(),
-      cache: 'no-store',
-      mode: 'cors',
-      credentials: 'omit'
-    });
+    const isFixed = await fixDatabaseTables();
     
-    if (!fixResponse.ok) {
+    if (!isFixed) {
       toast.error('Failed to fix vehicle tables');
       return false;
     }
+    
+    toast.success('Successfully synchronized vehicle data across tables');
     
     // Clear any cached data
     localStorage.removeItem('cachedVehicles');
@@ -173,6 +168,41 @@ export const syncVehicleData = async (): Promise<boolean> => {
     return true;
   } catch (error) {
     console.error('Error syncing vehicle data:', error);
+    return false;
+  }
+};
+
+/**
+ * Sync a specific vehicle's data across all tables
+ */
+export const syncVehicleTables = async (vehicleId: string): Promise<boolean> => {
+  try {
+    // Call the fix-vehicle-tables endpoint with the specific vehicle ID
+    const url = `${apiBaseUrl}/api/admin/fix-vehicle-tables.php?vehicleId=${encodeURIComponent(vehicleId)}&_t=${Date.now()}`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: getBypassHeaders(),
+      cache: 'no-store',
+      mode: 'cors',
+      credentials: 'omit'
+    });
+    
+    if (!response.ok) {
+      console.error(`Failed to sync vehicle tables: ${response.status} ${response.statusText}`);
+      return false;
+    }
+    
+    const result = await response.json();
+    
+    if (result.status === 'success') {
+      console.log(`Vehicle ${vehicleId} synchronized across all tables`);
+      return true;
+    } else {
+      console.error('Failed to sync vehicle tables:', result.message);
+      return false;
+    }
+  } catch (error) {
+    console.error('Error syncing vehicle tables:', error);
     return false;
   }
 };
@@ -196,7 +226,7 @@ export const getVehicleById = async (vehicleId: string): Promise<CabType | null>
     }
     
     // If not in cache, try to fetch from server
-    const url = `${apiBaseUrl}/api/fares/vehicles-data.php?_t=${Date.now()}`;
+    const url = `${apiBaseUrl}/api/admin/get-vehicles.php?_t=${Date.now()}`;
     const response = await safeFetch(url);
     
     if (!response.ok) {
