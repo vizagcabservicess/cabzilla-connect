@@ -1,4 +1,3 @@
-
 import { toast } from 'sonner';
 import { apiBaseUrl, directVehicleHeaders, apiTimeout } from '@/config/api';
 import { formatDataForMultipart } from '@/config/requestConfig';
@@ -108,6 +107,47 @@ export const checkApiHealth = async (): Promise<boolean> => {
     return data.status === 'ok' || data.status === 'success';
   } catch (error) {
     console.error('API health check failed:', error);
+    return false;
+  }
+};
+
+/**
+ * Fix database tables for vehicle management
+ * This function calls the fix-database-tables.php endpoint
+ */
+export const fixDatabaseTables = async (): Promise<boolean> => {
+  try {
+    console.log('Attempting to fix database tables...');
+    
+    const url = `${apiBaseUrl}/api/admin/fix-database-tables.php?_t=${Date.now()}`;
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        ...directVehicleHeaders,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'X-Admin-Mode': 'true',
+      },
+      mode: 'cors',
+      cache: 'no-store',
+      credentials: 'omit',
+    });
+    
+    if (!response.ok) {
+      throw new Error(`API request failed with status ${response.status}`);
+    }
+    
+    const result = await response.json();
+    
+    if (result.status === 'success') {
+      console.log('Database tables fixed successfully:', result);
+      return true;
+    } else {
+      console.error('Failed to fix database tables:', result.message || 'Unknown error');
+      return false;
+    }
+  } catch (error: any) {
+    console.error(`Error fixing database tables: ${error.message}`);
     return false;
   }
 };
