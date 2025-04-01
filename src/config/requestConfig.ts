@@ -23,15 +23,17 @@ export const getBypassHeaders = (): Record<string, string> => {
 
 /**
  * Get forced request configuration with bypass headers and cache settings
+ * Enhanced with additional settings to prevent CORS issues
  */
 export const getForcedRequestConfig = () => {
   return {
     headers: getBypassHeaders(),
-    timeout: 30000, // 30 seconds timeout
+    timeout: 45000, // Increased timeout for reliability
     cache: 'no-store' as const,
     mode: 'cors' as const,
     credentials: 'omit' as const, // Don't send credentials for CORS
-    keepalive: true // Keep connection alive
+    keepalive: true, // Keep connection alive
+    redirect: 'follow' as const // Follow redirects
   };
 };
 
@@ -61,4 +63,25 @@ export const formatDataForMultipart = (data: Record<string, any>): FormData => {
  */
 export const createCorsUrl = (endpoint: string): string => {
   return getApiUrl(endpoint);
+};
+
+/**
+ * Apply CORS workarounds for OPTIONS preflight requests
+ * This helps fix CORS issues by sending a preflight request first
+ */
+export const checkCorsWithPreflight = async (endpoint: string): Promise<boolean> => {
+  try {
+    // First check if the CORS fix endpoint works
+    const corsFixUrl = getApiUrl('/api/fix-cors');
+    await fetch(corsFixUrl, { 
+      method: 'OPTIONS',
+      headers: getBypassHeaders(),
+      mode: 'cors'
+    });
+    console.log('CORS preflight check successful');
+    return true;
+  } catch (error) {
+    console.error('CORS preflight check failed:', error);
+    return false;
+  }
 };

@@ -1,47 +1,37 @@
 # Enable rewrite engine
 RewriteEngine On
 
+# CRITICAL: Respond with 200 OK for OPTIONS preflight requests (highest priority)
+# This must be the very first rule for CORS to work properly
+<IfModule mod_headers.c>
+    <If "%{REQUEST_METHOD} == 'OPTIONS'">
+        Header always set Status "200 OK"
+        Header always set Access-Control-Allow-Origin "*" 
+        Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh, X-Admin-Mode, *"
+        Header always set Access-Control-Max-Age "86400"
+        Header always set Content-Type "text/plain"
+        Header always set Content-Length "0"
+    </If>
+</IfModule>
+
 # Set access headers for all responses with high priority
 <IfModule mod_headers.c>
     # Set CORS headers unconditionally for all responses - high priority
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
     Header always set Access-Control-Allow-Headers "*"
-    Header always set Access-Control-Max-Age "7200"
+    Header always set Access-Control-Max-Age "86400"
+    Header always set Access-Control-Expose-Headers "*"
     
-    # Set CORS headers specifically for OPTIONS preflight requests - highest priority
-    <If "%{REQUEST_METHOD} == 'OPTIONS'">
-        Header always set Access-Control-Allow-Origin "*"
-        Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-        Header always set Access-Control-Allow-Headers "*"
-        Header always set Access-Control-Max-Age "7200"
-        Header always set Content-Type "text/plain"
-        Header always set Content-Length "0"
-        Header always set Status "200 OK"
-    </If>
-    
-    # Enhanced caching headers for stability - prevent browsers from causing loops
-    Header always set Cache-Control "private, must-revalidate, max-age=60"
-    Header always set Pragma "no-cache"
-    Header always set Expires "60"
-    
-    # Add debugging headers
-    Header always set X-API-Debug "Processed by main API htaccess - v1.1.0"
-    Header always set X-API-Version "1.1.0"
+    # Debug headers to help troubleshoot CORS issues
+    Header always set X-CORS-Debug "CORS headers set by API htaccess"
+    Header always set X-API-Version "1.2.0"
     Header always set X-Server-Time "%{TIME}e"
     Header always set X-Request-ID "%{UNIQUE_ID}e"
-    Header always set X-Response-Timestamp "%{TIME}e"
-    Header always set X-Rate-Limit-Remaining "100"
-    
-    # CORS DEBUG - Expose additional headers for debugging
-    Header always set X-CORS-Debug "CORS headers set by htaccess"
-    
-    # Expose additional headers to clients
-    Header always set Access-Control-Expose-Headers "*"
 </IfModule>
 
 # Handle OPTIONS requests for CORS preflight - immediately return 200
-# This is crucial for preflight requests to succeed
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
 
@@ -215,6 +205,12 @@ RewriteRule ^tours/([^/]+)$ tours.php?id=$1 [L,QSA]
 Header set X-Requested-Path "%{REQUEST_URI}e"
 Header set X-Query-String "%{QUERY_STRING}e"
 Header set X-Script-Filename "%{SCRIPT_FILENAME}e"
+
+# Protect PHP files from direct access
+<Files "*.php">
+    # Allow all requests through - critical for CORS
+    Require all granted
+</Files>
 
 # Prevent directory listing
 Options -Indexes

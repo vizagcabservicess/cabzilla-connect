@@ -4,9 +4,35 @@ RewriteEngine On
 # Set the base for relative path references
 # RewriteBase /
 
-# Added: Handle OPTIONS preflight with absolute highest priority
+# CORS handling for all HTTP methods
+<IfModule mod_headers.c>
+    # Set CORS headers for ALL requests
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh, X-Admin-Mode, *"
+    Header always set Access-Control-Max-Age "86400"
+    Header always set Access-Control-Expose-Headers "*"
+
+    # CRITICAL: Handle OPTIONS preflight requests
+    <If "%{REQUEST_METHOD} == 'OPTIONS'">
+        Header always set Status "200 OK"
+        Header always set Access-Control-Allow-Origin "*"
+        Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Header always set Access-Control-Allow-Headers "*"
+        Header always set Content-Length "0"
+        Header always set Content-Type "text/plain"
+    </If>
+</IfModule>
+
+# Added: CRITICAL FIX - Handle OPTIONS preflight with absolute highest priority
 RewriteCond %{REQUEST_METHOD} OPTIONS
-RewriteRule ^api/ - [R=200,L]
+RewriteRule ^api/ [R=200,L]
+
+# CORS Fix endpoint - highest priority
+RewriteRule ^api/fix-cors$ api/admin/fix-cors.php [L,QSA]
+RewriteRule ^api/fix-cors\.php$ api/admin/fix-cors.php [L,QSA]
+RewriteRule ^api/admin/fix-cors$ api/admin/fix-cors.php [L,QSA]
+RewriteRule ^api/admin/fix-cors\.php$ api/admin/fix-cors.php [L,QSA]
 
 # Ensure API requests go directly to PHP files
 RewriteRule ^api/ - [L]
@@ -16,12 +42,6 @@ RewriteRule ^api/init-database$ api/admin/init-database.php [L,QSA]
 RewriteRule ^api/init-database\.php$ api/admin/init-database.php [L,QSA]
 RewriteRule ^api/admin/init-database$ api/admin/init-database.php [L,QSA]
 RewriteRule ^api/admin/init-database\.php$ api/admin/init-database.php [L,QSA]
-
-# Added: Direct access to CORS fixer with highest priority
-RewriteRule ^api/fix-cors$ api/admin/fix-cors.php [L,QSA]
-RewriteRule ^api/fix-cors\.php$ api/admin/fix-cors.php [L,QSA]
-RewriteRule ^api/admin/fix-cors$ api/admin/fix-cors.php [L,QSA]
-RewriteRule ^api/admin/fix-cors\.php$ api/admin/fix-cors.php [L,QSA]
 
 # Direct endpoint for vehicle creation - highest priority
 RewriteRule ^api/admin/direct-vehicle-create$ api/admin/direct-vehicle-create.php [QSA,L]
@@ -113,43 +133,13 @@ AddDefaultCharset UTF-8
     </FilesMatch>
 </IfModule>
 
-# Enable CORS with maximum permissive settings for API endpoints
-<IfModule mod_headers.c>
-    <FilesMatch "^api/">
-        Header always set Access-Control-Allow-Origin "*"
-        Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-        Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh, *"
-        Header always set Access-Control-Max-Age "7200"
-        Header always set Access-Control-Expose-Headers "*"
-    </FilesMatch>
-</IfModule>
-
-# Set CORS headers specifically for OPTIONS preflight requests - highest priority
-<IfModule mod_headers.c>
-    <FilesMatch "^api/">
-        <If "%{REQUEST_METHOD} == 'OPTIONS'">
-            Header always set Access-Control-Allow-Origin "*"
-            Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-            Header always set Access-Control-Allow-Headers "*"
-            Header always set Access-Control-Max-Age "7200"
-            Header always set Content-Type "text/plain"
-            Header always set Content-Length "0"
-            Header always set Status "200 OK"
-        </If>
-    </FilesMatch>
-</IfModule>
-
-# Handle OPTIONS requests for CORS preflight more aggressively
-RewriteCond %{REQUEST_METHOD} OPTIONS
-RewriteRule ^api/ - [R=200,L]
-
 # Return 200 OK with necessary CORS headers for OPTIONS
 <If "%{REQUEST_METHOD} == 'OPTIONS'">
     Header always set Status "200 OK"
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
     Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh, *"
-    Header always set Access-Control-Max-Age "3600"
+    Header always set Access-Control-Max-Age "86400"
 </If>
 
 # Redirect all non-file/directory/API requests to index.html for React Router

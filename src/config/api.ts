@@ -2,16 +2,16 @@
 // Base API URL configuration
 export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
 
-// CORS proxy settings
+// CORS proxy settings - ENHANCED TO PREVENT ISSUES
 const useCorsProxy = true; // Always use CORS proxy regardless of env setting
-export const corsProxyUrl = import.meta.env.VITE_CORS_PROXY_URL || 'https://corsproxy.io/?';
+export const corsProxyUrl = 'https://corsproxy.io/?'; // Hardcoded for reliability
 
 // Function to get properly formatted URL with CORS proxy if needed
 export function getApiUrl(endpoint: string): string {
-  // Make sure we have a full URL to encode
-  const fullUrl = endpoint.startsWith('http') ? endpoint : `${apiBaseUrl}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+  // Clean any double slashes in the URL
+  let fullUrl = endpoint.startsWith('http') ? endpoint : `${apiBaseUrl}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
   
-  // Always apply CORS proxy regardless of the env setting for reliability
+  // Always apply CORS proxy for maximum compatibility
   const finalUrl = `${corsProxyUrl}${encodeURIComponent(fullUrl)}`;
   
   // Add debug info to console
@@ -20,10 +20,10 @@ export function getApiUrl(endpoint: string): string {
   return finalUrl;
 }
 
-// Default timeout in milliseconds
-export const apiTimeout = 30000;
+// Increase default timeout for stability
+export const apiTimeout = 45000;
 
-// Default headers
+// Enhanced default headers with additional CORS support
 export const defaultHeaders = {
   'Content-Type': 'application/json',
   'Cache-Control': 'no-cache, no-store, must-revalidate',
