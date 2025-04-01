@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { useNavigate, useLocation } from 'react-router-dom';
-import { MapPin, Calendar, Car, CircleDollarSign, CheckCircle2, ArrowRight, Mail, AlertTriangle } from 'lucide-react';
+import { MapPin, Calendar, Car, CircleDollarSign, CheckCircle2, ArrowRight, Mail, AlertTriangle, Info } from 'lucide-react';
 import { Navbar } from '@/components/Navbar';
 import { toast } from "sonner";
 
@@ -11,21 +11,24 @@ export default function BookingConfirmationPage() {
   const location = useLocation();
   const [bookingDetails, setBookingDetails] = useState<any>(null);
   const [secondsRemaining, setSecondsRemaining] = useState(10);
-  const [emailStatus, setEmailStatus] = useState<'sent' | 'failed' | 'unknown'>('unknown');
+  const [emailStatus, setEmailStatus] = useState<'sent' | 'failed' | 'pending' | 'unknown'>('unknown');
 
   // Check if this is a new booking, which would trigger automatic redirect
   const isNewBooking = location.state?.newBooking === true;
-  const emailSent = location.state?.emailSent === true;
+  const emailSent = location.state?.emailSent;
 
   useEffect(() => {
     // Check email status from location state
     if (isNewBooking) {
-      if (emailSent) {
+      if (emailSent === true) {
         setEmailStatus('sent');
         toast.success("Booking confirmation email sent successfully!");
       } else if (emailSent === false) {
         setEmailStatus('failed');
         toast.error("Failed to send confirmation email. We'll try again later.");
+      } else if (emailSent === undefined) {
+        setEmailStatus('pending');
+        toast.info("Email confirmation status is pending. Please check your inbox in a few minutes.");
       }
     }
 
@@ -100,7 +103,7 @@ export default function BookingConfirmationPage() {
             <CheckCircle2 className="h-16 w-16 mx-auto mb-4" />
             <h1 className="text-2xl font-bold">Booking Confirmed!</h1>
             <p className="mt-2">Your booking has been successfully confirmed.</p>
-            {bookingDetails.bookingNumber && (
+            {bookingDetails?.bookingNumber && (
               <div className="mt-3 bg-white text-green-800 py-2 px-4 rounded-md inline-block font-bold">
                 Booking #: {bookingDetails.bookingNumber}
               </div>
@@ -116,11 +119,11 @@ export default function BookingConfirmationPage() {
                   <MapPin className="h-5 w-5 mr-3 text-gray-500 mt-0.5" />
                   <div>
                     <p className="text-sm text-gray-500">Pickup Location</p>
-                    <p className="font-medium">{bookingDetails.pickupLocation?.name || bookingDetails.pickupLocation}</p>
+                    <p className="font-medium">{bookingDetails?.pickupLocation?.name || bookingDetails?.pickupLocation}</p>
                   </div>
                 </div>
                 
-                {bookingDetails.dropLocation && (
+                {bookingDetails?.dropLocation && (
                   <div className="flex items-start">
                     <MapPin className="h-5 w-5 mr-3 text-gray-500 mt-0.5" />
                     <div>
@@ -134,11 +137,11 @@ export default function BookingConfirmationPage() {
                   <Calendar className="h-5 w-5 mr-3 text-gray-500 mt-0.5" />
                   <div>
                     <p className="text-sm text-gray-500">Pickup Date & Time</p>
-                    <p className="font-medium">{formatDate(bookingDetails.pickupDate)}</p>
+                    <p className="font-medium">{bookingDetails?.pickupDate ? formatDate(bookingDetails.pickupDate) : ''}</p>
                   </div>
                 </div>
                 
-                {bookingDetails.bookingType === 'tour' && bookingDetails.tourName && (
+                {bookingDetails?.bookingType === 'tour' && bookingDetails?.tourName && (
                   <div className="flex items-start">
                     <MapPin className="h-5 w-5 mr-3 text-gray-500 mt-0.5" />
                     <div>
@@ -156,7 +159,7 @@ export default function BookingConfirmationPage() {
                   <Car className="h-5 w-5 mr-3 text-gray-500 mt-0.5" />
                   <div>
                     <p className="text-sm text-gray-500">Vehicle Type</p>
-                    <p className="font-medium">{bookingDetails.selectedCab?.name}</p>
+                    <p className="font-medium">{bookingDetails?.selectedCab?.name}</p>
                   </div>
                 </div>
                 
@@ -164,7 +167,7 @@ export default function BookingConfirmationPage() {
                   <CircleDollarSign className="h-5 w-5 mr-3 text-gray-500 mt-0.5" />
                   <div>
                     <p className="text-sm text-gray-500">Total Amount</p>
-                    <p className="font-bold text-lg">₹{bookingDetails.totalPrice?.toLocaleString('en-IN')}</p>
+                    <p className="font-bold text-lg">₹{bookingDetails?.totalPrice?.toLocaleString('en-IN')}</p>
                   </div>
                 </div>
                 
@@ -173,12 +176,16 @@ export default function BookingConfirmationPage() {
                     ? 'bg-blue-50 border-blue-100' 
                     : emailStatus === 'failed' 
                       ? 'bg-amber-50 border-amber-100' 
-                      : 'bg-gray-50 border-gray-100'
+                      : emailStatus === 'pending'
+                        ? 'bg-purple-50 border-purple-100'
+                        : 'bg-gray-50 border-gray-100'
                 }`}>
                   {emailStatus === 'sent' ? (
                     <Mail className="h-5 w-5 mr-3 text-blue-500 mt-1" />
                   ) : emailStatus === 'failed' ? (
                     <AlertTriangle className="h-5 w-5 mr-3 text-amber-500 mt-1" />
+                  ) : emailStatus === 'pending' ? (
+                    <Info className="h-5 w-5 mr-3 text-purple-500 mt-1" />
                   ) : (
                     <Mail className="h-5 w-5 mr-3 text-gray-500 mt-1" />
                   )}
@@ -189,27 +196,41 @@ export default function BookingConfirmationPage() {
                         ? 'text-blue-800' 
                         : emailStatus === 'failed' 
                           ? 'text-amber-800' 
-                          : 'text-gray-800'
+                          : emailStatus === 'pending'
+                            ? 'text-purple-800'
+                            : 'text-gray-800'
                     }`}>
                       {emailStatus === 'sent' 
                         ? 'Email Confirmation Sent' 
                         : emailStatus === 'failed' 
                           ? 'Email Sending Failed' 
-                          : 'Email Confirmation'}
+                          : emailStatus === 'pending'
+                            ? 'Email Delivery in Progress'
+                            : 'Email Confirmation'}
                     </p>
                     <p className={`text-sm ${
                       emailStatus === 'sent' 
                         ? 'text-blue-600' 
                         : emailStatus === 'failed' 
                           ? 'text-amber-600' 
-                          : 'text-gray-600'
+                          : emailStatus === 'pending'
+                            ? 'text-purple-600'
+                            : 'text-gray-600'
                     }`}>
                       {emailStatus === 'sent' 
-                        ? `A confirmation has been sent to ${bookingDetails.guestDetails?.email || 'your email'}`
+                        ? `A confirmation has been sent to ${bookingDetails?.guestDetails?.email || bookingDetails?.passengerEmail || 'your email'}`
                         : emailStatus === 'failed' 
                           ? 'We could not send an email confirmation at this time. Please contact support.'
-                          : 'Please check your email for booking details'}
+                          : emailStatus === 'pending'
+                            ? 'Your confirmation email is being processed. Please check your inbox and spam folder.'
+                            : 'Please check your email for booking details'}
                     </p>
+                    
+                    {emailStatus === 'failed' && (
+                      <p className="text-sm mt-1 text-amber-700">
+                        If you don't receive your confirmation in the next 10 minutes, please contact us at +91 9966363662.
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

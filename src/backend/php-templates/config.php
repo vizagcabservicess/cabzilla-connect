@@ -1,8 +1,12 @@
-
 <?php
 // Turn on error reporting for debugging - remove in production
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
+
+// Set PHP mail configuration for better delivery
+ini_set('sendmail_from', 'info@vizagtaxihub.com');
+ini_set('SMTP', 'localhost');
+ini_set('smtp_port', 25);
 
 // Ensure all responses are JSON
 header('Content-Type: application/json');
@@ -292,8 +296,28 @@ function generateBookingNumber() {
 function logError($message, $data = []) {
     $logFile = __DIR__ . '/error.log';
     $timestamp = date('Y-m-d H:i:s');
+    
+    // Add server information to help diagnose email issues
+    if (strpos($message, 'email') !== false || strpos($message, 'mail') !== false) {
+        if (!isset($data['server_info'])) {
+            $data['server_info'] = [
+                'php_version' => phpversion(),
+                'os' => PHP_OS,
+                'sapi' => php_sapi_name(),
+                'mail_enabled' => function_exists('mail'),
+                'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown'
+            ];
+        }
+    }
+    
     $logMessage = "[$timestamp] $message " . json_encode($data) . PHP_EOL;
     error_log($logMessage, 3, $logFile);
+    
+    // For critical email errors, log to a separate file
+    if (strpos(strtolower($message), 'failed to send email') !== false) {
+        $emailLogFile = __DIR__ . '/email_errors.log';
+        error_log($logMessage, 3, $emailLogFile);
+    }
 }
 
 // Set error handler to catch PHP errors

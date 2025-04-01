@@ -1,4 +1,3 @@
-
 <?php
 // Adjust the path to config.php correctly
 require_once __DIR__ . '/../config.php';
@@ -29,7 +28,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 logError("Book.php request initiated", [
     'method' => $_SERVER['REQUEST_METHOD'],
     'headers' => getallheaders(),
-    'request_uri' => $_SERVER['REQUEST_URI']
+    'request_uri' => $_SERVER['REQUEST_URI'],
+    'server_info' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown'
 ]);
 
 // Get the request body
@@ -298,7 +298,10 @@ try {
     // Send confirmation emails with detailed error logging
     logError("Attempting to send confirmation emails", [
         'booking_id' => $bookingId,
-        'passenger_email' => $booking['passenger_email']
+        'passenger_email' => $booking['passenger_email'],
+        'mail_function_exists' => function_exists('mail') ? 'yes' : 'no',
+        'php_version' => phpversion(),
+        'server_os' => PHP_OS
     ]);
     
     // Initialize email results array
@@ -335,7 +338,8 @@ try {
     logError("Email sending results", [
         'customer_email_sent' => $emailSuccess['customer'] ? 'yes' : 'no',
         'admin_email_sent' => $emailSuccess['admin'] ? 'yes' : 'no',
-        'booking_id' => $bookingId
+        'booking_id' => $bookingId,
+        'php_mail_function' => function_exists('mail') ? 'available' : 'unavailable'
     ]);
 
     // Send response including email status

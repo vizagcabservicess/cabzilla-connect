@@ -1,3 +1,4 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -16,23 +17,28 @@ function sendEmail($to, $subject, $htmlBody, $textBody = '', $headers = []) {
     $from = 'info@vizagtaxihub.com';
     $fromName = 'Vizag Taxi Hub';
     
-    // Log email sending attempt
+    // Log email sending attempt with more details
     logError("Attempting to send email", [
         'to' => $to,
         'subject' => $subject,
-        'from' => $from
+        'from' => $from,
+        'server_info' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown'
     ]);
     
     // Generate a boundary for the multipart message
     $boundary = md5(time());
     
-    // Set up email headers
+    // Set up email headers with more delivery-focused headers
     $defaultHeaders = [
         'From' => "$fromName <$from>",
         'Reply-To' => $from,
+        'Return-Path' => $from,  // Add return path for better delivery
         'MIME-Version' => '1.0',
         'Content-Type' => "multipart/alternative; boundary=\"$boundary\"",
-        'X-Mailer' => 'PHP/' . phpversion()
+        'X-Mailer' => 'PHP/' . phpversion(),
+        'X-Priority' => '1',  // High priority
+        'X-MSMail-Priority' => 'High',
+        'Importance' => 'High'
     ];
     
     // Merge default headers with custom headers
@@ -72,25 +78,42 @@ function sendEmail($to, $subject, $htmlBody, $textBody = '', $headers = []) {
     }
     
     try {
-        // Try native mail function first
-        $success = mail($to, $subject, $message, $headersStr);
+        // Try with additional parameters for better delivery
+        ini_set('sendmail_from', $from);
+        
+        // Try native mail function first with enhanced parameters
+        $success = mail($to, $subject, $message, $headersStr, "-f$from");
         $mailError = error_get_last();
         
         if (!$success) {
             logError("Native mail() function failed", [
                 'error' => $mailError ? $mailError['message'] : 'Unknown error',
-                'to' => $to
+                'to' => $to,
+                'headers' => $headersStr
             ]);
             
             // Try alternative approach if native mail fails
-            // This falls back to sending via direct SMTP if configured in php.ini
+            // This uses more force with the fifth parameter
             $success = @mail($to, $subject, $message, $headersStr, "-f$from");
             $fallbackError = error_get_last();
             
             if (!$success) {
                 logError("Fallback mail sending failed", [
-                    'error' => $fallbackError ? $fallbackError['message'] : 'Unknown error'
+                    'error' => $fallbackError ? $fallbackError['message'] : 'Unknown error',
+                    'method' => 'mail with -f flag'
                 ]);
+                
+                // Last attempt - try without fifth parameter but with sendmail_from
+                ini_set('sendmail_from', $from);
+                $success = @mail($to, $subject, $message, $headersStr);
+                $lastAttemptError = error_get_last();
+                
+                if (!$success) {
+                    logError("Last attempt mail sending failed", [
+                        'error' => $lastAttemptError ? $lastAttemptError['message'] : 'Unknown error',
+                        'method' => 'mail with sendmail_from'
+                    ]);
+                }
             }
         }
     } catch (Exception $e) {
@@ -101,19 +124,23 @@ function sendEmail($to, $subject, $htmlBody, $textBody = '', $headers = []) {
         $success = false;
     }
     
-    // Log the result
+    // Log the result with more details
     if ($success) {
         logError("Email sent successfully", [
             'to' => $to, 
             'subject' => $subject,
-            'method' => 'PHP mail()'
+            'method' => 'PHP mail()',
+            'from' => $from,
+            'php_version' => phpversion()
         ]);
     } else {
         $lastError = error_get_last();
         logError("Failed to send email", [
             'to' => $to, 
             'subject' => $subject, 
-            'error' => $lastError ? $lastError['message'] : 'Unknown error'
+            'error' => $lastError ? $lastError['message'] : 'Unknown error',
+            'php_mail_enabled' => function_exists('mail'),
+            'server_os' => PHP_OS
         ]);
     }
     
@@ -500,23 +527,26 @@ function sendBookingConfirmationEmail($booking) {
     $subject = "Booking Confirmation - #" . $booking['bookingNumber'];
     $htmlBody = generateBookingConfirmationEmail($booking);
     
-    // Add high importance headers
+    // Add high importance headers and additional delivery headers
     $headers = [
         'X-Priority' => '1',
         'X-MSMail-Priority' => 'High',
-        'Importance' => 'High'
+        'Importance' => 'High',
+        'X-Auto-Response-Suppress' => 'OOF, DR, RN, NRN, AutoReply'
     ];
     
     logError("Sending booking confirmation email", [
         'to' => $to,
-        'booking_number' => $booking['bookingNumber']
+        'booking_number' => $booking['bookingNumber'],
+        'passenger_name' => $booking['passengerName'] ?? 'unknown'
     ]);
     
     $result = sendEmail($to, $subject, $htmlBody, '', $headers);
     
     logError("Booking confirmation email result", [
         'success' => $result ? 'yes' : 'no',
-        'booking_number' => $booking['bookingNumber']
+        'booking_number' => $booking['bookingNumber'],
+        'recipient' => $to
     ]);
     
     return $result;
@@ -535,16 +565,18 @@ function sendAdminNotificationEmail($booking) {
     $subject = "New Booking - #" . $booking['bookingNumber'];
     $htmlBody = generateAdminNotificationEmail($booking);
     
-    // Add high importance headers
+    // Add high importance headers and additional delivery headers
     $headers = [
         'X-Priority' => '1',
         'X-MSMail-Priority' => 'High',
-        'Importance' => 'High'
+        'Importance' => 'High',
+        'X-Auto-Response-Suppress' => 'OOF, DR, RN, NRN, AutoReply'
     ];
     
     logError("Sending admin notification email", [
         'to' => $to,
-        'booking_number' => $booking['bookingNumber']
+        'booking_number' => $booking['bookingNumber'],
+        'booking_id' => $booking['id'] ?? 'unknown'
     ]);
     
     $result = sendEmail($to, $subject, $htmlBody, '', $headers);
@@ -556,3 +588,4 @@ function sendAdminNotificationEmail($booking) {
     
     return $result;
 }
+
