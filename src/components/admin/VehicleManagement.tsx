@@ -11,9 +11,8 @@ import { AddVehicleDialog } from "./AddVehicleDialog";
 import { EditVehicleDialog } from "./EditVehicleDialog";
 import { getVehicleData, clearVehicleDataCache } from "@/services/vehicleDataService";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getApiUrl } from '@/config/api';
+import { apiBaseUrl } from '@/config/api';
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
-import { safeFetch } from '@/config/requestConfig';
 
 export default function VehicleManagement() {
   const [isLoading, setIsLoading] = useState(true);
@@ -27,6 +26,7 @@ export default function VehicleManagement() {
   const [retryCount, setRetryCount] = useState(0);
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
   const [error, setError] = useState<Error | null>(null);
+  const [offlineMode, setOfflineMode] = useState(false);
 
   // Reset error state when needed
   const resetError = () => setError(null);
@@ -36,15 +36,18 @@ export default function VehicleManagement() {
     resetError();
     
     try {
-      // First try to hit the CORS fix endpoint
-      try {
-        await safeFetch('/api/fix-cors');
-        console.log('CORS fix endpoint hit successfully');
-      } catch (error) {
-        console.log('CORS fix preflight failed, continuing anyway');
+      // Try direct API call without CORS proxy
+      const response = await fetch(`${apiBaseUrl}/api/admin/fix-vehicle-tables.php`, {
+        method: 'GET',
+        credentials: 'omit',
+        mode: 'cors',
+        cache: 'no-store'
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Database fix failed with status: ${response.status}`);
       }
       
-      const response = await fetch(getApiUrl('/api/admin/fix-vehicle-tables.php'));
       const data = await response.json();
       
       if (data.status === 'success') {
@@ -61,6 +64,7 @@ export default function VehicleManagement() {
       try {
         loadVehiclesFromLocalStorage();
         toast.info("Loaded vehicles from local cache");
+        setOfflineMode(true);
       } catch (cacheError) {
         setError(error as Error);
       }
@@ -100,83 +104,95 @@ export default function VehicleManagement() {
       setLastRefreshTime(now);
       console.log("Admin: Fetching all vehicles...");
       
-      // First try to hit the CORS fix endpoint
+      // Always try online mode first
       try {
-        await safeFetch('/api/fix-cors');
-        console.log('CORS fix endpoint hit successfully before vehicle load');
-      } catch (error) {
-        console.log('CORS fix preflight failed, continuing anyway');
-      }
-      
-      const fetchedVehicles = await getVehicleData(true, true);
-      console.log(`Loaded ${fetchedVehicles.length} vehicles for admin view:`, fetchedVehicles);
-      
-      if (fetchedVehicles && fetchedVehicles.length > 0) {
-        const deduplicatedVehicles: Record<string, CabType> = {};
+        const fetchedVehicles = await getVehicleData(true, true);
+        console.log(`Loaded ${fetchedVehicles.length} vehicles for admin view:`, fetchedVehicles);
         
-        fetchedVehicles.forEach(vehicle => {
-          const normalizedId = String(vehicle.id || vehicle.vehicleId || '').trim();
-          if (!normalizedId) return;
+        if (fetchedVehicles && fetchedVehicles.length > 0) {
+          const deduplicatedVehicles: Record<string, CabType> = {};
           
-          const normalizedVehicle: CabType = {
-            ...vehicle,
-            id: normalizedId,
-            vehicleId: normalizedId,
-            description: vehicle.description || '',
-            isActive: vehicle.isActive === false ? false : true,
-            capacity: Number(vehicle.capacity || 4),
-            luggageCapacity: Number(vehicle.luggageCapacity || 2),
-            price: Number(vehicle.price || vehicle.basePrice || 0), 
-            pricePerKm: Number(vehicle.pricePerKm || 0),
-            amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC'],
-            nightHaltCharge: Number(vehicle.nightHaltCharge || 700),
-            driverAllowance: Number(vehicle.driverAllowance || 300)
-          };
-          
-          if (deduplicatedVehicles[normalizedId]) {
-            const existing = deduplicatedVehicles[normalizedId];
+          fetchedVehicles.forEach(vehicle => {
+            const normalizedId = String(vehicle.id || vehicle.vehicleId || '').trim();
+            if (!normalizedId) return;
             
-            deduplicatedVehicles[normalizedId] = {
-              ...existing,
-              ...normalizedVehicle,
-              description: normalizedVehicle.description || existing.description || '',
-              name: normalizedVehicle.name || existing.name || '',
-              nightHaltCharge: normalizedVehicle.nightHaltCharge || existing.nightHaltCharge || 700,
-              driverAllowance: normalizedVehicle.driverAllowance || existing.driverAllowance || 300
+            // Create normalized vehicle object
+            const normalizedVehicle: CabType = {
+              ...vehicle,
+              id: normalizedId,
+              vehicleId: normalizedId,
+              description: vehicle.description || '',
+              isActive: vehicle.isActive === false ? false : true,
+              capacity: Number(vehicle.capacity || 4),
+              luggageCapacity: Number(vehicle.luggageCapacity || 2),
+              price: Number(vehicle.price || vehicle.basePrice || 0), 
+              pricePerKm: Number(vehicle.pricePerKm || 0),
+              amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC'],
+              nightHaltCharge: Number(vehicle.nightHaltCharge || 700),
+              driverAllowance: Number(vehicle.driverAllowance || 300)
             };
-          } else {
-            deduplicatedVehicles[normalizedId] = normalizedVehicle;
+            
+            // Handle duplicates by merging properties
+            if (deduplicatedVehicles[normalizedId]) {
+              const existing = deduplicatedVehicles[normalizedId];
+              
+              deduplicatedVehicles[normalizedId] = {
+                ...existing,
+                ...normalizedVehicle,
+                description: normalizedVehicle.description || existing.description || '',
+                name: normalizedVehicle.name || existing.name || '',
+                nightHaltCharge: normalizedVehicle.nightHaltCharge || existing.nightHaltCharge || 700,
+                driverAllowance: normalizedVehicle.driverAllowance || existing.driverAllowance || 300
+              };
+            } else {
+              deduplicatedVehicles[normalizedId] = normalizedVehicle;
+            }
+          });
+          
+          const uniqueVehicles = Object.values(deduplicatedVehicles);
+          
+          console.log(`Deduplicated to ${uniqueVehicles.length} unique vehicles`);
+          setVehicles(uniqueVehicles);
+          setOfflineMode(false);
+          
+          // Cache the results
+          try {
+            localStorage.setItem('cachedVehicles', JSON.stringify(uniqueVehicles));
+            localStorage.setItem('localVehicles', JSON.stringify(uniqueVehicles));
+          } catch (cacheError) {
+            console.error("Error caching vehicles:", cacheError);
           }
-        });
-        
-        const uniqueVehicles = Object.values(deduplicatedVehicles);
-        
-        console.log(`Deduplicated to ${uniqueVehicles.length} unique vehicles`);
-        setVehicles(uniqueVehicles);
-        
-        // Cache the results
-        try {
-          localStorage.setItem('cachedVehicles', JSON.stringify(uniqueVehicles));
-          localStorage.setItem('localVehicles', JSON.stringify(uniqueVehicles));
-        } catch (cacheError) {
-          console.error("Error caching vehicles:", cacheError);
+        } else if (retryCount < 2) {
+          console.log("No vehicles returned, clearing cache and retrying...");
+          clearVehicleDataCache();
+          setRetryCount(prev => prev + 1);
+          setTimeout(() => loadVehicles(), 800);
+        } else {
+          console.log("Multiple retries failed, attempting to load from localStorage");
+          if (!loadVehiclesFromLocalStorage()) {
+            toast.error("Failed to load vehicles. Please try refreshing the page.");
+            setOfflineMode(true);
+          }
         }
-      } else if (retryCount < 2) {
-        console.log("No vehicles returned, clearing cache and retrying...");
-        clearVehicleDataCache();
-        setRetryCount(prev => prev + 1);
-        setTimeout(() => loadVehicles(), 800);
-      } else {
-        console.log("Multiple retries failed, attempting to load from localStorage");
-        if (!loadVehiclesFromLocalStorage()) {
-          toast.error("Failed to load vehicles. Please try refreshing the page.");
+      } catch (apiError) {
+        console.error("API error:", apiError);
+        
+        // Try loading from localStorage as a fallback
+        if (loadVehiclesFromLocalStorage()) {
+          toast.warning("Working in offline mode. Changes will be saved locally.");
+          setOfflineMode(true);
+        } else {
+          setError(apiError as Error);
         }
       }
     } catch (error) {
       console.error("Error loading vehicles:", error);
       
       // Try loading from localStorage as a fallback
-      if (!loadVehiclesFromLocalStorage()) {
+      if (loadVehiclesFromLocalStorage()) {
+        toast.warning("Working in offline mode. Changes will be saved locally.");
+        setOfflineMode(true);
+      } else {
         setError(error as Error);
       }
     } finally {
@@ -192,18 +208,31 @@ export default function VehicleManagement() {
       setTimeout(() => loadVehicles(), 500);
     };
     
+    // Setup event listeners
     window.addEventListener('vehicle-data-updated', handleVehicleDataUpdated);
     window.addEventListener('vehicle-data-refreshed', handleVehicleDataUpdated);
     window.addEventListener('vehicle-data-changed', handleVehicleDataUpdated);
     window.addEventListener('vehicle-data-cache-cleared', handleVehicleDataUpdated);
+    
+    // Network status change handler
+    const handleOnline = () => {
+      console.log("Network back online, refreshing data");
+      if (offlineMode) {
+        toast.info("Network connection restored, refreshing data");
+        handleRefreshData();
+      }
+    };
+    
+    window.addEventListener('online', handleOnline);
     
     return () => {
       window.removeEventListener('vehicle-data-updated', handleVehicleDataUpdated);
       window.removeEventListener('vehicle-data-refreshed', handleVehicleDataUpdated);
       window.removeEventListener('vehicle-data-changed', handleVehicleDataUpdated);
       window.removeEventListener('vehicle-data-cache-cleared', handleVehicleDataUpdated);
+      window.removeEventListener('online', handleOnline);
     };
-  }, [loadVehicles]);
+  }, [loadVehicles, offlineMode]);
 
   const handleRefreshData = async () => {
     try {
@@ -217,7 +246,9 @@ export default function VehicleManagement() {
       toast.error("Failed to refresh vehicle data. Trying offline mode.");
       
       // Try loading from localStorage as a fallback
-      if (!loadVehiclesFromLocalStorage()) {
+      if (loadVehiclesFromLocalStorage()) {
+        setOfflineMode(true);
+      } else {
         setError(error as Error);
       }
     } finally {
@@ -306,7 +337,10 @@ export default function VehicleManagement() {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-2xl font-bold">Vehicle Management</h2>
+        <h2 className="text-2xl font-bold">
+          Vehicle Management
+          {offlineMode && <span className="ml-2 text-sm bg-amber-100 text-amber-800 rounded px-2 py-1">Offline Mode</span>}
+        </h2>
         <div className="flex gap-2">
           <Button
             variant="outline"

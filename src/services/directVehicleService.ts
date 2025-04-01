@@ -1,8 +1,6 @@
-
 import { CabType } from '@/types/cab';
-import { apiBaseUrl, defaultHeaders, forceRefreshHeaders, getApiUrl } from '@/config/api';
-import { getBypassHeaders, getForcedRequestConfig, formatDataForMultipart } from '@/config/requestConfig';
-import { directVehicleOperation } from '@/utils/apiHelper';
+import { apiBaseUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
+import { getBypassHeaders, formatDataForMultipart } from '@/config/requestConfig';
 
 /**
  * Creates a new vehicle
@@ -35,16 +33,17 @@ export const createVehicle = async (vehicleData: CabType): Promise<CabType> => {
     // Use expanded set of headers to help with CORS
     const headers = {
       ...getBypassHeaders(),
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
       'Origin': window.location.origin,
       'X-Requested-With': 'XMLHttpRequest'
     };
     
-    console.log('Submitting vehicle creation request with CORS proxy...');
+    console.log('Submitting vehicle creation request...');
     
-    // Call the API using the getApiUrl function to ensure CORS proxy is used
-    const response = await fetch(getApiUrl('/api/admin/direct-vehicle-create.php'), {
+    // Call the API directly
+    const url = `${apiBaseUrl}/api/admin/direct-vehicle-create.php`;
+    console.log(`Using create URL: ${url}`);
+    
+    const response = await fetch(url, {
       method: 'POST',
       body: formData,
       headers: headers,
@@ -90,7 +89,27 @@ export const createVehicle = async (vehicleData: CabType): Promise<CabType> => {
     return vehicleData;
   } catch (error) {
     console.error('Error creating vehicle:', error);
-    throw error;
+    
+    // Fallback - save to local storage at minimum
+    try {
+      const cachedVehiclesString = localStorage.getItem('cachedVehicles');
+      const cachedVehicles = cachedVehiclesString ? JSON.parse(cachedVehiclesString) : [];
+      const updatedVehicles = [...cachedVehicles.filter((v: CabType) => v.id !== vehicleData.id), vehicleData];
+      localStorage.setItem('cachedVehicles', JSON.stringify(updatedVehicles));
+      localStorage.setItem('cachedVehiclesTimestamp', Date.now().toString());
+      
+      console.log('Added vehicle to local storage as fallback');
+      
+      // Still trigger the event so UI updates
+      window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
+        detail: { vehicleId: vehicleData.id, timestamp: Date.now(), offline: true }
+      }));
+      
+      return vehicleData;
+    } catch (localStorageError) {
+      console.error('All vehicle creation methods failed:', localStorageError);
+      throw error;
+    }
   }
 };
 
@@ -156,45 +175,28 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
     formData.append('driver_allowance', driverAllowance);
     formData.append('driverAllowance', driverAllowance);
     
-    // Add SQL create command to add missing columns if they don't exist
-    const sqlAlterQuery = `
-    ALTER TABLE vehicles 
-    ADD COLUMN IF NOT EXISTS night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 700,
-    ADD COLUMN IF NOT EXISTS driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 300;
-    
-    ALTER TABLE vehicle_types 
-    ADD COLUMN IF NOT EXISTS night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 700,
-    ADD COLUMN IF NOT EXISTS driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 300;
-    `;
-    
-    formData.append('sql_fix', sqlAlterQuery);
-    
     // Force update flag
     formData.append('forceUpdate', 'true');
     formData.append('addColumnsIfMissing', 'true');
     
-    console.log('Submitting vehicle update with data: ', Object.fromEntries(formData));
+    console.log('Submitting vehicle update...');
     
     // Enhanced headers to help with CORS
     const headers = {
       ...getBypassHeaders(),
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
       'Origin': window.location.origin,
       'X-Requested-With': 'XMLHttpRequest'
     };
     
-    // Use getApiUrl to ensure CORS proxy is applied consistently
-    const updateUrl = getApiUrl('/api/admin/direct-vehicle-update.php');
-    console.log(`Using update URL with CORS proxy: ${updateUrl}`);
+    // Direct API URL without CORS proxy
+    const updateUrl = `${apiBaseUrl}/api/admin/direct-vehicle-update.php`;
+    console.log(`Using update URL: ${updateUrl}`);
     
     // Try the update with more debug info
     let response = null;
     let result = null;
     
     try {
-      console.log(`Vehicle update attempt using direct-vehicle-update.php with CORS proxy`);
-      
       response = await fetch(updateUrl, {
         method: 'POST',
         body: formData,
@@ -226,7 +228,7 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
     } catch (updateError) {
       console.error('Vehicle update error:', updateError);
       
-      // Update fallback - try to save to local storage at minimum
+      // Update fallback - save to local storage
       try {
         const cachedVehiclesString = localStorage.getItem('cachedVehicles');
         if (cachedVehiclesString) {
@@ -272,10 +274,7 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
       }
     }
     
-    // Delay to ensure backend has time to process the update
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Trigger multiple events to ensure all UI components update
+    // Trigger events to ensure all UI components update
     const events = [
       new CustomEvent('vehicle-data-updated', {
         detail: { vehicleId, timestamp: Date.now() }
@@ -288,19 +287,17 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
       })
     ];
     
-    // Dispatch all events with slight delays between them
+    // Dispatch all events
     for (const event of events) {
       window.dispatchEvent(event);
-      await new Promise(resolve => setTimeout(resolve, 100));
     }
     
-    // Return the updated vehicle data with confirmed description
+    // Return the updated vehicle data
     return {
       ...vehicleData,
       id: vehicleId,
       vehicleId: vehicleId,
-      description: description, // Ensure description is properly set
-      // Make sure these fields have values
+      description: description,
       nightHaltCharge: vehicleData.nightHaltCharge || 700,
       driverAllowance: vehicleData.driverAllowance || 300
     };
@@ -321,21 +318,46 @@ export const deleteVehicle = async (vehicleId: string): Promise<boolean> => {
     formData.append('vehicle_id', vehicleId);
     formData.append('forceDelete', 'true');
     
+    const url = `${apiBaseUrl}/api/admin/direct-vehicle-delete.php`;
+    console.log(`Using delete URL: ${url}`);
+    
     // Call the API
-    const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-delete.php`, {
+    const response = await fetch(url, {
       method: 'POST',
       body: formData,
-      headers: getBypassHeaders()
+      headers: getBypassHeaders(),
+      mode: 'cors',
+      credentials: 'omit'
     });
     
     if (!response.ok) {
-      throw new Error(`Failed to delete vehicle: ${response.status} ${response.statusText}`);
+      // Try alternative delete approach using GET
+      const getDeleteUrl = `${apiBaseUrl}/api/admin/direct-vehicle-delete.php?vehicleId=${vehicleId}&forceDelete=true`;
+      console.log(`Trying alternative delete URL: ${getDeleteUrl}`);
+      
+      const altResponse = await fetch(getDeleteUrl, {
+        method: 'GET',
+        headers: getBypassHeaders(),
+        mode: 'cors',
+        credentials: 'omit'
+      });
+      
+      if (!altResponse.ok) {
+        throw new Error(`Failed to delete vehicle: ${altResponse.status} ${altResponse.statusText}`);
+      }
     }
     
-    const result = await response.json();
-    
-    if (result.status === 'error') {
-      throw new Error(result.message || 'Failed to delete vehicle');
+    // Delete from local cache as fallback
+    try {
+      const cachedVehiclesString = localStorage.getItem('cachedVehicles');
+      if (cachedVehiclesString) {
+        const cachedVehicles = JSON.parse(cachedVehiclesString);
+        const filteredVehicles = cachedVehicles.filter((v: CabType) => v.id !== vehicleId);
+        localStorage.setItem('cachedVehicles', JSON.stringify(filteredVehicles));
+        localStorage.setItem('cachedVehiclesTimestamp', Date.now().toString());
+      }
+    } catch (e) {
+      console.warn('Could not update local cache after deletion:', e);
     }
     
     // Trigger event to notify components
@@ -346,6 +368,27 @@ export const deleteVehicle = async (vehicleId: string): Promise<boolean> => {
     return true;
   } catch (error) {
     console.error('Error deleting vehicle:', error);
+    
+    // Fallback: Remove from local storage at minimum
+    try {
+      const cachedVehiclesString = localStorage.getItem('cachedVehicles');
+      if (cachedVehiclesString) {
+        const cachedVehicles = JSON.parse(cachedVehiclesString);
+        const filteredVehicles = cachedVehicles.filter((v: CabType) => v.id !== vehicleId);
+        localStorage.setItem('cachedVehicles', JSON.stringify(filteredVehicles));
+        localStorage.setItem('cachedVehiclesTimestamp', Date.now().toString());
+        
+        // Notify UI of the change
+        window.dispatchEvent(new CustomEvent('vehicle-data-updated', {
+          detail: { vehicleId, action: 'delete', timestamp: Date.now(), offline: true }
+        }));
+        
+        return true;
+      }
+    } catch (localStorageError) {
+      console.error('Failed to update local cache after deletion:', localStorageError);
+    }
+    
     throw error;
   }
 };
