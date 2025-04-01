@@ -26,8 +26,8 @@ RewriteEngine On
     Header always set Expires "60"
     
     # Add debugging headers
-    Header always set X-API-Debug "Processed by main API htaccess - v1.0.72"
-    Header always set X-API-Version "1.0.72"
+    Header always set X-API-Debug "Processed by main API htaccess - v1.1.0"
+    Header always set X-API-Version "1.1.0"
     Header always set X-Server-Time "%{TIME}e"
     Header always set X-Request-ID "%{UNIQUE_ID}e"
     Header always set X-Response-Timestamp "%{TIME}e"
@@ -44,6 +44,12 @@ RewriteEngine On
 # This is crucial for preflight requests to succeed
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
+
+# Added: Direct access to CORS fixer with highest priority
+RewriteRule ^fix-cors$ admin/fix-cors.php [L,QSA]
+RewriteRule ^fix-cors\.php$ admin/fix-cors.php [L,QSA]
+RewriteRule ^admin/fix-cors$ admin/fix-cors.php [L,QSA]
+RewriteRule ^admin/fix-cors\.php$ admin/fix-cors.php [L,QSA]
 
 # DIRECT VEHICLE CREATE AND UPDATE - HIGHEST PRIORITY
 # Make sure these endpoints have absolute top priority

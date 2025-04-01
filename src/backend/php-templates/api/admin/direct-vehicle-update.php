@@ -3,18 +3,19 @@
 // direct-vehicle-update.php - A specialized endpoint for vehicle updates
 // with maximum compatibility and robust error handling
 
-// Set comprehensive CORS headers
+// Set comprehensive CORS headers - HIGHEST PRIORITY
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, *');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, Origin, *');
+header('Access-Control-Max-Age: 7200');
 header('Access-Control-Expose-Headers: *');
-header('X-API-Version: 1.0.2');
+header('X-API-Version: 1.1.0');
 
-// Handle preflight OPTIONS request
+// Handle preflight OPTIONS request with HIGHEST PRIORITY
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;

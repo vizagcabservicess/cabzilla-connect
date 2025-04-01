@@ -13,7 +13,11 @@ export const getBypassHeaders = (): Record<string, string> => {
     'Pragma': 'no-cache',
     'Expires': '0',
     'Origin': window.location.origin,
-    'X-Requested-With': 'XMLHttpRequest'
+    'X-Requested-With': 'XMLHttpRequest',
+    // Additional CORS headers
+    'Accept': '*/*',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS'
   };
 };
 
@@ -26,7 +30,8 @@ export const getForcedRequestConfig = () => {
     timeout: 30000, // 30 seconds timeout
     cache: 'no-store' as const,
     mode: 'cors' as const,
-    credentials: 'omit' as const // Don't send credentials for CORS
+    credentials: 'omit' as const, // Don't send credentials for CORS
+    keepalive: true // Keep connection alive
   };
 };
 

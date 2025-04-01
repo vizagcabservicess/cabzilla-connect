@@ -1,9 +1,12 @@
-
 # Enable rewrite engine
 RewriteEngine On
 
 # Set the base for relative path references
 # RewriteBase /
+
+# Added: Handle OPTIONS preflight with absolute highest priority
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule ^api/ - [R=200,L]
 
 # Ensure API requests go directly to PHP files
 RewriteRule ^api/ - [L]
@@ -13,6 +16,12 @@ RewriteRule ^api/init-database$ api/admin/init-database.php [L,QSA]
 RewriteRule ^api/init-database\.php$ api/admin/init-database.php [L,QSA]
 RewriteRule ^api/admin/init-database$ api/admin/init-database.php [L,QSA]
 RewriteRule ^api/admin/init-database\.php$ api/admin/init-database.php [L,QSA]
+
+# Added: Direct access to CORS fixer with highest priority
+RewriteRule ^api/fix-cors$ api/admin/fix-cors.php [L,QSA]
+RewriteRule ^api/fix-cors\.php$ api/admin/fix-cors.php [L,QSA]
+RewriteRule ^api/admin/fix-cors$ api/admin/fix-cors.php [L,QSA]
+RewriteRule ^api/admin/fix-cors\.php$ api/admin/fix-cors.php [L,QSA]
 
 # Direct endpoint for vehicle creation - highest priority
 RewriteRule ^api/admin/direct-vehicle-create$ api/admin/direct-vehicle-create.php [QSA,L]
@@ -109,8 +118,9 @@ AddDefaultCharset UTF-8
     <FilesMatch "^api/">
         Header always set Access-Control-Allow-Origin "*"
         Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-        Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh, X-Custom-Timestamp"
-        Header always set Access-Control-Max-Age "3600"
+        Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh, *"
+        Header always set Access-Control-Max-Age "7200"
+        Header always set Access-Control-Expose-Headers "*"
     </FilesMatch>
 </IfModule>
 
@@ -124,6 +134,7 @@ AddDefaultCharset UTF-8
             Header always set Access-Control-Max-Age "7200"
             Header always set Content-Type "text/plain"
             Header always set Content-Length "0"
+            Header always set Status "200 OK"
         </If>
     </FilesMatch>
 </IfModule>
@@ -137,7 +148,7 @@ RewriteRule ^api/ - [R=200,L]
     Header always set Status "200 OK"
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh, X-Custom-Timestamp"
+    Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh, *"
     Header always set Access-Control-Max-Age "3600"
 </If>
 

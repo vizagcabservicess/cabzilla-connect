@@ -1,3 +1,4 @@
+
 import { CabType } from '@/types/cab';
 import { apiBaseUrl, defaultHeaders, forceRefreshHeaders, getApiUrl } from '@/config/api';
 import { getBypassHeaders, getForcedRequestConfig, formatDataForMultipart } from '@/config/requestConfig';
@@ -8,6 +9,8 @@ import { directVehicleOperation } from '@/utils/apiHelper';
  */
 export const createVehicle = async (vehicleData: CabType): Promise<CabType> => {
   try {
+    console.log('Creating vehicle with data:', vehicleData);
+    
     // Format data for multipart submission
     const formData = formatDataForMultipart(vehicleData);
     
@@ -29,22 +32,40 @@ export const createVehicle = async (vehicleData: CabType): Promise<CabType> => {
     // Force creation flag
     formData.append('forceCreate', 'true');
     
+    // Use expanded set of headers to help with CORS
+    const headers = {
+      ...getBypassHeaders(),
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Origin': window.location.origin,
+      'X-Requested-With': 'XMLHttpRequest'
+    };
+    
+    console.log('Submitting vehicle creation request with CORS proxy...');
+    
     // Call the API using the getApiUrl function to ensure CORS proxy is used
     const response = await fetch(getApiUrl('/api/admin/direct-vehicle-create.php'), {
       method: 'POST',
       body: formData,
-      headers: {
-        ...getBypassHeaders(),
-        'Access-Control-Allow-Origin': '*'
-      },
-      mode: 'cors'
+      headers: headers,
+      mode: 'cors',
+      credentials: 'omit' // Important for CORS
     });
     
-    if (!response.ok) {
-      throw new Error(`Failed to create vehicle: ${response.status} ${response.statusText}`);
-    }
+    const responseText = await response.text();
+    console.log('Raw response:', responseText);
     
-    const result = await response.json();
+    let result;
+    try {
+      result = JSON.parse(responseText);
+    } catch (e) {
+      console.warn('Failed to parse JSON response:', e);
+      if (response.ok) {
+        result = { status: 'success', message: 'Vehicle created successfully but response was not valid JSON' };
+      } else {
+        throw new Error(`Failed to create vehicle: ${response.status} ${response.statusText}`);
+      }
+    }
     
     if (result.status === 'error') {
       throw new Error(result.message || 'Failed to create vehicle');
@@ -116,8 +137,7 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
     const description = vehicleData.description !== undefined ? vehicleData.description : '';
     formData.append('description', description);
     
-    // Fix naming convention for pricing fields to resolve "Unknown column 'base_price'" errors
-    // Add both camelCase and snake_case versions to ensure compatibility
+    // Fix naming convention for pricing fields
     const basePrice = String(vehicleData.price || vehicleData.basePrice || 0);
     formData.append('base_price', basePrice);
     formData.append('basePrice', basePrice);
@@ -127,7 +147,7 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
     formData.append('price_per_km', pricePerKm);
     formData.append('pricePerKm', pricePerKm);
     
-    // Add these fields explicitly to ensure database doesn't error with missing columns
+    // Add these fields explicitly
     const nightHaltCharge = String(vehicleData.nightHaltCharge || 700);
     formData.append('night_halt_charge', nightHaltCharge);
     formData.append('nightHaltCharge', nightHaltCharge);
@@ -155,58 +175,56 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
     
     console.log('Submitting vehicle update with data: ', Object.fromEntries(formData));
     
-    // Additional headers that might help with CORS
+    // Enhanced headers to help with CORS
     const headers = {
       ...getBypassHeaders(),
       'Access-Control-Allow-Origin': '*',
-      'Origin': window.location.origin
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Origin': window.location.origin,
+      'X-Requested-With': 'XMLHttpRequest'
     };
     
-    // Try direct update with our PHP script - always use getApiUrl to ensure CORS proxy is used
-    let response: Response | null = null;
-    let result: any = null;
+    // Use getApiUrl to ensure CORS proxy is applied consistently
+    const updateUrl = getApiUrl('/api/admin/direct-vehicle-update.php');
+    console.log(`Using update URL with CORS proxy: ${updateUrl}`);
+    
+    // Try the update with more debug info
+    let response = null;
+    let result = null;
     
     try {
-      console.log(`Vehicle update attempt using direct-vehicle-update.php`);
-      
-      // Use getApiUrl to ensure CORS proxy is applied
-      const updateUrl = getApiUrl('/api/admin/direct-vehicle-update.php');
-      console.log(`Using update URL with CORS proxy: ${updateUrl}`);
+      console.log(`Vehicle update attempt using direct-vehicle-update.php with CORS proxy`);
       
       response = await fetch(updateUrl, {
         method: 'POST',
         body: formData,
         headers: headers,
-        mode: 'cors'
+        mode: 'cors',
+        credentials: 'omit' // Important for CORS
       });
       
-      if (response.ok) {
-        try {
-          const text = await response.text();
-          result = text ? JSON.parse(text) : { status: 'success' };
-          console.log('Vehicle update API response:', result);
-          
-          if (result.status === 'error') {
-            throw new Error(result.message || 'API returned error status');
-          }
-          console.log('Direct vehicle update succeeded');
-          
-        } catch (jsonError) {
-          console.warn('Error parsing JSON response:', jsonError);
-          // If we can't parse but the HTTP status was OK, assume success
-          if (response.ok) {
-            result = { status: 'success' };
-            console.log('Assuming success despite JSON parse error');
-          } else {
-            throw new Error('Failed to parse API response');
-          }
+      console.log('Response status:', response.status);
+      
+      const responseText = await response.text();
+      console.log('Raw response:', responseText);
+      
+      try {
+        result = JSON.parse(responseText);
+        console.log('Parsed response:', result);
+      } catch (e) {
+        console.warn('Failed to parse JSON response:', e);
+        if (response.ok) {
+          result = { status: 'success', message: 'Vehicle updated successfully but response was not valid JSON' };
+        } else {
+          throw new Error(`Failed to update vehicle: ${response.status} ${response.statusText}`);
         }
-      } else {
-        console.error(`Update failed with status ${response.status}`);
-        throw new Error(`Update failed with status ${response.status}`);
       }
-    } catch (directUpdateError) {
-      console.error('Direct update failed:', directUpdateError);
+      
+      if (result && result.status === 'error') {
+        throw new Error(result.message || 'API returned error status');
+      }
+    } catch (updateError) {
+      console.error('Vehicle update error:', updateError);
       
       // Update fallback - try to save to local storage at minimum
       try {
@@ -222,7 +240,7 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
           localStorage.setItem('cachedVehicles', JSON.stringify(updatedVehicles));
           localStorage.setItem('cachedVehiclesTimestamp', Date.now().toString());
           
-          console.log('Updated vehicle in local storage cache');
+          console.log('Updated vehicle in local storage cache as fallback');
           result = { 
             status: 'success', 
             message: 'Vehicle updated successfully (offline mode)',

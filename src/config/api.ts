@@ -30,7 +30,11 @@ export const defaultHeaders = {
   'Pragma': 'no-cache',
   'Expires': '0',
   'Origin': window.location.origin,
-  'X-Requested-With': 'XMLHttpRequest'
+  'X-Requested-With': 'XMLHttpRequest',
+  // Add additional headers to help with CORS
+  'Accept': '*/*',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS'
 };
 
 // Force refresh headers

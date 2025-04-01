@@ -2,18 +2,19 @@
 // direct-vehicle-create.php - A specialized endpoint for vehicle creation 
 // with maximum compatibility and robust error handling
 
-// Set comprehensive CORS headers
+// Set comprehensive CORS headers - HIGHEST PRIORITY
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, *');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, Origin, *');
+header('Access-Control-Max-Age: 7200');
 header('Access-Control-Expose-Headers: *');
-header('X-API-Version: 1.0.8');
+header('X-API-Version: 1.1.0');
 
-// Handle preflight OPTIONS request
+// Handle preflight OPTIONS request with HIGHEST PRIORITY - THIS IS CRITICAL
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
@@ -24,6 +25,12 @@ $timestamp = date('Y-m-d H:i:s');
 $requestMethod = $_SERVER['REQUEST_METHOD'];
 $requestUri = $_SERVER['REQUEST_URI'];
 error_log("[$timestamp] Direct vehicle create request: Method=$requestMethod, URI=$requestUri");
+
+// DEBUG: Log all request data 
+error_log("REQUEST URI: " . $_SERVER['REQUEST_URI']);
+error_log("REQUEST METHOD: " . $_SERVER['REQUEST_METHOD']);
+error_log("CONTENT TYPE: " . $_SERVER['CONTENT_TYPE'] ?? 'not set');
+error_log("ALL HEADERS: " . json_encode(getallheaders()));
 
 // Get data from request using multiple approaches
 $data = [];
