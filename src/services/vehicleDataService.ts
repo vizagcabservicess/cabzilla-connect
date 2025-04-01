@@ -5,8 +5,8 @@ import { OutstationFare, LocalFare, AirportFare } from '@/types/cab';
 import { toast } from 'sonner';
 
 // Reduced cache durations to ensure fresher data
-const JSON_CACHE_DURATION = 30 * 1000; // 30 seconds in milliseconds (reduced significantly)
-const API_CACHE_DURATION = 15 * 1000; // 15 seconds in milliseconds (reduced significantly)
+const JSON_CACHE_DURATION = 30 * 1000; // 30 seconds in milliseconds
+const API_CACHE_DURATION = 15 * 1000; // 15 seconds in milliseconds
 
 // Store fetched vehicle data in memory to reduce API calls
 let cachedVehicles: {
@@ -123,196 +123,23 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
     console.log('Force refresh requested, skipping cache');
   }
   
-  // Try to fetch from direct DB API first (with error handling)
-  try {
-    // Build the URL with includeInactive parameter
-    const includeInactiveParam = includeInactive ? 'true' : 'false';
-    let endpoint = `/api/admin/get-vehicles.php?${cacheBuster}&includeInactive=${includeInactiveParam}`;
-    let url = getApiUrl(endpoint);
-    
-    console.log(`Fetching vehicle data from direct API: ${url}`);
-    
-    const fetchPromise = fetch(url, {
-      headers: {
-        ...forceRefreshHeaders,
-        'X-Admin-Mode': includeInactive ? 'true' : 'false' // Add admin mode header
-      },
-      mode: 'cors',
-      cache: 'no-store'
-    });
-    
-    // Add timeout to the fetch
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Direct API request timeout')), 8000); // Increased timeout
-    });
-    
-    // Race the fetch against the timeout
-    const response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
-    
-    if (!response.ok) {
-      throw new Error(`Direct API response not OK: ${response.status} ${response.statusText}`);
-    }
-    
-    const data = await response.json();
-    
-    if (data && data.status === 'success' && Array.isArray(data.vehicles) && data.vehicles.length > 0) {
-      console.log(`Received ${data.vehicles.length} vehicles from direct API`);
-      
-      // Process vehicle data to ensure correct format
-      const processedVehicles = processVehicles(data.vehicles);
-      
-      // Cache the processed data
-      cachedVehicles.api = {
-        data: processedVehicles,
-        timestamp: now
-      };
-      
-      // Cache to localStorage for persistence
-      try {
-        localStorage.setItem('cachedVehicles', JSON.stringify(processedVehicles));
-        localStorage.setItem('cachedVehiclesTimestamp', now.toString());
-      } catch (e) {
-        console.error('Error caching vehicles to localStorage:', e);
-      }
-      
-      // Dispatch event to notify components about the refresh
-      window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
-        detail: { 
-          count: processedVehicles.length,
-          timestamp: now,
-          isAdminView: includeInactive
-        }
-      }));
-      
-      return filterVehicles(processedVehicles, includeInactive);
-    } else {
-      console.warn('Direct API returned empty or invalid vehicles array:', data);
-      
-      // Try the fix-vehicle-tables endpoint to repair database
-      try {
-        toast.info("Attempting to fix vehicle database tables");
-        const fixResponse = await fetch(`${apiBaseUrl}/api/admin/fix-vehicle-tables.php?${cacheBuster}`, {
-          headers: forceRefreshHeaders,
-          mode: 'cors',
-          cache: 'no-store'
-        });
-        
-        if (fixResponse.ok) {
-          // Try fetching vehicles again
-          const retryResponse = await fetch(url, {
-            headers: forceRefreshHeaders,
-            mode: 'cors',
-            cache: 'no-store'
-          });
-          
-          if (retryResponse.ok) {
-            const retryData = await retryResponse.json();
-            
-            if (retryData && retryData.status === 'success' && Array.isArray(retryData.vehicles) && retryData.vehicles.length > 0) {
-              console.log(`Received ${retryData.vehicles.length} vehicles after fixing database`);
-              
-              // Process vehicle data to ensure correct format
-              const processedVehicles = processVehicles(retryData.vehicles);
-              
-              // Cache the processed data
-              cachedVehicles.api = {
-                data: processedVehicles,
-                timestamp: now
-              };
-              
-              // Cache to localStorage for persistence
-              localStorage.setItem('cachedVehicles', JSON.stringify(processedVehicles));
-              localStorage.setItem('cachedVehiclesTimestamp', now.toString());
-              
-              toast.success(`Successfully retrieved ${processedVehicles.length} vehicles after database fix`);
-              
-              return filterVehicles(processedVehicles, includeInactive);
-            }
-          }
-        }
-      } catch (fixError) {
-        console.error('Error fixing database:', fixError);
-      }
-      
-      throw new Error('Direct API returned empty or invalid vehicles array');
-    }
-  } catch (directApiError) {
-    console.error('Error fetching vehicles from direct API:', directApiError);
-    
-    // Now try the vehicles-data.php endpoint (with error handling)
+  // Try all endpoints with fallbacks to ensure we get vehicle data
+  const endpoints = [
+    // Try the direct admin endpoint first for most complete data
+    `/api/admin/get-vehicles.php?${cacheBuster}&includeInactive=${includeInactive ? 'true' : 'false'}`,
+    // Then try the public endpoint
+    `/api/fares/vehicles-data.php?${cacheBuster}&includeInactive=${includeInactive ? 'true' : 'false'}&force=${forceRefresh ? 'true' : 'false'}`,
+    // Then try local json file as final fallback
+    null // Special marker for local JSON file
+  ];
+  
+  let lastError: Error | null = null;
+  
+  // Try each endpoint in order until one succeeds
+  for (const endpoint of endpoints) {
     try {
-      const includeInactiveParam = includeInactive ? 'true' : 'false';
-      let endpoint = `/api/fares/vehicles-data.php?${cacheBuster}&includeInactive=${includeInactiveParam}`;
-      if (forceRefresh) {
-        endpoint += '&force=true';
-      }
-      
-      let url = getApiUrl(endpoint);
-      console.log(`Fetching vehicle data from API: ${url}`);
-      
-      const fetchPromise = fetch(url, {
-        headers: forceRefresh ? {
-          ...forceRefreshHeaders,
-          'X-Admin-Mode': includeInactive ? 'true' : 'false' // Add admin mode header
-        } : defaultHeaders,
-        mode: 'cors',
-        cache: 'no-store'
-      });
-      
-      // Add timeout to the fetch
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('API request timeout')), 8000); // Increased timeout
-      });
-      
-      // Race the fetch against the timeout
-      const response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
-      
-      if (!response.ok) {
-        console.error(`API response not OK: ${response.status} ${response.statusText}`);
-        throw new Error(`Failed to fetch vehicles: ${response.status} ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      
-      if (data && Array.isArray(data.vehicles) && data.vehicles.length > 0) {
-        console.log(`Received ${data.vehicles.length} vehicles from API`);
-        
-        // Process vehicle data to ensure correct format
-        const processedVehicles = processVehicles(data.vehicles);
-        
-        // Cache the processed data
-        cachedVehicles.api = {
-          data: processedVehicles,
-          timestamp: now
-        };
-        
-        // Cache to localStorage for persistence
-        try {
-          localStorage.setItem('cachedVehicles', JSON.stringify(processedVehicles));
-          localStorage.setItem('cachedVehiclesTimestamp', now.toString());
-        } catch (e) {
-          console.error('Error caching vehicles to localStorage:', e);
-        }
-        
-        // Dispatch event to notify components about the refresh
-        window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
-          detail: { 
-            count: processedVehicles.length,
-            timestamp: now,
-            isAdminView: includeInactive
-          }
-        }));
-        
-        return filterVehicles(processedVehicles, includeInactive);
-      } else {
-        console.warn('API returned empty or invalid vehicles array');
-        throw new Error('API returned empty or invalid vehicles array');
-      }
-    } catch (apiError) {
-      console.error('Error fetching vehicles from API:', apiError);
-      
-      // Try local JSON file with better error handling
-      try {
+      if (endpoint === null) {
+        // Try local JSON file
         console.log('Fetching from vehicles.json fallback');
         const jsonResponse = await fetch(`/data/vehicles.json?${cacheBuster}`, {
           headers: {
@@ -356,10 +183,119 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
         } else {
           throw new Error('JSON data is empty or invalid');
         }
-      } catch (jsonError) {
-        console.error('Error loading from local JSON, using default vehicles:', jsonError);
+      } else {
+        // Try API endpoint
+        const url = getApiUrl(endpoint);
+        console.log(`Fetching vehicle data from API: ${url}`);
+        
+        const headers = {
+          ...forceRefreshHeaders,
+          'X-Admin-Mode': includeInactive ? 'true' : 'false'
+        };
+        
+        const response = await fetch(url, {
+          headers: headers,
+          mode: 'cors',
+          cache: 'no-store'
+        });
+        
+        if (!response.ok) {
+          throw new Error(`API response not OK: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        // Check if the response contains vehicles
+        if (data && Array.isArray(data.vehicles) && data.vehicles.length > 0) {
+          console.log(`Received ${data.vehicles.length} vehicles from API`);
+          
+          // Process vehicle data to ensure correct format
+          const processedVehicles = processVehicles(data.vehicles);
+          
+          // Cache the processed data
+          cachedVehicles.api = {
+            data: processedVehicles,
+            timestamp: now
+          };
+          
+          // Cache to localStorage for persistence
+          try {
+            localStorage.setItem('cachedVehicles', JSON.stringify(processedVehicles));
+            localStorage.setItem('cachedVehiclesTimestamp', now.toString());
+          } catch (e) {
+            console.error('Error caching vehicles to localStorage:', e);
+          }
+          
+          // Dispatch event to notify components about the refresh
+          window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
+            detail: { 
+              count: processedVehicles.length,
+              timestamp: now,
+              isAdminView: includeInactive
+            }
+          }));
+          
+          return filterVehicles(processedVehicles, includeInactive);
+        }
+        
+        // If we got here, the data exists but there are no vehicles, try next endpoint
+        console.warn('API returned empty vehicles array, trying next endpoint');
+      }
+    } catch (error) {
+      console.error(`Error fetching vehicles from ${endpoint || 'JSON file'}:`, error);
+      lastError = error as Error;
+      // Continue to next endpoint
+    }
+  }
+  
+  // Try to fix database tables as a last resort
+  try {
+    console.log("Attempting to fix database tables and retry");
+    
+    await fetch(`${apiBaseUrl}/api/admin/fix-vehicle-tables.php?${cacheBuster}`, {
+      headers: forceRefreshHeaders,
+      mode: 'cors',
+      cache: 'no-store'
+    });
+    
+    // Try the admin endpoint again after fixing tables
+    const finalUrl = getApiUrl(`/api/admin/get-vehicles.php?${cacheBuster}&includeInactive=${includeInactive ? 'true' : 'false'}`);
+    
+    const finalResponse = await fetch(finalUrl, {
+      headers: {
+        ...forceRefreshHeaders,
+        'X-Admin-Mode': includeInactive ? 'true' : 'false'
+      },
+      mode: 'cors',
+      cache: 'no-store'
+    });
+    
+    if (finalResponse.ok) {
+      const finalData = await finalResponse.json();
+      
+      if (finalData && Array.isArray(finalData.vehicles) && finalData.vehicles.length > 0) {
+        console.log(`Received ${finalData.vehicles.length} vehicles after fixing database`);
+        
+        const processedVehicles = processVehicles(finalData.vehicles);
+        
+        cachedVehicles.api = {
+          data: processedVehicles,
+          timestamp: now
+        };
+        
+        // Cache to localStorage
+        try {
+          localStorage.setItem('cachedVehicles', JSON.stringify(processedVehicles));
+          localStorage.setItem('cachedVehiclesTimestamp', now.toString());
+        } catch (e) {
+          console.error('Error caching vehicles to localStorage:', e);
+        }
+        
+        return filterVehicles(processedVehicles, includeInactive);
       }
     }
+  } catch (fixError) {
+    console.error('Error fixing database tables:', fixError);
   }
   
   // Check for fallback data from previous requests
@@ -408,19 +344,43 @@ function filterVehicles(vehicles: CabType[], includeInactive: boolean): CabType[
 // Helper function to process vehicle data to ensure consistent format
 function processVehicles(vehicles: any[]): CabType[] {
   return vehicles.map(vehicle => {
+    // Handle amenities that might be parsed JSON strings
+    let amenities = ['AC'];
+    if (Array.isArray(vehicle.amenities)) {
+      amenities = vehicle.amenities;
+    } else if (typeof vehicle.amenities === 'string') {
+      try {
+        // Try to parse as JSON
+        const parsedAmenities = JSON.parse(vehicle.amenities);
+        if (Array.isArray(parsedAmenities)) {
+          amenities = parsedAmenities;
+        } else {
+          // Try to parse as comma-separated string
+          amenities = vehicle.amenities.split(',').map((a: string) => a.trim());
+        }
+      } catch (e) {
+        // If parsing fails, try to clean up the string and split it
+        const cleaned = vehicle.amenities.replace(/[\[\]"']/g, '');
+        amenities = cleaned.split(',').map((a: string) => a.trim());
+      }
+    }
+    
+    // Normalize vehicle ID
+    const id = String(vehicle.id || vehicle.vehicleId || vehicle.vehicle_id || '').trim();
+    
     // Ensure all properties have appropriate defaults
     return {
-      id: String(vehicle.id || vehicle.vehicleId || vehicle.vehicle_id || ''),
-      vehicleId: String(vehicle.vehicleId || vehicle.id || vehicle.vehicle_id || ''),
-      name: vehicle.name || 'Unknown',
+      id: id,
+      vehicleId: id,
+      name: vehicle.name || ucwords(id.replace(/_/g, ' ')),
       capacity: parseInt(vehicle.capacity || vehicle.seats || '4', 10),
       luggageCapacity: parseInt(vehicle.luggageCapacity || vehicle.luggage_capacity || '2', 10),
       basePrice: parseFloat(vehicle.basePrice || vehicle.base_price || vehicle.price || '0'),
       price: parseFloat(vehicle.price || vehicle.basePrice || vehicle.base_price || '0'),
       pricePerKm: parseFloat(vehicle.pricePerKm || vehicle.price_per_km || '0'),
       image: vehicle.image || '/cars/sedan.png',
-      amenities: Array.isArray(vehicle.amenities) ? vehicle.amenities : ['AC'],
-      description: vehicle.description || `${vehicle.name || 'Unknown'} vehicle`,
+      amenities: amenities.filter((a: any) => a), // Filter out empty values
+      description: vehicle.description || `${vehicle.name || ucwords(id.replace(/_/g, ' '))} vehicle`,
       ac: vehicle.ac === undefined ? true : Boolean(vehicle.ac),
       nightHaltCharge: parseFloat(vehicle.nightHaltCharge || vehicle.night_halt_charge || '0'),
       driverAllowance: parseFloat(vehicle.driverAllowance || vehicle.driver_allowance || '0'),
@@ -430,6 +390,11 @@ function processVehicles(vehicles: any[]): CabType[] {
       outstation: vehicle.outstation || {}
     };
   });
+}
+
+// Helper function to capitalize words
+function ucwords(str: string): string {
+  return str.replace(/\b\w/g, (l) => l.toUpperCase());
 }
 
 // Function to directly clear vehicle data cache

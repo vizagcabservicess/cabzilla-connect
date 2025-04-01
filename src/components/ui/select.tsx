@@ -114,16 +114,19 @@ const SelectItem = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item> & { value: string }
 >(({ className, children, value, ...props }, ref) => {
-  // Ensure value is never empty string
+  // Ensure value is never empty string or undefined
   const safeValue = value || "undefined";
   
-  // Clean vehicle ID (remove item- prefix if present)
+  // Clean vehicle ID (remove any prefix if present)
   const cleanValue = (): string => {
     if (!safeValue) return 'undefined';
     
-    // Remove 'item-' prefix if it exists
-    if (typeof safeValue === 'string' && safeValue.startsWith('item-')) {
-      return safeValue.substring(5);
+    // Remove any prefix like 'item-', 'vehicle-', etc.
+    if (typeof safeValue === 'string') {
+      const matches = safeValue.match(/^(item-|vehicle-|cab-|car-|type-)?(.+)$/);
+      if (matches && matches[2]) {
+        return matches[2];
+      }
     }
     
     return safeValue;
