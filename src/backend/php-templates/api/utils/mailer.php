@@ -1,8 +1,79 @@
-
 <?php
 require_once __DIR__ . '/../../config.php';
 
-// Function to send email using Hostinger's hsendmail specifically
+// Function specifically for SendGrid sending
+function sendSendGridEmail($to, $subject, $htmlBody) {
+    // Log attempt with detailed information
+    logError("Attempting to send email via SendGrid", [
+        'to' => $to,
+        'subject' => $subject,
+        'server_info' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown'
+    ]);
+    
+    // SendGrid API key - should be in a secure location/env variable in production
+    $sendgridApiKey = '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';
+    
+    // Build email headers
+    $from = 'info@vizagtaxihub.com';
+    $fromName = 'Vizag Taxi Hub';
+    
+    // Prepare SendGrid API request
+    $data = [
+        'personalizations' => [
+            [
+                'to' => [['email' => $to]],
+                'subject' => $subject
+            ]
+        ],
+        'from' => [
+            'email' => $from,
+            'name' => $fromName
+        ],
+        'content' => [
+            [
+                'type' => 'text/html',
+                'value' => $htmlBody
+            ]
+        ]
+    ];
+    
+    // Initialize cURL
+    $ch = curl_init();
+    
+    // Set cURL options
+    curl_setopt($ch, CURLOPT_URL, 'https://api.sendgrid.com/v3/mail/send');
+    curl_setopt($ch, CURLOPT_POST, 1);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Authorization: Bearer ' . $sendgridApiKey,
+        'Content-Type: application/json'
+    ]);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    
+    // Execute cURL request
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    
+    // Close cURL
+    curl_close($ch);
+    
+    // Check for success (2xx status code)
+    $success = ($httpCode >= 200 && $httpCode < 300);
+    
+    // Log the result
+    logError("SendGrid email sending result", [
+        'success' => $success ? 'yes' : 'no',
+        'to' => $to,
+        'http_code' => $httpCode,
+        'curl_error' => $curlError,
+        'response' => $response,
+    ]);
+    
+    return $success;
+}
+
+// Function to send email using Hostinger-recommended methods with improved error handling
 function sendHostingerMail($to, $subject, $htmlBody, $textBody = '', $headers = []) {
     // Initialize variables for tracking
     $success = false;
@@ -247,7 +318,7 @@ function sendMailReliable($to, $subject, $htmlBody, $textBody = '', $headers = [
     return false;
 }
 
-// Function to send booking confirmation email using the reliable method
+// Function to send booking confirmation email using multiple methods
 function sendReliableBookingConfirmationEmail($booking) {
     if (empty($booking['passengerEmail'])) {
         logError("Cannot send confirmation email - no passenger email provided", [
@@ -260,20 +331,29 @@ function sendReliableBookingConfirmationEmail($booking) {
     $subject = "Booking Confirmation - #" . $booking['bookingNumber'];
     $htmlBody = generateBookingConfirmationEmail($booking);
     
-    logError("Sending booking confirmation email with Hostinger-optimized method", [
+    logError("Sending booking confirmation email", [
         'to' => $to,
         'booking_number' => $booking['bookingNumber']
     ]);
     
-    // Try Hostinger-specific method first
-    $result = sendHostingerMail($to, $subject, $htmlBody);
+    // Try SendGrid first (most reliable)
+    $result = sendSendGridEmail($to, $subject, $htmlBody);
     
-    if (!$result) {
-        // If that fails, try regular reliable method
-        $result = sendMailReliable($to, $subject, $htmlBody);
+    if ($result) {
+        return true;
     }
     
-    logError("Booking confirmation email result", [
+    // If SendGrid fails, try native Hostinger methods
+    $result = sendHostingerMail($to, $subject, $htmlBody);
+    
+    if ($result) {
+        return true;
+    }
+    
+    // If that fails too, try regular reliable method
+    $result = sendMailReliable($to, $subject, $htmlBody);
+    
+    logError("Booking confirmation email final result", [
         'success' => $result ? 'yes' : 'no',
         'booking_number' => $booking['bookingNumber'],
         'recipient' => $to
@@ -282,26 +362,35 @@ function sendReliableBookingConfirmationEmail($booking) {
     return $result;
 }
 
-// Function to send admin notification email using the reliable method
+// Function to send admin notification email
 function sendReliableAdminNotificationEmail($booking) {
     $to = 'info@vizagtaxihub.com';
     $subject = "New Booking - #" . $booking['bookingNumber'];
     $htmlBody = generateAdminNotificationEmail($booking);
     
-    logError("Sending admin notification email with Hostinger-optimized method", [
+    logError("Sending admin notification email", [
         'to' => $to,
         'booking_number' => $booking['bookingNumber']
     ]);
     
-    // Try Hostinger-specific method first
-    $result = sendHostingerMail($to, $subject, $htmlBody);
+    // Try SendGrid first (most reliable)
+    $result = sendSendGridEmail($to, $subject, $htmlBody);
     
-    if (!$result) {
-        // If that fails, try regular reliable method
-        $result = sendMailReliable($to, $subject, $htmlBody);
+    if ($result) {
+        return true;
     }
     
-    logError("Admin notification email result", [
+    // If SendGrid fails, try native Hostinger methods
+    $result = sendHostingerMail($to, $subject, $htmlBody);
+    
+    if ($result) {
+        return true;
+    }
+    
+    // If that fails too, try regular reliable method
+    $result = sendMailReliable($to, $subject, $htmlBody);
+    
+    logError("Admin notification email final result", [
         'success' => $result ? 'yes' : 'no',
         'booking_number' => $booking['bookingNumber']
     ]);
@@ -350,6 +439,13 @@ function sendBookingStatusUpdateEmail($to, $subject, $message) {
 </body>
 </html>';
     
-    // Try our more reliable method
+    // Try SendGrid first (most reliable)
+    $result = sendSendGridEmail($to, $subject, $htmlBody);
+    
+    if ($result) {
+        return true;
+    }
+    
+    // If that fails, try our more reliable Hostinger method
     return sendHostingerMail($to, $subject, $htmlBody);
 }
