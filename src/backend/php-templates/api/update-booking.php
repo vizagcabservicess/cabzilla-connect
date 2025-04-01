@@ -1,3 +1,4 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../config.php';
@@ -151,6 +152,15 @@ try {
         'admin_notes' => 'adminNotes'
     ];
     
+    // Track if status is being updated to 'confirmed'
+    $statusUpdated = false;
+    $oldStatus = $booking['status'];
+    $newStatus = isset($data['status']) ? $data['status'] : $oldStatus;
+    
+    if ($oldStatus != $newStatus) {
+        $statusUpdated = true;
+    }
+    
     // Map API field names to database field names
     foreach ($allowedFields as $dbField => $apiField) {
         if (isset($data[$apiField])) {
@@ -227,8 +237,8 @@ try {
         'updatedAt' => $updatedBooking['updated_at']
     ];
     
-    // If status is changed to 'confirmed', send a confirmation email to customer
-    if (isset($data['status']) && $data['status'] === 'confirmed') {
+    // If status is changed, send a notification email to customer
+    if ($statusUpdated && $newStatus === 'confirmed') {
         logError("Sending booking status update email", [
             'booking_id' => $bookingId,
             'new_status' => 'confirmed',
@@ -238,10 +248,14 @@ try {
         try {
             // Only send if we have a passenger email
             if (!empty($updatedBooking['passenger_email'])) {
-                $emailSuccess = sendHostingerMail(
+                // Use our specialized function for status updates
+                $emailSuccess = sendBookingStatusUpdateEmail(
                     $updatedBooking['passenger_email'],
                     "Booking #" . $updatedBooking['booking_number'] . " Confirmed",
-                    "Your booking has been confirmed. Thank you for choosing Vizag Taxi Hub."
+                    "Your booking has been confirmed by Vizag Taxi Hub. Your driver " . 
+                    ($updatedBooking['driver_name'] ? $updatedBooking['driver_name'] : "will be assigned soon") . 
+                    " and vehicle " . ($updatedBooking['vehicle_number'] ? $updatedBooking['vehicle_number'] : "details will be shared soon") . 
+                    ". Thank you for choosing Vizag Taxi Hub."
                 );
                 
                 logError("Status update email result", [
@@ -264,3 +278,4 @@ try {
     logError("Update booking error", ['message' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
     sendJsonResponse(['status' => 'error', 'message' => 'Failed to update booking: ' . $e->getMessage()], 500);
 }
+
