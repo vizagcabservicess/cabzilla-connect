@@ -35,6 +35,9 @@ RewriteEngine On
     
     # CORS DEBUG - Expose additional headers for debugging
     Header always set X-CORS-Debug "CORS headers set by htaccess"
+    
+    # Expose additional headers to clients
+    Header always set Access-Control-Expose-Headers "*"
 </IfModule>
 
 # Handle OPTIONS requests for CORS preflight - immediately return 200

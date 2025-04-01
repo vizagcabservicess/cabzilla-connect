@@ -1,15 +1,16 @@
-
 <?php
 // direct-vehicle-create.php - A specialized endpoint for vehicle creation 
 // with maximum compatibility and robust error handling
 
+// Set comprehensive CORS headers
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, *');
+header('Access-Control-Expose-Headers: *');
 header('X-API-Version: 1.0.8');
 
 // Handle preflight OPTIONS request

@@ -11,7 +11,9 @@ export const getBypassHeaders = (): Record<string, string> => {
     'X-Force-Refresh': 'true',
     'Cache-Control': 'no-cache, no-store, must-revalidate',
     'Pragma': 'no-cache',
-    'Expires': '0'
+    'Expires': '0',
+    'Origin': window.location.origin,
+    'X-Requested-With': 'XMLHttpRequest'
   };
 };
 
@@ -23,7 +25,8 @@ export const getForcedRequestConfig = () => {
     headers: getBypassHeaders(),
     timeout: 30000, // 30 seconds timeout
     cache: 'no-store' as const,
-    mode: 'cors' as const
+    mode: 'cors' as const,
+    credentials: 'omit' as const // Don't send credentials for CORS
   };
 };
 

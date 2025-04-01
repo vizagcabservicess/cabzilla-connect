@@ -3,7 +3,7 @@
 export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
 
 // CORS proxy settings
-const useCorsProxy = import.meta.env.VITE_USE_CORS_PROXY === 'true';
+const useCorsProxy = true; // Always use CORS proxy regardless of env setting
 export const corsProxyUrl = import.meta.env.VITE_CORS_PROXY_URL || 'https://corsproxy.io/?';
 
 // Function to get properly formatted URL with CORS proxy if needed
@@ -28,7 +28,9 @@ export const defaultHeaders = {
   'Content-Type': 'application/json',
   'Cache-Control': 'no-cache, no-store, must-revalidate',
   'Pragma': 'no-cache',
-  'Expires': '0'
+  'Expires': '0',
+  'Origin': window.location.origin,
+  'X-Requested-With': 'XMLHttpRequest'
 };
 
 // Force refresh headers

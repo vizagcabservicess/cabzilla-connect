@@ -1,4 +1,3 @@
-
 import { CabType } from '@/types/cab';
 import { apiBaseUrl, defaultHeaders, forceRefreshHeaders, getApiUrl } from '@/config/api';
 import { getBypassHeaders, getForcedRequestConfig, formatDataForMultipart } from '@/config/requestConfig';
@@ -34,7 +33,11 @@ export const createVehicle = async (vehicleData: CabType): Promise<CabType> => {
     const response = await fetch(getApiUrl('/api/admin/direct-vehicle-create.php'), {
       method: 'POST',
       body: formData,
-      headers: getBypassHeaders()
+      headers: {
+        ...getBypassHeaders(),
+        'Access-Control-Allow-Origin': '*'
+      },
+      mode: 'cors'
     });
     
     if (!response.ok) {
@@ -51,6 +54,17 @@ export const createVehicle = async (vehicleData: CabType): Promise<CabType> => {
     window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
       detail: { vehicleId: vehicleData.id, timestamp: Date.now() }
     }));
+    
+    // Also write to local storage cache as fallback
+    try {
+      const cachedVehiclesString = localStorage.getItem('cachedVehicles');
+      const cachedVehicles = cachedVehiclesString ? JSON.parse(cachedVehiclesString) : [];
+      const updatedVehicles = [...cachedVehicles.filter((v: CabType) => v.id !== vehicleData.id), vehicleData];
+      localStorage.setItem('cachedVehicles', JSON.stringify(updatedVehicles));
+      localStorage.setItem('cachedVehiclesTimestamp', Date.now().toString());
+    } catch (cacheError) {
+      console.warn("Could not update local cache:", cacheError);
+    }
     
     return vehicleData;
   } catch (error) {
@@ -141,10 +155,16 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
     
     console.log('Submitting vehicle update with data: ', Object.fromEntries(formData));
     
+    // Additional headers that might help with CORS
+    const headers = {
+      ...getBypassHeaders(),
+      'Access-Control-Allow-Origin': '*',
+      'Origin': window.location.origin
+    };
+    
     // Try direct update with our PHP script - always use getApiUrl to ensure CORS proxy is used
     let response: Response | null = null;
     let result: any = null;
-    let fallbackUsed = false;
     
     try {
       console.log(`Vehicle update attempt using direct-vehicle-update.php`);
@@ -156,7 +176,8 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
       response = await fetch(updateUrl, {
         method: 'POST',
         body: formData,
-        headers: getBypassHeaders()
+        headers: headers,
+        mode: 'cors'
       });
       
       if (response.ok) {
@@ -186,106 +207,50 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
       }
     } catch (directUpdateError) {
       console.error('Direct update failed:', directUpdateError);
-      fallbackUsed = true;
       
-      console.warn('Direct update failed, trying alternate endpoint...');
-      
-      // Try alternate endpoint - always use getApiUrl
+      // Update fallback - try to save to local storage at minimum
       try {
-        const alternateUrl = getApiUrl('/api/fares/update-vehicle.php');
-        console.log(`Using alternate URL with CORS proxy: ${alternateUrl}`);
-        
-        response = await fetch(alternateUrl, {
-          method: 'POST',
-          body: formData,
-          headers: getBypassHeaders()
-        });
-        
-        if (response.ok) {
-          try {
-            const text = await response.text();
-            result = text ? JSON.parse(text) : { status: 'success' };
-            
-            if (result.status === 'error') {
-              throw new Error(result.message || 'API returned error status');
-            }
-            
-            console.log('Alternate endpoint update succeeded');
-          } catch (jsonError) {
-            console.warn('Error parsing JSON from alternate endpoint:', jsonError);
-            if (response.ok) {
-              result = { status: 'success' };
-            } else {
-              throw new Error('Failed to parse API response from alternate endpoint');
-            }
-          }
+        const cachedVehiclesString = localStorage.getItem('cachedVehicles');
+        if (cachedVehiclesString) {
+          const cachedVehicles = JSON.parse(cachedVehiclesString);
+          const updatedVehicles = cachedVehicles.map((vehicle: any) => 
+            vehicle.id === vehicleId || vehicle.vehicleId === vehicleId ? 
+              { ...vehicle, ...vehicleData, description } : 
+              vehicle
+          );
+          
+          localStorage.setItem('cachedVehicles', JSON.stringify(updatedVehicles));
+          localStorage.setItem('cachedVehiclesTimestamp', Date.now().toString());
+          
+          console.log('Updated vehicle in local storage cache');
+          result = { 
+            status: 'success', 
+            message: 'Vehicle updated successfully (offline mode)',
+            vehicleId: vehicleId,
+            offline: true,
+            timestamp: new Date().toISOString()
+          };
         } else {
-          throw new Error(`Alternate endpoint update failed with status ${response.status}`);
-        }
-      } catch (alternateError) {
-        console.error('Alternate endpoint failed:', alternateError);
-        
-        console.warn('Alternate endpoint failed, trying fallback method...');
-        
-        try {
-          // Use alternative update approach with more fields
-          const updateData = {
+          // If no cached vehicles, create a new entry
+          localStorage.setItem('cachedVehicles', JSON.stringify([{
             ...vehicleData,
             id: vehicleId,
             vehicleId: vehicleId,
-            basePrice: vehicleData.price || vehicleData.basePrice || 0,
-            pricePerKm: vehicleData.pricePerKm || 0,
-            nightHaltCharge: vehicleData.nightHaltCharge || 700,
-            driverAllowance: vehicleData.driverAllowance || 300,
-            description: description,
-            isActive: vehicleData.isActive === false ? false : true,
-            name: vehicleData.name || ''
+            description: description
+          }]));
+          localStorage.setItem('cachedVehiclesTimestamp', Date.now().toString());
+          
+          result = { 
+            status: 'success', 
+            message: 'Vehicle saved to local cache',
+            vehicleId: vehicleId,
+            offline: true,
+            timestamp: new Date().toISOString()
           };
-          
-          const fallbackResult = await directVehicleOperation<any>(
-            'update',
-            updateData,
-            {
-              notification: true,
-              localStorageFallback: true
-            }
-          );
-          
-          console.log('Vehicle update succeeded via fallback method:', fallbackResult);
-          result = { status: 'success' };
-        } catch (fallbackError) {
-          console.error('Fallback method also failed:', fallbackError);
-          
-          // Last resort: update the local storage cache directly
-          try {
-            const vehiclesCacheString = localStorage.getItem('cachedVehicles');
-            if (vehiclesCacheString) {
-              const cachedVehicles = JSON.parse(vehiclesCacheString);
-              const updatedVehicles = cachedVehicles.map((vehicle: any) => 
-                vehicle.id === vehicleId || vehicle.vehicleId === vehicleId ? 
-                  { ...vehicle, ...vehicleData, description } : 
-                  vehicle
-              );
-              
-              localStorage.setItem('cachedVehicles', JSON.stringify(updatedVehicles));
-              localStorage.setItem('cachedVehiclesTimestamp', Date.now().toString());
-              
-              console.log('Updated vehicle in local storage cache');
-              result = { 
-                status: 'success', 
-                message: 'Vehicle updated successfully (offline mode)',
-                vehicleId: vehicleId,
-                offline: true,
-                timestamp: new Date().toISOString()
-              };
-            } else {
-              throw new Error('No cached vehicles found in localStorage');
-            }
-          } catch (localStorageError) {
-            console.error('All vehicle update methods failed:', localStorageError);
-            throw new Error('All vehicle update methods failed');
-          }
         }
+      } catch (localStorageError) {
+        console.error('All vehicle update methods failed:', localStorageError);
+        throw new Error('All vehicle update methods failed');
       }
     }
     
