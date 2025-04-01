@@ -1,6 +1,6 @@
 
 // Base API URL configuration
-export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
 
 // Default timeout in milliseconds
 export const apiTimeout = 30000;

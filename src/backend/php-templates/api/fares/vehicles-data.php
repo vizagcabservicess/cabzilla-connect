@@ -129,7 +129,7 @@ try {
                     if (isset($row['ac'])) $existingVehicle['ac'] = (bool) $row['ac'];
                     if (isset($row['image']) && !empty($row['image'])) $existingVehicle['image'] = $row['image'];
                     if (isset($row['amenities'])) $existingVehicle['amenities'] = json_decode($row['amenities'], true);
-                    if (isset($row['description'])) $existingVehicle['description'] = $row['description'];
+                    if (isset($row['description']) && !empty($row['description'])) $existingVehicle['description'] = $row['description'];
                     if (isset($row['is_active'])) $existingVehicle['isActive'] = (bool) $row['is_active'];
                     
                     $allVehicles[$vehicleId] = $existingVehicle;
@@ -138,148 +138,100 @@ try {
         }
     }
     
-    // 3. Get pricing information if we have any vehicles
+    // 3. Now get pricing information from vehicle_pricing or outstation_fares tables
     if (count($vehicleIds) > 0) {
-        $vehicleIdsStr = implode(',', $vehicleIds);
+        // First check if vehicle_pricing table exists
+        $vehiclePricingExists = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'")->num_rows > 0;
         
-        // First try the vehicle_pricing table
-        $pricingExists = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'")->num_rows > 0;
-        
-        if ($pricingExists) {
-            $pricingQuery = "
-                SELECT vp.vehicle_id, vp.trip_type, vp.base_fare, vp.price_per_km,
-                       vp.driver_allowance, vp.night_halt_charge
-                FROM vehicle_pricing vp
-                WHERE vp.vehicle_id IN ($vehicleIdsStr) AND vp.trip_type LIKE 'outstation%'
-                ORDER BY CASE
-                    WHEN vp.trip_type = 'outstation' THEN 1
-                    WHEN vp.trip_type = 'outstation-one-way' THEN 2
-                    ELSE 3
-                END
-                LIMIT 1000
-            ";
-            
+        if ($vehiclePricingExists) {
+            $vehicleIdsString = implode(',', $vehicleIds);
+            $pricingQuery = "SELECT * FROM vehicle_pricing WHERE vehicle_id IN ($vehicleIdsString)";
             $pricingResult = $conn->query($pricingQuery);
             
             if ($pricingResult && $pricingResult->num_rows > 0) {
-                error_log("Found pricing data for " . $pricingResult->num_rows . " vehicles");
+                error_log("Found " . $pricingResult->num_rows . " pricing entries in vehicle_pricing table");
                 
-                // Group pricing by vehicle_id
-                $vehiclePricing = [];
                 while ($row = $pricingResult->fetch_assoc()) {
                     $vehicleId = $row['vehicle_id'];
                     
-                    if (!isset($vehiclePricing[$vehicleId])) {
-                        $vehiclePricing[$vehicleId] = [];
-                    }
-                    
-                    $vehiclePricing[$vehicleId][] = $row;
-                }
-                
-                // Apply pricing data to vehicles
-                foreach ($vehiclePricing as $vehicleId => $pricingData) {
                     if (isset($allVehicles[$vehicleId])) {
-                        // Use first pricing entry for the vehicle
-                        $pricing = $pricingData[0];
-                        
-                        $allVehicles[$vehicleId]['basePrice'] = (float) $pricing['base_fare'];
-                        $allVehicles[$vehicleId]['price'] = (float) $pricing['base_fare'];
-                        $allVehicles[$vehicleId]['pricePerKm'] = (float) $pricing['price_per_km'];
-                        $allVehicles[$vehicleId]['driverAllowance'] = (float) $pricing['driver_allowance'];
-                        $allVehicles[$vehicleId]['nightHaltCharge'] = (float) $pricing['night_halt_charge'];
+                        $allVehicles[$vehicleId]['price'] = (float) ($row['base_price'] ?? 0);
+                        $allVehicles[$vehicleId]['basePrice'] = (float) ($row['base_price'] ?? 0);
+                        $allVehicles[$vehicleId]['pricePerKm'] = (float) ($row['price_per_km'] ?? 0);
+                        $allVehicles[$vehicleId]['nightHaltCharge'] = (float) ($row['night_halt_charge'] ?? 700);
+                        $allVehicles[$vehicleId]['driverAllowance'] = (float) ($row['driver_allowance'] ?? 300);
                     }
                 }
             }
         }
         
-        // Then check outstation_fares table for any missing pricing info
+        // Also check if outstation_fares table exists
         $outstationFaresExists = $conn->query("SHOW TABLES LIKE 'outstation_fares'")->num_rows > 0;
         
         if ($outstationFaresExists) {
-            $outstationQuery = "
-                SELECT vehicle_id, base_price, price_per_km, driver_allowance, night_halt_charge
-                FROM outstation_fares
-                WHERE vehicle_id IN ($vehicleIdsStr)
-            ";
+            $vehicleIdsString = implode(',', $vehicleIds);
+            $faresQuery = "SELECT vehicle_id, base_price, price_per_km FROM outstation_fares WHERE vehicle_id IN ($vehicleIdsString) LIMIT 1";
+            $faresResult = $conn->query($faresQuery);
             
-            $outstationResult = $conn->query($outstationQuery);
-            
-            if ($outstationResult && $outstationResult->num_rows > 0) {
-                error_log("Found outstation fares for " . $outstationResult->num_rows . " vehicles");
+            if ($faresResult && $faresResult->num_rows > 0) {
+                error_log("Found pricing data in outstation_fares table");
                 
-                while ($row = $outstationResult->fetch_assoc()) {
+                while ($row = $faresResult->fetch_assoc()) {
                     $vehicleId = $row['vehicle_id'];
                     
-                    if (isset($allVehicles[$vehicleId])) {
-                        // Only update if price is not already set
-                        if (!isset($allVehicles[$vehicleId]['basePrice']) || $allVehicles[$vehicleId]['basePrice'] == 0) {
-                            $allVehicles[$vehicleId]['basePrice'] = (float) $row['base_price'];
-                            $allVehicles[$vehicleId]['price'] = (float) $row['base_price'];
-                        }
-                        
-                        if (!isset($allVehicles[$vehicleId]['pricePerKm']) || $allVehicles[$vehicleId]['pricePerKm'] == 0) {
-                            $allVehicles[$vehicleId]['pricePerKm'] = (float) $row['price_per_km'];
-                        }
-                        
-                        if (!isset($allVehicles[$vehicleId]['driverAllowance']) || $allVehicles[$vehicleId]['driverAllowance'] == 0) {
-                            $allVehicles[$vehicleId]['driverAllowance'] = (float) $row['driver_allowance'];
-                        }
-                        
-                        if (!isset($allVehicles[$vehicleId]['nightHaltCharge']) || $allVehicles[$vehicleId]['nightHaltCharge'] == 0) {
-                            $allVehicles[$vehicleId]['nightHaltCharge'] = (float) $row['night_halt_charge'];
-                        }
+                    if (isset($allVehicles[$vehicleId]) && (!isset($allVehicles[$vehicleId]['price']) || $allVehicles[$vehicleId]['price'] == 0)) {
+                        $allVehicles[$vehicleId]['price'] = (float) ($row['base_price'] ?? 0);
+                        $allVehicles[$vehicleId]['basePrice'] = (float) ($row['base_price'] ?? 0);
+                        $allVehicles[$vehicleId]['pricePerKm'] = (float) ($row['price_per_km'] ?? 0);
                     }
                 }
             }
         }
+        
+        // If we still don't have pricing, set default values
+        foreach ($allVehicles as $vehicleId => $vehicle) {
+            if (!isset($vehicle['price']) || $vehicle['price'] == 0) {
+                $defaultPrices = [
+                    'sedan' => ['price' => 2500, 'pricePerKm' => 14],
+                    'ertiga' => ['price' => 3200, 'pricePerKm' => 18],
+                    'innova' => ['price' => 3500, 'pricePerKm' => 18],
+                    'innova_crysta' => ['price' => 3800, 'pricePerKm' => 20],
+                    'luxury' => ['price' => 5000, 'pricePerKm' => 24],
+                    'tempo' => ['price' => 4500, 'pricePerKm' => 22]
+                ];
+                
+                $lowerVehicleId = strtolower($vehicleId);
+                if (isset($defaultPrices[$lowerVehicleId])) {
+                    $allVehicles[$vehicleId]['price'] = $defaultPrices[$lowerVehicleId]['price'];
+                    $allVehicles[$vehicleId]['basePrice'] = $defaultPrices[$lowerVehicleId]['price'];
+                    $allVehicles[$vehicleId]['pricePerKm'] = $defaultPrices[$lowerVehicleId]['pricePerKm'];
+                } else {
+                    $allVehicles[$vehicleId]['price'] = 2500;
+                    $allVehicles[$vehicleId]['basePrice'] = 2500;
+                    $allVehicles[$vehicleId]['pricePerKm'] = 14;
+                }
+                
+                $allVehicles[$vehicleId]['nightHaltCharge'] = 700;
+                $allVehicles[$vehicleId]['driverAllowance'] = 300;
+            }
+            
+            // Make sure these properties are always set
+            if (!isset($allVehicles[$vehicleId]['nightHaltCharge'])) {
+                $allVehicles[$vehicleId]['nightHaltCharge'] = 700;
+            }
+            
+            if (!isset($allVehicles[$vehicleId]['driverAllowance'])) {
+                $allVehicles[$vehicleId]['driverAllowance'] = 300;
+            }
+        }
     }
     
-    // Convert to array and ensure all required fields
-    $vehiclesArray = [];
-    foreach ($allVehicles as $vehicle) {
-        // Make sure each vehicle has complete data
-        if (!isset($vehicle['basePrice']) || $vehicle['basePrice'] == 0) {
-            $vehicle['basePrice'] = 2500;
-            $vehicle['price'] = 2500;
-        }
-        
-        if (!isset($vehicle['pricePerKm']) || $vehicle['pricePerKm'] == 0) {
-            $vehicle['pricePerKm'] = 15;
-        }
-        
-        if (!isset($vehicle['driverAllowance']) || $vehicle['driverAllowance'] == 0) {
-            $vehicle['driverAllowance'] = 300;
-        }
-        
-        if (!isset($vehicle['nightHaltCharge']) || $vehicle['nightHaltCharge'] == 0) {
-            $vehicle['nightHaltCharge'] = 800;
-        }
-        
-        if (!isset($vehicle['image']) || empty($vehicle['image'])) {
-            $vehicle['image'] = '/cars/sedan.png';
-        }
-        
-        if (!isset($vehicle['amenities']) || !is_array($vehicle['amenities'])) {
-            $vehicle['amenities'] = ['AC'];
-        }
-        
-        if (!isset($vehicle['description']) || empty($vehicle['description'])) {
-            $vehicle['description'] = 'Vehicle suitable for ' . $vehicle['capacity'] . ' passengers.';
-        }
-        
-        $vehiclesArray[] = $vehicle;
-    }
+    // Convert to indexed array
+    $vehicles = array_values($allVehicles);
     
-    // Sort vehicles by name
-    usort($vehiclesArray, function ($a, $b) {
-        return strcmp($a['name'], $b['name']);
-    });
-    
-    // If no vehicles found at all, return default vehicles
-    if (empty($vehiclesArray)) {
-        error_log("No vehicles found, returning default vehicles");
-        
-        $vehiclesArray = [
+    if (count($vehicles) == 0) {
+        // Default vehicles if none found
+        $vehicles = [
             [
                 'id' => 'sedan',
                 'vehicleId' => 'sedan',
@@ -287,14 +239,13 @@ try {
                 'capacity' => 4,
                 'luggageCapacity' => 2,
                 'price' => 2500,
-                'basePrice' => 2500,
                 'pricePerKm' => 14,
                 'image' => '/cars/sedan.png',
                 'amenities' => ['AC', 'Bottle Water', 'Music System'],
                 'description' => 'Comfortable sedan suitable for 4 passengers.',
                 'ac' => true,
                 'nightHaltCharge' => 700,
-                'driverAllowance' => 250,
+                'driverAllowance' => 300,
                 'isActive' => true
             ],
             [
@@ -304,14 +255,13 @@ try {
                 'capacity' => 6,
                 'luggageCapacity' => 3,
                 'price' => 3200,
-                'basePrice' => 3200,
                 'pricePerKm' => 18,
                 'image' => '/cars/ertiga.png',
                 'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
                 'description' => 'Spacious SUV suitable for 6 passengers.',
                 'ac' => true,
                 'nightHaltCharge' => 1000,
-                'driverAllowance' => 250,
+                'driverAllowance' => 300,
                 'isActive' => true
             ],
             [
@@ -321,35 +271,34 @@ try {
                 'capacity' => 7,
                 'luggageCapacity' => 4,
                 'price' => 3800,
-                'basePrice' => 3800,
                 'pricePerKm' => 20,
                 'image' => '/cars/innova.png',
                 'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
                 'description' => 'Premium SUV with ample space for 7 passengers.',
                 'ac' => true,
                 'nightHaltCharge' => 1000,
-                'driverAllowance' => 250,
+                'driverAllowance' => 300,
                 'isActive' => true
             ]
         ];
     }
     
-    error_log("Returning " . count($vehiclesArray) . " vehicles");
+    // Set cache control headers for better performance
+    header('Cache-Control: public, max-age=60');
     
-    // Return the vehicle data
+    // Return JSON response
     echo json_encode([
-        'vehicles' => $vehiclesArray,
-        'count' => count($vehiclesArray),
-        'includeInactive' => $includeInactive,
-        'isAdminMode' => $isAdminMode,
+        'status' => 'success',
+        'data' => $vehicles,
+        'count' => count($vehicles),
         'timestamp' => time()
     ]);
     
 } catch (Exception $e) {
-    error_log("Error fetching vehicle data: " . $e->getMessage());
+    error_log("Error in vehicles-data.php: " . $e->getMessage() . " - " . $e->getTraceAsString());
     
-    // Return default vehicles on error
-    $defaultVehicles = [
+    // Use default vehicles in case of error
+    $vehicles = [
         [
             'id' => 'sedan',
             'vehicleId' => 'sedan',
@@ -357,14 +306,13 @@ try {
             'capacity' => 4,
             'luggageCapacity' => 2,
             'price' => 2500,
-            'basePrice' => 2500,
             'pricePerKm' => 14,
             'image' => '/cars/sedan.png',
             'amenities' => ['AC', 'Bottle Water', 'Music System'],
             'description' => 'Comfortable sedan suitable for 4 passengers.',
             'ac' => true,
             'nightHaltCharge' => 700,
-            'driverAllowance' => 250,
+            'driverAllowance' => 300,
             'isActive' => true
         ],
         [
@@ -374,14 +322,13 @@ try {
             'capacity' => 6,
             'luggageCapacity' => 3,
             'price' => 3200,
-            'basePrice' => 3200,
             'pricePerKm' => 18,
             'image' => '/cars/ertiga.png',
             'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
             'description' => 'Spacious SUV suitable for 6 passengers.',
             'ac' => true,
             'nightHaltCharge' => 1000,
-            'driverAllowance' => 250,
+            'driverAllowance' => 300,
             'isActive' => true
         ],
         [
@@ -391,25 +338,23 @@ try {
             'capacity' => 7,
             'luggageCapacity' => 4,
             'price' => 3800,
-            'basePrice' => 3800,
             'pricePerKm' => 20,
             'image' => '/cars/innova.png',
             'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
             'description' => 'Premium SUV with ample space for 7 passengers.',
             'ac' => true,
             'nightHaltCharge' => 1000,
-            'driverAllowance' => 250,
+            'driverAllowance' => 300,
             'isActive' => true
         ]
     ];
     
-    // Output error but in a way that still provides usable data
     echo json_encode([
-        'vehicles' => $defaultVehicles,
-        'count' => count($defaultVehicles),
+        'status' => 'error',
+        'message' => 'An error occurred while retrieving vehicle data. Using default vehicles.',
         'error' => $e->getMessage(),
-        'includeInactive' => $includeInactive,
-        'isAdminMode' => $isAdminMode,
+        'data' => $vehicles,
+        'count' => count($vehicles),
         'timestamp' => time()
     ]);
 }
