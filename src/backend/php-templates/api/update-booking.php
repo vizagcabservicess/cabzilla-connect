@@ -262,10 +262,20 @@ try {
                     'timestamp' => date('Y-m-d H:i:s')
                 ]);
                 
+                $htmlEmail = generateConfirmationEmailHtml($emailSubject, $emailMessage);
+                
+                // Add some additional information to help avoid spam filters
+                $htmlEmail = str_replace('</body>', 
+                    '<div style="font-size:0.8em;color:#666;margin-top:30px;border-top:1px solid #eee;padding-top:10px;">
+                        <p>This is a legitimate booking confirmation from Vizag Taxi Hub. If you did not make this booking, please contact us.</p>
+                        <p>Our address: Lawsons Bay Colony, Visakhapatnam, AP 530017</p>
+                        <p>Contact: +91 9966363662 | info@vizagtaxihub.com</p>
+                    </div></body>', $htmlEmail);
+                
                 $emailSuccess = sendSmtpEmail(
                     $updatedBooking['passenger_email'],
                     $emailSubject,
-                    generateConfirmationEmailHtml($emailSubject, $emailMessage)
+                    $htmlEmail
                 );
                 
                 if (!$emailSuccess) {
@@ -279,7 +289,7 @@ try {
                     $emailSuccess = sendEmailAllMethods(
                         $updatedBooking['passenger_email'],
                         $emailSubject,
-                        generateConfirmationEmailHtml($emailSubject, $emailMessage)
+                        $htmlEmail
                     );
                 }
                 
@@ -327,6 +337,8 @@ function generateConfirmationEmailHtml($subject, $message) {
         .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
         .content { background-color: #f9f9f9; padding: 20px; border-radius: 0 0 5px 5px; border: 1px solid #ddd; }
         .footer { margin-top: 20px; text-align: center; color: #777; font-size: 14px; }
+        .contact-info { margin-top: 15px; padding: 10px; background-color: #f5f5f5; border-radius: 5px; }
+        .booking-reference { font-weight: bold; color: #4CAF50; }
     </style>
 </head>
 <body>
@@ -336,13 +348,17 @@ function generateConfirmationEmailHtml($subject, $message) {
         </div>
         <div class="content">
             <p>'.$message.'</p>
-            <p>If you have any questions, please contact our customer support:</p>
-            <p>Phone: +91 9966363662</p>
-            <p>Email: info@vizagtaxihub.com</p>
+            <div class="contact-info">
+                <p>If you have any questions, please contact our customer support:</p>
+                <p>Phone: +91 9966363662</p>
+                <p>Email: info@vizagtaxihub.com</p>
+                <p class="booking-reference">Please keep your booking reference for all communications.</p>
+            </div>
         </div>
         <div class="footer">
             <p>Thank you for choosing Vizag Taxi Hub!</p>
             <p>© ' . date('Y') . ' Vizag Taxi Hub. All rights reserved.</p>
+            <p>Lawsons Bay Colony, Visakhapatnam, AP 530017</p>
         </div>
     </div>
 </body>

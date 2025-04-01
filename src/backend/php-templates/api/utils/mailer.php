@@ -93,7 +93,10 @@ function sendSmtpEmail($to, $subject, $htmlBody) {
     $from = 'info@vizagtaxihub.com';
     $fromName = 'Vizag Taxi Hub';
     
-    // Prepare full email headers for better deliverability
+    // Generate a unique Message-ID with proper domain
+    $messageId = '<' . md5(uniqid(time())) . '@vizagtaxihub.com>';
+    
+    // Prepare full email headers for better deliverability with DKIM/SPF hints
     $headers = [
         'MIME-Version: 1.0',
         'Content-Type: text/html; charset=UTF-8',
@@ -105,8 +108,11 @@ function sendSmtpEmail($to, $subject, $htmlBody) {
         'X-MSMail-Priority: High',
         'Importance: High',
         'X-Sender: ' . $from,
-        // SPF hint
+        'Message-ID: ' . $messageId,
+        'Date: ' . date('r'),
+        // SPF/DKIM hints (actual records should be in DNS)
         'X-SPF: pass',
+        'X-DKIM: pass',
         // Avoid auto-responses
         'X-Auto-Response-Suppress: OOF, DR, RN, NRN, AutoReply',
         'Precedence: bulk'
@@ -130,7 +136,9 @@ function sendSmtpEmail($to, $subject, $htmlBody) {
     
     logError("Attempting SMTP connection", [
         'socket' => $socketAddress,
-        'encryption' => $smtpEncryption
+        'encryption' => $smtpEncryption,
+        'from' => $from,
+        'to' => $to
     ]);
     
     $socket = @stream_socket_client(
@@ -231,16 +239,10 @@ function sendSmtpEmail($to, $subject, $htmlBody) {
             return false;
         }
         
-        // Calculate message ID using domain
-        $messageId = '<' . md5(uniqid(time())) . '@vizagtaxihub.com>';
-        $date = date('r');
-        
         // Add headers to email content
         $message = "";
-        $message .= "Date: $date\r\n";
         $message .= "To: $to\r\n";
         $message .= "Subject: $subject\r\n";
-        $message .= "Message-ID: $messageId\r\n";
         
         // Add all headers
         foreach ($headers as $header) {
@@ -259,6 +261,10 @@ function sendSmtpEmail($to, $subject, $htmlBody) {
         // Send message data
         fputs($socket, $message);
         $response = fgets($socket, 515);
+        
+        // Log detailed response
+        logError("SMTP DATA response", ['response' => $response, 'to' => $to]);
+        
         if (substr($response, 0, 3) != '250') {
             logError("Message sending failed", ['response' => $response]);
             fclose($socket);
@@ -697,7 +703,7 @@ function sendBookingStatusUpdateEmail($to, $subject, $message) {
         return true;
     }
     
-    // Last resort, try PHP mail
+    // Last resort, try PHP's mail
     $result = sendMailReliable($to, $subject, $htmlBody);
     
     logError("Final email sending result", [
