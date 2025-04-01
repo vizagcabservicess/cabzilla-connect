@@ -1,3 +1,4 @@
+
 <?php
 /**
  * direct-vehicle-delete.php - Delete a vehicle from all related tables
@@ -47,8 +48,8 @@ $response = [
 ];
 
 // Allow POST/DELETE methods
-if ($_SERVER['REQUEST_METHOD'] !== 'POST' && $_SERVER['REQUEST_METHOD'] !== 'DELETE') {
-    $response['message'] = 'Only POST or DELETE methods are allowed';
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' && $_SERVER['REQUEST_METHOD'] !== 'DELETE' && $_SERVER['REQUEST_METHOD'] !== 'GET') {
+    $response['message'] = 'Only POST, DELETE, or GET methods are allowed';
     echo json_encode($response);
     exit;
 }
@@ -87,86 +88,57 @@ try {
     // Get vehicle ID from request parameters or body
     $vehicleId = null;
     
-    // Check URL parameters
-    if (isset($_GET['vehicleId']) && !empty($_GET['vehicleId'])) {
-        $vehicleId = $_GET['vehicleId'];
-        logMessage("Found vehicle ID in query parameters: $vehicleId");
+    // Check URL parameters - try multiple common parameter names
+    $possibleParams = ['vehicleId', 'vehicle_id', 'id', 'vehicle-id', 'cab_id', 'cabId'];
+    
+    foreach ($possibleParams as $param) {
+        if (isset($_GET[$param]) && !empty($_GET[$param])) {
+            $vehicleId = $_GET[$param];
+            logMessage("Found vehicle ID in query parameter '$param': $vehicleId");
+            break;
+        }
     }
-    else if (isset($_GET['id']) && !empty($_GET['id'])) {
-        $vehicleId = $_GET['id'];
-        logMessage("Found vehicle ID as 'id' in query parameters: $vehicleId");
-    }
-    else if (isset($_GET['vehicle_id']) && !empty($_GET['vehicle_id'])) {
-        $vehicleId = $_GET['vehicle_id'];
-        logMessage("Found vehicle ID as 'vehicle_id' in query parameters: $vehicleId");
-    }
-    // Otherwise try to get from body
-    else {
-        $rawData = file_get_contents('php://input');
-        $jsonData = json_decode($rawData, true);
-        
-        if (json_last_error() === JSON_ERROR_NONE) {
-            // Try all possible field names
-            $possibleFields = ['vehicleId', 'id', 'vehicle_id'];
-            foreach ($possibleFields as $field) {
-                if (isset($jsonData[$field])) {
-                    $vehicleId = $jsonData[$field];
-                    logMessage("Found vehicle ID in JSON body as '$field': $vehicleId");
-                    break;
-                }
+    
+    // If not found in GET, check POST data
+    if (!$vehicleId) {
+        foreach ($possibleParams as $param) {
+            if (isset($_POST[$param]) && !empty($_POST[$param])) {
+                $vehicleId = $_POST[$param];
+                logMessage("Found vehicle ID in POST data parameter '$param': $vehicleId");
+                break;
             }
         }
-        // Try POST data if no JSON
-        else if (isset($_POST['vehicleId'])) {
-            $vehicleId = $_POST['vehicleId'];
-            logMessage("Found vehicle ID in POST body: $vehicleId");
-        }
-        else if (isset($_POST['id'])) {
-            $vehicleId = $_POST['id'];
-            logMessage("Found vehicle ID as 'id' in POST body: $vehicleId");
-        }
-        else if (isset($_POST['vehicle_id'])) {
-            $vehicleId = $_POST['vehicle_id'];
-            logMessage("Found vehicle ID as 'vehicle_id' in POST body: $vehicleId");
+    }
+    
+    // If still not found, try JSON body
+    if (!$vehicleId) {
+        $rawData = file_get_contents('php://input');
+        if (!empty($rawData)) {
+            $jsonData = json_decode($rawData, true);
+            
+            if (json_last_error() === JSON_ERROR_NONE) {
+                foreach ($possibleParams as $param) {
+                    if (isset($jsonData[$param]) && !empty($jsonData[$param])) {
+                        $vehicleId = $jsonData[$param];
+                        logMessage("Found vehicle ID in JSON body parameter '$param': $vehicleId");
+                        break;
+                    }
+                }
+            }
         }
     }
     
     if (!$vehicleId) {
-        throw new Exception("Vehicle ID is required");
+        throw new Exception("Vehicle ID is required. Please check your request.");
     }
+    
+    logMessage("Final vehicle ID to delete: $vehicleId");
     
     // Begin transaction
     $conn->begin_transaction();
     
     try {
-        // Check if vehicle exists
-        $checkQuery = "SELECT * FROM vehicles WHERE vehicle_id = ?";
-        $checkStmt = $conn->prepare($checkQuery);
-        $checkStmt->bind_param('s', $vehicleId);
-        $checkStmt->execute();
-        $checkResult = $checkStmt->get_result();
-        
-        if ($checkResult->num_rows === 0) {
-            // Try checking vehicle_types table as fallback
-            $checkTypeQuery = "SELECT * FROM vehicle_types WHERE vehicle_id = ?";
-            $checkTypeStmt = $conn->prepare($checkTypeQuery);
-            $checkTypeStmt->bind_param('s', $vehicleId);
-            $checkTypeStmt->execute();
-            $checkTypeResult = $checkTypeStmt->get_result();
-            
-            if ($checkTypeResult->num_rows === 0) {
-                throw new Exception("Vehicle with ID '$vehicleId' not found");
-            } else {
-                $vehicleData = $checkTypeResult->fetch_assoc();
-            }
-        } else {
-            $vehicleData = $checkResult->fetch_assoc();
-        }
-        
-        // Store vehicle name for response
-        $vehicleName = $vehicleData['name'];
-        
-        // Delete from all tables to ensure complete removal
+        // Instead of checking first, try direct delete from all tables
         $tables = [
             'vehicles',
             'vehicle_types',
@@ -176,16 +148,68 @@ try {
             'outstation_fares'
         ];
         
+        $deleted = false;
+        
         foreach ($tables as $table) {
+            // Check if the table exists first
+            $tableCheckResult = $conn->query("SHOW TABLES LIKE '$table'");
+            if ($tableCheckResult->num_rows == 0) {
+                logMessage("Table $table does not exist, skipping");
+                continue;
+            }
+            
             $deleteQuery = "DELETE FROM $table WHERE vehicle_id = ?";
             $deleteStmt = $conn->prepare($deleteQuery);
             
             if ($deleteStmt) {
                 $deleteStmt->bind_param('s', $vehicleId);
                 $deleteStmt->execute();
-                logMessage("Deleted from $table: " . $deleteStmt->affected_rows . " row(s)");
+                $affectedRows = $deleteStmt->affected_rows;
+                logMessage("Deleted from $table: $affectedRows row(s)");
+                
+                if ($affectedRows > 0) {
+                    $deleted = true;
+                }
+                $deleteStmt->close();
             } else {
-                logMessage("Table $table might not exist, skipping");
+                logMessage("Error preparing delete statement for $table: " . $conn->error);
+            }
+        }
+        
+        if (!$deleted) {
+            // If no rows were affected, try with alternate ID columns
+            foreach ($tables as $table) {
+                $tableCheckResult = $conn->query("SHOW TABLES LIKE '$table'");
+                if ($tableCheckResult->num_rows == 0) {
+                    continue;
+                }
+                
+                $columnsResult = $conn->query("SHOW COLUMNS FROM $table");
+                $hasIdColumn = false;
+                
+                while ($column = $columnsResult->fetch_assoc()) {
+                    if ($column['Field'] === 'id') {
+                        $hasIdColumn = true;
+                        break;
+                    }
+                }
+                
+                if ($hasIdColumn) {
+                    $deleteQuery = "DELETE FROM $table WHERE id = ?";
+                    $deleteStmt = $conn->prepare($deleteQuery);
+                    
+                    if ($deleteStmt) {
+                        $deleteStmt->bind_param('s', $vehicleId);
+                        $deleteStmt->execute();
+                        $affectedRows = $deleteStmt->affected_rows;
+                        logMessage("Deleted from $table using 'id' column: $affectedRows row(s)");
+                        
+                        if ($affectedRows > 0) {
+                            $deleted = true;
+                        }
+                        $deleteStmt->close();
+                    }
+                }
             }
         }
         
@@ -194,10 +218,11 @@ try {
         
         // Prepare successful response
         $response['status'] = 'success';
-        $response['message'] = "Vehicle '$vehicleName' deleted successfully";
+        $response['message'] = "Vehicle '$vehicleId' deleted successfully";
         $response['vehicleId'] = $vehicleId;
+        $response['deleted'] = $deleted;
         
-        logMessage("Vehicle '$vehicleName' deleted successfully with ID: $vehicleId");
+        logMessage("Vehicle deletion process completed for ID: $vehicleId");
         
     } catch (Exception $e) {
         // Rollback transaction on error

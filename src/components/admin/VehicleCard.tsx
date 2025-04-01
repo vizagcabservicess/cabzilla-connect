@@ -19,14 +19,24 @@ interface VehicleCardProps {
 export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   
+  // Make sure we use the most reliable ID form for this vehicle
+  const vehicleId = vehicle.id || vehicle.vehicleId || '';
+  
   const handleDelete = async () => {
     try {
       setIsDeleting(true);
-      await deleteVehicle(vehicle.id);
-      onDelete(vehicle.id);
+      console.log(`Deleting vehicle with ID: ${vehicleId}`);
+      
+      if (!vehicleId) {
+        throw new Error("Vehicle ID is missing");
+      }
+      
+      await deleteVehicle(vehicleId);
+      toast.success(`Vehicle ${vehicle.name} deleted successfully`);
+      onDelete(vehicleId);
     } catch (error) {
       console.error("Error deleting vehicle:", error);
-      toast.error("Failed to delete vehicle. Please try again.");
+      toast.error(`Failed to delete vehicle: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsDeleting(false);
     }
@@ -58,11 +68,11 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
           </div>
           <div className="flex items-center gap-1 truncate">
             <Car className="h-4 w-4 flex-shrink-0" />
-            <span>ID: {vehicle.id}</span>
+            <span>ID: {vehicleId}</span>
           </div>
           <div className="flex items-center gap-1">
             <Clock className="h-4 w-4" />
-            <span>₹{vehicle.pricePerKm}/km</span>
+            <span>₹{vehicle.pricePerKm || 0}/km</span>
           </div>
         </div>
         
@@ -71,11 +81,19 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
         </div>
         
         <div className="flex flex-wrap gap-1 mb-3">
-          {vehicle.amenities && vehicle.amenities.map((amenity, index) => (
-            <Badge key={index} variant="secondary" className="text-xs">
-              {amenity}
+          {Array.isArray(vehicle.amenities) ? (
+            vehicle.amenities.map((amenity, index) => (
+              <Badge key={index} variant="secondary" className="text-xs">
+                {amenity}
+              </Badge>
+            ))
+          ) : vehicle.amenities ? (
+            <Badge variant="secondary" className="text-xs">
+              {String(vehicle.amenities)}
             </Badge>
-          ))}
+          ) : (
+            <Badge variant="secondary" className="text-xs">AC</Badge>
+          )}
         </div>
         
         <div className="flex justify-between mt-2">
@@ -101,7 +119,7 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
                       disabled={isDeleting}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
-                      Delete
+                      {isDeleting ? 'Deleting...' : 'Delete'}
                     </Button>
                   </TooltipTrigger>
                 </AlertDialogTrigger>
@@ -114,13 +132,16 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will permanently delete the {vehicle.name}. This action cannot be undone.
+                    This will permanently delete the {vehicle.name} (ID: {vehicleId}). This action cannot be undone.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                   <AlertDialogAction 
-                    onClick={handleDelete} 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleDelete();
+                    }} 
                     className="bg-red-500 hover:bg-red-600"
                   >
                     {isDeleting ? "Deleting..." : "Delete"}

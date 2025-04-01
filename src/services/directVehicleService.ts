@@ -9,6 +9,13 @@ import { getBypassHeaders, safeFetch } from '@/config/requestConfig';
 import { directVehicleOperation, checkApiHealth, fixDatabaseTables } from '@/utils/apiHelper';
 import { toast } from 'sonner';
 
+// Helper function to ensure consistent vehicle ID format
+const normalizeVehicleId = (id: string): string => {
+  if (!id) return '';
+  // Return the ID as-is without any transformations to maintain compatibility with backend
+  return id.trim();
+};
+
 /**
  * Create a new vehicle
  */
@@ -16,11 +23,41 @@ export const createVehicle = async (vehicle: CabType): Promise<CabType> => {
   try {
     console.log('Creating vehicle:', vehicle);
     
-    const result = await directVehicleOperation(
-      '/api/admin/direct-vehicle-create.php', 
-      'POST', 
-      vehicle
-    );
+    // Normalize vehicle ID before sending
+    const normalizedVehicle = {
+      ...vehicle,
+      id: normalizeVehicleId(vehicle.id || vehicle.vehicleId || ''),
+      vehicleId: normalizeVehicleId(vehicle.id || vehicle.vehicleId || ''),
+    };
+    
+    // Use FormData instead of JSON for better PHP compatibility
+    const formData = new FormData();
+    Object.entries(normalizedVehicle).forEach(([key, value]) => {
+      if (typeof value === 'object' && value !== null) {
+        formData.append(key, JSON.stringify(value));
+      } else {
+        formData.append(key, String(value || ''));
+      }
+    });
+    
+    // Make direct request to create endpoint with FormData
+    const url = `${apiBaseUrl}/api/admin/direct-vehicle-create.php?_t=${Date.now()}`;
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData,
+      headers: getBypassHeaders(),
+      credentials: 'omit',
+      mode: 'cors',
+      cache: 'no-store'
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API request failed with status ${response.status}: ${errorText}`);
+    }
+    
+    const result = await response.json();
     
     if (result.status === 'success') {
       // Clear any cached data
@@ -30,8 +67,9 @@ export const createVehicle = async (vehicle: CabType): Promise<CabType> => {
       window.dispatchEvent(new CustomEvent('vehicle-data-changed'));
       
       return {
-        ...vehicle,
-        id: vehicle.vehicleId || vehicle.id
+        ...normalizedVehicle,
+        id: normalizedVehicle.id,
+        vehicleId: normalizedVehicle.id,
       };
     } else {
       throw new Error(result.message || 'Failed to create vehicle');
@@ -50,11 +88,41 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
   try {
     console.log('Updating vehicle:', vehicle);
     
-    const result = await directVehicleOperation(
-      '/api/admin/direct-vehicle-update.php', 
-      'POST', 
-      vehicle
-    );
+    // Normalize vehicle ID before sending
+    const normalizedVehicle = {
+      ...vehicle,
+      id: normalizeVehicleId(vehicle.id || vehicle.vehicleId || ''),
+      vehicleId: normalizeVehicleId(vehicle.id || vehicle.vehicleId || ''),
+    };
+    
+    // Use FormData instead of JSON for better PHP compatibility
+    const formData = new FormData();
+    Object.entries(normalizedVehicle).forEach(([key, value]) => {
+      if (typeof value === 'object' && value !== null) {
+        formData.append(key, JSON.stringify(value));
+      } else {
+        formData.append(key, String(value || ''));
+      }
+    });
+    
+    // Make direct request to update endpoint with FormData
+    const url = `${apiBaseUrl}/api/admin/direct-vehicle-update.php?_t=${Date.now()}`;
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData,
+      headers: getBypassHeaders(),
+      credentials: 'omit',
+      mode: 'cors',
+      cache: 'no-store'
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API request failed with status ${response.status}: ${errorText}`);
+    }
+    
+    const result = await response.json();
     
     if (result.status === 'success') {
       // Clear any cached data
@@ -63,7 +131,7 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
       // Dispatch event to notify other components about the change
       window.dispatchEvent(new CustomEvent('vehicle-data-changed'));
       
-      return vehicle;
+      return normalizedVehicle;
     } else {
       throw new Error(result.message || 'Failed to update vehicle');
     }
@@ -80,10 +148,25 @@ export const deleteVehicle = async (vehicleId: string): Promise<boolean> => {
   try {
     console.log('Deleting vehicle:', vehicleId);
     
-    const result = await directVehicleOperation(
-      `/api/admin/direct-vehicle-delete.php?vehicleId=${encodeURIComponent(vehicleId)}`, 
-      'POST'
-    );
+    const normalizedId = normalizeVehicleId(vehicleId);
+    
+    // Make direct request to delete endpoint with URL parameters
+    const url = `${apiBaseUrl}/api/admin/direct-vehicle-delete.php?vehicleId=${encodeURIComponent(normalizedId)}&_t=${Date.now()}`;
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: getBypassHeaders(),
+      credentials: 'omit',
+      mode: 'cors',
+      cache: 'no-store'
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API request failed with status ${response.status}: ${errorText}`);
+    }
+    
+    const result = await response.json();
     
     if (result.status === 'success') {
       // Clear any cached data

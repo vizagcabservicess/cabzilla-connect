@@ -114,25 +114,9 @@ const SelectItem = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item> & { value: string }
 >(({ className, children, value, ...props }, ref) => {
-  // Ensure value is never empty string or undefined
-  const safeValue = value || "undefined";
-  
-  // Clean vehicle ID (remove any prefix if present)
-  const cleanValue = (): string => {
-    if (!safeValue) return 'undefined';
-    
-    // Remove any prefix like 'item-', 'vehicle-', etc.
-    if (typeof safeValue === 'string') {
-      const matches = safeValue.match(/^(item-|vehicle-|cab-|car-|type-)?(.+)$/);
-      if (matches && matches[2]) {
-        return matches[2];
-      }
-    }
-    
-    return safeValue;
-  };
-  
-  const displayValue = cleanValue();
+  // Preserve original value instead of trying to clean it
+  // This ensures we maintain the exact ID format expected by the backend
+  const originalValue = value || "";
   
   return (
     <SelectPrimitive.Item
@@ -141,7 +125,7 @@ const SelectItem = React.forwardRef<
         "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className
       )}
-      value={displayValue}
+      value={originalValue}
       {...props}
     >
       <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
@@ -150,7 +134,7 @@ const SelectItem = React.forwardRef<
         </SelectPrimitive.ItemIndicator>
       </span>
 
-      <SelectPrimitive.ItemText>{children || displayValue}</SelectPrimitive.ItemText>
+      <SelectPrimitive.ItemText>{children || originalValue}</SelectPrimitive.ItemText>
     </SelectPrimitive.Item>
   );
 })

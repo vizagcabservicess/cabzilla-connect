@@ -14,7 +14,8 @@ export const directVehicleOperation = async (
 ): Promise<any> => {
   try {
     // Add timestamp to prevent caching
-    const url = `${apiBaseUrl}${endpoint}${endpoint.includes('?') ? '&' : '?'}_t=${Date.now()}`;
+    const baseUrl = `${apiBaseUrl}${endpoint}${endpoint.includes('?') ? '&' : '?'}_t=${Date.now()}`;
+    let url = baseUrl;
     console.log(`Making ${method} request to ${url}`);
     
     const headers = {
@@ -22,7 +23,7 @@ export const directVehicleOperation = async (
       'X-Admin-Mode': 'true',
     };
     
-    const options: RequestInit = {
+    let options: RequestInit = {
       method,
       headers,
       mode: 'cors',
@@ -35,12 +36,32 @@ export const directVehicleOperation = async (
     if (data) {
       if (method === 'GET') {
         // For GET requests, add data to URL as query params
-        const queryString = new URLSearchParams(data).toString();
-        url.concat(`&${queryString}`);
+        const queryParams = new URLSearchParams();
+        Object.entries(data).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            queryParams.append(key, String(value));
+          }
+        });
+        const queryString = queryParams.toString();
+        if (queryString) {
+          url += `&${queryString}`;
+        }
       } else {
-        // For POST/PUT/DELETE, try to send as JSON by default
-        options.body = JSON.stringify(data);
-        headers['Content-Type'] = 'application/json';
+        // Always use FormData for more reliable PHP compatibility
+        delete headers['Content-Type']; // Let browser set the content type with boundary
+        
+        const formData = new FormData();
+        Object.entries(data).forEach(([key, value]) => {
+          if (value === undefined || value === null) return;
+          
+          if (typeof value === 'object' && !(value instanceof File)) {
+            formData.append(key, JSON.stringify(value));
+          } else {
+            formData.append(key, String(value));
+          }
+        });
+        
+        options.body = formData;
       }
     }
     
@@ -50,32 +71,33 @@ export const directVehicleOperation = async (
     options.signal = controller.signal;
     
     // Make the request
+    console.log('Request options:', options);
     const response = await fetch(url, options);
     clearTimeout(timeoutId);
     
-    // If response is not ok, try fallback approach with FormData
-    if (!response.ok && data && method !== 'GET') {
-      // Retry with FormData
-      delete headers['Content-Type']; // Let browser set the content type
-      
-      const formData = formatDataForMultipart(data);
-      options.body = formData;
-      
-      console.log('Retrying with FormData');
-      const retryResponse = await fetch(url, options);
-      
-      if (!retryResponse.ok) {
-        throw new Error(`API request failed with status ${retryResponse.status}`);
-      }
-      
-      return await retryResponse.json();
-    }
+    console.log('Response status:', response.status);
     
     if (!response.ok) {
-      throw new Error(`API request failed with status ${response.status}`);
+      if (response.status === 404) {
+        throw new Error(`API endpoint not found: ${endpoint}`);
+      }
+      
+      // Try to get error text
+      let errorText;
+      try {
+        errorText = await response.text();
+        console.error('Error response:', errorText);
+      } catch (e) {
+        errorText = `Status ${response.status}`;
+      }
+      
+      throw new Error(`API request failed with status ${response.status}: ${errorText}`);
     }
     
-    return await response.json();
+    const result = await response.json();
+    console.log('API response:', result);
+    
+    return result;
   } catch (error: any) {
     console.error(`Direct vehicle operation failed: ${error.message}`);
     toast.error(`Operation failed: ${error.message}`);
@@ -88,7 +110,10 @@ export const directVehicleOperation = async (
  */
 export const checkApiHealth = async (): Promise<boolean> => {
   try {
-    const response = await fetch(`${apiBaseUrl}/api/status.php?_t=${Date.now()}`, {
+    const url = `${apiBaseUrl}/api/status.php?_t=${Date.now()}`;
+    console.log(`Checking API health at ${url}`);
+    
+    const response = await fetch(url, {
       method: 'GET',
       mode: 'cors',
       cache: 'no-store',
@@ -97,15 +122,22 @@ export const checkApiHealth = async (): Promise<boolean> => {
         'X-Health-Check': 'true',
         'Cache-Control': 'no-cache'
       },
-      signal: AbortSignal.timeout(3000) // 3 second timeout
+      signal: AbortSignal.timeout(5000) // 5 second timeout
     });
     
     if (!response.ok) {
+      console.warn(`API health check failed with status ${response.status}`);
       return false;
     }
     
-    const data = await response.json();
-    return data.status === 'ok' || data.status === 'success';
+    try {
+      const data = await response.json();
+      return data.status === 'ok' || data.status === 'success';
+    } catch (parseError) {
+      // If we can't parse the JSON, the API is probably not healthy
+      console.warn('API health check failed - invalid JSON response');
+      return false;
+    }
   } catch (error) {
     console.error('API health check failed:', error);
     return false;
@@ -135,20 +167,47 @@ export const fixDatabaseTables = async (): Promise<boolean> => {
     });
     
     if (!response.ok) {
-      throw new Error(`API request failed with status ${response.status}`);
+      console.warn(`Fix database tables failed with status ${response.status}`);
+      return false;
     }
     
-    const result = await response.json();
-    
-    if (result.status === 'success') {
-      console.log('Database tables fixed successfully:', result);
-      return true;
-    } else {
-      console.error('Failed to fix database tables:', result.message || 'Unknown error');
+    try {
+      const result = await response.json();
+      
+      if (result.status === 'success') {
+        console.log('Database tables fixed successfully:', result);
+        return true;
+      } else {
+        console.error('Failed to fix database tables:', result.message || 'Unknown error');
+        return false;
+      }
+    } catch (parseError) {
+      console.error('Failed to parse fix database tables response:', parseError);
       return false;
     }
   } catch (error: any) {
     console.error(`Error fixing database tables: ${error.message}`);
     return false;
   }
+};
+
+/**
+ * Error handler for vehicle operations - provides additional context for debugging
+ */
+export const handleVehicleError = (error: any, operation: string): string => {
+  console.error(`Vehicle ${operation} error:`, error);
+  
+  let message = error?.message || `Failed to ${operation} vehicle`;
+  
+  // Check for specific error types
+  if (error.name === 'AbortError') {
+    message = `Operation timed out while trying to ${operation} vehicle`;
+  } else if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+    message = `Network error: Unable to connect to the server`;
+  } else if (typeof error === 'string') {
+    message = error;
+  }
+  
+  toast.error(message);
+  return message;
 };
