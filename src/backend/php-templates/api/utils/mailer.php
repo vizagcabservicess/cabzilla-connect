@@ -1,4 +1,3 @@
-
 <?php
 require_once __DIR__ . '/../../config.php';
 
@@ -15,7 +14,7 @@ function sendSendGridEmail($to, $subject, $htmlBody) {
     $sendgridApiKey = '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';
     
     // Build email headers
-    $from = 'info@vizagup.com';
+    $from = 'info@vizagtaxihub.com';
     $fromName = 'Vizag Taxi Hub';
     
     // Prepare SendGrid API request
@@ -181,7 +180,7 @@ function sendSmtpEmail($to, $subject, $htmlBody) {
         }
         
         // Send EHLO command - using the domain for proper identification
-        fputs($socket, "EHLO vizagup.com\r\n");
+        fputs($socket, "EHLO vizagtaxihub.com\r\n");
         $response = fgets($socket, 515);
         if (substr($response, 0, 3) != '250') {
             logError("EHLO command failed", ['response' => $response]);
@@ -338,13 +337,13 @@ function sendHostingerMail($to, $subject, $htmlBody, $textBody = '', $headers = 
     
     // Build email headers with spam-prevention techniques
     $date = date('r');
-    $messageId = '<' . md5(uniqid(microtime(true))) . '@vizagup.com>';
+    $messageId = '<' . md5(uniqid(microtime(true))) . '@vizagtaxihub.com>';
     
     $emailContent = "To: $to\r\n";
     $emailContent .= "Subject: $subject\r\n";
     $emailContent .= "From: $fromName <$from>\r\n";
-    $emailContent .= "Reply-To: info@vizagup.com\r\n";
-    $emailContent .= "Return-Path: info@vizagup.com\r\n";
+    $emailContent .= "Reply-To: info@vizagtaxihub.com\r\n";
+    $emailContent .= "Return-Path: info@vizagtaxihub.com\r\n";
     $emailContent .= "Date: $date\r\n";
     $emailContent .= "Message-ID: $messageId\r\n";
     $emailContent .= "MIME-Version: 1.0\r\n";
@@ -353,7 +352,7 @@ function sendHostingerMail($to, $subject, $htmlBody, $textBody = '', $headers = 
     $emailContent .= "X-Priority: 1\r\n";
     $emailContent .= "X-MSMail-Priority: High\r\n";
     $emailContent .= "Importance: High\r\n";
-    $emailContent .= "X-Sender: info@vizagup.com\r\n";
+    $emailContent .= "X-Sender: info@vizagtaxihub.com\r\n";
     $emailContent .= "X-Auto-Response-Suppress: OOF, DR, RN, NRN, AutoReply\r\n";
     
     // Add SPF hint (the actual SPF record should be set in DNS)
@@ -394,12 +393,12 @@ function sendHostingerMail($to, $subject, $htmlBody, $textBody = '', $headers = 
             $originalSendmailPath = ini_get('sendmail_path');
             
             // Set to Hostinger's path explicitly
-            ini_set('sendmail_path', '/usr/sbin/hsendmail -t -i -f info@vizagup.com');
+            ini_set('sendmail_path', '/usr/sbin/hsendmail -t -i -f info@vizagtaxihub.com');
             
             // Very simple headers
             $simpleHeaders = "From: $fromName <$from>\r\n";
-            $simpleHeaders .= "Reply-To: info@vizagup.com\r\n";
-            $simpleHeaders .= "Return-Path: info@vizagup.com\r\n";
+            $simpleHeaders .= "Reply-To: info@vizagtaxihub.com\r\n";
+            $simpleHeaders .= "Return-Path: info@vizagtaxihub.com\r\n";
             $simpleHeaders .= "Content-Type: text/html; charset=UTF-8\r\n";
             $simpleHeaders .= "X-Mailer: PHP/" . phpversion() . "\r\n";
             
@@ -409,7 +408,7 @@ function sendHostingerMail($to, $subject, $htmlBody, $textBody = '', $headers = 
             ]);
             
             // Use direct mail call with minimal parameters and 5th parameter for envelope sender
-            $success = mail($to, $subject, $htmlBody, $simpleHeaders, '-f info@vizagup.com');
+            $success = mail($to, $subject, $htmlBody, $simpleHeaders, '-f info@vizagtaxihub.com');
             
             if ($success) {
                 logError("Email sent successfully with explicit sendmail path", [
@@ -431,7 +430,7 @@ function sendHostingerMail($to, $subject, $htmlBody, $textBody = '', $headers = 
         if (!$success) {
             // Use PHP's mail() function with no frills as recommended sometimes by Hostinger
             $bareHeaders = "From: $fromName <$from>\r\n" .
-                           "Reply-To: info@vizagup.com\r\n" .
+                           "Reply-To: info@vizagtaxihub.com\r\n" .
                            "Content-Type: text/html; charset=UTF-8\r\n";
             
             logError("Trying barebones mail()", ['to' => $to]);

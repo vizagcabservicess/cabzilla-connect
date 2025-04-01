@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../config.php';
@@ -270,7 +269,7 @@ try {
                     '<div style="font-size:0.8em;color:#666;margin-top:30px;border-top:1px solid #eee;padding-top:10px;">
                         <p>This is a legitimate booking confirmation from Vizag Taxi Hub. If you did not make this booking, please contact us.</p>
                         <p>Our address: Lawsons Bay Colony, Visakhapatnam, AP 530017</p>
-                        <p>Contact: +91 9966363662 | info@vizagup.com</p>
+                        <p>Contact: +91 9966363662 | info@vizagtaxihub.com</p>
                     </div></body>', $htmlEmail);
                 
                 $emailSuccess = sendSmtpEmail(
@@ -352,7 +351,7 @@ function generateConfirmationEmailHtml($subject, $message) {
             <div class="contact-info">
                 <p>If you have any questions, please contact our customer support:</p>
                 <p>Phone: +91 9966363662</p>
-                <p>Email: info@vizagup.com</p>
+                <p>Email: info@vizagtaxihub.com</p>
                 <p class="booking-reference">Please keep your booking reference for all communications.</p>
             </div>
         </div>

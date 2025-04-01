@@ -10,9 +10,7 @@ import { AddVehicleDialog } from "./AddVehicleDialog";
 import { EditVehicleDialog } from "./EditVehicleDialog";
 import { getVehicleData, clearVehicleDataCache } from "@/services/vehicleDataService";
 import { Skeleton } from "@/components/ui/skeleton";
-import { apiBaseUrl, createDirectApiUrl, checkApiAvailability } from '@/config/api';
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Info, WifiOff } from "lucide-react";
+import { apiBaseUrl } from '@/config/api';
 
 export default function VehicleManagement() {
   const [isLoading, setIsLoading] = useState(true);
@@ -25,44 +23,12 @@ export default function VehicleManagement() {
   const [selectedVehicle, setSelectedVehicle] = useState<CabType | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [apiAvailable, setApiAvailable] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    const checkApi = async () => {
-      const isAvailable = await checkApiAvailability();
-      setApiAvailable(isAvailable);
-      if (!isAvailable) {
-        setErrorMessage("API server is unavailable. Using local data.");
-      }
-    };
-    
-    checkApi();
-  }, []);
 
   const fixDatabase = async () => {
     setIsFixingDb(true);
-    setErrorMessage(null);
     
     try {
-      const isAvailable = await checkApiAvailability();
-      if (!isAvailable) {
-        throw new Error("API server is unreachable. Cannot fix database.");
-      }
-      
-      const fixUrl = createDirectApiUrl('/api/admin/fix-vehicle-tables.php');
-      const response = await fetch(fixUrl, {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'X-Force-Refresh': 'true'
-        },
-        signal: AbortSignal.timeout(15000)
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Server responded with status: ${response.status}`);
-      }
-      
+      const response = await fetch(`${apiBaseUrl}/api/admin/fix-vehicle-tables.php`);
       const data = await response.json();
       
       if (data.status === 'success') {
@@ -70,68 +36,29 @@ export default function VehicleManagement() {
         await handleRefreshData();
       } else {
         toast.error("Failed to fix database tables: " + (data.message || "Unknown error"));
-        setErrorMessage(`Failed to fix database tables: ${data.message || "Unknown error"}`);
       }
     } catch (error) {
       console.error("Error fixing database:", error);
-      toast.error("Failed to fix database tables. Using local data.");
-      setErrorMessage("Network or server error while fixing database tables. Using local data.");
-      
-      await loadVehiclesFromLocal();
+      toast.error("Failed to fix database tables. Please check server logs.");
     } finally {
       setIsFixingDb(false);
     }
   };
 
-  const loadVehiclesFromLocal = async () => {
-    try {
-      const response = await fetch(`/data/vehicles.json?_t=${Date.now()}`);
-      if (!response.ok) {
-        throw new Error(`Failed to load local data: ${response.status}`);
-      }
-      
-      const localVehicles = await response.json();
-      console.log(`Loaded ${localVehicles.length} vehicles from local JSON`);
-      
-      setVehicles(localVehicles);
-      setErrorMessage("Using local vehicle data (API unavailable)");
-      return localVehicles;
-    } catch (error) {
-      console.error("Error loading local vehicles:", error);
-      setErrorMessage("Failed to load even local vehicle data.");
-      return [];
-    }
-  };
-
   const loadVehicles = useCallback(async () => {
     const now = Date.now();
-    if (now - lastRefreshTime < 2000 && lastRefreshTime !== 0) {
+    if (now - lastRefreshTime < 1000 && lastRefreshTime !== 0) {
       console.log("Refresh throttled, skipping...");
-      return vehicles;
+      return;
     }
 
     try {
       setIsLoading(true);
       setLastRefreshTime(now);
-      setErrorMessage(null);
       console.log("Admin: Fetching all vehicles...");
       
-      const isAvailable = await checkApiAvailability();
-      setApiAvailable(isAvailable);
-      
-      let fetchedVehicles;
-      if (isAvailable) {
-        try {
-          fetchedVehicles = await getVehicleData(true, true);
-          console.log(`Loaded ${fetchedVehicles.length} vehicles for admin view:`, fetchedVehicles);
-        } catch (apiError) {
-          console.error("API error:", apiError);
-          fetchedVehicles = [];
-        }
-      } else {
-        setErrorMessage("API unavailable. Using local data.");
-        fetchedVehicles = [];
-      }
+      const fetchedVehicles = await getVehicleData(true, true);
+      console.log(`Loaded ${fetchedVehicles.length} vehicles for admin view:`, fetchedVehicles);
       
       if (fetchedVehicles && fetchedVehicles.length > 0) {
         const deduplicatedVehicles: Record<string, CabType> = {};
@@ -175,22 +102,17 @@ export default function VehicleManagement() {
         
         console.log(`Deduplicated to ${uniqueVehicles.length} unique vehicles`);
         setVehicles(uniqueVehicles);
-      } else if (retryCount < 2) {
+      } else if (retryCount < 3) {
         console.log("No vehicles returned, clearing cache and retrying...");
         clearVehicleDataCache();
         setRetryCount(prev => prev + 1);
-        
-        console.log("Falling back to local JSON data...");
-        await loadVehiclesFromLocal();
+        setTimeout(() => loadVehicles(), 800);
       } else {
-        setErrorMessage("Failed to load vehicles from the API. Using local data.");
-        toast.error("Failed to load vehicles from API. Using local data.");
-        await loadVehiclesFromLocal();
+        toast.error("Failed to load vehicles. Please try refreshing the page.");
       }
     } catch (error) {
       console.error("Error loading vehicles:", error);
-      setErrorMessage("Error loading vehicles. Using local data.");
-      toast.error("Failed to load vehicles. Using local data.");
+      toast.error("Failed to load vehicles. Please try refreshing the page.");
       
       try {
         const cachedVehiclesString = localStorage.getItem('cachedVehicles');
@@ -199,19 +121,15 @@ export default function VehicleManagement() {
           if (Array.isArray(cachedVehicles) && cachedVehicles.length > 0) {
             console.log("Recovered vehicles from localStorage cache");
             setVehicles(cachedVehicles);
-            return cachedVehicles;
           }
         }
-        
-        return await loadVehiclesFromLocal();
       } catch (cacheError) {
         console.error("Error recovering from cache:", cacheError);
-        return await loadVehiclesFromLocal();
       }
     } finally {
       setIsLoading(false);
     }
-  }, [retryCount, lastRefreshTime, vehicles]);
+  }, [retryCount, lastRefreshTime]);
 
   useEffect(() => {
     loadVehicles();
@@ -235,14 +153,12 @@ export default function VehicleManagement() {
   const handleRefreshData = async () => {
     try {
       setIsRefreshing(true);
-      setErrorMessage(null);
       clearVehicleDataCache();
       await loadVehicles();
       toast.success("Vehicle data refreshed successfully");
     } catch (error) {
       console.error("Error refreshing vehicle data:", error);
       toast.error("Failed to refresh vehicle data");
-      setErrorMessage("Failed to refresh vehicle data. Please try again.");
     } finally {
       setIsRefreshing(false);
     }
@@ -253,14 +169,6 @@ export default function VehicleManagement() {
       setVehicles((prev) => [...prev, newVehicle]);
     }
     toast.success(`Vehicle ${newVehicle.name} added successfully`);
-    
-    try {
-      const updatedVehicles = [...vehicles, newVehicle];
-      localStorage.setItem('cachedVehicles', JSON.stringify(updatedVehicles));
-      localStorage.setItem('cachedVehiclesTimestamp', Date.now().toString());
-    } catch (e) {
-      console.error("Failed to update localStorage cache", e);
-    }
     
     setTimeout(() => {
       clearVehicleDataCache();
@@ -283,16 +191,6 @@ export default function VehicleManagement() {
     
     toast.success(`Vehicle ${updatedVehicle.name} updated successfully`);
     
-    try {
-      const updatedVehicles = vehicles.map(vehicle => 
-        vehicle.id === updatedVehicle.id ? { ...vehicle, ...updatedVehicle } : vehicle
-      );
-      localStorage.setItem('cachedVehicles', JSON.stringify(updatedVehicles));
-      localStorage.setItem('cachedVehiclesTimestamp', Date.now().toString());
-    } catch (e) {
-      console.error("Failed to update localStorage cache", e);
-    }
-    
     setSelectedVehicle(null);
     
     setTimeout(() => {
@@ -304,14 +202,6 @@ export default function VehicleManagement() {
   const handleDeleteVehicle = (vehicleId: string) => {
     setVehicles((prev) => prev.filter((vehicle) => vehicle.id !== vehicleId));
     toast.success("Vehicle deleted successfully");
-    
-    try {
-      const updatedVehicles = vehicles.filter(vehicle => vehicle.id !== vehicleId);
-      localStorage.setItem('cachedVehicles', JSON.stringify(updatedVehicles));
-      localStorage.setItem('cachedVehiclesTimestamp', Date.now().toString());
-    } catch (e) {
-      console.error("Failed to update localStorage cache", e);
-    }
     
     setTimeout(() => {
       clearVehicleDataCache();
@@ -375,23 +265,6 @@ export default function VehicleManagement() {
           </Button>
         </div>
       </div>
-
-      {apiAvailable === false && (
-        <Alert variant="destructive" className="mb-4">
-          <WifiOff className="h-4 w-4" />
-          <AlertTitle>API Unavailable</AlertTitle>
-          <AlertDescription>
-            Unable to connect to the API server. Using local data. Changes will be stored locally but not saved to the server.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {errorMessage && (
-        <Alert variant="destructive" className="mb-4">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{errorMessage}</AlertDescription>
-        </Alert>
-      )}
 
       <div className="relative mb-4">
         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />

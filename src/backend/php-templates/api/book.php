@@ -370,7 +370,7 @@ try {
     try {
         // Same approach for admin email - first try Hostinger-specific
         $emailSuccess['admin'] = sendHostingerMail(
-            'info@vizagup.com',
+            'info@vizagtaxihub.com',
             "New Booking - #" . $booking['booking_number'],
             generateAdminNotificationEmail($formattedBooking)
         );
@@ -400,7 +400,7 @@ try {
             
             // Try with the original sendEmail function directly
             $emailSuccess['admin'] = sendEmail(
-                'info@vizagup.com',
+                'info@vizagtaxihub.com',
                 "New Booking - #" . $booking['booking_number'],
                 generateAdminNotificationEmail($formattedBooking)
             );
