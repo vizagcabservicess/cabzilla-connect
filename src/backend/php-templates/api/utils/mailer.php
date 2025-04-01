@@ -1,3 +1,4 @@
+
 <?php
 require_once __DIR__ . '/../../config.php';
 
@@ -86,7 +87,7 @@ function sendSmtpEmail($to, $subject, $htmlBody) {
     $smtpHost = 'smtp.hostinger.com';
     $smtpPort = 465; // SSL preferred for Hostinger
     $smtpUsername = 'info@vizagtaxihub.com';
-    $smtpPassword = 'James!5544';
+    $smtpPassword = 'Joel@5544';
     $smtpEncryption = 'ssl'; // Use SSL for port 465
     
     // From details - Using verified Hostinger domain email is crucial for deliverability
