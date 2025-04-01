@@ -136,9 +136,9 @@ try {
     
     try {
         // Check if vehicle exists
-        $checkQuery = "SELECT * FROM vehicles WHERE vehicle_id = ?";
+        $checkQuery = "SELECT * FROM vehicles WHERE vehicle_id = ? OR id = ?";
         $checkStmt = $conn->prepare($checkQuery);
-        $checkStmt->bind_param('s', $vehicleId);
+        $checkStmt->bind_param('ss', $vehicleId, $vehicleId);
         $checkStmt->execute();
         $checkResult = $checkStmt->get_result();
         
@@ -150,31 +150,29 @@ try {
         $existingVehicle = $checkResult->fetch_assoc();
         logMessage("Existing vehicle data found: " . json_encode($existingVehicle));
         
-        // Handle the isActive flag specifically (default to existing value)
-        $isActiveSet = false;
-        $isActive = $existingVehicle['is_active']; // Default to existing value
+        // CRITICAL: Handle the isActive flag with proper fallbacks (default to TRUE if not specified)
+        $isActive = 1; // Default value is TRUE/active
         
-        // Check if isActive is explicitly set in the request
+        // Check if isActive is explicitly set in the request (using multiple possible field names)
+        // This allows any variant of the field name to be used
         if (isset($vehicleData['isActive'])) {
             $isActive = filter_var($vehicleData['isActive'], FILTER_VALIDATE_BOOLEAN) ? 1 : 0;
-            $isActiveSet = true;
             logMessage("isActive explicitly set to: " . ($isActive ? "true" : "false"));
         } 
         else if (isset($vehicleData['is_active'])) {
             $isActive = filter_var($vehicleData['is_active'], FILTER_VALIDATE_BOOLEAN) ? 1 : 0;
-            $isActiveSet = true;
             logMessage("is_active explicitly set to: " . ($isActive ? "true" : "false"));
         }
-        
-        if (!$isActiveSet) {
-            logMessage("isActive not set in request, using existing value: $isActive");
+        else if (isset($existingVehicle['is_active'])) {
+            $isActive = intval($existingVehicle['is_active']);
+            logMessage("Using existing is_active value: " . $isActive);
         }
-                
+        
         // Extract updated vehicle properties with fallback to existing values
-        $vehicleName = isset($vehicleData['name']) ? $vehicleData['name'] : $existingVehicle['name'];
+        $vehicleName = isset($vehicleData['name']) && !empty($vehicleData['name']) ? $vehicleData['name'] : $existingVehicle['name'];
         $capacity = isset($vehicleData['capacity']) ? intval($vehicleData['capacity']) : $existingVehicle['capacity'];
-        $luggageCapacity = isset($vehicleData['luggageCapacity']) ? intval($vehicleData['luggageCapacity']) : 
-                          (isset($vehicleData['luggage_capacity']) ? intval($vehicleData['luggage_capacity']) : $existingVehicle['luggage_capacity']);
+        $luggageCapacity = isset($vehicleData['luggageCapacity']) && !empty($vehicleData['luggageCapacity']) ? intval($vehicleData['luggageCapacity']) : 
+                          (isset($vehicleData['luggage_capacity']) && !empty($vehicleData['luggage_capacity']) ? intval($vehicleData['luggage_capacity']) : $existingVehicle['luggage_capacity']);
         
         $ac = isset($vehicleData['ac']) ? (intval($vehicleData['ac']) ? 1 : 0) : $existingVehicle['ac'];
         
@@ -189,19 +187,19 @@ try {
         
         $description = isset($vehicleData['description']) ? $vehicleData['description'] : $existingVehicle['description'];
         
-        // Extract pricing data
-        $basePrice = isset($vehicleData['basePrice']) ? floatval($vehicleData['basePrice']) : 
-                    (isset($vehicleData['base_price']) ? floatval($vehicleData['base_price']) : 
-                    (isset($vehicleData['price']) ? floatval($vehicleData['price']) : $existingVehicle['base_price']));
+        // Extract pricing data with proper fallbacks
+        $basePrice = isset($vehicleData['basePrice']) && !empty($vehicleData['basePrice']) ? floatval($vehicleData['basePrice']) : 
+                    (isset($vehicleData['base_price']) && !empty($vehicleData['base_price']) ? floatval($vehicleData['base_price']) : 
+                    (isset($vehicleData['price']) && !empty($vehicleData['price']) ? floatval($vehicleData['price']) : $existingVehicle['base_price']));
         
-        $pricePerKm = isset($vehicleData['pricePerKm']) ? floatval($vehicleData['pricePerKm']) : 
-                     (isset($vehicleData['price_per_km']) ? floatval($vehicleData['price_per_km']) : $existingVehicle['price_per_km']);
+        $pricePerKm = isset($vehicleData['pricePerKm']) && !empty($vehicleData['pricePerKm']) ? floatval($vehicleData['pricePerKm']) : 
+                     (isset($vehicleData['price_per_km']) && !empty($vehicleData['price_per_km']) ? floatval($vehicleData['price_per_km']) : $existingVehicle['price_per_km']);
         
-        $nightHaltCharge = isset($vehicleData['nightHaltCharge']) ? floatval($vehicleData['nightHaltCharge']) : 
-                          (isset($vehicleData['night_halt_charge']) ? floatval($vehicleData['night_halt_charge']) : $existingVehicle['night_halt_charge']);
+        $nightHaltCharge = isset($vehicleData['nightHaltCharge']) && !empty($vehicleData['nightHaltCharge']) ? floatval($vehicleData['nightHaltCharge']) : 
+                          (isset($vehicleData['night_halt_charge']) && !empty($vehicleData['night_halt_charge']) ? floatval($vehicleData['night_halt_charge']) : $existingVehicle['night_halt_charge']);
         
-        $driverAllowance = isset($vehicleData['driverAllowance']) ? floatval($vehicleData['driverAllowance']) : 
-                          (isset($vehicleData['driver_allowance']) ? floatval($vehicleData['driver_allowance']) : $existingVehicle['driver_allowance']);
+        $driverAllowance = isset($vehicleData['driverAllowance']) && !empty($vehicleData['driverAllowance']) ? floatval($vehicleData['driverAllowance']) : 
+                          (isset($vehicleData['driver_allowance']) && !empty($vehicleData['driver_allowance']) ? floatval($vehicleData['driver_allowance']) : $existingVehicle['driver_allowance']);
         
         // Update vehicles table
         $updateVehicleQuery = "UPDATE vehicles SET 
@@ -218,10 +216,10 @@ try {
             night_halt_charge = ?, 
             driver_allowance = ?, 
             updated_at = CURRENT_TIMESTAMP 
-            WHERE vehicle_id = ?";
+            WHERE vehicle_id = ? OR id = ?";
             
         $updateVehicleStmt = $conn->prepare($updateVehicleQuery);
-        $updateVehicleStmt->bind_param('siiissiddddds', 
+        $updateVehicleStmt->bind_param('siiissidddddss', 
             $vehicleName, 
             $capacity, 
             $luggageCapacity, 
@@ -234,6 +232,7 @@ try {
             $pricePerKm, 
             $nightHaltCharge, 
             $driverAllowance,
+            $vehicleId,
             $vehicleId
         );
         
@@ -241,85 +240,99 @@ try {
             throw new Exception("Error updating vehicles table: " . $updateVehicleStmt->error);
         }
         
-        // Update vehicle_types table as well (for compatibility)
-        $updateVehicleTypeQuery = "UPDATE vehicle_types SET 
-            name = ?, 
-            capacity = ?, 
-            luggage_capacity = ?, 
-            ac = ?, 
-            image = ?, 
-            amenities = ?, 
-            description = ?, 
-            is_active = ?, 
-            base_price = ?, 
-            price_per_km = ?, 
-            night_halt_charge = ?, 
-            driver_allowance = ?, 
-            updated_at = CURRENT_TIMESTAMP 
-            WHERE vehicle_id = ?";
-            
-        $updateVehicleTypeStmt = $conn->prepare($updateVehicleTypeQuery);
-        $updateVehicleTypeStmt->bind_param('siiissiddddds', 
-            $vehicleName, 
-            $capacity, 
-            $luggageCapacity, 
-            $ac, 
-            $image, 
-            $amenities, 
-            $description, 
-            $isActive, 
-            $basePrice, 
-            $pricePerKm, 
-            $nightHaltCharge, 
-            $driverAllowance,
-            $vehicleId
-        );
+        logMessage("Successfully updated vehicles table for $vehicleId");
         
-        if (!$updateVehicleTypeStmt->execute()) {
-            throw new Exception("Error updating vehicle_types table: " . $updateVehicleTypeStmt->error);
+        // Check if vehicle_types table exists, then update
+        $checkTypesTableResult = $conn->query("SHOW TABLES LIKE 'vehicle_types'");
+        if ($checkTypesTableResult->num_rows > 0) {
+            $updateVehicleTypeQuery = "UPDATE vehicle_types SET 
+                name = ?, 
+                capacity = ?, 
+                luggage_capacity = ?, 
+                ac = ?, 
+                image = ?, 
+                amenities = ?, 
+                description = ?, 
+                is_active = ?, 
+                base_price = ?, 
+                price_per_km = ?, 
+                night_halt_charge = ?, 
+                driver_allowance = ?, 
+                updated_at = CURRENT_TIMESTAMP 
+                WHERE vehicle_id = ?";
+                
+            $updateVehicleTypeStmt = $conn->prepare($updateVehicleTypeQuery);
+            $updateVehicleTypeStmt->bind_param('siiissiddddds', 
+                $vehicleName, 
+                $capacity, 
+                $luggageCapacity, 
+                $ac, 
+                $image, 
+                $amenities, 
+                $description, 
+                $isActive, 
+                $basePrice, 
+                $pricePerKm, 
+                $nightHaltCharge, 
+                $driverAllowance,
+                $vehicleId
+            );
+            
+            if (!$updateVehicleTypeStmt->execute()) {
+                logMessage("Warning: Could not update vehicle_types table: " . $updateVehicleTypeStmt->error);
+                // Don't throw exception here, continue with other updates
+            } else {
+                logMessage("Successfully updated vehicle_types table for $vehicleId");
+            }
         }
         
         // Update vehicle_pricing table for outstation
-        $updateOutstationPricingQuery = "UPDATE vehicle_pricing SET 
-            base_fare = ?, 
-            price_per_km = ?, 
-            night_halt_charge = ?, 
-            driver_allowance = ?, 
-            base_price = ?,
-            updated_at = CURRENT_TIMESTAMP 
-            WHERE vehicle_id = ? AND trip_type = 'outstation'";
+        $checkPricingTableResult = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'");
+        if ($checkPricingTableResult->num_rows > 0) {
+            $updateOutstationPricingQuery = "UPDATE vehicle_pricing SET 
+                base_fare = ?, 
+                price_per_km = ?, 
+                night_halt_charge = ?, 
+                driver_allowance = ?, 
+                base_price = ?,
+                updated_at = CURRENT_TIMESTAMP 
+                WHERE vehicle_id = ? AND trip_type = 'outstation'";
+                
+            $updateOutstationPricingStmt = $conn->prepare($updateOutstationPricingQuery);
+            $updateOutstationPricingStmt->bind_param('ddddds', 
+                $basePrice, 
+                $pricePerKm, 
+                $nightHaltCharge, 
+                $driverAllowance,
+                $basePrice,
+                $vehicleId
+            );
             
-        $updateOutstationPricingStmt = $conn->prepare($updateOutstationPricingQuery);
-        $updateOutstationPricingStmt->bind_param('ddddds', 
-            $basePrice, 
-            $pricePerKm, 
-            $nightHaltCharge, 
-            $driverAllowance,
-            $basePrice,
-            $vehicleId
-        );
-        
-        $updateOutstationPricingStmt->execute(); // Don't throw on error, as record might not exist yet
+            $updateOutstationPricingStmt->execute(); // Don't throw on error, as record might not exist yet
+        }
         
         // Update outstation_fares table if it exists
-        $updateOutstationFaresQuery = "UPDATE outstation_fares SET 
-            base_price = ?, 
-            price_per_km = ?, 
-            night_halt_charge = ?, 
-            driver_allowance = ?,
-            updated_at = CURRENT_TIMESTAMP 
-            WHERE vehicle_id = ?";
+        $checkOutstationFaresResult = $conn->query("SHOW TABLES LIKE 'outstation_fares'");
+        if ($checkOutstationFaresResult->num_rows > 0) {
+            $updateOutstationFaresQuery = "UPDATE outstation_fares SET 
+                base_price = ?, 
+                price_per_km = ?, 
+                night_halt_charge = ?, 
+                driver_allowance = ?,
+                updated_at = CURRENT_TIMESTAMP 
+                WHERE vehicle_id = ?";
+                
+            $updateOutstationFaresStmt = $conn->prepare($updateOutstationFaresQuery);
+            $updateOutstationFaresStmt->bind_param('dddds', 
+                $basePrice, 
+                $pricePerKm, 
+                $nightHaltCharge, 
+                $driverAllowance,
+                $vehicleId
+            );
             
-        $updateOutstationFaresStmt = $conn->prepare($updateOutstationFaresQuery);
-        $updateOutstationFaresStmt->bind_param('dddds', 
-            $basePrice, 
-            $pricePerKm, 
-            $nightHaltCharge, 
-            $driverAllowance,
-            $vehicleId
-        );
-        
-        $updateOutstationFaresStmt->execute(); // Don't throw on error
+            $updateOutstationFaresStmt->execute(); // Don't throw on error
+        }
         
         // Commit transaction
         $conn->commit();
@@ -334,7 +347,7 @@ try {
             'name' => $vehicleName,
             'capacity' => $capacity,
             'luggageCapacity' => $luggageCapacity,
-            'ac' => $ac,
+            'ac' => $ac == 1,
             'image' => $image,
             'description' => $description,
             'isActive' => $isActive == 1,

@@ -55,13 +55,23 @@ export const directVehicleOperation = async (
         for (const [key, value] of Object.entries(data)) {
           if (value === undefined || value === null) continue;
           
-          // Special handling for isActive/is_active to ensure it's properly sent
+          // CRITICAL: Special handling for isActive/is_active to ensure it's properly sent
           if (key === 'isActive' || key === 'is_active') {
             const boolValue = value === true || value === 'true' || value === 1 || value === '1';
             formData.append(key, boolValue ? '1' : '0');
             // Also add the other variant for API compatibility
             const otherKey = key === 'isActive' ? 'is_active' : 'isActive';
             formData.append(otherKey, boolValue ? '1' : '0');
+            continue;
+          }
+          
+          // Special case for capacity and luggage capacity - ensure they're sent as numbers
+          if (key === 'capacity' || key === 'luggageCapacity' || key === 'luggage_capacity') {
+            formData.append(key, String(value));
+            // Also add snake_case variant for PHP compatibility
+            if (key === 'luggageCapacity') {
+              formData.append('luggage_capacity', String(value));
+            }
             continue;
           }
           
@@ -75,6 +85,12 @@ export const directVehicleOperation = async (
               formData.append(key, String(value));
             }
           }
+        }
+        
+        // Log FormData contents for debugging
+        console.log('FormData contents:');
+        for (const pair of formData.entries()) {
+          console.log(`${pair[0]}: ${pair[1]}`);
         }
         
         options.body = formData;
