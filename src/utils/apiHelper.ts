@@ -51,15 +51,21 @@ export const directVehicleOperation = async (
         delete headers['Content-Type']; // Let browser set the content type with boundary
         
         const formData = new FormData();
-        Object.entries(data).forEach(([key, value]) => {
-          if (value === undefined || value === null) return;
+        // Handle object values specially for PHP compatibility
+        for (const [key, value] of Object.entries(data)) {
+          if (value === undefined || value === null) continue;
           
-          if (typeof value === 'object' && !(value instanceof File)) {
+          if (typeof value === 'object' && !(value instanceof File) && !(value instanceof Blob)) {
             formData.append(key, JSON.stringify(value));
           } else {
-            formData.append(key, String(value));
+            // For arrays, append each value with the same key
+            if (Array.isArray(value)) {
+              value.forEach(item => formData.append(`${key}[]`, String(item)));
+            } else {
+              formData.append(key, String(value));
+            }
           }
-        });
+        }
         
         options.body = formData;
       }
@@ -94,10 +100,17 @@ export const directVehicleOperation = async (
       throw new Error(`API request failed with status ${response.status}: ${errorText}`);
     }
     
-    const result = await response.json();
-    console.log('API response:', result);
-    
-    return result;
+    // Try to parse as JSON first
+    try {
+      const result = await response.json();
+      console.log('API response:', result);
+      return result;
+    } catch (parseError) {
+      // If can't parse as JSON, return the raw text
+      const text = await response.text();
+      console.log('API response (text):', text);
+      return { raw: text, success: true };
+    }
   } catch (error: any) {
     console.error(`Direct vehicle operation failed: ${error.message}`);
     toast.error(`Operation failed: ${error.message}`);
