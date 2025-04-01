@@ -17,7 +17,10 @@ export const getBypassHeaders = (): Record<string, string> => {
     'X-Requested-With': 'XMLHttpRequest',
     'Accept': '*/*',
     'X-CORS-Bypass': 'true',
-    'X-Admin-Mode': 'true' // Always include admin mode header for maximum compatibility
+    'X-Admin-Mode': 'true', // Always include admin mode header for maximum compatibility
+    'Access-Control-Allow-Origin': '*', // Add CORS headers directly in request
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Accept, Origin, X-Auth-Token, X-Force-Refresh, X-Admin-Mode, X-Debug, *'
   };
 };
 

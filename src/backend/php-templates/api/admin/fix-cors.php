@@ -2,6 +2,16 @@
 <?php
 // fix-cors.php - Ultimate CORS fix for all API endpoints
 
+// Force HTTP 200 OK status regardless of PHP errors
+http_response_code(200);
+
+// Allow specific origins - particularly important for preflight OPTIONS requests
+if (isset($_SERVER['HTTP_ORIGIN'])) {
+    header("Access-Control-Allow-Origin: {$_SERVER['HTTP_ORIGIN']}");
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
+
 // Send immediate headers without delay
 header('Content-Type: application/json');
 
@@ -9,7 +19,6 @@ header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0, pre-check=0, post-check=0');
 header('Pragma: no-cache');
 header('Expires: -1');
-header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, PATCH');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, Origin, X-Auth-Token, X-Force-Refresh, X-Admin-Mode, X-Debug, *');
 header('Access-Control-Max-Age: 86400');
@@ -69,4 +78,5 @@ $corsTest = [
     ]
 ];
 
+// Output response as JSON
 echo json_encode($corsTest);

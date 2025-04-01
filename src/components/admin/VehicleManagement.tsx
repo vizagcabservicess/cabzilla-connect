@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,6 +12,8 @@ import { EditVehicleDialog } from "./EditVehicleDialog";
 import { getVehicleData, clearVehicleDataCache } from "@/services/vehicleDataService";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getApiUrl } from '@/config/api';
+import { ApiErrorFallback } from '@/components/ApiErrorFallback';
+import { safeFetch } from '@/config/requestConfig';
 
 export default function VehicleManagement() {
   const [isLoading, setIsLoading] = useState(true);
@@ -23,11 +26,24 @@ export default function VehicleManagement() {
   const [selectedVehicle, setSelectedVehicle] = useState<CabType | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
+  const [error, setError] = useState<Error | null>(null);
+
+  // Reset error state when needed
+  const resetError = () => setError(null);
 
   const fixDatabase = async () => {
     setIsFixingDb(true);
+    resetError();
     
     try {
+      // First try to hit the CORS fix endpoint
+      try {
+        await safeFetch('/api/fix-cors');
+        console.log('CORS fix endpoint hit successfully');
+      } catch (error) {
+        console.log('CORS fix preflight failed, continuing anyway');
+      }
+      
       const response = await fetch(getApiUrl('/api/admin/fix-vehicle-tables.php'));
       const data = await response.json();
       
@@ -39,10 +55,36 @@ export default function VehicleManagement() {
       }
     } catch (error) {
       console.error("Error fixing database:", error);
-      toast.error("Failed to fix database tables. Please check server logs.");
+      toast.error("Failed to fix database tables. Using offline mode.");
+      
+      // Attempt to load vehicles from cache even if DB fix failed
+      try {
+        loadVehiclesFromLocalStorage();
+        toast.info("Loaded vehicles from local cache");
+      } catch (cacheError) {
+        setError(error as Error);
+      }
     } finally {
       setIsFixingDb(false);
     }
+  };
+
+  const loadVehiclesFromLocalStorage = () => {
+    try {
+      const cachedVehiclesString = localStorage.getItem('cachedVehicles') || localStorage.getItem('localVehicles');
+      if (cachedVehiclesString) {
+        const cachedVehicles = JSON.parse(cachedVehiclesString);
+        if (Array.isArray(cachedVehicles) && cachedVehicles.length > 0) {
+          console.log("Recovered vehicles from localStorage cache");
+          setVehicles(cachedVehicles);
+          setIsLoading(false);
+          return true;
+        }
+      }
+    } catch (cacheError) {
+      console.error("Error recovering from cache:", cacheError);
+    }
+    return false;
   };
 
   const loadVehicles = useCallback(async () => {
@@ -54,8 +96,17 @@ export default function VehicleManagement() {
 
     try {
       setIsLoading(true);
+      resetError();
       setLastRefreshTime(now);
       console.log("Admin: Fetching all vehicles...");
+      
+      // First try to hit the CORS fix endpoint
+      try {
+        await safeFetch('/api/fix-cors');
+        console.log('CORS fix endpoint hit successfully before vehicle load');
+      } catch (error) {
+        console.log('CORS fix preflight failed, continuing anyway');
+      }
       
       const fetchedVehicles = await getVehicleData(true, true);
       console.log(`Loaded ${fetchedVehicles.length} vehicles for admin view:`, fetchedVehicles);
@@ -102,29 +153,31 @@ export default function VehicleManagement() {
         
         console.log(`Deduplicated to ${uniqueVehicles.length} unique vehicles`);
         setVehicles(uniqueVehicles);
-      } else if (retryCount < 3) {
+        
+        // Cache the results
+        try {
+          localStorage.setItem('cachedVehicles', JSON.stringify(uniqueVehicles));
+          localStorage.setItem('localVehicles', JSON.stringify(uniqueVehicles));
+        } catch (cacheError) {
+          console.error("Error caching vehicles:", cacheError);
+        }
+      } else if (retryCount < 2) {
         console.log("No vehicles returned, clearing cache and retrying...");
         clearVehicleDataCache();
         setRetryCount(prev => prev + 1);
         setTimeout(() => loadVehicles(), 800);
       } else {
-        toast.error("Failed to load vehicles. Please try refreshing the page.");
+        console.log("Multiple retries failed, attempting to load from localStorage");
+        if (!loadVehiclesFromLocalStorage()) {
+          toast.error("Failed to load vehicles. Please try refreshing the page.");
+        }
       }
     } catch (error) {
       console.error("Error loading vehicles:", error);
-      toast.error("Failed to load vehicles. Please try refreshing the page.");
       
-      try {
-        const cachedVehiclesString = localStorage.getItem('cachedVehicles');
-        if (cachedVehiclesString) {
-          const cachedVehicles = JSON.parse(cachedVehiclesString);
-          if (Array.isArray(cachedVehicles) && cachedVehicles.length > 0) {
-            console.log("Recovered vehicles from localStorage cache");
-            setVehicles(cachedVehicles);
-          }
-        }
-      } catch (cacheError) {
-        console.error("Error recovering from cache:", cacheError);
+      // Try loading from localStorage as a fallback
+      if (!loadVehiclesFromLocalStorage()) {
+        setError(error as Error);
       }
     } finally {
       setIsLoading(false);
@@ -141,24 +194,32 @@ export default function VehicleManagement() {
     
     window.addEventListener('vehicle-data-updated', handleVehicleDataUpdated);
     window.addEventListener('vehicle-data-refreshed', handleVehicleDataUpdated);
+    window.addEventListener('vehicle-data-changed', handleVehicleDataUpdated);
     window.addEventListener('vehicle-data-cache-cleared', handleVehicleDataUpdated);
     
     return () => {
       window.removeEventListener('vehicle-data-updated', handleVehicleDataUpdated);
       window.removeEventListener('vehicle-data-refreshed', handleVehicleDataUpdated);
+      window.removeEventListener('vehicle-data-changed', handleVehicleDataUpdated);
       window.removeEventListener('vehicle-data-cache-cleared', handleVehicleDataUpdated);
     };
-  }, [loadVehicles, retryCount]);
+  }, [loadVehicles]);
 
   const handleRefreshData = async () => {
     try {
       setIsRefreshing(true);
+      resetError();
       clearVehicleDataCache();
       await loadVehicles();
       toast.success("Vehicle data refreshed successfully");
     } catch (error) {
       console.error("Error refreshing vehicle data:", error);
-      toast.error("Failed to refresh vehicle data");
+      toast.error("Failed to refresh vehicle data. Trying offline mode.");
+      
+      // Try loading from localStorage as a fallback
+      if (!loadVehiclesFromLocalStorage()) {
+        setError(error as Error);
+      }
     } finally {
       setIsRefreshing(false);
     }
@@ -214,6 +275,33 @@ export default function VehicleManagement() {
     vehicle.id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (vehicle.description && vehicle.description.toLowerCase().includes(searchQuery.toLowerCase()))
   );
+
+  // If there's an error, show the error fallback
+  if (error) {
+    return (
+      <div className="space-y-4">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-2xl font-bold">Vehicle Management</h2>
+          <Button 
+            variant="default" 
+            onClick={resetError}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Try Again
+          </Button>
+        </div>
+        
+        <ApiErrorFallback 
+          error={error} 
+          resetErrorBoundary={resetError}
+          onRetry={handleRefreshData}
+          title="Vehicle Data Error"
+          description="Could not connect to the vehicle data API. Working in offline mode."
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
