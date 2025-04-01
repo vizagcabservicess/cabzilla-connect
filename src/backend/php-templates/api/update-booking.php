@@ -1,3 +1,4 @@
+
 <?php
 // Include configuration file
 require_once __DIR__ . '/../config.php';
@@ -247,7 +248,7 @@ try {
         try {
             // Only send if we have a passenger email
             if (!empty($updatedBooking['passenger_email'])) {
-                // Use our enhanced function for status updates with SendGrid support
+                // Use our enhanced function for status updates with SMTP and SendGrid support
                 $emailSuccess = sendBookingStatusUpdateEmail(
                     $updatedBooking['passenger_email'],
                     "Booking #" . $updatedBooking['booking_number'] . " Confirmed",

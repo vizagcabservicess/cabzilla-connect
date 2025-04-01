@@ -73,6 +73,203 @@ function sendSendGridEmail($to, $subject, $htmlBody) {
     return $success;
 }
 
+// Function to send email using direct SMTP with PHPMailer-like implementation
+function sendSmtpEmail($to, $subject, $htmlBody) {
+    // Log attempt with detailed information
+    logError("Attempting to send email via SMTP", [
+        'to' => $to,
+        'subject' => $subject,
+        'server_info' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown'
+    ]);
+    
+    // SMTP credentials for Hostinger
+    $smtpHost = 'smtp.hostinger.com';
+    $smtpPort = 465; // SSL
+    $smtpUsername = 'info@vizagtaxihub.com';
+    $smtpPassword = 'James!5544';
+    $smtpEncryption = 'ssl'; // Use 'tls' for port 587
+    
+    // From details
+    $from = 'info@vizagtaxihub.com';
+    $fromName = 'Vizag Taxi Hub';
+    
+    // Generate a unique boundary for multipart message
+    $boundary = md5(uniqid());
+    
+    // Prepare email headers
+    $headers = [];
+    $headers[] = "From: $fromName <$from>";
+    $headers[] = "Reply-To: $from";
+    $headers[] = "MIME-Version: 1.0";
+    $headers[] = "Content-Type: text/html; charset=UTF-8";
+    $headers[] = "X-Mailer: PHP/" . phpversion();
+    
+    // Create socket connection to SMTP server
+    $errno = 0;
+    $errstr = '';
+    $socket = fsockopen(
+        ($smtpEncryption == 'ssl' ? 'ssl://' : '') . $smtpHost,
+        $smtpPort,
+        $errno,
+        $errstr,
+        30
+    );
+    
+    if (!$socket) {
+        logError("SMTP connection failed", [
+            'error' => "$errno: $errstr",
+            'server' => $smtpHost,
+            'port' => $smtpPort
+        ]);
+        return false;
+    }
+    
+    // Read server greeting
+    $response = fgets($socket, 515);
+    if (substr($response, 0, 3) != '220') {
+        logError("Invalid SMTP greeting", ['response' => $response]);
+        fclose($socket);
+        return false;
+    }
+    
+    // Send EHLO command
+    fputs($socket, "EHLO " . $_SERVER['SERVER_NAME'] . "\r\n");
+    $response = fgets($socket, 515);
+    if (substr($response, 0, 3) != '250') {
+        logError("EHLO command failed", ['response' => $response]);
+        fclose($socket);
+        return false;
+    }
+    
+    // Clear any remaining EHLO response lines
+    while (substr($response, 3, 1) == '-') {
+        $response = fgets($socket, 515);
+    }
+    
+    // Start TLS if needed
+    if ($smtpEncryption == 'tls') {
+        fputs($socket, "STARTTLS\r\n");
+        $response = fgets($socket, 515);
+        if (substr($response, 0, 3) != '220') {
+            logError("STARTTLS failed", ['response' => $response]);
+            fclose($socket);
+            return false;
+        }
+        
+        // Enable crypto on the connection
+        if (!stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) {
+            logError("Failed to enable TLS encryption");
+            fclose($socket);
+            return false;
+        }
+        
+        // Send EHLO again after TLS
+        fputs($socket, "EHLO " . $_SERVER['SERVER_NAME'] . "\r\n");
+        $response = fgets($socket, 515);
+        if (substr($response, 0, 3) != '250') {
+            logError("EHLO after TLS failed", ['response' => $response]);
+            fclose($socket);
+            return false;
+        }
+        
+        // Clear remaining EHLO response lines
+        while (substr($response, 3, 1) == '-') {
+            $response = fgets($socket, 515);
+        }
+    }
+    
+    // Authenticate
+    fputs($socket, "AUTH LOGIN\r\n");
+    $response = fgets($socket, 515);
+    if (substr($response, 0, 3) != '334') {
+        logError("AUTH command failed", ['response' => $response]);
+        fclose($socket);
+        return false;
+    }
+    
+    // Send username
+    fputs($socket, base64_encode($smtpUsername) . "\r\n");
+    $response = fgets($socket, 515);
+    if (substr($response, 0, 3) != '334') {
+        logError("Username not accepted", ['response' => $response]);
+        fclose($socket);
+        return false;
+    }
+    
+    // Send password
+    fputs($socket, base64_encode($smtpPassword) . "\r\n");
+    $response = fgets($socket, 515);
+    if (substr($response, 0, 3) != '235') {
+        logError("Authentication failed", ['response' => $response]);
+        fclose($socket);
+        return false;
+    }
+    
+    // Set sender
+    fputs($socket, "MAIL FROM:<$from>\r\n");
+    $response = fgets($socket, 515);
+    if (substr($response, 0, 3) != '250') {
+        logError("MAIL FROM command failed", ['response' => $response]);
+        fclose($socket);
+        return false;
+    }
+    
+    // Set recipient
+    fputs($socket, "RCPT TO:<$to>\r\n");
+    $response = fgets($socket, 515);
+    if (substr($response, 0, 3) != '250') {
+        logError("RCPT TO command failed", ['response' => $response, 'recipient' => $to]);
+        fclose($socket);
+        return false;
+    }
+    
+    // Start data
+    fputs($socket, "DATA\r\n");
+    $response = fgets($socket, 515);
+    if (substr($response, 0, 3) != '354') {
+        logError("DATA command failed", ['response' => $response]);
+        fclose($socket);
+        return false;
+    }
+    
+    // Prepare full email content
+    $date = date('r');
+    $messageId = '<' . md5(uniqid()) . '@vizagtaxihub.com>';
+    
+    $message = "Date: $date\r\n";
+    $message .= "To: $to\r\n";
+    $message .= "Subject: $subject\r\n";
+    $message .= "Message-ID: $messageId\r\n";
+    foreach ($headers as $header) {
+        $message .= "$header\r\n";
+    }
+    $message .= "\r\n";
+    $message .= $htmlBody;
+    $message .= "\r\n.\r\n";
+    
+    // Send message data
+    fputs($socket, $message);
+    $response = fgets($socket, 515);
+    if (substr($response, 0, 3) != '250') {
+        logError("Message sending failed", ['response' => $response]);
+        fclose($socket);
+        return false;
+    }
+    
+    // Quit
+    fputs($socket, "QUIT\r\n");
+    fclose($socket);
+    
+    logError("Email sent successfully via SMTP", [
+        'to' => $to,
+        'subject' => $subject,
+        'host' => $smtpHost,
+        'port' => $smtpPort
+    ]);
+    
+    return true;
+}
+
 // Function to send email using Hostinger-recommended methods with improved error handling
 function sendHostingerMail($to, $subject, $htmlBody, $textBody = '', $headers = []) {
     // Initialize variables for tracking
@@ -336,7 +533,14 @@ function sendReliableBookingConfirmationEmail($booking) {
         'booking_number' => $booking['bookingNumber']
     ]);
     
-    // Try SendGrid first (most reliable)
+    // Try SMTP first (should be most reliable)
+    $result = sendSmtpEmail($to, $subject, $htmlBody);
+    
+    if ($result) {
+        return true;
+    }
+    
+    // If SMTP fails, try SendGrid
     $result = sendSendGridEmail($to, $subject, $htmlBody);
     
     if ($result) {
@@ -373,7 +577,14 @@ function sendReliableAdminNotificationEmail($booking) {
         'booking_number' => $booking['bookingNumber']
     ]);
     
-    // Try SendGrid first (most reliable)
+    // Try SMTP first (should be most reliable)
+    $result = sendSmtpEmail($to, $subject, $htmlBody);
+    
+    if ($result) {
+        return true;
+    }
+    
+    // If SMTP fails, try SendGrid
     $result = sendSendGridEmail($to, $subject, $htmlBody);
     
     if ($result) {
@@ -439,7 +650,14 @@ function sendBookingStatusUpdateEmail($to, $subject, $message) {
 </body>
 </html>';
     
-    // Try SendGrid first (most reliable)
+    // Try SMTP first (most reliable)
+    $result = sendSmtpEmail($to, $subject, $htmlBody);
+    
+    if ($result) {
+        return true;
+    }
+    
+    // Try SendGrid if SMTP fails
     $result = sendSendGridEmail($to, $subject, $htmlBody);
     
     if ($result) {
