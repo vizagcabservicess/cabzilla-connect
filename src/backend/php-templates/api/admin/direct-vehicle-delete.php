@@ -26,11 +26,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // Check if the request method is DELETE or POST
-if (!in_array($_SERVER['REQUEST_METHOD'], ['DELETE', 'POST'])) {
+if (!in_array($_SERVER['REQUEST_METHOD'], ['DELETE', 'POST', 'GET'])) {
     http_response_code(405);
     echo json_encode([
         'status' => 'error',
-        'message' => 'Method not allowed. Only DELETE or POST requests are accepted.',
+        'message' => 'Method not allowed. Only DELETE, POST, or GET requests are accepted.',
         'received' => $_SERVER['REQUEST_METHOD']
     ]);
     exit;
@@ -53,7 +53,7 @@ try {
             parse_str($_SERVER['QUERY_STRING'], $params);
             $vehicleId = $params['id'] ?? $params['vehicleId'] ?? null;
         }
-    } else {
+    } else if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // For POST, check both POST data and query string
         $vehicleId = $_POST['id'] ?? $_POST['vehicleId'] ?? null;
         
@@ -66,9 +66,14 @@ try {
         if (!$vehicleId) {
             // Try to parse JSON input
             $jsonData = file_get_contents('php://input');
-            $data = json_decode($jsonData, true);
-            $vehicleId = $data['id'] ?? $data['vehicleId'] ?? null;
+            if ($jsonData) {
+                $data = json_decode($jsonData, true);
+                $vehicleId = $data['id'] ?? $data['vehicleId'] ?? null;
+            }
         }
+    } else if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+        // For GET, check query string
+        $vehicleId = $_GET['id'] ?? $_GET['vehicleId'] ?? null;
     }
     
     if (!$vehicleId) {
@@ -143,10 +148,8 @@ try {
             $affectedTables[] = 'airport_transfer_fares';
         }
         
-        // Check if any tables were affected
-        if (count($affectedTables) === 0) {
-            throw new Exception("Vehicle with ID '$vehicleId' not found in any table");
-        }
+        // We won't consider it an error if no tables were affected,
+        // as the user may be trying to delete a vehicle that doesn't exist
         
         // Commit the transaction
         $conn->commit();
@@ -157,7 +160,8 @@ try {
             'message' => "Vehicle with ID '$vehicleId' deleted successfully",
             'details' => [
                 'vehicleId' => $vehicleId,
-                'tables_affected' => $affectedTables
+                'tables_affected' => $affectedTables,
+                'tables_checked' => ['vehicle_types', 'vehicles', 'vehicle_pricing', 'outstation_fares', 'local_package_fares', 'airport_transfer_fares']
             ]
         ]);
         

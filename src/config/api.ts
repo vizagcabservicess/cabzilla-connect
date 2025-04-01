@@ -23,7 +23,7 @@ export function getApiUrl(endpoint: string): string {
 export const apiTimeout = 60000; // 60 seconds for maximum reliability
 
 // Enhanced default headers with CORS support
-export const defaultHeaders = {
+export const defaultHeaders: Record<string, string> = {
   'Content-Type': 'application/json',
   'Cache-Control': 'no-cache, no-store, must-revalidate',
   'Pragma': 'no-cache',
@@ -34,14 +34,14 @@ export const defaultHeaders = {
 };
 
 // Force refresh headers
-export const forceRefreshHeaders = {
+export const forceRefreshHeaders: Record<string, string> = {
   ...defaultHeaders,
   'X-Force-Refresh': 'true',
   'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0'
 };
 
 // Direct vehicle API headers - more aggressive CORS settings
-export const directVehicleHeaders = {
+export const directVehicleHeaders: Record<string, string> = {
   ...forceRefreshHeaders,
   'X-Admin-Mode': 'true', 
   'Origin': typeof window !== 'undefined' ? window.location.origin : '*',
@@ -49,9 +49,6 @@ export const directVehicleHeaders = {
   'Access-Control-Request-Method': 'POST, GET, OPTIONS',
   'Access-Control-Request-Headers': 'Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh'
 };
-
-// Check if we should use the CORS fix endpoint
-export const useCorsFixEndpoint = import.meta.env.VITE_USE_CORS_FIX === 'true';
 
 // Check if we should use direct vehicle API
 export const useDirectVehicleApi = import.meta.env.VITE_USE_DIRECT_VEHICLE_API === 'true';

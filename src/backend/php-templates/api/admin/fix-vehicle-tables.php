@@ -1,6 +1,9 @@
 
 <?php
-// fix-vehicle-tables.php - Fix and repair vehicle database tables
+/**
+ * fix-vehicle-tables.php - Comprehensive vehicle table synchronization
+ * This script ensures consistent data across all vehicle-related tables
+ */
 
 // Set comprehensive CORS headers
 header('Content-Type: application/json');
@@ -11,11 +14,15 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, *');
 header('Access-Control-Expose-Headers: *');
-header('X-API-Version: 1.0.2');
+header('X-API-Version: 1.0.3');
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
+    echo json_encode([
+        'status' => 'success',
+        'message' => 'CORS preflight request successful'
+    ]);
     exit;
 }
 
@@ -34,6 +41,17 @@ try {
     $conn->begin_transaction();
     
     try {
+        $response = [
+            'status' => 'success',
+            'message' => 'Vehicle tables synchronized successfully',
+            'details' => [
+                'tables_checked' => [],
+                'tables_fixed' => [],
+                'vehicles_synced' => [],
+                'errors' => []
+            ]
+        ];
+        
         // 1. Create vehicles table if it doesn't exist
         $conn->query("
             CREATE TABLE IF NOT EXISTS vehicles (
@@ -55,6 +73,7 @@ try {
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             )
         ");
+        $response['details']['tables_checked'][] = 'vehicles';
         
         // 2. Create vehicle_types table if it doesn't exist
         $conn->query("
@@ -77,411 +96,545 @@ try {
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             )
         ");
+        $response['details']['tables_checked'][] = 'vehicle_types';
         
-        // 3. Create vehicle_pricing table if it doesn't exist
+        // 3. Create outstation_fares table if it doesn't exist
+        $conn->query("
+            CREATE TABLE IF NOT EXISTS outstation_fares (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                vehicle_id VARCHAR(50) NOT NULL UNIQUE,
+                base_price DECIMAL(10,2) DEFAULT 0,
+                price_per_km DECIMAL(10,2) DEFAULT 0,
+                night_halt_charge DECIMAL(10,2) DEFAULT 700,
+                driver_allowance DECIMAL(10,2) DEFAULT 250,
+                roundtrip_base_price DECIMAL(10,2) DEFAULT 0,
+                roundtrip_price_per_km DECIMAL(10,2) DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )
+        ");
+        $response['details']['tables_checked'][] = 'outstation_fares';
+        
+        // 4. Create local_package_fares table if it doesn't exist
+        $conn->query("
+            CREATE TABLE IF NOT EXISTS local_package_fares (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                vehicle_id VARCHAR(50) NOT NULL UNIQUE,
+                price_4hrs_40km DECIMAL(10,2) DEFAULT 0,
+                price_8hrs_80km DECIMAL(10,2) DEFAULT 0,
+                price_10hrs_100km DECIMAL(10,2) DEFAULT 0,
+                price_extra_km DECIMAL(10,2) DEFAULT 0,
+                price_extra_hour DECIMAL(10,2) DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )
+        ");
+        $response['details']['tables_checked'][] = 'local_package_fares';
+        
+        // 5. Create airport_transfer_fares table if it doesn't exist
+        $conn->query("
+            CREATE TABLE IF NOT EXISTS airport_transfer_fares (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                vehicle_id VARCHAR(50) NOT NULL UNIQUE,
+                base_price DECIMAL(10,2) DEFAULT 0,
+                price_per_km DECIMAL(10,2) DEFAULT 0,
+                pickup_price DECIMAL(10,2) DEFAULT 0,
+                drop_price DECIMAL(10,2) DEFAULT 0,
+                tier1_price DECIMAL(10,2) DEFAULT 0,
+                tier2_price DECIMAL(10,2) DEFAULT 0,
+                tier3_price DECIMAL(10,2) DEFAULT 0,
+                tier4_price DECIMAL(10,2) DEFAULT 0,
+                extra_km_charge DECIMAL(10,2) DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )
+        ");
+        $response['details']['tables_checked'][] = 'airport_transfer_fares';
+        
+        // 6. Create vehicle_pricing table if it doesn't exist
         $conn->query("
             CREATE TABLE IF NOT EXISTS vehicle_pricing (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 vehicle_id VARCHAR(50) NOT NULL,
-                trip_type VARCHAR(50) DEFAULT 'all',
+                trip_type VARCHAR(50) DEFAULT 'outstation',
                 base_fare DECIMAL(10,2) DEFAULT 0,
                 price_per_km DECIMAL(10,2) DEFAULT 0,
                 night_halt_charge DECIMAL(10,2) DEFAULT 700,
                 driver_allowance DECIMAL(10,2) DEFAULT 250,
                 base_price DECIMAL(10,2) DEFAULT 0,
+                extra_km_charge DECIMAL(10,2) DEFAULT 0,
+                extra_hour_charge DECIMAL(10,2) DEFAULT 0,
+                local_package_4hr DECIMAL(10,2) DEFAULT 0,
+                local_package_8hr DECIMAL(10,2) DEFAULT 0,
+                local_package_10hr DECIMAL(10,2) DEFAULT 0,
+                airport_base_price DECIMAL(10,2) DEFAULT 0,
+                airport_price_per_km DECIMAL(10,2) DEFAULT 0,
+                airport_pickup_price DECIMAL(10,2) DEFAULT 0,
+                airport_drop_price DECIMAL(10,2) DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 UNIQUE KEY vehicle_trip_type (vehicle_id, trip_type)
             )
         ");
+        $response['details']['tables_checked'][] = 'vehicle_pricing';
         
-        // Add missing columns to vehicle tables if they don't exist
-        $vehicleTables = ['vehicles', 'vehicle_types'];
-        $columns = [
-            'night_halt_charge' => 'DECIMAL(10,2) DEFAULT 700',
-            'driver_allowance' => 'DECIMAL(10,2) DEFAULT 250',
-            'base_price' => 'DECIMAL(10,2) DEFAULT 0',
-            'price_per_km' => 'DECIMAL(10,2) DEFAULT 0'
-        ];
+        // 7. Collect and merge data from all sources to find all vehicle_ids
+        $allVehicleIds = [];
         
-        foreach ($vehicleTables as $table) {
-            foreach ($columns as $column => $definition) {
-                // Check if column exists
-                $result = $conn->query("SHOW COLUMNS FROM `{$table}` LIKE '{$column}'");
-                if (!$result || $result->num_rows === 0) {
-                    $conn->query("ALTER TABLE `{$table}` ADD COLUMN `{$column}` {$definition}");
-                }
-            }
-        }
-        
-        // Add base_price column to vehicle_pricing if it doesn't exist
-        $result = $conn->query("SHOW COLUMNS FROM `vehicle_pricing` LIKE 'base_price'");
-        if (!$result || $result->num_rows === 0) {
-            $conn->query("ALTER TABLE `vehicle_pricing` ADD COLUMN `base_price` DECIMAL(10,2) DEFAULT 0");
-        }
-        
-        // Synchronize data between tables
-        // First copy from vehicle_types to vehicles
-        $conn->query("
-            INSERT INTO vehicles (vehicle_id, name, capacity, luggage_capacity, ac, image, amenities, description, 
-                                is_active, base_price, price_per_km, night_halt_charge, driver_allowance)
-            SELECT vt.vehicle_id, vt.name, vt.capacity, vt.luggage_capacity, vt.ac, vt.image, vt.amenities, 
-                  vt.description, vt.is_active, vt.base_price, vt.price_per_km, vt.night_halt_charge, vt.driver_allowance
-            FROM vehicle_types vt
-            LEFT JOIN vehicles v ON vt.vehicle_id = v.vehicle_id
-            WHERE v.vehicle_id IS NULL
-            ON DUPLICATE KEY UPDATE 
-                name = VALUES(name), 
-                capacity = VALUES(capacity), 
-                luggage_capacity = VALUES(luggage_capacity), 
-                ac = VALUES(ac),
-                image = VALUES(image),
-                amenities = VALUES(amenities),
-                description = VALUES(description),
-                is_active = VALUES(is_active),
-                base_price = VALUES(base_price),
-                price_per_km = VALUES(price_per_km),
-                night_halt_charge = VALUES(night_halt_charge),
-                driver_allowance = VALUES(driver_allowance)
-        ");
-        
-        // Then copy from vehicles to vehicle_types
-        $conn->query("
-            INSERT INTO vehicle_types (vehicle_id, name, capacity, luggage_capacity, ac, image, amenities, description,
-                                    is_active, base_price, price_per_km, night_halt_charge, driver_allowance)
-            SELECT v.vehicle_id, v.name, v.capacity, v.luggage_capacity, v.ac, v.image, v.amenities, 
-                  v.description, v.is_active, v.base_price, v.price_per_km, v.night_halt_charge, v.driver_allowance
-            FROM vehicles v
-            LEFT JOIN vehicle_types vt ON v.vehicle_id = vt.vehicle_id
-            WHERE vt.vehicle_id IS NULL
-            ON DUPLICATE KEY UPDATE 
-                name = VALUES(name), 
-                capacity = VALUES(capacity), 
-                luggage_capacity = VALUES(luggage_capacity), 
-                ac = VALUES(ac),
-                image = VALUES(image),
-                amenities = VALUES(amenities),
-                description = VALUES(description),
-                is_active = VALUES(is_active),
-                base_price = VALUES(base_price),
-                price_per_km = VALUES(price_per_km),
-                night_halt_charge = VALUES(night_halt_charge),
-                driver_allowance = VALUES(driver_allowance)
-        ");
-        
-        // Make sure each vehicle has entries in vehicle_pricing table
-        $result = $conn->query("SELECT vehicle_id FROM vehicle_types");
-        $vehicleIds = [];
+        // From vehicle_types
+        $result = $conn->query("SELECT DISTINCT vehicle_id FROM vehicle_types");
         while ($row = $result->fetch_assoc()) {
-            $vehicleIds[] = $row['vehicle_id'];
+            $allVehicleIds[$row['vehicle_id']] = true;
         }
         
-        // For each vehicle ID, ensure it has entries for different trip types
-        $tripTypes = ['outstation', 'local', 'airport'];
-        foreach ($vehicleIds as $vehicleId) {
-            foreach ($tripTypes as $tripType) {
-                $stmt = $conn->prepare("
-                    SELECT id FROM vehicle_pricing 
-                    WHERE vehicle_id = ? AND trip_type = ?
-                ");
-                $stmt->bind_param("ss", $vehicleId, $tripType);
+        // From vehicles
+        $result = $conn->query("SELECT DISTINCT vehicle_id FROM vehicles");
+        while ($row = $result->fetch_assoc()) {
+            $allVehicleIds[$row['vehicle_id']] = true;
+        }
+        
+        // From outstation_fares
+        $result = $conn->query("SELECT DISTINCT vehicle_id FROM outstation_fares");
+        while ($row = $result->fetch_assoc()) {
+            $allVehicleIds[$row['vehicle_id']] = true;
+        }
+        
+        // From local_package_fares
+        $result = $conn->query("SELECT DISTINCT vehicle_id FROM local_package_fares");
+        while ($row = $result->fetch_assoc()) {
+            $allVehicleIds[$row['vehicle_id']] = true;
+        }
+        
+        // From airport_transfer_fares
+        $result = $conn->query("SELECT DISTINCT vehicle_id FROM airport_transfer_fares");
+        while ($row = $result->fetch_assoc()) {
+            $allVehicleIds[$row['vehicle_id']] = true;
+        }
+        
+        // From vehicle_pricing
+        $result = $conn->query("SELECT DISTINCT vehicle_id FROM vehicle_pricing");
+        while ($row = $result->fetch_assoc()) {
+            $allVehicleIds[$row['vehicle_id']] = true;
+        }
+        
+        // 8. For each vehicle_id, ensure it exists in all tables
+        foreach (array_keys($allVehicleIds) as $vehicleId) {
+            // First get the best available data for this vehicle
+            $vehicleData = [
+                'name' => ucfirst(str_replace('_', ' ', $vehicleId)), // Default name
+                'capacity' => 4,
+                'luggage_capacity' => 2,
+                'base_price' => 0,
+                'price_per_km' => 0,
+                'night_halt_charge' => 700,
+                'driver_allowance' => 250,
+                'ac' => 1,
+                'image' => '/cars/sedan.png',
+                'amenities' => '["AC"]',
+                'description' => '',
+                'is_active' => 1
+            ];
+            
+            // Check if exists in vehicle_types and get data
+            $stmt = $conn->prepare("SELECT * FROM vehicle_types WHERE vehicle_id = ?");
+            $stmt->bind_param("s", $vehicleId);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            if ($result->num_rows > 0) {
+                $row = $result->fetch_assoc();
+                $vehicleData['name'] = $row['name'];
+                $vehicleData['capacity'] = $row['capacity'];
+                $vehicleData['luggage_capacity'] = $row['luggage_capacity'];
+                $vehicleData['base_price'] = $row['base_price'];
+                $vehicleData['price_per_km'] = $row['price_per_km'];
+                $vehicleData['night_halt_charge'] = $row['night_halt_charge'];
+                $vehicleData['driver_allowance'] = $row['driver_allowance'];
+                $vehicleData['ac'] = $row['ac'];
+                $vehicleData['image'] = $row['image'];
+                $vehicleData['amenities'] = $row['amenities'];
+                $vehicleData['description'] = $row['description'];
+                $vehicleData['is_active'] = $row['is_active'];
+            } else {
+                // If not in vehicle_types, check vehicles table
+                $stmt = $conn->prepare("SELECT * FROM vehicles WHERE vehicle_id = ?");
+                $stmt->bind_param("s", $vehicleId);
                 $stmt->execute();
                 $result = $stmt->get_result();
-                
-                // If no entry exists, create it
-                if ($result->num_rows === 0) {
-                    // Get vehicle base price and other details
-                    $vStmt = $conn->prepare("
-                        SELECT base_price, price_per_km, night_halt_charge, driver_allowance 
-                        FROM vehicle_types 
-                        WHERE vehicle_id = ?
-                    ");
-                    $vStmt->bind_param("s", $vehicleId);
-                    $vStmt->execute();
-                    $vResult = $vStmt->get_result();
-                    $vehicle = $vResult->fetch_assoc();
-                    
-                    // Use default values if not found
-                    if (!$vehicle) {
-                        $vehicle = [
-                            'base_price' => 0,
-                            'price_per_km' => 0,
-                            'night_halt_charge' => 700,
-                            'driver_allowance' => 250
-                        ];
-                    }
-                    
-                    $insertStmt = $conn->prepare("
-                        INSERT INTO vehicle_pricing 
-                        (vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance, base_price) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    ");
-                    $insertStmt->bind_param(
-                        "ssddddd", 
-                        $vehicleId, 
-                        $tripType, 
-                        $vehicle['base_price'], 
-                        $vehicle['price_per_km'], 
-                        $vehicle['night_halt_charge'], 
-                        $vehicle['driver_allowance'],
-                        $vehicle['base_price']
-                    );
-                    $insertStmt->execute();
+                if ($result->num_rows > 0) {
+                    $row = $result->fetch_assoc();
+                    $vehicleData['name'] = $row['name'];
+                    $vehicleData['capacity'] = $row['capacity'];
+                    $vehicleData['luggage_capacity'] = $row['luggage_capacity'];
+                    $vehicleData['base_price'] = $row['base_price'];
+                    $vehicleData['price_per_km'] = $row['price_per_km'];
+                    $vehicleData['night_halt_charge'] = $row['night_halt_charge'];
+                    $vehicleData['driver_allowance'] = $row['driver_allowance'];
+                    $vehicleData['ac'] = $row['ac'];
+                    $vehicleData['image'] = $row['image'];
+                    $vehicleData['amenities'] = $row['amenities'];
+                    $vehicleData['description'] = $row['description'];
+                    $vehicleData['is_active'] = $row['is_active'];
                 }
             }
-        }
-        
-        // Create outstation_fares table if it doesn't exist
-        $conn->query("
-            CREATE TABLE IF NOT EXISTS outstation_fares (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                vehicle_id VARCHAR(50) NOT NULL,
-                base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-                night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 700,
-                driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 250,
-                roundtrip_base_price DECIMAL(10,2) DEFAULT NULL,
-                roundtrip_price_per_km DECIMAL(5,2) DEFAULT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                UNIQUE KEY vehicle_id (vehicle_id)
-            )
-        ");
-        
-        // Create local_package_fares table if it doesn't exist
-        $conn->query("
-            CREATE TABLE IF NOT EXISTS local_package_fares (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                vehicle_id VARCHAR(50) NOT NULL,
-                price_4hrs_40km DECIMAL(10,2) NOT NULL DEFAULT 0,
-                price_8hrs_80km DECIMAL(10,2) NOT NULL DEFAULT 0,
-                price_10hrs_100km DECIMAL(10,2) NOT NULL DEFAULT 0,
-                price_extra_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-                price_extra_hour DECIMAL(5,2) NOT NULL DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                UNIQUE KEY vehicle_id (vehicle_id)
-            )
-        ");
-        
-        // Create airport_transfer_fares table if it doesn't exist
-        $conn->query("
-            CREATE TABLE IF NOT EXISTS airport_transfer_fares (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                vehicle_id VARCHAR(50) NOT NULL,
-                base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-                pickup_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                drop_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                tier1_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                tier2_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                tier3_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                tier4_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                extra_km_charge DECIMAL(5,2) NOT NULL DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                UNIQUE KEY vehicle_id (vehicle_id)
-            )
-        ");
-        
-        // Sync vehicle data to outstation_fares
-        foreach ($vehicleIds as $vehicleId) {
-            $stmt = $conn->prepare("
-                SELECT id FROM outstation_fares
-                WHERE vehicle_id = ?
-            ");
+            
+            // Check if pricing data exists in outstation_fares
+            $stmt = $conn->prepare("SELECT * FROM outstation_fares WHERE vehicle_id = ?");
             $stmt->bind_param("s", $vehicleId);
             $stmt->execute();
             $result = $stmt->get_result();
-            
-            // If no entry exists, create it
-            if ($result->num_rows === 0) {
-                // Get vehicle details
-                $vStmt = $conn->prepare("
-                    SELECT base_price, price_per_km, night_halt_charge, driver_allowance
-                    FROM vehicle_types
-                    WHERE vehicle_id = ?
-                ");
-                $vStmt->bind_param("s", $vehicleId);
-                $vStmt->execute();
-                $vResult = $vStmt->get_result();
-                $vehicle = $vResult->fetch_assoc();
-                
-                // Use default values if not found
-                if (!$vehicle) {
-                    $vehicle = [
-                        'base_price' => 0,
-                        'price_per_km' => 0,
-                        'night_halt_charge' => 700,
-                        'driver_allowance' => 250
-                    ];
+            if ($result->num_rows > 0) {
+                $row = $result->fetch_assoc();
+                // Only update pricing if not already set
+                if ($vehicleData['base_price'] == 0) {
+                    $vehicleData['base_price'] = $row['base_price'];
+                }
+                if ($vehicleData['price_per_km'] == 0) {
+                    $vehicleData['price_per_km'] = $row['price_per_km'];
+                }
+                if ($vehicleData['night_halt_charge'] == 0) {
+                    $vehicleData['night_halt_charge'] = $row['night_halt_charge'];
+                }
+                if ($vehicleData['driver_allowance'] == 0) {
+                    $vehicleData['driver_allowance'] = $row['driver_allowance'];
                 }
                 
-                $insertStmt = $conn->prepare("
-                    INSERT INTO outstation_fares 
-                    (vehicle_id, base_price, price_per_km, night_halt_charge, driver_allowance, 
-                     roundtrip_base_price, roundtrip_price_per_km) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                ");
-                $roundtripBasePrice = $vehicle['base_price'] * 0.95;
-                $roundtripPricePerKm = $vehicle['price_per_km'] * 0.9;
-                $insertStmt->bind_param(
-                    "sdddddd", 
-                    $vehicleId, 
-                    $vehicle['base_price'], 
-                    $vehicle['price_per_km'], 
-                    $vehicle['night_halt_charge'], 
-                    $vehicle['driver_allowance'],
-                    $roundtripBasePrice,
-                    $roundtripPricePerKm
-                );
-                $insertStmt->execute();
+                $outstation_fares_exists = true;
+                $outstation_base_price = $row['base_price'];
+                $outstation_price_per_km = $row['price_per_km'];
+                $outstation_night_halt = $row['night_halt_charge'];
+                $outstation_driver_allowance = $row['driver_allowance'];
+                $roundtrip_base_price = $row['roundtrip_base_price'];
+                $roundtrip_price_per_km = $row['roundtrip_price_per_km'];
+            } else {
+                $outstation_fares_exists = false;
+                // Default outstation pricing based on vehicle data
+                $outstation_base_price = $vehicleData['base_price'] > 0 ? $vehicleData['base_price'] : 3000;
+                $outstation_price_per_km = $vehicleData['price_per_km'] > 0 ? $vehicleData['price_per_km'] : 15;
+                $outstation_night_halt = $vehicleData['night_halt_charge'];
+                $outstation_driver_allowance = $vehicleData['driver_allowance'];
+                $roundtrip_base_price = $outstation_base_price * 0.95; // 5% discount
+                $roundtrip_price_per_km = $outstation_price_per_km * 0.9; // 10% discount
             }
-        }
-        
-        // Sync vehicle data to local_package_fares
-        foreach ($vehicleIds as $vehicleId) {
-            $stmt = $conn->prepare("
-                SELECT id FROM local_package_fares
-                WHERE vehicle_id = ?
-            ");
+            
+            // Check if pricing data exists in local_package_fares
+            $stmt = $conn->prepare("SELECT * FROM local_package_fares WHERE vehicle_id = ?");
             $stmt->bind_param("s", $vehicleId);
             $stmt->execute();
             $result = $stmt->get_result();
+            if ($result->num_rows > 0) {
+                $row = $result->fetch_assoc();
+                $local_fares_exists = true;
+                $price_4hrs_40km = $row['price_4hrs_40km'];
+                $price_8hrs_80km = $row['price_8hrs_80km'];
+                $price_10hrs_100km = $row['price_10hrs_100km'];
+                $price_extra_km = $row['price_extra_km'];
+                $price_extra_hour = $row['price_extra_hour'];
+            } else {
+                $local_fares_exists = false;
+                // Default local package pricing based on vehicle data
+                $price_4hrs_40km = $vehicleData['base_price'] > 0 ? $vehicleData['base_price'] * 0.4 : 1200;
+                $price_8hrs_80km = $vehicleData['base_price'] > 0 ? $vehicleData['base_price'] * 0.7 : 2200;
+                $price_10hrs_100km = $vehicleData['base_price'] > 0 ? $vehicleData['base_price'] * 0.9 : 2500;
+                $price_extra_km = $vehicleData['price_per_km'] > 0 ? $vehicleData['price_per_km'] : 14;
+                $price_extra_hour = $vehicleData['driver_allowance'] > 0 ? $vehicleData['driver_allowance'] : 250;
+            }
             
-            // If no entry exists, create it
-            if ($result->num_rows === 0) {
-                // Get vehicle details
-                $vStmt = $conn->prepare("
-                    SELECT base_price, price_per_km
-                    FROM vehicle_types
-                    WHERE vehicle_id = ?
-                ");
-                $vStmt->bind_param("s", $vehicleId);
-                $vStmt->execute();
-                $vResult = $vStmt->get_result();
-                $vehicle = $vResult->fetch_assoc();
+            // Check if pricing data exists in airport_transfer_fares
+            $stmt = $conn->prepare("SELECT * FROM airport_transfer_fares WHERE vehicle_id = ?");
+            $stmt->bind_param("s", $vehicleId);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            if ($result->num_rows > 0) {
+                $row = $result->fetch_assoc();
+                $airport_fares_exists = true;
+                $airport_base_price = $row['base_price'];
+                $airport_price_per_km = $row['price_per_km'];
+                $airport_pickup_price = $row['pickup_price'];
+                $airport_drop_price = $row['drop_price'];
+                $airport_tier1_price = $row['tier1_price'];
+                $airport_tier2_price = $row['tier2_price'];
+                $airport_tier3_price = $row['tier3_price'];
+                $airport_tier4_price = $row['tier4_price'];
+                $airport_extra_km_charge = $row['extra_km_charge'];
+            } else {
+                $airport_fares_exists = false;
+                // Default airport pricing based on vehicle data
+                $airport_base_price = $vehicleData['base_price'] > 0 ? $vehicleData['base_price'] * 1.2 : 3000;
+                $airport_price_per_km = $vehicleData['price_per_km'] > 0 ? $vehicleData['price_per_km'] * 1.1 : 18;
+                $airport_pickup_price = $vehicleData['base_price'] > 0 ? $vehicleData['base_price'] * 0.25 : 800;
+                $airport_drop_price = $airport_pickup_price;
+                $airport_tier1_price = $airport_pickup_price * 0.75;
+                $airport_tier2_price = $airport_pickup_price;
+                $airport_tier3_price = $airport_pickup_price * 1.25;
+                $airport_tier4_price = $airport_pickup_price * 1.5;
+                $airport_extra_km_charge = $vehicleData['price_per_km'] > 0 ? $vehicleData['price_per_km'] : 15;
+            }
+            
+            // Now ensure the vehicle exists in all tables
+            
+            // 1. Ensure it exists in vehicle_types
+            $stmt = $conn->prepare("
+                INSERT INTO vehicle_types (
+                    vehicle_id, name, capacity, luggage_capacity, 
+                    base_price, price_per_km, night_halt_charge, driver_allowance,
+                    ac, image, amenities, description, is_active
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    name = VALUES(name),
+                    capacity = VALUES(capacity),
+                    luggage_capacity = VALUES(luggage_capacity),
+                    base_price = VALUES(base_price),
+                    price_per_km = VALUES(price_per_km),
+                    night_halt_charge = VALUES(night_halt_charge),
+                    driver_allowance = VALUES(driver_allowance),
+                    ac = VALUES(ac),
+                    image = VALUES(image),
+                    amenities = VALUES(amenities),
+                    description = VALUES(description),
+                    is_active = VALUES(is_active),
+                    updated_at = CURRENT_TIMESTAMP
+            ");
+            $stmt->bind_param(
+                "ssiiddddisss", 
+                $vehicleId, 
+                $vehicleData['name'],
+                $vehicleData['capacity'],
+                $vehicleData['luggage_capacity'],
+                $vehicleData['base_price'],
+                $vehicleData['price_per_km'],
+                $vehicleData['night_halt_charge'],
+                $vehicleData['driver_allowance'],
+                $vehicleData['ac'],
+                $vehicleData['image'],
+                $vehicleData['amenities'],
+                $vehicleData['description'],
+                $vehicleData['is_active']
+            );
+            $stmt->execute();
+            
+            // 2. Also ensure it exists in vehicles table
+            $stmt = $conn->prepare("
+                INSERT INTO vehicles (
+                    vehicle_id, name, capacity, luggage_capacity, 
+                    base_price, price_per_km, night_halt_charge, driver_allowance,
+                    ac, image, amenities, description, is_active
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    name = VALUES(name),
+                    capacity = VALUES(capacity),
+                    luggage_capacity = VALUES(luggage_capacity),
+                    base_price = VALUES(base_price),
+                    price_per_km = VALUES(price_per_km),
+                    night_halt_charge = VALUES(night_halt_charge),
+                    driver_allowance = VALUES(driver_allowance),
+                    ac = VALUES(ac),
+                    image = VALUES(image),
+                    amenities = VALUES(amenities),
+                    description = VALUES(description),
+                    is_active = VALUES(is_active),
+                    updated_at = CURRENT_TIMESTAMP
+            ");
+            $stmt->bind_param(
+                "ssiiddddisss", 
+                $vehicleId, 
+                $vehicleData['name'],
+                $vehicleData['capacity'],
+                $vehicleData['luggage_capacity'],
+                $vehicleData['base_price'],
+                $vehicleData['price_per_km'],
+                $vehicleData['night_halt_charge'],
+                $vehicleData['driver_allowance'],
+                $vehicleData['ac'],
+                $vehicleData['image'],
+                $vehicleData['amenities'],
+                $vehicleData['description'],
+                $vehicleData['is_active']
+            );
+            $stmt->execute();
+            
+            // 3. Ensure it exists in outstation_fares
+            $stmt = $conn->prepare("
+                INSERT INTO outstation_fares (
+                    vehicle_id, base_price, price_per_km, 
+                    night_halt_charge, driver_allowance,
+                    roundtrip_base_price, roundtrip_price_per_km
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    base_price = VALUES(base_price),
+                    price_per_km = VALUES(price_per_km),
+                    night_halt_charge = VALUES(night_halt_charge),
+                    driver_allowance = VALUES(driver_allowance),
+                    roundtrip_base_price = VALUES(roundtrip_base_price),
+                    roundtrip_price_per_km = VALUES(roundtrip_price_per_km),
+                    updated_at = CURRENT_TIMESTAMP
+            ");
+            $stmt->bind_param(
+                "sdddddd", 
+                $vehicleId, 
+                $outstation_base_price,
+                $outstation_price_per_km,
+                $outstation_night_halt,
+                $outstation_driver_allowance,
+                $roundtrip_base_price,
+                $roundtrip_price_per_km
+            );
+            $stmt->execute();
+            
+            // 4. Ensure it exists in local_package_fares
+            $stmt = $conn->prepare("
+                INSERT INTO local_package_fares (
+                    vehicle_id, price_4hrs_40km, price_8hrs_80km, 
+                    price_10hrs_100km, price_extra_km, price_extra_hour
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    price_4hrs_40km = VALUES(price_4hrs_40km),
+                    price_8hrs_80km = VALUES(price_8hrs_80km),
+                    price_10hrs_100km = VALUES(price_10hrs_100km),
+                    price_extra_km = VALUES(price_extra_km),
+                    price_extra_hour = VALUES(price_extra_hour),
+                    updated_at = CURRENT_TIMESTAMP
+            ");
+            $stmt->bind_param(
+                "sddddd", 
+                $vehicleId, 
+                $price_4hrs_40km,
+                $price_8hrs_80km,
+                $price_10hrs_100km,
+                $price_extra_km,
+                $price_extra_hour
+            );
+            $stmt->execute();
+            
+            // 5. Ensure it exists in airport_transfer_fares
+            $stmt = $conn->prepare("
+                INSERT INTO airport_transfer_fares (
+                    vehicle_id, base_price, price_per_km, pickup_price, drop_price,
+                    tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    base_price = VALUES(base_price),
+                    price_per_km = VALUES(price_per_km),
+                    pickup_price = VALUES(pickup_price),
+                    drop_price = VALUES(drop_price),
+                    tier1_price = VALUES(tier1_price),
+                    tier2_price = VALUES(tier2_price),
+                    tier3_price = VALUES(tier3_price),
+                    tier4_price = VALUES(tier4_price),
+                    extra_km_charge = VALUES(extra_km_charge),
+                    updated_at = CURRENT_TIMESTAMP
+            ");
+            $stmt->bind_param(
+                "sddddddddd", 
+                $vehicleId, 
+                $airport_base_price,
+                $airport_price_per_km,
+                $airport_pickup_price,
+                $airport_drop_price,
+                $airport_tier1_price,
+                $airport_tier2_price,
+                $airport_tier3_price,
+                $airport_tier4_price,
+                $airport_extra_km_charge
+            );
+            $stmt->execute();
+            
+            // 6. Ensure entries in vehicle_pricing for each trip type
+            $tripTypes = ['outstation', 'local', 'airport'];
+            
+            foreach ($tripTypes as $tripType) {
+                $basePrice = 0;
+                $pricePerKm = 0;
+                $nightHalt = $vehicleData['night_halt_charge'];
+                $driverAllowance = $vehicleData['driver_allowance'];
+                $extraKmCharge = 0;
+                $extraHourCharge = 0;
+                $localPackage4hr = 0;
+                $localPackage8hr = 0;
+                $localPackage10hr = 0;
+                $airportBasePrice = 0;
                 
-                // Use default values if not found
-                if (!$vehicle) {
-                    $vehicle = [
-                        'base_price' => 0,
-                        'price_per_km' => 0
-                    ];
+                if ($tripType === 'outstation') {
+                    $basePrice = $outstation_base_price;
+                    $pricePerKm = $outstation_price_per_km;
+                } else if ($tripType === 'local') {
+                    $basePrice = $price_10hrs_100km;
+                    $pricePerKm = $price_extra_km;
+                    $extraKmCharge = $price_extra_km;
+                    $extraHourCharge = $price_extra_hour;
+                    $localPackage4hr = $price_4hrs_40km;
+                    $localPackage8hr = $price_8hrs_80km;
+                    $localPackage10hr = $price_10hrs_100km;
+                } else if ($tripType === 'airport') {
+                    $basePrice = $airport_base_price;
+                    $pricePerKm = $airport_price_per_km;
+                    $airportBasePrice = $airport_base_price;
                 }
                 
-                $price4hrs40km = $vehicle['base_price'] > 0 ? $vehicle['base_price'] * 0.5 : 1200;
-                $price8hrs80km = $vehicle['base_price'] > 0 ? $vehicle['base_price'] * 0.8 : 2200;
-                $price10hrs100km = $vehicle['base_price'] > 0 ? $vehicle['base_price'] : 2500;
-                $priceExtraKm = $vehicle['price_per_km'] > 0 ? $vehicle['price_per_km'] : 14;
-                $priceExtraHour = 250;
-                
-                $insertStmt = $conn->prepare("
-                    INSERT INTO local_package_fares
-                    (vehicle_id, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                $stmt = $conn->prepare("
+                    INSERT INTO vehicle_pricing (
+                        vehicle_id, trip_type, base_fare, price_per_km, 
+                        night_halt_charge, driver_allowance, base_price,
+                        extra_km_charge, extra_hour_charge, 
+                        local_package_4hr, local_package_8hr, local_package_10hr,
+                        airport_base_price
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE
+                        base_fare = VALUES(base_fare),
+                        price_per_km = VALUES(price_per_km),
+                        night_halt_charge = VALUES(night_halt_charge),
+                        driver_allowance = VALUES(driver_allowance),
+                        base_price = VALUES(base_price),
+                        extra_km_charge = VALUES(extra_km_charge),
+                        extra_hour_charge = VALUES(extra_hour_charge),
+                        local_package_4hr = VALUES(local_package_4hr),
+                        local_package_8hr = VALUES(local_package_8hr),
+                        local_package_10hr = VALUES(local_package_10hr),
+                        airport_base_price = VALUES(airport_base_price),
+                        updated_at = CURRENT_TIMESTAMP
                 ");
-                $insertStmt->bind_param(
-                    "sddddd",
+                $stmt->bind_param(
+                    "ssdddddddddd", 
                     $vehicleId,
-                    $price4hrs40km,
-                    $price8hrs80km,
-                    $price10hrs100km,
-                    $priceExtraKm,
-                    $priceExtraHour
+                    $tripType,
+                    $basePrice,
+                    $pricePerKm,
+                    $nightHalt,
+                    $driverAllowance,
+                    $basePrice,
+                    $extraKmCharge,
+                    $extraHourCharge,
+                    $localPackage4hr,
+                    $localPackage8hr,
+                    $localPackage10hr,
+                    $airportBasePrice
                 );
-                $insertStmt->execute();
+                $stmt->execute();
             }
-        }
-        
-        // Sync vehicle data to airport_transfer_fares
-        foreach ($vehicleIds as $vehicleId) {
-            $stmt = $conn->prepare("
-                SELECT id FROM airport_transfer_fares
-                WHERE vehicle_id = ?
-            ");
-            $stmt->bind_param("s", $vehicleId);
-            $stmt->execute();
-            $result = $stmt->get_result();
             
-            // If no entry exists, create it
-            if ($result->num_rows === 0) {
-                // Get vehicle details
-                $vStmt = $conn->prepare("
-                    SELECT base_price, price_per_km
-                    FROM vehicle_types
-                    WHERE vehicle_id = ?
-                ");
-                $vStmt->bind_param("s", $vehicleId);
-                $vStmt->execute();
-                $vResult = $vStmt->get_result();
-                $vehicle = $vResult->fetch_assoc();
-                
-                // Use default values if not found
-                if (!$vehicle) {
-                    $vehicle = [
-                        'base_price' => 0,
-                        'price_per_km' => 0
-                    ];
-                }
-                
-                $airportBasePrice = $vehicle['base_price'] > 0 ? $vehicle['base_price'] * 0.7 : 3000;
-                $airportPricePerKm = $vehicle['price_per_km'] > 0 ? $vehicle['price_per_km'] : 15;
-                $pickupPrice = $vehicle['base_price'] > 0 ? $vehicle['base_price'] * 0.2 : 800;
-                $dropPrice = $pickupPrice;
-                $tier1Price = $pickupPrice * 0.75;
-                $tier2Price = $pickupPrice;
-                $tier3Price = $pickupPrice * 1.25;
-                $tier4Price = $pickupPrice * 1.5;
-                $extraKmCharge = $airportPricePerKm;
-                
-                $insertStmt = $conn->prepare("
-                    INSERT INTO airport_transfer_fares
-                    (vehicle_id, base_price, price_per_km, pickup_price, drop_price,
-                    tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ");
-                $insertStmt->bind_param(
-                    "sddddddddd",
-                    $vehicleId,
-                    $airportBasePrice,
-                    $airportPricePerKm,
-                    $pickupPrice,
-                    $dropPrice,
-                    $tier1Price,
-                    $tier2Price,
-                    $tier3Price,
-                    $tier4Price,
-                    $extraKmCharge
-                );
-                $insertStmt->execute();
-            }
+            $response['details']['vehicles_synced'][] = $vehicleId;
         }
         
         // Commit the transaction
         $conn->commit();
         
         // Return success response
-        echo json_encode([
-            'status' => 'success',
-            'message' => 'Vehicle tables created and fixed successfully',
-            'tables_created' => ['vehicles', 'vehicle_types', 'vehicle_pricing', 'outstation_fares', 'local_package_fares', 'airport_transfer_fares'],
-            'columns_added' => $columns,
-            'vehicles_synced' => $vehicleIds
-        ]);
-        
+        echo json_encode($response);
     } catch (Exception $e) {
-        // Rollback the transaction on error
+        // Rollback on error
         $conn->rollback();
         throw $e;
     }
-    
 } catch (Exception $e) {
-    // Log and return error response
-    error_log("Error fixing vehicle tables: " . $e->getMessage());
+    // Log error
+    error_log("Error fixing database: " . $e->getMessage());
+    
+    // Send error response
     http_response_code(500);
     echo json_encode([
         'status' => 'error',
-        'message' => 'Failed to fix vehicle tables: ' . $e->getMessage()
+        'message' => $e->getMessage(),
+        'file' => basename(__FILE__),
+        'line' => $e->getLine(),
+        'trace' => $e->getTraceAsString()
     ]);
 }
