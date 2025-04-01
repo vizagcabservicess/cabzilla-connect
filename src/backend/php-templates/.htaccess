@@ -1,71 +1,76 @@
 # Enable rewrite engine
 RewriteEngine On
 
-# Set the base for relative path references
-# RewriteBase /
-
-# CORS handling for all HTTP methods
+# -- ULTRA PRIORITY: CORS PREFLIGHT OPTIONS HANDLING --
+# Always allow OPTIONS preflight requests - THIS MUST BE BEFORE ALL OTHER RULES
 <IfModule mod_headers.c>
-    # Set CORS headers for ALL requests
+    # Unconditionally set CORS headers for ALL requests
     Header always set Access-Control-Allow-Origin "*"
-    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS, PATCH"
     Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh, X-Admin-Mode, *"
     Header always set Access-Control-Max-Age "86400"
     Header always set Access-Control-Expose-Headers "*"
+    Header always set X-CORS-Summary "Enabled by htaccess at 2000+ level"
+    Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0, pre-check=0, post-check=0"
+    Header always set Pragma "no-cache"
+    Header always set Expires "-1"
 
-    # CRITICAL: Handle OPTIONS preflight requests
+    # CRITICAL: For OPTIONS requests, return 200 immediately with cors headers
     <If "%{REQUEST_METHOD} == 'OPTIONS'">
         Header always set Status "200 OK"
-        Header always set Access-Control-Allow-Origin "*"
-        Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-        Header always set Access-Control-Allow-Headers "*"
-        Header always set Content-Length "0"
         Header always set Content-Type "text/plain"
+        Header always set Content-Length "0"
     </If>
 </IfModule>
 
-# Added: CRITICAL FIX - Handle OPTIONS preflight with absolute highest priority
+# -- CRITICAL OPTIONS REQUEST HANDLING --
+# Kill all OPTIONS requests immediately with 200 OK - VERY HIGH PRIORITY
 RewriteCond %{REQUEST_METHOD} OPTIONS
-RewriteRule ^api/ [R=200,L]
+RewriteRule .* - [R=200,L]
 
-# CORS Fix endpoint - highest priority
+# -- DIRECT CORS FIXER ENDPOINT (HIGHEST PRIORITY) --
+# This must be before any other rules
 RewriteRule ^api/fix-cors$ api/admin/fix-cors.php [L,QSA]
 RewriteRule ^api/fix-cors\.php$ api/admin/fix-cors.php [L,QSA]
 RewriteRule ^api/admin/fix-cors$ api/admin/fix-cors.php [L,QSA]
 RewriteRule ^api/admin/fix-cors\.php$ api/admin/fix-cors.php [L,QSA]
 
-# Ensure API requests go directly to PHP files
-RewriteRule ^api/ - [L]
+# -- ENHANCED VEHICLE DATA ENDPOINT (HIGH PRIORITY) --
+RewriteRule ^api/vehicles-data$ api/vehicles-data.php [L,QSA]
+RewriteRule ^api/vehicles-data\.php$ api/vehicles-data.php [L,QSA]
 
-# Highest priority routes - database initialization and direct updates
-RewriteRule ^api/init-database$ api/admin/init-database.php [L,QSA] 
+# -- DIRECT VEHICLE MANAGEMENT ENDPOINTS (HIGH PRIORITY) --
+RewriteRule ^api/direct-vehicle-create$ api/admin/direct-vehicle-create.php [L,QSA]
+RewriteRule ^api/direct-vehicle-create\.php$ api/admin/direct-vehicle-create.php [L,QSA]
+RewriteRule ^api/admin/direct-vehicle-create$ api/admin/direct-vehicle-create.php [L,QSA]
+RewriteRule ^api/admin/direct-vehicle-create\.php$ api/admin/direct-vehicle-create.php [L,QSA]
+
+# Direct vehicle update endpoints
+RewriteRule ^api/direct-vehicle-update$ api/admin/direct-vehicle-update.php [L,QSA]
+RewriteRule ^api/direct-vehicle-update\.php$ api/admin/direct-vehicle-update.php [L,QSA]
+RewriteRule ^api/admin/direct-vehicle-update$ api/admin/direct-vehicle-update.php [L,QSA]
+RewriteRule ^api/admin/direct-vehicle-update\.php$ api/admin/direct-vehicle-update.php [L,QSA]
+
+# Direct vehicle deletion endpoints
+RewriteRule ^api/direct-vehicle-delete(/.*)?$ api/admin/direct-vehicle-delete.php [L,QSA]
+RewriteRule ^api/direct-vehicle-delete\.php(/.*)?$ api/admin/direct-vehicle-delete.php [L,QSA]
+RewriteRule ^api/admin/direct-vehicle-delete(/.*)?$ api/admin/direct-vehicle-delete.php [L,QSA]
+RewriteRule ^api/admin/direct-vehicle-delete\.php(/.*)?$ api/admin/direct-vehicle-delete.php [L,QSA]
+
+# -- DATABASE SETUP AND MAINTENANCE ENDPOINTS (HIGH PRIORITY) --
+RewriteRule ^api/init-database$ api/admin/init-database.php [L,QSA]
 RewriteRule ^api/init-database\.php$ api/admin/init-database.php [L,QSA]
 RewriteRule ^api/admin/init-database$ api/admin/init-database.php [L,QSA]
 RewriteRule ^api/admin/init-database\.php$ api/admin/init-database.php [L,QSA]
 
-# Direct endpoint for vehicle creation - highest priority
-RewriteRule ^api/admin/direct-vehicle-create$ api/admin/direct-vehicle-create.php [QSA,L]
-RewriteRule ^api/admin/direct-vehicle-create\.php$ api/admin/direct-vehicle-create.php [QSA,L]
-RewriteRule ^api/direct-vehicle-create$ api/admin/direct-vehicle-create.php [QSA,L]
-RewriteRule ^api/vehicle-create$ api/admin/direct-vehicle-create.php [QSA,L]
+# Fix vehicle tables endpoint
+RewriteRule ^api/fix-vehicle-tables$ api/admin/fix-vehicle-tables.php [L,QSA]
+RewriteRule ^api/fix-vehicle-tables\.php$ api/admin/fix-vehicle-tables.php [L,QSA]
+RewriteRule ^api/admin/fix-vehicle-tables$ api/admin/fix-vehicle-tables.php [L,QSA]
+RewriteRule ^api/admin/fix-vehicle-tables\.php$ api/admin/fix-vehicle-tables.php [L,QSA]
 
-# Direct endpoint for vehicle deletion - highest priority (with improved patterns)
-RewriteRule ^api/admin/direct-vehicle-delete(/.*)?$ api/admin/direct-vehicle-delete.php [QSA,L]
-RewriteRule ^api/admin/direct-vehicle-delete\.php(/.*)?$ api/admin/direct-vehicle-delete.php [QSA,L]
-RewriteRule ^api/direct-vehicle-delete(/.*)?$ api/admin/direct-vehicle-delete.php [QSA,L]
-RewriteRule ^api/vehicle-delete(/.*)?$ api/admin/direct-vehicle-delete.php [QSA,L]
-RewriteRule ^api/admin/vehicles/delete(/.*)?$ api/admin/direct-vehicle-delete.php [QSA,L]
-RewriteRule ^api/admin/vehicle/delete(/.*)?$ api/admin/direct-vehicle-delete.php [QSA,L]
-
-# Direct endpoint for vehicle update - highest priority 
-RewriteRule ^api/admin/direct-vehicle-update$ api/admin/direct-vehicle-update.php [QSA,L]
-RewriteRule ^api/admin/direct-vehicle-update\.php$ api/admin/direct-vehicle-update.php [QSA,L]
-RewriteRule ^api/direct-vehicle-update$ api/admin/direct-vehicle-update.php [QSA,L]
-RewriteRule ^api/vehicles-update$ api/admin/direct-vehicle-update.php [QSA,L]
-RewriteRule ^api/admin/vehicles-update$ api/admin/direct-vehicle-update.php [QSA,L]
-RewriteRule ^api/admin/vehicles-update\.php$ api/admin/direct-vehicle-update.php [QSA,L]
-
-# New! Ensure vehicles-data.php is accessible for vehicle sync
+# -- STANDARD API ROUTES --
+# Regular API routes fall through to here after the priority rules above
 RewriteRule ^api/fares/vehicles-data$ api/fares/vehicles-data.php [QSA,L]
 RewriteRule ^api/fares/vehicles-data\.php$ api/fares/vehicles-data.php [QSA,L]
 RewriteRule ^api/vehicles-data$ api/fares/vehicles-data.php [QSA,L]

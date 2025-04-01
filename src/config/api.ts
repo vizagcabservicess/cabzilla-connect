@@ -2,26 +2,25 @@
 // Base API URL configuration
 export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
 
-// CORS proxy settings - ENHANCED TO PREVENT ISSUES
-const useCorsProxy = true; // Always use CORS proxy regardless of env setting
-export const corsProxyUrl = 'https://corsproxy.io/?'; // Hardcoded for reliability
+// CORS proxy settings - ULTRA ENHANCED VERSION
+const corsProxyUrl = 'https://corsproxy.io/?'; // Hardcoded for maximum reliability
 
-// Function to get properly formatted URL with CORS proxy if needed
+// Function to get properly formatted URL with CORS proxy ALWAYS enabled
 export function getApiUrl(endpoint: string): string {
   // Clean any double slashes in the URL
   let fullUrl = endpoint.startsWith('http') ? endpoint : `${apiBaseUrl}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
   
-  // Always apply CORS proxy for maximum compatibility
+  // CRITICAL: Always apply CORS proxy - no conditional logic
   const finalUrl = `${corsProxyUrl}${encodeURIComponent(fullUrl)}`;
   
   // Add debug info to console
-  console.log(`API URL: ${finalUrl} (CORS proxy: enabled)`);
+  console.log(`API URL: ${finalUrl} (CORS proxy: enforced)`);
   
   return finalUrl;
 }
 
 // Increase default timeout for stability
-export const apiTimeout = 45000;
+export const apiTimeout = 60000; // 60 seconds for maximum reliability
 
 // Enhanced default headers with additional CORS support
 export const defaultHeaders = {
@@ -31,14 +30,14 @@ export const defaultHeaders = {
   'Expires': '0',
   'Origin': window.location.origin,
   'X-Requested-With': 'XMLHttpRequest',
-  // Add additional headers to help with CORS
   'Accept': '*/*',
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS'
+  'X-Force-Refresh': 'true',
+  'X-CORS-Bypass': 'true'
 };
 
 // Force refresh headers
 export const forceRefreshHeaders = {
   ...defaultHeaders,
-  'X-Force-Refresh': 'true'
+  'X-Force-Refresh': 'true',
+  'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0'
 };

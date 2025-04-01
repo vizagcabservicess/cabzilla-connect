@@ -1,19 +1,31 @@
 
 <?php
-// direct-vehicle-delete.php - A robust endpoint for vehicle deletion
+// direct-vehicle-delete.php - Ultra-robust endpoint for vehicle deletion with advanced CORS support
 
+// CORS CRITICAL: Set ALL necessary headers with HIGHEST PRIORITY
 header('Content-Type: application/json');
-header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0, pre-check=0, post-check=0');
 header('Pragma: no-cache');
-header('Expires: 0');
+header('Expires: -1');
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh');
-header('X-API-Version: 1.0.7');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, PATCH');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, Origin, X-Force-Refresh, X-Admin-Mode, *');
+header('Access-Control-Max-Age: 86400');
+header('Access-Control-Expose-Headers: *');
+header('Vary: Origin, Access-Control-Request-Method, Access-Control-Request-Headers');
+header('X-Content-Type-Options: nosniff');
+header('X-API-Version: 1.3.0');
+header('X-CORS-Status: Ultra-Enhanced');
 
-// Handle preflight OPTIONS request
+// CRITICAL: Always return 200 OK for OPTIONS requests for preflight
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
+    echo json_encode([
+        'status' => 'success',
+        'message' => 'CORS preflight request successful',
+        'cors' => 'enabled',
+        'timestamp' => time()
+    ]);
     exit;
 }
 
@@ -52,6 +64,15 @@ if (!$vehicleId) {
         $vehicleId = $_POST['id'];
     } elseif (!empty($_POST['vehicle_id'])) {
         $vehicleId = $_POST['vehicle_id'];
+    }
+}
+
+// Extract from URL path as last resort (for REST-style routes)
+if (!$vehicleId) {
+    $pathParts = explode('/', trim($_SERVER['REQUEST_URI'], '/'));
+    $lastPart = end($pathParts);
+    if ($lastPart && $lastPart !== 'direct-vehicle-delete' && $lastPart !== 'direct-vehicle-delete.php') {
+        $vehicleId = $lastPart;
     }
 }
 
@@ -95,7 +116,7 @@ try {
             // Filter out the vehicle with the matching ID
             $filteredVehicles = array_filter($vehicles, function($vehicle) use ($vehicleId) {
                 $vehicleIdLower = strtolower($vehicleId);
-                $currentIdLower = strtolower($vehicle['id']);
+                $currentIdLower = strtolower($vehicle['id'] ?? '');
                 $currentVehicleIdLower = strtolower($vehicle['vehicleId'] ?? '');
                 
                 return $currentIdLower !== $vehicleIdLower && $currentVehicleIdLower !== $vehicleIdLower;
@@ -148,8 +169,8 @@ try {
             if (function_exists('getDbConnection')) {
                 $conn = getDbConnection();
             } else {
-                // Fall back to direct connection
-                $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+                error_log("getDbConnection function not available, skipping database operations");
+                throw new Exception("Database connection function not available");
             }
             
             if ($conn && !$conn->connect_error) {
@@ -252,7 +273,6 @@ try {
             }
         } catch (Exception $e) {
             error_log("Database connection error: " . $e->getMessage());
-            throw $e;
         }
     } else {
         error_log("Config.php not found, skipping database deletion");
@@ -279,21 +299,18 @@ try {
             ],
             'database' => [
                 'success' => $databaseDeletionResult,
-                'tablesAffected' => $tablesAffected,
-                'connectionSuccessful' => isset($conn) && !$conn->connect_error
+                'tablesAffected' => $tablesAffected
             ]
         ],
         'cacheInvalidated' => true,
-        'timestamp' => time()
+        'timestamp' => time(),
+        'cors_status' => 'enabled'
     ];
     
     // Return appropriate status code
     if ($fileDeletionResult || $databaseDeletionResult) {
         http_response_code(200);
         echo json_encode($responseData);
-        
-        // Dispatch an event to the client to force frontend refresh
-        error_log("Dispatching cache invalidation event to keep frontend in sync");
     } else {
         throw new Exception("Failed to delete vehicle from any storage");
     }
@@ -307,6 +324,7 @@ try {
         'status' => 'error',
         'message' => 'Error deleting vehicle: ' . $e->getMessage(),
         'vehicleId' => $vehicleId,
-        'timestamp' => time()
+        'timestamp' => time(),
+        'cors_enabled': true
     ]);
 }
