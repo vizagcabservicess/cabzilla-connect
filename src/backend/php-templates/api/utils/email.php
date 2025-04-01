@@ -317,7 +317,7 @@ HTML;
             <div class="contact">
                 <p>If you have any questions or need to modify your booking, please contact our customer support:</p>
                 <p>Phone: +91 9966363662</p>
-                <p>Email: info@vizagtaxihub.com</p>
+                <p>Email: info@vizagup.com</p>
             </div>
             
             <div class="footer">
@@ -509,7 +509,7 @@ HTML;
             
             <div class="admin-action">
                 <p><strong>Admin Action Required:</strong> Please assign a driver to this booking and update the status in the admin dashboard.</p>
-                <a href="https://saddlebrown-oryx-227656.hostingersite.com/admin" class="button">Go to Admin Dashboard</a>
+                <a href="https://vizagup.com/admin" class="button">Go to Admin Dashboard</a>
             </div>
             
             <div class="footer">
