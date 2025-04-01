@@ -1,5 +1,6 @@
+
 import { CabType } from '@/types/cab';
-import { apiBaseUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
+import { apiBaseUrl, defaultHeaders, forceRefreshHeaders, getApiUrl } from '@/config/api';
 import { getBypassHeaders, getForcedRequestConfig, formatDataForMultipart } from '@/config/requestConfig';
 import { directVehicleOperation } from '@/utils/apiHelper';
 
@@ -29,8 +30,8 @@ export const createVehicle = async (vehicleData: CabType): Promise<CabType> => {
     // Force creation flag
     formData.append('forceCreate', 'true');
     
-    // Call the API
-    const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-create.php`, {
+    // Call the API using the getApiUrl function
+    const response = await fetch(getApiUrl('/api/admin/direct-vehicle-create.php'), {
       method: 'POST',
       body: formData,
       headers: getBypassHeaders()
@@ -148,7 +149,7 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
     try {
       console.log(`Vehicle update attempt using direct-vehicle-update.php`);
       
-      response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-update.php`, {
+      response = await fetch(getApiUrl('/api/admin/direct-vehicle-update.php'), {
         method: 'POST',
         body: formData,
         headers: getBypassHeaders()
@@ -186,7 +187,7 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
       
       // Try alternate endpoint
       try {
-        response = await fetch(`${apiBaseUrl}/api/fares/update-vehicle.php`, {
+        response = await fetch(getApiUrl('/api/fares/update-vehicle.php'), {
           method: 'POST',
           body: formData,
           headers: getBypassHeaders()

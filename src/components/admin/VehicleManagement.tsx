@@ -1,8 +1,9 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Loader2, Plus, RefreshCw, Search, Wrench } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Wrench } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { VehicleCard } from "./VehicleCard";
 import { CabType } from "@/types/cab";
@@ -10,7 +11,7 @@ import { AddVehicleDialog } from "./AddVehicleDialog";
 import { EditVehicleDialog } from "./EditVehicleDialog";
 import { getVehicleData, clearVehicleDataCache } from "@/services/vehicleDataService";
 import { Skeleton } from "@/components/ui/skeleton";
-import { apiBaseUrl } from '@/config/api';
+import { apiBaseUrl, getApiUrl } from '@/config/api';
 
 export default function VehicleManagement() {
   const [isLoading, setIsLoading] = useState(true);
@@ -28,7 +29,7 @@ export default function VehicleManagement() {
     setIsFixingDb(true);
     
     try {
-      const response = await fetch(`${apiBaseUrl}/api/admin/fix-vehicle-tables.php`);
+      const response = await fetch(getApiUrl('/api/admin/fix-vehicle-tables.php'));
       const data = await response.json();
       
       if (data.status === 'success') {
@@ -214,6 +215,8 @@ export default function VehicleManagement() {
     vehicle.id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (vehicle.description && vehicle.description.toLowerCase().includes(searchQuery.toLowerCase()))
   );
+
+  // The duplicate fixDatabase function was removed here
 
   return (
     <div className="space-y-4">
