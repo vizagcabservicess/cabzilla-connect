@@ -63,4 +63,3 @@ export const checkApiAvailability = async (): Promise<boolean> => {
     return false;
   }
 };
-

@@ -28,7 +28,6 @@ export default function VehicleManagement() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [apiAvailable, setApiAvailable] = useState<boolean | null>(null);
 
-  // Check API availability on load
   useEffect(() => {
     const checkApi = async () => {
       const isAvailable = await checkApiAvailability();
@@ -46,7 +45,6 @@ export default function VehicleManagement() {
     setErrorMessage(null);
     
     try {
-      // First check if API is available
       const isAvailable = await checkApiAvailability();
       if (!isAvailable) {
         throw new Error("API server is unreachable. Cannot fix database.");
@@ -58,7 +56,7 @@ export default function VehicleManagement() {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'X-Force-Refresh': 'true'
         },
-        signal: AbortSignal.timeout(15000) // 15 second timeout
+        signal: AbortSignal.timeout(15000)
       });
       
       if (!response.ok) {
@@ -79,14 +77,12 @@ export default function VehicleManagement() {
       toast.error("Failed to fix database tables. Using local data.");
       setErrorMessage("Network or server error while fixing database tables. Using local data.");
       
-      // Load local data
       await loadVehiclesFromLocal();
     } finally {
       setIsFixingDb(false);
     }
   };
 
-  // Separate function to load from local JSON
   const loadVehiclesFromLocal = async () => {
     try {
       const response = await fetch(`/data/vehicles.json?_t=${Date.now()}`);
@@ -108,7 +104,6 @@ export default function VehicleManagement() {
   };
 
   const loadVehicles = useCallback(async () => {
-    // Prevent excessive refreshing
     const now = Date.now();
     if (now - lastRefreshTime < 2000 && lastRefreshTime !== 0) {
       console.log("Refresh throttled, skipping...");
@@ -121,13 +116,11 @@ export default function VehicleManagement() {
       setErrorMessage(null);
       console.log("Admin: Fetching all vehicles...");
       
-      // First check API availability
       const isAvailable = await checkApiAvailability();
       setApiAvailable(isAvailable);
       
       let fetchedVehicles;
       if (isAvailable) {
-        // Try to get vehicles from API
         try {
           fetchedVehicles = await getVehicleData(true, true);
           console.log(`Loaded ${fetchedVehicles.length} vehicles for admin view:`, fetchedVehicles);
@@ -141,7 +134,6 @@ export default function VehicleManagement() {
       }
       
       if (fetchedVehicles && fetchedVehicles.length > 0) {
-        // Process the vehicles received from API
         const deduplicatedVehicles: Record<string, CabType> = {};
         
         fetchedVehicles.forEach(vehicle => {
@@ -188,7 +180,6 @@ export default function VehicleManagement() {
         clearVehicleDataCache();
         setRetryCount(prev => prev + 1);
         
-        // Fall back to local JSON data
         console.log("Falling back to local JSON data...");
         await loadVehiclesFromLocal();
       } else {
@@ -202,7 +193,6 @@ export default function VehicleManagement() {
       toast.error("Failed to load vehicles. Using local data.");
       
       try {
-        // First try to recover from localStorage
         const cachedVehiclesString = localStorage.getItem('cachedVehicles');
         if (cachedVehiclesString) {
           const cachedVehicles = JSON.parse(cachedVehiclesString);
@@ -213,7 +203,6 @@ export default function VehicleManagement() {
           }
         }
         
-        // If that fails, load from local JSON
         return await loadVehiclesFromLocal();
       } catch (cacheError) {
         console.error("Error recovering from cache:", cacheError);
@@ -265,7 +254,6 @@ export default function VehicleManagement() {
     }
     toast.success(`Vehicle ${newVehicle.name} added successfully`);
     
-    // Update localStorage cache to avoid needing API calls
     try {
       const updatedVehicles = [...vehicles, newVehicle];
       localStorage.setItem('cachedVehicles', JSON.stringify(updatedVehicles));
@@ -295,7 +283,6 @@ export default function VehicleManagement() {
     
     toast.success(`Vehicle ${updatedVehicle.name} updated successfully`);
     
-    // Update localStorage cache to avoid needing API calls
     try {
       const updatedVehicles = vehicles.map(vehicle => 
         vehicle.id === updatedVehicle.id ? { ...vehicle, ...updatedVehicle } : vehicle
@@ -318,7 +305,6 @@ export default function VehicleManagement() {
     setVehicles((prev) => prev.filter((vehicle) => vehicle.id !== vehicleId));
     toast.success("Vehicle deleted successfully");
     
-    // Update localStorage cache to avoid needing API calls
     try {
       const updatedVehicles = vehicles.filter(vehicle => vehicle.id !== vehicleId);
       localStorage.setItem('cachedVehicles', JSON.stringify(updatedVehicles));
