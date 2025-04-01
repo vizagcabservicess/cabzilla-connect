@@ -88,22 +88,47 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
   try {
     console.log('Updating vehicle:', vehicle);
     
+    // CRITICAL: Preserve isActive status, don't convert to default values
+    const isActive = typeof vehicle.isActive === 'boolean' ? vehicle.isActive : true;
+    
     // Normalize vehicle ID before sending
     const normalizedVehicle = {
       ...vehicle,
       id: normalizeVehicleId(vehicle.id || vehicle.vehicleId || ''),
       vehicleId: normalizeVehicleId(vehicle.id || vehicle.vehicleId || ''),
+      isActive: isActive,
+      is_active: isActive
     };
+    
+    console.log('Normalized vehicle before update:', normalizedVehicle);
     
     // Use FormData instead of JSON for better PHP compatibility
     const formData = new FormData();
     Object.entries(normalizedVehicle).forEach(([key, value]) => {
+      // Skip undefined or null values
+      if (value === undefined || value === null) return;
+      
+      // Handle isActive specially
+      if (key === 'isActive' || key === 'is_active') {
+        const boolValue = value === true || value === 'true' || value === 1 || value === '1';
+        formData.append(key, boolValue ? '1' : '0');
+        return;
+      }
+      
+      // Handle objects (like amenities array)
       if (typeof value === 'object' && value !== null) {
         formData.append(key, JSON.stringify(value));
       } else {
-        formData.append(key, String(value || ''));
+        // Add everything else as string
+        formData.append(key, String(value));
       }
     });
+    
+    // Log FormData contents for debugging
+    console.log('FormData contents for vehicle update:');
+    for (const pair of formData.entries()) {
+      console.log(`${pair[0]}: ${pair[1]}`);
+    }
     
     // Make direct request to update endpoint with FormData
     const url = `${apiBaseUrl}/api/admin/direct-vehicle-update.php?_t=${Date.now()}`;

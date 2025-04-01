@@ -8,10 +8,18 @@ import {
   SelectTrigger, 
   SelectValue 
 } from "@/components/ui/select";
-import { updateOutstationFares, updateLocalFares, updateAirportFares } from "@/services/fareUpdateService";
+import { 
+  updateOutstationFares, 
+  updateLocalFares, 
+  updateAirportFares,
+  getAllOutstationFares,
+  getAllLocalFares,
+  getAllAirportFares
+} from "@/services/fareUpdateService";
 import { getVehicleTypes } from '@/services/vehicleDataService';
 import { Loader2 } from "lucide-react";
 import { toast } from 'sonner';
+import { directVehicleOperation } from '@/utils/apiHelper';
 
 interface VehicleTripFaresFormProps {
   tripType: 'outstation' | 'local' | 'airport';
@@ -23,6 +31,7 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
   const [isSaving, setIsSaving] = useState(false);
   const [vehicles, setVehicles] = useState<{id: string, name: string}[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<string>('');
+  const [allFares, setAllFares] = useState<Record<string, any>>({});
   
   // Outstation fare state
   const [basePrice, setBasePrice] = useState<number>(0);
@@ -51,9 +60,66 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
     const loadVehicles = async () => {
       setIsLoading(true);
       try {
+        console.log(`Loading vehicles for ${tripType} management...`);
+        
         const vehicleTypes = await getVehicleTypes(true, true);
         console.log('Loaded vehicle types:', vehicleTypes);
+        
+        if (tripType === 'outstation') {
+          try {
+            const outFares = await getAllOutstationFares();
+            console.log('Loaded outstation fares:', outFares);
+            setAllFares(outFares);
+            
+            const result = await directVehicleOperation('/api/admin/outstation-fares-update.php', 'GET', {
+              sync: 'true',
+              includeInactive: 'true'
+            });
+            
+            if (result && result.fares) {
+              console.log(`Retrieved ${Object.keys(result.fares).length} outstation fares from direct endpoint`);
+              
+              const outFareVehicles = Object.keys(result.fares).map(id => ({
+                id,
+                name: vehicleTypes.find(v => v.id === id)?.name || id.replace(/_/g, ' ')
+              }));
+              
+              console.log('Outstation fare vehicles:', outFareVehicles);
+              
+              const allVehicles = [...vehicleTypes];
+              
+              for (const vehicle of outFareVehicles) {
+                if (!allVehicles.some(v => v.id === vehicle.id)) {
+                  allVehicles.push(vehicle);
+                }
+              }
+              
+              setVehicles(allVehicles);
+              console.log(`Combined total of ${allVehicles.length} vehicles`);
+              
+              return;
+            }
+          } catch (error) {
+            console.error('Error fetching outstation fares data:', error);
+          }
+        } else if (tripType === 'local') {
+          try {
+            const localFares = await getAllLocalFares();
+            setAllFares(localFares);
+          } catch (error) {
+            console.error('Error fetching local fares:', error);
+          }
+        } else if (tripType === 'airport') {
+          try {
+            const airportFares = await getAllAirportFares();
+            setAllFares(airportFares);
+          } catch (error) {
+            console.error('Error fetching airport fares:', error);
+          }
+        }
+        
         setVehicles(vehicleTypes);
+        console.log(`Using ${vehicleTypes.length} vehicles from getVehicleTypes`);
       } catch (error) {
         console.error('Error loading vehicle types:', error);
         toast.error('Failed to load vehicles');
@@ -63,13 +129,50 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
     };
     
     loadVehicles();
-  }, []);
+  }, [tripType]);
   
   const handleVehicleChange = (value: string) => {
     console.log('Selected vehicle:', value);
     setSelectedVehicle(value);
     
-    // Reset form values when vehicle changes
+    if (allFares && allFares[value]) {
+      const fares = allFares[value];
+      console.log(`Found existing fares for ${value}:`, fares);
+      
+      if (tripType === 'outstation') {
+        setBasePrice(fares.basePrice || 0);
+        setPricePerKm(fares.pricePerKm || 0);
+        setRoundTripBasePrice(fares.roundTripBasePrice || 0);
+        setRoundTripPricePerKm(fares.roundTripPricePerKm || 0);
+        setDriverAllowance(fares.driverAllowance || 300);
+        setNightHaltCharge(fares.nightHaltCharge || 700);
+      } else if (tripType === 'local') {
+        setExtraKmRate(fares.extraKmRate || 0);
+        setExtraHourRate(fares.extraHourRate || 0);
+        
+        if (fares.packages && fares.packages.length) {
+          const pkg4hr = fares.packages.find((p: any) => p.hours === 4 && p.km === 40);
+          const pkg8hr = fares.packages.find((p: any) => p.hours === 8 && p.km === 80);
+          const pkg12hr = fares.packages.find((p: any) => p.hours === 12 && p.km === 120);
+          
+          setPackage4hr40km(pkg4hr ? pkg4hr.price : 0);
+          setPackage8hr80km(pkg8hr ? pkg8hr.price : 0);
+          setPackage12hr120km(pkg12hr ? pkg12hr.price : 0);
+        }
+      } else if (tripType === 'airport') {
+        setPickupPrice(fares.pickup || 0);
+        setDropPrice(fares.drop || 0);
+        setTier1Price(fares.tier1 || 0);
+        setTier2Price(fares.tier2 || 0);
+        setTier3Price(fares.tier3 || 0);
+        setTier4Price(fares.tier4 || 0);
+      }
+    } else {
+      resetFormValues();
+    }
+  };
+  
+  const resetFormValues = () => {
     if (tripType === 'outstation') {
       setBasePrice(0);
       setPricePerKm(0);
@@ -114,8 +217,8 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
           selectedVehicle,
           basePrice,
           pricePerKm,
-          roundTripBasePrice || basePrice * 0.9, // Default to 90% of one-way if not specified
-          roundTripPricePerKm || pricePerKm * 0.85, // Default to 85% of one-way if not specified
+          roundTripBasePrice || basePrice * 0.9,
+          roundTripPricePerKm || pricePerKm * 0.85,
           driverAllowance,
           nightHaltCharge
         );
@@ -164,10 +267,9 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
         toast.success(`Updated airport fares for ${selectedVehicle}`);
       }
       
-      // Reset form after successful submission
       setSelectedVehicle('');
+      resetFormValues();
       
-      // Call onSuccess callback if provided
       if (onSuccess) {
         onSuccess();
       }

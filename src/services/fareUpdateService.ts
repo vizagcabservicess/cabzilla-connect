@@ -18,7 +18,7 @@ export const updateOutstationFares = async (
   console.log(`Updating outstation fares for vehicle ${vehicleId}`);
   
   try {
-    // Use directVehicleOperation for direct API access
+    // Use directVehicleOperation for direct API access with explicit endpoint
     const result = await directVehicleOperation('/api/admin/direct-outstation-fares.php', 'POST', {
       vehicleId,
       basePrice: oneWayBasePrice,
@@ -99,5 +99,78 @@ export const updateAirportFares = async (
     console.error(`Error updating airport fares: ${error.message}`, error);
     toast.error(`Failed to update airport fares: ${error.message}`);
     throw error;
+  }
+};
+
+/**
+ * Get outstation fares for all vehicles (force refresh to get live data)
+ */
+export const getAllOutstationFares = async (): Promise<Record<string, any>> => {
+  console.log(`Fetching all outstation fares`);
+  
+  try {
+    // Use directVehicleOperation for direct API access
+    const result = await directVehicleOperation('/api/admin/outstation-fares-update.php', 'GET', {
+      sync: 'true',
+      force_sync: 'true'
+    });
+    
+    if (result && result.status === 'success' && result.fares) {
+      console.log(`Retrieved ${Object.keys(result.fares).length} outstation fares`);
+      return result.fares;
+    } else {
+      console.warn('No outstation fares found or API returned error');
+      return {};
+    }
+  } catch (error: any) {
+    console.error(`Error fetching outstation fares: ${error.message}`, error);
+    toast.error(`Failed to fetch outstation fares: ${error.message}`);
+    return {};
+  }
+};
+
+/**
+ * Get local package fares for all vehicles
+ */
+export const getAllLocalFares = async (): Promise<Record<string, any>> => {
+  console.log(`Fetching all local package fares`);
+  
+  try {
+    const result = await directVehicleOperation('/api/admin/local-fares-update.php', 'GET', {
+      sync: 'true'
+    });
+    
+    if (result && result.status === 'success' && result.fares) {
+      console.log(`Retrieved ${Object.keys(result.fares).length} local fares`);
+      return result.fares;
+    } else {
+      console.warn('No local fares found or API returned error');
+      return {};
+    }
+  } catch (error: any) {
+    console.error(`Error fetching local fares: ${error.message}`, error);
+    return {};
+  }
+};
+
+/**
+ * Get airport transfer fares for all vehicles
+ */
+export const getAllAirportFares = async (): Promise<Record<string, any>> => {
+  console.log(`Fetching all airport fares`);
+  
+  try {
+    const result = await directVehicleOperation('/api/admin/airport-fares-update.php', 'GET');
+    
+    if (result && result.status === 'success' && result.fares) {
+      console.log(`Retrieved ${Object.keys(result.fares).length} airport fares`);
+      return result.fares;
+    } else {
+      console.warn('No airport fares found or API returned error');
+      return {};
+    }
+  } catch (error: any) {
+    console.error(`Error fetching airport fares: ${error.message}`, error);
+    return {};
   }
 };
