@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -214,6 +215,27 @@ export default function VehicleManagement() {
     vehicle.id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (vehicle.description && vehicle.description.toLowerCase().includes(searchQuery.toLowerCase()))
   );
+
+  const fixDatabase = async () => {
+    setIsFixingDb(true);
+    
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/admin/fix-vehicle-tables.php`);
+      const data = await response.json();
+      
+      if (data.status === 'success') {
+        toast.success("Database tables fixed successfully");
+        await handleRefreshData();
+      } else {
+        toast.error("Failed to fix database tables: " + (data.message || "Unknown error"));
+      }
+    } catch (error) {
+      console.error("Error fixing database:", error);
+      toast.error("Failed to fix database tables. Please check server logs.");
+    } finally {
+      setIsFixingDb(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
