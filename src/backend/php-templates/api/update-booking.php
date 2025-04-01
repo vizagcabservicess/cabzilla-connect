@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../config.php';
@@ -248,26 +247,42 @@ try {
         try {
             // Only send if we have a passenger email
             if (!empty($updatedBooking['passenger_email'])) {
-                // Use our enhanced function for status updates with SMTP and SendGrid support
-                $emailSuccess = sendBookingStatusUpdateEmail(
-                    $updatedBooking['passenger_email'],
-                    "Booking #" . $updatedBooking['booking_number'] . " Confirmed",
-                    "Your booking has been confirmed by Vizag Taxi Hub. Your driver " . 
+                // Enhanced email sending with all available methods
+                $emailSubject = "Booking #" . $updatedBooking['booking_number'] . " Confirmed";
+                $emailMessage = "Your booking has been confirmed by Vizag Taxi Hub. Your driver " . 
                     ($updatedBooking['driver_name'] ? $updatedBooking['driver_name'] : "will be assigned soon") . 
                     " and vehicle " . ($updatedBooking['vehicle_number'] ? $updatedBooking['vehicle_number'] : "details will be shared soon") . 
-                    ". Thank you for choosing Vizag Taxi Hub."
+                    ". Thank you for choosing Vizag Taxi Hub.";
+                
+                // First, try all methods through our helper
+                $emailSuccess = sendEmailAllMethods(
+                    $updatedBooking['passenger_email'],
+                    $emailSubject,
+                    $emailMessage
                 );
                 
+                // If the helper fails, try the specialized function as backup
+                if (!$emailSuccess) {
+                    $emailSuccess = sendBookingStatusUpdateEmail(
+                        $updatedBooking['passenger_email'],
+                        $emailSubject,
+                        $emailMessage
+                    );
+                }
+                
+                // Log the email sending result
                 logError("Status update email result", [
                     'success' => $emailSuccess ? 'yes' : 'no',
                     'booking_id' => $bookingId,
-                    'recipient' => $updatedBooking['passenger_email']
+                    'recipient' => $updatedBooking['passenger_email'],
+                    'methods_tried' => 'all available methods'
                 ]);
             }
         } catch (Exception $e) {
             logError("Error sending status update email", [
                 'error' => $e->getMessage(),
-                'booking_id' => $bookingId
+                'booking_id' => $bookingId,
+                'trace' => $e->getTraceAsString()
             ]);
         }
     }

@@ -2,6 +2,7 @@
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/mailer.php';
 
 /**
  * Send an email using PHP's mail function with improved error handling and debugging
@@ -14,6 +15,20 @@ require_once __DIR__ . '/../../config.php';
  * @return bool True if the email was sent successfully, false otherwise
  */
 function sendEmail($to, $subject, $htmlBody, $textBody = '', $headers = []) {
+    // Log attempt to send email through our enhanced system
+    logError("Attempting to send email through enhanced system", [
+        'to' => $to,
+        'subject' => $subject
+    ]);
+    
+    // First try our most reliable method - the combined approach
+    $result = sendEmailAllMethods($to, $subject, $htmlBody);
+    
+    if ($result) {
+        return true;
+    }
+    
+    // Original implementation as fallback
     $from = 'info@vizagtaxihub.com';
     $fromName = 'Vizag Taxi Hub';
     
@@ -535,18 +550,25 @@ function sendBookingConfirmationEmail($booking) {
         'X-Auto-Response-Suppress' => 'OOF, DR, RN, NRN, AutoReply'
     ];
     
-    logError("Sending booking confirmation email", [
+    logError("Sending booking confirmation email through enhanced system", [
         'to' => $to,
         'booking_number' => $booking['bookingNumber'],
         'passenger_name' => $booking['passengerName'] ?? 'unknown'
     ]);
     
-    $result = sendEmail($to, $subject, $htmlBody, '', $headers);
+    // Try our enhanced email delivery system first
+    $result = sendEmailAllMethods($to, $subject, $htmlBody);
+    
+    if (!$result) {
+        // If enhanced system fails, try original method as fallback
+        $result = sendEmail($to, $subject, $htmlBody, '', $headers);
+    }
     
     logError("Booking confirmation email result", [
         'success' => $result ? 'yes' : 'no',
         'booking_number' => $booking['bookingNumber'],
-        'recipient' => $to
+        'recipient' => $to,
+        'methods_tried' => 'all available methods'
     ]);
     
     return $result;
@@ -573,19 +595,25 @@ function sendAdminNotificationEmail($booking) {
         'X-Auto-Response-Suppress' => 'OOF, DR, RN, NRN, AutoReply'
     ];
     
-    logError("Sending admin notification email", [
+    logError("Sending admin notification email through enhanced system", [
         'to' => $to,
         'booking_number' => $booking['bookingNumber'],
         'booking_id' => $booking['id'] ?? 'unknown'
     ]);
     
-    $result = sendEmail($to, $subject, $htmlBody, '', $headers);
+    // Try our enhanced email delivery system first
+    $result = sendEmailAllMethods($to, $subject, $htmlBody);
+    
+    if (!$result) {
+        // If enhanced system fails, try original method as fallback
+        $result = sendEmail($to, $subject, $htmlBody, '', $headers);
+    }
     
     logError("Admin notification email result", [
         'success' => $result ? 'yes' : 'no',
-        'booking_number' => $booking['bookingNumber']
+        'booking_number' => $booking['bookingNumber'],
+        'methods_tried' => 'all available methods'
     ]);
     
     return $result;
 }
-

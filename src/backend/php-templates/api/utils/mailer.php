@@ -73,7 +73,7 @@ function sendSendGridEmail($to, $subject, $htmlBody) {
     return $success;
 }
 
-// Function to send email using direct SMTP with PHPMailer-like implementation
+// Enhanced function to send email using direct SMTP with PHPMailer-like implementation
 function sendSmtpEmail($to, $subject, $htmlBody) {
     // Log attempt with detailed information
     logError("Attempting to send email via SMTP", [
@@ -96,7 +96,7 @@ function sendSmtpEmail($to, $subject, $htmlBody) {
     // Generate a unique boundary for multipart message
     $boundary = md5(uniqid());
     
-    // Prepare email headers
+    // Prepare email headers with specific ordering and format for better deliverability
     $headers = [];
     $headers[] = "From: $fromName <$from>";
     $headers[] = "Reply-To: $from";
@@ -104,25 +104,38 @@ function sendSmtpEmail($to, $subject, $htmlBody) {
     $headers[] = "Content-Type: text/html; charset=UTF-8";
     $headers[] = "X-Mailer: PHP/" . phpversion();
     
-    // Create socket connection to SMTP server
+    // Try using socket connection with proper SSL/TLS context options
+    $context = stream_context_create([
+        'ssl' => [
+            'verify_peer' => false,
+            'verify_peer_name' => false,
+            'allow_self_signed' => true
+        ]
+    ]);
+    
     $errno = 0;
     $errstr = '';
-    $socket = fsockopen(
-        ($smtpEncryption == 'ssl' ? 'ssl://' : '') . $smtpHost,
-        $smtpPort,
+    $socket = @stream_socket_client(
+        ($smtpEncryption == 'ssl' ? 'ssl://' : '') . $smtpHost . ':' . $smtpPort,
         $errno,
         $errstr,
-        30
+        30,
+        STREAM_CLIENT_CONNECT,
+        $context
     );
     
     if (!$socket) {
         logError("SMTP connection failed", [
             'error' => "$errno: $errstr",
             'server' => $smtpHost,
-            'port' => $smtpPort
+            'port' => $smtpPort,
+            'encryption' => $smtpEncryption
         ]);
         return false;
     }
+    
+    // Set socket timeout to prevent hanging
+    stream_set_timeout($socket, 30);
     
     // Read server greeting
     $response = fgets($socket, 515);
@@ -133,7 +146,7 @@ function sendSmtpEmail($to, $subject, $htmlBody) {
     }
     
     // Send EHLO command
-    fputs($socket, "EHLO " . $_SERVER['SERVER_NAME'] . "\r\n");
+    fputs($socket, "EHLO vizagtaxihub.com\r\n");
     $response = fgets($socket, 515);
     if (substr($response, 0, 3) != '250') {
         logError("EHLO command failed", ['response' => $response]);
@@ -164,7 +177,7 @@ function sendSmtpEmail($to, $subject, $htmlBody) {
         }
         
         // Send EHLO again after TLS
-        fputs($socket, "EHLO " . $_SERVER['SERVER_NAME'] . "\r\n");
+        fputs($socket, "EHLO vizagtaxihub.com\r\n");
         $response = fgets($socket, 515);
         if (substr($response, 0, 3) != '250') {
             logError("EHLO after TLS failed", ['response' => $response]);
@@ -236,13 +249,22 @@ function sendSmtpEmail($to, $subject, $htmlBody) {
     $date = date('r');
     $messageId = '<' . md5(uniqid()) . '@vizagtaxihub.com>';
     
-    $message = "Date: $date\r\n";
+    // Construct email with proper headers for better deliverability
+    $message = "";
+    $message .= "Date: $date\r\n";
     $message .= "To: $to\r\n";
     $message .= "Subject: $subject\r\n";
     $message .= "Message-ID: $messageId\r\n";
-    foreach ($headers as $header) {
-        $message .= "$header\r\n";
-    }
+    $message .= "From: $fromName <$from>\r\n";
+    $message .= "Reply-To: $from\r\n";
+    $message .= "Return-Path: $from\r\n";
+    $message .= "MIME-Version: 1.0\r\n";
+    $message .= "Content-Type: text/html; charset=UTF-8\r\n";
+    $message .= "X-Mailer: PHP/" . phpversion() . "\r\n";
+    // Avoid Precedence header which can trigger auto-responses
+    $message .= "Precedence: bulk\r\n";
+    // Add more deliverability headers
+    $message .= "X-Auto-Response-Suppress: DR, RN, NRN, OOF, AutoReply\r\n";
     $message .= "\r\n";
     $message .= $htmlBody;
     $message .= "\r\n.\r\n";
@@ -644,7 +666,7 @@ function sendBookingStatusUpdateEmail($to, $subject, $message) {
         </div>
         <div class="footer">
             <p>Thank you for choosing Vizag Taxi Hub!</p>
-            <p>© 2023 Vizag Taxi Hub. All rights reserved.</p>
+            <p>© ' . date('Y') . ' Vizag Taxi Hub. All rights reserved.</p>
         </div>
     </div>
 </body>
@@ -654,6 +676,7 @@ function sendBookingStatusUpdateEmail($to, $subject, $message) {
     $result = sendSmtpEmail($to, $subject, $htmlBody);
     
     if ($result) {
+        logError("Email sent successfully via SMTP", ['to' => $to, 'subject' => $subject]);
         return true;
     }
     
@@ -661,9 +684,68 @@ function sendBookingStatusUpdateEmail($to, $subject, $message) {
     $result = sendSendGridEmail($to, $subject, $htmlBody);
     
     if ($result) {
+        logError("Email sent successfully via SendGrid", ['to' => $to, 'subject' => $subject]);
         return true;
     }
     
     // If that fails, try our more reliable Hostinger method
-    return sendHostingerMail($to, $subject, $htmlBody);
+    $result = sendHostingerMail($to, $subject, $htmlBody);
+    
+    if ($result) {
+        logError("Email sent successfully via Hostinger method", ['to' => $to, 'subject' => $subject]);
+        return true;
+    }
+    
+    // Last resort, try PHP mail
+    $result = sendMailReliable($to, $subject, $htmlBody);
+    
+    logError("Final email sending result", [
+        'success' => $result ? 'yes' : 'no',
+        'to' => $to,
+        'subject' => $subject
+    ]);
+    
+    return $result;
+}
+
+// New helper function to try all available email methods sequentially
+function sendEmailAllMethods($to, $subject, $htmlBody) {
+    // First try direct SMTP connection (most reliable)
+    logError("Attempting email delivery via SMTP", ['to' => $to]);
+    $result = sendSmtpEmail($to, $subject, $htmlBody);
+    
+    if ($result) {
+        logError("Email successfully sent via SMTP", ['to' => $to]);
+        return true;
+    }
+    
+    // Next try SendGrid API
+    logError("SMTP failed, trying SendGrid", ['to' => $to]);
+    $result = sendSendGridEmail($to, $subject, $htmlBody);
+    
+    if ($result) {
+        logError("Email successfully sent via SendGrid", ['to' => $to]);
+        return true;
+    }
+    
+    // Then try Hostinger's specific method
+    logError("SendGrid failed, trying Hostinger method", ['to' => $to]);
+    $result = sendHostingerMail($to, $subject, $htmlBody);
+    
+    if ($result) {
+        logError("Email successfully sent via Hostinger method", ['to' => $to]);
+        return true;
+    }
+    
+    // Finally, fall back to PHP's mail function
+    logError("Hostinger method failed, trying PHP mail", ['to' => $to]);
+    $result = sendMailReliable($to, $subject, $htmlBody);
+    
+    if ($result) {
+        logError("Email successfully sent via PHP mail", ['to' => $to]);
+        return true;
+    }
+    
+    logError("All email methods failed", ['to' => $to, 'subject' => $subject]);
+    return false;
 }
