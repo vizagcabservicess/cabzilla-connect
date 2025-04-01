@@ -148,7 +148,28 @@ try {
         
         // Get existing vehicle data
         $existingVehicle = $checkResult->fetch_assoc();
+        logMessage("Existing vehicle data found: " . json_encode($existingVehicle));
         
+        // Handle the isActive flag specifically (default to existing value)
+        $isActiveSet = false;
+        $isActive = $existingVehicle['is_active']; // Default to existing value
+        
+        // Check if isActive is explicitly set in the request
+        if (isset($vehicleData['isActive'])) {
+            $isActive = filter_var($vehicleData['isActive'], FILTER_VALIDATE_BOOLEAN) ? 1 : 0;
+            $isActiveSet = true;
+            logMessage("isActive explicitly set to: " . ($isActive ? "true" : "false"));
+        } 
+        else if (isset($vehicleData['is_active'])) {
+            $isActive = filter_var($vehicleData['is_active'], FILTER_VALIDATE_BOOLEAN) ? 1 : 0;
+            $isActiveSet = true;
+            logMessage("is_active explicitly set to: " . ($isActive ? "true" : "false"));
+        }
+        
+        if (!$isActiveSet) {
+            logMessage("isActive not set in request, using existing value: $isActive");
+        }
+                
         // Extract updated vehicle properties with fallback to existing values
         $vehicleName = isset($vehicleData['name']) ? $vehicleData['name'] : $existingVehicle['name'];
         $capacity = isset($vehicleData['capacity']) ? intval($vehicleData['capacity']) : $existingVehicle['capacity'];
@@ -156,8 +177,6 @@ try {
                           (isset($vehicleData['luggage_capacity']) ? intval($vehicleData['luggage_capacity']) : $existingVehicle['luggage_capacity']);
         
         $ac = isset($vehicleData['ac']) ? (intval($vehicleData['ac']) ? 1 : 0) : $existingVehicle['ac'];
-        $isActive = isset($vehicleData['isActive']) ? (intval($vehicleData['isActive']) ? 1 : 0) : 
-                   (isset($vehicleData['is_active']) ? (intval($vehicleData['is_active']) ? 1 : 0) : $existingVehicle['is_active']);
         
         // Handle image path
         $image = isset($vehicleData['image']) && !empty($vehicleData['image']) ? $vehicleData['image'] : $existingVehicle['image'];
@@ -318,7 +337,7 @@ try {
             'ac' => $ac,
             'image' => $image,
             'description' => $description,
-            'isActive' => $isActive,
+            'isActive' => $isActive == 1,
             'basePrice' => $basePrice,
             'price' => $basePrice,
             'pricePerKm' => $pricePerKm,

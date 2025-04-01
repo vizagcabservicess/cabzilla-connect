@@ -55,6 +55,16 @@ export const directVehicleOperation = async (
         for (const [key, value] of Object.entries(data)) {
           if (value === undefined || value === null) continue;
           
+          // Special handling for isActive/is_active to ensure it's properly sent
+          if (key === 'isActive' || key === 'is_active') {
+            const boolValue = value === true || value === 'true' || value === 1 || value === '1';
+            formData.append(key, boolValue ? '1' : '0');
+            // Also add the other variant for API compatibility
+            const otherKey = key === 'isActive' ? 'is_active' : 'isActive';
+            formData.append(otherKey, boolValue ? '1' : '0');
+            continue;
+          }
+          
           if (typeof value === 'object' && !(value instanceof File) && !(value instanceof Blob)) {
             formData.append(key, JSON.stringify(value));
           } else {

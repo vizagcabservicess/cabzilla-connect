@@ -64,6 +64,26 @@ const DEFAULT_VEHICLES: CabType[] = [
 ];
 
 /**
+ * Clear all vehicle data caches
+ */
+export const clearVehicleDataCache = () => {
+  console.log('Clearing vehicle data cache');
+  cachedVehicles = {};
+  try {
+    localStorage.removeItem('cachedVehicles');
+    localStorage.removeItem('cachedVehiclesTimestamp');
+    localStorage.removeItem('localVehicles');
+  } catch (e) {
+    console.error('Error clearing cached vehicles from localStorage:', e);
+  }
+  
+  // Dispatch event to notify components about the cache clear
+  window.dispatchEvent(new CustomEvent('vehicle-data-cache-cleared', {
+    detail: { timestamp: Date.now() }
+  }));
+};
+
+/**
  * Fetches vehicle data from local JSON file or API
  * @param forceRefresh Force data refresh (bypass cache)
  * @param includeInactive Include inactive vehicles in the result
@@ -222,6 +242,7 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
           try {
             localStorage.setItem('cachedVehicles', JSON.stringify(processedVehicles));
             localStorage.setItem('cachedVehiclesTimestamp', now.toString());
+            localStorage.setItem('localVehicles', JSON.stringify(processedVehicles));
           } catch (e) {
             console.error('Error caching vehicles to localStorage:', e);
           }
@@ -287,6 +308,7 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
         try {
           localStorage.setItem('cachedVehicles', JSON.stringify(processedVehicles));
           localStorage.setItem('cachedVehiclesTimestamp', now.toString());
+          localStorage.setItem('localVehicles', JSON.stringify(processedVehicles));
         } catch (e) {
           console.error('Error caching vehicles to localStorage:', e);
         }
@@ -311,6 +333,7 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
   try {
     localStorage.setItem('cachedVehicles', JSON.stringify(DEFAULT_VEHICLES));
     localStorage.setItem('cachedVehiclesTimestamp', now.toString());
+    localStorage.setItem('localVehicles', JSON.stringify(DEFAULT_VEHICLES));
   } catch (e) {
     console.error('Error caching default vehicles to localStorage:', e);
   }
@@ -331,6 +354,26 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
   }));
   
   return filterVehicles(DEFAULT_VEHICLES, includeInactive);
+};
+
+/**
+ * Wrapper function to get a list of vehicle types (IDs and names)
+ * This is used in selectors where we only need basic vehicle info
+ */
+export const getVehicleTypes = async (forceRefresh = false, includeInactive = false): Promise<{id: string, name: string}[]> => {
+  try {
+    const vehicles = await getVehicleData(forceRefresh, includeInactive);
+    return vehicles.map(v => ({ 
+      id: v.id || v.vehicleId || '',
+      name: v.name || ucwords((v.id || '').replace(/_/g, ' '))
+    }));
+  } catch (error) {
+    console.error('Error getting vehicle types:', error);
+    return DEFAULT_VEHICLES.map(v => ({ 
+      id: v.id || '',
+      name: v.name || ''
+    }));
+  }
 };
 
 // Helper function to filter vehicles by active status
@@ -368,341 +411,39 @@ function processVehicles(vehicles: any[]): CabType[] {
     // Normalize vehicle ID
     const id = String(vehicle.id || vehicle.vehicleId || vehicle.vehicle_id || '').trim();
     
+    // Ensure isActive is correctly set (default to true)
+    let isActive = true;
+    if (typeof vehicle.isActive === 'boolean') {
+      isActive = vehicle.isActive;
+    } else if (vehicle.isActive === 0 || vehicle.isActive === '0' || vehicle.isActive === 'false') {
+      isActive = false;
+    } else if (typeof vehicle.is_active === 'boolean') {
+      isActive = vehicle.is_active;
+    } else if (vehicle.is_active === 0 || vehicle.is_active === '0' || vehicle.is_active === 'false') {
+      isActive = false;
+    }
+    
     // Ensure all properties have appropriate defaults
     return {
       id: id,
       vehicleId: id,
       name: vehicle.name || ucwords(id.replace(/_/g, ' ')),
-      capacity: parseInt(vehicle.capacity || vehicle.seats || '4', 10),
-      luggageCapacity: parseInt(vehicle.luggageCapacity || vehicle.luggage_capacity || '2', 10),
-      basePrice: parseFloat(vehicle.basePrice || vehicle.base_price || vehicle.price || '0'),
-      price: parseFloat(vehicle.price || vehicle.basePrice || vehicle.base_price || '0'),
-      pricePerKm: parseFloat(vehicle.pricePerKm || vehicle.price_per_km || '0'),
-      image: vehicle.image || '/cars/sedan.png',
-      amenities: amenities.filter((a: any) => a), // Filter out empty values
-      description: vehicle.description || `${vehicle.name || ucwords(id.replace(/_/g, ' '))} vehicle`,
-      ac: vehicle.ac === undefined ? true : Boolean(vehicle.ac),
-      nightHaltCharge: parseFloat(vehicle.nightHaltCharge || vehicle.night_halt_charge || '0'),
-      driverAllowance: parseFloat(vehicle.driverAllowance || vehicle.driver_allowance || '0'),
-      isActive: vehicle.is_active === undefined ? (vehicle.isActive === undefined ? true : Boolean(vehicle.isActive)) : Boolean(vehicle.is_active),
-      local: vehicle.local || {},
-      airport: vehicle.airport || {},
-      outstation: vehicle.outstation || {}
+      capacity: parseInt(String(vehicle.capacity || vehicle.seats || 4), 10),
+      luggageCapacity: parseInt(String(vehicle.luggageCapacity || vehicle.luggage_capacity || 2), 10),
+      price: parseFloat(String(vehicle.price || vehicle.basePrice || vehicle.base_price || 0)),
+      pricePerKm: parseFloat(String(vehicle.pricePerKm || vehicle.price_per_km || 0)),
+      image: vehicle.image || `/cars/${id}.png`.toLowerCase(),
+      amenities: amenities.filter(a => a), // Filter empty amenities
+      description: vehicle.description || '',
+      ac: vehicle.ac === false ? false : true,
+      nightHaltCharge: parseFloat(String(vehicle.nightHaltCharge || vehicle.night_halt_charge || 700)),
+      driverAllowance: parseFloat(String(vehicle.driverAllowance || vehicle.driver_allowance || 300)),
+      isActive: isActive
     };
   });
 }
 
-// Helper function to capitalize words
+// Utility function to capitalize words
 function ucwords(str: string): string {
-  return str.replace(/\b\w/g, (l) => l.toUpperCase());
+  return (str || '').replace(/\b\w/g, match => match.toUpperCase());
 }
-
-// Function to directly clear vehicle data cache
-export const clearVehicleDataCache = () => {
-  console.log('Clearing vehicle data cache');
-  cachedVehicles = {};
-  
-  // Clear localStorage cache too
-  try {
-    localStorage.removeItem('cachedVehicles');
-    localStorage.removeItem('cachedVehiclesTimestamp');
-  } catch (e) {
-    console.error('Error clearing localStorage cache:', e);
-  }
-  
-  // Dispatch event to notify components
-  window.dispatchEvent(new CustomEvent('vehicle-data-cache-cleared', {
-    detail: { timestamp: Date.now() }
-  }));
-};
-
-/**
- * Get vehicle types for dropdowns
- */
-export const getVehicleTypes = async (): Promise<{id: string, name: string}[]> => {
-  try {
-    // Always include inactive vehicles for admin dropdowns
-    const vehicles = await getVehicleData(true, true);
-    
-    return vehicles.map(vehicle => ({
-      id: vehicle.id,
-      name: vehicle.name
-    }));
-  } catch (error) {
-    console.error("Error fetching vehicle types:", error);
-    return [];
-  }
-};
-
-/**
- * Update outstation fares for a vehicle
- */
-export const updateOutstationFares = async (vehicleId: string, fareData: OutstationFare): Promise<boolean> => {
-  try {
-    // Create FormData for better compatibility with server
-    const formData = new FormData();
-    formData.append('vehicleId', vehicleId);
-    formData.append('vehicle_id', vehicleId);
-    formData.append('tripType', 'outstation');
-    formData.append('trip_type', 'outstation');
-    
-    // Add all fare data with all possible field names for compatibility
-    Object.entries(fareData).forEach(([key, value]) => {
-      formData.append(key, value.toString());
-      
-      // Add with alternative naming conventions
-      const snakeCaseKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
-      if (snakeCaseKey !== key) {
-        formData.append(snakeCaseKey, value.toString());
-      }
-      
-      const camelCaseKey = key.replace(/_([a-z])/g, (_, p1) => p1.toUpperCase());
-      if (camelCaseKey !== key) {
-        formData.append(camelCaseKey, value.toString());
-      }
-    });
-    
-    // Add nightHalt for backward compatibility
-    if (fareData.nightHaltCharge) {
-      formData.append('nightHalt', fareData.nightHaltCharge.toString());
-      formData.append('night_halt', fareData.nightHaltCharge.toString());
-    }
-    
-    // Force create/update the vehicle in all tables
-    formData.append('forceSync', 'true');
-    formData.append('force_sync', 'true');
-    
-    // Try direct outstation fares endpoint
-    const directResponse = await fetch(getApiUrl('/api/admin/direct-outstation-fares.php'), {
-      method: 'POST',
-      body: formData,
-      headers: {
-        'X-Force-Refresh': 'true',
-        'Cache-Control': 'no-cache'
-      }
-    });
-    
-    if (directResponse.ok) {
-      const result = await directResponse.json();
-      console.log('Direct API response for outstation fares:', result);
-      
-      // Clear cache to ensure fresh data on next fetch
-      clearVehicleDataCache();
-      
-      // Trigger event to update UI
-      window.dispatchEvent(new CustomEvent('fare-data-updated', { 
-        detail: { vehicleId, tripType: 'outstation' }
-      }));
-      
-      return true;
-    }
-    
-    // Try the fallback endpoint
-    const fallbackResponse = await fetch(getApiUrl('/api/admin/outstation-fares-update.php'), {
-      method: 'POST',
-      body: formData
-    });
-    
-    if (fallbackResponse.ok) {
-      const result = await fallbackResponse.json();
-      console.log('Fallback API response for outstation fares:', result);
-      
-      // Clear cache to ensure fresh data on next fetch
-      clearVehicleDataCache();
-      
-      // Trigger event to update UI
-      window.dispatchEvent(new CustomEvent('fare-data-updated', { 
-        detail: { vehicleId, tripType: 'outstation' }
-      }));
-      
-      return true;
-    }
-    
-    throw new Error('Failed to update outstation fares');
-  } catch (error) {
-    console.error('Error updating outstation fares:', error);
-    throw error;
-  }
-};
-
-/**
- * Update local fares for a vehicle
- */
-export const updateLocalFares = async (vehicleId: string, fareData: LocalFare): Promise<boolean> => {
-  try {
-    // Create FormData for better compatibility with server
-    const formData = new FormData();
-    formData.append('vehicleId', vehicleId);
-    formData.append('vehicle_id', vehicleId);
-    formData.append('tripType', 'local');
-    formData.append('trip_type', 'local');
-    
-    // Add all naming conventions for local package fare fields
-    if (fareData.price4hrs40km !== undefined) {
-      formData.append('package4hr40km', fareData.price4hrs40km.toString());
-      formData.append('price4hrs40km', fareData.price4hrs40km.toString());
-      formData.append('hr4km40Price', fareData.price4hrs40km.toString());
-      formData.append('local_package_4hr', fareData.price4hrs40km.toString());
-    }
-    
-    if (fareData.price8hrs80km !== undefined) {
-      formData.append('package8hr80km', fareData.price8hrs80km.toString());
-      formData.append('price8hrs80km', fareData.price8hrs80km.toString());
-      formData.append('hr8km80Price', fareData.price8hrs80km.toString());
-      formData.append('local_package_8hr', fareData.price8hrs80km.toString());
-    }
-    
-    if (fareData.price10hrs100km !== undefined) {
-      formData.append('package10hr100km', fareData.price10hrs100km.toString());
-      formData.append('price10hrs100km', fareData.price10hrs100km.toString());
-      formData.append('hr10km100Price', fareData.price10hrs100km.toString());
-      formData.append('local_package_10hr', fareData.price10hrs100km.toString());
-    }
-    
-    if (fareData.priceExtraKm !== undefined) {
-      formData.append('priceExtraKm', fareData.priceExtraKm.toString());
-      formData.append('price_extra_km', fareData.priceExtraKm.toString());
-      formData.append('extraKmPrice', fareData.priceExtraKm.toString());
-      formData.append('extra_km_charge', fareData.priceExtraKm.toString());
-    }
-    
-    if (fareData.priceExtraHour !== undefined) {
-      formData.append('priceExtraHour', fareData.priceExtraHour.toString());
-      formData.append('price_extra_hour', fareData.priceExtraHour.toString());
-      formData.append('extraHourPrice', fareData.priceExtraHour.toString());
-      formData.append('extra_hour_charge', fareData.priceExtraHour.toString());
-    }
-    
-    // Try direct local fares endpoint
-    const directResponse = await fetch(getApiUrl('/api/direct-local-fares.php'), {
-      method: 'POST',
-      body: formData,
-      headers: {
-        'X-Force-Refresh': 'true',
-        'Cache-Control': 'no-cache'
-      }
-    });
-    
-    if (directResponse.ok) {
-      const result = await directResponse.json();
-      console.log('Direct API response for local fares:', result);
-      
-      // Clear cache to ensure fresh data on next fetch
-      clearVehicleDataCache();
-      
-      // Trigger event to update UI
-      window.dispatchEvent(new CustomEvent('fare-data-updated', { 
-        detail: { vehicleId, tripType: 'local' }
-      }));
-      
-      return true;
-    }
-    
-    // Try the fallback endpoint
-    const fallbackResponse = await fetch(getApiUrl('/api/admin/local-fares-update.php'), {
-      method: 'POST',
-      body: formData
-    });
-    
-    if (fallbackResponse.ok) {
-      const result = await fallbackResponse.json();
-      console.log('Fallback API response for local fares:', result);
-      
-      // Clear cache to ensure fresh data on next fetch
-      clearVehicleDataCache();
-      
-      // Trigger event to update UI
-      window.dispatchEvent(new CustomEvent('fare-data-updated', { 
-        detail: { vehicleId, tripType: 'local' }
-      }));
-      
-      return true;
-    }
-    
-    throw new Error('Failed to update local fares');
-  } catch (error) {
-    console.error('Error updating local fares:', error);
-    throw error;
-  }
-};
-
-/**
- * Update airport fares for a vehicle
- */
-export const updateAirportFares = async (vehicleId: string, fareData: AirportFare): Promise<boolean> => {
-  try {
-    // Create FormData for better compatibility with server
-    const formData = new FormData();
-    formData.append('vehicleId', vehicleId);
-    formData.append('vehicle_id', vehicleId);
-    formData.append('tripType', 'airport');
-    formData.append('trip_type', 'airport');
-    
-    // Add all fare data with all possible field names for compatibility
-    Object.entries(fareData).forEach(([key, value]) => {
-      formData.append(key, value.toString());
-      
-      // Add with alternative naming conventions
-      const snakeCaseKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
-      if (snakeCaseKey !== key) {
-        formData.append(snakeCaseKey, value.toString());
-      }
-      
-      const camelCaseKey = key.replace(/_([a-z])/g, (_, p1) => p1.toUpperCase());
-      if (camelCaseKey !== key) {
-        formData.append(camelCaseKey, value.toString());
-      }
-    });
-    
-    // Try direct airport fares endpoint
-    const directResponse = await fetch(getApiUrl('/api/admin/direct-airport-fares.php'), {
-      method: 'POST',
-      body: formData,
-      headers: {
-        'X-Force-Refresh': 'true',
-        'Cache-Control': 'no-cache'
-      }
-    });
-    
-    if (directResponse.ok) {
-      const result = await directResponse.json();
-      console.log('Direct API response for airport fares:', result);
-      
-      // Clear cache to ensure fresh data on next fetch
-      clearVehicleDataCache();
-      
-      // Trigger event to update UI
-      window.dispatchEvent(new CustomEvent('fare-data-updated', { 
-        detail: { vehicleId, tripType: 'airport' }
-      }));
-      
-      return true;
-    }
-    
-    // Try the fallback endpoint
-    const fallbackResponse = await fetch(getApiUrl('/api/admin/airport-fares-update.php'), {
-      method: 'POST',
-      body: formData
-    });
-    
-    if (fallbackResponse.ok) {
-      const result = await fallbackResponse.json();
-      console.log('Fallback API response for airport fares:', result);
-      
-      // Clear cache to ensure fresh data on next fetch
-      clearVehicleDataCache();
-      
-      // Trigger event to update UI
-      window.dispatchEvent(new CustomEvent('fare-data-updated', { 
-        detail: { vehicleId, tripType: 'airport' }
-      }));
-      
-      return true;
-    }
-    
-    throw new Error('Failed to update airport fares');
-  } catch (error) {
-    console.error('Error updating airport fares:', error);
-    throw error;
-  }
-};
