@@ -83,12 +83,20 @@ function sendSmtpEmail($to, $subject, $htmlBody) {
         'server_info' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown'
     ]);
     
-    // SMTP credentials for Hostinger - explicitly set
+    // SMTP credentials for Hostinger - explicitly set and verified
     $smtpHost = 'smtp.hostinger.com';
     $smtpPort = 465; // SSL preferred for Hostinger
     $smtpUsername = 'info@vizagtaxihub.com';
     $smtpPassword = 'Joel@5544';
     $smtpEncryption = 'ssl'; // Use SSL for port 465
+    
+    logError("Using SMTP configuration", [
+        'host' => $smtpHost,
+        'port' => $smtpPort,
+        'username' => $smtpUsername,
+        'encryption' => $smtpEncryption,
+        'to' => $to
+    ]);
     
     // From details - Using verified Hostinger domain email is crucial for deliverability
     $from = 'info@vizagtaxihub.com';
@@ -119,7 +127,7 @@ function sendSmtpEmail($to, $subject, $htmlBody) {
         'Precedence: bulk'
     ];
     
-    // Prepare context options for SSL connection
+    // Prepare context options for SSL connection with more detailed error handling
     $context = stream_context_create([
         'ssl' => [
             'verify_peer' => false,
