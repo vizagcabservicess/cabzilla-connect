@@ -2,14 +2,14 @@
 <?php
 require_once __DIR__ . '/../../config.php';
 
-// Function to send email using more reliable methods suitable for shared hosting
+// Function to send email using PHP mail() function optimized for Hostinger
 function sendMailReliable($to, $subject, $htmlBody, $textBody = '', $headers = []) {
     // Initialize variables for tracking
     $success = false;
     $error = '';
     
     // Log attempt with detailed server info
-    logError("Attempting to send email with reliable method", [
+    logError("Attempting to send email with Hostinger-optimized method", [
         'to' => $to,
         'subject' => $subject,
         'mail_function' => function_exists('mail') ? 'available' : 'unavailable',
@@ -19,24 +19,20 @@ function sendMailReliable($to, $subject, $htmlBody, $textBody = '', $headers = [
         'sapi' => php_sapi_name()
     ]);
     
-    // Set email parameters
+    // Set email parameters - use proper domain email that matches SPF record
     $from = 'info@vizagtaxihub.com';
     $fromName = 'Vizag Taxi Hub';
     
-    // Try method 1: Direct mail with additional parameters
+    // Try primary email method specifically configured for Hostinger
     try {
-        // Add To header to help with delivery
+        // Add properly formatted headers for Hostinger
         $additionalHeaders = [
-            'To' => $to,
             'From' => "$fromName <$from>",
             'Reply-To' => $from,
             'Return-Path' => $from,
-            'X-Mailer' => 'PHP/' . phpversion(),
             'MIME-Version' => '1.0',
             'Content-Type' => 'text/html; charset=UTF-8',
-            'X-Priority' => '1',
-            'X-MSMail-Priority' => 'High',
-            'Importance' => 'High'
+            'X-Mailer' => 'PHP/' . phpversion()
         ];
         
         // Merge with custom headers
@@ -48,47 +44,57 @@ function sendMailReliable($to, $subject, $htmlBody, $textBody = '', $headers = [
             $headerStr .= "$name: $value\r\n";
         }
         
-        // Special additional parameters for shared hosting
+        // For Hostinger, make sure this from address matches the SPF record
         $additionalParams = "-f$from";
         
-        // Set PHP ini settings that might help with delivery
+        // Set PHP ini settings that might help with delivery on Hostinger
         ini_set('sendmail_from', $from);
         
-        // Attempt to send with extra parameters
+        // Attempt to send with Hostinger-specific parameters
         $success = mail($to, $subject, $htmlBody, $headerStr, $additionalParams);
         
         if ($success) {
-            logError("Email sent successfully with direct method and parameters", [
+            logError("Email sent successfully with Hostinger-optimized method", [
                 'to' => $to,
                 'subject' => $subject,
-                'method' => 'PHP mail() with parameters'
+                'method' => 'PHP mail() with Hostinger parameters'
             ]);
             return true;
+        } else {
+            logError("Primary email method failed", [
+                'to' => $to,
+                'error' => error_get_last() ? error_get_last()['message'] : 'Unknown error'
+            ]);
         }
     } catch (Exception $e) {
         $error = $e->getMessage();
         logError("Exception in primary email method", ['error' => $error]);
     }
     
-    // Method 2: Try alternate approach with simpler parameters
+    // Method 2: Try alternative approach for Hostinger with simpler headers
     if (!$success) {
         try {
-            // Simpler headers
+            // For Hostinger, simple headers sometimes work better
             $simpleHeaders = "From: $fromName <$from>\r\n";
             $simpleHeaders .= "Reply-To: $from\r\n";
             $simpleHeaders .= "MIME-Version: 1.0\r\n";
             $simpleHeaders .= "Content-Type: text/html; charset=UTF-8\r\n";
             
-            // Try sending with simplified approach
+            // Try sending with simplified Hostinger approach
             $success = mail($to, $subject, $htmlBody, $simpleHeaders);
             
             if ($success) {
-                logError("Email sent successfully with simplified method", [
+                logError("Email sent successfully with simplified Hostinger method", [
                     'to' => $to,
                     'subject' => $subject,
-                    'method' => 'PHP mail() simplified'
+                    'method' => 'PHP mail() simplified for Hostinger'
                 ]);
                 return true;
+            } else {
+                logError("Secondary email method failed", [
+                    'to' => $to,
+                    'error' => error_get_last() ? error_get_last()['message'] : 'Unknown error'
+                ]);
             }
         } catch (Exception $e) {
             $error .= ' | ' . $e->getMessage();
@@ -96,14 +102,14 @@ function sendMailReliable($to, $subject, $htmlBody, $textBody = '', $headers = [
         }
     }
     
-    // Method 3: Last resort - direct file method for some hosting environments
+    // Method 3: Last resort - use direct sendmail approach which sometimes works on Hostinger
     if (!$success) {
         try {
-            // Try a file-based approach which works on some hosts
+            // Try Hostinger's sendmail directly
             $tempFile = tempnam(sys_get_temp_dir(), 'mail');
             $handle = fopen($tempFile, 'w');
             
-            // Simple email format
+            // Email format optimized for Hostinger
             $emailContent = "To: $to\r\n";
             $emailContent .= "From: $fromName <$from>\r\n";
             $emailContent .= "Subject: $subject\r\n";
@@ -114,23 +120,27 @@ function sendMailReliable($to, $subject, $htmlBody, $textBody = '', $headers = [
             fwrite($handle, $emailContent);
             fclose($handle);
             
-            // Use system mail command if available (works on many Linux hosts)
+            // Use sendmail directly - this path is correct for Hostinger
             if (function_exists('exec') && !in_array('exec', array_map('trim', explode(',', ini_get('disable_functions'))))) {
                 exec("/usr/sbin/sendmail -t < $tempFile", $output, $returnCode);
                 $success = ($returnCode === 0);
                 
                 if ($success) {
-                    logError("Email sent successfully with sendmail command", [
+                    logError("Email sent successfully with sendmail on Hostinger", [
                         'to' => $to,
                         'subject' => $subject,
-                        'method' => 'sendmail via exec'
+                        'method' => 'sendmail via exec on Hostinger'
                     ]);
                 } else {
-                    logError("Sendmail command failed", [
+                    logError("Hostinger sendmail command failed", [
                         'return_code' => $returnCode,
                         'output' => implode("\n", $output)
                     ]);
                 }
+            } else {
+                logError("Exec function not available for sendmail approach", [
+                    'disable_functions' => ini_get('disable_functions')
+                ]);
             }
             
             // Clean up
@@ -141,12 +151,12 @@ function sendMailReliable($to, $subject, $htmlBody, $textBody = '', $headers = [
             }
         } catch (Exception $e) {
             $error .= ' | ' . $e->getMessage();
-            logError("Exception in fallback email method", ['error' => $e->getMessage()]);
+            logError("Exception in Hostinger fallback email method", ['error' => $e->getMessage()]);
         }
     }
     
     // Log detailed failure information
-    logError("All email methods failed", [
+    logError("All Hostinger email methods failed", [
         'to' => $to,
         'subject' => $subject,
         'errors' => $error,
@@ -174,7 +184,7 @@ function sendReliableBookingConfirmationEmail($booking) {
     $subject = "Booking Confirmation - #" . $booking['bookingNumber'];
     $htmlBody = generateBookingConfirmationEmail($booking);
     
-    logError("Sending booking confirmation email with reliable method", [
+    logError("Sending booking confirmation email with Hostinger-optimized method", [
         'to' => $to,
         'booking_number' => $booking['bookingNumber']
     ]);
@@ -196,7 +206,7 @@ function sendReliableAdminNotificationEmail($booking) {
     $subject = "New Booking - #" . $booking['bookingNumber'];
     $htmlBody = generateAdminNotificationEmail($booking);
     
-    logError("Sending admin notification email with reliable method", [
+    logError("Sending admin notification email with Hostinger-optimized method", [
         'to' => $to,
         'booking_number' => $booking['bookingNumber']
     ]);

@@ -1,4 +1,3 @@
-
 <?php
 // Adjust the path to config.php correctly
 require_once __DIR__ . '/../config.php';
@@ -297,8 +296,8 @@ try {
         'updatedAt' => $booking['updated_at']
     ];
     
-    // Send confirmation emails with detailed error logging and using both methods
-    logError("Attempting to send confirmation emails", [
+    // Send confirmation emails with detailed error logging and using Hostinger-optimized methods
+    logError("Attempting to send confirmation emails using Hostinger-optimized method", [
         'booking_id' => $bookingId,
         'passenger_email' => $booking['passenger_email'],
         'mail_function_exists' => function_exists('mail') ? 'yes' : 'no',
@@ -309,14 +308,14 @@ try {
     // Initialize email results array
     $emailSuccess = ['customer' => false, 'admin' => false];
     
-    // First try with the new reliable method
+    // Try with the Hostinger-optimized method first
     try {
-        // Try the new reliable method first
+        // First try our Hostinger-optimized method
         $emailSuccess['customer'] = sendReliableBookingConfirmationEmail($formattedBooking);
         
-        // If that fails, try the original method as fallback
+        // If that fails, fall back to the original method
         if (!$emailSuccess['customer']) {
-            logError("Reliable method failed, trying original method", [
+            logError("Hostinger-optimized method failed, trying original method", [
                 'booking_id' => $bookingId,
                 'email' => $booking['passenger_email']
             ]);
@@ -336,12 +335,12 @@ try {
     }
     
     try {
-        // Try the new reliable method first for admin email
+        // Try the Hostinger-optimized method first for admin email
         $emailSuccess['admin'] = sendReliableAdminNotificationEmail($formattedBooking);
         
-        // If that fails, try the original method as fallback
+        // If that fails, fall back to the original method
         if (!$emailSuccess['admin']) {
-            logError("Reliable method failed for admin email, trying original method", [
+            logError("Hostinger-optimized method failed for admin email, trying original method", [
                 'booking_id' => $bookingId
             ]);
             $emailSuccess['admin'] = sendAdminNotificationEmail($formattedBooking);
@@ -358,7 +357,7 @@ try {
         $emailSuccess['admin'] = false;
     }
     
-    logError("Email sending results", [
+    logError("Email sending results with Hostinger optimization", [
         'customer_email_sent' => $emailSuccess['customer'] ? 'yes' : 'no',
         'admin_email_sent' => $emailSuccess['admin'] ? 'yes' : 'no',
         'booking_id' => $bookingId,
