@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { useNavigate, useLocation } from 'react-router-dom';
-import { MapPin, Calendar, Car, CircleDollarSign, CheckCircle2, ArrowRight, Mail, AlertTriangle, Info } from 'lucide-react';
+import { MapPin, Calendar, Car, CircleDollarSign, CheckCircle2, ArrowRight, Mail, AlertTriangle, Info, Loader2 } from 'lucide-react';
 import { Navbar } from '@/components/Navbar';
 import { toast } from "sonner";
 
@@ -185,7 +185,7 @@ export default function BookingConfirmationPage() {
                   ) : emailStatus === 'failed' ? (
                     <AlertTriangle className="h-5 w-5 mr-3 text-amber-500 mt-1" />
                   ) : emailStatus === 'pending' ? (
-                    <Info className="h-5 w-5 mr-3 text-purple-500 mt-1" />
+                    <Loader2 className="h-5 w-5 mr-3 text-purple-500 mt-1 animate-spin" />
                   ) : (
                     <Mail className="h-5 w-5 mr-3 text-gray-500 mt-1" />
                   )}
@@ -203,7 +203,7 @@ export default function BookingConfirmationPage() {
                       {emailStatus === 'sent' 
                         ? 'Email Confirmation Sent' 
                         : emailStatus === 'failed' 
-                          ? 'Email Sending Failed' 
+                          ? 'Email Delivery Failed' 
                           : emailStatus === 'pending'
                             ? 'Email Delivery in Progress'
                             : 'Email Confirmation'}
@@ -220,16 +220,32 @@ export default function BookingConfirmationPage() {
                       {emailStatus === 'sent' 
                         ? `A confirmation has been sent to ${bookingDetails?.guestDetails?.email || bookingDetails?.passengerEmail || 'your email'}`
                         : emailStatus === 'failed' 
-                          ? 'We could not send an email confirmation at this time. Please contact support.'
+                          ? 'We could not send an email confirmation. Please save your booking number.'
                           : emailStatus === 'pending'
-                            ? 'Your confirmation email is being processed. Please check your inbox and spam folder.'
+                            ? 'Your confirmation email is being processed. Please check your inbox in a few minutes.'
                             : 'Please check your email for booking details'}
                     </p>
                     
                     {emailStatus === 'failed' && (
-                      <p className="text-sm mt-1 text-amber-700">
-                        If you don't receive your confirmation in the next 10 minutes, please contact us at +91 9966363662.
-                      </p>
+                      <div className="mt-3">
+                        <p className="text-sm text-amber-700 mb-2">
+                          Please make a note of your booking number shown above. You can also view your booking in your dashboard.
+                        </p>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="text-amber-700 border-amber-300 hover:bg-amber-50"
+                          onClick={() => {
+                            // Copy booking number to clipboard
+                            if (bookingDetails?.bookingNumber) {
+                              navigator.clipboard.writeText(bookingDetails.bookingNumber);
+                              toast.success("Booking number copied to clipboard");
+                            }
+                          }}
+                        >
+                          Copy Booking Number
+                        </Button>
+                      </div>
                     )}
                   </div>
                 </div>

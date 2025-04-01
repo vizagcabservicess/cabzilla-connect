@@ -1,7 +1,9 @@
+
 <?php
 // Adjust the path to config.php correctly
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/utils/email.php';
+require_once __DIR__ . '/utils/mailer.php';
 
 // For CORS preflight request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -295,7 +297,7 @@ try {
         'updatedAt' => $booking['updated_at']
     ];
     
-    // Send confirmation emails with detailed error logging
+    // Send confirmation emails with detailed error logging and using both methods
     logError("Attempting to send confirmation emails", [
         'booking_id' => $bookingId,
         'passenger_email' => $booking['passenger_email'],
@@ -307,9 +309,20 @@ try {
     // Initialize email results array
     $emailSuccess = ['customer' => false, 'admin' => false];
     
-    // Wrap email sending in try-catch for better error handling
+    // First try with the new reliable method
     try {
-        $emailSuccess['customer'] = sendBookingConfirmationEmail($formattedBooking);
+        // Try the new reliable method first
+        $emailSuccess['customer'] = sendReliableBookingConfirmationEmail($formattedBooking);
+        
+        // If that fails, try the original method as fallback
+        if (!$emailSuccess['customer']) {
+            logError("Reliable method failed, trying original method", [
+                'booking_id' => $bookingId,
+                'email' => $booking['passenger_email']
+            ]);
+            $emailSuccess['customer'] = sendBookingConfirmationEmail($formattedBooking);
+        }
+        
         logError("Customer email sending attempt completed", [
             'result' => $emailSuccess['customer'] ? 'success' : 'failed',
             'email' => $booking['passenger_email']
@@ -323,7 +336,17 @@ try {
     }
     
     try {
-        $emailSuccess['admin'] = sendAdminNotificationEmail($formattedBooking);
+        // Try the new reliable method first for admin email
+        $emailSuccess['admin'] = sendReliableAdminNotificationEmail($formattedBooking);
+        
+        // If that fails, try the original method as fallback
+        if (!$emailSuccess['admin']) {
+            logError("Reliable method failed for admin email, trying original method", [
+                'booking_id' => $bookingId
+            ]);
+            $emailSuccess['admin'] = sendAdminNotificationEmail($formattedBooking);
+        }
+        
         logError("Admin email sending attempt completed", [
             'result' => $emailSuccess['admin'] ? 'success' : 'failed'
         ]);
