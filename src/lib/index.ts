@@ -37,7 +37,8 @@ export {
   defaultHeaders,
   forceRefreshHeaders,
   corsHeaders,
-  createDirectApiUrl
+  createDirectApiUrl,
+  checkApiAvailability
 } from '@/config/api';
 
 // Re-export all methods from fareService
@@ -100,3 +101,4 @@ export { CabLoading, CabRefreshing } from '@/components/cab-options/CabLoading';
 
 // Export the Skeleton component
 export { Skeleton } from '@/components/ui/skeleton';
+
