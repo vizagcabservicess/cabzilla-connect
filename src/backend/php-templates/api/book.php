@@ -1,3 +1,4 @@
+
 <?php
 // Adjust the path to config.php correctly
 require_once __DIR__ . '/../config.php';
@@ -296,36 +297,49 @@ try {
         'updatedAt' => $booking['updated_at']
     ];
     
-    // Send confirmation emails with detailed error logging and using LiteSpeed-optimized methods
-    logError("Attempting to send confirmation emails using LiteSpeed-optimized method", [
+    // Send confirmation emails with detailed error logging and using enhanced LiteSpeed methods
+    logError("Attempting to send confirmation emails", [
         'booking_id' => $bookingId,
         'passenger_email' => $booking['passenger_email'],
         'mail_function_exists' => function_exists('mail') ? 'yes' : 'no',
         'php_version' => phpversion(),
-        'server_os' => PHP_OS
+        'server_os' => PHP_OS,
+        'sapi' => php_sapi_name(),
+        'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown'
     ]);
     
     // Initialize email results array
     $emailSuccess = ['customer' => false, 'admin' => false];
     
-    // Try with the LiteSpeed-optimized method first
+    // Try with all available methods in order of preference
     try {
-        // First try our LiteSpeed-optimized method
+        // First try our LiteSpeed-optimized method with enhanced debugging
         $emailSuccess['customer'] = sendReliableBookingConfirmationEmail($formattedBooking);
-        
-        // If that fails, fall back to the original method
-        if (!$emailSuccess['customer']) {
-            logError("LiteSpeed-optimized method failed, trying original method", [
-                'booking_id' => $bookingId,
-                'email' => $booking['passenger_email']
-            ]);
-            $emailSuccess['customer'] = sendBookingConfirmationEmail($formattedBooking);
-        }
         
         logError("Customer email sending attempt completed", [
             'result' => $emailSuccess['customer'] ? 'success' : 'failed',
             'email' => $booking['passenger_email']
         ]);
+        
+        // If that fails, fall back to the original method
+        if (!$emailSuccess['customer']) {
+            logError("LiteSpeed-optimized method failed for customer, trying original method", [
+                'booking_id' => $bookingId,
+                'email' => $booking['passenger_email']
+            ]);
+            
+            // Try with the original sendEmail function directly
+            $emailSuccess['customer'] = sendEmail(
+                $booking['passenger_email'],
+                "Booking Confirmation - #" . $booking['booking_number'],
+                generateBookingConfirmationEmail($formattedBooking)
+            );
+            
+            logError("Original method result for customer email", [
+                'result' => $emailSuccess['customer'] ? 'success' : 'failed',
+                'email' => $booking['passenger_email']
+            ]);
+        }
     } catch (Exception $e) {
         logError("Exception while sending customer email", [
             'error' => $e->getMessage(),
@@ -335,20 +349,30 @@ try {
     }
     
     try {
-        // Try the LiteSpeed-optimized method first for admin email
+        // Same approach for admin email
         $emailSuccess['admin'] = sendReliableAdminNotificationEmail($formattedBooking);
-        
-        // If that fails, fall back to the original method
-        if (!$emailSuccess['admin']) {
-            logError("LiteSpeed-optimized method failed for admin email, trying original method", [
-                'booking_id' => $bookingId
-            ]);
-            $emailSuccess['admin'] = sendAdminNotificationEmail($formattedBooking);
-        }
         
         logError("Admin email sending attempt completed", [
             'result' => $emailSuccess['admin'] ? 'success' : 'failed'
         ]);
+        
+        // If that fails, fall back to the original method
+        if (!$emailSuccess['admin']) {
+            logError("LiteSpeed-optimized method failed for admin, trying original method", [
+                'booking_id' => $bookingId
+            ]);
+            
+            // Try with the original sendEmail function directly
+            $emailSuccess['admin'] = sendEmail(
+                'info@vizagtaxihub.com',
+                "New Booking - #" . $booking['booking_number'],
+                generateAdminNotificationEmail($formattedBooking)
+            );
+            
+            logError("Original method result for admin email", [
+                'result' => $emailSuccess['admin'] ? 'success' : 'failed'
+            ]);
+        }
     } catch (Exception $e) {
         logError("Exception while sending admin email", [
             'error' => $e->getMessage(),
@@ -357,11 +381,12 @@ try {
         $emailSuccess['admin'] = false;
     }
     
-    logError("Email sending results with LiteSpeed optimization", [
+    logError("Email sending final results", [
         'customer_email_sent' => $emailSuccess['customer'] ? 'yes' : 'no',
         'admin_email_sent' => $emailSuccess['admin'] ? 'yes' : 'no',
         'booking_id' => $bookingId,
-        'php_mail_function' => function_exists('mail') ? 'available' : 'unavailable'
+        'php_mail_function' => function_exists('mail') ? 'available' : 'unavailable',
+        'php_version' => phpversion()
     ]);
 
     // Send response including email status
