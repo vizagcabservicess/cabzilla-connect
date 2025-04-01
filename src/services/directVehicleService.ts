@@ -30,7 +30,7 @@ export const createVehicle = async (vehicleData: CabType): Promise<CabType> => {
     // Force creation flag
     formData.append('forceCreate', 'true');
     
-    // Call the API using the getApiUrl function
+    // Call the API using the getApiUrl function to ensure CORS proxy is used
     const response = await fetch(getApiUrl('/api/admin/direct-vehicle-create.php'), {
       method: 'POST',
       body: formData,
@@ -141,7 +141,7 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
     
     console.log('Submitting vehicle update with data: ', Object.fromEntries(formData));
     
-    // Try direct update with our PHP script with improved error handling
+    // Try direct update with our PHP script - always use getApiUrl to ensure CORS proxy is used
     let response: Response | null = null;
     let result: any = null;
     let fallbackUsed = false;
@@ -149,7 +149,11 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
     try {
       console.log(`Vehicle update attempt using direct-vehicle-update.php`);
       
-      response = await fetch(getApiUrl('/api/admin/direct-vehicle-update.php'), {
+      // Use getApiUrl to ensure CORS proxy is applied
+      const updateUrl = getApiUrl('/api/admin/direct-vehicle-update.php');
+      console.log(`Using update URL with CORS proxy: ${updateUrl}`);
+      
+      response = await fetch(updateUrl, {
         method: 'POST',
         body: formData,
         headers: getBypassHeaders()
@@ -177,6 +181,7 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
           }
         }
       } else {
+        console.error(`Update failed with status ${response.status}`);
         throw new Error(`Update failed with status ${response.status}`);
       }
     } catch (directUpdateError) {
@@ -185,9 +190,12 @@ export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Pr
       
       console.warn('Direct update failed, trying alternate endpoint...');
       
-      // Try alternate endpoint
+      // Try alternate endpoint - always use getApiUrl
       try {
-        response = await fetch(getApiUrl('/api/fares/update-vehicle.php'), {
+        const alternateUrl = getApiUrl('/api/fares/update-vehicle.php');
+        console.log(`Using alternate URL with CORS proxy: ${alternateUrl}`);
+        
+        response = await fetch(alternateUrl, {
           method: 'POST',
           body: formData,
           headers: getBypassHeaders()

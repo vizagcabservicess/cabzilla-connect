@@ -32,6 +32,9 @@ RewriteEngine On
     Header always set X-Request-ID "%{UNIQUE_ID}e"
     Header always set X-Response-Timestamp "%{TIME}e"
     Header always set X-Rate-Limit-Remaining "100"
+    
+    # CORS DEBUG - Expose additional headers for debugging
+    Header always set X-CORS-Debug "CORS headers set by htaccess"
 </IfModule>
 
 # Handle OPTIONS requests for CORS preflight - immediately return 200

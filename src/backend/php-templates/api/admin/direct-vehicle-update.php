@@ -13,6 +13,7 @@ header('Expires: 0');
 // Handle preflight OPTIONS request explicitly
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
+    echo json_encode(['status' => 'success', 'message' => 'CORS preflight request accepted']);
     exit;
 }
 
@@ -407,134 +408,40 @@ try {
         $insertResult = $insertStmt->execute();
         
         if (!$insertResult) {
-            throw new Exception("Failed to insert vehicle: " . $conn->error);
+            throw new Exception("Failed to insert vehicle into vehicle_types: " . $conn->error);
         }
         
         $insertStmt->close();
         
-        file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "New vehicle inserted into vehicle_types table\n", FILE_APPEND);
+        file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Vehicle inserted into vehicle_types table\n", FILE_APPEND);
     }
     
-    // Also update the outstation_fares table if it exists
-    $checkOutstationTable = $conn->query("SHOW TABLES LIKE 'outstation_fares'");
-    if ($checkOutstationTable && $checkOutstationTable->num_rows > 0) {
-        // Check if this vehicle has an entry
-        $checkOutstation = $conn->prepare("SELECT id FROM outstation_fares WHERE vehicle_id = ?");
-        $checkOutstation->bind_param("s", $vehicleId);
-        $checkOutstation->execute();
-        $outstationResult = $checkOutstation->get_result();
-        
-        if ($outstationResult->num_rows > 0) {
-            // Update outstation fares record
-            $updateOutstation = $conn->prepare("
-                UPDATE outstation_fares 
-                SET base_price = ?, price_per_km = ?, 
-                    night_halt_charge = ?, driver_allowance = ?,
-                    updated_at = NOW() 
-                WHERE vehicle_id = ?
-            ");
-            
-            $updateOutstation->bind_param(
-                "dddds", 
-                $basePrice, $pricePerKm, 
-                $nightHaltCharge, $driverAllowance,
-                $vehicleId
-            );
-            
-            $updateOutstation->execute();
-            $updateOutstation->close();
-            
-            file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Updated outstation_fares for this vehicle\n", FILE_APPEND);
-        } else {
-            // Insert into outstation_fares
-            $insertOutstation = $conn->prepare("
-                INSERT INTO outstation_fares 
-                (vehicle_id, base_price, price_per_km, night_halt_charge, driver_allowance) 
-                VALUES (?, ?, ?, ?, ?)
-            ");
-            
-            $insertOutstation->bind_param(
-                "sdddd", 
-                $vehicleId, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance
-            );
-            
-            $insertOutstation->execute();
-            $insertOutstation->close();
-            
-            file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Inserted into outstation_fares for this vehicle\n", FILE_APPEND);
-        }
-    }
-    
-    // Try to update the vehicle_pricing table if it exists
-    $checkPricingTable = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'");
-    if ($checkPricingTable && $checkPricingTable->num_rows > 0) {
-        // Check if this vehicle has a pricing record for outstation
-        $checkPricing = $conn->prepare("SELECT id FROM vehicle_pricing WHERE vehicle_id = ? AND trip_type = 'outstation'");
-        $checkPricing->bind_param("s", $vehicleId);
-        $checkPricing->execute();
-        $pricingResult = $checkPricing->get_result();
-        
-        if ($pricingResult->num_rows > 0) {
-            // Update pricing record for outstation
-            $updatePricing = $conn->prepare("
-                UPDATE vehicle_pricing 
-                SET base_fare = ?, price_per_km = ?, 
-                    night_halt_charge = ?, driver_allowance = ?,
-                    base_price = ?, 
-                    updated_at = NOW() 
-                WHERE vehicle_id = ? AND trip_type = 'outstation'
-            ");
-            
-            $updatePricing->bind_param(
-                "ddddds", 
-                $basePrice, $pricePerKm, 
-                $nightHaltCharge, $driverAllowance,
-                $basePrice, 
-                $vehicleId
-            );
-            
-            $updatePricing->execute();
-            $updatePricing->close();
-            
-            file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Updated vehicle_pricing for outstation trip type\n", FILE_APPEND);
-        } else {
-            // Create pricing record for outstation
-            $insertPricing = $conn->prepare("
-                INSERT INTO vehicle_pricing 
-                (vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance, base_price) 
-                VALUES (?, 'outstation', ?, ?, ?, ?, ?)
-            ");
-            
-            $insertPricing->bind_param(
-                "sddddd", 
-                $vehicleId, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, $basePrice
-            );
-            
-            $insertPricing->execute();
-            $insertPricing->close();
-            
-            file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Inserted new record into vehicle_pricing for outstation\n", FILE_APPEND);
-        }
-    }
+    // Close database connection
+    $conn->close();
     
     // Return success response
-    $response = [
+    http_response_code(200);
+    echo json_encode([
         'status' => 'success',
-        'message' => 'Vehicle updated successfully',
-        'vehicle_id' => $vehicleId,
-        'updated_tables' => [],
-        'timestamp' => time()
-    ];
-    
-    if ($conn->affected_rows > 0) {
-        $response['updated_tables'][] = 'vehicle_types';
-    }
-    
-    echo json_encode($response);
+        'message' => "Vehicle '$name' ($vehicleId) updated successfully",
+        'vehicleId' => $vehicleId,
+        'timestamp' => date('Y-m-d H:i:s'),
+        'data' => [
+            'id' => $vehicleId,
+            'name' => $name,
+            'capacity' => $capacity,
+            'luggageCapacity' => $luggageCapacity,
+            'isActive' => (bool)$isActive,
+            'basePrice' => (float)$basePrice,
+            'pricePerKm' => (float)$pricePerKm,
+            'nightHaltCharge' => (float)$nightHaltCharge,
+            'driverAllowance' => (float)$driverAllowance
+        ]
+    ]);
     
 } catch (Exception $e) {
-    // Log error
-    file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Error: " . $e->getMessage() . "\n", FILE_APPEND);
+    // Log the error
+    file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "ERROR: " . $e->getMessage() . "\n", FILE_APPEND);
     file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Stack trace: " . $e->getTraceAsString() . "\n", FILE_APPEND);
     
     // Return error response
@@ -542,6 +449,7 @@ try {
     echo json_encode([
         'status' => 'error',
         'message' => $e->getMessage(),
-        'timestamp' => time()
+        'vehicleId' => $vehicleId,
+        'timestamp' => date('Y-m-d H:i:s')
     ]);
 }

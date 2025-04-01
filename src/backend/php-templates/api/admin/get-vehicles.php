@@ -16,12 +16,14 @@ header('Expires: 0');
 
 // Add debugging headers
 header('X-Debug-File: get-vehicles.php');
-header('X-API-Version: 1.0.3');
+header('X-API-Version: 1.0.4');
 header('X-Timestamp: ' . time());
+header('X-CORS-Debug: CORS headers set by get-vehicles.php');
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
+    echo json_encode(['status' => 'success', 'message' => 'CORS preflight allowed']);
     exit;
 }
 
@@ -330,7 +332,7 @@ try {
         return strcmp($a['name'], $b['name']);
     });
     
-    // If no vehicles found, provide default vehicles
+    // If no vehicles found, provide default vehicles from vehicles.json
     if (empty($vehiclesArray)) {
         $vehiclesArray = [
             [

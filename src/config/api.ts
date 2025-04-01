@@ -11,11 +11,11 @@ export function getApiUrl(endpoint: string): string {
   // Make sure we have a full URL to encode
   const fullUrl = endpoint.startsWith('http') ? endpoint : `${apiBaseUrl}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
   
-  // Apply CORS proxy if enabled
-  const finalUrl = useCorsProxy ? `${corsProxyUrl}${encodeURIComponent(fullUrl)}` : fullUrl;
+  // Always apply CORS proxy regardless of the env setting for reliability
+  const finalUrl = `${corsProxyUrl}${encodeURIComponent(fullUrl)}`;
   
   // Add debug info to console
-  console.log(`API URL: ${finalUrl} (CORS proxy: ${useCorsProxy ? 'enabled' : 'disabled'})`);
+  console.log(`API URL: ${finalUrl} (CORS proxy: enabled)`);
   
   return finalUrl;
 }

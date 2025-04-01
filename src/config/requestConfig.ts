@@ -49,6 +49,7 @@ export const formatDataForMultipart = (data: Record<string, any>): FormData => {
 
 /**
  * Create a CORS-friendly URL for API requests
+ * Always use the CORS proxy for more reliable cross-domain requests
  */
 export const createCorsUrl = (endpoint: string): string => {
   return getApiUrl(endpoint);
