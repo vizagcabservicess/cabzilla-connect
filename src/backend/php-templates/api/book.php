@@ -296,8 +296,8 @@ try {
         'updatedAt' => $booking['updated_at']
     ];
     
-    // Send confirmation emails with detailed error logging and using Hostinger-optimized methods
-    logError("Attempting to send confirmation emails using Hostinger-optimized method", [
+    // Send confirmation emails with detailed error logging and using LiteSpeed-optimized methods
+    logError("Attempting to send confirmation emails using LiteSpeed-optimized method", [
         'booking_id' => $bookingId,
         'passenger_email' => $booking['passenger_email'],
         'mail_function_exists' => function_exists('mail') ? 'yes' : 'no',
@@ -308,14 +308,14 @@ try {
     // Initialize email results array
     $emailSuccess = ['customer' => false, 'admin' => false];
     
-    // Try with the Hostinger-optimized method first
+    // Try with the LiteSpeed-optimized method first
     try {
-        // First try our Hostinger-optimized method
+        // First try our LiteSpeed-optimized method
         $emailSuccess['customer'] = sendReliableBookingConfirmationEmail($formattedBooking);
         
         // If that fails, fall back to the original method
         if (!$emailSuccess['customer']) {
-            logError("Hostinger-optimized method failed, trying original method", [
+            logError("LiteSpeed-optimized method failed, trying original method", [
                 'booking_id' => $bookingId,
                 'email' => $booking['passenger_email']
             ]);
@@ -335,12 +335,12 @@ try {
     }
     
     try {
-        // Try the Hostinger-optimized method first for admin email
+        // Try the LiteSpeed-optimized method first for admin email
         $emailSuccess['admin'] = sendReliableAdminNotificationEmail($formattedBooking);
         
         // If that fails, fall back to the original method
         if (!$emailSuccess['admin']) {
-            logError("Hostinger-optimized method failed for admin email, trying original method", [
+            logError("LiteSpeed-optimized method failed for admin email, trying original method", [
                 'booking_id' => $bookingId
             ]);
             $emailSuccess['admin'] = sendAdminNotificationEmail($formattedBooking);
@@ -357,7 +357,7 @@ try {
         $emailSuccess['admin'] = false;
     }
     
-    logError("Email sending results with Hostinger optimization", [
+    logError("Email sending results with LiteSpeed optimization", [
         'customer_email_sent' => $emailSuccess['customer'] ? 'yes' : 'no',
         'admin_email_sent' => $emailSuccess['admin'] ? 'yes' : 'no',
         'booking_id' => $bookingId,

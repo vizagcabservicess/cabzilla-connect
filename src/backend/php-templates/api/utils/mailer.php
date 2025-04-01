@@ -2,14 +2,14 @@
 <?php
 require_once __DIR__ . '/../../config.php';
 
-// Function to send email using PHP mail() function optimized for Hostinger
+// Function to send email using PHP mail() function optimized for LiteSpeed servers
 function sendMailReliable($to, $subject, $htmlBody, $textBody = '', $headers = []) {
     // Initialize variables for tracking
     $success = false;
     $error = '';
     
     // Log attempt with detailed server info
-    logError("Attempting to send email with Hostinger-optimized method", [
+    logError("Attempting to send email with LiteSpeed-optimized method", [
         'to' => $to,
         'subject' => $subject,
         'mail_function' => function_exists('mail') ? 'available' : 'unavailable',
@@ -23,140 +23,156 @@ function sendMailReliable($to, $subject, $htmlBody, $textBody = '', $headers = [
     $from = 'info@vizagtaxihub.com';
     $fromName = 'Vizag Taxi Hub';
     
-    // Try primary email method specifically configured for Hostinger
+    // LiteSpeed Method 1: Simple direct approach
     try {
-        // Add properly formatted headers for Hostinger
-        $additionalHeaders = [
-            'From' => "$fromName <$from>",
-            'Reply-To' => $from,
-            'Return-Path' => $from,
-            'MIME-Version' => '1.0',
-            'Content-Type' => 'text/html; charset=UTF-8',
-            'X-Mailer' => 'PHP/' . phpversion()
-        ];
+        // LiteSpeed specifically prefers minimal headers
+        $simpleHeaders = "From: $fromName <$from>\r\n";
+        $simpleHeaders .= "Reply-To: $from\r\n";
+        $simpleHeaders .= "Content-Type: text/html; charset=UTF-8\r\n";
         
-        // Merge with custom headers
-        $finalHeaders = array_merge($additionalHeaders, $headers);
-        
-        // Format headers for mail function
-        $headerStr = '';
-        foreach ($finalHeaders as $name => $value) {
-            $headerStr .= "$name: $value\r\n";
-        }
-        
-        // For Hostinger, make sure this from address matches the SPF record
+        // Use -f parameter which is critical for LiteSpeed
         $additionalParams = "-f$from";
         
-        // Set PHP ini settings that might help with delivery on Hostinger
-        ini_set('sendmail_from', $from);
-        
-        // Attempt to send with Hostinger-specific parameters
-        $success = mail($to, $subject, $htmlBody, $headerStr, $additionalParams);
+        // Attempt to send with minimal headers
+        $success = mail($to, $subject, $htmlBody, $simpleHeaders, $additionalParams);
         
         if ($success) {
-            logError("Email sent successfully with Hostinger-optimized method", [
+            logError("Email sent successfully with LiteSpeed simple method", [
                 'to' => $to,
                 'subject' => $subject,
-                'method' => 'PHP mail() with Hostinger parameters'
+                'method' => 'Simple LiteSpeed mail()'
             ]);
             return true;
         } else {
-            logError("Primary email method failed", [
+            logError("LiteSpeed simple method failed", [
                 'to' => $to,
                 'error' => error_get_last() ? error_get_last()['message'] : 'Unknown error'
             ]);
         }
     } catch (Exception $e) {
         $error = $e->getMessage();
-        logError("Exception in primary email method", ['error' => $error]);
+        logError("Exception in LiteSpeed simple method", ['error' => $error]);
     }
     
-    // Method 2: Try alternative approach for Hostinger with simpler headers
+    // LiteSpeed Method 2: Try with minimal parameters
     if (!$success) {
         try {
-            // For Hostinger, simple headers sometimes work better
-            $simpleHeaders = "From: $fromName <$from>\r\n";
-            $simpleHeaders .= "Reply-To: $from\r\n";
-            $simpleHeaders .= "MIME-Version: 1.0\r\n";
-            $simpleHeaders .= "Content-Type: text/html; charset=UTF-8\r\n";
+            // Reset error buffer
+            if (function_exists('error_clear_last')) {
+                error_clear_last();
+            }
             
-            // Try sending with simplified Hostinger approach
-            $success = mail($to, $subject, $htmlBody, $simpleHeaders);
+            // For LiteSpeed, sometimes just the From header works better
+            $minimalHeaders = "From: $from\r\n";
+            $minimalHeaders .= "Content-Type: text/html; charset=UTF-8\r\n";
+            
+            // No additional parameters
+            $success = mail($to, $subject, $htmlBody, $minimalHeaders);
             
             if ($success) {
-                logError("Email sent successfully with simplified Hostinger method", [
+                logError("Email sent successfully with minimal LiteSpeed method", [
                     'to' => $to,
                     'subject' => $subject,
-                    'method' => 'PHP mail() simplified for Hostinger'
+                    'method' => 'Minimal LiteSpeed mail()'
                 ]);
                 return true;
             } else {
-                logError("Secondary email method failed", [
+                logError("LiteSpeed minimal method failed", [
                     'to' => $to,
                     'error' => error_get_last() ? error_get_last()['message'] : 'Unknown error'
                 ]);
             }
         } catch (Exception $e) {
             $error .= ' | ' . $e->getMessage();
-            logError("Exception in secondary email method", ['error' => $e->getMessage()]);
+            logError("Exception in LiteSpeed minimal method", ['error' => $e->getMessage()]);
         }
     }
     
-    // Method 3: Last resort - use direct sendmail approach which sometimes works on Hostinger
+    // LiteSpeed Method 3: Try with full headers but no additional params
     if (!$success) {
         try {
-            // Try Hostinger's sendmail directly
-            $tempFile = tempnam(sys_get_temp_dir(), 'mail');
-            $handle = fopen($tempFile, 'w');
-            
-            // Email format optimized for Hostinger
-            $emailContent = "To: $to\r\n";
-            $emailContent .= "From: $fromName <$from>\r\n";
-            $emailContent .= "Subject: $subject\r\n";
-            $emailContent .= "MIME-Version: 1.0\r\n";
-            $emailContent .= "Content-Type: text/html; charset=UTF-8\r\n\r\n";
-            $emailContent .= $htmlBody;
-            
-            fwrite($handle, $emailContent);
-            fclose($handle);
-            
-            // Use sendmail directly - this path is correct for Hostinger
-            if (function_exists('exec') && !in_array('exec', array_map('trim', explode(',', ini_get('disable_functions'))))) {
-                exec("/usr/sbin/sendmail -t < $tempFile", $output, $returnCode);
-                $success = ($returnCode === 0);
-                
-                if ($success) {
-                    logError("Email sent successfully with sendmail on Hostinger", [
-                        'to' => $to,
-                        'subject' => $subject,
-                        'method' => 'sendmail via exec on Hostinger'
-                    ]);
-                } else {
-                    logError("Hostinger sendmail command failed", [
-                        'return_code' => $returnCode,
-                        'output' => implode("\n", $output)
-                    ]);
-                }
-            } else {
-                logError("Exec function not available for sendmail approach", [
-                    'disable_functions' => ini_get('disable_functions')
-                ]);
+            // Reset error buffer
+            if (function_exists('error_clear_last')) {
+                error_clear_last();
             }
             
-            // Clean up
-            @unlink($tempFile);
+            // Add properly formatted headers for LiteSpeed
+            $fullHeaders = [
+                'From' => "$fromName <$from>",
+                'Reply-To' => $from,
+                'Return-Path' => $from,
+                'MIME-Version' => '1.0',
+                'Content-Type' => 'text/html; charset=UTF-8',
+                'X-Mailer' => 'PHP/' . phpversion()
+            ];
+            
+            // Merge with custom headers
+            $finalHeaders = array_merge($fullHeaders, $headers);
+            
+            // Format headers for mail function
+            $headerStr = '';
+            foreach ($finalHeaders as $name => $value) {
+                $headerStr .= "$name: $value\r\n";
+            }
+            
+            // No additional params for this attempt
+            $success = mail($to, $subject, $htmlBody, $headerStr);
             
             if ($success) {
+                logError("Email sent successfully with full headers LiteSpeed method", [
+                    'to' => $to,
+                    'subject' => $subject,
+                    'method' => 'Full headers LiteSpeed mail()'
+                ]);
                 return true;
+            } else {
+                logError("LiteSpeed full headers method failed", [
+                    'to' => $to,
+                    'error' => error_get_last() ? error_get_last()['message'] : 'Unknown error'
+                ]);
             }
         } catch (Exception $e) {
             $error .= ' | ' . $e->getMessage();
-            logError("Exception in Hostinger fallback email method", ['error' => $e->getMessage()]);
+            logError("Exception in LiteSpeed full headers method", ['error' => $e->getMessage()]);
+        }
+    }
+    
+    // LiteSpeed Method 4: Try without Content-Type header
+    if (!$success) {
+        try {
+            // Reset error buffer
+            if (function_exists('error_clear_last')) {
+                error_clear_last();
+            }
+            
+            // Some LiteSpeed servers have issues with Content-Type headers
+            $noContentTypeHeaders = "From: $from\r\n";
+            $noContentTypeHeaders .= "Reply-To: $from\r\n";
+            
+            // Try sending
+            $success = mail($to, $subject, $htmlBody, $noContentTypeHeaders);
+            
+            if ($success) {
+                logError("Email sent successfully with no Content-Type header method", [
+                    'to' => $to,
+                    'subject' => $subject,
+                    'method' => 'No Content-Type LiteSpeed mail()'
+                ]);
+                return true;
+            } else {
+                logError("LiteSpeed no Content-Type method failed", [
+                    'to' => $to,
+                    'error' => error_get_last() ? error_get_last()['message'] : 'Unknown error'
+                ]);
+            }
+        } catch (Exception $e) {
+            $error .= ' | ' . $e->getMessage();
+            logError("Exception in LiteSpeed no Content-Type method", ['error' => $e->getMessage()]);
         }
     }
     
     // Log detailed failure information
-    logError("All Hostinger email methods failed", [
+    logError("All LiteSpeed email methods failed", [
         'to' => $to,
         'subject' => $subject,
         'errors' => $error,
@@ -184,7 +200,7 @@ function sendReliableBookingConfirmationEmail($booking) {
     $subject = "Booking Confirmation - #" . $booking['bookingNumber'];
     $htmlBody = generateBookingConfirmationEmail($booking);
     
-    logError("Sending booking confirmation email with Hostinger-optimized method", [
+    logError("Sending booking confirmation email with LiteSpeed-optimized method", [
         'to' => $to,
         'booking_number' => $booking['bookingNumber']
     ]);
@@ -206,7 +222,7 @@ function sendReliableAdminNotificationEmail($booking) {
     $subject = "New Booking - #" . $booking['bookingNumber'];
     $htmlBody = generateAdminNotificationEmail($booking);
     
-    logError("Sending admin notification email with Hostinger-optimized method", [
+    logError("Sending admin notification email with LiteSpeed-optimized method", [
         'to' => $to,
         'booking_number' => $booking['bookingNumber']
     ]);
