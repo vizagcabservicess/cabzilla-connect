@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -392,7 +391,7 @@ export default function VehicleManagement() {
       </div>
 
       {apiAvailable === false && (
-        <Alert variant="warning" className="mb-4">
+        <Alert variant="destructive" className="mb-4">
           <WifiOff className="h-4 w-4" />
           <AlertTitle>API Unavailable</AlertTitle>
           <AlertDescription>
