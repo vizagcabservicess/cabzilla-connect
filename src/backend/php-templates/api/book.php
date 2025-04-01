@@ -1,4 +1,3 @@
-
 <?php
 // Adjust the path to config.php correctly
 require_once __DIR__ . '/../config.php';
@@ -297,7 +296,7 @@ try {
         'updatedAt' => $booking['updated_at']
     ];
     
-    // Send confirmation emails with detailed error logging and using enhanced LiteSpeed methods
+    // Send confirmation emails with detailed error logging and using Hostinger methods
     logError("Attempting to send confirmation emails", [
         'booking_id' => $bookingId,
         'passenger_email' => $booking['passenger_email'],
@@ -305,7 +304,8 @@ try {
         'php_version' => phpversion(),
         'server_os' => PHP_OS,
         'sapi' => php_sapi_name(),
-        'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown'
+        'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown',
+        'sendmail_path' => ini_get('sendmail_path')
     ]);
     
     // Initialize email results array
@@ -313,17 +313,36 @@ try {
     
     // Try with all available methods in order of preference
     try {
-        // First try our LiteSpeed-optimized method with enhanced debugging
-        $emailSuccess['customer'] = sendReliableBookingConfirmationEmail($formattedBooking);
+        // First try our Hostinger-specific method
+        $emailSuccess['customer'] = sendHostingerMail(
+            $booking['passenger_email'],
+            "Booking Confirmation - #" . $booking['booking_number'],
+            generateBookingConfirmationEmail($formattedBooking)
+        );
         
-        logError("Customer email sending attempt completed", [
+        logError("Hostinger-specific customer email sending attempt completed", [
             'result' => $emailSuccess['customer'] ? 'success' : 'failed',
             'email' => $booking['passenger_email']
         ]);
         
-        // If that fails, fall back to the original method
+        // If that fails, try the reliable method
         if (!$emailSuccess['customer']) {
-            logError("LiteSpeed-optimized method failed for customer, trying original method", [
+            logError("Hostinger-specific method failed for customer, trying reliable method", [
+                'booking_id' => $bookingId,
+                'email' => $booking['passenger_email']
+            ]);
+            
+            $emailSuccess['customer'] = sendReliableBookingConfirmationEmail($formattedBooking);
+            
+            logError("Reliable method result for customer email", [
+                'result' => $emailSuccess['customer'] ? 'success' : 'failed',
+                'email' => $booking['passenger_email']
+            ]);
+        }
+        
+        // If both failed, try as a last resort the original method
+        if (!$emailSuccess['customer']) {
+            logError("All custom methods failed for customer, trying original method", [
                 'booking_id' => $bookingId,
                 'email' => $booking['passenger_email']
             ]);
@@ -349,16 +368,33 @@ try {
     }
     
     try {
-        // Same approach for admin email
-        $emailSuccess['admin'] = sendReliableAdminNotificationEmail($formattedBooking);
+        // Same approach for admin email - first try Hostinger-specific
+        $emailSuccess['admin'] = sendHostingerMail(
+            'info@vizagtaxihub.com',
+            "New Booking - #" . $booking['booking_number'],
+            generateAdminNotificationEmail($formattedBooking)
+        );
         
-        logError("Admin email sending attempt completed", [
+        logError("Hostinger-specific admin email sending attempt completed", [
             'result' => $emailSuccess['admin'] ? 'success' : 'failed'
         ]);
         
-        // If that fails, fall back to the original method
+        // If that fails, try the reliable method
         if (!$emailSuccess['admin']) {
-            logError("LiteSpeed-optimized method failed for admin, trying original method", [
+            logError("Hostinger-specific method failed for admin, trying reliable method", [
+                'booking_id' => $bookingId
+            ]);
+            
+            $emailSuccess['admin'] = sendReliableAdminNotificationEmail($formattedBooking);
+            
+            logError("Reliable method result for admin email", [
+                'result' => $emailSuccess['admin'] ? 'success' : 'failed'
+            ]);
+        }
+        
+        // If both failed, try as a last resort the original method
+        if (!$emailSuccess['admin']) {
+            logError("All custom methods failed for admin, trying original method", [
                 'booking_id' => $bookingId
             ]);
             
@@ -386,7 +422,8 @@ try {
         'admin_email_sent' => $emailSuccess['admin'] ? 'yes' : 'no',
         'booking_id' => $bookingId,
         'php_mail_function' => function_exists('mail') ? 'available' : 'unavailable',
-        'php_version' => phpversion()
+        'php_version' => phpversion(),
+        'sendmail_path' => ini_get('sendmail_path')
     ]);
 
     // Send response including email status

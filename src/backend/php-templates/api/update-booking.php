@@ -1,7 +1,8 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/utils/mailer.php';
+require_once __DIR__ . '/utils/email.php';
 
 // CORS Headers
 header('Access-Control-Allow-Origin: *');
@@ -225,6 +226,37 @@ try {
         'createdAt' => $updatedBooking['created_at'],
         'updatedAt' => $updatedBooking['updated_at']
     ];
+    
+    // If status is changed to 'confirmed', send a confirmation email to customer
+    if (isset($data['status']) && $data['status'] === 'confirmed') {
+        logError("Sending booking status update email", [
+            'booking_id' => $bookingId,
+            'new_status' => 'confirmed',
+            'passenger_email' => $updatedBooking['passenger_email']
+        ]);
+        
+        try {
+            // Only send if we have a passenger email
+            if (!empty($updatedBooking['passenger_email'])) {
+                $emailSuccess = sendHostingerMail(
+                    $updatedBooking['passenger_email'],
+                    "Booking #" . $updatedBooking['booking_number'] . " Confirmed",
+                    "Your booking has been confirmed. Thank you for choosing Vizag Taxi Hub."
+                );
+                
+                logError("Status update email result", [
+                    'success' => $emailSuccess ? 'yes' : 'no',
+                    'booking_id' => $bookingId,
+                    'recipient' => $updatedBooking['passenger_email']
+                ]);
+            }
+        } catch (Exception $e) {
+            logError("Error sending status update email", [
+                'error' => $e->getMessage(),
+                'booking_id' => $bookingId
+            ]);
+        }
+    }
     
     sendJsonResponse(['status' => 'success', 'message' => 'Booking updated successfully', 'data' => $booking]);
     
