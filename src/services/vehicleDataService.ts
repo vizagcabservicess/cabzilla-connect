@@ -1,6 +1,5 @@
-
 import { CabType } from '@/types/cab';
-import { apiBaseUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
+import { apiBaseUrl, getApiUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
 import { OutstationFare, LocalFare, AirportFare } from '@/types/cab';
 
 // Reduced cache durations to ensure fresher data
@@ -126,7 +125,8 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
   try {
     // Build the URL with includeInactive parameter
     const includeInactiveParam = includeInactive ? 'true' : 'false';
-    let url = `${apiBaseUrl}/api/admin/get-vehicles.php?${cacheBuster}&includeInactive=${includeInactiveParam}`;
+    let endpoint = `/api/admin/get-vehicles.php?${cacheBuster}&includeInactive=${includeInactiveParam}`;
+    let url = getApiUrl(endpoint);
     
     console.log(`Fetching vehicle data from direct API: ${url}`);
     
@@ -141,7 +141,7 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
     
     // Add timeout to the fetch
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Direct API request timeout')), 3000);
+      setTimeout(() => reject(new Error('Direct API request timeout')), 5000); // Increased timeout
     });
     
     // Race the fetch against the timeout
@@ -193,12 +193,12 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
     // Now try the vehicles-data.php endpoint (with error handling)
     try {
       const includeInactiveParam = includeInactive ? 'true' : 'false';
-      let url = `${apiBaseUrl}/api/fares/vehicles-data.php?${cacheBuster}&includeInactive=${includeInactiveParam}`;
-      
+      let endpoint = `/api/fares/vehicles-data.php?${cacheBuster}&includeInactive=${includeInactiveParam}`;
       if (forceRefresh) {
-        url += '&force=true';
+        endpoint += '&force=true';
       }
       
+      let url = getApiUrl(endpoint);
       console.log(`Fetching vehicle data from API: ${url}`);
       
       const fetchPromise = fetch(url, {
@@ -212,7 +212,7 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
       
       // Add timeout to the fetch
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('API request timeout')), 3000);
+        setTimeout(() => reject(new Error('API request timeout')), 5000); // Increased timeout
       });
       
       // Race the fetch against the timeout
@@ -456,7 +456,7 @@ export const updateOutstationFares = async (vehicleId: string, fareData: Outstat
     formData.append('force_sync', 'true');
     
     // Try direct airport fares endpoint
-    const directResponse = await fetch(`${apiBaseUrl}/api/direct-fare-update.php`, {
+    const directResponse = await fetch(getApiUrl('/api/direct-fare-update.php'), {
       method: 'POST',
       body: formData,
       headers: {
@@ -484,7 +484,7 @@ export const updateOutstationFares = async (vehicleId: string, fareData: Outstat
     }
     
     // Try the fallback endpoint
-    const fallbackResponse = await fetch(`${apiBaseUrl}/api/admin/outstation-fares-update.php`, {
+    const fallbackResponse = await fetch(getApiUrl('/api/admin/outstation-fares-update.php'), {
       method: 'POST',
       body: formData
     });
@@ -567,7 +567,7 @@ export const updateLocalFares = async (vehicleId: string, fareData: LocalFare): 
     formData.append('force_sync', 'true');
     
     // Try the direct API endpoint first
-    const directResponse = await fetch(`${apiBaseUrl}/api/direct-fare-update.php`, {
+    const directResponse = await fetch(getApiUrl('/api/direct-fare-update.php'), {
       method: 'POST',
       body: formData,
       headers: {
@@ -595,7 +595,7 @@ export const updateLocalFares = async (vehicleId: string, fareData: LocalFare): 
     }
     
     // Try the fallback endpoint
-    const fallbackResponse = await fetch(`${apiBaseUrl}/api/admin/local-fares-update.php`, {
+    const fallbackResponse = await fetch(getApiUrl('/api/admin/local-fares-update.php'), {
       method: 'POST',
       body: formData
     });
@@ -657,7 +657,7 @@ export const updateAirportFares = async (vehicleId: string, fareData: AirportFar
     formData.append('force_sync', 'true');
     
     // Try the direct airport fares endpoint first
-    const directResponse = await fetch(`${apiBaseUrl}/api/direct-airport-fares.php`, {
+    const directResponse = await fetch(getApiUrl('/api/direct-airport-fares.php'), {
       method: 'POST',
       body: formData,
       headers: {
@@ -685,7 +685,7 @@ export const updateAirportFares = async (vehicleId: string, fareData: AirportFar
     }
     
     // Try the general fare update endpoint
-    const generalResponse = await fetch(`${apiBaseUrl}/api/direct-fare-update.php`, {
+    const generalResponse = await fetch(getApiUrl('/api/direct-fare-update.php'), {
       method: 'POST',
       body: formData,
       headers: {
@@ -713,7 +713,7 @@ export const updateAirportFares = async (vehicleId: string, fareData: AirportFar
     }
     
     // Try the fallback endpoint
-    const fallbackResponse = await fetch(`${apiBaseUrl}/api/admin/airport-fares-update.php`, {
+    const fallbackResponse = await fetch(getApiUrl('/api/admin/airport-fares-update.php'), {
       method: 'POST',
       body: formData
     });
@@ -749,14 +749,16 @@ export const updateAirportFares = async (vehicleId: string, fareData: AirportFar
 async function syncVehicleTables(vehicleId?: string): Promise<void> {
   try {
     // Build the sync URL
-    let syncUrl = `${apiBaseUrl}/api/admin/force-sync-outstation-fares.php?_t=${Date.now()}`;
+    let endpoint = `/api/admin/force-sync-outstation-fares.php?_t=${Date.now()}`;
     
     if (vehicleId) {
-      syncUrl += `&vehicle_id=${vehicleId}`;
+      endpoint += `&vehicle_id=${vehicleId}`;
     }
     
+    const url = getApiUrl(endpoint);
+    
     // Call the sync endpoint
-    const response = await fetch(syncUrl, {
+    const response = await fetch(url, {
       headers: {
         'X-Force-Refresh': 'true',
         'Cache-Control': 'no-cache'

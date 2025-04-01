@@ -1,5 +1,6 @@
 
 // Helper functions for making API requests
+import { getApiUrl } from './api';
 
 /**
  * Get headers that bypass common API restrictions
@@ -21,7 +22,8 @@ export const getForcedRequestConfig = () => {
   return {
     headers: getBypassHeaders(),
     timeout: 30000, // 30 seconds timeout
-    cache: 'no-store' as const
+    cache: 'no-store' as const,
+    mode: 'cors' as const
   };
 };
 
@@ -43,4 +45,11 @@ export const formatDataForMultipart = (data: Record<string, any>): FormData => {
   });
   
   return formData;
+};
+
+/**
+ * Create a CORS-friendly URL for API requests
+ */
+export const createCorsUrl = (endpoint: string): string => {
+  return getApiUrl(endpoint);
 };

@@ -1,14 +1,16 @@
 
 <?php
+// Enhanced CORS headers first - these must be set before any output
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Admin-Mode, X-Force-Refresh');
+header('Access-Control-Allow-Methods: POST, OPTIONS, GET');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Admin-Mode, X-Force-Refresh, Origin, X-Requested-With');
+header('Access-Control-Max-Age: 86400'); // 24 hours
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
-// Handle preflight OPTIONS request
+// Handle preflight OPTIONS request explicitly
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
@@ -34,6 +36,8 @@ if (!$data) {
 // Write to debug log with timestamp
 $logFile = __DIR__ . '/../../logs/vehicle_update_' . date('Y-m-d') . '.log';
 file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Direct vehicle update received data: " . print_r($data, true) . "\n", FILE_APPEND);
+file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Request method: " . $_SERVER['REQUEST_METHOD'] . "\n", FILE_APPEND);
+file_put_contents($logFile, date('[Y-m-d H:i:s] ') . "Raw input: " . $rawData . "\n", FILE_APPEND);
 
 // Check for XDebug and disable it to prevent memory issues
 if (function_exists('xdebug_disable')) {

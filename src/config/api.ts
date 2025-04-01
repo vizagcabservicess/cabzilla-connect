@@ -4,12 +4,20 @@ export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.
 
 // CORS proxy settings
 const useCorsProxy = import.meta.env.VITE_USE_CORS_PROXY === 'true';
-export const corsProxyUrl = 'https://corsproxy.io/?';
+export const corsProxyUrl = import.meta.env.VITE_CORS_PROXY_URL || 'https://corsproxy.io/?';
 
 // Function to get properly formatted URL with CORS proxy if needed
 export function getApiUrl(endpoint: string): string {
+  // Make sure we have a full URL to encode
   const fullUrl = endpoint.startsWith('http') ? endpoint : `${apiBaseUrl}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
-  return useCorsProxy ? `${corsProxyUrl}${encodeURIComponent(fullUrl)}` : fullUrl;
+  
+  // Apply CORS proxy if enabled
+  const finalUrl = useCorsProxy ? `${corsProxyUrl}${encodeURIComponent(fullUrl)}` : fullUrl;
+  
+  // Add debug info to console
+  console.log(`API URL: ${finalUrl} (CORS proxy: ${useCorsProxy ? 'enabled' : 'disabled'})`);
+  
+  return finalUrl;
 }
 
 // Default timeout in milliseconds
