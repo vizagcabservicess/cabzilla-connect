@@ -160,6 +160,19 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
     console.log(`Original capacity value: ${vehicle.capacity}, type: ${typeof vehicle.capacity}, parsed: ${capacity}`);
     console.log(`Original luggage capacity value: ${vehicle.luggageCapacity}, type: ${typeof vehicle.luggageCapacity}, parsed: ${luggageCapacity}`);
     
+    // Ensure basePrice and pricePerKm are numbers
+    const basePrice = typeof vehicle.basePrice === 'string'
+      ? parseFloat(vehicle.basePrice)
+      : Number(vehicle.basePrice || vehicle.price || 0);
+      
+    const price = typeof vehicle.price === 'string'
+      ? parseFloat(vehicle.price)
+      : Number(vehicle.price || vehicle.basePrice || 0);
+      
+    const pricePerKm = typeof vehicle.pricePerKm === 'string'
+      ? parseFloat(vehicle.pricePerKm)
+      : Number(vehicle.pricePerKm || 0);
+    
     // Normalize vehicle ID before sending and ensure all numeric values are actually numbers
     const normalizedVehicle = {
       ...ensureNumericValues(vehicle),
@@ -171,6 +184,12 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
       capacity: isNaN(capacity) ? 4 : capacity,
       luggageCapacity: isNaN(luggageCapacity) ? 2 : luggageCapacity,
       luggage_capacity: isNaN(luggageCapacity) ? 2 : luggageCapacity,
+      // Ensure price fields are numbers
+      basePrice: isNaN(basePrice) ? 0 : basePrice,
+      base_price: isNaN(basePrice) ? 0 : basePrice,
+      price: isNaN(price) ? 0 : price,
+      pricePerKm: isNaN(pricePerKm) ? 0 : pricePerKm,
+      price_per_km: isNaN(pricePerKm) ? 0 : pricePerKm,
     };
     
     console.log('Normalized vehicle before update:', normalizedVehicle);
@@ -228,8 +247,10 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
       if (key === 'amenities') {
         if (Array.isArray(value)) {
           formData.append(key, value.join(', '));
+        } else if (typeof value === 'string' && value) {
+          formData.append(key, String(value));
         } else {
-          formData.append(key, String(value || ''));
+          formData.append(key, 'AC');
         }
         return;
       }
@@ -274,7 +295,12 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
       localStorage.removeItem('cachedVehicles');
       
       // Dispatch event to notify other components about the change
-      window.dispatchEvent(new CustomEvent('vehicle-data-changed'));
+      window.dispatchEvent(new CustomEvent('vehicle-data-changed', {
+        detail: {
+          vehicleId: normalizedVehicle.id,
+          timestamp: Date.now()
+        }
+      }));
       
       // Return both the original normalized vehicle and the server response
       const updatedVehicle = {
@@ -376,6 +402,16 @@ export const updateVehicleFares = async (vehicleId: string, fareData: any): Prom
  */
 export const syncVehicleData = async (): Promise<boolean> => {
   try {
+    // Throttle API calls
+    const now = Date.now();
+    const lastSyncTime = parseInt(localStorage.getItem('lastSyncVehicleData') || '0');
+    if (now - lastSyncTime < 10000) { // 10 seconds throttle
+      console.log('syncVehicleData throttled - too recent');
+      return false;
+    }
+    
+    localStorage.setItem('lastSyncVehicleData', now.toString());
+    
     // Start by checking API health
     const isHealthy = await checkApiHealth();
     
@@ -398,7 +434,9 @@ export const syncVehicleData = async (): Promise<boolean> => {
     localStorage.removeItem('cachedVehicles');
     
     // Dispatch event to notify other components about the change
-    window.dispatchEvent(new CustomEvent('vehicle-data-cache-cleared'));
+    window.dispatchEvent(new CustomEvent('vehicle-data-cache-cleared', {
+      detail: { timestamp: Date.now() }
+    }));
     
     return true;
   } catch (error) {

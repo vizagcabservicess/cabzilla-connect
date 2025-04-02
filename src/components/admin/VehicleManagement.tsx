@@ -1,5 +1,4 @@
-
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -26,25 +25,51 @@ export default function VehicleManagement() {
   const [error, setError] = useState<Error | null>(null);
   const [offlineMode, setOfflineMode] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
+  
+  const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const mountedRef = useRef<boolean>(true);
+  const refreshCountRef = useRef<number>(0);
+  const lastEventTimeRef = useRef<number>(0);
+  const isDebouncingRef = useRef<boolean>(false);
 
-  // Reset error state when needed
   const resetError = () => setError(null);
 
-  // Throttle refreshes to prevent rapid reloads
   const canRefresh = useCallback(() => {
     const now = Date.now();
     const timeSinceLastRefresh = now - lastRefreshTime;
-    return timeSinceLastRefresh > 2000 || lastRefreshTime === 0;
+    return timeSinceLastRefresh > 5000 || lastRefreshTime === 0;
   }, [lastRefreshTime]);
+
+  const debounce = useCallback((fn: Function, delay: number) => {
+    if (isDebouncingRef.current) {
+      return false;
+    }
+    
+    isDebouncingRef.current = true;
+    setTimeout(() => {
+      if (mountedRef.current) {
+        fn();
+      }
+      isDebouncingRef.current = false;
+    }, delay);
+    
+    return true;
+  }, []);
 
   const fixDatabase = async () => {
     if (isFixingDb) return; // Prevent duplicate calls
     
+    const now = Date.now();
+    if (now - lastEventTimeRef.current < 10000) {
+      console.log('Fix database throttled');
+      return;
+    }
+    
+    lastEventTimeRef.current = now;
     setIsFixingDb(true);
     resetError();
     
     try {
-      // Try direct API call without CORS proxy
       const response = await fetch(`${apiBaseUrl}/api/admin/fix-vehicle-tables.php`, {
         method: 'GET',
         credentials: 'omit',
@@ -60,7 +85,7 @@ export default function VehicleManagement() {
       
       if (data.status === 'success') {
         toast.success("Database tables fixed successfully");
-        await handleRefreshData();
+        await handleRefreshData(true);
       } else {
         toast.error("Failed to fix database tables: " + (data.message || "Unknown error"));
       }
@@ -68,7 +93,6 @@ export default function VehicleManagement() {
       console.error("Error fixing database:", error);
       toast.error("Failed to fix database tables. Using offline mode.");
       
-      // Attempt to load vehicles from cache even if DB fix failed
       try {
         loadVehiclesFromLocalStorage();
         toast.info("Loaded vehicles from local cache");
@@ -99,21 +123,34 @@ export default function VehicleManagement() {
     return false;
   };
 
-  const loadVehicles = useCallback(async (forceRefresh = false) => {
-    if (!forceRefresh && !canRefresh()) {
+  const handleRefreshData = useCallback(async (forceRefresh = false) => {
+    if (isRefreshing || (!forceRefresh && !canRefresh())) {
       console.log("Refresh throttled, skipping...");
       return;
     }
-
-    try {
-      setIsLoading(true);
-      resetError();
-      setLastRefreshTime(Date.now());
-      console.log("Admin: Fetching all vehicles...");
+    
+    refreshCountRef.current += 1;
+    if (refreshCountRef.current > 3 && !forceRefresh) {
+      console.log(`Too many refreshes (${refreshCountRef.current}), cooling down...`);
       
-      // Always try online mode first
+      if (!refreshTimeoutRef.current) {
+        refreshTimeoutRef.current = setTimeout(() => {
+          refreshCountRef.current = 0;
+          refreshTimeoutRef.current = null;
+        }, 30000);
+      }
+      
+      return;
+    }
+    
+    setIsRefreshing(true);
+    setLastRefreshTime(Date.now());
+    
+    try {
+      resetError();
+      console.log("Admin: Fetching all vehicles (forceRefresh=", forceRefresh, ")");
+      
       try {
-        console.log("Requesting vehicles with forceRefresh=", forceRefresh);
         const fetchedVehicles = await getVehicleData(forceRefresh, true);
         console.log(`Loaded ${fetchedVehicles.length} vehicles for admin view:`, fetchedVehicles);
         
@@ -124,7 +161,6 @@ export default function VehicleManagement() {
             const normalizedId = String(vehicle.id || vehicle.vehicleId || '').trim();
             if (!normalizedId) return;
             
-            // Create normalized vehicle object
             const normalizedVehicle: CabType = {
               ...vehicle,
               id: normalizedId,
@@ -145,7 +181,6 @@ export default function VehicleManagement() {
               driverAllowance: Number(vehicle.driverAllowance || 300)
             };
             
-            // Log numeric values to help debug
             console.log(`Vehicle ${normalizedId} numeric fields:`, {
               capacity: normalizedVehicle.capacity,
               luggageCapacity: normalizedVehicle.luggageCapacity,
@@ -153,7 +188,6 @@ export default function VehicleManagement() {
               pricePerKm: normalizedVehicle.pricePerKm
             });
             
-            // Handle duplicates by merging properties
             if (deduplicatedVehicles[normalizedId]) {
               const existing = deduplicatedVehicles[normalizedId];
               
@@ -176,7 +210,6 @@ export default function VehicleManagement() {
           setVehicles(uniqueVehicles);
           setOfflineMode(false);
           
-          // Cache the results
           try {
             localStorage.setItem('cachedVehicles', JSON.stringify(uniqueVehicles));
             localStorage.setItem('localVehicles', JSON.stringify(uniqueVehicles));
@@ -184,7 +217,6 @@ export default function VehicleManagement() {
             console.error("Error caching vehicles:", cacheError);
           }
         } else {
-          // No vehicles returned, try loading from localStorage
           console.log("No vehicles returned from API, trying localStorage");
           if (!loadVehiclesFromLocalStorage()) {
             toast.error("Failed to load vehicles. Please try refreshing the page.");
@@ -193,7 +225,6 @@ export default function VehicleManagement() {
       } catch (apiError) {
         console.error("API error:", apiError);
         
-        // Try loading from localStorage as a fallback
         if (loadVehiclesFromLocalStorage()) {
           toast.warning("Working in offline mode. Changes will be saved locally.");
           setOfflineMode(true);
@@ -204,7 +235,6 @@ export default function VehicleManagement() {
     } catch (error) {
       console.error("Error loading vehicles:", error);
       
-      // Try loading from localStorage as a fallback
       if (loadVehiclesFromLocalStorage()) {
         toast.warning("Working in offline mode. Changes will be saved locally.");
         setOfflineMode(true);
@@ -213,129 +243,99 @@ export default function VehicleManagement() {
       }
     } finally {
       setIsLoading(false);
-    }
-  }, [canRefresh]);
-
-  useEffect(() => {
-    loadVehicles(false);
-    
-    const handleVehicleDataUpdated = () => {
-      console.log("Vehicle data updated event received");
-      // Use a timeout to prevent multiple refreshes at once
-      setTimeout(() => loadVehicles(true), 500);
-    };
-    
-    // Setup event listeners
-    window.addEventListener('vehicle-data-updated', handleVehicleDataUpdated);
-    window.addEventListener('vehicle-data-refreshed', handleVehicleDataUpdated);
-    window.addEventListener('vehicle-data-changed', handleVehicleDataUpdated);
-    window.addEventListener('vehicle-data-cache-cleared', handleVehicleDataUpdated);
-    
-    // Network status change handler
-    const handleOnline = () => {
-      console.log("Network back online, refreshing data");
-      if (offlineMode) {
-        toast.info("Network connection restored, refreshing data");
-        handleRefreshData();
-      }
-    };
-    
-    window.addEventListener('online', handleOnline);
-    
-    return () => {
-      window.removeEventListener('vehicle-data-updated', handleVehicleDataUpdated);
-      window.removeEventListener('vehicle-data-refreshed', handleVehicleDataUpdated);
-      window.removeEventListener('vehicle-data-changed', handleVehicleDataUpdated);
-      window.removeEventListener('vehicle-data-cache-cleared', handleVehicleDataUpdated);
-      window.removeEventListener('online', handleOnline);
-    };
-  }, [loadVehicles, offlineMode]);
-
-  const handleRefreshData = async () => {
-    if (isRefreshing || !canRefresh()) return;
-    
-    try {
-      setIsRefreshing(true);
-      resetError();
-      clearVehicleDataCache();
-      await loadVehicles(true);
-      toast.success("Vehicle data refreshed successfully");
-    } catch (error) {
-      console.error("Error refreshing vehicle data:", error);
-      toast.error("Failed to refresh vehicle data. Trying offline mode.");
-      
-      // Try loading from localStorage as a fallback
-      if (loadVehiclesFromLocalStorage()) {
-        setOfflineMode(true);
-      } else {
-        setError(error as Error);
-      }
-    } finally {
       setIsRefreshing(false);
     }
-  };
+  }, [canRefresh, debounce]);
+
+  const loadVehicles = useCallback((force = false) => {
+    if (debounce(() => handleRefreshData(force), 300)) {
+      console.log("Debounced vehicle data refresh");
+    }
+  }, [handleRefreshData, debounce]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    const initialLoad = localStorage.getItem('initialVehicleLoad');
+    
+    if (!initialLoad) {
+      loadVehicles(false);
+      localStorage.setItem('initialVehicleLoad', 'true');
+    } else {
+      if (!loadVehiclesFromLocalStorage()) {
+        loadVehicles(false);
+      }
+    }
+    
+    const handleDataEvent = (event: Event) => {
+      const now = Date.now();
+      const eventType = event.type;
+      
+      if (now - lastEventTimeRef.current < 10000) {
+        console.log(`Event ${eventType} throttled (last event was ${(now - lastEventTimeRef.current) / 1000}s ago)`);
+        return;
+      }
+      
+      console.log(`Received ${eventType} event`);
+      lastEventTimeRef.current = now;
+      
+      if (!isRefreshing && mountedRef.current) {
+        debounce(() => loadVehicles(true), 500);
+      }
+    };
+    
+    const eventTypes = [
+      'vehicle-data-changed',
+      'vehicle-data-refreshed',
+      'vehicle-data-cache-cleared'
+    ];
+    
+    eventTypes.forEach(type => {
+      window.addEventListener(type, handleDataEvent);
+    });
+    
+    return () => {
+      mountedRef.current = false;
+      
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
+      
+      eventTypes.forEach(type => {
+        window.removeEventListener(type, handleDataEvent);
+      });
+    };
+  }, [loadVehicles, debounce]);
 
   const handleAddVehicle = (newVehicle: CabType) => {
-    // Update local state immediately
-    if (!vehicles.some(v => v.id === newVehicle.id)) {
-      setVehicles((prev) => [...prev, newVehicle]);
-    }
-    toast.success(`Vehicle ${newVehicle.name} added successfully`);
-    
-    // Refresh data after a delay to fetch the latest data from server
-    setTimeout(() => {
-      clearVehicleDataCache();
-      loadVehicles(true);
-    }, 1000);
+    setVehicles(prevVehicles => [...prevVehicles, newVehicle]);
   };
 
-  const handleEditVehicle = (updatedVehicle: CabType) => {
-    console.log("Handling edit vehicle callback with data:", updatedVehicle);
-    
-    // Update local state immediately
-    setVehicles((prev) =>
-      prev.map((vehicle) =>
-        vehicle.id === updatedVehicle.id ? {
-          ...updatedVehicle,
-          // Ensure numeric fields are preserved
-          capacity: Number(updatedVehicle.capacity || 4),
-          luggageCapacity: Number(updatedVehicle.luggageCapacity || 2),
-          basePrice: Number(updatedVehicle.basePrice || updatedVehicle.price || 0),
-          price: Number(updatedVehicle.price || updatedVehicle.basePrice || 0),
-          pricePerKm: Number(updatedVehicle.pricePerKm || 0)
-        } : vehicle
+  const handleEditVehicle = (editedVehicle: CabType) => {
+    setVehicles(prevVehicles =>
+      prevVehicles.map(vehicle =>
+        vehicle.id === editedVehicle.id ? { ...editedVehicle } : vehicle
       )
     );
-    
-    toast.success(`Vehicle ${updatedVehicle.name} updated successfully`);
     setSelectedVehicle(null);
-    
-    // Refresh data after a delay to fetch the latest data from server
-    setTimeout(() => {
-      clearVehicleDataCache();
-      loadVehicles(true);
-    }, 1500);
   };
 
-  const handleDeleteVehicle = (vehicleId: string) => {
-    // Update local state immediately
-    setVehicles((prev) => prev.filter((vehicle) => vehicle.id !== vehicleId));
-    toast.success("Vehicle deleted successfully");
-    
-    // Refresh data after a delay to fetch the latest data from server
-    setTimeout(() => {
-      clearVehicleDataCache();
-      loadVehicles(true);
-    }, 1000);
+  const handleDeleteVehicle = (id: string) => {
+    setVehicles(prevVehicles => prevVehicles.filter(vehicle => vehicle.id !== id));
   };
 
-  const filteredVehicles = vehicles.filter((vehicle) =>
-    vehicle.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    vehicle.id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (vehicle.description && vehicle.description.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const filteredVehicles = vehicles.filter(vehicle => {
+    const searchTerms = searchQuery.toLowerCase().split(' ').filter(Boolean);
+    if (!searchTerms.length) return true;
+    
+    const vehicleText = [
+      vehicle.id,
+      vehicle.name,
+      vehicle.description
+    ].filter(Boolean).join(' ').toLowerCase();
+    
+    return searchTerms.every(term => vehicleText.includes(term));
+  });
 
-  // If there's an error, show the error fallback
   if (error) {
     return (
       <div className="space-y-4">
@@ -450,7 +450,6 @@ export default function VehicleManagement() {
               vehicle={vehicle}
               onEdit={() => {
                 console.log("Selected vehicle for editing:", vehicle);
-                // Create a deep copy to prevent direct state mutation
                 setSelectedVehicle(JSON.parse(JSON.stringify(vehicle)));
                 setIsEditDialogOpen(true);
               }}

@@ -65,7 +65,10 @@ export function EditVehicleDialog({
       if (Array.isArray(initialVehicle.amenities)) {
         vehicleAmenities = initialVehicle.amenities.filter(Boolean);
       } else if (typeof initialVehicle.amenities === 'string' && initialVehicle.amenities) {
-        vehicleAmenities = initialVehicle.amenities.split(',').map(a => a.trim()).filter(Boolean);
+        // Add type check before calling string methods
+        if (initialVehicle.amenities && typeof initialVehicle.amenities === 'string') {
+          vehicleAmenities = initialVehicle.amenities.split(',').map(a => a.trim()).filter(Boolean);
+        }
       }
       
       console.log('Parsed numeric values:');
