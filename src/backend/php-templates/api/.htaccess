@@ -90,6 +90,12 @@ RewriteRule ^delete-vehicle\.php$ admin/direct-vehicle-delete.php [L,QSA]
 RewriteRule ^admin/delete-vehicle$ admin/direct-vehicle-delete.php [L,QSA]
 RewriteRule ^admin/delete-vehicle\.php$ admin/direct-vehicle-delete.php [L,QSA]
 
+# Make sure our outstation fares endpoint is properly accessible
+RewriteRule ^admin/direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^admin/direct-outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^direct-outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
+
 # Other API endpoints can remain as they are
 RewriteRule ^status$ status.php [L,QSA]
 RewriteRule ^admin/status$ admin/status.php [L,QSA]

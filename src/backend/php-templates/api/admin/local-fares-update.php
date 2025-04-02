@@ -79,13 +79,14 @@ if (strpos($vehicleId, 'item-') === 0) {
     $vehicleId = substr($vehicleId, 5);
 }
 
-// CRITICAL FIX: Expanded ID mapping with all known numeric IDs - THIS IS THE KEY CHANGE
+// CRITICAL FIX: Comprehensive ID mapping with all known numeric IDs
 $knownMappings = [
+    // Single numeric IDs
     '1' => 'sedan',
     '2' => 'ertiga',
     '180' => 'etios',
-    '1266' => 'MPV',
     '592' => 'Urbania',
+    '1266' => 'MPV',
     '1270' => 'MPV',
     '1271' => 'etios',
     '1272' => 'etios',
@@ -97,33 +98,70 @@ $knownMappings = [
     '1278' => 'etios',
     '1279' => 'etios',
     '1280' => 'etios',
-    // Special cases observed in logs
+    '1281' => 'MPV',
+    '1282' => 'sedan',
+    '1283' => 'sedan',
+    '1284' => 'etios',
+    '1285' => 'etios',
+    '1286' => 'etios',
+    '1287' => 'etios',
+    '1288' => 'etios',
+    '1289' => 'etios',
+    '1290' => 'etios',
     '100' => 'sedan',
     '101' => 'sedan',
     '102' => 'sedan',
     '200' => 'ertiga',
     '201' => 'ertiga',
-    // Additional mappings for problematic IDs reported by user
-    '1281' => 'MPV',
-    '1282' => 'sedan',
-    '1,1266,180' => 'sedan', // Handle comma-separated IDs
+    '202' => 'ertiga',
+    
+    // Comma-separated numeric IDs (must handle these specifically)
+    '1,1266,180' => 'sedan',
+    '1,2,180' => 'sedan',
+    '2,1,180' => 'ertiga',
+    '1266,1,180' => 'MPV',
+    '180,1,1266' => 'etios'
 ];
 
 // Log the original and cleaned vehicleId
 error_log("[$timestamp] Original vehicle ID: $originalVehicleId, Cleaned: $vehicleId", 3, $logDir . '/local-fares.log');
 
-// CRITICAL CHECK: If this is ANY numeric ID, we MUST map it or reject it completely
-// Also handle comma-separated lists which could be slipping through
+// CRITICAL CHECK: Block ANY numeric ID that isn't in our mappings
+// Also handle comma-separated lists which are causing the issues
 if (is_numeric($vehicleId) || strpos($vehicleId, ',') !== false) {
-    // If in mappings, use proper vehicle_id
+    // Check if we have a mapping for this exact ID
     if (isset($knownMappings[$vehicleId])) {
         $numericId = $vehicleId;
         $vehicleId = $knownMappings[$vehicleId];
-        error_log("[$timestamp] Mapped numeric/list ID $numericId to vehicle_id: $vehicleId", 3, $logDir . '/local-fares.log');
+        error_log("[$timestamp] Successfully mapped problematic ID '$numericId' to proper vehicle_id: $vehicleId", 3, $logDir . '/local-fares.log');
+    } 
+    // If we don't have an exact mapping but it's a comma-separated list
+    else if (strpos($vehicleId, ',') !== false) {
+        // Try to get the first value and map that
+        $idParts = explode(',', $vehicleId);
+        $firstId = trim($idParts[0]);
+        
+        if (isset($knownMappings[$firstId])) {
+            $numericId = $vehicleId;
+            $vehicleId = $knownMappings[$firstId];
+            error_log("[$timestamp] Mapped first ID from list '$numericId' to: $vehicleId", 3, $logDir . '/local-fares.log');
+        }
+        else {
+            // We don't have a mapping for this numeric ID - reject it
+            error_log("[$timestamp] REJECTED unmapped comma-separated ID: $vehicleId", 3, $logDir . '/local-fares.log');
+            http_response_code(400);
+            echo json_encode([
+                'status' => 'error',
+                'message' => "Cannot use ID '$vehicleId'. Please use proper vehicle_id like 'sedan', 'ertiga', 'etios', etc.",
+                'isNumericId' => true,
+                'originalId' => $originalVehicleId
+            ]);
+            exit;
+        }
     }
-    // If not in mappings, ALWAYS reject numeric IDs completely
+    // Single numeric ID without mapping - reject it
     else {
-        error_log("[$timestamp] REJECTED unmapped numeric/list ID: $vehicleId - will not allow this to create a duplicate", 3, $logDir . '/local-fares.log');
+        error_log("[$timestamp] REJECTED unmapped numeric ID: $vehicleId", 3, $logDir . '/local-fares.log');
         http_response_code(400);
         echo json_encode([
             'status' => 'error',
@@ -135,7 +173,7 @@ if (is_numeric($vehicleId) || strpos($vehicleId, ',') !== false) {
     }
 }
 
-// If vehicleId is still empty or invalid, report error
+// If vehicleId is still empty or invalid after all processing, report error
 if (empty($vehicleId) || $vehicleId === 'undefined') {
     http_response_code(400);
     echo json_encode([
@@ -250,6 +288,7 @@ function getDbConnection() {
         
         return $conn;
     } catch (Exception $e) {
+        global $timestamp, $logDir;
         error_log("[$timestamp] DB Connection Error: " . $e->getMessage(), 3, $logDir . '/local-fares.log');
         throw $e;
     }
