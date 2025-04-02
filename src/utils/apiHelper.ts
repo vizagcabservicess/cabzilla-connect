@@ -65,17 +65,35 @@ export const directVehicleOperation = async (
             continue;
           }
           
-          // Special case for capacity and luggage capacity - ensure they're sent as numbers
+          // CRITICAL: Special handling for capacity to ensure it's sent correctly as a number
           if (key === 'capacity') {
-            const numValue = Number(value) || 4; // Default to 4 if invalid
-            formData.append(key, String(numValue));
+            // Ensure capacity is a valid number (default to 4 if invalid)
+            const numValue = parseInt(String(value), 10);
+            const validValue = isNaN(numValue) ? 4 : numValue;
+            formData.append(key, String(validValue));
+            // Also include a numeric version for PHP
+            formData.append('capacity_value', String(validValue));
             continue;
           }
           
+          // CRITICAL: Special handling for luggageCapacity to ensure it's sent in both formats
           if (key === 'luggageCapacity' || key === 'luggage_capacity') {
-            const numValue = Number(value) || 2; // Default to 2 if invalid
-            formData.append('luggageCapacity', String(numValue));
-            formData.append('luggage_capacity', String(numValue)); // Add snake_case version for PHP
+            // Ensure luggage capacity is a valid number (default to 2 if invalid)
+            const numValue = parseInt(String(value), 10);
+            const validValue = isNaN(numValue) ? 2 : numValue;
+            
+            // Add both camelCase and snake_case versions for compatibility
+            formData.append('luggageCapacity', String(validValue));
+            formData.append('luggage_capacity', String(validValue));
+            // Also include numeric versions for PHP
+            formData.append('luggage_capacity_value', String(validValue));
+            continue;
+          }
+          
+          // Special handling for price fields to ensure they're numbers
+          if (['basePrice', 'pricePerKm', 'nightHaltCharge', 'driverAllowance', 'price'].includes(key)) {
+            const numValue = parseFloat(String(value));
+            formData.append(key, String(isNaN(numValue) ? 0 : numValue));
             continue;
           }
           
@@ -89,6 +107,17 @@ export const directVehicleOperation = async (
               formData.append(key, String(value));
             }
           }
+        }
+        
+        // Add explicit numeric fields to ensure they're included correctly
+        if (data.capacity !== undefined) {
+          const capacityValue = parseInt(String(data.capacity), 10);
+          formData.append('capacity_numeric', String(isNaN(capacityValue) ? 4 : capacityValue));
+        }
+        
+        if (data.luggageCapacity !== undefined) {
+          const luggageValue = parseInt(String(data.luggageCapacity), 10);
+          formData.append('luggage_capacity_numeric', String(isNaN(luggageValue) ? 2 : luggageValue));
         }
         
         // Log FormData contents for debugging
