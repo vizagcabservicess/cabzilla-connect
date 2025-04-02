@@ -1,3 +1,4 @@
+
 /**
  * Direct vehicle service for operations that bypass API layers
  * This ensures consistent behavior for vehicle CRUD operations
@@ -223,6 +224,16 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
         return;
       }
       
+      // Handle amenities array specially
+      if (key === 'amenities') {
+        if (Array.isArray(value)) {
+          formData.append(key, value.join(', '));
+        } else {
+          formData.append(key, String(value || ''));
+        }
+        return;
+      }
+      
       // Handle objects (like amenities array)
       if (typeof value === 'object' && value !== null) {
         formData.append(key, JSON.stringify(value));
@@ -256,6 +267,7 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
     }
     
     const result = await response.json();
+    console.log('API update response:', result);
     
     if (result.status === 'success') {
       // Clear any cached data
@@ -264,7 +276,14 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
       // Dispatch event to notify other components about the change
       window.dispatchEvent(new CustomEvent('vehicle-data-changed'));
       
-      return normalizedVehicle;
+      // Return both the original normalized vehicle and the server response
+      const updatedVehicle = {
+        ...normalizedVehicle,
+        ...result.vehicle,
+      };
+      
+      console.log('Final updated vehicle:', updatedVehicle);
+      return updatedVehicle;
     } else {
       throw new Error(result.message || 'Failed to update vehicle');
     }
