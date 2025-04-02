@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,10 +35,16 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
   let amenities: string[] = ['AC'];
   
   if (Array.isArray(vehicle.amenities)) {
+    // If amenities is already an array, use it directly
     amenities = vehicle.amenities.filter(Boolean);
-  } else if (typeof vehicle.amenities === 'string' && vehicle.amenities) {
-    // Explicitly check that it's a string AND not empty before calling split
-    amenities = vehicle.amenities.split(',').map(a => a.trim()).filter(Boolean);
+  } else if (typeof vehicle.amenities === 'string') {
+    // If amenities is a string, split it only if it's not empty
+    if (vehicle.amenities.trim() !== '') {
+      amenities = vehicle.amenities.split(',').map(a => a.trim()).filter(Boolean);
+    }
+  } else {
+    // If amenities is undefined, null, or some other type, keep the default ['AC']
+    console.log('Unexpected amenities format:', vehicle.amenities);
   }
   
   const handleDelete = async () => {
