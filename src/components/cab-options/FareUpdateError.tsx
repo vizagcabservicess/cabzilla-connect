@@ -1,142 +1,101 @@
 
-import React, { useState } from 'react';
-import { AlertTriangle, RefreshCw, Database } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { fareService } from '@/services/fareService';
-import { toast } from 'sonner';
+import { AlertTriangle, RefreshCw, Database, Terminal } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Card } from "@/components/ui/card";
+import { fixDatabaseTables } from "@/utils/apiHelper";
+import { toast } from "sonner";
 
 interface FareUpdateErrorProps {
-  message?: string;
-  onRefresh?: () => void;
+  message: string;
+  onRetry: () => void;
   isAdmin?: boolean;
-  // Add the missing props
-  error?: Error;
   title?: string;
   description?: string;
-  onRetry?: () => void;
 }
 
-export function FareUpdateError({ 
-  message, 
-  onRefresh, 
+export function FareUpdateError({
+  message,
+  onRetry,
   isAdmin = false,
-  error,
-  title,
-  description,
-  onRetry
+  title = "Update Error",
+  description = "There was a problem updating data. This is often due to a connection issue."
 }: FareUpdateErrorProps) {
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(false);
-  
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    toast.info('Refreshing fare data...');
-    
-    // Clear caches
-    fareService.clearCache();
-    
-    // Wait a moment then call refresh handler
-    setTimeout(() => {
-      if (onRetry) {
-        // Use onRetry if provided
-        onRetry();
-      } else if (onRefresh) {
-        // Fallback to onRefresh if onRetry not provided
-        onRefresh();
-      } else {
-        window.location.reload();
-      }
-      setIsRefreshing(false);
-    }, 1000);
-  };
-  
-  const handleInitializeDatabase = async () => {
-    setIsInitializing(true);
-    toast.info('Initializing database...');
-    
+  const handleFixDatabase = async () => {
     try {
-      // Using the correct number of arguments - only pass forceRecreate
-      const result = await fareService.initializeDatabase(true);
-      console.log('Database initialization result:', result);
+      toast.loading("Fixing database tables...");
+      const success = await fixDatabaseTables();
       
-      if (result?.status === 'success') {
-        toast.success('Database initialized successfully');
-        // Trigger a refresh after successful initialization
-        setTimeout(handleRefresh, 1000);
+      if (success) {
+        toast.success("Database tables fixed successfully");
+        onRetry(); // Retry the operation after fixing the database
       } else {
-        toast.error('Database initialization failed');
-        console.error('Initialization failed:', result);
+        toast.error("Failed to fix database tables");
       }
     } catch (error) {
-      console.error('Database initialization error:', error);
-      toast.error('Failed to initialize database');
-    } finally {
-      setIsInitializing(false);
+      toast.error("Error fixing database tables");
+      console.error("Error fixing database:", error);
+    }
+  };
+
+  const handleDirectAccess = () => {
+    // For admin users, provide direct access to the database management page
+    if (isAdmin) {
+      window.open("/admin/database", "_blank");
+    } else {
+      toast.error("Administrator access required");
     }
   };
   
-  // For direct link to DB endpoint for admin debugging
-  const openDbEndpoint = () => {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
-    window.open(`${baseUrl}/api/admin/direct-local-fares.php?initialize=true&_t=${Date.now()}`, '_blank');
-  };
-  
-  // Determine the message to display
-  const displayMessage = message || 
-                        (error && error.message) || 
-                        description || 
-                        "Failed to update fare data. The server returned an error.";
-  
-  // Determine the title to display
-  const displayTitle = title || (error ? "Error Occurred" : null);
-  
-  // Add context information for debugging
-  let contextInfo = null;
-  if (isAdmin && displayMessage.includes('vehicleId') || displayMessage.includes('vehicle_id')) {
-    contextInfo = (
-      <div className="text-xs mt-2 text-gray-500 bg-gray-100 p-2 rounded">
-        <p><strong>Troubleshooting:</strong> This error occurs when the vehicle ID is not properly passed to the API.</p>
-        <p>Make sure you've selected a vehicle from the dropdown before saving. If the issue persists, try clearing your browser cache and refreshing the page.</p>
-      </div>
-    );
-  } else if (isAdmin && (displayMessage.includes('MySQL server has gone away') || displayMessage.includes('gone away'))) {
-    contextInfo = (
-      <div className="text-xs mt-2 text-gray-500 bg-gray-100 p-2 rounded">
-        <p><strong>Database Connection Issue:</strong> The connection to the database server was lost.</p>
-        <p>This may be due to server maintenance, network issues, or the connection timing out. Please wait a moment and try again.</p>
-      </div>
-    );
-  } else if (isAdmin && (displayMessage.includes('Duplicate entry') || displayMessage.includes('vehicle_type'))) {
-    contextInfo = (
-      <div className="text-xs mt-2 text-gray-500 bg-gray-100 p-2 rounded">
-        <p><strong>Duplicate Entry Error:</strong> This vehicle ID or type already exists in the database.</p>
-        <p>Try using a different vehicle ID, or check if there's a name collision in the vehicle_type field.</p>
-      </div>
-    );
-  }
-  
+  // Detect if we have a 404 error
+  const is404Error = message.includes('404') || message.includes('not found');
+  const isSqlError = message.includes('SQL') || message.includes('MySQL');
+  const isConnectionError = message.includes('connection') || message.includes('timeout');
+
   return (
-    <Alert variant="destructive" className="mb-4">
-      <div className="flex flex-col w-full">
-        <div className="flex items-start mb-2">
-          <AlertTriangle className="h-5 w-5 mr-2 flex-shrink-0" />
-          <div>
-            {displayTitle && <div className="font-semibold mb-1">{displayTitle}</div>}
-            {displayMessage}
-            {contextInfo}
-          </div>
+    <Card className="p-4 mb-4 border-red-200 bg-red-50 dark:bg-red-950 dark:border-red-800">
+      <Alert variant="destructive" className="bg-transparent border-none p-0">
+        <AlertTriangle className="h-5 w-5" />
+        <AlertTitle className="text-red-600 dark:text-red-400">{title}</AlertTitle>
+        <AlertDescription className="text-gray-700 dark:text-gray-300">
+          {description}
+        </AlertDescription>
+        
+        <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+          <p className="font-mono bg-red-100 dark:bg-red-900 p-2 rounded my-2 overflow-auto max-h-24">
+            {message}
+          </p>
+          
+          {is404Error && (
+            <p className="mt-2">
+              <strong>API Endpoint Not Found:</strong> The system couldn't find the correct API endpoint. 
+              This could be due to a server configuration issue.
+            </p>
+          )}
+          
+          {isSqlError && (
+            <p className="mt-2">
+              <strong>Database Error:</strong> There appears to be an issue with the database. 
+              Try fixing the database tables or contact your administrator.
+            </p>
+          )}
+          
+          {isConnectionError && (
+            <p className="mt-2">
+              <strong>Connection Error:</strong> Could not connect to the server. 
+              Please check your network connection and try again.
+            </p>
+          )}
         </div>
         
-        <div className="flex flex-wrap gap-2 mt-1">
+        <div className="flex flex-wrap gap-2 mt-4">
           <Button 
-            variant="destructive" 
+            variant="secondary" 
             size="sm" 
-            onClick={handleRefresh}
-            disabled={isRefreshing}
+            onClick={onRetry}
+            className="flex items-center gap-1"
           >
-            <RefreshCw className={`h-3.5 w-3.5 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
-            {isRefreshing ? 'Refreshing...' : (onRetry ? 'Retry' : 'Refresh Data')}
+            <RefreshCw className="w-4 h-4" /> Retry
           </Button>
           
           {isAdmin && (
@@ -144,24 +103,24 @@ export function FareUpdateError({
               <Button 
                 variant="outline" 
                 size="sm" 
-                onClick={handleInitializeDatabase}
-                disabled={isInitializing}
+                onClick={handleFixDatabase}
+                className="flex items-center gap-1"
               >
-                <Database className={`h-3.5 w-3.5 mr-1 ${isInitializing ? 'animate-pulse' : ''}`} />
-                {isInitializing ? 'Initializing...' : 'Initialize Database'}
+                <Database className="w-4 h-4" /> Initialize Database
               </Button>
               
               <Button 
                 variant="outline" 
                 size="sm" 
-                onClick={openDbEndpoint}
+                onClick={handleDirectAccess}
+                className="flex items-center gap-1"
               >
-                Direct Database Access
+                <Terminal className="w-4 h-4" /> Direct Database Access
               </Button>
             </>
           )}
         </div>
-      </div>
-    </Alert>
+      </Alert>
+    </Card>
   );
 }

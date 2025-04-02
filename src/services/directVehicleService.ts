@@ -3,7 +3,6 @@ import { apiBaseUrl } from '@/config/api';
 import { CabType } from '@/types/cab';
 import { directVehicleOperation } from '@/utils/apiHelper';
 
-// Add headers for the requests
 const defaultHeaders = {
   'X-Force-Refresh': 'true',
   'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -11,7 +10,6 @@ const defaultHeaders = {
   'Expires': '0'
 };
 
-// Keep track of ongoing API calls to prevent duplicates
 const pendingRequests: Record<string, Promise<any>> = {};
 
 /**
@@ -22,21 +20,17 @@ export const getVehicles = async (
   includeInactive = false,
   isAdminMode = false
 ): Promise<CabType[]> => {
-  // Create a request key to track duplicate calls
   const requestKey = `getVehicles-${forceRefresh}-${includeInactive}-${isAdminMode}`;
   
-  // If there's already a pending request with the same parameters, return it
   if (pendingRequests[requestKey]) {
     console.log('Returning existing pending request for', requestKey);
     try {
       return await pendingRequests[requestKey];
     } catch (error) {
-      // If the pending request fails, we'll try again below
       console.error('Pending request failed:', error);
     }
   }
   
-  // Create a new request and store its promise
   const request = new Promise<CabType[]>(async (resolve, reject) => {
     try {
       console.log(`getVehicleData called with forceRefresh=${forceRefresh}, includeInactive=${includeInactive}`);
@@ -52,7 +46,6 @@ export const getVehicles = async (
         'X-Admin-Mode': isAdminMode ? 'true' : 'false'
       };
       
-      // Use directly fetch API rather than helper function for more control
       const response = await fetch(url, {
         method: 'GET',
         headers,
@@ -77,12 +70,9 @@ export const getVehicles = async (
       
       console.log(`Received ${data.vehicles.length} vehicles from API`);
       
-      // Process and normalize vehicle data
       const vehicles = data.vehicles.map((vehicle: any) => {
-        // Add debug logging for each vehicle
         console.log(`Processing vehicle ${vehicle.id || vehicle.vehicleId}: capacity=${vehicle.capacity}->${Number(vehicle.capacity) || 4}, luggage=${vehicle.luggage_capacity}->${Number(vehicle.luggage_capacity) || 2}`);
         
-        // Normalize vehicle data to ensure consistent types
         return {
           id: vehicle.id || vehicle.vehicleId || vehicle.vehicle_id,
           vehicleId: vehicle.id || vehicle.vehicleId || vehicle.vehicle_id,
@@ -112,14 +102,12 @@ export const getVehicles = async (
       console.error('Error fetching vehicles:', error);
       reject(error);
     } finally {
-      // Remove the pending request after it completes (success or failure)
       setTimeout(() => {
         delete pendingRequests[requestKey];
-      }, 1000); // Small delay to prevent immediate duplicate calls
+      }, 1000);
     }
   });
   
-  // Store the promise
   pendingRequests[requestKey] = request;
   
   return request;
@@ -130,7 +118,6 @@ export const getVehicles = async (
  */
 export const getVehicle = async (id: string): Promise<CabType | null> => {
   try {
-    // Try to get the vehicle from the cache first
     const vehicles = await getVehicles(false, true, true);
     const vehicle = vehicles.find(v => v.id === id || v.vehicleId === id);
     
@@ -138,7 +125,6 @@ export const getVehicle = async (id: string): Promise<CabType | null> => {
       return vehicle;
     }
     
-    // If not found, try a direct API call
     const response = await directVehicleOperation('/api/admin/get-vehicle.php', 'GET', { id });
     
     if (response && response.status === 'success' && response.vehicle) {
@@ -159,24 +145,23 @@ export const updateVehicle = async (vehicleData: CabType): Promise<any> => {
   try {
     console.log('Updating vehicle:', vehicleData);
     
-    // Normalize the data before sending
     const normalizedData = {
       id: vehicleData.id,
-      vehicleId: vehicleData.id, // Ensure vehicleId is same as id
-      vehicle_id: vehicleData.id, // Also include for PHP backend compatibility
+      vehicleId: vehicleData.id,
+      vehicle_id: vehicleData.id,
       name: vehicleData.name,
       capacity: Number(vehicleData.capacity),
       luggage_capacity: Number(vehicleData.luggageCapacity),
       luggageCapacity: Number(vehicleData.luggageCapacity),
       ac: vehicleData.ac,
       isActive: vehicleData.isActive,
-      is_active: vehicleData.isActive, // Include both formats
+      is_active: vehicleData.isActive,
       image: vehicleData.image,
       amenities: vehicleData.amenities,
       description: vehicleData.description,
       basePrice: Number(vehicleData.basePrice),
       base_price: Number(vehicleData.basePrice),
-      price: Number(vehicleData.basePrice), // Keep price and basePrice in sync
+      price: Number(vehicleData.basePrice),
       pricePerKm: Number(vehicleData.pricePerKm),
       price_per_km: Number(vehicleData.pricePerKm),
       nightHaltCharge: Number(vehicleData.nightHaltCharge),
@@ -187,23 +172,70 @@ export const updateVehicle = async (vehicleData: CabType): Promise<any> => {
     
     console.log('Normalized vehicle data for update:', normalizedData);
     
-    // Try the new direct update endpoint first
-    const result = await directVehicleOperation('/api/admin/update-vehicle.php', 'POST', normalizedData);
-    console.log('Update vehicle response:', result);
+    let result;
+    let error;
     
-    // Clear any pending requests for getVehicles to force a refresh on next call
+    const possibleEndpoints = [
+      '/api/admin/direct-vehicle-update.php',
+      '/api/admin/update-vehicle.php',
+      '/api/admin/vehicle-update.php'
+    ];
+    
+    for (const endpoint of possibleEndpoints) {
+      try {
+        console.log(`Attempting to update vehicle using endpoint: ${endpoint}`);
+        result = await directVehicleOperation(endpoint, 'POST', normalizedData);
+        
+        if (result && result.status === 'success') {
+          console.log(`Successfully updated vehicle using endpoint: ${endpoint}`);
+          break;
+        }
+      } catch (err) {
+        console.log(`Failed to update using ${endpoint}:`, err);
+        error = err;
+      }
+    }
+    
+    if (!result || result.status !== 'success') {
+      try {
+        console.log('Trying fallback direct update method...');
+        const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-update.php`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          },
+          body: JSON.stringify(normalizedData)
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error: ${response.status}`);
+        }
+        
+        result = await response.json();
+        
+        if (result && result.status === 'success') {
+          console.log('Fallback update method succeeded');
+        } else {
+          throw new Error(result?.message || 'Failed to update vehicle');
+        }
+      } catch (fallbackErr) {
+        console.error('Fallback update also failed:', fallbackErr);
+        throw error || fallbackErr;
+      }
+    }
+    
     Object.keys(pendingRequests).forEach(key => {
       if (key.startsWith('getVehicles-')) {
         delete pendingRequests[key];
       }
     });
     
-    if (result && result.status === 'success') {
-      console.log('Vehicle updated successfully:', result);
-      return result;
-    }
-    
-    throw new Error(result?.message || 'Failed to update vehicle');
+    return result;
   } catch (error: any) {
     console.error('Error updating vehicle:', error);
     throw error;
@@ -220,7 +252,6 @@ export const deleteVehicle = async (id: string): Promise<any> => {
     const result = await directVehicleOperation('/api/admin/delete-vehicle.php', 'POST', { id });
     
     if (result && result.status === 'success') {
-      // Clear any pending requests for getVehicles to force a refresh on next call
       Object.keys(pendingRequests).forEach(key => {
         if (key.startsWith('getVehicles-')) {
           delete pendingRequests[key];
@@ -244,7 +275,6 @@ export const addVehicle = async (vehicleData: CabType): Promise<any> => {
   try {
     console.log('Adding new vehicle:', vehicleData);
     
-    // Normalize the data before sending
     const normalizedData = {
       id: vehicleData.id,
       vehicleId: vehicleData.id,
@@ -261,7 +291,7 @@ export const addVehicle = async (vehicleData: CabType): Promise<any> => {
       description: vehicleData.description,
       basePrice: Number(vehicleData.basePrice),
       base_price: Number(vehicleData.basePrice),
-      price: Number(vehicleData.basePrice), // Keep price and basePrice in sync
+      price: Number(vehicleData.basePrice),
       pricePerKm: Number(vehicleData.pricePerKm),
       price_per_km: Number(vehicleData.pricePerKm),
       nightHaltCharge: Number(vehicleData.nightHaltCharge),
@@ -275,7 +305,6 @@ export const addVehicle = async (vehicleData: CabType): Promise<any> => {
     const result = await directVehicleOperation('/api/admin/add-vehicle.php', 'POST', normalizedData);
     
     if (result && result.status === 'success') {
-      // Clear any pending requests for getVehicles to force a refresh on next call
       Object.keys(pendingRequests).forEach(key => {
         if (key.startsWith('getVehicles-')) {
           delete pendingRequests[key];
@@ -319,13 +348,11 @@ export const updateVehicleFares = async (vehicleId: string, fareData: any): Prom
   try {
     console.log(`Updating fares for vehicle ${vehicleId}`, fareData);
     
-    // Format the data for the API
     const requestData = {
       vehicleId,
       ...fareData
     };
     
-    // Use the direct operation helper
     const result = await directVehicleOperation('/api/admin/direct-vehicle-pricing.php', 'POST', requestData);
     
     if (result && result.status === 'success') {
@@ -344,11 +371,9 @@ export const updateVehicleFares = async (vehicleId: string, fareData: any): Prom
  */
 export const syncVehicleData = async (forceRefresh = false): Promise<CabType[]> => {
   try {
-    // Clear any pending requests for getVehicles
     const pendingKeys = Object.keys(pendingRequests).filter(key => key.startsWith('getVehicles-'));
     pendingKeys.forEach(key => delete pendingRequests[key]);
     
-    // Get fresh vehicle data
     const vehicles = await getVehicles(forceRefresh, true, true);
     
     console.log(`Synced ${vehicles.length} vehicles with backend`);

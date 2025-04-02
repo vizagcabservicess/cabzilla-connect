@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -32,14 +31,12 @@ export function EditVehicleDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
-  // Add a special flag to track if we've already initialized the form values
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
     if (initialVehicle && open) {
       console.log('Initial vehicle data received:', initialVehicle);
       
-      // Convert string values to numbers to ensure consistency
       const numCapacity = parseNumericValue(initialVehicle.capacity, 4);
       const numLuggageCapacity = parseNumericValue(initialVehicle.luggageCapacity, 2);
       const numBasePrice = parseNumericValue(initialVehicle.basePrice || initialVehicle.price, 0);
@@ -47,7 +44,6 @@ export function EditVehicleDialog({
       const numDriverAllowance = parseNumericValue(initialVehicle.driverAllowance, 250);
       const numNightHaltCharge = parseNumericValue(initialVehicle.nightHaltCharge, 700);
       
-      // Prepare vehicle amenities
       const vehicleAmenities = parseAmenities(initialVehicle.amenities);
       
       console.log('Parsed numeric values:');
@@ -58,7 +54,6 @@ export function EditVehicleDialog({
       console.log('- nightHaltCharge:', initialVehicle.nightHaltCharge, '->', numNightHaltCharge);
       console.log('- driverAllowance:', initialVehicle.driverAllowance, '->', numDriverAllowance);
       
-      // Reset any previous server error when opening with new data
       setServerError(null);
       
       setVehicle({
@@ -66,14 +61,13 @@ export function EditVehicleDialog({
         capacity: numCapacity,
         luggageCapacity: numLuggageCapacity,
         basePrice: numBasePrice,
-        price: numBasePrice, // sync price and basePrice
+        price: numBasePrice,
         pricePerKm: numPricePerKm,
         driverAllowance: numDriverAllowance,
         nightHaltCharge: numNightHaltCharge,
         amenities: vehicleAmenities
       });
       
-      // Mark as initialized to prevent later resets
       setIsInitialized(true);
     }
   }, [initialVehicle, open]);
@@ -86,13 +80,12 @@ export function EditVehicleDialog({
     try {
       console.log('Submitting vehicle data:', vehicle);
 
-      // Ensure all numeric fields are numbers before submitting
       const updatedVehicle: CabType = {
         ...vehicle,
         capacity: Number(vehicle.capacity),
         luggageCapacity: Number(vehicle.luggageCapacity),
         basePrice: Number(vehicle.basePrice || 0),
-        price: Number(vehicle.basePrice || 0), // sync price and basePrice
+        price: Number(vehicle.basePrice || 0),
         pricePerKm: Number(vehicle.pricePerKm || 0),
         nightHaltCharge: Number(vehicle.nightHaltCharge || 700),
         driverAllowance: Number(vehicle.driverAllowance || 250)
@@ -100,7 +93,6 @@ export function EditVehicleDialog({
       
       console.log("Prepared vehicle data for update:", updatedVehicle);
       
-      // Add retry mechanism for update
       const maxRetries = 3;
       let attempt = 0;
       let success = false;
@@ -121,26 +113,27 @@ export function EditVehicleDialog({
           lastError = error;
           console.error(`Update attempt ${attempt} failed:`, error);
           
+          if (error.message && (error.message.includes('404') || error.response?.status === 404)) {
+            console.error("404 error detected - API endpoint not found");
+            throw new Error(`API endpoint not found (404): The update-vehicle.php endpoint could not be found on the server. Please check your server configuration.`);
+          }
+          
           if (attempt >= maxRetries) {
             throw error; // Rethrow after max retries
           }
           
-          // Wait before retrying (exponential backoff)
           await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
         }
       }
       
-      // If we get here with lastError, throw it to be caught below
       if (lastError) throw lastError;
       
     } catch (error: any) {
       console.error("Error updating vehicle:", error);
       
-      // Extract detailed error information
       const errorMessage = error.response?.data?.message || error.message || "Unknown error";
       const errorDetails = error.response?.data?.data || error.response?.data?.error || {};
       
-      // Set server error for display in the UI
       setServerError(`Failed to update vehicle: ${errorMessage}`);
       
       toast.error(`Failed to update vehicle: ${errorMessage}`);
@@ -149,7 +142,6 @@ export function EditVehicleDialog({
     }
   };
 
-  // Function to retry the update if there was a server error
   const handleRetry = () => {
     setServerError(null);
     handleSubmit(new Event('submit') as any);
