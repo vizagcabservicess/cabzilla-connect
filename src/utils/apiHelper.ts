@@ -7,7 +7,7 @@ import { apiBaseUrl } from '@/config/api';
  */
 export const directVehicleOperation = async (endpoint: string, method: string, data?: any) => {
   try {
-    const fullUrl = `${apiBaseUrl}${endpoint}`;
+    const fullUrl = `${apiBaseUrl}/${endpoint}`;
     console.log(`Direct vehicle operation: ${method} ${fullUrl}`);
     
     // Add timestamp to URL to avoid caching for GET requests
@@ -38,6 +38,9 @@ export const directVehicleOperation = async (endpoint: string, method: string, d
       }
     }
     
+    // Prepare headers with unique cache-busting value
+    const uniqueCacheBuster = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+    
     // Prepare headers
     const headers: Record<string, string> = {
       'X-Requested-With': 'XMLHttpRequest',
@@ -45,7 +48,8 @@ export const directVehicleOperation = async (endpoint: string, method: string, d
       'Cache-Control': 'no-cache, no-store, must-revalidate',
       'Pragma': 'no-cache',
       'Expires': '0',
-      'X-Admin-Mode': 'true'
+      'X-Admin-Mode': 'true',
+      'X-Cache-Buster': uniqueCacheBuster
     };
     
     // Only add Content-Type if not using FormData
@@ -53,59 +57,88 @@ export const directVehicleOperation = async (endpoint: string, method: string, d
       headers['Content-Type'] = contentType;
     }
     
-    const response = await fetch(finalUrl, {
-      method,
-      headers,
-      body,
-      signal: AbortSignal.timeout(30000) // 30 second timeout
-    });
+    // Use AbortController to set timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
     
-    // Handle different error status codes
-    if (!response.ok) {
-      const errorStatusCode = response.status;
-      let errorText;
+    try {
+      const response = await fetch(finalUrl, {
+        method,
+        headers,
+        body,
+        signal: controller.signal,
+        credentials: 'include', // Include cookies
+        cache: 'no-store',
+        mode: 'cors' // Enable CORS
+      });
       
-      try {
-        // Try to get JSON error message
-        const errorData = await response.json();
-        errorText = errorData.message || errorData.error || response.statusText;
-      } catch (parseError) {
-        // Fall back to status text if JSON parsing fails
-        errorText = response.statusText;
+      clearTimeout(timeoutId);
+      
+      // Handle different error status codes
+      if (!response.ok) {
+        const errorStatusCode = response.status;
+        let errorText;
+        
+        try {
+          // Try to get JSON error message
+          const errorData = await response.json();
+          errorText = errorData.message || errorData.error || response.statusText;
+        } catch (parseError) {
+          // Fall back to status text if JSON parsing fails
+          errorText = response.statusText;
+        }
+        
+        // Create detailed error message with status code
+        throw new Error(`API error: ${errorStatusCode} - ${errorText}`);
       }
       
-      // Create detailed error message with status code
-      throw new Error(`API error: ${errorStatusCode} - ${errorText}`);
-    }
-    
-    // Parse response data
-    const contentTypeHeader = response.headers.get('content-type');
-    
-    if (contentTypeHeader && contentTypeHeader.includes('application/json')) {
-      // JSON response
-      try {
-        const responseData = await response.json();
-        return responseData;
-      } catch (jsonError) {
-        console.error('Failed to parse JSON response', jsonError);
-        throw new Error(`Invalid JSON response: ${await response.text()}`);
+      // Parse response data
+      const contentTypeHeader = response.headers.get('content-type');
+      
+      if (contentTypeHeader && contentTypeHeader.includes('application/json')) {
+        // JSON response
+        try {
+          const responseData = await response.json();
+          return responseData;
+        } catch (jsonError) {
+          console.error('Failed to parse JSON response', jsonError);
+          
+          // Try to get the text and parse as JSON anyway
+          const textResponse = await response.text();
+          try {
+            return JSON.parse(textResponse);
+          } catch {
+            throw new Error(`Invalid JSON response: ${textResponse}`);
+          }
+        }
+      } else {
+        // Non-JSON response
+        const textResponse = await response.text();
+        try {
+          // Try to parse as JSON anyway in case Content-Type is incorrect
+          return JSON.parse(textResponse);
+        } catch (jsonError) {
+          // Return plain text response as an object
+          return {
+            status: response.ok ? 'success' : 'error',
+            message: textResponse,
+            raw: textResponse
+          };
+        }
       }
-    } else {
-      // Non-JSON response
-      const textResponse = await response.text();
-      try {
-        // Try to parse as JSON anyway in case Content-Type is incorrect
-        return JSON.parse(textResponse);
-      } catch (jsonError) {
-        // Return plain text response as an object
-        return {
-          status: response.ok ? 'success' : 'error',
-          message: textResponse,
-          raw: textResponse
-        };
-      }
+    } finally {
+      clearTimeout(timeoutId);
     }
   } catch (error: any) {
+    // Handle network errors
+    if (error.name === 'AbortError') {
+      throw new Error('Request timeout: The server took too long to respond');
+    }
+    
+    if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+      throw new Error('Network error: Unable to connect to the server. Please check your internet connection.');
+    }
+    
     console.error(`Error in directVehicleOperation (${endpoint}):`, error);
     throw error;
   }
@@ -217,22 +250,25 @@ export const fixDatabaseTables = async (): Promise<boolean> => {
 /**
  * Get bypass headers for direct API access
  */
-export const getBypassHeaders = (forceRefresh = false, isAdminMode = false) => {
+export const getBypassHeaders = (forceRefresh = true, isAdminMode = true) => {
+  const uniqueCacheBuster = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+  
   return {
     'Content-Type': 'application/json',
     'X-Requested-With': 'XMLHttpRequest',
-    'X-Force-Refresh': forceRefresh ? 'true' : 'false',
+    'X-Force-Refresh': 'true',
     'X-Admin-Mode': isAdminMode ? 'true' : 'false',
-    'Cache-Control': forceRefresh ? 'no-cache, no-store, must-revalidate' : 'max-age=300',
-    'Pragma': forceRefresh ? 'no-cache' : '',
-    'Expires': forceRefresh ? '0' : ''
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'X-Cache-Buster': uniqueCacheBuster
   };
 };
 
 /**
  * Get forced request configuration for API calls
  */
-export const getForcedRequestConfig = (isAdminMode = false) => {
+export const getForcedRequestConfig = (isAdminMode = true) => {
   return {
     headers: getBypassHeaders(true, isAdminMode),
     cache: 'no-store' as RequestCache,

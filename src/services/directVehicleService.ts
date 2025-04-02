@@ -21,7 +21,11 @@ export const addVehicle = async (vehicle: CabType): Promise<CabType> => {
     // Try each endpoint until one succeeds
     for (const endpoint of endpoints) {
       try {
-        const response = await directVehicleOperation(endpoint, 'POST', vehicle);
+        // Add a timestamp to bypass cache
+        const timestampedEndpoint = `${endpoint}?_t=${Date.now()}`;
+        console.log(`Trying vehicle creation endpoint: ${apiBaseUrl}/${timestampedEndpoint}`);
+        
+        const response = await directVehicleOperation(timestampedEndpoint, 'POST', vehicle);
         
         if (response && response.status === 'success') {
           return response.vehicle || vehicle;
@@ -31,6 +35,31 @@ export const addVehicle = async (vehicle: CabType): Promise<CabType> => {
         console.error(`Error with endpoint ${endpoint}:`, error);
         // Continue to the next endpoint
       }
+    }
+    
+    // If all endpoints failed, try a direct fetch as a last resort
+    try {
+      console.log('Trying direct fetch as last resort for vehicle creation...');
+      const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-create.php`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          'X-Admin-Mode': 'true'
+        },
+        body: JSON.stringify(vehicle)
+      });
+      
+      const result = await response.json();
+      if (result && result.status === 'success') {
+        return result.vehicle || vehicle;
+      }
+    } catch (error) {
+      console.error('Last resort direct fetch failed:', error);
     }
     
     // If we've reached here, all endpoints failed
@@ -63,7 +92,11 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
     // Try each endpoint until one succeeds
     for (const endpoint of endpoints) {
       try {
-        const response = await directVehicleOperation(endpoint, 'POST', vehicle);
+        // Add a timestamp to bypass cache
+        const timestampedEndpoint = `${endpoint}?_t=${Date.now()}`;
+        console.log(`Trying vehicle update endpoint: ${apiBaseUrl}/${timestampedEndpoint}`);
+        
+        const response = await directVehicleOperation(timestampedEndpoint, 'POST', vehicle);
         
         if (response && response.status === 'success') {
           return response.vehicle || vehicle;
@@ -75,10 +108,10 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
       }
     }
     
-    // If direct endpoint approach fails, try a direct fetch as a fallback
+    // If all endpoints failed, try a direct fetch as a last resort
     try {
-      console.log('Trying direct fetch as last resort...');
-      const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-update.php`, {
+      console.log('Trying direct fetch as last resort for vehicle update...');
+      const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-update.php?_t=${Date.now()}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -98,6 +131,32 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
       }
     } catch (error) {
       console.error('Last resort direct fetch failed:', error);
+    }
+    
+    // If direct API calls failed, try using the backup domain if available
+    if (typeof window !== 'undefined') {
+      try {
+        const backupDomain = 'https://vizagcabs.com';
+        console.log(`Trying backup domain: ${backupDomain}`);
+        const response = await fetch(`${backupDomain}/api/admin/direct-vehicle-update.php`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'X-Admin-Mode': 'true'
+          },
+          body: JSON.stringify(vehicle)
+        });
+        
+        const result = await response.json();
+        if (result && result.status === 'success') {
+          return result.vehicle || vehicle;
+        }
+      } catch (error) {
+        console.error('Backup domain attempt failed:', error);
+      }
     }
     
     // If we've reached here, all endpoints failed
@@ -125,7 +184,11 @@ export const deleteVehicle = async (vehicleId: string): Promise<{ status: string
     // Try each endpoint until one succeeds
     for (const endpoint of endpoints) {
       try {
-        const response = await directVehicleOperation(endpoint, 'POST', { vehicleId });
+        // Add a timestamp to bypass cache
+        const timestampedEndpoint = `${endpoint}?_t=${Date.now()}`;
+        console.log(`Trying vehicle deletion endpoint: ${apiBaseUrl}/${timestampedEndpoint}`);
+        
+        const response = await directVehicleOperation(timestampedEndpoint, 'POST', { vehicleId });
         
         if (response && response.status === 'success') {
           return { status: 'success' };
@@ -135,6 +198,29 @@ export const deleteVehicle = async (vehicleId: string): Promise<{ status: string
         console.error(`Error with endpoint ${endpoint}:`, error);
         // Continue to the next endpoint
       }
+    }
+    
+    // If all API endpoints failed, try a direct fetch as a last resort
+    try {
+      console.log('Trying direct fetch as last resort for vehicle deletion...');
+      const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-delete.php?id=${vehicleId}&_t=${Date.now()}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'X-Admin-Mode': 'true'
+        },
+        body: JSON.stringify({ vehicleId })
+      });
+      
+      const result = await response.json();
+      if (result && result.status === 'success') {
+        return { status: 'success' };
+      }
+    } catch (error) {
+      console.error('Last resort direct fetch for deletion failed:', error);
     }
     
     // If we've reached here, all endpoints failed
@@ -150,7 +236,7 @@ export const deleteVehicle = async (vehicleId: string): Promise<{ status: string
  */
 export const getVehicle = async (vehicleId: string): Promise<CabType> => {
   try {
-    const response = await directVehicleOperation(`api/admin/vehicles-data.php?id=${vehicleId}`, 'GET');
+    const response = await directVehicleOperation(`api/admin/vehicles-data.php?id=${vehicleId}&_t=${Date.now()}`, 'GET');
     
     if (response && response.vehicles && response.vehicles.length > 0) {
       return response.vehicles[0];
@@ -164,11 +250,14 @@ export const getVehicle = async (vehicleId: string): Promise<CabType> => {
 };
 
 /**
- * Get all vehicles - added to fix the missing export error
+ * Get all vehicles
  */
 export const getVehicles = async (includeInactive = false): Promise<CabType[]> => {
   try {
-    const response = await directVehicleOperation(`api/admin/vehicles-data.php?includeInactive=${includeInactive ? 'true' : 'false'}`, 'GET');
+    const response = await directVehicleOperation(
+      `api/admin/vehicles-data.php?includeInactive=${includeInactive ? 'true' : 'false'}&_t=${Date.now()}`, 
+      'GET'
+    );
     
     if (response && response.vehicles && Array.isArray(response.vehicles)) {
       return response.vehicles;

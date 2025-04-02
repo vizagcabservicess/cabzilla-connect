@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -56,10 +57,39 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
       const vehicleId = String(vehicle.id || vehicle.vehicleId || '');
       console.log(`Deleting vehicle ID: ${vehicleId}`);
 
-      await deleteVehicle(vehicleId);
+      // Try multiple times with increasing delays
+      let isSuccess = false;
+      let maxAttempts = 3;
       
-      toast.success(`Vehicle "${vehicle.name}" deleted successfully`);
-      onDelete(vehicleId);
+      for (let attempt = 0; attempt < maxAttempts && !isSuccess; attempt++) {
+        try {
+          // Add some delay between attempts (except for first attempt)
+          if (attempt > 0) {
+            const delay = 1000 * attempt;
+            await new Promise(resolve => setTimeout(resolve, delay));
+            console.log(`Retry attempt ${attempt + 1}/${maxAttempts} after ${delay}ms delay...`);
+          }
+          
+          const result = await deleteVehicle(vehicleId);
+          if (result && result.status === 'success') {
+            isSuccess = true;
+          }
+        } catch (err) {
+          console.error(`Delete attempt ${attempt + 1} failed:`, err);
+          // Continue to next attempt or throw on final attempt
+          if (attempt === maxAttempts - 1) {
+            throw err;
+          }
+        }
+      }
+      
+      if (isSuccess) {
+        toast.success(`Vehicle "${vehicle.name}" deleted successfully`);
+        onDelete(vehicleId);
+      } else {
+        // This should not happen if all attempts failed, as an error would be thrown
+        toast.error(`Failed to delete vehicle: Unknown error`);
+      }
     } catch (err: any) {
       console.error("Error deleting vehicle:", err);
       setError(err);

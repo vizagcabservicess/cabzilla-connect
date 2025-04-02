@@ -172,7 +172,7 @@ export function EditVehicleDialog({
         
         {serverError && (
           <FareUpdateError 
-            message={serverError}
+            error={new Error(serverError)}
             onRetry={handleRetry}
             isAdmin={true}
             title="Database Error"
@@ -338,18 +338,6 @@ export function EditVehicleDialog({
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
-            <Textarea
-              id="description"
-              name="description"
-              value={vehicle.description || ''}
-              onChange={(e) => setVehicle({ ...vehicle, description: e.target.value })}
-              placeholder="Enter vehicle description"
-              rows={3}
-            />
-          </div>
-          
-          <div className="space-y-2">
             <Label>Amenities</Label>
             <div className="grid grid-cols-2 gap-2">
               {amenitiesList.map((amenity) => (
@@ -378,6 +366,18 @@ export function EditVehicleDialog({
                 </div>
               ))}
             </div>
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              name="description"
+              value={vehicle.description || ''}
+              onChange={(e) => setVehicle({ ...vehicle, description: e.target.value })}
+              placeholder="Enter vehicle description"
+              rows={3}
+            />
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
