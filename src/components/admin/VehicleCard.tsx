@@ -17,6 +17,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { safeIncludes } from "@/lib/safeStringUtils";
 
 interface VehicleCardProps {
   vehicle: CabType;
@@ -45,15 +46,17 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
   if (Array.isArray(vehicle.amenities)) {
     // If amenities is already an array, use it directly
     amenities = vehicle.amenities.filter(Boolean);
-  } else if (typeof vehicle.amenities === 'string' && vehicle.amenities !== null) {
-    // If amenities is a string, split it only if it's not empty
-    const amenitiesString = vehicle.amenities;
-    if (amenitiesString && typeof amenitiesString === 'string' && amenitiesString.trim() !== '') {
-      amenities = amenitiesString.split(',').map(a => a.trim()).filter(Boolean);
+  } else if (vehicle.amenities !== undefined && vehicle.amenities !== null) {
+    if (typeof vehicle.amenities === 'string') {
+      // Safe string handling
+      const amenitiesString = vehicle.amenities;
+      if (amenitiesString && amenitiesString !== '') {
+        amenities = amenitiesString.split(',').map(a => typeof a === 'string' ? a.trim() : a).filter(Boolean);
+      }
+    } else {
+      // Log unexpected format for debugging
+      console.log('Unexpected amenities format:', vehicle.amenities);
     }
-  } else {
-    // If amenities is undefined, null, or some other type, keep the default ['AC']
-    console.log('Unexpected amenities format:', vehicle.amenities);
   }
   
   // Ensure all price values are presented as numbers

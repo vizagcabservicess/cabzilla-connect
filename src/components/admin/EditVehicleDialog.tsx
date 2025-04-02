@@ -63,10 +63,15 @@ export function EditVehicleDialog({
       
       if (Array.isArray(initialVehicle.amenities)) {
         processedAmenities = initialVehicle.amenities.filter(Boolean);
-      } else if (typeof initialVehicle.amenities === 'string' && initialVehicle.amenities !== null) {
-        const amenitiesString = initialVehicle.amenities;
-        if (amenitiesString && typeof amenitiesString === 'string' && amenitiesString.trim() !== '') {
-          processedAmenities = amenitiesString.split(',').map(a => a.trim()).filter(Boolean);
+      } else if (initialVehicle.amenities !== undefined && initialVehicle.amenities !== null) {
+        if (typeof initialVehicle.amenities === 'string') {
+          // Safe string handling
+          if (initialVehicle.amenities !== '') {
+            processedAmenities = initialVehicle.amenities
+              .split(',')
+              .map(a => typeof a === 'string' ? a.trim() : a)
+              .filter(Boolean);
+          }
         }
       }
       
