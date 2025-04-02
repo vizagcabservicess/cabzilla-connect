@@ -41,11 +41,18 @@ export function FareUpdateError({
       } else {
         toast.error("Failed to fix database tables");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error fixing database tables:", err);
-      toast.error("Failed to fix database tables");
+      toast.error(`Failed to fix database tables: ${err.message || 'Unknown error'}`);
     }
   };
+
+  // Look for specific SQL errors in the message
+  const hasSqlError = errorMessage.includes('MySQL') || 
+    errorMessage.includes('SQL') || 
+    errorMessage.includes('database') ||
+    errorMessage.includes('column') ||
+    errorMessage.includes('table');
 
   return (
     <Alert variant="destructive" className="mb-4">
@@ -64,8 +71,13 @@ export function FareUpdateError({
             </Button>
           )}
           
-          {isAdmin && (fixDatabaseHandler || handleFixDatabase) && (
-            <Button size="sm" variant="outline" onClick={fixDatabaseHandler || handleFixDatabase} className="flex items-center">
+          {isAdmin && (fixDatabaseHandler || (hasSqlError && handleFixDatabase)) && (
+            <Button 
+              size="sm" 
+              variant="outline" 
+              onClick={fixDatabaseHandler || handleFixDatabase} 
+              className="flex items-center"
+            >
               <Database className="mr-2 h-4 w-4" />
               Fix Database
             </Button>

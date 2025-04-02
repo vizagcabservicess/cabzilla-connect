@@ -83,7 +83,7 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
       throw new Error('Vehicle ID is required for update');
     }
     
-    // Make sure numeric fields are actually numbers
+    // Make sure numeric fields are actually numbers and set default values for problematic fields
     const preparedVehicle = {
       ...vehicle,
       id: vehicle.id || vehicle.vehicleId,
@@ -93,8 +93,8 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
       basePrice: Number(vehicle.basePrice || vehicle.price || 0),
       price: Number(vehicle.price || vehicle.basePrice || 0),
       pricePerKm: Number(vehicle.pricePerKm || 0),
-      nightHaltCharge: Number(vehicle.nightHaltCharge || 700),
-      driverAllowance: Number(vehicle.driverAllowance || 250)
+      nightHaltCharge: Number(vehicle.nightHaltCharge || 700), // Default to 700 if null
+      driverAllowance: Number(vehicle.driverAllowance || 250)  // Default to 250 if null
     };
     
     console.log('Prepared vehicle data for update:', preparedVehicle);

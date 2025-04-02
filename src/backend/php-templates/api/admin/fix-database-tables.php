@@ -224,16 +224,31 @@ try {
                 vehicle_id VARCHAR(50) NOT NULL,
                 base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
                 price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-                night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 0,
-                driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 0,
-                roundtrip_base_price DECIMAL(10,2) DEFAULT 0,
-                roundtrip_price_per_km DECIMAL(5,2) DEFAULT 0,
+                night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 700,
+                driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 300,
+                roundtrip_base_price DECIMAL(10,2) DEFAULT NULL,
+                roundtrip_price_per_km DECIMAL(5,2) DEFAULT NULL,
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 UNIQUE KEY vehicle_id (vehicle_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         ");
         $response["details"]["tables_fixed"][] = "outstation_fares (created)";
+    } else {
+        // Fix NULL issues in outstation_fares table by setting default values
+        $conn->query("
+            UPDATE outstation_fares 
+            SET night_halt_charge = 700 
+            WHERE night_halt_charge IS NULL OR night_halt_charge = 0
+        ");
+        $response["details"]["tables_fixed"][] = "outstation_fares (fixed NULL night_halt_charge values)";
+        
+        $conn->query("
+            UPDATE outstation_fares 
+            SET driver_allowance = 300 
+            WHERE driver_allowance IS NULL OR driver_allowance = 0
+        ");
+        $response["details"]["tables_fixed"][] = "outstation_fares (fixed NULL driver_allowance values)";
     }
     
     // 6. Ensure all vehicles have pricing entries in vehicle_pricing
@@ -251,16 +266,33 @@ try {
                 // Default values based on trip type
                 $baseFare = ($tripType === 'outstation') ? 2000 : (($tripType === 'airport') ? 3000 : 1000);
                 $pricePerKm = ($tripType === 'outstation') ? 15 : (($tripType === 'airport') ? 18 : 12);
+                $nightHaltCharge = 700; // Set default value
+                $driverAllowance = 300; // Set default value
                 
                 $insertStmt = $conn->prepare("
                     INSERT INTO vehicle_pricing 
-                    (vehicle_id, trip_type, base_fare, price_per_km) 
-                    VALUES (?, ?, ?, ?)
+                    (vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance) 
+                    VALUES (?, ?, ?, ?, ?, ?)
                 ");
-                $insertStmt->bind_param("ssdd", $vehicleId, $tripType, $baseFare, $pricePerKm);
+                $insertStmt->bind_param("ssdddd", $vehicleId, $tripType, $baseFare, $pricePerKm, $nightHaltCharge, $driverAllowance);
                 $insertStmt->execute();
                 
                 $response["details"]["vehicle_pricing_entries"][] = "Added $tripType pricing for $vehicleId";
+            } else {
+                // Ensure existing entries don't have NULL for required fields
+                $conn->query("
+                    UPDATE vehicle_pricing 
+                    SET night_halt_charge = 700 
+                    WHERE vehicle_id = '$vehicleId' AND trip_type = '$tripType' 
+                      AND (night_halt_charge IS NULL OR night_halt_charge = 0)
+                ");
+                
+                $conn->query("
+                    UPDATE vehicle_pricing 
+                    SET driver_allowance = 300 
+                    WHERE vehicle_id = '$vehicleId' AND trip_type = '$tripType' 
+                      AND (driver_allowance IS NULL OR driver_allowance = 0)
+                ");
             }
             $checkStmt->close();
         }
@@ -279,8 +311,9 @@ try {
         $vehicleName = ucwords(str_replace('_', ' ', $vehicleId));
         
         $insertStmt = $conn->prepare("
-            INSERT INTO vehicle_types (vehicle_id, name, is_active) 
-            VALUES (?, ?, 1)
+            INSERT INTO vehicle_types (
+                vehicle_id, name, is_active, base_price, price_per_km, night_halt_charge, driver_allowance
+            ) VALUES (?, ?, 1, 3000, 15, 700, 300)
         ");
         $insertStmt->bind_param("ss", $vehicleId, $vehicleName);
         $insertStmt->execute();
@@ -323,6 +356,33 @@ try {
         }
         $checkStmt->close();
     }
+    
+    // 9. Check for NULL values in outstation_fares and fix them
+    $conn->query("
+        UPDATE outstation_fares 
+        SET night_halt_charge = 700 
+        WHERE night_halt_charge IS NULL OR night_halt_charge = 0
+    ");
+    
+    $conn->query("
+        UPDATE outstation_fares 
+        SET driver_allowance = 300 
+        WHERE driver_allowance IS NULL OR driver_allowance = 0
+    ");
+    
+    $conn->query("
+        UPDATE outstation_fares 
+        SET roundtrip_base_price = base_price * 0.95 
+        WHERE roundtrip_base_price IS NULL OR roundtrip_base_price = 0
+    ");
+    
+    $conn->query("
+        UPDATE outstation_fares 
+        SET roundtrip_price_per_km = price_per_km * 0.85 
+        WHERE roundtrip_price_per_km IS NULL OR roundtrip_price_per_km = 0
+    ");
+    
+    $response["details"]["tables_fixed"][] = "outstation_fares (fixed NULL values)";
     
     // Clear the database_fix_prompted flag to prevent future unwanted prompts
     $conn->query("
