@@ -7,6 +7,7 @@ import { Pencil, Trash2, Users, Briefcase, Check, X } from "lucide-react";
 import { CabType } from "@/types/cab";
 import { deleteVehicle } from "@/services/directVehicleService";
 import { toast } from "sonner";
+import { parseAmenities, parseNumericValue } from '@/utils/safeStringUtils';
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -29,39 +30,15 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
   const [isDeleting, setIsDeleting] = React.useState(false);
   
   // Ensure capacity and luggageCapacity are always parsed as numbers
-  const capacity = typeof vehicle.capacity === 'string' 
-    ? parseInt(vehicle.capacity, 10) 
-    : Number(vehicle.capacity || 4);
-  
-  const luggageCapacity = typeof vehicle.luggageCapacity === 'string' 
-    ? parseInt(vehicle.luggageCapacity, 10) 
-    : Number(vehicle.luggageCapacity || 2);
+  const capacity = parseNumericValue(vehicle.capacity, 4);
+  const luggageCapacity = parseNumericValue(vehicle.luggageCapacity, 2);
   
   // Clean up and display amenities with proper type checking
-  let amenities: string[] = ['AC'];
-  
-  if (Array.isArray(vehicle.amenities)) {
-    // If amenities is already an array, use it directly
-    amenities = vehicle.amenities.filter(Boolean);
-  } else if (typeof vehicle.amenities === 'string' && vehicle.amenities) {
-    // If amenities is a string, split it only if it's not empty
-    const amenitiesString = vehicle.amenities;
-    if (amenitiesString && amenitiesString.trim && amenitiesString.trim() !== '') {
-      amenities = amenitiesString.split(',').map(a => a.trim()).filter(Boolean);
-    }
-  } else {
-    // If amenities is undefined, null, or some other type, keep the default ['AC']
-    console.log('Unexpected amenities format:', vehicle.amenities);
-  }
+  const amenities = parseAmenities(vehicle.amenities);
   
   // Ensure all price values are presented as numbers
-  const basePrice = typeof vehicle.price === 'string' 
-    ? parseFloat(vehicle.price) 
-    : Number(vehicle.price || vehicle.basePrice || 0);
-    
-  const pricePerKm = typeof vehicle.pricePerKm === 'string' 
-    ? parseFloat(vehicle.pricePerKm) 
-    : Number(vehicle.pricePerKm || 0);
+  const basePrice = parseNumericValue(vehicle.price || vehicle.basePrice, 0);
+  const pricePerKm = parseNumericValue(vehicle.pricePerKm, 0);
   
   const handleDelete = async () => {
     try {

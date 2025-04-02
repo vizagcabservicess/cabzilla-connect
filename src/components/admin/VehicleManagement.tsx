@@ -12,6 +12,7 @@ import { getVehicleData, clearVehicleDataCache } from "@/services/vehicleDataSer
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiBaseUrl } from '@/config/api';
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
+import { parseAmenities } from '@/utils/safeStringUtils';
 
 export default function VehicleManagement() {
   const [isLoading, setIsLoading] = useState(true);
@@ -161,6 +162,8 @@ export default function VehicleManagement() {
             const normalizedId = String(vehicle.id || vehicle.vehicleId || '').trim();
             if (!normalizedId) return;
             
+            const parsedAmenities = parseAmenities(vehicle.amenities);
+            
             const normalizedVehicle: CabType = {
               ...vehicle,
               id: normalizedId,
@@ -172,11 +175,7 @@ export default function VehicleManagement() {
               price: Number(vehicle.price || vehicle.basePrice || 0), 
               basePrice: Number(vehicle.basePrice || vehicle.price || 0),
               pricePerKm: Number(vehicle.pricePerKm || 0),
-              amenities: Array.isArray(vehicle.amenities) 
-                ? vehicle.amenities 
-                : (typeof vehicle.amenities === 'string' && vehicle.amenities 
-                  ? vehicle.amenities.split(',').map(a => a.trim()) 
-                  : ['AC']),
+              amenities: parsedAmenities,
               nightHaltCharge: Number(vehicle.nightHaltCharge || 700),
               driverAllowance: Number(vehicle.driverAllowance || 300)
             };
@@ -324,6 +323,8 @@ export default function VehicleManagement() {
   };
 
   const filteredVehicles = vehicles.filter(vehicle => {
+    if (!searchQuery.trim()) return true;
+    
     const searchTerms = searchQuery.toLowerCase().split(' ').filter(Boolean);
     if (!searchTerms.length) return true;
     
@@ -335,6 +336,10 @@ export default function VehicleManagement() {
     
     return searchTerms.every(term => vehicleText.includes(term));
   });
+
+  const handleRefreshButtonClick = () => {
+    handleRefreshData(true);
+  };
 
   if (error) {
     return (
@@ -390,7 +395,7 @@ export default function VehicleManagement() {
           </Button>
           <Button
             variant="outline"
-            onClick={handleRefreshData}
+            onClick={handleRefreshButtonClick}
             disabled={isRefreshing || !canRefresh()}
             className="flex items-center gap-2"
           >

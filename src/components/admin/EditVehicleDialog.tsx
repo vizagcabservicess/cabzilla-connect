@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -11,6 +10,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { CabType } from "@/types/cab";
 import { updateVehicle } from "@/services/directVehicleService";
+import { parseAmenities, parseNumericValue } from '@/utils/safeStringUtils';
 
 interface EditVehicleDialogProps {
   open: boolean;
@@ -36,40 +36,15 @@ export function EditVehicleDialog({
       console.log('Initial vehicle data received:', initialVehicle);
       
       // Convert string values to numbers to ensure consistency
-      const numCapacity = typeof initialVehicle.capacity === 'string' 
-        ? parseInt(initialVehicle.capacity, 10) 
-        : Number(initialVehicle.capacity || 4);
-        
-      const numLuggageCapacity = typeof initialVehicle.luggageCapacity === 'string' 
-        ? parseInt(initialVehicle.luggageCapacity, 10) 
-        : Number(initialVehicle.luggageCapacity || 2);
-        
-      const numBasePrice = typeof initialVehicle.basePrice === 'string'
-        ? parseFloat(initialVehicle.basePrice)
-        : Number(initialVehicle.basePrice || initialVehicle.price || 0);
-        
-      const numPricePerKm = typeof initialVehicle.pricePerKm === 'string'
-        ? parseFloat(initialVehicle.pricePerKm)
-        : Number(initialVehicle.pricePerKm || 0);
-        
-      const numDriverAllowance = typeof initialVehicle.driverAllowance === 'string'
-        ? parseFloat(initialVehicle.driverAllowance)
-        : Number(initialVehicle.driverAllowance || 250);
-        
-      const numNightHaltCharge = typeof initialVehicle.nightHaltCharge === 'string'
-        ? parseFloat(initialVehicle.nightHaltCharge)
-        : Number(initialVehicle.nightHaltCharge || 700);
+      const numCapacity = parseNumericValue(initialVehicle.capacity, 4);
+      const numLuggageCapacity = parseNumericValue(initialVehicle.luggageCapacity, 2);
+      const numBasePrice = parseNumericValue(initialVehicle.basePrice || initialVehicle.price, 0);
+      const numPricePerKm = parseNumericValue(initialVehicle.pricePerKm, 0);
+      const numDriverAllowance = parseNumericValue(initialVehicle.driverAllowance, 250);
+      const numNightHaltCharge = parseNumericValue(initialVehicle.nightHaltCharge, 700);
       
       // Prepare vehicle amenities
-      let vehicleAmenities: string[] = ['AC'];
-      if (Array.isArray(initialVehicle.amenities)) {
-        vehicleAmenities = initialVehicle.amenities.filter(Boolean);
-      } else if (typeof initialVehicle.amenities === 'string' && initialVehicle.amenities) {
-        // Add type check before calling string methods
-        if (initialVehicle.amenities && typeof initialVehicle.amenities === 'string') {
-          vehicleAmenities = initialVehicle.amenities.split(',').map(a => a.trim()).filter(Boolean);
-        }
-      }
+      const vehicleAmenities = parseAmenities(initialVehicle.amenities);
       
       console.log('Parsed numeric values:');
       console.log('- capacity:', initialVehicle.capacity, '->', numCapacity);
