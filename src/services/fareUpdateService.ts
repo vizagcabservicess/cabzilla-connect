@@ -197,6 +197,14 @@ export const updateLocalFares = async (
       return Promise.reject(new Error(errorMsg));
     }
     
+    // Handle comma-separated IDs (a common source of problems)
+    if (typeof vehicleId === 'string' && vehicleId.includes(',')) {
+      const errorMsg = `Cannot use comma-separated ID list: ${vehicleId}`;
+      console.error(errorMsg);
+      toast.error(errorMsg);
+      return Promise.reject(new Error(errorMsg));
+    }
+    
     // Verify and normalize the vehicle ID - get the proper vehicle_id from database
     let verifiedVehicleId;
     try {

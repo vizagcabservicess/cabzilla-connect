@@ -114,58 +114,49 @@ $knownMappings = [
     '200' => 'ertiga',
     '201' => 'ertiga',
     '202' => 'ertiga',
-    
-    // Comma-separated numeric IDs (must handle these specifically)
-    '1,1266,180' => 'sedan',
-    '1,2,180' => 'sedan',
-    '2,1,180' => 'ertiga',
-    '1266,1,180' => 'MPV',
-    '180,1,1266' => 'etios'
 ];
 
 // Log the original and cleaned vehicleId
 error_log("[$timestamp] Original vehicle ID: $originalVehicleId, Cleaned: $vehicleId", 3, $logDir . '/local-fares.log');
 
-// CRITICAL CHECK: Block ANY numeric ID that isn't in our mappings
-// Also handle comma-separated lists which are causing the issues
-if (is_numeric($vehicleId) || strpos($vehicleId, ',') !== false) {
-    // Check if we have a mapping for this exact ID
-    if (isset($knownMappings[$vehicleId])) {
-        $numericId = $vehicleId;
-        $vehicleId = $knownMappings[$vehicleId];
-        error_log("[$timestamp] Successfully mapped problematic ID '$numericId' to proper vehicle_id: $vehicleId", 3, $logDir . '/local-fares.log');
-    } 
-    // If we don't have an exact mapping but it's a comma-separated list
-    else if (strpos($vehicleId, ',') !== false) {
-        // Try to get the first value and map that
-        $idParts = explode(',', $vehicleId);
-        $firstId = trim($idParts[0]);
-        
-        if (isset($knownMappings[$firstId])) {
-            $numericId = $vehicleId;
-            $vehicleId = $knownMappings[$firstId];
-            error_log("[$timestamp] Mapped first ID from list '$numericId' to: $vehicleId", 3, $logDir . '/local-fares.log');
-        }
-        else {
-            // We don't have a mapping for this numeric ID - reject it
-            error_log("[$timestamp] REJECTED unmapped comma-separated ID: $vehicleId", 3, $logDir . '/local-fares.log');
-            http_response_code(400);
-            echo json_encode([
-                'status' => 'error',
-                'message' => "Cannot use ID '$vehicleId'. Please use proper vehicle_id like 'sedan', 'ertiga', 'etios', etc.",
-                'isNumericId' => true,
-                'originalId' => $originalVehicleId
-            ]);
-            exit;
-        }
+// CRITICAL CHECK: Handle comma-separated lists which are causing the issues
+if (strpos($vehicleId, ',') !== false) {
+    // Split the comma-separated list
+    $idParts = explode(',', $vehicleId);
+    // Take first value and map if possible
+    $firstId = trim($idParts[0]);
+    
+    if (array_key_exists($firstId, $knownMappings)) {
+        $oldId = $vehicleId;
+        $vehicleId = $knownMappings[$firstId];
+        error_log("[$timestamp] Mapped comma-separated ID '$oldId' to proper vehicle_id: $vehicleId", 3, $logDir . '/local-fares.log');
+    } else {
+        // Reject any comma-separated ID we can't map
+        error_log("[$timestamp] REJECTED unmapped comma-separated ID: $vehicleId", 3, $logDir . '/local-fares.log');
+        http_response_code(400);
+        echo json_encode([
+            'status' => 'error',
+            'message' => "Cannot use comma-separated ID '$vehicleId'. Please use a proper vehicle ID.",
+            'isCommaId' => true,
+            'originalId' => $originalVehicleId
+        ]);
+        exit;
     }
-    // Single numeric ID without mapping - reject it
-    else {
+}
+// Handle single numeric IDs
+else if (is_numeric($vehicleId)) {
+    // Check if we have a mapping for this numeric ID
+    if (array_key_exists($vehicleId, $knownMappings)) {
+        $numericId = $vehicleId;
+        $vehicleId = $knownMappings[$numericId];
+        error_log("[$timestamp] Mapped numeric ID '$numericId' to proper vehicle_id: $vehicleId", 3, $logDir . '/local-fares.log');
+    } else {
+        // Reject any numeric ID we don't recognize
         error_log("[$timestamp] REJECTED unmapped numeric ID: $vehicleId", 3, $logDir . '/local-fares.log');
         http_response_code(400);
         echo json_encode([
             'status' => 'error',
-            'message' => "Cannot use ID '$vehicleId'. Please use proper vehicle_id like 'sedan', 'ertiga', 'etios', etc.",
+            'message' => "Cannot use numeric ID '$vehicleId'. Please use proper vehicle_id like 'sedan', 'ertiga', 'etios', etc.",
             'isNumericId' => true,
             'originalId' => $originalVehicleId
         ]);
