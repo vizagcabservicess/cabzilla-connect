@@ -4,6 +4,7 @@ import { AlertCircle, RefreshCcw, Database, ExternalLink, FileJson } from "lucid
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { fixDatabaseTables } from "@/utils/apiHelper";
 import { toast } from "sonner";
+import { clearVehicleDataCache } from "@/services/vehicleDataService";
 
 interface FareUpdateErrorProps {
   error: Error;
@@ -28,22 +29,39 @@ export function FareUpdateError({
 }: FareUpdateErrorProps) {
   const errorMessage = message || error?.message || "Unknown error";
   
-  // Default handler for database fixes
+  // Enhanced handler for database fixes with improved error handling
   const handleFixDatabase = async () => {
     try {
       toast.loading("Attempting to fix database tables...");
+      
+      // First, clear any cached vehicle data
+      clearVehicleDataCache();
+      
       const success = await fixDatabaseTables();
       if (success) {
         toast.success("Database tables fixed successfully");
+        // Trigger event to refresh data everywhere
+        window.dispatchEvent(new CustomEvent('database-fixed', { 
+          detail: { timestamp: Date.now() }
+        }));
+        
         if (onRetry) {
-          setTimeout(onRetry, 500);
+          setTimeout(onRetry, 800); // Give a bit more time for the event to be processed
         }
       } else {
         toast.error("Failed to fix database tables");
       }
     } catch (err: any) {
       console.error("Error fixing database tables:", err);
-      toast.error(`Failed to fix database tables: ${err.message || 'Unknown error'}`);
+      
+      // More descriptive error message based on error type
+      if (err.message && (err.message.includes('Access denied') || err.message.includes('connect'))) {
+        toast.error(`Database connection error: ${err.message || 'Check credentials'}`);
+      } else if (err.message && err.message.includes('JSON')) {
+        toast.error(`Invalid server response: ${err.message}`);
+      } else {
+        toast.error(`Failed to fix database tables: ${err.message || 'Unknown error'}`);
+      }
     }
   };
 
@@ -52,7 +70,12 @@ export function FareUpdateError({
     errorMessage.includes('SQL') || 
     errorMessage.includes('database') ||
     errorMessage.includes('column') ||
-    errorMessage.includes('table');
+    errorMessage.includes('table') ||
+    errorMessage.includes('Access denied');
+
+  const hasConnectionError = errorMessage.includes('connect') || 
+    errorMessage.includes('Access denied') ||
+    errorMessage.includes('localhost');
 
   return (
     <Alert variant="destructive" className="mb-4">
@@ -79,7 +102,7 @@ export function FareUpdateError({
               className="flex items-center"
             >
               <Database className="mr-2 h-4 w-4" />
-              Fix Database
+              Fix Database {hasConnectionError ? "(Connection Error)" : ""}
             </Button>
           )}
           

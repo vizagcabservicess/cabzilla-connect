@@ -4,12 +4,47 @@
  * This is a utility script for setting up the driver management tables.
  * It should be executed once to create the necessary tables if they don't exist.
  */
-require_once '../../config.php';
 
-// Connect to database
-$conn = getDbConnection();
+// Set correct headers
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+header('Content-Type: application/json');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
+
+// Error reporting
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
+
+// Initialize response
+$response = [
+    'status' => 'error',
+    'message' => 'Unknown error',
+    'tables_created' => [],
+    'tables_failed' => [],
+    'messages' => [],
+    'timestamp' => time()
+];
 
 try {
+    // Define database connection with updated credentials
+    $dbHost = 'localhost';
+    $dbName = 'u644605165_db_be';
+    $dbUser = 'u644605165_usr_be';
+    $dbPass = 'Vizag@1213';
+    
+    // Create connection
+    $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+    
+    // Check connection
+    if ($conn->connect_error) {
+        throw new Exception("Database connection failed: " . $conn->connect_error);
+    }
+    
+    $response['messages'][] = "Connected to database successfully";
+
     // Create drivers table if it doesn't exist
     $query = "
     CREATE TABLE IF NOT EXISTS drivers (
@@ -29,9 +64,14 @@ try {
     ) ENGINE=InnoDB;
     ";
     
-    $conn->query($query);
+    if ($conn->query($query)) {
+        $response['tables_created'][] = 'drivers';
+    } else {
+        $response['tables_failed'][] = 'drivers';
+        $response['messages'][] = "Error creating drivers table: " . $conn->error;
+    }
     
-    // CREATE LOCAL PACKAGE FARES TABLE WITH CORRECTED COLUMN NAMES
+    // CREATE LOCAL PACKAGE FARES TABLE WITH CORRECTED COLUMN NAMES AND NOT NULL VALUES
     $local_fares_query = "
     CREATE TABLE IF NOT EXISTS local_package_fares (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -47,9 +87,14 @@ try {
     ) ENGINE=InnoDB;
     ";
     
-    $conn->query($local_fares_query);
+    if ($conn->query($local_fares_query)) {
+        $response['tables_created'][] = 'local_package_fares';
+    } else {
+        $response['tables_failed'][] = 'local_package_fares';
+        $response['messages'][] = "Error creating local_package_fares table: " . $conn->error;
+    }
     
-    // CREATE AIRPORT TRANSFER FARES TABLE IF IT DOESN'T EXIST
+    // CREATE AIRPORT TRANSFER FARES TABLE WITH NOT NULL VALUES
     $airport_fares_query = "
     CREATE TABLE IF NOT EXISTS airport_transfer_fares (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -69,10 +114,14 @@ try {
     ) ENGINE=InnoDB;
     ";
     
-    $conn->query($airport_fares_query);
+    if ($conn->query($airport_fares_query)) {
+        $response['tables_created'][] = 'airport_transfer_fares';
+    } else {
+        $response['tables_failed'][] = 'airport_transfer_fares';
+        $response['messages'][] = "Error creating airport_transfer_fares table: " . $conn->error;
+    }
     
-    // CREATE OUTSTATION FARES TABLE IF IT DOESN'T EXIST
-    // CRITICAL: night_halt_charge and driver_allowance are NOT NULL with DEFAULT values
+    // CREATE OUTSTATION FARES TABLE WITH NON NULL VALUES FOR CRITICAL FIELDS
     $outstation_fares_query = "
     CREATE TABLE IF NOT EXISTS outstation_fares (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -89,7 +138,41 @@ try {
     ) ENGINE=InnoDB;
     ";
     
-    $conn->query($outstation_fares_query);
+    if ($conn->query($outstation_fares_query)) {
+        $response['tables_created'][] = 'outstation_fares';
+    } else {
+        $response['tables_failed'][] = 'outstation_fares';
+        $response['messages'][] = "Error creating outstation_fares table: " . $conn->error;
+    }
+    
+    // CREATE VEHICLES TABLE IF NOT EXISTS
+    $vehicles_query = "
+    CREATE TABLE IF NOT EXISTS vehicles (
+        id VARCHAR(50) NOT NULL PRIMARY KEY,
+        vehicle_id VARCHAR(50) NOT NULL UNIQUE,
+        name VARCHAR(100) NOT NULL,
+        capacity INT NOT NULL DEFAULT 4,
+        luggage_capacity INT NOT NULL DEFAULT 2,
+        ac TINYINT(1) NOT NULL DEFAULT 1,
+        is_active TINYINT(1) NOT NULL DEFAULT 1,
+        image VARCHAR(255) NOT NULL DEFAULT '/cars/sedan.png',
+        amenities TEXT,
+        description TEXT,
+        base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+        price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
+        night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 700,
+        driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 250,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB;
+    ";
+    
+    if ($conn->query($vehicles_query)) {
+        $response['tables_created'][] = 'vehicles';
+    } else {
+        $response['tables_failed'][] = 'vehicles';
+        $response['messages'][] = "Error creating vehicles table: " . $conn->error;
+    }
     
     // Fix any existing tables with NULL values in critical fields
     $fix_outstation_fares = "
@@ -100,14 +183,15 @@ try {
     
     try {
         $conn->query($fix_outstation_fares);
+        $response['messages'][] = "Fixed outstation_fares table constraints";
     } catch (Exception $e) {
-        // Ignore errors here, just log them
-        error_log("Error fixing outstation_fares table: " . $e->getMessage());
+        $response['messages'][] = "Error fixing outstation_fares table: " . $e->getMessage();
     }
     
     // Update any NULL values in existing tables
     $conn->query("UPDATE outstation_fares SET night_halt_charge = 700 WHERE night_halt_charge IS NULL");
     $conn->query("UPDATE outstation_fares SET driver_allowance = 250 WHERE driver_allowance IS NULL");
+    $response['messages'][] = "Updated NULL values in outstation_fares";
     
     // Check for vehicles table and fix it if exists
     $check_vehicles = $conn->query("SHOW TABLES LIKE 'vehicles'");
@@ -123,9 +207,9 @@ try {
             // Update any NULL values
             $conn->query("UPDATE vehicles SET night_halt_charge = 700 WHERE night_halt_charge IS NULL");
             $conn->query("UPDATE vehicles SET driver_allowance = 250 WHERE driver_allowance IS NULL");
+            $response['messages'][] = "Fixed vehicles table constraints and updated NULL values";
         } catch (Exception $e) {
-            // Ignore errors here, just log them
-            error_log("Error fixing vehicles table: " . $e->getMessage());
+            $response['messages'][] = "Error fixing vehicles table: " . $e->getMessage();
         }
     }
     
@@ -144,7 +228,7 @@ try {
             ('Ramesh Babu', '8765432108', 'ramesh@example.com', 'Tempo', 'AP 35 XX 7890', 'Busy', 'Ameerpet', 4.4, 175, 65000)
         ");
         
-        echo "Sample drivers added.\n";
+        $response['messages'][] = "Sample drivers added";
     }
     
     // Add sample data to local_package_fares if it's empty
@@ -162,7 +246,7 @@ try {
             ('luxury', 3500, 5500, 6500, 25, 300)
         ");
         
-        echo "Sample local package fares added.\n";
+        $response['messages'][] = "Sample local package fares added";
     }
     
     // Add sample data to airport_transfer_fares if it's empty
@@ -181,7 +265,7 @@ try {
             ('luxury', 7000, 22, 2500, 2500, 2000, 2200, 2500, 3000, 22)
         ");
         
-        echo "Sample airport transfer fares added.\n";
+        $response['messages'][] = "Sample airport transfer fares added";
     }
     
     // Add sample data to outstation_fares if it's empty
@@ -200,15 +284,22 @@ try {
             ('luxury', 10500, 25, 1500, 300, 10000, 22)
         ");
         
-        echo "Sample outstation fares added.\n";
+        $response['messages'][] = "Sample outstation fares added";
     }
     
     // Verify and fix any NULL values in these important fields
     $conn->query("UPDATE outstation_fares SET night_halt_charge = 700 WHERE night_halt_charge IS NULL");
     $conn->query("UPDATE outstation_fares SET driver_allowance = 250 WHERE driver_allowance IS NULL");
+    $response['messages'][] = "Verified and fixed any remaining NULL values";
     
-    echo "Database setup complete.";
+    // Success response
+    $response['status'] = 'success';
+    $response['message'] = "Database setup complete";
     
 } catch (Exception $e) {
-    echo "Error: " . $e->getMessage();
+    $response['status'] = 'error';
+    $response['message'] = "Error: " . $e->getMessage();
 }
+
+// Send JSON response
+echo json_encode($response);

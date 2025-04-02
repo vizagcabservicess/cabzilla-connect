@@ -74,16 +74,20 @@ try {
         error_log(date('Y-m-d H:i:s') . " - No data parsed, raw input length: " . strlen($rawInput) . "\n", 3, $logFile);
     }
     
-    // Check if direct-vehicle-update.php exists
-    $updateFile = __DIR__ . '/direct-vehicle-update.php';
+    // Use direct-vehicle-modify.php instead (more reliable implementation)
+    $updateFile = __DIR__ . '/direct-vehicle-modify.php';
     if (!file_exists($updateFile)) {
-        handleError("Update implementation file not found");
+        // Fall back to direct-vehicle-update.php if modify version doesn't exist
+        $updateFile = __DIR__ . '/direct-vehicle-update.php';
+        if (!file_exists($updateFile)) {
+            handleError("Update implementation file not found");
+        }
     }
     
     // Store data for access in included file
     $_SERVER['VEHICLE_DATA'] = $data;
     
-    // Include the direct-vehicle-update.php file which has the full implementation
+    // Include the direct implementation file which has the full implementation
     include($updateFile);
 } catch (Exception $e) {
     error_log(date('Y-m-d H:i:s') . " - Error: " . $e->getMessage() . "\n", 3, $logFile);

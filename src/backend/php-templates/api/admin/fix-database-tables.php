@@ -1,404 +1,227 @@
 
 <?php
 /**
- * fix-database-tables.php
+ * fix-database-tables.php - Fix database issues
  * 
- * This script fixes database schema issues and migrates data as needed.
- * It's designed to be called from the admin interface to resolve database issues.
+ * This script fixes common database issues such as NULL values in critical fields
+ * and ensures proper table structure.
  */
-header('Content-Type: application/json');
+
+// Set CORS headers
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: *');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+header('Content-Type: application/json');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 
-// Check if database config is included
-if (!function_exists('getDbConnection')) {
-    require_once __DIR__ . '/../../config.php';
+// Handle OPTIONS preflight request
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit;
 }
 
-// Establish database connection
+// Error reporting
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
+
+// Response array
+$response = [
+    'status' => 'error',
+    'message' => 'Unknown error occurred',
+    'details' => [
+        'tables_fixed' => [],
+        'vehicle_pricing_entries' => [],
+        'tables_failed' => [],
+        'errors' => []
+    ],
+    'timestamp' => time()
+];
+
 try {
-    $conn = getDbConnection();
-    if (!$conn) {
-        throw new Exception("Database connection failed");
+    // Define database connection 
+    $dbHost = 'localhost';
+    $dbName = 'u644605165_db_be';
+    $dbUser = 'u644605165_usr_be';
+    $dbPass = 'Vizag@1213';
+    
+    // Create connection
+    $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+    
+    // Check connection
+    if ($conn->connect_error) {
+        throw new Exception("Database connection failed: " . $conn->connect_error);
     }
     
-    // Start with a response structure
-    $response = [
-        "status" => "success",
-        "message" => "Database tables fixed successfully",
-        "details" => [
-            "tables_checked" => [],
-            "tables_fixed" => [],
-            "vehicle_pricing_entries" => [],
-            "errors" => []
-        ]
-    ];
-    
-    // First check if an admin_settings table exists and set a flag to prevent future prompts
-    $adminSettingsExists = $conn->query("SHOW TABLES LIKE 'admin_settings'")->num_rows > 0;
-    
-    if (!$adminSettingsExists) {
-        $conn->query("
-            CREATE TABLE admin_settings (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                setting_key VARCHAR(50) NOT NULL UNIQUE,
-                setting_value TEXT NOT NULL,
-                description VARCHAR(255) NULL,
-                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        ");
-        $response["details"]["tables_fixed"][] = "admin_settings (created)";
+    // Enable logging
+    $logDir = dirname(__FILE__) . '/../../logs';
+    if (!file_exists($logDir)) {
+        mkdir($logDir, 0755, true);
     }
     
-    // Insert or update the database_fix_prompted setting to prevent continuous prompts
-    $conn->query("
-        INSERT INTO admin_settings (setting_key, setting_value, description)
-        VALUES ('database_fix_prompted', 'fixed', 'Flag to prevent continuous database fix prompts')
-        ON DUPLICATE KEY UPDATE setting_value = 'fixed', updated_at = NOW()
-    ");
-    $response["details"]["settings_updated"][] = "database_fix_prompted flag set to 'fixed'";
+    $logFile = $logDir . '/fix-database.log';
+    error_log(date('Y-m-d H:i:s') . " - Starting database fix\n", 3, $logFile);
     
-    // 1. Check and fix vehicle_types table
-    $response["details"]["tables_checked"][] = "vehicle_types";
-    $tableExists = $conn->query("SHOW TABLES LIKE 'vehicle_types'")->num_rows > 0;
+    // Begin transaction
+    $conn->begin_transaction();
     
-    if (!$tableExists) {
-        $conn->query("
-            CREATE TABLE vehicle_types (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                vehicle_id VARCHAR(50) NOT NULL UNIQUE,
-                name VARCHAR(100) NOT NULL,
-                capacity INT NOT NULL DEFAULT 4,
-                luggage_capacity INT NOT NULL DEFAULT 2,
-                ac TINYINT(1) NOT NULL DEFAULT 1,
-                image VARCHAR(255) DEFAULT '/cars/sedan.png',
-                amenities TEXT DEFAULT NULL,
-                description TEXT DEFAULT NULL,
-                is_active TINYINT(1) NOT NULL DEFAULT 1,
-                base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-                night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 700,
-                driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 300,
-                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        ");
-        $response["details"]["tables_fixed"][] = "vehicle_types (created)";
-    } else {
-        // Check and add missing columns
-        $columnsToAdd = [
-            "base_price" => "DECIMAL(10,2) NOT NULL DEFAULT 0",
-            "price_per_km" => "DECIMAL(5,2) NOT NULL DEFAULT 0",
-            "night_halt_charge" => "DECIMAL(10,2) NOT NULL DEFAULT 700",
-            "driver_allowance" => "DECIMAL(10,2) NOT NULL DEFAULT 300"
-        ];
-        
-        foreach ($columnsToAdd as $column => $definition) {
-            $columnExists = $conn->query("SHOW COLUMNS FROM vehicle_types LIKE '$column'")->num_rows > 0;
-            if (!$columnExists) {
-                $conn->query("ALTER TABLE vehicle_types ADD COLUMN $column $definition");
-                $response["details"]["tables_fixed"][] = "vehicle_types (added $column)";
-            }
-        }
-    }
-    
-    // 2. Check and fix airport_transfer_fares table
-    $response["details"]["tables_checked"][] = "airport_transfer_fares";
-    $tableExists = $conn->query("SHOW TABLES LIKE 'airport_transfer_fares'")->num_rows > 0;
-    
-    if (!$tableExists) {
-        $conn->query("
-            CREATE TABLE airport_transfer_fares (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                vehicle_id VARCHAR(50) NOT NULL,
-                base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-                pickup_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                drop_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                tier1_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                tier2_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                tier3_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                tier4_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                extra_km_charge DECIMAL(5,2) NOT NULL DEFAULT 0,
-                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                UNIQUE KEY vehicle_id (vehicle_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        ");
-        $response["details"]["tables_fixed"][] = "airport_transfer_fares (created)";
-    }
-    
-    // 3. Check and fix vehicle_pricing table
-    $response["details"]["tables_checked"][] = "vehicle_pricing";
-    $tableExists = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'")->num_rows > 0;
-    
-    if (!$tableExists) {
-        $conn->query("
-            CREATE TABLE vehicle_pricing (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                vehicle_id VARCHAR(50) NOT NULL,
-                trip_type VARCHAR(20) NOT NULL DEFAULT 'outstation',
-                base_fare DECIMAL(10,2) NOT NULL DEFAULT 0,
-                price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-                night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 700,
-                driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 300,
-                airport_base_price DECIMAL(10,2) DEFAULT 0,
-                airport_price_per_km DECIMAL(5,2) DEFAULT 0,
-                airport_pickup_price DECIMAL(10,2) DEFAULT 0,
-                airport_drop_price DECIMAL(10,2) DEFAULT 0,
-                airport_tier1_price DECIMAL(10,2) DEFAULT 0,
-                airport_tier2_price DECIMAL(10,2) DEFAULT 0,
-                airport_tier3_price DECIMAL(10,2) DEFAULT 0,
-                airport_tier4_price DECIMAL(10,2) DEFAULT 0,
-                airport_extra_km_charge DECIMAL(5,2) DEFAULT 0,
-                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                UNIQUE KEY unique_vehicle_trip (vehicle_id, trip_type)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        ");
-        $response["details"]["tables_fixed"][] = "vehicle_pricing (created)";
-    } else {
-        // Check and add missing columns
-        $columnsToAdd = [
-            "airport_base_price" => "DECIMAL(10,2) DEFAULT 0",
-            "airport_price_per_km" => "DECIMAL(5,2) DEFAULT 0",
-            "airport_pickup_price" => "DECIMAL(10,2) DEFAULT 0",
-            "airport_drop_price" => "DECIMAL(10,2) DEFAULT 0",
-            "airport_tier1_price" => "DECIMAL(10,2) DEFAULT 0",
-            "airport_tier2_price" => "DECIMAL(10,2) DEFAULT 0",
-            "airport_tier3_price" => "DECIMAL(10,2) DEFAULT 0",
-            "airport_tier4_price" => "DECIMAL(10,2) DEFAULT 0",
-            "airport_extra_km_charge" => "DECIMAL(5,2) DEFAULT 0"
-        ];
-        
-        foreach ($columnsToAdd as $column => $definition) {
-            $columnExists = $conn->query("SHOW COLUMNS FROM vehicle_pricing LIKE '$column'")->num_rows > 0;
-            if (!$columnExists) {
-                $conn->query("ALTER TABLE vehicle_pricing ADD COLUMN $column $definition");
-                $response["details"]["tables_fixed"][] = "vehicle_pricing (added $column)";
-            }
-        }
-        
-        // Check for vehicle_type column and ensure vehicle_id exists
-        $vehicleTypeExists = $conn->query("SHOW COLUMNS FROM vehicle_pricing LIKE 'vehicle_type'")->num_rows > 0;
-        $vehicleIdExists = $conn->query("SHOW COLUMNS FROM vehicle_pricing LIKE 'vehicle_id'")->num_rows > 0;
-        
-        if ($vehicleTypeExists && !$vehicleIdExists) {
-            $conn->query("ALTER TABLE vehicle_pricing ADD COLUMN vehicle_id VARCHAR(50) NOT NULL AFTER id");
-            $conn->query("UPDATE vehicle_pricing SET vehicle_id = vehicle_type");
-            $response["details"]["tables_fixed"][] = "vehicle_pricing (added vehicle_id from vehicle_type)";
-        }
-    }
-    
-    // 4. Check and fix local_package_fares table
-    $response["details"]["tables_checked"][] = "local_package_fares";
-    $tableExists = $conn->query("SHOW TABLES LIKE 'local_package_fares'")->num_rows > 0;
-    
-    if (!$tableExists) {
-        $conn->query("
-            CREATE TABLE local_package_fares (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                vehicle_id VARCHAR(50) NOT NULL,
-                price_4hrs_40km DECIMAL(10,2) NOT NULL DEFAULT 0,
-                price_8hrs_80km DECIMAL(10,2) NOT NULL DEFAULT 0,
-                price_10hrs_100km DECIMAL(10,2) NOT NULL DEFAULT 0,
-                price_extra_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-                price_extra_hour DECIMAL(5,2) NOT NULL DEFAULT 0,
-                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                UNIQUE KEY vehicle_id (vehicle_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        ");
-        $response["details"]["tables_fixed"][] = "local_package_fares (created)";
-    }
-    
-    // 5. Check and fix outstation_fares table
-    $response["details"]["tables_checked"][] = "outstation_fares";
-    $tableExists = $conn->query("SHOW TABLES LIKE 'outstation_fares'")->num_rows > 0;
-    
-    if (!$tableExists) {
-        $conn->query("
-            CREATE TABLE outstation_fares (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                vehicle_id VARCHAR(50) NOT NULL,
-                base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
-                price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-                night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 700,
-                driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 300,
-                roundtrip_base_price DECIMAL(10,2) DEFAULT NULL,
-                roundtrip_price_per_km DECIMAL(5,2) DEFAULT NULL,
-                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                UNIQUE KEY vehicle_id (vehicle_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        ");
-        $response["details"]["tables_fixed"][] = "outstation_fares (created)";
-    } else {
-        // Fix NULL issues in outstation_fares table by setting default values
-        $conn->query("
-            UPDATE outstation_fares 
-            SET night_halt_charge = 700 
-            WHERE night_halt_charge IS NULL OR night_halt_charge = 0
-        ");
-        $response["details"]["tables_fixed"][] = "outstation_fares (fixed NULL night_halt_charge values)";
-        
-        $conn->query("
-            UPDATE outstation_fares 
-            SET driver_allowance = 300 
-            WHERE driver_allowance IS NULL OR driver_allowance = 0
-        ");
-        $response["details"]["tables_fixed"][] = "outstation_fares (fixed NULL driver_allowance values)";
-    }
-    
-    // 6. Ensure all vehicles have pricing entries in vehicle_pricing
-    $result = $conn->query("SELECT vehicle_id FROM vehicle_types WHERE is_active = 1");
-    while ($vehicle = $result->fetch_assoc()) {
-        $vehicleId = $vehicle['vehicle_id'];
-        $tripTypes = ['outstation', 'local', 'airport'];
-        
-        foreach ($tripTypes as $tripType) {
-            $checkStmt = $conn->prepare("SELECT id FROM vehicle_pricing WHERE vehicle_id = ? AND trip_type = ?");
-            $checkStmt->bind_param("ss", $vehicleId, $tripType);
-            $checkStmt->execute();
+    try {
+        // Fix 1: Check if vehicles table exists and fix night_halt_charge and driver_allowance fields
+        if ($conn->query("SHOW TABLES LIKE 'vehicles'")->num_rows > 0) {
+            error_log(date('Y-m-d H:i:s') . " - Fixing vehicles table\n", 3, $logFile);
             
-            if ($checkStmt->get_result()->num_rows === 0) {
-                // Default values based on trip type
-                $baseFare = ($tripType === 'outstation') ? 2000 : (($tripType === 'airport') ? 3000 : 1000);
-                $pricePerKm = ($tripType === 'outstation') ? 15 : (($tripType === 'airport') ? 18 : 12);
-                $nightHaltCharge = 700; // Set default value
-                $driverAllowance = 300; // Set default value
-                
-                $insertStmt = $conn->prepare("
-                    INSERT INTO vehicle_pricing 
-                    (vehicle_id, trip_type, base_fare, price_per_km, night_halt_charge, driver_allowance) 
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ");
-                $insertStmt->bind_param("ssdddd", $vehicleId, $tripType, $baseFare, $pricePerKm, $nightHaltCharge, $driverAllowance);
-                $insertStmt->execute();
-                
-                $response["details"]["vehicle_pricing_entries"][] = "Added $tripType pricing for $vehicleId";
-            } else {
-                // Ensure existing entries don't have NULL for required fields
-                $conn->query("
-                    UPDATE vehicle_pricing 
-                    SET night_halt_charge = 700 
-                    WHERE vehicle_id = '$vehicleId' AND trip_type = '$tripType' 
-                      AND (night_halt_charge IS NULL OR night_halt_charge = 0)
-                ");
-                
-                $conn->query("
-                    UPDATE vehicle_pricing 
-                    SET driver_allowance = 300 
-                    WHERE vehicle_id = '$vehicleId' AND trip_type = '$tripType' 
-                      AND (driver_allowance IS NULL OR driver_allowance = 0)
-                ");
-            }
-            $checkStmt->close();
-        }
-    }
-    
-    // 7. If vehicle exists in vehicle_pricing but not in vehicle_types, create it in vehicle_types
-    $result = $conn->query("
-        SELECT DISTINCT vp.vehicle_id 
-        FROM vehicle_pricing vp 
-        LEFT JOIN vehicle_types vt ON vp.vehicle_id = vt.vehicle_id 
-        WHERE vt.id IS NULL
-    ");
-    
-    while ($row = $result->fetch_assoc()) {
-        $vehicleId = $row['vehicle_id'];
-        $vehicleName = ucwords(str_replace('_', ' ', $vehicleId));
-        
-        $insertStmt = $conn->prepare("
-            INSERT INTO vehicle_types (
-                vehicle_id, name, is_active, base_price, price_per_km, night_halt_charge, driver_allowance
-            ) VALUES (?, ?, 1, 3000, 15, 700, 300)
-        ");
-        $insertStmt->bind_param("ss", $vehicleId, $vehicleName);
-        $insertStmt->execute();
-        
-        $response["details"]["tables_fixed"][] = "vehicle_types (added missing vehicle $vehicleId)";
-    }
-    
-    // 8. Check if vehicles have airport_transfer_fares entries
-    $result = $conn->query("SELECT vehicle_id FROM vehicle_types WHERE is_active = 1");
-    while ($vehicle = $result->fetch_assoc()) {
-        $vehicleId = $vehicle['vehicle_id'];
-        
-        $checkStmt = $conn->prepare("SELECT id FROM airport_transfer_fares WHERE vehicle_id = ?");
-        $checkStmt->bind_param("s", $vehicleId);
-        $checkStmt->execute();
-        
-        if ($checkStmt->get_result()->num_rows === 0) {
-            // Default values for airport transfer fares
-            $basePrice = 3000;
-            $pricePerKm = 15;
-            $pickupPrice = 800;
-            $dropPrice = 800;
-            $tier1Price = 600;
-            $tier2Price = 800;
-            $tier3Price = 1000;
-            $tier4Price = 1200;
-            $extraKmCharge = 15;
-            
-            $insertStmt = $conn->prepare("
-                INSERT INTO airport_transfer_fares 
-                (vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
-                 tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            // Ensure night_halt_charge and driver_allowance are NOT NULL with DEFAULT values
+            $conn->query("
+                ALTER TABLE vehicles 
+                MODIFY night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 700,
+                MODIFY driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 250
             ");
-            $insertStmt->bind_param("sddddddddd", $vehicleId, $basePrice, $pricePerKm, $pickupPrice, $dropPrice, 
-                                 $tier1Price, $tier2Price, $tier3Price, $tier4Price, $extraKmCharge);
-            $insertStmt->execute();
             
-            $response["details"]["tables_fixed"][] = "airport_transfer_fares (added entry for $vehicleId)";
+            // Update any NULL values in vehicles table
+            $updateResult = $conn->query("UPDATE vehicles SET night_halt_charge = 700 WHERE night_halt_charge IS NULL");
+            $updateResult2 = $conn->query("UPDATE vehicles SET driver_allowance = 250 WHERE driver_allowance IS NULL");
+            
+            $response['details']['tables_fixed'][] = 'vehicles table - NULL values fixed in night_halt_charge and driver_allowance';
         }
-        $checkStmt->close();
+        
+        // Fix 2: Check if outstation_fares table exists and fix its columns
+        if ($conn->query("SHOW TABLES LIKE 'outstation_fares'")->num_rows > 0) {
+            error_log(date('Y-m-d H:i:s') . " - Fixing outstation_fares table\n", 3, $logFile);
+            
+            // Ensure night_halt_charge and driver_allowance are NOT NULL with DEFAULT values
+            $conn->query("
+                ALTER TABLE outstation_fares 
+                MODIFY night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 700,
+                MODIFY driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 250
+            ");
+            
+            // Update any NULL values in outstation_fares table
+            $conn->query("UPDATE outstation_fares SET night_halt_charge = 700 WHERE night_halt_charge IS NULL");
+            $conn->query("UPDATE outstation_fares SET driver_allowance = 250 WHERE driver_allowance IS NULL");
+            
+            $response['details']['tables_fixed'][] = 'outstation_fares table - NULL values fixed in night_halt_charge and driver_allowance';
+        }
+        
+        // Fix 3: Look for other tables with these columns and fix there too
+        $tables = [];
+        $tablesResult = $conn->query("SHOW TABLES");
+        while ($table = $tablesResult->fetch_array(MYSQLI_NUM)) {
+            $tables[] = $table[0];
+        }
+        
+        foreach ($tables as $table) {
+            $columnsResult = $conn->query("SHOW COLUMNS FROM `$table`");
+            $columns = [];
+            while ($column = $columnsResult->fetch_assoc()) {
+                $columns[] = $column['Field'];
+            }
+            
+            if (in_array('night_halt_charge', $columns)) {
+                error_log(date('Y-m-d H:i:s') . " - Found night_halt_charge in $table, fixing\n", 3, $logFile);
+                $conn->query("UPDATE `$table` SET night_halt_charge = 700 WHERE night_halt_charge IS NULL");
+                $response['details']['tables_fixed'][] = "$table - NULL values fixed in night_halt_charge";
+            }
+            
+            if (in_array('driver_allowance', $columns)) {
+                error_log(date('Y-m-d H:i:s') . " - Found driver_allowance in $table, fixing\n", 3, $logFile);
+                $conn->query("UPDATE `$table` SET driver_allowance = 250 WHERE driver_allowance IS NULL");
+                $response['details']['tables_fixed'][] = "$table - NULL values fixed in driver_allowance";
+            }
+        }
+        
+        // Fix 4: Ensure all vehicles have corresponding entries in pricing tables
+        $vehiclesResult = $conn->query("SELECT id, vehicle_id FROM vehicles");
+        while ($vehicle = $vehiclesResult->fetch_assoc()) {
+            $vehicleId = $vehicle['id'] ?? $vehicle['vehicle_id'];
+            
+            // Check outstation_fares
+            $checkOutstation = $conn->query("SELECT COUNT(*) as count FROM outstation_fares WHERE vehicle_id = '$vehicleId'");
+            $outstationCount = $checkOutstation->fetch_assoc()['count'];
+            
+            if ($outstationCount == 0) {
+                // Create entry with default values
+                $insertOutstation = $conn->query("
+                    INSERT INTO outstation_fares (
+                        vehicle_id, base_price, price_per_km, night_halt_charge, driver_allowance, 
+                        roundtrip_base_price, roundtrip_price_per_km, created_at, updated_at
+                    ) VALUES (
+                        '$vehicleId', 3000, 15, 700, 250, 2850, 12.75, NOW(), NOW()
+                    )
+                ");
+                
+                if ($insertOutstation) {
+                    $response['details']['vehicle_pricing_entries'][] = "Created outstation pricing for $vehicleId";
+                }
+            }
+            
+            // Check local_package_fares
+            $checkLocal = $conn->query("SELECT COUNT(*) as count FROM local_package_fares WHERE vehicle_id = '$vehicleId'");
+            $localCount = $checkLocal->fetch_assoc()['count'];
+            
+            if ($localCount == 0) {
+                // Create entry with default values
+                $insertLocal = $conn->query("
+                    INSERT INTO local_package_fares (
+                        vehicle_id, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, 
+                        price_extra_km, price_extra_hour, created_at, updated_at
+                    ) VALUES (
+                        '$vehicleId', 1200, 2200, 2500, 14, 250, NOW(), NOW()
+                    )
+                ");
+                
+                if ($insertLocal) {
+                    $response['details']['vehicle_pricing_entries'][] = "Created local package pricing for $vehicleId";
+                }
+            }
+            
+            // Check airport_transfer_fares
+            $checkAirport = $conn->query("SELECT COUNT(*) as count FROM airport_transfer_fares WHERE vehicle_id = '$vehicleId'");
+            $airportCount = $checkAirport->fetch_assoc()['count'];
+            
+            if ($airportCount == 0) {
+                // Create entry with default values
+                $insertAirport = $conn->query("
+                    INSERT INTO airport_transfer_fares (
+                        vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
+                        tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge,
+                        created_at, updated_at
+                    ) VALUES (
+                        '$vehicleId', 3000, 12, 800, 800, 600, 800, 1000, 1200, 12, NOW(), NOW()
+                    )
+                ");
+                
+                if ($insertAirport) {
+                    $response['details']['vehicle_pricing_entries'][] = "Created airport transfer pricing for $vehicleId";
+                }
+            }
+        }
+        
+        // Commit all changes
+        $conn->commit();
+        
+        // Success response
+        $response['status'] = 'success';
+        $response['message'] = 'Database tables fixed successfully';
+        
+    } catch (Exception $e) {
+        // Roll back transaction on error
+        $conn->rollback();
+        throw $e;
     }
     
-    // 9. Check for NULL values in outstation_fares and fix them
-    $conn->query("
-        UPDATE outstation_fares 
-        SET night_halt_charge = 700 
-        WHERE night_halt_charge IS NULL OR night_halt_charge = 0
-    ");
-    
-    $conn->query("
-        UPDATE outstation_fares 
-        SET driver_allowance = 300 
-        WHERE driver_allowance IS NULL OR driver_allowance = 0
-    ");
-    
-    $conn->query("
-        UPDATE outstation_fares 
-        SET roundtrip_base_price = base_price * 0.95 
-        WHERE roundtrip_base_price IS NULL OR roundtrip_base_price = 0
-    ");
-    
-    $conn->query("
-        UPDATE outstation_fares 
-        SET roundtrip_price_per_km = price_per_km * 0.85 
-        WHERE roundtrip_price_per_km IS NULL OR roundtrip_price_per_km = 0
-    ");
-    
-    $response["details"]["tables_fixed"][] = "outstation_fares (fixed NULL values)";
-    
-    // Clear the database_fix_prompted flag to prevent future unwanted prompts
-    $conn->query("
-        INSERT INTO admin_settings (setting_key, setting_value, description)
-        VALUES ('database_fix_prompted', 'fixed', 'Flag to prevent continuous database fix prompts')
-        ON DUPLICATE KEY UPDATE setting_value = 'fixed', updated_at = NOW()
-    ");
-    
-    echo json_encode($response);
+    // Close connection
+    $conn->close();
     
 } catch (Exception $e) {
-    http_response_code(500);
-    echo json_encode([
-        "status" => "error",
-        "message" => "Failed to fix database tables: " . $e->getMessage(),
-        "file" => $e->getFile(),
-        "line" => $e->getLine()
-    ]);
+    $errorMessage = "Error fixing database tables: " . $e->getMessage();
+    error_log(date('Y-m-d H:i:s') . " - $errorMessage\n", 3, $logFile ?? null);
+    
+    $response['status'] = 'error';
+    $response['message'] = $errorMessage;
+    $response['details']['errors'][] = $e->getMessage();
 }
+
+// Send response
+echo json_encode($response);
+exit;
