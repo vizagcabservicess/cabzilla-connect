@@ -67,12 +67,32 @@ export const directVehicleOperation = async (
           
           // Special case for capacity and luggage capacity - ensure they're sent as numbers
           if (key === 'capacity' || key === 'luggageCapacity' || key === 'luggage_capacity') {
-            const numValue = Number(value) || 4; // Default to 4 if invalid
-            formData.append(key, String(numValue));
+            // Try to convert to number first
+            let numValue: number;
+            if (typeof value === 'number') {
+              numValue = value;
+            } else {
+              numValue = parseInt(String(value), 10);
+            }
+            
+            // Use default values if parsing fails
+            const defaultValue = key === 'capacity' ? 4 : 2;
+            const finalValue = isNaN(numValue) ? defaultValue : numValue;
+            
+            console.log(`apiHelper - Setting ${key} value: ${finalValue} (original: ${value}, type: ${typeof value})`);
+            
+            formData.append(key, String(finalValue));
+            
             // Also add snake_case variant for PHP compatibility
             if (key === 'luggageCapacity') {
-              formData.append('luggage_capacity', String(numValue));
+              formData.append('luggage_capacity', String(finalValue));
+            } else if (key === 'luggage_capacity') {
+              formData.append('luggageCapacity', String(finalValue));
             }
+            
+            // Add additional fields for debugging
+            formData.append(`${key}_numeric`, String(finalValue));
+            formData.append(`${key}_original_type`, String(typeof value));
             continue;
           }
           
@@ -89,7 +109,7 @@ export const directVehicleOperation = async (
         }
         
         // Log FormData contents for debugging
-        console.log('FormData contents:');
+        console.log('FormData contents in apiHelper:');
         for (const pair of formData.entries()) {
           console.log(`${pair[0]}: ${pair[1]}`);
         }

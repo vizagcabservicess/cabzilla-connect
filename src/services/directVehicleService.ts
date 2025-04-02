@@ -1,3 +1,4 @@
+
 /**
  * Direct vehicle service for operations that bypass API layers
  * This ensures consistent behavior for vehicle CRUD operations
@@ -17,6 +18,13 @@ const normalizeVehicleId = (id: string): string => {
 
 // Helper function to ensure numeric values are always sent as numbers
 const ensureNumericValues = (vehicle: CabType): CabType => {
+  console.log(`directVehicleService - ensureNumericValues input:`, {
+    capacity: vehicle.capacity,
+    luggageCapacity: vehicle.luggageCapacity,
+    type_capacity: typeof vehicle.capacity,
+    type_luggageCapacity: typeof vehicle.luggageCapacity
+  });
+  
   // Force parse all numeric fields to ensure they're stored as numbers
   const capacity = parseInt(String(vehicle.capacity), 10);
   const luggageCapacity = parseInt(String(vehicle.luggageCapacity), 10);
@@ -25,6 +33,13 @@ const ensureNumericValues = (vehicle: CabType): CabType => {
   const pricePerKm = parseFloat(String(vehicle.pricePerKm || 0));
   const nightHaltCharge = parseFloat(String(vehicle.nightHaltCharge || 700));
   const driverAllowance = parseFloat(String(vehicle.driverAllowance || 250));
+  
+  console.log(`directVehicleService - ensureNumericValues parsed:`, {
+    capacity,
+    luggageCapacity,
+    isNaN_capacity: isNaN(capacity),
+    isNaN_luggageCapacity: isNaN(luggageCapacity)
+  });
   
   return {
     ...vehicle,
@@ -126,6 +141,8 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
     };
     
     console.log('Normalized vehicle before update:', normalizedVehicle);
+    console.log('Capacity type after normalization:', typeof normalizedVehicle.capacity);
+    console.log('Luggage capacity type after normalization:', typeof normalizedVehicle.luggageCapacity);
     
     // Use FormData instead of JSON for better PHP compatibility
     const formData = new FormData();
@@ -148,6 +165,7 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
           formData.append(key, String(isNaN(numVal) ? 4 : numVal));
           formData.append('capacity_numeric', String(isNaN(numVal) ? 4 : numVal));
           formData.append('capacity_value', String(isNaN(numVal) ? 4 : numVal));
+          console.log(`Setting capacity form value: ${String(isNaN(numVal) ? 4 : numVal)}`);
         } else {
           numVal = parseInt(String(value), 10);
           formData.append(key, String(isNaN(numVal) ? 2 : numVal));
@@ -156,6 +174,7 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
             formData.append('luggage_capacity', String(isNaN(numVal) ? 2 : numVal));
             formData.append('luggage_capacity_numeric', String(isNaN(numVal) ? 2 : numVal));
             formData.append('luggage_capacity_value', String(isNaN(numVal) ? 2 : numVal));
+            console.log(`Setting luggage_capacity form value: ${String(isNaN(numVal) ? 2 : numVal)}`);
           }
         }
         return;

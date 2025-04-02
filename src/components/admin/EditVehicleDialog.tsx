@@ -32,22 +32,41 @@ export function EditVehicleDialog({
     setVehicle(initialVehicle);
   }, [initialVehicle]);
 
+  // Parse numeric value and ensure it's a number
+  const parseNumericValue = (value: any, defaultValue: number = 0): number => {
+    const parsed = Number(value);
+    return isNaN(parsed) ? defaultValue : parsed;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     try {
-      // Ensure capacity and luggageCapacity are numbers
+      // Ensure capacity and luggageCapacity are explicit numbers
+      const capacity = parseNumericValue(vehicle.capacity, 4);
+      const luggageCapacity = parseNumericValue(vehicle.luggageCapacity, 2);
+      
+      // Log the values being sent for debugging
+      console.log("EditVehicleDialog - Values before update:", {
+        id: vehicle.id,
+        capacity,
+        luggageCapacity,
+        rawCapacity: vehicle.capacity,
+        rawLuggageCapacity: vehicle.luggageCapacity
+      });
+      
       const updatedVehicle = {
         ...vehicle,
-        capacity: Number(vehicle.capacity),
-        luggageCapacity: Number(vehicle.luggageCapacity),
-        basePrice: Number(vehicle.basePrice),
-        pricePerKm: Number(vehicle.pricePerKm),
-        nightHaltCharge: Number(vehicle.nightHaltCharge),
-        driverAllowance: Number(vehicle.driverAllowance)
+        capacity,
+        luggageCapacity,
+        basePrice: parseNumericValue(vehicle.basePrice, 0),
+        price: parseNumericValue(vehicle.price || vehicle.basePrice, 0),
+        pricePerKm: parseNumericValue(vehicle.pricePerKm, 0),
+        nightHaltCharge: parseNumericValue(vehicle.nightHaltCharge, 700),
+        driverAllowance: parseNumericValue(vehicle.driverAllowance, 250)
       };
       
-      console.log("Submitting vehicle update with data:", updatedVehicle);
+      console.log("EditVehicleDialog - Submitting vehicle update with data:", updatedVehicle);
       
       await updateVehicle(updatedVehicle);
       toast.success(`Vehicle ${vehicle.name} updated successfully`);
@@ -59,6 +78,26 @@ export function EditVehicleDialog({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleCapacityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    const numericValue = parseInt(value, 10);
+    console.log(`EditVehicleDialog - Capacity changed to: ${value}, parsed as: ${numericValue}`);
+    setVehicle({ 
+      ...vehicle, 
+      capacity: isNaN(numericValue) ? 4 : numericValue
+    });
+  };
+  
+  const handleLuggageCapacityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    const numericValue = parseInt(value, 10);
+    console.log(`EditVehicleDialog - Luggage capacity changed to: ${value}, parsed as: ${numericValue}`);
+    setVehicle({ 
+      ...vehicle, 
+      luggageCapacity: isNaN(numericValue) ? 2 : numericValue
+    });
   };
 
   return (
@@ -105,10 +144,7 @@ export function EditVehicleDialog({
                 type="number"
                 min={1}
                 value={vehicle.capacity || 4}
-                onChange={(e) => setVehicle({ 
-                  ...vehicle, 
-                  capacity: parseInt(e.target.value, 10) || 4 
-                })}
+                onChange={handleCapacityChange}
               />
             </div>
             
@@ -120,10 +156,7 @@ export function EditVehicleDialog({
                 type="number"
                 min={0}
                 value={vehicle.luggageCapacity || 2}
-                onChange={(e) => setVehicle({ 
-                  ...vehicle, 
-                  luggageCapacity: parseInt(e.target.value, 10) || 2
-                })}
+                onChange={handleLuggageCapacityChange}
               />
             </div>
           </div>
