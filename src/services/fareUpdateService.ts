@@ -1,9 +1,8 @@
-
 import { toast } from 'sonner';
 import { apiBaseUrl } from '@/config/api';
 import { directVehicleOperation } from '@/utils/apiHelper';
 
-// Expanded ID mapping with all known numeric IDs and their proper vehicle_ids
+// CRITICAL FIX: Expanded ID mapping with all known numeric IDs and their proper vehicle_ids
 const numericIdMapExtended: Record<string, string> = {
   '1': 'sedan',
   '2': 'ertiga',
@@ -15,10 +14,15 @@ const numericIdMapExtended: Record<string, string> = {
   '1272': 'etios', // Map these duplicates back to proper vehicle_id
   '1273': 'etios', // Add any new numeric IDs that have appeared
   '1274': 'etios',
-  '1275': 'etios'
+  '1275': 'etios',
+  '1276': 'etios',
+  '1277': 'etios',
+  '1278': 'etios',
+  '1279': 'etios',
+  '1280': 'etios'
 };
 
-// Enhanced helper function to normalize vehicle IDs with more robust logic
+// CRITICAL FIX: Enhanced helper function to normalize vehicle IDs with more aggressive logic
 const normalizeVehicleId = (vehicleId: string | number): string => {
   if (!vehicleId) return '';
   
@@ -37,30 +41,23 @@ const normalizeVehicleId = (vehicleId: string | number): string => {
     return normalizedId;
   }
   
-  // If it's in our mapping, always use the mapped value to prevent duplicate vehicles
+  // CRITICAL: If it's in our mapping, always use the mapped value to prevent duplicate vehicles
   if (numericIdMapExtended[normalizedId]) {
     const mappedId = numericIdMapExtended[normalizedId];
     console.log(`CRITICAL: Converting numeric ID ${normalizedId} to vehicle ID: ${mappedId}`);
     return mappedId;
   }
   
-  // If it's purely numeric, we need to check the database for the actual vehicle_id
+  // If it's purely numeric, we MUST reject it completely
   if (/^\d+$/.test(normalizedId)) {
-    // STRICTER APPROACH: If this is a numeric ID above 10, BLOCK it completely
-    // This is more aggressive but necessary to prevent duplicate vehicles
-    if (parseInt(normalizedId) > 10) {
-      console.error(`REJECTED: Numeric ID ${normalizedId} not allowed as vehicle ID to prevent duplicates`);
-      throw new Error(`Cannot use numeric ID ${normalizedId} as a vehicle identifier. Please use the proper vehicle ID.`);
-    }
-    
-    // If it's a small number (below 10), log a warning but allow it
-    console.warn(`Small numeric ID: ${normalizedId} - allowing but verifying with check-vehicle.php`);
+    console.error(`REJECTED: Numeric ID ${normalizedId} not allowed as vehicle ID to prevent duplicates`);
+    throw new Error(`Cannot use numeric ID ${normalizedId} as a vehicle identifier. Please use the proper vehicle ID.`);
   }
   
   return normalizedId;
 };
 
-// Helper function to verify a vehicle ID exists before updating fares
+// CRITICAL FIX: Enhanced helper function to verify a vehicle ID exists before updating fares
 const verifyVehicleId = async (vehicleId: string): Promise<string> => {
   try {
     // First normalize the ID using our enhanced function
@@ -70,6 +67,12 @@ const verifyVehicleId = async (vehicleId: string): Promise<string> => {
     } catch (error) {
       console.error(`Error normalizing vehicle ID: ${error}`);
       throw error; // Re-throw to prevent processing with invalid IDs
+    }
+    
+    // CRITICAL: After normalization, check again that it's not numeric
+    if (/^\d+$/.test(normalizedId)) {
+      console.error(`EMERGENCY: Normalized vehicle ID '${normalizedId}' is still numeric. Rejecting.`);
+      throw new Error(`Cannot use numeric ID ${normalizedId} as it would create a duplicate vehicle.`);
     }
     
     // Use check-vehicle endpoint to verify this ID exists
@@ -86,22 +89,16 @@ const verifyVehicleId = async (vehicleId: string): Promise<string> => {
     if (checkResult && checkResult.status === 'success' && checkResult.exists) {
       // If we found the vehicle, use its actual vehicle_id from the database
       const actualVehicleId = checkResult.vehicle.vehicle_id;
-      if (actualVehicleId && actualVehicleId !== normalizedId) {
+      if (actualVehicleId && actualVehicleId !== normalizedId && !(/^\d+$/.test(actualVehicleId))) {
         console.log(`Using actual vehicle_id ${actualVehicleId} instead of ${normalizedId}`);
         return actualVehicleId;
       }
       return normalizedId;
     }
     
-    // If we couldn't verify, log an error but return the normalized ID
+    // If we couldn't verify, log an error
     console.error(`Could not verify vehicle ID: ${normalizedId}`, checkResult);
-    
-    // IMPORTANT: If this is numeric, throw an error to prevent creation of duplicate vehicles
-    if (/^\d+$/.test(normalizedId)) {
-      throw new Error(`Cannot use numeric ID ${normalizedId} as it may create a duplicate vehicle`);
-    }
-    
-    return normalizedId;
+    throw new Error(`Vehicle with ID ${normalizedId} not found in database. Cannot update fares.`);
   } catch (error) {
     console.error(`Error verifying vehicle ID: ${error}`);
     throw error;
@@ -159,9 +156,24 @@ export const updateLocalFares = async (
   packages: any[] = []
 ): Promise<any> => {
   try {
-    // Verify and normalize the vehicle ID first
-    const verifiedVehicleId = await verifyVehicleId(vehicleId);
-    console.log(`Updating local fares for vehicle ${vehicleId} (verified: ${verifiedVehicleId})`);
+    console.log(`Starting fare update for local packages with vehicle ID ${vehicleId}`);
+    
+    // CRITICAL FIX: Verify and normalize the vehicle ID first with stronger checks
+    let verifiedVehicleId;
+    try {
+      verifiedVehicleId = await verifyVehicleId(vehicleId);
+      console.log(`Updating local fares for vehicle ${vehicleId} (verified: ${verifiedVehicleId})`);
+      
+      // One final check after verification - reject if still numeric
+      if (/^\d+$/.test(verifiedVehicleId)) {
+        console.error(`REJECTED: Verified ID ${verifiedVehicleId} is still numeric after verification!`);
+        throw new Error(`Cannot use numeric ID ${verifiedVehicleId} as it would create a duplicate vehicle.`);
+      }
+    } catch (error) {
+      console.error(`Vehicle verification failed: ${error}`);
+      toast.error(`Cannot update fares: ${error instanceof Error ? error.message : String(error)}`);
+      return Promise.reject(error);
+    }
     
     // Add additional validation to prevent problematic IDs
     if (!verifiedVehicleId || verifiedVehicleId === 'undefined' || verifiedVehicleId === 'null') {
@@ -170,50 +182,71 @@ export const updateLocalFares = async (
       return Promise.reject(new Error("Invalid vehicle ID"));
     }
     
-    // First try using the universal fare update endpoint which has better validation
-    const universalResult = await directVehicleOperation('/api/admin/fare-update.php', 'POST', {
-      tripType: 'local',
-      vehicleId: verifiedVehicleId,
-      extraKmRate,
-      extraHourRate,
-      price4hr: typeof packages === 'object' && packages['4hrs-40km'] ? packages['4hrs-40km'] : 0,
-      price8hr: typeof packages === 'object' && packages['8hrs-80km'] ? packages['8hrs-80km'] : 0,
-      price10hr: typeof packages === 'object' && packages['10hrs-100km'] ? packages['10hrs-100km'] : 0
-    });
-    
-    console.log("Universal endpoint response:", universalResult);
-    
-    if (universalResult && universalResult.status === 'success') {
-      toast.success(`Updated local fares for ${verifiedVehicleId}`);
-      return universalResult;
+    console.log(`Trying direct local fares endpoint`);
+    try {
+      // Try the direct endpoint first which has the most aggressive validation
+      const directResult = await directVehicleOperation('/api/admin/direct-local-fares.php', 'POST', {
+        vehicleId: verifiedVehicleId,
+        extraKmRate,
+        extraHourRate,
+        packages: typeof packages === 'object' ? JSON.stringify(packages) : packages
+      });
+      
+      if (directResult && directResult.status === 'success') {
+        toast.success(`Updated local fares for ${verifiedVehicleId}`);
+        return directResult;
+      } else if (directResult && directResult.status === 'error') {
+        throw new Error(directResult.message || 'Failed to update local fares using direct endpoint');
+      }
+    } catch (directError) {
+      console.error(`Error with direct endpoint: ${directError}`);
+      // Continue to next method - don't return yet
     }
     
-    // If universal endpoint fails, try the direct endpoint
-    const directResult = await directVehicleOperation('/api/admin/direct-local-fares.php', 'POST', {
-      vehicleId: verifiedVehicleId,
-      extraKmRate,
-      extraHourRate,
-      packages: typeof packages === 'object' ? JSON.stringify(packages) : packages
-    });
-    
-    if (directResult && directResult.status === 'success') {
-      toast.success(`Updated local fares for ${verifiedVehicleId}`);
-      return directResult;
+    // Try using the universal fare update endpoint as fallback
+    console.log(`Trying universal fare update endpoint`);
+    try {
+      const universalResult = await directVehicleOperation('/api/admin/fare-update.php', 'POST', {
+        tripType: 'local',
+        vehicleId: verifiedVehicleId,
+        extraKmRate,
+        extraHourRate,
+        price4hr: typeof packages === 'object' && packages['4hrs-40km'] ? packages['4hrs-40km'] : 0,
+        price8hr: typeof packages === 'object' && packages['8hrs-80km'] ? packages['8hrs-80km'] : 0,
+        price10hr: typeof packages === 'object' && packages['10hrs-100km'] ? packages['10hrs-100km'] : 0
+      });
+      
+      console.log("Universal endpoint response:", universalResult);
+      
+      if (universalResult && universalResult.status === 'success') {
+        toast.success(`Updated local fares for ${verifiedVehicleId}`);
+        return universalResult;
+      }
+    } catch (universalError) {
+      console.error(`Error with universal endpoint: ${universalError}`);
+      // Continue to next method - don't return yet
     }
     
-    // Fall back to the older endpoint
-    const result = await directVehicleOperation('/api/admin/local-package-fares-update.php', 'POST', {
-      vehicleId: verifiedVehicleId,
-      extraKmRate,
-      extraHourRate,
-      packages: typeof packages === 'object' ? JSON.stringify(packages) : packages
-    });
-    
-    if (result && result.status === 'success') {
-      toast.success(`Updated local fares for ${verifiedVehicleId}`);
-      return result;
-    } else {
-      throw new Error(result?.message || 'Failed to update local fares');
+    // Fall back to the older endpoint as last resort
+    console.log(`Trying older local package fares update endpoint`);
+    try {
+      const result = await directVehicleOperation('/api/admin/local-package-fares-update.php', 'POST', {
+        vehicleId: verifiedVehicleId,
+        extraKmRate,
+        extraHourRate,
+        packages: typeof packages === 'object' ? JSON.stringify(packages) : packages
+      });
+      
+      if (result && result.status === 'success') {
+        toast.success(`Updated local fares for ${verifiedVehicleId}`);
+        return result;
+      } else {
+        throw new Error(result?.message || 'Failed to update local fares with any endpoint');
+      }
+    } catch (error: any) {
+      console.error(`Error updating local fares with legacy endpoint: ${error.message}`, error);
+      toast.error(`Failed to update local fares: ${error.message}`);
+      throw error;
     }
   } catch (error: any) {
     console.error(`Error updating local fares: ${error.message}`, error);

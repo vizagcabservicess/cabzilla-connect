@@ -13,7 +13,7 @@ header('Content-Type: application/json');
 
 // Add additional headers for debugging
 header('X-Debug-File: direct-local-fares.php');
-header('X-API-Version: 1.0.2');
+header('X-API-Version: 1.0.3'); // Increased version number
 header('X-Timestamp: ' . time());
 
 // Handle preflight OPTIONS request
@@ -75,7 +75,7 @@ function getDbConnection() {
     }
 }
 
-// Map of known numeric IDs to their proper vehicle_ids
+// CRITICAL FIX: Map of known numeric IDs to their proper vehicle_ids - EXPANDED
 function getKnownVehicleIdMap() {
     return [
         '1' => 'sedan',
@@ -83,12 +83,17 @@ function getKnownVehicleIdMap() {
         '180' => 'etios',
         '1266' => 'MPV',
         '592' => 'Urbania',
-        '1270' => 'MPV', // Special case: ID that was already converted to vehicle_id
-        '1271' => 'etios' // Special case: ID that was already converted to vehicle_id
+        '1270' => 'MPV',   // Map these duplicates back to proper vehicle_id
+        '1271' => 'etios', // Map these duplicates back to proper vehicle_id
+        '1272' => 'etios', // Map these duplicates back to proper vehicle_id
+        '1273' => 'etios',
+        '1274' => 'etios',
+        '1275' => 'etios',
+        // Add ANY numeric values that appear as IDs in your database
     ];
 }
 
-// Function to normalize vehicle ID
+// IMPROVED: Function to normalize vehicle ID with stricter rules
 function normalizeVehicleId($rawId) {
     global $logDir, $timestamp;
     
@@ -104,46 +109,64 @@ function normalizeVehicleId($rawId) {
         $normalizedId = substr($normalizedId, 5);
     }
     
-    // If it's a numeric ID, it might be a database ID rather than a vehicle_id
+    // CRITICAL FIX: If it's a pure numeric ID, it MUST be converted to a string name
+    // This is what was creating the duplicate vehicles
     if (is_numeric($normalizedId)) {
+        error_log("[$timestamp] NUMERIC ID DETECTED: $normalizedId - must be converted", 3, $logDir . '/direct-local-fares.log');
+        
         $knownMap = getKnownVehicleIdMap();
         
         // First check our hardcoded map for known vehicle IDs
         if (isset($knownMap[$normalizedId])) {
             $mappedId = $knownMap[$normalizedId];
-            error_log("[$timestamp] Mapped numeric ID $normalizedId to vehicle_id: $mappedId using known map", 3, $logDir . '/direct-local-fares.log');
+            error_log("[$timestamp] MAPPED numeric ID $normalizedId to proper vehicle_id: $mappedId", 3, $logDir . '/direct-local-fares.log');
             return $mappedId;
         }
         
         // Then try to look up the actual vehicle_id in database
         try {
             $conn = getDbConnection();
-            $stmt = $conn->prepare("SELECT vehicle_id, name FROM vehicles WHERE id = ? LIMIT 1");
+            
+            // First try to find by exact ID match
+            $stmt = $conn->prepare("SELECT id, vehicle_id, name FROM vehicles WHERE id = ? LIMIT 1");
             $stmt->execute([$normalizedId]);
             $result = $stmt->fetch(PDO::FETCH_ASSOC);
             
-            if ($result && !empty($result['vehicle_id'])) {
-                error_log("[$timestamp] Converted numeric ID $normalizedId to vehicle_id: {$result['vehicle_id']}", 3, $logDir . '/direct-local-fares.log');
-                return $result['vehicle_id'];
+            if ($result) {
+                // If found by ID and has a non-numeric vehicle_id, use that
+                if (!empty($result['vehicle_id']) && !is_numeric($result['vehicle_id'])) {
+                    error_log("[$timestamp] Found vehicle_id '{$result['vehicle_id']}' for numeric ID $normalizedId", 3, $logDir . '/direct-local-fares.log');
+                    return $result['vehicle_id'];
+                }
+                
+                // If no good vehicle_id but has a proper name, use that
+                if (!empty($result['name']) && $result['name'] !== $normalizedId && !is_numeric($result['name'])) {
+                    error_log("[$timestamp] Using name '{$result['name']}' for numeric ID $normalizedId", 3, $logDir . '/direct-local-fares.log');
+                    return $result['name'];
+                }
             }
             
-            // If no vehicle_id but we have a name, use that
-            if ($result && !empty($result['name']) && $result['name'] !== $normalizedId) {
-                error_log("[$timestamp] Using vehicle name '{$result['name']}' for numeric ID $normalizedId", 3, $logDir . '/direct-local-fares.log');
-                return $result['name'];
+            // If not found by exact ID, try to find a vehicle with this numeric value as vehicle_id 
+            // (it's already in the database incorrectly)
+            $stmt = $conn->prepare("SELECT id, vehicle_id, name FROM vehicles WHERE vehicle_id = ? LIMIT 1");
+            $stmt->execute([$normalizedId]);
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($result) {
+                // If it has a name, prefer using that instead of the numeric ID
+                if (!empty($result['name']) && !is_numeric($result['name'])) {
+                    error_log("[$timestamp] Vehicle exists with numeric vehicle_id, using name '{$result['name']}' instead", 3, $logDir . '/direct-local-fares.log');
+                    return $result['name'];
+                }
             }
             
-            // If it's a large number, this is likely a database ID incorrectly used as a vehicle_id
-            if (intval($normalizedId) > 100) {
-                error_log("[$timestamp] WARNING: Large numeric ID $normalizedId could create a duplicate vehicle", 3, $logDir . '/direct-local-fares.log');
-                // Here we're explicitly preventing these large numeric IDs
-                throw new Exception("Cannot use numeric ID $normalizedId as a vehicle identifier. Please use a proper vehicle ID.");
-            }
+            // CRITICAL: We've found no good mapping, so we must reject this numeric ID completely
+            error_log("[$timestamp] REJECTED: No mapping found for numeric ID $normalizedId - cannot use as vehicle_id", 3, $logDir . '/direct-local-fares.log');
+            throw new Exception("Cannot use numeric ID '$normalizedId' as a vehicle identifier. Please use a proper vehicle ID like 'sedan', 'ertiga', etc.");
+            
         } catch (Exception $e) {
-            if (strpos($e->getMessage(), "Cannot use numeric ID") === 0) {
-                throw $e; // Re-throw our explicit prevention message
-            }
-            error_log("[$timestamp] Error looking up vehicle_id: " . $e->getMessage(), 3, $logDir . '/direct-local-fares.log');
+            error_log("[$timestamp] Error or rejection during ID normalization: " . $e->getMessage(), 3, $logDir . '/direct-local-fares.log');
+            throw $e; // Re-throw to be handled by caller
         }
     }
     
@@ -163,12 +186,22 @@ function verifyVehicleExists($vehicleId) {
         $conn = getDbConnection();
         
         // Check if vehicle exists in the vehicles table
-        $stmt = $conn->prepare("SELECT id, vehicle_id, name FROM vehicles WHERE vehicle_id = ? OR id = ?");
-        $stmt->execute([$vehicleId, $vehicleId]);
+        $stmt = $conn->prepare("SELECT id, vehicle_id, name FROM vehicles WHERE vehicle_id = ? LIMIT 1");
+        $stmt->execute([$vehicleId]);
         $vehicle = $stmt->fetch(PDO::FETCH_ASSOC);
         
         if ($vehicle) {
-            error_log("[$timestamp] Vehicle exists: " . json_encode($vehicle), 3, $logDir . '/direct-local-fares.log');
+            error_log("[$timestamp] Vehicle exists with given vehicle_id: " . json_encode($vehicle), 3, $logDir . '/direct-local-fares.log');
+            return $vehicle;
+        }
+        
+        // Try by ID as fallback
+        $stmt = $conn->prepare("SELECT id, vehicle_id, name FROM vehicles WHERE id = ? LIMIT 1");
+        $stmt->execute([$vehicleId]);
+        $vehicle = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($vehicle) {
+            error_log("[$timestamp] Vehicle exists by ID: " . json_encode($vehicle), 3, $logDir . '/direct-local-fares.log');
             return $vehicle;
         }
         
@@ -244,22 +277,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception("Vehicle ID is required");
         }
         
-        // Normalize the vehicle ID - critical step to prevent duplicate vehicles
+        // CRITICAL STEP: Normalize the vehicle ID with strict checking
         try {
             $vehicleId = normalizeVehicleId($vehicleId);
         } catch (Exception $e) {
-            // If normalization explicitly throws an error, stop processing
-            throw $e;
+            // Return an error response instead of letting the request continue
+            http_response_code(400);
+            echo json_encode([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+                'originalId' => $originalVehicleId,
+                'timestamp' => time()
+            ]);
+            exit;
         }
         
         if (empty($vehicleId)) {
             throw new Exception("Failed to normalize vehicle ID from: $originalVehicleId");
         }
         
-        // Verify the vehicle exists - prevents creating new vehicles
+        // CRITICAL: Check again if this is purely numeric after normalization - reject completely
+        if (is_numeric($vehicleId)) {
+            error_log("[$timestamp] REJECTED: Normalized ID $vehicleId is still numeric", 3, $logDir . '/direct-local-fares.log');
+            http_response_code(400);
+            echo json_encode([
+                'status' => 'error',
+                'message' => "Cannot use numeric ID '$vehicleId' as a vehicle identifier. Please use a proper vehicle ID.",
+                'originalId' => $originalVehicleId,
+                'timestamp' => time()
+            ]);
+            exit;
+        }
+        
+        // CRITICAL: Verify the vehicle exists - prevents creating new vehicles
         $vehicle = verifyVehicleExists($vehicleId);
         if (!$vehicle) {
-            throw new Exception("Vehicle with ID '$vehicleId' not found in the database");
+            error_log("[$timestamp] Vehicle with ID '$vehicleId' not found", 3, $logDir . '/direct-local-fares.log');
+            http_response_code(400);
+            echo json_encode([
+                'status' => 'error',
+                'message' => "Vehicle with ID '$vehicleId' not found in the database. Update rejected to prevent ghost record creation.",
+                'timestamp' => time()
+            ]);
+            exit;
         }
         
         // Extract pricing information
@@ -320,19 +380,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Now update or insert the fares
         $conn = getDbConnection();
         
-        // One final check - use the vehicle record's vehicle_id to ensure consistency
+        // IMPORTANT: Always use the vehicle record's vehicle_id to ensure consistency
         $vehicleIdToUse = $vehicleId;
         try {
-            $finalCheckStmt = $conn->prepare("SELECT vehicle_id FROM vehicles WHERE vehicle_id = ? OR id = ? LIMIT 1");
+            $finalCheckStmt = $conn->prepare("SELECT vehicle_id, name FROM vehicles WHERE vehicle_id = ? OR id = ? LIMIT 1");
             $finalCheckStmt->execute([$vehicleId, $vehicleId]);
             $finalCheck = $finalCheckStmt->fetch(PDO::FETCH_ASSOC);
             
-            if ($finalCheck && !empty($finalCheck['vehicle_id'])) {
-                error_log("[$timestamp] Using verified vehicle_id '{$finalCheck['vehicle_id']}' for update", 3, $logDir . '/direct-local-fares.log');
-                $vehicleIdToUse = $finalCheck['vehicle_id'];
+            if ($finalCheck) {
+                // Always prefer non-numeric vehicle_id
+                if (!empty($finalCheck['vehicle_id']) && !is_numeric($finalCheck['vehicle_id'])) {
+                    error_log("[$timestamp] Using verified vehicle_id '{$finalCheck['vehicle_id']}' for update", 3, $logDir . '/direct-local-fares.log');
+                    $vehicleIdToUse = $finalCheck['vehicle_id'];
+                } 
+                // If vehicle_id is numeric but name is not, use the name
+                else if (!empty($finalCheck['name']) && !is_numeric($finalCheck['name'])) {
+                    error_log("[$timestamp] Using name '{$finalCheck['name']}' for update instead of numeric ID", 3, $logDir . '/direct-local-fares.log');
+                    $vehicleIdToUse = $finalCheck['name'];
+                }
             }
         } catch (Exception $e) {
             error_log("[$timestamp] Warning: Final vehicle ID check failed: " . $e->getMessage(), 3, $logDir . '/direct-local-fares.log');
+        }
+        
+        // FINAL CHECK: Never allow numeric vehicle IDs
+        if (is_numeric($vehicleIdToUse)) {
+            error_log("[$timestamp] EMERGENCY PREVENTION: Attempted to use numeric vehicle_id: $vehicleIdToUse", 3, $logDir . '/direct-local-fares.log');
+            http_response_code(400);
+            echo json_encode([
+                'status' => 'error',
+                'message' => "Cannot use numeric vehicle ID for fare update. This would create a duplicate vehicle.",
+                'originalId' => $originalVehicleId,
+                'timestamp' => time()
+            ]);
+            exit;
         }
         
         // Check if record exists
@@ -380,150 +461,115 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             error_log("[$timestamp] Inserted local fares for vehicle: $vehicleIdToUse", 3, $logDir . '/direct-local-fares.log');
         }
         
-        // Also sync these values to the vehicles table to ensure consistency
-        try {
-            // Check if the vehicles table has the necessary columns
-            $columnsStmt = $conn->query("SHOW COLUMNS FROM vehicles LIKE 'local_package_%'");
-            $hasLocalColumns = ($columnsStmt->rowCount() > 0);
-            
-            if ($hasLocalColumns) {
-                $stmt = $conn->prepare("UPDATE vehicles SET 
-                    local_package_4hr = ?, 
-                    local_package_8hr = ?, 
-                    local_package_10hr = ?, 
-                    local_extra_km = ?, 
-                    local_extra_hour = ? 
-                    WHERE vehicle_id = ?");
-                
-                $stmt->execute([
-                    $price4hrs40km,
-                    $price8hrs80km,
-                    $price10hrs100km,
-                    $extraKmRate,
-                    $extraHourRate,
-                    $vehicleIdToUse
-                ]);
-                
-                error_log("[$timestamp] Synced local fares to vehicles table for: $vehicleIdToUse", 3, $logDir . '/direct-local-fares.log');
-            } else {
-                error_log("[$timestamp] Vehicles table does not have local_package columns, skipping sync", 3, $logDir . '/direct-local-fares.log');
-            }
-        } catch (Exception $syncError) {
-            error_log("[$timestamp] Warning: Error syncing to vehicles table: " . $syncError->getMessage(), 3, $logDir . '/direct-local-fares.log');
-        }
-        
-        // Return success response
+        // Return success response with the actual vehicle ID used
         echo json_encode([
             'status' => 'success',
-            'message' => 'Fare updated successfully',
-            'vehicleId' => $vehicleIdToUse,
-            'originalId' => $originalVehicleId,
-            'tripType' => 'local',
-            'fares' => [
-                '4hrs-40km' => $price4hrs40km,
-                '8hrs-80km' => $price8hrs80km,
-                '10hrs-100km' => $price10hrs100km,
-                'extra-km' => $extraKmRate,
-                'extra-hour' => $extraHourRate
+            'message' => "Local fares updated successfully for $vehicleIdToUse",
+            'data' => [
+                'originalVehicleId' => $originalVehicleId,
+                'vehicleId' => $vehicleIdToUse,
+                'price4hrs40km' => $price4hrs40km,
+                'price8hrs80km' => $price8hrs80km,
+                'price10hrs100km' => $price10hrs100km,
+                'extraKmRate' => $extraKmRate,
+                'extraHourRate' => $extraHourRate
             ],
             'timestamp' => time()
         ]);
+        exit;
         
     } catch (Exception $e) {
-        error_log("[$timestamp] Error: " . $e->getMessage(), 3, $logDir . '/direct-local-fares.log');
-        
+        error_log("[$timestamp] Error updating local fares: " . $e->getMessage(), 3, $logDir . '/direct-local-fares.log');
         http_response_code(500);
         echo json_encode([
             'status' => 'error',
-            'message' => $e->getMessage(),
+            'message' => "Failed to update local fares: " . $e->getMessage(),
             'timestamp' => time()
         ]);
+        exit;
     }
-    exit;
 }
 
-// Handler for GET request (fetch fares)
+// Handle GET requests to retrieve fares
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     try {
-        // Extract the vehicle ID if one was provided
+        // Get vehicle_id parameter if provided
         $vehicleId = null;
-        if (!empty($_GET['vehicleId'])) {
-            $vehicleId = $_GET['vehicleId'];
-        } elseif (!empty($_GET['vehicle_id'])) {
-            $vehicleId = $_GET['vehicle_id'];
-        } elseif (!empty($_GET['id'])) {
-            $vehicleId = $_GET['id'];
+        foreach (['vehicleId', 'vehicle_id', 'id'] as $key) {
+            if (!empty($_GET[$key])) {
+                $vehicleId = $_GET[$key];
+                break;
+            }
         }
         
-        // If a vehicle ID was provided, normalize it
-        if ($vehicleId) {
-            $vehicleId = normalizeVehicleId($vehicleId);
+        // If vehicle ID is provided, normalize it
+        if (!empty($vehicleId)) {
+            try {
+                $vehicleId = normalizeVehicleId($vehicleId);
+            } catch (Exception $e) {
+                // Just log the error but continue with the original ID for GET requests
+                error_log("[$timestamp] Warning during GET: " . $e->getMessage(), 3, $logDir . '/direct-local-fares.log');
+            }
         }
         
-        // Ensure the table exists
+        // Make sure the table exists
         ensureLocalFaresTable();
         
-        // Fetch the fares
+        // Get fares from database
         $conn = getDbConnection();
+        $fares = [];
         
-        if ($vehicleId) {
-            // Fetch fares for a specific vehicle
+        if (!empty($vehicleId)) {
+            // Get fares for specific vehicle
             $stmt = $conn->prepare("SELECT * FROM local_package_fares WHERE vehicle_id = ?");
             $stmt->execute([$vehicleId]);
         } else {
-            // Fetch all fares
+            // Get all fares
             $stmt = $conn->query("SELECT * FROM local_package_fares");
         }
         
-        $fares = [];
+        // Process results
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            $vId = $row['vehicle_id'];
-            $fares[$vId] = [
-                'vehicleId' => $vId,
-                'vehicle_id' => $vId,
-                'vehicle_type' => $row['vehicle_type'],
-                '4hrs-40km' => floatval($row['price_4hrs_40km']),
-                '8hrs-80km' => floatval($row['price_8hrs_80km']),
-                '10hrs-100km' => floatval($row['price_10hrs_100km']),
-                'extra-km' => floatval($row['price_extra_km']),
-                'extra-hour' => floatval($row['price_extra_hour']),
-                'price_4hrs_40km' => floatval($row['price_4hrs_40km']),
-                'price_8hrs_80km' => floatval($row['price_8hrs_80km']),
-                'price_10hrs_100km' => floatval($row['price_10hrs_100km']),
-                'price_extra_km' => floatval($row['price_extra_km']),
-                'price_extra_hour' => floatval($row['price_extra_hour']),
-                'updated_at' => $row['updated_at'],
-                'created_at' => $row['created_at']
+            $id = $row['vehicle_id'];
+            
+            // Convert to standardized format
+            $fares[$id] = [
+                'vehicle_id' => $id,
+                'price4hrs40km' => floatval($row['price_4hrs_40km']),
+                'price8hrs80km' => floatval($row['price_8hrs_80km']),
+                'price10hrs100km' => floatval($row['price_10hrs_100km']),
+                'extraKmRate' => floatval($row['price_extra_km']),
+                'extraHourRate' => floatval($row['price_extra_hour'])
             ];
         }
         
-        // Return success response
+        // Return response
         echo json_encode([
             'status' => 'success',
             'fares' => $fares,
-            'count' => count($fares),
             'vehicle_id' => $vehicleId,
+            'count' => count($fares),
             'timestamp' => time()
         ]);
+        exit;
         
     } catch (Exception $e) {
-        error_log("[$timestamp] Error: " . $e->getMessage(), 3, $logDir . '/direct-local-fares.log');
-        
+        error_log("[$timestamp] Error retrieving local fares: " . $e->getMessage(), 3, $logDir . '/direct-local-fares.log');
         http_response_code(500);
         echo json_encode([
             'status' => 'error',
-            'message' => $e->getMessage(),
+            'message' => "Failed to retrieve local fares: " . $e->getMessage(),
             'timestamp' => time()
         ]);
+        exit;
     }
-    exit;
 }
 
-// If we got here, unsupported method
+// Handle unsupported methods
 http_response_code(405);
 echo json_encode([
     'status' => 'error',
-    'message' => 'Method not allowed',
-    'allowed_methods' => ['GET', 'POST', 'OPTIONS'],
+    'message' => "Method not allowed. Supported methods: GET, POST, OPTIONS",
     'timestamp' => time()
 ]);
+exit;
