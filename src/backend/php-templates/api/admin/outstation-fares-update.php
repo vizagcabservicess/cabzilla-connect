@@ -71,6 +71,32 @@ if (empty($data)) {
     $data = [];
 }
 
+// ID mappings for numeric IDs - these must be consistent across all endpoints
+$numericIdMapExtended = [
+    '1' => 'sedan',
+    '2' => 'ertiga',
+    '180' => 'etios',
+    '1266' => 'MPV',
+    '592' => 'Urbania',
+    '1270' => 'MPV',
+    '1271' => 'etios',
+    '1272' => 'etios',
+    '1273' => 'etios',
+    '1274' => 'etios',
+    '1275' => 'etios',
+    '1276' => 'etios',
+    '1277' => 'etios',
+    '1278' => 'etios',
+    '1279' => 'etios',
+    '1280' => 'etios',
+    '100' => 'sedan',
+    '101' => 'sedan',
+    '102' => 'sedan',
+    '103' => 'sedan',
+    '200' => 'ertiga',
+    '201' => 'ertiga'
+];
+
 // Handle GET request for retrieving all fares
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     try {
@@ -104,20 +130,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         }
         
         // First get the vehicle list to ensure we have complete data
+        // IMPROVED: Get ALL vehicles, even those without fares, to show in the management interface
         $vehicleStmt = $conn->query("
             SELECT v.id, v.vehicle_id, v.name, v.capacity, v.luggage_capacity, v.is_active 
             FROM vehicles v
+            WHERE v.is_active = 1 OR 1=1 
             ORDER BY v.name
         ");
         
         $vehicles = [];
         if ($vehicleStmt) {
             while ($vehicle = $vehicleStmt->fetch_assoc()) {
-                $vehicles[$vehicle['id']] = $vehicle;
+                $vehicleId = $vehicle['vehicle_id'] ?: $vehicle['id'];
+                $vehicles[$vehicleId] = [
+                    'id' => $vehicleId,
+                    'vehicle_id' => $vehicleId,
+                    'name' => $vehicle['name'],
+                    'capacity' => (int)$vehicle['capacity'],
+                    'luggage_capacity' => (int)$vehicle['luggage_capacity'],
+                    'is_active' => (bool)$vehicle['is_active'],
+                    'base_price' => 0,
+                    'price_per_km' => 0,
+                    'roundtrip_base_price' => 0,
+                    'roundtrip_price_per_km' => 0,
+                    'driver_allowance' => 250,
+                    'night_halt_charge' => 700
+                ];
             }
         }
         
-        // Now get the outstation fares
+        // Now get the outstation fares and merge with vehicle data
         $fareStmt = $conn->query("
             SELECT 
                 of.vehicle_id,
@@ -134,18 +176,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 of.vehicle_id
         ");
         
-        $fares = [];
         if ($fareStmt) {
             while ($fare = $fareStmt->fetch_assoc()) {
                 $vehicleId = $fare['vehicle_id'];
-                $fares[$vehicleId] = $fare;
                 
-                // Merge with vehicle data if available
+                // If we have the vehicle in our list, update its fare data
                 if (isset($vehicles[$vehicleId])) {
-                    $fares[$vehicleId]['name'] = $vehicles[$vehicleId]['name'];
-                    $fares[$vehicleId]['capacity'] = (int)$vehicles[$vehicleId]['capacity'];
-                    $fares[$vehicleId]['luggage_capacity'] = (int)$vehicles[$vehicleId]['luggage_capacity'];
-                    $fares[$vehicleId]['is_active'] = (bool)$vehicles[$vehicleId]['is_active'];
+                    $vehicles[$vehicleId]['base_price'] = (float)$fare['base_price'];
+                    $vehicles[$vehicleId]['price_per_km'] = (float)$fare['price_per_km'];
+                    $vehicles[$vehicleId]['roundtrip_base_price'] = (float)$fare['roundtrip_base_price'];
+                    $vehicles[$vehicleId]['roundtrip_price_per_km'] = (float)$fare['roundtrip_price_per_km'];
+                    $vehicles[$vehicleId]['driver_allowance'] = (float)$fare['driver_allowance'];
+                    $vehicles[$vehicleId]['night_halt_charge'] = (float)$fare['night_halt_charge'];
+                    $vehicles[$vehicleId]['updated_at'] = $fare['updated_at'];
+                }
+                // If not in our list (unusual), add it
+                else {
+                    $vehicles[$vehicleId] = [
+                        'id' => $vehicleId,
+                        'vehicle_id' => $vehicleId,
+                        'name' => ucfirst(str_replace('_', ' ', $vehicleId)),
+                        'base_price' => (float)$fare['base_price'],
+                        'price_per_km' => (float)$fare['price_per_km'],
+                        'roundtrip_base_price' => (float)$fare['roundtrip_base_price'],
+                        'roundtrip_price_per_km' => (float)$fare['roundtrip_price_per_km'],
+                        'driver_allowance' => (float)$fare['driver_allowance'],
+                        'night_halt_charge' => (float)$fare['night_halt_charge'],
+                        'is_active' => true,
+                        'updated_at' => $fare['updated_at']
+                    ];
                 }
             }
         }
@@ -153,8 +212,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         // Return the fares
         echo json_encode([
             'status' => 'success',
-            'fares' => $fares,
-            'count' => count($fares),
+            'fares' => $vehicles,
+            'count' => count($vehicles),
             'includeInactive' => true,
             'isAdminMode' => true,
             'timestamp' => time()
@@ -186,11 +245,38 @@ if (empty($data) || (!isset($data['vehicleId']) && !isset($data['vehicle_id']) &
 }
 
 // Extract vehicle ID and normalize
-$vehicleId = $data['vehicleId'] ?? $data['vehicle_id'] ?? $data['vehicleType'] ?? '';
+$rawVehicleId = $data['vehicleId'] ?? $data['vehicle_id'] ?? $data['vehicleType'] ?? '';
+$vehicleId = $rawVehicleId;
 
 // Normalize vehicle ID (remove any 'item-' prefix)
 if (strpos($vehicleId, 'item-') === 0) {
     $vehicleId = substr($vehicleId, 5);
+}
+
+// CRITICAL: Map numeric IDs to string IDs to prevent duplicate vehicles
+if (is_numeric($vehicleId)) {
+    if (isset($numericIdMapExtended[$vehicleId])) {
+        $originalId = $vehicleId;
+        $vehicleId = $numericIdMapExtended[$vehicleId];
+        error_log("Mapped numeric ID $originalId to $vehicleId");
+    } else {
+        error_log("REJECTED: Unmapped numeric ID not allowed: " . $vehicleId);
+        echo json_encode([
+            'status' => 'error',
+            'message' => "Cannot use numeric ID '$vehicleId'. Please use a proper vehicle ID like 'sedan', 'ertiga', etc."
+        ]);
+        exit;
+    }
+}
+
+// FINAL CHECK: Make sure we don't have a numeric ID at this point
+if (is_numeric($vehicleId)) {
+    error_log("CRITICAL: Vehicle ID is still numeric after processing: $vehicleId");
+    echo json_encode([
+        'status' => 'error',
+        'message' => "Cannot use numeric ID '$vehicleId'. This is a critical error."
+    ]);
+    exit;
 }
 
 // Extract pricing data with multiple possible field names
@@ -370,6 +456,7 @@ try {
             'message' => "Successfully updated outstation fares for $vehicleId",
             'data' => [
                 'vehicleId' => $vehicleId,
+                'vehicle_id' => $vehicleId,
                 'oneWayBasePrice' => $oneWayBasePrice,
                 'oneWayPricePerKm' => $oneWayPricePerKm,
                 'roundTripBasePrice' => $roundTripBasePrice,
