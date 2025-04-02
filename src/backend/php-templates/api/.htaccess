@@ -1,4 +1,3 @@
-
 # Enable rewrite engine
 RewriteEngine On
 
@@ -9,7 +8,7 @@ RewriteEngine On
         Header always set Status "200 OK"
         Header always set Access-Control-Allow-Origin "*" 
         Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-        Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh, X-Admin-Mode, *"
+        Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh, X-Admin-Mode, X-Debug, *"
         Header always set Access-Control-Max-Age "86400"
         Header always set Content-Type "text/plain"
         Header always set Content-Length "0"
@@ -54,6 +53,41 @@ RewriteRule ^direct-vehicle-modify$ admin/direct-vehicle-modify.php [L,QSA]
 RewriteRule ^direct-vehicle-modify\.php$ admin/direct-vehicle-modify.php [L,QSA]
 RewriteRule ^admin/direct-vehicle-modify$ admin/direct-vehicle-modify.php [L,QSA]
 RewriteRule ^admin/direct-vehicle-modify\.php$ admin/direct-vehicle-modify.php [L,QSA]
+
+# CRITICAL FARE ENDPOINTS - HIGH PRIORITY (FIXED)
+# Make sure sync-local-fares endpoint is accessible from multiple paths
+RewriteRule ^sync-local-fares$ admin/sync-local-fares.php [L,QSA]
+RewriteRule ^sync-local-fares\.php$ admin/sync-local-fares.php [L,QSA]
+RewriteRule ^admin/sync-local-fares$ admin/sync-local-fares.php [L,QSA]
+RewriteRule ^admin/sync-local-fares\.php$ admin/sync-local-fares.php [L,QSA]
+
+# Direct fare-related endpoints for all trip types
+RewriteRule ^direct-local-fares$ admin/direct-local-fares.php [L,QSA]
+RewriteRule ^direct-local-fares\.php$ admin/direct-local-fares.php [L,QSA]
+RewriteRule ^admin/direct-local-fares$ admin/direct-local-fares.php [L,QSA]
+RewriteRule ^admin/direct-local-fares\.php$ admin/direct-local-fares.php [L,QSA]
+
+RewriteRule ^direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^direct-outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^admin/direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^admin/direct-outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
+
+RewriteRule ^direct-airport-fares$ admin/direct-airport-fares.php [L,QSA]
+RewriteRule ^direct-airport-fares\.php$ admin/direct-airport-fares.php [L,QSA]
+RewriteRule ^admin/direct-airport-fares$ admin/direct-airport-fares.php [L,QSA]
+RewriteRule ^admin/direct-airport-fares\.php$ admin/direct-airport-fares.php [L,QSA]
+
+# Vehicle data endpoint accessibility
+RewriteRule ^vehicles-data$ vehicles-data.php [L,QSA]
+RewriteRule ^vehicles-data\.php$ vehicles-data.php [L,QSA]
+RewriteRule ^admin/vehicles-data$ vehicles-data.php [L,QSA]
+RewriteRule ^admin/vehicles-data\.php$ vehicles-data.php [L,QSA]
+
+# Local fare updates - map both old and new endpoints
+RewriteRule ^local-fares-update$ admin/local-fares-update.php [L,QSA]
+RewriteRule ^local-fares-update\.php$ admin/local-fares-update.php [L,QSA]
+RewriteRule ^admin/local-fares-update$ admin/local-fares-update.php [L,QSA]
+RewriteRule ^admin/local-fares-update\.php$ admin/local-fares-update.php [L,QSA]
 
 # Legacy endpoints mapped to direct implementations
 RewriteRule ^vehicle-update$ admin/direct-vehicle-update.php [L,QSA]

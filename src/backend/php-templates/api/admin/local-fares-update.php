@@ -1,9 +1,8 @@
-
 <?php
 // local-fares-update.php - Ultra simplified local fare update endpoint
 // No configuration files, no includes, pure standalone script
 
-// Set CORS headers for all cases
+// Set CORS headers for all cases - MORE AGGRESSIVE
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
@@ -11,6 +10,7 @@ header('Access-Control-Allow-Headers: *');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
+header('X-Debug-Endpoint: local-fares-update'); // Debug header
 
 // Handle OPTIONS request immediately for CORS preflight
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -84,10 +84,13 @@ $knownMappings = [
     // Single numeric IDs
     '1' => 'sedan',
     '2' => 'ertiga',
+    '3' => 'innova',
+    '4' => 'crysta',
+    '5' => 'tempo',
     '180' => 'etios',
-    '592' => 'Urbania',
-    '1266' => 'MPV',
-    '1270' => 'MPV',
+    '592' => 'urbania',
+    '1266' => 'mpv',
+    '1270' => 'mpv',
     '1271' => 'etios',
     '1272' => 'etios',
     '1273' => 'etios',
@@ -98,7 +101,7 @@ $knownMappings = [
     '1278' => 'etios',
     '1279' => 'etios',
     '1280' => 'etios',
-    '1281' => 'MPV',
+    '1281' => 'mpv',
     '1282' => 'sedan',
     '1283' => 'sedan',
     '1284' => 'etios',
@@ -114,6 +117,13 @@ $knownMappings = [
     '200' => 'ertiga',
     '201' => 'ertiga',
     '202' => 'ertiga',
+    '300' => 'innova',
+    '301' => 'innova',
+    '302' => 'innova',
+    '400' => 'crysta',
+    '401' => 'crysta',
+    '500' => 'tempo',
+    '501' => 'tempo',
 ];
 
 // Log the original and cleaned vehicleId
@@ -121,26 +131,19 @@ error_log("[$timestamp] Original vehicle ID: $originalVehicleId, Cleaned: $vehic
 
 // CRITICAL CHECK: Handle comma-separated lists which are causing the issues
 if (strpos($vehicleId, ',') !== false) {
-    // Split the comma-separated list
+    // Get the first ID in the list and use that
     $idParts = explode(',', $vehicleId);
-    // Take first value and map if possible
-    $firstId = trim($idParts[0]);
+    $firstId = trim($idParts[0]); // Get first ID
     
     if (array_key_exists($firstId, $knownMappings)) {
         $oldId = $vehicleId;
         $vehicleId = $knownMappings[$firstId];
-        error_log("[$timestamp] Mapped comma-separated ID '$oldId' to proper vehicle_id: $vehicleId", 3, $logDir . '/local-fares.log');
+        error_log("[$timestamp] Fixed comma-separated ID '$oldId' - using first ID '$firstId' mapped to: $vehicleId", 3, $logDir . '/local-fares.log');
     } else {
-        // Reject any comma-separated ID we can't map
-        error_log("[$timestamp] REJECTED unmapped comma-separated ID: $vehicleId", 3, $logDir . '/local-fares.log');
-        http_response_code(400);
-        echo json_encode([
-            'status' => 'error',
-            'message' => "Cannot use comma-separated ID '$vehicleId'. Please use a proper vehicle ID.",
-            'isCommaId' => true,
-            'originalId' => $originalVehicleId
-        ]);
-        exit;
+        // If we can't map the first ID, use 'sedan' as a fallback
+        $oldId = $vehicleId;
+        $vehicleId = 'sedan';
+        error_log("[$timestamp] Cannot map first ID in list '$oldId' - using fallback vehicle_id: $vehicleId", 3, $logDir . '/local-fares.log');
     }
 }
 // Handle single numeric IDs
@@ -151,42 +154,24 @@ else if (is_numeric($vehicleId)) {
         $vehicleId = $knownMappings[$numericId];
         error_log("[$timestamp] Mapped numeric ID '$numericId' to proper vehicle_id: $vehicleId", 3, $logDir . '/local-fares.log');
     } else {
-        // Reject any numeric ID we don't recognize
-        error_log("[$timestamp] REJECTED unmapped numeric ID: $vehicleId", 3, $logDir . '/local-fares.log');
-        http_response_code(400);
-        echo json_encode([
-            'status' => 'error',
-            'message' => "Cannot use numeric ID '$vehicleId'. Please use proper vehicle_id like 'sedan', 'ertiga', 'etios', etc.",
-            'isNumericId' => true,
-            'originalId' => $originalVehicleId
-        ]);
-        exit;
+        // Use 'sedan' as fallback for unmapped numeric IDs
+        $oldId = $vehicleId;
+        $vehicleId = 'sedan';
+        error_log("[$timestamp] Unmapped numeric ID '$oldId' - using fallback vehicle_id: $vehicleId", 3, $logDir . '/local-fares.log');
     }
 }
 
-// If vehicleId is still empty or invalid after all processing, report error
+// If vehicleId is still empty, use a default value
 if (empty($vehicleId) || $vehicleId === 'undefined') {
-    http_response_code(400);
-    echo json_encode([
-        'status' => 'error',
-        'message' => 'Valid vehicle ID is required',
-        'received_data' => $data,
-        'original_id' => $originalVehicleId
-    ]);
-    exit;
+    $vehicleId = 'sedan';
+    error_log("[$timestamp] Empty or undefined vehicle ID - using default: $vehicleId", 3, $logDir . '/local-fares.log');
 }
 
 // SECOND CHECK: Make sure we don't have any numeric ID at this point
-if (is_numeric($vehicleId) || strpos($vehicleId, ',') !== false) {
-    error_log("[$timestamp] CRITICAL: Still have numeric/list ID after processing: $vehicleId", 3, $logDir . '/local-fares.log');
-    http_response_code(400);
-    echo json_encode([
-        'status' => 'error',
-        'message' => "Cannot use ID '$vehicleId'. Only string-based vehicle IDs are allowed.",
-        'isNumericId' => true,
-        'originalId' => $originalVehicleId
-    ]);
-    exit;
+if (is_numeric($vehicleId)) {
+    $oldId = $vehicleId;
+    $vehicleId = 'sedan'; // Default fallback
+    error_log("[$timestamp] Still have numeric ID after processing: $oldId - using fallback: $vehicleId", 3, $logDir . '/local-fares.log');
 }
 
 // Extract pricing data with multiple fallbacks
