@@ -1,3 +1,4 @@
+
 # Enable rewrite engine
 RewriteEngine On
 
@@ -41,6 +42,19 @@ RewriteRule ^fix-cors\.php$ admin/fix-cors.php [L,QSA]
 RewriteRule ^admin/fix-cors$ admin/fix-cors.php [L,QSA]
 RewriteRule ^admin/fix-cors\.php$ admin/fix-cors.php [L,QSA]
 
+# DIRECT VEHICLE OPERATIONS - HIGHEST PRIORITY
+# Critical: Make sure add-vehicle.php is mapped correctly with highest priority
+RewriteRule ^add-vehicle$ admin/direct-vehicle-create.php [L,QSA]
+RewriteRule ^add-vehicle\.php$ admin/direct-vehicle-create.php [L,QSA]
+RewriteRule ^admin/add-vehicle$ admin/direct-vehicle-create.php [L,QSA]
+RewriteRule ^admin/add-vehicle\.php$ admin/direct-vehicle-create.php [L,QSA]
+
+# Critical: Make sure vehicle-update.php is mapped correctly with highest priority
+RewriteRule ^vehicle-update$ admin/direct-vehicle-update.php [L,QSA]
+RewriteRule ^vehicle-update\.php$ admin/direct-vehicle-update.php [L,QSA]
+RewriteRule ^admin/vehicle-update$ admin/direct-vehicle-update.php [L,QSA]
+RewriteRule ^admin/vehicle-update\.php$ admin/direct-vehicle-update.php [L,QSA]
+
 # DIRECT VEHICLE CREATE AND UPDATE - HIGHEST PRIORITY
 # Make sure these endpoints have absolute top priority
 RewriteRule ^direct-vehicle-create$ admin/direct-vehicle-create.php [L,QSA]
@@ -53,6 +67,12 @@ RewriteRule ^direct-vehicle-update$ admin/direct-vehicle-update.php [L,QSA]
 RewriteRule ^direct-vehicle-update\.php$ admin/direct-vehicle-update.php [L,QSA]
 RewriteRule ^admin/direct-vehicle-update$ admin/direct-vehicle-update.php [L,QSA]
 RewriteRule ^admin/direct-vehicle-update\.php$ admin/direct-vehicle-update.php [L,QSA]
+
+# NEW: Make sure update-vehicle.php redirects to direct-vehicle-update.php
+RewriteRule ^update-vehicle$ admin/direct-vehicle-update.php [L,QSA]
+RewriteRule ^update-vehicle\.php$ admin/direct-vehicle-update.php [L,QSA]
+RewriteRule ^admin/update-vehicle$ admin/direct-vehicle-update.php [L,QSA]
+RewriteRule ^admin/update-vehicle\.php$ admin/direct-vehicle-update.php [L,QSA]
 
 # Enhanced rate limiting for vehicle data and fare endpoints
 # These endpoints can cause client-side loops if called too frequently
@@ -83,7 +103,7 @@ RewriteRule ^admin/direct-vehicle-update\.php$ admin/direct-vehicle-update.php [
     </FilesMatch>
     
     # No caching for vehicle creation
-    <FilesMatch "(direct-vehicle-create|vehicles-update)\.php$">
+    <FilesMatch "(direct-vehicle-create|vehicles-update|add-vehicle|update-vehicle|vehicle-update)\.php$">
         Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
         Header set Pragma "no-cache"
         Header set Expires "0"

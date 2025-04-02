@@ -1,3 +1,4 @@
+
 import { toast } from 'sonner';
 import { apiBaseUrl } from '@/config/api';
 import { CabType } from '@/types/cab';
@@ -175,10 +176,12 @@ export const updateVehicle = async (vehicleData: CabType): Promise<any> => {
     let result;
     let error;
     
+    // UPDATED: Try different endpoint patterns to maximize compatibility
     const possibleEndpoints = [
-      '/api/admin/direct-vehicle-update.php',
       '/api/admin/update-vehicle.php',
-      '/api/admin/vehicle-update.php'
+      '/api/admin/direct-vehicle-update.php',
+      '/api/admin/vehicle-update.php',
+      '/api/admin/vehicles-update.php'
     ];
     
     for (const endpoint of possibleEndpoints) {
@@ -199,6 +202,7 @@ export const updateVehicle = async (vehicleData: CabType): Promise<any> => {
     if (!result || result.status !== 'success') {
       try {
         console.log('Trying fallback direct update method...');
+        // Try absolute URL as a last resort
         const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-update.php`, {
           method: 'POST',
           headers: {
@@ -229,6 +233,7 @@ export const updateVehicle = async (vehicleData: CabType): Promise<any> => {
       }
     }
     
+    // Clear all pending vehicle requests to force a refresh
     Object.keys(pendingRequests).forEach(key => {
       if (key.startsWith('getVehicles-')) {
         delete pendingRequests[key];
@@ -238,6 +243,12 @@ export const updateVehicle = async (vehicleData: CabType): Promise<any> => {
     return result;
   } catch (error: any) {
     console.error('Error updating vehicle:', error);
+    
+    // Enhance error message for 404s
+    if (error.message && error.message.includes('404')) {
+      throw new Error(`API endpoint not found (404): The update-vehicle.php endpoint could not be found on the server. Please check your server configuration.`);
+    }
+    
     throw error;
   }
 };
@@ -269,7 +280,7 @@ export const deleteVehicle = async (id: string): Promise<any> => {
 };
 
 /**
- * Add a new vehicle
+ * Add a new vehicle with improved error handling and multiple endpoint fallback
  */
 export const addVehicle = async (vehicleData: CabType): Promise<any> => {
   try {
@@ -302,21 +313,81 @@ export const addVehicle = async (vehicleData: CabType): Promise<any> => {
     
     console.log('Normalized vehicle data for add:', normalizedData);
     
-    const result = await directVehicleOperation('/api/admin/add-vehicle.php', 'POST', normalizedData);
+    // Try multiple endpoints for maximum compatibility
+    const possibleEndpoints = [
+      '/api/admin/add-vehicle.php',
+      '/api/admin/direct-vehicle-create.php',
+      '/api/admin/vehicle-create.php'
+    ];
     
-    if (result && result.status === 'success') {
-      Object.keys(pendingRequests).forEach(key => {
-        if (key.startsWith('getVehicles-')) {
-          delete pendingRequests[key];
+    let result;
+    let error;
+    
+    for (const endpoint of possibleEndpoints) {
+      try {
+        console.log(`Attempting to add vehicle using endpoint: ${endpoint}`);
+        result = await directVehicleOperation(endpoint, 'POST', normalizedData);
+        
+        if (result && result.status === 'success') {
+          console.log(`Successfully added vehicle using endpoint: ${endpoint}`);
+          break;
         }
-      });
-      
-      return result;
+      } catch (err) {
+        console.log(`Failed to add using ${endpoint}:`, err);
+        error = err;
+      }
     }
     
-    throw new Error(result?.message || 'Failed to add vehicle');
+    if (!result || result.status !== 'success') {
+      try {
+        console.log('Trying fallback direct create method...');
+        // Try absolute URL as a last resort
+        const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-create.php`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          },
+          body: JSON.stringify(normalizedData)
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error: ${response.status}`);
+        }
+        
+        result = await response.json();
+        
+        if (result && result.status === 'success') {
+          console.log('Fallback create method succeeded');
+        } else {
+          throw new Error(result?.message || 'Failed to add vehicle');
+        }
+      } catch (fallbackErr) {
+        console.error('Fallback create also failed:', fallbackErr);
+        throw error || fallbackErr;
+      }
+    }
+    
+    // Clear all pending vehicle requests to force a refresh
+    Object.keys(pendingRequests).forEach(key => {
+      if (key.startsWith('getVehicles-')) {
+        delete pendingRequests[key];
+      }
+    });
+    
+    return result;
   } catch (error: any) {
     console.error('Error adding vehicle:', error);
+    
+    // Enhance error message for 404s
+    if (error.message && error.message.includes('404')) {
+      throw new Error(`API endpoint not found (404): The add-vehicle.php endpoint could not be found on the server. Please check your server configuration.`);
+    }
+    
     throw error;
   }
 };

@@ -1,131 +1,142 @@
 
+import { toast } from 'sonner';
 import { apiBaseUrl } from '@/config/api';
 
-// Add retry mechanism for API operations
-export const directVehicleOperation = async (
-  endpoint: string,
-  method: 'GET' | 'POST',
-  params: Record<string, any> = {},
-  maxRetries: number = 2
-): Promise<any> => {
-  let currentRetry = 0;
-  let lastError: any = null;
-  
-  // Track ongoing requests to avoid duplication within a short timeframe
-  const requestKey = `${method}-${endpoint}-${JSON.stringify(params)}`;
-  const requestTimestampKey = `timestamp-${requestKey}`;
-  
-  // Check if we've made this exact request recently (within 2 seconds)
-  const lastRequestTime = parseInt(sessionStorage.getItem(requestTimestampKey) || '0');
-  const now = Date.now();
-  const timeSinceLastRequest = now - lastRequestTime;
-  
-  if (timeSinceLastRequest < 2000) {
-    console.log(`Skipping duplicate request to ${endpoint} (last request was ${timeSinceLastRequest}ms ago)`);
-    // If the last request was very recent, delay slightly
-    await new Promise(resolve => setTimeout(resolve, 500));
-  }
-  
-  // Update the timestamp for this request
-  sessionStorage.setItem(requestTimestampKey, now.toString());
-  
-  while (currentRetry <= maxRetries) {
-    try {
-      const url = apiBaseUrl + endpoint;
-      
-      // Prepare request options
-      const options: RequestInit = {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest',
-          'X-Force-Refresh': 'true',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        },
-      };
-      
-      // Add request body for POST requests
-      if (method === 'POST') {
-        options.body = JSON.stringify(params);
-      } 
-      // Add query parameters for GET requests
-      else if (Object.keys(params).length > 0) {
-        const queryString = Object.entries(params)
-          .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
-          .join('&');
-        
-        const separator = url.includes('?') ? '&' : '?';
-        const urlWithParams = `${url}${separator}${queryString}`;
-        
-        const response = await fetch(urlWithParams, options);
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        return data;
-      }
-      
-      const response = await fetch(url, options);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      return data;
-    } catch (error: any) {
-      lastError = error;
-      currentRetry++;
-      
-      console.error(`API request to ${endpoint} failed (attempt ${currentRetry}/${maxRetries + 1}):`, error);
-      
-      // Only delay and retry if we haven't reached max retries yet
-      if (currentRetry <= maxRetries) {
-        // Exponential backoff - wait longer between each retry
-        const delay = Math.pow(2, currentRetry) * 500;
-        console.log(`Retrying in ${delay}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-  }
-  
-  // If we get here, all retries failed
-  console.error(`All ${maxRetries + 1} attempts to ${endpoint} failed`);
-  throw lastError || new Error(`Failed to complete operation after ${maxRetries + 1} attempts`);
-};
-
 /**
- * Utility function to fix database tables
- * 
- * @returns Promise<boolean> True if fix was successful
+ * Helper function for direct vehicle operations with better error handling
  */
-export const fixDatabaseTables = async (): Promise<boolean> => {
+export const directVehicleOperation = async (endpoint: string, method: string, data: any) => {
   try {
-    const response = await fetch(`${apiBaseUrl}/api/admin/fix-vehicle-tables.php`, {
-      method: 'GET',
+    const fullUrl = `${apiBaseUrl}${endpoint}`;
+    console.log(`Direct vehicle operation: ${method} ${fullUrl}`);
+    
+    const response = await fetch(fullUrl, {
+      method,
       headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
         'X-Force-Refresh': 'true',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache',
-        'Expires': '0'
+        'Expires': '0',
+        'X-Admin-Mode': 'true'
       },
-      credentials: 'omit',
-      mode: 'cors',
-      cache: 'no-store'
+      body: method !== 'GET' ? JSON.stringify(data) : undefined
     });
     
     if (!response.ok) {
-      throw new Error(`Database fix failed with status: ${response.status}`);
+      throw new Error(`API error: ${response.status} ${response.statusText}`);
     }
     
-    const data = await response.json();
-    return data.status === 'success';
+    return await response.json();
+  } catch (error: any) {
+    console.error(`Error in directVehicleOperation (${endpoint}):`, error);
+    throw error;
+  }
+};
+
+/**
+ * Formats data for multipart form submission
+ */
+export const formatDataForMultipart = (data: Record<string, any>): FormData => {
+  const formData = new FormData();
+  Object.entries(data).forEach(([key, value]) => {
+    if (value !== null && value !== undefined) {
+      if (typeof value === 'object' && !(value instanceof File) && !(value instanceof Blob)) {
+        formData.append(key, JSON.stringify(value));
+      } else {
+        formData.append(key, value);
+      }
+    }
+  });
+  return formData;
+};
+
+/**
+ * Fix database tables - creates necessary tables if they don't exist
+ */
+export const fixDatabaseTables = async (): Promise<boolean> => {
+  try {
+    // First try init-database endpoint
+    let response = await fetch(`${apiBaseUrl}/api/admin/init-database.php`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Force-Refresh': 'true',
+        'X-Admin-Mode': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    });
+    
+    if (response.ok) {
+      const result = await response.json();
+      console.log('Database initialization result:', result);
+      return result.status === 'success';
+    }
+    
+    // Try fix-vehicle-tables as a backup
+    response = await fetch(`${apiBaseUrl}/api/admin/fix-vehicle-tables.php`, {
+      method: 'GET',
+      headers: {
+        'X-Force-Refresh': 'true',
+        'X-Admin-Mode': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      }
+    });
+    
+    if (response.ok) {
+      const result = await response.json();
+      console.log('Fix vehicle tables result:', result);
+      return result.status === 'success';
+    }
+    
+    // Try sync-local-fares as a last resort
+    response = await fetch(`${apiBaseUrl}/api/admin/sync-local-fares.php`, {
+      method: 'GET',
+      headers: {
+        'X-Force-Refresh': 'true',
+        'X-Admin-Mode': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      }
+    });
+    
+    if (response.ok) {
+      const result = await response.json();
+      console.log('Sync local fares result:', result);
+      return result.status === 'success';
+    }
+    
+    return false;
   } catch (error) {
-    console.error("Error fixing database:", error);
+    console.error('Error fixing database tables:', error);
     return false;
   }
+};
+
+/**
+ * Get bypass headers for direct API access
+ */
+export const getBypassHeaders = (forceRefresh = false, isAdminMode = false) => {
+  return {
+    'Content-Type': 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
+    'X-Force-Refresh': forceRefresh ? 'true' : 'false',
+    'X-Admin-Mode': isAdminMode ? 'true' : 'false',
+    'Cache-Control': forceRefresh ? 'no-cache, no-store, must-revalidate' : 'max-age=300',
+    'Pragma': forceRefresh ? 'no-cache' : '',
+    'Expires': forceRefresh ? '0' : ''
+  };
+};
+
+/**
+ * Get forced request configuration for API calls
+ */
+export const getForcedRequestConfig = (isAdminMode = false) => {
+  return {
+    headers: getBypassHeaders(true, isAdminMode),
+    cache: 'no-store' as RequestCache,
+    next: { revalidate: 0 }
+  };
 };
