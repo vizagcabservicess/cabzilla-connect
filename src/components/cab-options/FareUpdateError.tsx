@@ -100,6 +100,20 @@ export function FareUpdateError({
         <p>Make sure you've selected a vehicle from the dropdown before saving. If the issue persists, try clearing your browser cache and refreshing the page.</p>
       </div>
     );
+  } else if (isAdmin && (displayMessage.includes('MySQL server has gone away') || displayMessage.includes('gone away'))) {
+    contextInfo = (
+      <div className="text-xs mt-2 text-gray-500 bg-gray-100 p-2 rounded">
+        <p><strong>Database Connection Issue:</strong> The connection to the database server was lost.</p>
+        <p>This may be due to server maintenance, network issues, or the connection timing out. Please wait a moment and try again.</p>
+      </div>
+    );
+  } else if (isAdmin && (displayMessage.includes('Duplicate entry') || displayMessage.includes('vehicle_type'))) {
+    contextInfo = (
+      <div className="text-xs mt-2 text-gray-500 bg-gray-100 p-2 rounded">
+        <p><strong>Duplicate Entry Error:</strong> This vehicle ID or type already exists in the database.</p>
+        <p>Try using a different vehicle ID, or check if there's a name collision in the vehicle_type field.</p>
+      </div>
+    );
   }
   
   return (

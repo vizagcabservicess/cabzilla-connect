@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -6,11 +7,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { CabType } from "@/types/cab";
 import { updateVehicle } from "@/services/directVehicleService";
 import { parseAmenities, parseNumericValue } from '@/utils/safeStringUtils';
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FareUpdateError } from '@/components/cab-options/FareUpdateError';
 
 interface EditVehicleDialogProps {
   open: boolean;
@@ -27,6 +30,7 @@ export function EditVehicleDialog({
 }: EditVehicleDialogProps) {
   const [vehicle, setVehicle] = useState<CabType>(initialVehicle);
   const [isLoading, setIsLoading] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
 
   // Add a special flag to track if we've already initialized the form values
   const [isInitialized, setIsInitialized] = useState(false);
@@ -54,6 +58,9 @@ export function EditVehicleDialog({
       console.log('- nightHaltCharge:', initialVehicle.nightHaltCharge, '->', numNightHaltCharge);
       console.log('- driverAllowance:', initialVehicle.driverAllowance, '->', numDriverAllowance);
       
+      // Reset any previous server error when opening with new data
+      setServerError(null);
+      
       setVehicle({
         ...initialVehicle,
         capacity: numCapacity,
@@ -74,6 +81,8 @@ export function EditVehicleDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setServerError(null);
+    
     try {
       console.log('Submitting vehicle data:', vehicle);
 
@@ -91,18 +100,59 @@ export function EditVehicleDialog({
       
       console.log("Prepared vehicle data for update:", updatedVehicle);
       
-      const response = await updateVehicle(updatedVehicle);
-      console.log("Vehicle update API response:", response);
+      // Add retry mechanism for update
+      const maxRetries = 3;
+      let attempt = 0;
+      let success = false;
+      let lastError: any = null;
       
-      toast.success(`Vehicle ${vehicle.name} updated successfully`);
-      onEditVehicle(updatedVehicle);
-      onClose();
+      while (attempt < maxRetries && !success) {
+        try {
+          const response = await updateVehicle(updatedVehicle);
+          console.log("Vehicle update API response:", response);
+          success = true;
+          
+          toast.success(`Vehicle ${vehicle.name} updated successfully`);
+          onEditVehicle(updatedVehicle);
+          onClose();
+          return; // Exit on success
+        } catch (error: any) {
+          attempt++;
+          lastError = error;
+          console.error(`Update attempt ${attempt} failed:`, error);
+          
+          if (attempt >= maxRetries) {
+            throw error; // Rethrow after max retries
+          }
+          
+          // Wait before retrying (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        }
+      }
+      
+      // If we get here with lastError, throw it to be caught below
+      if (lastError) throw lastError;
+      
     } catch (error: any) {
       console.error("Error updating vehicle:", error);
-      toast.error(`Failed to update vehicle: ${error.message}`);
+      
+      // Extract detailed error information
+      const errorMessage = error.response?.data?.message || error.message || "Unknown error";
+      const errorDetails = error.response?.data?.data || error.response?.data?.error || {};
+      
+      // Set server error for display in the UI
+      setServerError(`Failed to update vehicle: ${errorMessage}`);
+      
+      toast.error(`Failed to update vehicle: ${errorMessage}`);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Function to retry the update if there was a server error
+  const handleRetry = () => {
+    setServerError(null);
+    handleSubmit(new Event('submit') as any);
   };
 
   return (
@@ -111,6 +161,16 @@ export function EditVehicleDialog({
         <DialogHeader>
           <DialogTitle>Edit Vehicle</DialogTitle>
         </DialogHeader>
+        
+        {serverError && (
+          <FareUpdateError 
+            message={serverError}
+            onRetry={handleRetry}
+            isAdmin={true}
+            title="Database Error"
+            description="There was an issue connecting to the database. This could be due to a temporary network issue or server maintenance."
+          />
+        )}
         
         <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto px-1 py-2" style={{ maxHeight: "calc(80vh - 120px)" }}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

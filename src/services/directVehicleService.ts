@@ -1,319 +1,210 @@
-
-/**
- * Direct vehicle service for operations that bypass API layers
- * This ensures consistent behavior for vehicle CRUD operations
- */
-import { CabType } from '@/types/cab';
-import { apiBaseUrl } from '@/config/api';
-import { getBypassHeaders, safeFetch } from '@/config/requestConfig';
-import { directVehicleOperation, checkApiHealth, fixDatabaseTables } from '@/utils/apiHelper';
 import { toast } from 'sonner';
+import { apiBaseUrl } from '@/config/api';
+import { CabType } from '@/types/cab';
+import { directVehicleOperation } from '@/utils/apiHelper';
 
-// Helper function to ensure consistent vehicle ID format
-const normalizeVehicleId = (id: string): string => {
-  if (!id) return '';
-  // Return the ID as-is without any transformations to maintain compatibility with backend
-  return id.trim();
+// Add headers for the requests
+const defaultHeaders = {
+  'X-Force-Refresh': 'true',
+  'Cache-Control': 'no-cache, no-store, must-revalidate',
+  'Pragma': 'no-cache',
+  'Expires': '0'
 };
 
-// Helper function to ensure numeric values are always sent as numbers
-const ensureNumericValues = (vehicle: CabType): CabType => {
-  // First ensure all fields exist before attempting to parse them
-  // Handle capacity and luggageCapacity, ensuring they are numbers
-  const capacity = typeof vehicle.capacity === 'string' 
-    ? parseInt(vehicle.capacity, 10) 
-    : Number(vehicle.capacity || 4);
-    
-  const luggageCapacity = typeof vehicle.luggageCapacity === 'string' 
-    ? parseInt(vehicle.luggageCapacity, 10) 
-    : Number(vehicle.luggageCapacity || 2);
+// Keep track of ongoing API calls to prevent duplicates
+const pendingRequests: Record<string, Promise<any>> = {};
+
+/**
+ * Get all vehicles from the API with optional caching
+ */
+export const getVehicles = async (
+  forceRefresh = false,
+  includeInactive = false,
+  isAdminMode = false
+): Promise<CabType[]> => {
+  // Create a request key to track duplicate calls
+  const requestKey = `getVehicles-${forceRefresh}-${includeInactive}-${isAdminMode}`;
   
-  // Handle pricing fields, ensuring they are numbers
-  const basePrice = typeof vehicle.basePrice === 'string'
-    ? parseFloat(vehicle.basePrice)
-    : Number(vehicle.basePrice || vehicle.price || 0);
-    
-  const price = typeof vehicle.price === 'string'
-    ? parseFloat(vehicle.price)
-    : Number(vehicle.price || vehicle.basePrice || 0);
-    
-  const pricePerKm = typeof vehicle.pricePerKm === 'string'
-    ? parseFloat(vehicle.pricePerKm)
-    : Number(vehicle.pricePerKm || 0);
-    
-  const nightHaltCharge = typeof vehicle.nightHaltCharge === 'string'
-    ? parseFloat(vehicle.nightHaltCharge)
-    : Number(vehicle.nightHaltCharge || 700);
-    
-  const driverAllowance = typeof vehicle.driverAllowance === 'string'
-    ? parseFloat(vehicle.driverAllowance)
-    : Number(vehicle.driverAllowance || 250);
+  // If there's already a pending request with the same parameters, return it
+  if (pendingRequests[requestKey]) {
+    console.log('Returning existing pending request for', requestKey);
+    try {
+      return await pendingRequests[requestKey];
+    } catch (error) {
+      // If the pending request fails, we'll try again below
+      console.error('Pending request failed:', error);
+    }
+  }
   
-  console.log('Normalizing numeric values:');
-  console.log('- capacity:', vehicle.capacity, '->', capacity);
-  console.log('- luggageCapacity:', vehicle.luggageCapacity, '->', luggageCapacity);
-  console.log('- basePrice:', vehicle.basePrice, '->', basePrice);
-  console.log('- price:', vehicle.price, '->', price);
-  console.log('- pricePerKm:', vehicle.pricePerKm, '->', pricePerKm);
+  // Create a new request and store its promise
+  const request = new Promise<CabType[]>(async (resolve, reject) => {
+    try {
+      console.log(`getVehicleData called with forceRefresh=${forceRefresh}, includeInactive=${includeInactive}`);
+      
+      const timestamp = Date.now();
+      const url = `${apiBaseUrl}/api/admin/get-vehicles.php?_t=${timestamp}&includeInactive=${includeInactive ? 'true' : 'false'}`;
+      
+      console.log('API request to:', url);
+      console.log('Fetching vehicle data from API:', url);
+      
+      const headers: Record<string, string> = {
+        ...defaultHeaders,
+        'X-Admin-Mode': isAdminMode ? 'true' : 'false'
+      };
+      
+      // Use directly fetch API rather than helper function for more control
+      const response = await fetch(url, {
+        method: 'GET',
+        headers,
+        cache: 'no-store'
+      });
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.status !== 'success') {
+        throw new Error(data.message || 'Failed to load vehicle data');
+      }
+      
+      if (!data.vehicles || !Array.isArray(data.vehicles)) {
+        console.warn('No vehicles array in response:', data);
+        resolve([]);
+        return;
+      }
+      
+      console.log(`Received ${data.vehicles.length} vehicles from API`);
+      
+      // Process and normalize vehicle data
+      const vehicles = data.vehicles.map((vehicle: any) => {
+        // Add debug logging for each vehicle
+        console.log(`Processing vehicle ${vehicle.id || vehicle.vehicleId}: capacity=${vehicle.capacity}->${Number(vehicle.capacity) || 4}, luggage=${vehicle.luggage_capacity}->${Number(vehicle.luggage_capacity) || 2}`);
+        
+        // Normalize vehicle data to ensure consistent types
+        return {
+          id: vehicle.id || vehicle.vehicleId || vehicle.vehicle_id,
+          vehicleId: vehicle.id || vehicle.vehicleId || vehicle.vehicle_id,
+          name: vehicle.name || '',
+          capacity: Number(vehicle.capacity) || 4,
+          luggageCapacity: Number(vehicle.luggage_capacity) || 2,
+          ac: vehicle.ac !== false && vehicle.ac !== 0,
+          isActive: vehicle.is_active !== false && vehicle.is_active !== 0 && vehicle.isActive !== false,
+          image: vehicle.image || '/cars/sedan.png',
+          amenities: vehicle.amenities || [],
+          description: vehicle.description || '',
+          basePrice: Number(vehicle.base_price || vehicle.basePrice || vehicle.price || 0),
+          price: Number(vehicle.price || vehicle.base_price || vehicle.basePrice || 0),
+          pricePerKm: Number(vehicle.price_per_km || vehicle.pricePerKm || 0),
+          nightHaltCharge: Number(vehicle.night_halt_charge || vehicle.nightHaltCharge || 700),
+          driverAllowance: Number(vehicle.driver_allowance || vehicle.driverAllowance || 250),
+          outstation: vehicle.outstation || {},
+          local: vehicle.local || {},
+          airport: vehicle.airport || {}
+        };
+      });
+      
+      console.log(`Successfully loaded ${vehicles.length} vehicles from primary API`);
+      console.log('Refreshed and cached', vehicles.length, 'vehicles');
+      resolve(vehicles);
+    } catch (error: any) {
+      console.error('Error fetching vehicles:', error);
+      reject(error);
+    } finally {
+      // Remove the pending request after it completes (success or failure)
+      setTimeout(() => {
+        delete pendingRequests[requestKey];
+      }, 1000); // Small delay to prevent immediate duplicate calls
+    }
+  });
   
-  return {
-    ...vehicle,
-    // Force these to be valid numbers and preserve original values
-    capacity: isNaN(capacity) ? 4 : capacity,
-    luggageCapacity: isNaN(luggageCapacity) ? 2 : luggageCapacity,
-    basePrice: isNaN(basePrice) ? 0 : basePrice,
-    price: isNaN(price) ? 0 : price,
-    pricePerKm: isNaN(pricePerKm) ? 0 : pricePerKm,
-    nightHaltCharge: isNaN(nightHaltCharge) ? 700 : nightHaltCharge,
-    driverAllowance: isNaN(driverAllowance) ? 250 : driverAllowance,
-  };
+  // Store the promise
+  pendingRequests[requestKey] = request;
+  
+  return request;
 };
 
 /**
- * Create a new vehicle
+ * Get a vehicle by ID
  */
-export const createVehicle = async (vehicle: CabType): Promise<CabType> => {
+export const getVehicle = async (id: string): Promise<CabType | null> => {
   try {
-    console.log('Creating vehicle:', vehicle);
+    // Try to get the vehicle from the cache first
+    const vehicles = await getVehicles(false, true, true);
+    const vehicle = vehicles.find(v => v.id === id || v.vehicleId === id);
     
-    // Normalize vehicle ID and ensure numeric values
-    const normalizedVehicle = {
-      ...ensureNumericValues(vehicle),
-      id: normalizeVehicleId(vehicle.id || vehicle.vehicleId || ''),
-      vehicleId: normalizeVehicleId(vehicle.id || vehicle.vehicleId || ''),
-    };
-    
-    console.log('Normalized vehicle for creation:', normalizedVehicle);
-    
-    // Use FormData instead of JSON for better PHP compatibility
-    const formData = new FormData();
-    Object.entries(normalizedVehicle).forEach(([key, value]) => {
-      if (value === undefined || value === null) return; // Skip undefined values
-      
-      if (typeof value === 'object' && value !== null) {
-        formData.append(key, JSON.stringify(value));
-      } else {
-        formData.append(key, String(value || ''));
-      }
-    });
-    
-    // Make direct request to create endpoint with FormData
-    const url = `${apiBaseUrl}/api/admin/direct-vehicle-create.php?_t=${Date.now()}`;
-    
-    const response = await fetch(url, {
-      method: 'POST',
-      body: formData,
-      headers: getBypassHeaders(),
-      credentials: 'omit',
-      mode: 'cors',
-      cache: 'no-store'
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API request failed with status ${response.status}: ${errorText}`);
+    if (vehicle) {
+      return vehicle;
     }
     
-    const result = await response.json();
+    // If not found, try a direct API call
+    const response = await directVehicleOperation('/api/admin/get-vehicle.php', 'GET', { id });
     
-    if (result.status === 'success') {
-      // Clear any cached data
-      localStorage.removeItem('cachedVehicles');
-      
-      // Dispatch event to notify other components about the change
-      window.dispatchEvent(new CustomEvent('vehicle-data-changed'));
-      
-      return {
-        ...normalizedVehicle,
-        id: normalizedVehicle.id,
-        vehicleId: normalizedVehicle.id,
-      };
-    } else {
-      throw new Error(result.message || 'Failed to create vehicle');
+    if (response && response.status === 'success' && response.vehicle) {
+      return response.vehicle;
     }
-  } catch (error) {
-    console.error('Error creating vehicle:', error);
-    // Re-throw to allow the UI to handle the error
-    throw error;
+    
+    return null;
+  } catch (error: any) {
+    console.error(`Error getting vehicle ${id}:`, error);
+    return null;
   }
 };
 
 /**
- * Update an existing vehicle
+ * Update a vehicle
  */
-export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
+export const updateVehicle = async (vehicleData: CabType): Promise<any> => {
   try {
-    console.log('Updating vehicle with original data:', vehicle);
+    console.log('Updating vehicle:', vehicleData);
     
-    // CRITICAL: Preserve isActive status and numeric values correctly
-    const isActive = typeof vehicle.isActive === 'boolean' ? vehicle.isActive : true;
-    
-    // Explicitly get capacity and luggage_capacity as numbers
-    const capacity = typeof vehicle.capacity === 'string'
-      ? parseInt(vehicle.capacity, 10)
-      : Number(vehicle.capacity || 4);
-      
-    const luggageCapacity = typeof vehicle.luggageCapacity === 'string'
-      ? parseInt(vehicle.luggageCapacity, 10)
-      : Number(vehicle.luggageCapacity || 2);
-    
-    console.log(`Original capacity value: ${vehicle.capacity}, type: ${typeof vehicle.capacity}, parsed: ${capacity}`);
-    console.log(`Original luggage capacity value: ${vehicle.luggageCapacity}, type: ${typeof vehicle.luggageCapacity}, parsed: ${luggageCapacity}`);
-    
-    // Ensure basePrice and pricePerKm are numbers
-    const basePrice = typeof vehicle.basePrice === 'string'
-      ? parseFloat(vehicle.basePrice)
-      : Number(vehicle.basePrice || vehicle.price || 0);
-      
-    const price = typeof vehicle.price === 'string'
-      ? parseFloat(vehicle.price)
-      : Number(vehicle.price || vehicle.basePrice || 0);
-      
-    const pricePerKm = typeof vehicle.pricePerKm === 'string'
-      ? parseFloat(vehicle.pricePerKm)
-      : Number(vehicle.pricePerKm || 0);
-    
-    // Normalize vehicle ID before sending and ensure all numeric values are actually numbers
-    const normalizedVehicle = {
-      ...ensureNumericValues(vehicle),
-      id: normalizeVehicleId(vehicle.id || vehicle.vehicleId || ''),
-      vehicleId: normalizeVehicleId(vehicle.id || vehicle.vehicleId || ''),
-      isActive: isActive,
-      is_active: isActive,
-      // Force capacity values to be numbers
-      capacity: isNaN(capacity) ? 4 : capacity,
-      luggageCapacity: isNaN(luggageCapacity) ? 2 : luggageCapacity,
-      luggage_capacity: isNaN(luggageCapacity) ? 2 : luggageCapacity,
-      // Ensure price fields are numbers
-      basePrice: isNaN(basePrice) ? 0 : basePrice,
-      base_price: isNaN(basePrice) ? 0 : basePrice,
-      price: isNaN(price) ? 0 : price,
-      pricePerKm: isNaN(pricePerKm) ? 0 : pricePerKm,
-      price_per_km: isNaN(pricePerKm) ? 0 : pricePerKm,
+    // Normalize the data before sending
+    const normalizedData = {
+      id: vehicleData.id,
+      vehicleId: vehicleData.id, // Ensure vehicleId is same as id
+      vehicle_id: vehicleData.id, // Also include for PHP backend compatibility
+      name: vehicleData.name,
+      capacity: Number(vehicleData.capacity),
+      luggage_capacity: Number(vehicleData.luggageCapacity),
+      luggageCapacity: Number(vehicleData.luggageCapacity),
+      ac: vehicleData.ac,
+      isActive: vehicleData.isActive,
+      is_active: vehicleData.isActive, // Include both formats
+      image: vehicleData.image,
+      amenities: vehicleData.amenities,
+      description: vehicleData.description,
+      basePrice: Number(vehicleData.basePrice),
+      base_price: Number(vehicleData.basePrice),
+      price: Number(vehicleData.basePrice), // Keep price and basePrice in sync
+      pricePerKm: Number(vehicleData.pricePerKm),
+      price_per_km: Number(vehicleData.pricePerKm),
+      nightHaltCharge: Number(vehicleData.nightHaltCharge),
+      night_halt_charge: Number(vehicleData.nightHaltCharge),
+      driverAllowance: Number(vehicleData.driverAllowance),
+      driver_allowance: Number(vehicleData.driverAllowance),
     };
     
-    console.log('Normalized vehicle before update:', normalizedVehicle);
+    console.log('Normalized vehicle data for update:', normalizedData);
     
-    // Use FormData instead of JSON for better PHP compatibility
-    const formData = new FormData();
+    // Try the new direct update endpoint first
+    const result = await directVehicleOperation('/api/admin/update-vehicle.php', 'POST', normalizedData);
+    console.log('Update vehicle response:', result);
     
-    // Add critical fields explicitly first to ensure they're included
-    formData.append('id', String(normalizedVehicle.id));
-    formData.append('vehicleId', String(normalizedVehicle.id));
-    formData.append('vehicle_id', String(normalizedVehicle.id));
-    
-    // Explicitly add capacity in all forms
-    formData.append('capacity', String(normalizedVehicle.capacity));
-    formData.append('capacity_value', String(normalizedVehicle.capacity));
-    formData.append('capacity_numeric', String(normalizedVehicle.capacity));
-    
-    // Explicitly add luggage capacity in all forms
-    formData.append('luggageCapacity', String(normalizedVehicle.luggageCapacity));
-    formData.append('luggage_capacity', String(normalizedVehicle.luggageCapacity));
-    formData.append('luggage_capacity_value', String(normalizedVehicle.luggageCapacity));
-    formData.append('luggage_capacity_numeric', String(normalizedVehicle.luggageCapacity));
-    
-    // Add price fields explicitly
-    formData.append('basePrice', String(normalizedVehicle.basePrice));
-    formData.append('base_price', String(normalizedVehicle.basePrice));
-    formData.append('price', String(normalizedVehicle.price));
-    formData.append('pricePerKm', String(normalizedVehicle.pricePerKm));
-    formData.append('price_per_km', String(normalizedVehicle.pricePerKm));
-    
-    // Add is_active flags explicitly
-    formData.append('isActive', normalizedVehicle.isActive ? '1' : '0');
-    formData.append('is_active', normalizedVehicle.isActive ? '1' : '0');
-    
-    // Add other fields
-    Object.entries(normalizedVehicle).forEach(([key, value]) => {
-      // Skip undefined or null values and already added critical fields
-      if (value === undefined || value === null) return;
-      if ([
-        'id', 'vehicleId', 'vehicle_id', 
-        'capacity', 'luggageCapacity', 'luggage_capacity', 
-        'basePrice', 'base_price', 'price', 
-        'pricePerKm', 'price_per_km',
-        'isActive', 'is_active'
-      ].includes(key)) return;
-      
-      // Handle price fields specially to ensure they're numbers
-      if (key === 'nightHaltCharge' || key === 'driverAllowance') {
-        const numVal = parseFloat(String(value));
-        formData.append(key, String(isNaN(numVal) ? 0 : numVal));
-        return;
-      }
-      
-      // Handle amenities array specially
-      if (key === 'amenities') {
-        if (Array.isArray(value)) {
-          formData.append(key, value.join(', '));
-        } else if (typeof value === 'string' && value) {
-          formData.append(key, String(value));
-        } else {
-          formData.append(key, 'AC');
-        }
-        return;
-      }
-      
-      // Handle objects (like amenities array)
-      if (typeof value === 'object' && value !== null) {
-        formData.append(key, JSON.stringify(value));
-      } else {
-        // Add everything else as string
-        formData.append(key, String(value));
+    // Clear any pending requests for getVehicles to force a refresh on next call
+    Object.keys(pendingRequests).forEach(key => {
+      if (key.startsWith('getVehicles-')) {
+        delete pendingRequests[key];
       }
     });
     
-    // Log FormData contents for debugging
-    console.log('FormData contents for vehicle update:');
-    for (const pair of formData.entries()) {
-      console.log(`${pair[0]}: ${pair[1]}`);
+    if (result && result.status === 'success') {
+      console.log('Vehicle updated successfully:', result);
+      return result;
     }
     
-    // Make direct request to update endpoint with FormData
-    const url = `${apiBaseUrl}/api/admin/direct-vehicle-update.php?_t=${Date.now()}`;
-    
-    const response = await fetch(url, {
-      method: 'POST',
-      body: formData,
-      headers: getBypassHeaders(),
-      credentials: 'omit',
-      mode: 'cors',
-      cache: 'no-store'
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API request failed with status ${response.status}: ${errorText}`);
-    }
-    
-    const result = await response.json();
-    console.log('API update response:', result);
-    
-    if (result.status === 'success') {
-      // Clear any cached data
-      localStorage.removeItem('cachedVehicles');
-      
-      // Dispatch event to notify other components about the change
-      window.dispatchEvent(new CustomEvent('vehicle-data-changed', {
-        detail: {
-          vehicleId: normalizedVehicle.id,
-          timestamp: Date.now()
-        }
-      }));
-      
-      // Return both the original normalized vehicle and the server response
-      const updatedVehicle = {
-        ...normalizedVehicle,
-        ...result.vehicle,
-      };
-      
-      console.log('Final updated vehicle:', updatedVehicle);
-      return updatedVehicle;
-    } else {
-      throw new Error(result.message || 'Failed to update vehicle');
-    }
-  } catch (error) {
+    throw new Error(result?.message || 'Failed to update vehicle');
+  } catch (error: any) {
     console.error('Error updating vehicle:', error);
     throw error;
   }
@@ -322,203 +213,81 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
 /**
  * Delete a vehicle
  */
-export const deleteVehicle = async (vehicleId: string): Promise<boolean> => {
+export const deleteVehicle = async (id: string): Promise<any> => {
   try {
-    console.log('Deleting vehicle:', vehicleId);
+    console.log(`Deleting vehicle ${id}`);
     
-    const normalizedId = normalizeVehicleId(vehicleId);
+    const result = await directVehicleOperation('/api/admin/delete-vehicle.php', 'POST', { id });
     
-    // Make direct request to delete endpoint with URL parameters
-    const url = `${apiBaseUrl}/api/admin/direct-vehicle-delete.php?vehicleId=${encodeURIComponent(normalizedId)}&_t=${Date.now()}`;
-    
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: getBypassHeaders(),
-      credentials: 'omit',
-      mode: 'cors',
-      cache: 'no-store'
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API request failed with status ${response.status}: ${errorText}`);
+    if (result && result.status === 'success') {
+      // Clear any pending requests for getVehicles to force a refresh on next call
+      Object.keys(pendingRequests).forEach(key => {
+        if (key.startsWith('getVehicles-')) {
+          delete pendingRequests[key];
+        }
+      });
+      
+      return result;
     }
     
-    const result = await response.json();
-    
-    if (result.status === 'success') {
-      // Clear any cached data
-      localStorage.removeItem('cachedVehicles');
-      
-      // Dispatch event to notify other components about the change
-      window.dispatchEvent(new CustomEvent('vehicle-data-changed'));
-      
-      return true;
-    } else {
-      throw new Error(result.message || 'Failed to delete vehicle');
-    }
-  } catch (error) {
+    throw new Error(result?.message || 'Failed to delete vehicle');
+  } catch (error: any) {
     console.error('Error deleting vehicle:', error);
     throw error;
   }
 };
 
 /**
- * Update a vehicle's fares
+ * Add a new vehicle
  */
-export const updateVehicleFares = async (vehicleId: string, fareData: any): Promise<boolean> => {
+export const addVehicle = async (vehicleData: CabType): Promise<any> => {
   try {
-    console.log('Updating vehicle fares:', vehicleId, fareData);
+    console.log('Adding new vehicle:', vehicleData);
     
-    const result = await directVehicleOperation(
-      '/api/admin/direct-vehicle-update.php', 
-      'POST', 
-      {
-        vehicleId,
-        ...fareData
-      }
-    );
+    // Normalize the data before sending
+    const normalizedData = {
+      id: vehicleData.id,
+      vehicleId: vehicleData.id,
+      vehicle_id: vehicleData.id,
+      name: vehicleData.name,
+      capacity: Number(vehicleData.capacity),
+      luggage_capacity: Number(vehicleData.luggageCapacity),
+      luggageCapacity: Number(vehicleData.luggageCapacity),
+      ac: vehicleData.ac,
+      isActive: vehicleData.isActive,
+      is_active: vehicleData.isActive,
+      image: vehicleData.image,
+      amenities: vehicleData.amenities,
+      description: vehicleData.description,
+      basePrice: Number(vehicleData.basePrice),
+      base_price: Number(vehicleData.basePrice),
+      price: Number(vehicleData.basePrice), // Keep price and basePrice in sync
+      pricePerKm: Number(vehicleData.pricePerKm),
+      price_per_km: Number(vehicleData.pricePerKm),
+      nightHaltCharge: Number(vehicleData.nightHaltCharge),
+      night_halt_charge: Number(vehicleData.nightHaltCharge),
+      driverAllowance: Number(vehicleData.driverAllowance),
+      driver_allowance: Number(vehicleData.driverAllowance),
+    };
     
-    if (result.status === 'success') {
-      // Clear any cached data
-      localStorage.removeItem('cachedVehicles');
+    console.log('Normalized vehicle data for add:', normalizedData);
+    
+    const result = await directVehicleOperation('/api/admin/add-vehicle.php', 'POST', normalizedData);
+    
+    if (result && result.status === 'success') {
+      // Clear any pending requests for getVehicles to force a refresh on next call
+      Object.keys(pendingRequests).forEach(key => {
+        if (key.startsWith('getVehicles-')) {
+          delete pendingRequests[key];
+        }
+      });
       
-      // Dispatch event to notify other components about the change
-      window.dispatchEvent(new CustomEvent('vehicle-data-changed'));
-      
-      return true;
-    } else {
-      throw new Error(result.message || 'Failed to update vehicle fares');
+      return result;
     }
-  } catch (error) {
-    console.error('Error updating vehicle fares:', error);
+    
+    throw new Error(result?.message || 'Failed to add vehicle');
+  } catch (error: any) {
+    console.error('Error adding vehicle:', error);
     throw error;
-  }
-};
-
-/**
- * Sync vehicle data with server
- * Use this to fix database tables if needed
- */
-export const syncVehicleData = async (): Promise<boolean> => {
-  try {
-    // Throttle API calls
-    const now = Date.now();
-    const lastSyncTime = parseInt(localStorage.getItem('lastSyncVehicleData') || '0');
-    if (now - lastSyncTime < 10000) { // 10 seconds throttle
-      console.log('syncVehicleData throttled - too recent');
-      return false;
-    }
-    
-    localStorage.setItem('lastSyncVehicleData', now.toString());
-    
-    // Start by checking API health
-    const isHealthy = await checkApiHealth();
-    
-    if (!isHealthy) {
-      toast.warning("API not responding. Try using Fix Database option.");
-      return false;
-    }
-    
-    // Try to fix database tables
-    const isFixed = await fixDatabaseTables();
-    
-    if (!isFixed) {
-      toast.error('Failed to fix vehicle tables');
-      return false;
-    }
-    
-    toast.success('Successfully synchronized vehicle data across tables');
-    
-    // Clear any cached data
-    localStorage.removeItem('cachedVehicles');
-    
-    // Dispatch event to notify other components about the change
-    window.dispatchEvent(new CustomEvent('vehicle-data-cache-cleared', {
-      detail: { timestamp: Date.now() }
-    }));
-    
-    return true;
-  } catch (error) {
-    console.error('Error syncing vehicle data:', error);
-    return false;
-  }
-};
-
-/**
- * Sync a specific vehicle's data across all tables
- */
-export const syncVehicleTables = async (vehicleId: string): Promise<boolean> => {
-  try {
-    // Call the fix-vehicle-tables endpoint with the specific vehicle ID
-    const url = `${apiBaseUrl}/api/admin/fix-vehicle-tables.php?vehicleId=${encodeURIComponent(vehicleId)}&_t=${Date.now()}`;
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: getBypassHeaders(),
-      cache: 'no-store',
-      mode: 'cors',
-      credentials: 'omit'
-    });
-    
-    if (!response.ok) {
-      console.error(`Failed to sync vehicle tables: ${response.status} ${response.statusText}`);
-      return false;
-    }
-    
-    const result = await response.json();
-    
-    if (result.status === 'success') {
-      console.log(`Vehicle ${vehicleId} synchronized across all tables`);
-      return true;
-    } else {
-      console.error('Failed to sync vehicle tables:', result.message);
-      return false;
-    }
-  } catch (error) {
-    console.error('Error syncing vehicle tables:', error);
-    return false;
-  }
-};
-
-/**
- * Get a specific vehicle by ID
- */
-export const getVehicleById = async (vehicleId: string): Promise<CabType | null> => {
-  try {
-    // Check local storage cache first
-    const cachedVehiclesString = localStorage.getItem('cachedVehicles');
-    if (cachedVehiclesString) {
-      const cachedVehicles = JSON.parse(cachedVehiclesString);
-      const cachedVehicle = cachedVehicles.find((v: CabType) => 
-        v.id === vehicleId || v.vehicleId === vehicleId
-      );
-      
-      if (cachedVehicle) {
-        return cachedVehicle;
-      }
-    }
-    
-    // If not in cache, try to fetch from server
-    const url = `${apiBaseUrl}/api/admin/get-vehicles.php?_t=${Date.now()}`;
-    const response = await safeFetch(url);
-    
-    if (!response.ok) {
-      throw new Error(`API request failed with status ${response.status}`);
-    }
-    
-    const data = await response.json();
-    
-    if (data && data.vehicles) {
-      const vehicle = data.vehicles.find((v: CabType) => 
-        v.id === vehicleId || v.vehicleId === vehicleId
-      );
-      
-      return vehicle || null;
-    }
-    
-    return null;
-  } catch (error) {
-    console.error('Error fetching vehicle by ID:', error);
-    return null;
   }
 };

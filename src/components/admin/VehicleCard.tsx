@@ -43,12 +43,38 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
   const handleDelete = async () => {
     try {
       setIsDeleting(true);
-      await deleteVehicle(vehicle.id || '');
+      // Add a retry mechanism for the delete operation
+      const maxRetries = 3;
+      let attempt = 0;
+      let success = false;
+      
+      while (attempt < maxRetries && !success) {
+        try {
+          await deleteVehicle(vehicle.id || '');
+          success = true;
+        } catch (error: any) {
+          attempt++;
+          console.error(`Delete attempt ${attempt} failed:`, error);
+          
+          if (attempt >= maxRetries) {
+            throw error; // Rethrow after max retries
+          }
+          
+          // Wait before retrying (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        }
+      }
+      
       toast.success(`Vehicle ${vehicle.name} deleted`);
       onDelete(vehicle.id || '');
     } catch (error: any) {
       console.error('Error deleting vehicle:', error);
-      toast.error(`Failed to delete vehicle: ${error.message}`);
+      
+      // Show a more detailed error message to help with debugging
+      const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
+      const errorDetails = error.response?.data?.error || '';
+      
+      toast.error(`Failed to delete vehicle: ${errorMessage}${errorDetails ? ` (${errorDetails})` : ''}`);
     } finally {
       setIsDeleting(false);
       setConfirmDelete(false);
@@ -114,7 +140,11 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
               )}
               
               <div className="flex justify-end gap-2 mt-4">
-                <Button variant="outline" size="sm" onClick={onEdit}>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={onEdit}
+                >
                   <Pencil className="h-4 w-4 mr-1" /> Edit
                 </Button>
                 <Button 

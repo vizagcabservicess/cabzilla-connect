@@ -1,94 +1,102 @@
 
 /**
- * Utility functions for safely handling strings
- * These help avoid TypeScript errors when dealing with potentially undefined values
- */
-
-/**
- * Safely trims a string, handling undefined, null, or non-string values
- * @param str The string to trim
- * @returns Trimmed string or empty string if input is invalid
- */
-export const safeTrim = (str: unknown): string => {
-  if (typeof str !== 'string') return '';
-  return str.trim();
-};
-
-/**
- * Safely splits a string, handling undefined, null, or non-string values
- * @param str The string to split
- * @param separator The separator to use for splitting
- * @returns Array of string segments or empty array if input is invalid
- */
-export const safeSplit = (str: unknown, separator: string): string[] => {
-  if (typeof str !== 'string') return [];
-  return str.split(separator);
-};
-
-/**
- * Safely converts amenities data to a string array
- * @param amenities Amenities data which could be string, array, or undefined
- * @returns Processed array of amenities strings
- */
-export const parseAmenities = (amenities: unknown): string[] => {
-  if (Array.isArray(amenities)) {
-    return amenities.filter(Boolean).map(a => 
-      typeof a === 'string' ? a.trim() : String(a)
-    );
-  }
-  
-  if (typeof amenities === 'string' && amenities) {
-    return amenities.split(',')
-      .map(a => a.trim())
-      .filter(Boolean);
-  }
-  
-  return ['AC'];
-};
-
-/**
- * Safely parses a numeric value from various input types
+ * Parse a value as a number, with fallback to a default value if parsing fails
+ * 
  * @param value The value to parse as a number
- * @param defaultValue Default value if parsing fails
- * @returns Parsed number or default value
+ * @param defaultValue The default value to use if parsing fails
+ * @returns The parsed number or default value
  */
-export const parseNumericValue = (
-  value: unknown, 
-  defaultValue: number = 0
-): number => {
-  if (value === undefined || value === null) return defaultValue;
-  
-  if (typeof value === 'number') return value;
-  
-  if (typeof value === 'string') {
-    const parsed = parseFloat(value);
-    return isNaN(parsed) ? defaultValue : parsed;
+export function parseNumericValue(value: any, defaultValue: number): number {
+  // If the value is already a number, return it
+  if (typeof value === 'number' && !isNaN(value)) {
+    return value;
   }
   
+  // If the value is a string, try to parse it
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    const parsed = parseFloat(trimmed);
+    if (!isNaN(parsed)) {
+      return parsed;
+    }
+  }
+  
+  // For any other case, return the default value
   return defaultValue;
-};
+}
 
 /**
- * Safely ensures a value is a boolean
- * @param value The value to convert to boolean
- * @param defaultValue Default value if conversion is ambiguous
- * @returns Boolean value
+ * Parse amenities from various possible formats into a string array
+ * 
+ * @param amenities The amenities to parse
+ * @returns An array of amenities as strings
  */
-export const ensureBoolean = (
-  value: unknown, 
-  defaultValue: boolean = true
-): boolean => {
-  if (typeof value === 'boolean') return value;
-  
-  if (value === 0 || value === '0' || 
-      value === 'false' || value === 'no') {
-    return false;
+export function parseAmenities(amenities: any): string[] {
+  // If it's already an array, just ensure it contains only strings
+  if (Array.isArray(amenities)) {
+    return amenities.filter(item => 
+      item && (typeof item === 'string' || typeof item === 'number')
+    ).map(item => String(item));
   }
   
-  if (value === 1 || value === '1' || 
-      value === 'true' || value === 'yes') {
-    return true;
+  // If it's a string, try to split it
+  if (typeof amenities === 'string') {
+    // Check for common delimiters in the string
+    if (amenities.includes(',')) {
+      return amenities.split(',').map(s => s.trim()).filter(Boolean);
+    } 
+    else if (amenities.includes(';')) {
+      return amenities.split(';').map(s => s.trim()).filter(Boolean);
+    }
+    else if (amenities.trim()) {
+      // If no delimiters but not empty, treat as a single amenity
+      return [amenities.trim()];
+    }
   }
   
+  // If it's an object (e.g., from JSON), try to extract values
+  if (amenities && typeof amenities === 'object') {
+    return Object.values(amenities)
+      .filter(item => item && (typeof item === 'string' || typeof item === 'number'))
+      .map(item => String(item));
+  }
+  
+  // Default to empty array if nothing else worked
+  return [];
+}
+
+/**
+ * Safely convert a value to a boolean
+ * 
+ * @param value The value to convert to boolean
+ * @param defaultValue The default value if conversion fails
+ * @returns The boolean value
+ */
+export function parseBooleanValue(value: any, defaultValue: boolean = false): boolean {
+  // Handle explicit boolean values
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  
+  // Handle numeric values (0 = false, anything else = true)
+  if (typeof value === 'number') {
+    return value !== 0;
+  }
+  
+  // Handle string values
+  if (typeof value === 'string') {
+    const lowercased = value.toLowerCase().trim();
+    
+    // Handle common true/false strings
+    if (['true', 'yes', 'y', '1', 'on'].includes(lowercased)) {
+      return true;
+    }
+    
+    if (['false', 'no', 'n', '0', 'off'].includes(lowercased)) {
+      return false;
+    }
+  }
+  
+  // For null/undefined or other cases, return the default
   return defaultValue;
-};
+}
