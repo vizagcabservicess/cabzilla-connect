@@ -1,3 +1,4 @@
+
 import { toast } from 'sonner';
 import { apiBaseUrl } from '@/config/api';
 import { directVehicleOperation } from '@/utils/apiHelper';
@@ -153,12 +154,14 @@ export const updateOutstationFares = async (
     // Use directVehicleOperation for direct API access with explicit endpoint
     const result = await directVehicleOperation('/api/admin/direct-outstation-fares.php', 'POST', {
       vehicleId: verifiedVehicleId,
+      vehicle_id: verifiedVehicleId, // Add this to be extra sure
       basePrice: oneWayBasePrice,
       pricePerKm: oneWayPricePerKm,
       roundTripBasePrice: roundTripBasePrice || oneWayBasePrice * 0.9,
       roundTripPricePerKm: roundTripPricePerKm || oneWayPricePerKm * 0.85,
       driverAllowance,
-      nightHaltCharge
+      nightHaltCharge,
+      use_vehicle_id: 'true' // Signal to backend to explicitly use vehicle_id instead of id
     });
     
     if (result && result.status === 'success') {
@@ -220,9 +223,9 @@ export const updateLocalFares = async (
     
     console.log(`Using final verified ID for local fares: ${verifiedVehicleId}`);
     
-    // Try the direct endpoint first which has the most aggressive validation
+    // Try the new direct endpoint first
     try {
-      console.log(`Trying direct local fares endpoint with ID: ${verifiedVehicleId}`);
+      console.log(`Trying direct-local-fares endpoint with ID: ${verifiedVehicleId}`);
       const directResult = await directVehicleOperation('/api/admin/direct-local-fares.php', 'POST', {
         vehicleId: verifiedVehicleId,  // CRITICAL: Always use the vehicle_id field!
         vehicle_id: verifiedVehicleId, // Add this to be extra sure
@@ -402,8 +405,8 @@ export const getAllOutstationFares = async (): Promise<Record<string, any>> => {
       
       const faresMap: Record<string, any> = {};
       vehiclesResult.vehicles.forEach((vehicle: any) => {
-        if (vehicle.id || vehicle.vehicleId) {
-          const id = vehicle.id || vehicle.vehicleId;
+        if (vehicle.vehicle_id || vehicle.id) {
+          const id = vehicle.vehicle_id || vehicle.id;
           faresMap[id] = {
             id: id,
             vehicleId: id,
@@ -439,6 +442,19 @@ export const getAllLocalFares = async (): Promise<Record<string, any>> => {
   console.log(`Fetching all local package fares`);
   
   try {
+    // First try the new direct-local-fares endpoint
+    const directResult = await directVehicleOperation('/api/admin/direct-local-fares.php', 'GET', {
+      includeInactive: 'true',
+      isAdminMode: 'true',
+      force_refresh: 'true'
+    });
+    
+    if (directResult && directResult.status === 'success' && directResult.fares) {
+      console.log(`Retrieved ${Object.keys(directResult.fares).length} local fares from direct endpoint`);
+      return directResult.fares;
+    }
+
+    // Fallback to the older endpoint
     const result = await directVehicleOperation('/api/admin/local-fares-update.php', 'GET', {
       sync: 'true',
       includeInactive: 'true',
@@ -446,7 +462,7 @@ export const getAllLocalFares = async (): Promise<Record<string, any>> => {
     });
     
     if (result && result.status === 'success' && result.fares) {
-      console.log(`Retrieved ${Object.keys(result.fares).length} local fares`);
+      console.log(`Retrieved ${Object.keys(result.fares).length} local fares from fallback endpoint`);
       return result.fares;
     } else {
       console.warn('No local fares found or API returned error');

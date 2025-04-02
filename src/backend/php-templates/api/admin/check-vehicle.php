@@ -64,6 +64,7 @@ $knownMappings = [
     '100' => 'sedan',
     '101' => 'sedan',
     '102' => 'sedan',
+    '103' => 'sedan',
     '200' => 'ertiga',
     '201' => 'ertiga'
 ];
