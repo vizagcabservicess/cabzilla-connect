@@ -1,3 +1,4 @@
+
 /**
  * Direct vehicle service for operations that bypass API layers
  * This ensures consistent behavior for vehicle CRUD operations
@@ -17,39 +18,16 @@ const normalizeVehicleId = (id: string): string => {
 
 // Helper function to ensure numeric values are always sent as numbers
 const ensureNumericValues = (vehicle: CabType): CabType => {
-  console.log(`directVehicleService - ensureNumericValues input:`, {
-    capacity: vehicle.capacity,
-    luggageCapacity: vehicle.luggageCapacity,
-    type_capacity: typeof vehicle.capacity,
-    type_luggageCapacity: typeof vehicle.luggageCapacity
-  });
-  
-  // CRITICAL FIX: Use parseInt with radix 10 for all numeric values
-  const capacity = parseInt(String(vehicle.capacity || 4), 10);
-  const luggageCapacity = parseInt(String(vehicle.luggageCapacity || 2), 10);
-  const basePrice = parseFloat(String(vehicle.basePrice || vehicle.price || 0));
-  const price = parseFloat(String(vehicle.price || vehicle.basePrice || 0));
-  const pricePerKm = parseFloat(String(vehicle.pricePerKm || 0));
-  const nightHaltCharge = parseFloat(String(vehicle.nightHaltCharge || 700));
-  const driverAllowance = parseFloat(String(vehicle.driverAllowance || 250));
-  
-  console.log(`directVehicleService - ensureNumericValues parsed:`, {
-    capacity,
-    luggageCapacity,
-    isNaN_capacity: isNaN(capacity),
-    isNaN_luggageCapacity: isNaN(luggageCapacity)
-  });
-  
   return {
     ...vehicle,
-    // CRITICAL FIX: Ensure these are always numbers by explicitly parsing
-    capacity: isNaN(capacity) ? 4 : capacity,
-    luggageCapacity: isNaN(luggageCapacity) ? 2 : luggageCapacity,
-    basePrice: isNaN(basePrice) ? 0 : basePrice,
-    price: isNaN(price) ? 0 : price,
-    pricePerKm: isNaN(pricePerKm) ? 0 : pricePerKm,
-    nightHaltCharge: isNaN(nightHaltCharge) ? 700 : nightHaltCharge,
-    driverAllowance: isNaN(driverAllowance) ? 250 : driverAllowance,
+    // Ensure these are always numbers by explicitly parsing
+    capacity: Number(vehicle.capacity || 4),
+    luggageCapacity: Number(vehicle.luggageCapacity || 2),
+    basePrice: Number(vehicle.basePrice || vehicle.price || 0),
+    price: Number(vehicle.price || vehicle.basePrice || 0),
+    pricePerKm: Number(vehicle.pricePerKm || 0),
+    nightHaltCharge: Number(vehicle.nightHaltCharge || 700),
+    driverAllowance: Number(vehicle.driverAllowance || 250),
   };
 };
 
@@ -127,12 +105,8 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
   try {
     console.log('Updating vehicle:', vehicle);
     
-    // CRITICAL: Preserve isActive status and ensure all numeric values are actually numbers
+    // CRITICAL: Preserve isActive status and numeric values correctly
     const isActive = typeof vehicle.isActive === 'boolean' ? vehicle.isActive : true;
-    
-    // CRITICAL FIX: Force parse capacity and luggage_capacity as integers
-    const capacity = parseInt(String(vehicle.capacity), 10) || 4;
-    const luggageCapacity = parseInt(String(vehicle.luggageCapacity), 10) || 2;
     
     // Normalize vehicle ID before sending and ensure all numeric values are actually numbers
     const normalizedVehicle = {
@@ -141,41 +115,91 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
       vehicleId: normalizeVehicleId(vehicle.id || vehicle.vehicleId || ''),
       isActive: isActive,
       is_active: isActive,
-      // CRITICAL FIX: Force these as explicit numbers to ensure PHP doesn't get confused
-      capacity: capacity,
-      luggageCapacity: luggageCapacity
     };
     
     console.log('Normalized vehicle before update:', normalizedVehicle);
-    console.log('Capacity type after normalization:', typeof normalizedVehicle.capacity);
-    console.log('Luggage capacity type after normalization:', typeof normalizedVehicle.luggageCapacity);
     
-    // CRITICAL FIX: Add cache-busting timestamp to force fresh request
-    const timestamp = Date.now();
-    const endpoint = `/api/admin/direct-vehicle-update.php?_t=${timestamp}`;
+    // Use FormData instead of JSON for better PHP compatibility
+    const formData = new FormData();
+    Object.entries(normalizedVehicle).forEach(([key, value]) => {
+      // Skip undefined or null values
+      if (value === undefined || value === null) return;
+      
+      // Handle isActive specially
+      if (key === 'isActive' || key === 'is_active') {
+        const boolValue = value === true || value === 'true' || value === 1 || value === '1';
+        formData.append(key, boolValue ? '1' : '0');
+        return;
+      }
+      
+      // Handle capacity and luggageCapacity specially to ensure they're numbers
+      if (key === 'capacity' || key === 'luggageCapacity' || key === 'luggage_capacity') {
+        const numVal = parseInt(String(value), 10);
+        formData.append(key, String(isNaN(numVal) ? 4 : numVal));
+        // Also add with underscore variant for PHP backend compatibility
+        if (key === 'luggageCapacity') {
+          formData.append('luggage_capacity', String(isNaN(numVal) ? 2 : numVal));
+        }
+        return;
+      }
+      
+      // Handle price fields specially to ensure they're numbers
+      if (key === 'basePrice' || key === 'pricePerKm' || key === 'nightHaltCharge' || key === 'driverAllowance') {
+        const numVal = parseFloat(String(value));
+        formData.append(key, String(isNaN(numVal) ? 0 : numVal));
+        return;
+      }
+      
+      // Handle objects (like amenities array)
+      if (typeof value === 'object' && value !== null) {
+        formData.append(key, JSON.stringify(value));
+      } else {
+        // Add everything else as string
+        formData.append(key, String(value));
+      }
+    });
     
-    // IMPORTANT FIX: Use directVehicleOperation for better error handling and consistency
-    const result = await directVehicleOperation(endpoint, 'POST', normalizedVehicle);
+    // Add explicit numeric fields to ensure they're included
+    formData.append('capacity_numeric', String(Number(normalizedVehicle.capacity)));
+    formData.append('luggage_capacity_numeric', String(Number(normalizedVehicle.luggageCapacity)));
+    
+    // Add fields in PHP format to ensure backward compatibility
+    formData.append('capacity_value', String(Number(normalizedVehicle.capacity)));
+    formData.append('luggage_capacity_value', String(Number(normalizedVehicle.luggageCapacity)));
+    
+    // Log FormData contents for debugging
+    console.log('FormData contents for vehicle update:');
+    for (const pair of formData.entries()) {
+      console.log(`${pair[0]}: ${pair[1]}`);
+    }
+    
+    // Make direct request to update endpoint with FormData
+    const url = `${apiBaseUrl}/api/admin/direct-vehicle-update.php?_t=${Date.now()}`;
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData,
+      headers: getBypassHeaders(),
+      credentials: 'omit',
+      mode: 'cors',
+      cache: 'no-store'
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API request failed with status ${response.status}: ${errorText}`);
+    }
+    
+    const result = await response.json();
     
     if (result.status === 'success') {
-      // CRITICAL FIX: Aggressively clear ALL cached data to ensure fresh data is loaded next time
+      // Clear any cached data
       localStorage.removeItem('cachedVehicles');
-      localStorage.removeItem('localVehicles');
-      sessionStorage.removeItem('vehicleCache');
       
       // Dispatch event to notify other components about the change
       window.dispatchEvent(new CustomEvent('vehicle-data-changed'));
       
-      // Force the browser to refresh the page after a short delay (better UX)
-      setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('vehicle-data-refresh-needed'));
-      }, 500);
-      
-      return {
-        ...normalizedVehicle,
-        capacity: capacity,
-        luggageCapacity: luggageCapacity
-      };
+      return normalizedVehicle;
     } else {
       throw new Error(result.message || 'Failed to update vehicle');
     }
@@ -288,7 +312,6 @@ export const syncVehicleData = async (): Promise<boolean> => {
     
     // Clear any cached data
     localStorage.removeItem('cachedVehicles');
-    localStorage.removeItem('localVehicles');
     
     // Dispatch event to notify other components about the change
     window.dispatchEvent(new CustomEvent('vehicle-data-cache-cleared'));
@@ -324,12 +347,6 @@ export const syncVehicleTables = async (vehicleId: string): Promise<boolean> => 
     
     if (result.status === 'success') {
       console.log(`Vehicle ${vehicleId} synchronized across all tables`);
-      
-      // Force refresh cached data
-      localStorage.removeItem('cachedVehicles');
-      localStorage.removeItem('localVehicles');
-      window.dispatchEvent(new CustomEvent('vehicle-data-changed'));
-      
       return true;
     } else {
       console.error('Failed to sync vehicle tables:', result.message);

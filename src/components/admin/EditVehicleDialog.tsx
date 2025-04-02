@@ -28,118 +28,34 @@ export function EditVehicleDialog({
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (open && initialVehicle) {
-      // CRITICAL FIX: Ensure capacity values are explicitly parsed as numbers
-      const parsedVehicle = {
-        ...initialVehicle,
-        capacity: parseInt(String(initialVehicle.capacity || 4), 10),
-        luggageCapacity: parseInt(String(initialVehicle.luggageCapacity || 2), 10)
-      };
-      
-      setVehicle(parsedVehicle);
-      
-      console.log("EditVehicleDialog initialized with:", {
-        initialCapacity: initialVehicle.capacity,
-        initialLuggageCapacity: initialVehicle.luggageCapacity,
-        parsedCapacity: parsedVehicle.capacity,
-        parsedLuggageCapacity: parsedVehicle.luggageCapacity,
-        capacityType: typeof parsedVehicle.capacity,
-        luggageCapacityType: typeof parsedVehicle.luggageCapacity
-      });
-    }
-  }, [initialVehicle, open]);
-
-  // Parse numeric value and ensure it's a number
-  const parseNumericValue = (value: any, defaultValue: number = 0): number => {
-    if (value === null || value === undefined) return defaultValue;
-    const parsed = parseInt(String(value), 10);
-    return isNaN(parsed) ? defaultValue : parsed;
-  };
+    setVehicle(initialVehicle);
+  }, [initialVehicle]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    
     try {
-      // CRITICAL FIX: Ensure capacity and luggageCapacity are explicit numbers
-      const capacity = parseNumericValue(vehicle.capacity, 4);
-      const luggageCapacity = parseNumericValue(vehicle.luggageCapacity, 2);
-      
-      // Log the values being sent for debugging
-      console.log("EditVehicleDialog - Values before update:", {
-        id: vehicle.id,
-        capacity,
-        luggageCapacity,
-        rawCapacity: vehicle.capacity,
-        rawLuggageCapacity: vehicle.luggageCapacity,
-        type_capacity: typeof capacity,
-        type_luggageCapacity: typeof luggageCapacity
-      });
-      
+      // Ensure capacity and luggageCapacity are numbers
       const updatedVehicle = {
         ...vehicle,
-        // CRITICAL FIX: Ensure these are explicitly numbers
-        capacity: capacity,
-        luggageCapacity: luggageCapacity,
-        basePrice: parseNumericValue(vehicle.basePrice, 0),
-        price: parseNumericValue(vehicle.price || vehicle.basePrice, 0),
-        pricePerKm: parseNumericValue(vehicle.pricePerKm, 0),
-        nightHaltCharge: parseNumericValue(vehicle.nightHaltCharge, 700),
-        driverAllowance: parseNumericValue(vehicle.driverAllowance, 250)
+        capacity: Number(vehicle.capacity),
+        luggageCapacity: Number(vehicle.luggageCapacity),
+        basePrice: Number(vehicle.basePrice),
+        pricePerKm: Number(vehicle.pricePerKm),
+        nightHaltCharge: Number(vehicle.nightHaltCharge),
+        driverAllowance: Number(vehicle.driverAllowance)
       };
       
-      console.log("EditVehicleDialog - Submitting vehicle update with data:", {
-        ...updatedVehicle,
-        capacity_type: typeof updatedVehicle.capacity,
-        luggageCapacity_type: typeof updatedVehicle.luggageCapacity
-      });
-      
-      // Send request to update the vehicle with explicit number type for capacity values
-      const result = await updateVehicle({
-        ...updatedVehicle,
-        capacity: Number(capacity),
-        luggageCapacity: Number(luggageCapacity)
-      });
-      
-      console.log("EditVehicleDialog - Update response:", result);
+      await updateVehicle(updatedVehicle);
       toast.success(`Vehicle ${vehicle.name} updated successfully`);
       onEditVehicle(updatedVehicle);
       onClose();
-      
-      // Force refresh data
-      window.dispatchEvent(new CustomEvent('vehicle-data-changed'));
-      
-      // Clear all caches to ensure fresh data
-      localStorage.removeItem('cachedVehicles');
-      localStorage.removeItem('localVehicles');
-      sessionStorage.removeItem('vehicleCache');
-      
     } catch (error: any) {
       console.error("Error updating vehicle:", error);
       toast.error(`Failed to update vehicle: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleCapacityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    const numericValue = parseInt(value, 10);
-    console.log(`EditVehicleDialog - Capacity changed to: ${value}, parsed as: ${numericValue}, type: ${typeof numericValue}`);
-    setVehicle({ 
-      ...vehicle, 
-      capacity: isNaN(numericValue) ? 4 : numericValue
-    });
-  };
-  
-  const handleLuggageCapacityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    const numericValue = parseInt(value, 10);
-    console.log(`EditVehicleDialog - Luggage capacity changed to: ${value}, parsed as: ${numericValue}, type: ${typeof numericValue}`);
-    setVehicle({ 
-      ...vehicle, 
-      luggageCapacity: isNaN(numericValue) ? 2 : numericValue
-    });
   };
 
   return (
@@ -149,7 +65,9 @@ export function EditVehicleDialog({
           <DialogTitle>Edit Vehicle</DialogTitle>
         </DialogHeader>
         
+        {/* Add overflow-y-auto to make the form scrollable */}
         <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto px-1 py-2" style={{ maxHeight: "calc(80vh - 120px)" }}>
+          {/* Basic Vehicle Information */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="id">Vehicle ID</Label>
@@ -184,11 +102,11 @@ export function EditVehicleDialog({
                 type="number"
                 min={1}
                 value={vehicle.capacity || 4}
-                onChange={handleCapacityChange}
+                onChange={(e) => setVehicle({ 
+                  ...vehicle, 
+                  capacity: parseInt(e.target.value, 10) || 4 
+                })}
               />
-              <p className="text-xs text-muted-foreground">
-                Current value: {vehicle.capacity || 4} (type: {typeof vehicle.capacity})
-              </p>
             </div>
             
             <div className="space-y-2">
@@ -199,14 +117,15 @@ export function EditVehicleDialog({
                 type="number"
                 min={0}
                 value={vehicle.luggageCapacity || 2}
-                onChange={handleLuggageCapacityChange}
+                onChange={(e) => setVehicle({ 
+                  ...vehicle, 
+                  luggageCapacity: parseInt(e.target.value, 10) || 2
+                })}
               />
-              <p className="text-xs text-muted-foreground">
-                Current value: {vehicle.luggageCapacity || 2} (type: {typeof vehicle.luggageCapacity})
-              </p>
             </div>
           </div>
           
+          {/* Pricing */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="basePrice">Base Price</Label>
@@ -279,6 +198,7 @@ export function EditVehicleDialog({
             </div>
           </div>
           
+          {/* Vehicle Image and Description */}
           <div className="space-y-2">
             <Label htmlFor="image">Image URL</Label>
             <Input
@@ -303,6 +223,7 @@ export function EditVehicleDialog({
             />
           </div>
           
+          {/* Amenities */}
           <div className="space-y-2">
             <Label>Amenities</Label>
             <div className="grid grid-cols-2 gap-2">
@@ -330,6 +251,7 @@ export function EditVehicleDialog({
             </div>
           </div>
           
+          {/* AC and Active Status */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex items-center space-x-2">
               <Switch
@@ -371,6 +293,7 @@ export function EditVehicleDialog({
   );
 }
 
+// List of common amenities
 const amenitiesList = [
   "AC",
   "Bottle Water",

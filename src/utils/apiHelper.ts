@@ -65,32 +65,14 @@ export const directVehicleOperation = async (
             continue;
           }
           
-          // CRITICAL FIX: Special case for capacities - ensure they're sent as explicit string integers
-          if (key === 'capacity' || key === 'luggageCapacity') {
-            // Try to convert to number first
-            let numValue: number;
-            if (typeof value === 'number') {
-              numValue = value;
-            } else {
-              numValue = parseInt(String(value), 10);
-            }
-            
-            // Use default values if parsing fails
-            const defaultValue = key === 'capacity' ? 4 : 2;
-            const finalValue = isNaN(numValue) ? defaultValue : numValue;
-            
-            console.log(`apiHelper - CRITICAL FIX: Setting ${key} value: ${finalValue} (original: ${value}, type: ${typeof value})`);
-            
-            // Send as string integer to ensure PHP gets it correctly
-            formData.append(key, String(finalValue));
-            
-            // If this is luggageCapacity, also send the snake_case version for PHP compatibility
+          // Special case for capacity and luggage capacity - ensure they're sent as numbers
+          if (key === 'capacity' || key === 'luggageCapacity' || key === 'luggage_capacity') {
+            const numValue = Number(value) || 4; // Default to 4 if invalid
+            formData.append(key, String(numValue));
+            // Also add snake_case variant for PHP compatibility
             if (key === 'luggageCapacity') {
-              formData.append('luggage_capacity', String(finalValue));
+              formData.append('luggage_capacity', String(numValue));
             }
-            
-            // Also add debugging fields
-            formData.append(`${key}_debug`, `Original value: ${value}, type: ${typeof value}, final: ${finalValue}`);
             continue;
           }
           
@@ -107,13 +89,10 @@ export const directVehicleOperation = async (
         }
         
         // Log FormData contents for debugging
-        console.log('FormData contents in apiHelper:');
-        let formDataDebug = {};
+        console.log('FormData contents:');
         for (const pair of formData.entries()) {
           console.log(`${pair[0]}: ${pair[1]}`);
-          formDataDebug[pair[0]] = pair[1];
         }
-        console.log('FormData contents (object format):', formDataDebug);
         
         options.body = formData;
       }
@@ -131,42 +110,34 @@ export const directVehicleOperation = async (
     
     console.log('Response status:', response.status);
     
-    // CRITICAL FIX: Log all response information for better debugging
-    const responseText = await response.text();
-    console.log('Response text:', responseText);
-    
     if (!response.ok) {
-      console.error('Error response:', responseText);
-      
       if (response.status === 404) {
         throw new Error(`API endpoint not found: ${endpoint}`);
       }
       
-      throw new Error(`API request failed with status ${response.status}: ${responseText}`);
+      // Try to get error text
+      let errorText;
+      try {
+        errorText = await response.text();
+        console.error('Error response:', errorText);
+      } catch (e) {
+        errorText = `Status ${response.status}`;
+      }
+      
+      throw new Error(`API request failed with status ${response.status}: ${errorText}`);
     }
     
     // Try to parse as JSON first
-    let result;
     try {
-      result = JSON.parse(responseText);
-      console.log('API response (parsed):', result);
+      const result = await response.json();
+      console.log('API response:', result);
+      return result;
     } catch (parseError) {
       // If can't parse as JSON, return the raw text
-      console.log('API response (raw text):', responseText);
-      result = { raw: responseText, success: true };
+      const text = await response.text();
+      console.log('API response (text):', text);
+      return { raw: text, success: true };
     }
-    
-    // CRITICAL FIX: Force refresh the page data after successful operation
-    if ((result.status === 'success' || result.success === true) && endpoint.includes('vehicle')) {
-      // Clear any cached vehicle data
-      localStorage.removeItem('cachedVehicles');
-      localStorage.removeItem('localVehicles');
-      
-      // Dispatch event to trigger refresh
-      window.dispatchEvent(new CustomEvent('vehicle-data-changed'));
-    }
-    
-    return result;
   } catch (error: any) {
     console.error(`Direct vehicle operation failed: ${error.message}`);
     toast.error(`Operation failed: ${error.message}`);
@@ -245,12 +216,6 @@ export const fixDatabaseTables = async (): Promise<boolean> => {
       
       if (result.status === 'success') {
         console.log('Database tables fixed successfully:', result);
-        
-        // CRITICAL FIX: Force refresh the cached data to reflect the fixes
-        localStorage.removeItem('cachedVehicles');
-        localStorage.removeItem('localVehicles');
-        window.dispatchEvent(new CustomEvent('vehicle-data-changed'));
-        
         return true;
       } else {
         console.error('Failed to fix database tables:', result.message || 'Unknown error');
