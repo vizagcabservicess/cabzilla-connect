@@ -4,6 +4,7 @@ import { apiBaseUrl } from '@/config/api';
 import { clearVehicleDataCache, getVehicleData } from '@/services/vehicleDataService';
 import { fareService } from '@/services/fareService';
 import { toast } from 'sonner';
+import { getBypassHeaders, getForcedRequestConfig, formatDataForMultipart } from '@/config/requestConfig';
 
 /**
  * Fix database tables - corrects NULL values in critical fields
@@ -124,3 +125,47 @@ export const checkBackendAvailable = async (): Promise<boolean> => {
     return false;
   }
 };
+
+/**
+ * Direct vehicle operation helper for API calls
+ * @param endpoint - API endpoint
+ * @param method - HTTP method
+ * @param data - Request data (optional)
+ * @returns Promise with response data
+ */
+export const directVehicleOperation = async (
+  endpoint: string, 
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET', 
+  data: any = null
+): Promise<any> => {
+  try {
+    const fullEndpoint = endpoint.startsWith('http') 
+      ? endpoint 
+      : `${apiBaseUrl}/${endpoint.startsWith('/') ? endpoint.slice(1) : endpoint}`;
+    
+    const requestConfig = {
+      method,
+      url: fullEndpoint,
+      headers: {
+        ...getBypassHeaders(),
+        'X-Admin-Mode': 'true',
+        'X-Force-Refresh': 'true',
+      },
+      data: method !== 'GET' ? data : undefined,
+      params: method === 'GET' ? data : undefined,
+      timeout: 30000, // 30 second timeout for reliability
+    };
+    
+    console.log(`Making ${method} request to ${fullEndpoint}`);
+    const response = await axios(requestConfig);
+    
+    return response.data;
+  } catch (error: any) {
+    console.error(`Error in directVehicleOperation (${endpoint}):`, error);
+    const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
+    throw new Error(errorMessage);
+  }
+};
+
+// Re-export the formatDataForMultipart function for components that need it directly
+export { formatDataForMultipart };
