@@ -33,15 +33,20 @@ $message = $statusMessages[$status] ?? 'Unknown Error';
 // Add more details based on the URL
 $details = "";
 $path = $_SERVER['REQUEST_URI'] ?? '';
+$originalUrl = $_SERVER['REDIRECT_URL'] ?? $path;
 
 if ($status == 404) {
-    $details = "The requested API endpoint '{$path}' could not be found. Please check the URL and try again.";
+    if (strpos($originalUrl, '/admin') === 0 || strpos($path, '/admin') === 0) {
+        $details = "The requested admin endpoint '{$originalUrl}' could not be found. Please check that the API is properly configured with admin routes.";
+    } else {
+        $details = "The requested API endpoint '{$originalUrl}' could not be found. Please check the URL and try again.";
+    }
 } elseif ($status == 500) {
     $details = "The server encountered an internal error processing your request. This might be due to database connectivity issues or server maintenance.";
 }
 
-// Log the error
-$logMessage = date('Y-m-d H:i:s') . " - Error {$status}: {$message} - " . $path;
+// Log the error with more context
+$logMessage = date('Y-m-d H:i:s') . " - Error {$status}: {$message} - Original URL: {$originalUrl}, Request URI: {$path}";
 error_log($logMessage, 3, dirname(__FILE__) . '/../logs/api-errors.log');
 
 // Return JSON error response
@@ -50,7 +55,8 @@ echo json_encode([
     'code' => $status,
     'message' => "API Error: {$message}",
     'details' => $details,
-    'path' => $path,
+    'path' => $originalUrl,
+    'requestUri' => $path,
     'timestamp' => time()
 ]);
 ?>

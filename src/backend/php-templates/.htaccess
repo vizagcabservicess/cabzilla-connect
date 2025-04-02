@@ -9,6 +9,10 @@ RewriteBase /api/
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 
+# Handle the root admin path for dashboard access
+RewriteRule ^admin$ /api/admin/status.php [L]
+RewriteRule ^admin/$ /api/admin/status.php [L]
+
 # Map vehicle update endpoints to our direct-vehicle-modify.php
 RewriteRule ^admin/update-vehicle\.php$ /api/admin/direct-vehicle-modify.php [L]
 RewriteRule ^admin/vehicle-update\.php$ /api/admin/direct-vehicle-modify.php [L]
