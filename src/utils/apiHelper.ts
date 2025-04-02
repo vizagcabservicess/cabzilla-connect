@@ -53,12 +53,17 @@ export const directVehicleOperation = async (endpoint: string, method: string, d
       headers['Content-Type'] = contentType;
     }
     
+    // Important: Specify 'no-store' to prevent issues with response body stream
     const response = await fetch(finalUrl, {
       method,
       headers,
       body,
-      signal: AbortSignal.timeout(30000) // 30 second timeout
+      signal: AbortSignal.timeout(30000), // 30 second timeout
+      cache: 'no-store'
     });
+    
+    // Clone the response before reading its body to prevent the "already read" error
+    const responseClone = response.clone();
     
     // Handle different error status codes
     if (!response.ok) {
@@ -67,7 +72,7 @@ export const directVehicleOperation = async (endpoint: string, method: string, d
       
       try {
         // Try to get JSON error message
-        const errorData = await response.json();
+        const errorData = await responseClone.json();
         errorText = errorData.message || errorData.error || response.statusText;
       } catch (parseError) {
         // Fall back to status text if JSON parsing fails
@@ -78,21 +83,31 @@ export const directVehicleOperation = async (endpoint: string, method: string, d
       throw new Error(`API error: ${errorStatusCode} - ${errorText}`);
     }
     
-    // Parse response data
-    const contentTypeHeader = response.headers.get('content-type');
+    // Parse response data from the cloned response
+    const contentTypeHeader = responseClone.headers.get('content-type');
     
     if (contentTypeHeader && contentTypeHeader.includes('application/json')) {
       // JSON response
       try {
-        const responseData = await response.json();
+        const responseData = await responseClone.json();
         return responseData;
       } catch (jsonError) {
         console.error('Failed to parse JSON response', jsonError);
-        throw new Error(`Invalid JSON response: ${await response.text()}`);
+        
+        // Try to get text response as fallback
+        const textResponse = await response.text();
+        console.log('Raw response:', textResponse);
+        
+        // Try to parse the text response as JSON
+        try {
+          return JSON.parse(textResponse);
+        } catch (e) {
+          throw new Error(`Invalid JSON response: ${textResponse}`);
+        }
       }
     } else {
       // Non-JSON response
-      const textResponse = await response.text();
+      const textResponse = await responseClone.text();
       try {
         // Try to parse as JSON anyway in case Content-Type is incorrect
         return JSON.parse(textResponse);

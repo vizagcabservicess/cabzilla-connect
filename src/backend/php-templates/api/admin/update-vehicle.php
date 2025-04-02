@@ -2,7 +2,7 @@
 <?php
 /**
  * update-vehicle.php - Update an existing vehicle
- * This is a simple proxy to direct-vehicle-update.php
+ * This is a simple proxy to direct-vehicle-modify.php
  */
 
 // Set CORS headers
@@ -17,6 +17,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Include the direct-vehicle-update.php file which has the full implementation
-require_once(__DIR__ . '/direct-vehicle-update.php');
+// Include the direct-vehicle-modify.php file which has the full implementation
+require_once(__DIR__ . '/direct-vehicle-modify.php');
 ?>

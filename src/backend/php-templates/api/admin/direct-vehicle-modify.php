@@ -15,7 +15,7 @@ header('Pragma: no-cache');
 header('Expires: 0');
 
 // Enable error reporting for debugging
-ini_set('display_errors', 1);
+ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
 // Increase timeouts for database operations
@@ -26,7 +26,11 @@ ini_set('default_socket_timeout', 60); // 60 seconds
 // Logging function
 function logMessage($message) {
     $timestamp = date('Y-m-d H:i:s');
-    error_log("[$timestamp] " . $message . "\n", 3, dirname(__FILE__) . '/../../logs/vehicle-modify.log');
+    $logDir = dirname(__FILE__) . '/../../logs';
+    if (!file_exists($logDir)) {
+        mkdir($logDir, 0755, true);
+    }
+    error_log("[$timestamp] " . $message . "\n", 3, $logDir . '/vehicle-modify.log');
 }
 
 // Handle OPTIONS preflight request
@@ -148,6 +152,9 @@ try {
         // Check if vehicle exists
         $checkQuery = "SELECT * FROM vehicles WHERE vehicle_id = ? OR id = ? LIMIT 1";
         $checkStmt = $conn->prepare($checkQuery);
+        if (!$checkStmt) {
+            throw new Exception("Error preparing check query: " . $conn->error);
+        }
         $checkStmt->bind_param('ss', $vehicleId, $vehicleId);
         $checkStmt->execute();
         $checkResult = $checkStmt->get_result();
@@ -204,37 +211,49 @@ try {
             $driverAllowance = isset($vehicleData['driverAllowance']) && !empty($vehicleData['driverAllowance']) ? floatval($vehicleData['driverAllowance']) : 
                               (isset($vehicleData['driver_allowance']) && !empty($vehicleData['driver_allowance']) ? floatval($vehicleData['driver_allowance']) : $existingVehicle['driver_allowance']);
             
-            logMessage("Processed vehicle data for update: " . json_encode([
-                'id' => $vehicleId,
-                'name' => $vehicleName,
-                'capacity' => $capacity,
-                'luggage_capacity' => $luggageCapacity,
-                'is_active' => $isActive,
-                'basePrice' => $basePrice,
-                'pricePerKm' => $pricePerKm
-            ]));
-            
-            // Update vehicles table with direct query to avoid prepared statement issues
+            // Create the update query with proper parameter binding
             $updateQuery = "UPDATE vehicles SET 
-                name = '" . $conn->real_escape_string($vehicleName) . "', 
-                capacity = " . $capacity . ", 
-                luggage_capacity = " . $luggageCapacity . ", 
-                ac = " . $ac . ", 
-                is_active = " . $isActive . ", 
-                image = '" . $conn->real_escape_string($image) . "', 
-                amenities = '" . $conn->real_escape_string($amenities) . "', 
-                description = '" . $conn->real_escape_string($description) . "', 
-                base_price = " . $basePrice . ", 
-                price_per_km = " . $pricePerKm . ", 
-                night_halt_charge = " . $nightHaltCharge . ", 
-                driver_allowance = " . $driverAllowance . ", 
+                name = ?, 
+                capacity = ?, 
+                luggage_capacity = ?, 
+                ac = ?, 
+                is_active = ?, 
+                image = ?, 
+                amenities = ?, 
+                description = ?, 
+                base_price = ?, 
+                price_per_km = ?, 
+                night_halt_charge = ?, 
+                driver_allowance = ?, 
                 updated_at = NOW() 
-                WHERE id = '" . $conn->real_escape_string($vehicleId) . "' OR vehicle_id = '" . $conn->real_escape_string($vehicleId) . "'";
+                WHERE id = ? OR vehicle_id = ?";
                 
-            logMessage("Executing update query: " . $updateQuery);
+            // Prepare, bind and execute the update statement
+            $updateStmt = $conn->prepare($updateQuery);
+            if (!$updateStmt) {
+                throw new Exception("Error preparing update statement: " . $conn->error);
+            }
             
-            if (!$conn->query($updateQuery)) {
-                throw new Exception("Error updating vehicles table: " . $conn->error);
+            $updateStmt->bind_param(
+                'siiiisssdddss',
+                $vehicleName,
+                $capacity,
+                $luggageCapacity,
+                $ac,
+                $isActive,
+                $image,
+                $amenities,
+                $description,
+                $basePrice,
+                $pricePerKm,
+                $nightHaltCharge,
+                $driverAllowance,
+                $vehicleId,
+                $vehicleId
+            );
+            
+            if (!$updateStmt->execute()) {
+                throw new Exception("Error executing update: " . $updateStmt->error);
             }
             
             logMessage("Successfully updated vehicles table for $vehicleId");
@@ -291,4 +310,3 @@ try {
 
 // Send response
 echo json_encode($response);
-?>
