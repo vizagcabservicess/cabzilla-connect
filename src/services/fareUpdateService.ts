@@ -112,7 +112,9 @@ export const getAllOutstationFares = async (): Promise<Record<string, any>> => {
     // Use directVehicleOperation for direct API access
     const result = await directVehicleOperation('/api/admin/outstation-fares-update.php', 'GET', {
       sync: 'true',
-      force_sync: 'true'
+      force_sync: 'true',
+      includeInactive: 'true', // Include inactive vehicles for admin view
+      isAdminMode: 'true'      // Ensure admin mode is active
     });
     
     if (result && result.status === 'success' && result.fares) {
@@ -137,7 +139,9 @@ export const getAllLocalFares = async (): Promise<Record<string, any>> => {
   
   try {
     const result = await directVehicleOperation('/api/admin/local-fares-update.php', 'GET', {
-      sync: 'true'
+      sync: 'true',
+      includeInactive: 'true',
+      isAdminMode: 'true'
     });
     
     if (result && result.status === 'success' && result.fares) {
@@ -160,7 +164,10 @@ export const getAllAirportFares = async (): Promise<Record<string, any>> => {
   console.log(`Fetching all airport fares`);
   
   try {
-    const result = await directVehicleOperation('/api/admin/airport-fares-update.php', 'GET');
+    const result = await directVehicleOperation('/api/admin/airport-fares-update.php', 'GET', {
+      includeInactive: 'true',
+      isAdminMode: 'true'
+    });
     
     if (result && result.status === 'success' && result.fares) {
       console.log(`Retrieved ${Object.keys(result.fares).length} airport fares`);

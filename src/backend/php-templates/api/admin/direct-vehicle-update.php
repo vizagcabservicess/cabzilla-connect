@@ -32,6 +32,9 @@ function logMessage($message) {
 
 // Log request information
 logMessage("Vehicle update request received: " . $_SERVER['REQUEST_METHOD']);
+
+// Log POST data for debugging
+logMessage("POST data: " . json_encode($_POST, JSON_PRETTY_PRINT));
 logMessage("Request body: " . file_get_contents('php://input'));
 
 // Handle OPTIONS preflight request
@@ -110,6 +113,8 @@ try {
         }
     }
     
+    logMessage("Vehicle data before processing: " . json_encode($vehicleData, JSON_PRETTY_PRINT));
+    
     if (empty($vehicleData)) {
         throw new Exception("No vehicle data provided");
     }
@@ -168,11 +173,20 @@ try {
             logMessage("Using existing is_active value: " . $isActive);
         }
         
+        // CRITICAL: Handle capacity and luggage capacity properly
+        $capacity = isset($vehicleData['capacity']) ? intval($vehicleData['capacity']) : 
+                   (isset($existingVehicle['capacity']) ? intval($existingVehicle['capacity']) : 4);
+                   
+        $luggageCapacity = isset($vehicleData['luggageCapacity']) ? intval($vehicleData['luggageCapacity']) : 
+                          (isset($vehicleData['luggage_capacity']) ? intval($vehicleData['luggage_capacity']) : 
+                          (isset($existingVehicle['luggage_capacity']) ? intval($existingVehicle['luggage_capacity']) : 2));
+
+        // Log capacity values for debugging
+        logMessage("Capacity being set to: " . $capacity);
+        logMessage("Luggage capacity being set to: " . $luggageCapacity);
+        
         // Extract updated vehicle properties with fallback to existing values
         $vehicleName = isset($vehicleData['name']) && !empty($vehicleData['name']) ? $vehicleData['name'] : $existingVehicle['name'];
-        $capacity = isset($vehicleData['capacity']) ? intval($vehicleData['capacity']) : $existingVehicle['capacity'];
-        $luggageCapacity = isset($vehicleData['luggageCapacity']) && !empty($vehicleData['luggageCapacity']) ? intval($vehicleData['luggageCapacity']) : 
-                          (isset($vehicleData['luggage_capacity']) && !empty($vehicleData['luggage_capacity']) ? intval($vehicleData['luggage_capacity']) : $existingVehicle['luggage_capacity']);
         
         $ac = isset($vehicleData['ac']) ? (intval($vehicleData['ac']) ? 1 : 0) : $existingVehicle['ac'];
         

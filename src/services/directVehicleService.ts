@@ -97,7 +97,16 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
       id: normalizeVehicleId(vehicle.id || vehicle.vehicleId || ''),
       vehicleId: normalizeVehicleId(vehicle.id || vehicle.vehicleId || ''),
       isActive: isActive,
-      is_active: isActive
+      is_active: isActive,
+      // Ensure numeric values are properly formatted as numbers
+      capacity: Number(vehicle.capacity || 4),
+      luggageCapacity: Number(vehicle.luggageCapacity || 2),
+      luggage_capacity: Number(vehicle.luggageCapacity || 2),
+      price: Number(vehicle.price || vehicle.basePrice || 0),
+      basePrice: Number(vehicle.basePrice || vehicle.price || 0),
+      pricePerKm: Number(vehicle.pricePerKm || 0),
+      nightHaltCharge: Number(vehicle.nightHaltCharge || 700),
+      driverAllowance: Number(vehicle.driverAllowance || 250),
     };
     
     console.log('Normalized vehicle before update:', normalizedVehicle);
@@ -112,6 +121,12 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
       if (key === 'isActive' || key === 'is_active') {
         const boolValue = value === true || value === 'true' || value === 1 || value === '1';
         formData.append(key, boolValue ? '1' : '0');
+        return;
+      }
+      
+      // Handle capacity and luggageCapacity specially to ensure they're numbers
+      if (key === 'capacity' || key === 'luggageCapacity' || key === 'luggage_capacity') {
+        formData.append(key, String(Number(value) || 4));
         return;
       }
       
