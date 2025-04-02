@@ -1,4 +1,3 @@
-
 <?php
 /**
  * Database utility functions
@@ -412,4 +411,15 @@ function debugSqlQuery($sql, $params = [], $types = '', $logToFile = false) {
     }
     
     return $formattedQuery;
+}
+
+/**
+ * Safely get a value with a default fallback if NULL
+ * 
+ * @param mixed $value The value to check
+ * @param mixed $default Default value if $value is NULL
+ * @return mixed The original value or the default
+ */
+function safeValue($value, $default) {
+    return $value !== NULL ? $value : $default;
 }

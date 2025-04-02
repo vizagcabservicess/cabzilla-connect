@@ -72,14 +72,15 @@ try {
     $conn->query($airport_fares_query);
     
     // CREATE OUTSTATION FARES TABLE IF IT DOESN'T EXIST
+    // MODIFIED to make night_halt_charge and driver_allowance NOT NULL with DEFAULT values
     $outstation_fares_query = "
     CREATE TABLE IF NOT EXISTS outstation_fares (
         id INT AUTO_INCREMENT PRIMARY KEY,
         vehicle_id VARCHAR(50) NOT NULL,
         base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
         price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
-        night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 0,
-        driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 0,
+        night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 700,
+        driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 250,
         roundtrip_base_price DECIMAL(10,2) DEFAULT NULL,
         roundtrip_price_per_km DECIMAL(5,2) DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
