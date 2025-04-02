@@ -7,10 +7,18 @@ import { directVehicleOperation } from '@/utils/apiHelper';
 const numericIdMapExtended: Record<string, string> = {
   '1': 'sedan',
   '2': 'ertiga',
+  '3': 'innova',
+  '4': 'crysta',
+  '5': 'tempo',
+  '6': 'bus',
+  '7': 'van',
+  '8': 'suv',
+  '9': 'traveller',
+  '10': 'luxury',
   '180': 'etios',
-  '1266': 'MPV',
-  '592': 'Urbania',
-  '1270': 'MPV',
+  '592': 'urbania',
+  '1266': 'mpv',
+  '1270': 'mpv',
   '1271': 'etios',
   '1272': 'etios',
   '1273': 'etios',
@@ -26,7 +34,15 @@ const numericIdMapExtended: Record<string, string> = {
   '102': 'sedan',
   '103': 'sedan',
   '200': 'ertiga',
-  '201': 'ertiga'
+  '201': 'ertiga',
+  '202': 'ertiga', 
+  '300': 'innova',
+  '301': 'innova',
+  '302': 'innova',
+  '400': 'crysta',
+  '401': 'crysta',
+  '500': 'tempo',
+  '501': 'tempo'
 };
 
 // CRITICAL FIX: Normalize and validate vehicle ID to prevent numeric ID usage
@@ -46,18 +62,29 @@ const normalizeVehicleId = (vehicleId: string | number): string => {
     console.log(`Removed item- prefix, now: ${normalizedId}`);
   }
   
-  // Check if this is already a known vehicle ID string
-  const knownVehicleIds = ['sedan', 'ertiga', 'etios', 'MPV', 'Urbania'];
-  if (knownVehicleIds.includes(normalizedId)) {
-    console.log(`Using known vehicle ID: ${normalizedId}`);
-    return normalizedId;
+  // Handle comma-separated lists (use first ID only)
+  if (normalizedId.includes(',')) {
+    const parts = normalizedId.split(',');
+    normalizedId = parts[0].trim();
+    console.log(`Found comma-separated list, using first ID: ${normalizedId}`);
+  }
+  
+  // Check if this is already a known vehicle ID string (case-insensitive)
+  const knownVehicleIds = ['sedan', 'ertiga', 'etios', 'mpv', 'urbania', 'innova', 'crysta', 'tempo', 'bus', 'van', 'suv'];
+  const normalizedIdLower = normalizedId.toLowerCase();
+  
+  for (const known of knownVehicleIds) {
+    if (normalizedIdLower === known.toLowerCase()) {
+      console.log(`Using known vehicle ID: ${known}`);
+      return known.toLowerCase(); // Use lowercase for consistent ID handling
+    }
   }
   
   // CRITICAL FIX: Map numeric IDs to proper vehicle_id values
   if (numericIdMapExtended[normalizedId]) {
     const mappedId = numericIdMapExtended[normalizedId];
     console.log(`CRITICAL: Converting numeric ID ${normalizedId} to vehicle_id: ${mappedId}`);
-    return mappedId;
+    return mappedId.toLowerCase(); // Use lowercase for consistent ID handling
   }
   
   // If it's numeric, reject it completely - ZERO TOLERANCE POLICY
@@ -66,7 +93,8 @@ const normalizeVehicleId = (vehicleId: string | number): string => {
     throw new Error(`Cannot use numeric ID ${normalizedId} as a vehicle identifier. Please use the proper vehicle ID like 'sedan', 'ertiga', 'etios', etc.`);
   }
   
-  return normalizedId;
+  // Return normalized ID in lowercase for consistency
+  return normalizedId.toLowerCase();
 };
 
 // Enhanced verification function to always return proper vehicle_id
@@ -118,7 +146,7 @@ const verifyVehicleId = async (vehicleId: string): Promise<string> => {
           return normalizedId;
         }
         
-        return actualVehicleId;
+        return actualVehicleId.toLowerCase(); // Use lowercase for consistency
       }
       
       // If we couldn't verify, log an error
@@ -199,10 +227,9 @@ export const updateLocalFares = async (
     
     // Handle comma-separated IDs (a common source of problems)
     if (typeof vehicleId === 'string' && vehicleId.includes(',')) {
-      const errorMsg = `Cannot use comma-separated ID list: ${vehicleId}`;
-      console.error(errorMsg);
-      toast.error(errorMsg);
-      return Promise.reject(new Error(errorMsg));
+      console.warn(`Found comma-separated ID list: ${vehicleId}. Using first ID only.`);
+      const parts = vehicleId.split(',');
+      vehicleId = parts[0].trim();
     }
     
     // Verify and normalize the vehicle ID - get the proper vehicle_id from database
@@ -239,6 +266,9 @@ export const updateLocalFares = async (
         vehicle_id: verifiedVehicleId, // Add this to be extra sure
         extraKmRate,
         extraHourRate,
+        price4hr40km: typeof packages === 'object' && packages['4hrs-40km'] ? packages['4hrs-40km'] : 0,
+        price8hr80km: typeof packages === 'object' && packages['8hrs-80km'] ? packages['8hrs-80km'] : 0,
+        price10hr100km: typeof packages === 'object' && packages['10hrs-100km'] ? packages['10hrs-100km'] : 0,
         packages: typeof packages === 'object' ? JSON.stringify(packages) : packages,
         use_vehicle_id: 'true' // Signal to backend to explicitly use vehicle_id instead of id
       });
@@ -276,31 +306,6 @@ export const updateLocalFares = async (
       }
     } catch (localError) {
       console.error(`Error with local-fares-update endpoint: ${localError}`);
-    }
-    
-    // Try using the universal fare update endpoint as fallback
-    console.log(`Trying universal fare update endpoint with ID: ${verifiedVehicleId}`);
-    try {
-      const universalResult = await directVehicleOperation('/api/admin/fare-update.php', 'POST', {
-        tripType: 'local',
-        vehicleId: verifiedVehicleId,
-        vehicle_id: verifiedVehicleId, // Add this to be extra sure 
-        extraKmRate,
-        extraHourRate,
-        price4hr: typeof packages === 'object' && packages['4hrs-40km'] ? packages['4hrs-40km'] : 0,
-        price8hr: typeof packages === 'object' && packages['8hrs-80km'] ? packages['8hrs-80km'] : 0,
-        price10hr: typeof packages === 'object' && packages['10hrs-100km'] ? packages['10hrs-100km'] : 0,
-        use_vehicle_id: 'true' // Signal to backend to explicitly use vehicle_id instead of id
-      });
-      
-      console.log("Universal endpoint response:", universalResult);
-      
-      if (universalResult && universalResult.status === 'success') {
-        toast.success(`Updated local fares for ${verifiedVehicleId}`);
-        return universalResult;
-      }
-    } catch (universalError) {
-      console.error(`Error with universal endpoint: ${universalError}`);
     }
     
     // Fall back to the older endpoint as last resort

@@ -1,3 +1,4 @@
+
 <?php
 // local-fares-update.php - Ultra simplified local fare update endpoint
 // No configuration files, no includes, pure standalone script
@@ -87,6 +88,11 @@ $knownMappings = [
     '3' => 'innova',
     '4' => 'crysta',
     '5' => 'tempo',
+    '6' => 'bus',
+    '7' => 'van',
+    '8' => 'suv',
+    '9' => 'traveller',
+    '10' => 'luxury',
     '180' => 'etios',
     '592' => 'urbania',
     '1266' => 'mpv',
@@ -114,6 +120,7 @@ $knownMappings = [
     '100' => 'sedan',
     '101' => 'sedan',
     '102' => 'sedan',
+    '103' => 'sedan',
     '200' => 'ertiga',
     '201' => 'ertiga',
     '202' => 'ertiga',
@@ -122,8 +129,10 @@ $knownMappings = [
     '302' => 'innova',
     '400' => 'crysta',
     '401' => 'crysta',
+    '402' => 'crysta',
     '500' => 'tempo',
     '501' => 'tempo',
+    '502' => 'tempo'
 ];
 
 // Log the original and cleaned vehicleId
@@ -173,6 +182,10 @@ if (is_numeric($vehicleId)) {
     $vehicleId = 'sedan'; // Default fallback
     error_log("[$timestamp] Still have numeric ID after processing: $oldId - using fallback: $vehicleId", 3, $logDir . '/local-fares.log');
 }
+
+// Normalize vehicle ID to lowercase to prevent duplicate vehicles with different cases
+$vehicleId = strtolower($vehicleId);
+error_log("[$timestamp] Normalized vehicle ID to lowercase: $vehicleId", 3, $logDir . '/local-fares.log');
 
 // Extract pricing data with multiple fallbacks
 $package4hr = 0;
@@ -283,19 +296,33 @@ try {
     $result = $checkStmt->get_result();
     
     if ($result->num_rows == 0) {
-        // Vehicle doesn't exist, create it with the vehicle_id as both id and vehicle_id
-        $vehicleName = ucfirst(str_replace(['_', '-'], ' ', $vehicleId));
+        // Try a case-insensitive search before creating a new vehicle
+        $checkCaseInsensitiveQuery = "SELECT id, vehicle_id, name FROM vehicles WHERE LOWER(vehicle_id) = LOWER(?)";
+        $checkCaseStmt = $conn->prepare($checkCaseInsensitiveQuery);
+        $checkCaseStmt->bind_param("s", $vehicleId);
+        $checkCaseStmt->execute();
+        $caseResult = $checkCaseStmt->get_result();
         
-        $insertVehicleQuery = "
-            INSERT INTO vehicles (vehicle_id, name, is_active, created_at, updated_at)
-            VALUES (?, ?, 1, NOW(), NOW())
-        ";
-        
-        $insertStmt = $conn->prepare($insertVehicleQuery);
-        $insertStmt->bind_param("ss", $vehicleId, $vehicleName);
-        $insertStmt->execute();
-        
-        error_log("[$timestamp] Created new vehicle: $vehicleId", 3, $logDir . '/local-fares.log');
+        if ($caseResult->num_rows > 0) {
+            // Found a vehicle with case-insensitive match - use that one
+            $existingVehicle = $caseResult->fetch_assoc();
+            $vehicleId = $existingVehicle['vehicle_id']; // Use the existing case-sensitive ID
+            error_log("[$timestamp] Found vehicle with case-insensitive search: $vehicleId", 3, $logDir . '/local-fares.log');
+        } else {
+            // Vehicle doesn't exist, create it with the vehicle_id as both id and vehicle_id
+            $vehicleName = ucfirst(str_replace(['_', '-'], ' ', $vehicleId));
+            
+            $insertVehicleQuery = "
+                INSERT INTO vehicles (vehicle_id, name, is_active, created_at, updated_at)
+                VALUES (?, ?, 1, NOW(), NOW())
+            ";
+            
+            $insertStmt = $conn->prepare($insertVehicleQuery);
+            $insertStmt->bind_param("ss", $vehicleId, $vehicleName);
+            $insertStmt->execute();
+            
+            error_log("[$timestamp] Created new vehicle: $vehicleId", 3, $logDir . '/local-fares.log');
+        }
     } else {
         $vehicle = $result->fetch_assoc();
         error_log("[$timestamp] Using existing vehicle: " . json_encode($vehicle), 3, $logDir . '/local-fares.log');

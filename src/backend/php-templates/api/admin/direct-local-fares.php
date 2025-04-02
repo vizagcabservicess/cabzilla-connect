@@ -49,14 +49,22 @@ function logMessage($message) {
     error_log($logMessage, 3, __DIR__ . '/../../logs/direct-local-fares.log');
 }
 
-// CRITICAL: Comprehensive ID mapping with all known numeric IDs and their proper vehicle_ids
+// ENHANCED: More comprehensive ID mapping with all known numeric IDs
 $numericIdMapExtended = [
     '1' => 'sedan',
     '2' => 'ertiga',
+    '3' => 'innova',
+    '4' => 'crysta',
+    '5' => 'tempo',
+    '6' => 'bus',
+    '7' => 'van',
+    '8' => 'suv',
+    '9' => 'traveller',
+    '10' => 'luxury',
     '180' => 'etios',
-    '1266' => 'MPV',
-    '592' => 'Urbania',
-    '1270' => 'MPV',
+    '592' => 'urbania',
+    '1266' => 'mpv',
+    '1270' => 'mpv',
     '1271' => 'etios',
     '1272' => 'etios',
     '1273' => 'etios',
@@ -67,11 +75,32 @@ $numericIdMapExtended = [
     '1278' => 'etios',
     '1279' => 'etios',
     '1280' => 'etios',
+    '1281' => 'mpv',
+    '1282' => 'sedan',
+    '1283' => 'sedan',
+    '1284' => 'etios',
+    '1285' => 'etios',
+    '1286' => 'etios',
+    '1287' => 'etios',
+    '1288' => 'etios',
+    '1289' => 'etios',
+    '1290' => 'etios',
     '100' => 'sedan',
     '101' => 'sedan',
     '102' => 'sedan',
+    '103' => 'sedan',
     '200' => 'ertiga',
-    '201' => 'ertiga'
+    '201' => 'ertiga',
+    '202' => 'ertiga',
+    '300' => 'innova',
+    '301' => 'innova',
+    '302' => 'innova',
+    '400' => 'crysta',
+    '401' => 'crysta',
+    '402' => 'crysta',
+    '500' => 'tempo',
+    '501' => 'tempo',
+    '502' => 'tempo'
 ];
 
 try {
@@ -120,8 +149,10 @@ try {
     
     // Handle POST request to update local fares
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        // Get vehicle ID
-        $rawVehicleId = isset($_POST['vehicleId']) ? $_POST['vehicleId'] : (isset($_POST['vehicle_id']) ? $_POST['vehicle_id'] : null);
+        // Get vehicle ID from various possible sources
+        $rawVehicleId = isset($_POST['vehicleId']) ? $_POST['vehicleId'] : 
+                      (isset($_POST['vehicle_id']) ? $_POST['vehicle_id'] : 
+                      (isset($_POST['id']) ? $_POST['id'] : null));
         logMessage("Original vehicle ID received: " . $rawVehicleId);
         
         // CRITICAL: Never use pure numeric IDs - convert them to proper vehicle_id values
@@ -131,6 +162,20 @@ try {
         if (strpos($vehicleId, 'item-') === 0) {
             $vehicleId = substr($vehicleId, 5);
             logMessage("Removed 'item-' prefix: " . $vehicleId);
+        }
+        
+        // Handle comma-separated lists and extract first ID
+        if (strpos($vehicleId, ',') !== false) {
+            $idParts = explode(',', $vehicleId);
+            $oldId = $vehicleId;
+            $vehicleId = trim($idParts[0]);
+            logMessage("Found comma-separated list, using first ID: $vehicleId");
+            
+            // Check if first ID needs mapping
+            if (is_numeric($vehicleId) && isset($numericIdMapExtended[$vehicleId])) {
+                $vehicleId = $numericIdMapExtended[$vehicleId];
+                logMessage("Mapped first ID from list to: $vehicleId");
+            }
         }
         
         // Handle numeric IDs by mapping to proper vehicle_id
@@ -150,12 +195,9 @@ try {
         }
         
         // Validate vehicle ID
-        if (empty($vehicleId)) {
-            echo json_encode([
-                'status' => 'error',
-                'message' => 'Vehicle ID is required'
-            ]);
-            exit;
+        if (empty($vehicleId) || $vehicleId === 'undefined' || $vehicleId === 'null') {
+            $vehicleId = 'sedan'; // Default fallback
+            logMessage("Empty or invalid vehicle ID - using default: sedan");
         }
         
         // Final check to reject any numeric IDs that slipped through
@@ -167,6 +209,10 @@ try {
             ]);
             exit;
         }
+        
+        // Normalize vehicle ID to lowercase to prevent duplicates with different case
+        $vehicleId = strtolower($vehicleId);
+        logMessage("Normalized vehicle ID to lowercase: $vehicleId");
         
         // Get fare values with fallbacks for different field naming styles
         $price4hrs40km = isset($_POST['price4hr40km']) ? floatval($_POST['price4hr40km']) : 
@@ -221,20 +267,35 @@ try {
             $vehicleExists = $checkVehicleStmt->fetch(PDO::FETCH_ASSOC);
             
             if (!$vehicleExists) {
-                // Vehicle doesn't exist, create it
-                $vehicleName = ucfirst(str_replace(['_', '-'], ' ', $vehicleId));
+                // Try a case-insensitive search before creating a new vehicle
+                $checkCaseInsensitiveQuery = "SELECT id, vehicle_id FROM vehicles WHERE LOWER(vehicle_id) = LOWER(?)";
+                $checkCaseStmt = $conn->prepare($checkCaseInsensitiveQuery);
+                $checkCaseStmt->execute([$vehicleId]);
+                $caseResult = $checkCaseStmt->fetch(PDO::FETCH_ASSOC);
                 
-                $insertVehicleQuery = "
-                    INSERT INTO vehicles (id, vehicle_id, name, is_active, created_at, updated_at)
-                    VALUES (?, ?, ?, 1, NOW(), NOW())
-                ";
-                
-                $insertVehicleStmt = $conn->prepare($insertVehicleQuery);
-                $insertVehicleStmt->execute([$vehicleId, $vehicleId, $vehicleName]);
-                
-                logMessage("Created new vehicle: " . $vehicleId);
+                if ($caseResult) {
+                    // Found a vehicle with case-insensitive match
+                    $vehicleExists = $caseResult;
+                    $vehicleId = $caseResult['vehicle_id']; // Use the existing case
+                    logMessage("Found vehicle with case-insensitive match. Using: " . $vehicleId);
+                } else {
+                    // Vehicle doesn't exist, create it
+                    $vehicleName = ucfirst(str_replace(['_', '-'], ' ', $vehicleId));
+                    
+                    $insertVehicleQuery = "
+                        INSERT INTO vehicles (vehicle_id, name, is_active, created_at, updated_at)
+                        VALUES (?, ?, 1, NOW(), NOW())
+                    ";
+                    
+                    $insertVehicleStmt = $conn->prepare($insertVehicleQuery);
+                    $insertVehicleStmt->execute([$vehicleId, $vehicleName]);
+                    
+                    logMessage("Created new vehicle: " . $vehicleId);
+                }
             } else {
-                logMessage("Vehicle exists: " . print_r($vehicleExists, true));
+                logMessage("Vehicle exists: " . json_encode($vehicleExists));
+                // Use the exact vehicle_id from the database to maintain case consistency
+                $vehicleId = $vehicleExists['vehicle_id'];
             }
             
             // Check if local_package_fares table exists
@@ -269,6 +330,21 @@ try {
             $checkFareStmt = $conn->prepare($checkFareQuery);
             $checkFareStmt->execute([$vehicleId]);
             $fareExists = $checkFareStmt->fetch(PDO::FETCH_ASSOC);
+            
+            if (!$fareExists) {
+                // Try case-insensitive search
+                $checkCaseQuery = "SELECT id, vehicle_id FROM local_package_fares WHERE LOWER(vehicle_id) = LOWER(?)";
+                $checkCaseStmt = $conn->prepare($checkCaseQuery);
+                $checkCaseStmt->execute([$vehicleId]);
+                $caseFareExists = $checkCaseStmt->fetch(PDO::FETCH_ASSOC);
+                
+                if ($caseFareExists) {
+                    $fareExists = $caseFareExists;
+                    // Use existing vehicle_id from fare record for consistency
+                    $vehicleId = $caseFareExists['vehicle_id'];
+                    logMessage("Found fare with case-insensitive match. Using: " . $vehicleId);
+                }
+            }
             
             if ($fareExists) {
                 // Update existing record

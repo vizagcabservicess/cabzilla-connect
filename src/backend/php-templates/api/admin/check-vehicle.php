@@ -43,14 +43,22 @@ function getDbConnection() {
     }
 }
 
-// CRITICAL POLICY: Never allow pure numeric IDs - they must be mapped to proper vehicle_ids
+// ENHANCED: More comprehensive ID mapping with all known numeric IDs and additional common IDs
 $knownMappings = [
     '1' => 'sedan',
     '2' => 'ertiga',
+    '3' => 'innova',
+    '4' => 'crysta',
+    '5' => 'tempo',
+    '6' => 'bus',
+    '7' => 'van',
+    '8' => 'suv',
+    '9' => 'traveller',
+    '10' => 'luxury',
     '180' => 'etios',
-    '1266' => 'MPV',
-    '592' => 'Urbania',
-    '1270' => 'MPV',
+    '592' => 'urbania',
+    '1266' => 'mpv',
+    '1270' => 'mpv',
     '1271' => 'etios',
     '1272' => 'etios',
     '1273' => 'etios',
@@ -61,12 +69,32 @@ $knownMappings = [
     '1278' => 'etios',
     '1279' => 'etios',
     '1280' => 'etios',
+    '1281' => 'mpv',
+    '1282' => 'sedan',
+    '1283' => 'sedan',
+    '1284' => 'etios',
+    '1285' => 'etios',
+    '1286' => 'etios',
+    '1287' => 'etios',
+    '1288' => 'etios',
+    '1289' => 'etios',
+    '1290' => 'etios',
     '100' => 'sedan',
     '101' => 'sedan',
     '102' => 'sedan',
     '103' => 'sedan',
     '200' => 'ertiga',
-    '201' => 'ertiga'
+    '201' => 'ertiga',
+    '202' => 'ertiga',
+    '300' => 'innova',
+    '301' => 'innova',
+    '302' => 'innova',
+    '400' => 'crysta',
+    '401' => 'crysta',
+    '402' => 'crysta',
+    '500' => 'tempo',
+    '501' => 'tempo',
+    '502' => 'tempo'
 ];
 
 // Extract vehicle ID from request
@@ -87,6 +115,14 @@ error_log("[$timestamp] Original vehicle ID: $originalId", 3, $logDir . '/check-
 if (strpos($vehicleId, 'item-') === 0) {
     $vehicleId = substr($vehicleId, 5);
     error_log("[$timestamp] Removed 'item-' prefix: $vehicleId", 3, $logDir . '/check-vehicle.log');
+}
+
+// ENHANCED: Check for comma-separated lists and extract first ID
+if (strpos($vehicleId, ',') !== false) {
+    $idParts = explode(',', $vehicleId);
+    $oldId = $vehicleId;
+    $vehicleId = trim($idParts[0]);
+    error_log("[$timestamp] Found comma-separated list, using first ID: $vehicleId", 3, $logDir . '/check-vehicle.log');
 }
 
 // CRITICAL: Numeric ID detection and rejection/mapping
@@ -123,6 +159,10 @@ if (empty($vehicleId)) {
     ]);
     exit;
 }
+
+// Normalize vehicle ID (convert to lowercase)
+$vehicleId = strtolower($vehicleId);
+error_log("[$timestamp] Normalized vehicle ID to lowercase: $vehicleId", 3, $logDir . '/check-vehicle.log');
 
 // FINAL CHECK: Make sure we don't have a numeric ID at this point
 if (is_numeric($vehicleId)) {

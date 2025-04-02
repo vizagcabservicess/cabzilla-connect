@@ -77,6 +77,12 @@ RewriteRule ^direct-airport-fares\.php$ admin/direct-airport-fares.php [L,QSA]
 RewriteRule ^admin/direct-airport-fares$ admin/direct-airport-fares.php [L,QSA]
 RewriteRule ^admin/direct-airport-fares\.php$ admin/direct-airport-fares.php [L,QSA]
 
+# Check vehicle endpoint
+RewriteRule ^check-vehicle$ admin/check-vehicle.php [L,QSA]
+RewriteRule ^check-vehicle\.php$ admin/check-vehicle.php [L,QSA]
+RewriteRule ^admin/check-vehicle$ admin/check-vehicle.php [L,QSA]
+RewriteRule ^admin/check-vehicle\.php$ admin/check-vehicle.php [L,QSA]
+
 # Vehicle data endpoint accessibility
 RewriteRule ^vehicles-data$ vehicles-data.php [L,QSA]
 RewriteRule ^vehicles-data\.php$ vehicles-data.php [L,QSA]
@@ -130,6 +136,10 @@ RewriteRule ^admin/direct-outstation-fares$ admin/direct-outstation-fares.php [L
 RewriteRule ^admin/direct-outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^direct-outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^admin/outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
+RewriteRule ^admin/outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
 
 # Other API endpoints can remain as they are
 RewriteRule ^status$ status.php [L,QSA]
