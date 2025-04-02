@@ -17,7 +17,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { safeIncludes } from "@/lib/safeStringUtils";
 
 interface VehicleCardProps {
   vehicle: CabType;
@@ -28,8 +27,6 @@ interface VehicleCardProps {
 export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
-  
-  console.log("Vehicle card rendering with data:", vehicle);
   
   // Ensure capacity and luggageCapacity are always parsed as numbers
   const capacity = typeof vehicle.capacity === 'string' 
@@ -46,37 +43,25 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
   if (Array.isArray(vehicle.amenities)) {
     // If amenities is already an array, use it directly
     amenities = vehicle.amenities.filter(Boolean);
-  } else if (vehicle.amenities !== undefined && vehicle.amenities !== null) {
-    if (typeof vehicle.amenities === 'string') {
-      // Safe string handling
-      const amenitiesString = vehicle.amenities;
-      if (amenitiesString && amenitiesString !== '') {
-        const parts = amenitiesString.split(',');
-        amenities = parts.map(a => typeof a === 'string' ? a.trim() : String(a)).filter(Boolean);
-      }
-    } else {
-      // Log unexpected format for debugging
-      console.log('Unexpected amenities format:', vehicle.amenities);
+  } else if (typeof vehicle.amenities === 'string') {
+    // If amenities is a string, split it only if it's not empty
+    const amenitiesString = vehicle.amenities as string; // Explicit type assertion
+    if (amenitiesString.trim() !== '') {
+      amenities = amenitiesString.split(',').map(a => a.trim()).filter(Boolean);
     }
+  } else {
+    // If amenities is undefined, null, or some other type, keep the default ['AC']
+    console.log('Unexpected amenities format:', vehicle.amenities);
   }
   
   // Ensure all price values are presented as numbers
-  const basePrice = typeof vehicle.basePrice === 'string' 
-    ? parseFloat(vehicle.basePrice) 
-    : typeof vehicle.price === 'string'
-      ? parseFloat(vehicle.price)
-      : Number(vehicle.basePrice || vehicle.price || 0);
+  const basePrice = typeof vehicle.price === 'string' 
+    ? parseFloat(vehicle.price) 
+    : Number(vehicle.price || vehicle.basePrice || 0);
     
   const pricePerKm = typeof vehicle.pricePerKm === 'string' 
     ? parseFloat(vehicle.pricePerKm) 
     : Number(vehicle.pricePerKm || 0);
-  
-  console.log(`Vehicle ${vehicle.name} parsed values:`, { 
-    capacity, 
-    luggageCapacity, 
-    basePrice, 
-    pricePerKm 
-  });
   
   const handleDelete = async () => {
     try {

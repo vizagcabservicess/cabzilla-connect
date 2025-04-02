@@ -89,20 +89,7 @@ export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDial
       }
 
       // Create the vehicle
-      const response = await createVehicle(formData as CabType);
-      
-      // Fix: Extract the vehicle from response or use formData as fallback
-      const newVehicle: CabType = response.vehicle || {
-        ...formData,
-        id: formData.vehicleId || '',
-        name: formData.name || '',
-        capacity: Number(formData.capacity || 4),
-        luggageCapacity: Number(formData.luggageCapacity || 2),
-        image: formData.image || '',
-        amenities: formData.amenities || ['AC'],
-        description: formData.description || '',
-        ac: formData.ac !== false,
-      } as CabType;
+      const newVehicle = await createVehicle(formData as CabType);
       
       // Notify the parent component
       onAddVehicle(newVehicle);

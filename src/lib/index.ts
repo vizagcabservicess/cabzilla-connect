@@ -49,15 +49,15 @@ export {
   fareService
 } from '@/services/fareService';
 
-// Export vehicle service functions - remove the non-existent functions
+// Export vehicle service functions
 export { 
   createVehicle,
   updateVehicle,
-  deleteVehicle
+  deleteVehicle,
+  updateVehicleFares,
+  syncVehicleData,
+  getVehicleById
 } from '@/services/directVehicleService';
-
-// Export syncVehicleData from its own module
-export { syncVehicleData } from './syncVehicleData';
 
 // Export fare update service functions
 export {

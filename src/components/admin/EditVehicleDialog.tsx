@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -29,9 +28,7 @@ export function EditVehicleDialog({
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (initialVehicle && open) {
-      console.log("Dialog received initial vehicle data:", initialVehicle);
-      
+    if (initialVehicle) {
       // Convert string values to numbers to ensure consistency
       const numCapacity = typeof initialVehicle.capacity === 'string' 
         ? parseInt(initialVehicle.capacity, 10) 
@@ -43,9 +40,7 @@ export function EditVehicleDialog({
         
       const numBasePrice = typeof initialVehicle.basePrice === 'string'
         ? parseFloat(initialVehicle.basePrice)
-        : typeof initialVehicle.price === 'string'
-          ? parseFloat(initialVehicle.price)
-          : Number(initialVehicle.basePrice || initialVehicle.price || 0);
+        : Number(initialVehicle.basePrice || initialVehicle.price || 0);
         
       const numPricePerKm = typeof initialVehicle.pricePerKm === 'string'
         ? parseFloat(initialVehicle.pricePerKm)
@@ -58,31 +53,11 @@ export function EditVehicleDialog({
       const numNightHaltCharge = typeof initialVehicle.nightHaltCharge === 'string'
         ? parseFloat(initialVehicle.nightHaltCharge)
         : Number(initialVehicle.nightHaltCharge || 700);
-
-      let processedAmenities: string[] = ['AC'];
       
-      if (Array.isArray(initialVehicle.amenities)) {
-        processedAmenities = initialVehicle.amenities.filter(Boolean);
-      } else if (initialVehicle.amenities !== undefined && initialVehicle.amenities !== null) {
-        if (typeof initialVehicle.amenities === 'string') {
-          // Safe string handling
-          if (initialVehicle.amenities !== '') {
-            const parts = initialVehicle.amenities.split(',');
-            processedAmenities = parts
-              .map(a => typeof a === 'string' ? a.trim() : String(a))
-              .filter(Boolean);
-          }
-        }
-      }
-      
-      console.log('Parsed numeric values for dialog:');
-      console.log('- capacity:', initialVehicle.capacity, '→', numCapacity);
-      console.log('- luggage capacity:', initialVehicle.luggageCapacity, '→', numLuggageCapacity);
-      console.log('- base price:', initialVehicle.basePrice || initialVehicle.price, '→', numBasePrice);
-      console.log('- price per km:', initialVehicle.pricePerKm, '→', numPricePerKm);
-      console.log('- driver allowance:', initialVehicle.driverAllowance, '→', numDriverAllowance);
-      console.log('- night halt charge:', initialVehicle.nightHaltCharge, '→', numNightHaltCharge);
-      console.log('- amenities:', initialVehicle.amenities, '→', processedAmenities);
+      console.log('Initial vehicle capacity:', initialVehicle.capacity, 'parsed as:', numCapacity);
+      console.log('Initial luggage capacity:', initialVehicle.luggageCapacity, 'parsed as:', numLuggageCapacity);
+      console.log('Initial base price:', initialVehicle.basePrice, 'parsed as:', numBasePrice);
+      console.log('Initial price per km:', initialVehicle.pricePerKm, 'parsed as:', numPricePerKm);
       
       setVehicle({
         ...initialVehicle,
@@ -92,18 +67,15 @@ export function EditVehicleDialog({
         price: numBasePrice, // sync price and basePrice
         pricePerKm: numPricePerKm,
         driverAllowance: numDriverAllowance,
-        nightHaltCharge: numNightHaltCharge,
-        amenities: processedAmenities
+        nightHaltCharge: numNightHaltCharge
       });
     }
-  }, [initialVehicle, open]);
+  }, [initialVehicle]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     try {
-      console.log("Submitting vehicle update with data:", vehicle);
-      
       // Ensure all numeric fields are numbers before submitting
       const updatedVehicle: CabType = {
         ...vehicle,
@@ -116,13 +88,15 @@ export function EditVehicleDialog({
         driverAllowance: Number(vehicle.driverAllowance || 250)
       };
       
-      console.log("Sending vehicle update with processed data:", updatedVehicle);
+      console.log("Original capacity value:", vehicle.capacity, "converted to:", updatedVehicle.capacity);
+      console.log("Original luggage capacity value:", vehicle.luggageCapacity, "converted to:", updatedVehicle.luggageCapacity);
+      console.log("Original base price:", vehicle.basePrice, "converted to:", updatedVehicle.basePrice);
+      console.log("Original price per km:", vehicle.pricePerKm, "converted to:", updatedVehicle.pricePerKm);
+      console.log("Submitting vehicle update with data:", updatedVehicle);
       
-      const response = await updateVehicle(updatedVehicle);
-      console.log("Vehicle update response:", response);
-      
+      await updateVehicle(updatedVehicle);
       toast.success(`Vehicle ${vehicle.name} updated successfully`);
-      onEditVehicle(updatedVehicle); // Pass the updated vehicle to the parent component
+      onEditVehicle(updatedVehicle);
       onClose();
     } catch (error: any) {
       console.error("Error updating vehicle:", error);
@@ -182,7 +156,6 @@ export function EditVehicleDialog({
                   });
                 }}
               />
-              <p className="text-xs text-muted-foreground">Current value: {vehicle.capacity || 4}</p>
             </div>
             
             <div className="space-y-2">
@@ -201,7 +174,6 @@ export function EditVehicleDialog({
                   });
                 }}
               />
-              <p className="text-xs text-muted-foreground">Current value: {vehicle.luggageCapacity || 2}</p>
             </div>
           </div>
           
@@ -224,7 +196,6 @@ export function EditVehicleDialog({
                   });
                 }}
               />
-              <p className="text-xs text-muted-foreground">Current value: ₹{vehicle.basePrice || 0}</p>
             </div>
             
             <div className="space-y-2">
@@ -244,7 +215,6 @@ export function EditVehicleDialog({
                   });
                 }}
               />
-              <p className="text-xs text-muted-foreground">Current value: ₹{vehicle.pricePerKm || 0}</p>
             </div>
           </div>
           
@@ -319,7 +289,7 @@ export function EditVehicleDialog({
                 <div key={amenity} className="flex items-center space-x-2">
                   <Checkbox
                     id={`amenity-${amenity}`}
-                    checked={Array.isArray(vehicle.amenities) && vehicle.amenities.includes(amenity)}
+                    checked={vehicle.amenities?.includes(amenity) || false}
                     onCheckedChange={(checked) => {
                       const currentAmenities = Array.isArray(vehicle.amenities) 
                         ? [...vehicle.amenities] 
