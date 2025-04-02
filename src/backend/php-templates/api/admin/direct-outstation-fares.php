@@ -67,13 +67,16 @@ $numericIdMapExtended = [
     '1278' => 'etios',
     '1279' => 'etios',
     '1280' => 'etios',
+    // Special cases observed in logs
     '100' => 'sedan',
     '101' => 'sedan',
     '102' => 'sedan',
     '200' => 'ertiga',
     '201' => 'ertiga',
+    // Additional mappings for problematic IDs reported by user
     '1281' => 'MPV',
-    '1282' => 'sedan'
+    '1282' => 'sedan',
+    '1,1266,180' => 'sedan', // Handle comma-separated IDs as well
 ];
 
 try {
@@ -82,7 +85,8 @@ try {
     
     // Handle GET request to retrieve outstation fares
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-        // Get all vehicles with their outstation fares
+        // IMPORTANT CHANGE: Get all vehicles with left join to outstation_fares
+        // This ensures we display ALL vehicles with or without fares
         $query = "
             SELECT v.id, v.vehicle_id, v.name, of.* 
             FROM vehicles v
@@ -113,6 +117,7 @@ try {
             ];
         }
         
+        // Convert to array and return for consistency with other endpoints
         echo json_encode([
             'status' => 'success',
             'fares' => array_values($fares), // Return as array instead of object
@@ -137,16 +142,16 @@ try {
         }
         
         // Handle numeric IDs by mapping to proper vehicle_id
-        if (is_numeric($vehicleId)) {
+        if (is_numeric($vehicleId) || strpos($vehicleId, ',') !== false) {
             if (isset($numericIdMapExtended[$vehicleId])) {
                 $originalId = $vehicleId;
                 $vehicleId = $numericIdMapExtended[$vehicleId];
-                logMessage("Mapped numeric ID $originalId to vehicle_id: $vehicleId");
+                logMessage("Mapped numeric/list ID $originalId to vehicle_id: $vehicleId");
             } else {
-                logMessage("REJECTED: Unmapped numeric ID not allowed: " . $vehicleId);
+                logMessage("REJECTED: Unmapped numeric/list ID not allowed: " . $vehicleId);
                 echo json_encode([
                     'status' => 'error',
-                    'message' => "Cannot use numeric ID '$vehicleId'. Please use proper vehicle_id like 'sedan', 'ertiga', etc."
+                    'message' => "Cannot use ID '$vehicleId'. Please use proper vehicle_id like 'sedan', 'ertiga', etc."
                 ]);
                 exit;
             }
@@ -162,11 +167,11 @@ try {
         }
         
         // Final check to reject any numeric IDs that slipped through
-        if (is_numeric($vehicleId)) {
-            logMessage("FINAL REJECTION: ID is still numeric after processing: " . $vehicleId);
+        if (is_numeric($vehicleId) || strpos($vehicleId, ',') !== false) {
+            logMessage("FINAL REJECTION: ID is still numeric/list after processing: " . $vehicleId);
             echo json_encode([
                 'status' => 'error', 
-                'message' => "Cannot use numeric ID '$vehicleId'. Please use proper vehicle_id."
+                'message' => "Cannot use ID '$vehicleId'. Please use proper vehicle_id."
             ]);
             exit;
         }
@@ -322,12 +327,10 @@ try {
                     // Update existing record
                     $updatePricingQuery = "
                         UPDATE vehicle_pricing
-                        SET base_price = ?,
+                        SET base_fare = ?,
                             price_per_km = ?,
                             night_halt_charge = ?,
                             driver_allowance = ?,
-                            roundtrip_base_price = ?,
-                            roundtrip_price_per_km = ?,
                             updated_at = NOW()
                         WHERE vehicle_id = ? AND trip_type = 'outstation'
                     ";
@@ -338,8 +341,6 @@ try {
                         $pricePerKm,
                         $nightHaltCharge,
                         $driverAllowance,
-                        $roundTripBasePrice,
-                        $roundTripPricePerKm,
                         $vehicleId
                     ]);
                 } else {
@@ -348,15 +349,13 @@ try {
                         INSERT INTO vehicle_pricing (
                             vehicle_id,
                             trip_type,
-                            base_price,
+                            base_fare,
                             price_per_km, 
                             night_halt_charge,
                             driver_allowance,
-                            roundtrip_base_price,
-                            roundtrip_price_per_km,
                             created_at,
                             updated_at
-                        ) VALUES (?, 'outstation', ?, ?, ?, ?, ?, ?, NOW(), NOW())
+                        ) VALUES (?, 'outstation', ?, ?, ?, ?, NOW(), NOW())
                     ";
                     
                     $insertPricingStmt = $conn->prepare($insertPricingQuery);
@@ -365,9 +364,7 @@ try {
                         $basePrice,
                         $pricePerKm,
                         $nightHaltCharge,
-                        $driverAllowance,
-                        $roundTripBasePrice,
-                        $roundTripPricePerKm
+                        $driverAllowance
                     ]);
                 }
                 

@@ -6,8 +6,8 @@
  */
 // Direct DB connection - not using config to avoid potential connection issues
 $host = 'localhost';
-$dbname = 'u644605165_new_bookingdb';
-$username = 'u644605165_new_bookingusr';
+$dbname = 'u644605165_db_be';
+$username = 'u644605165_usr_be';
 $password = 'Vizag@1213';
 
 // Set headers for CORS
@@ -68,11 +68,11 @@ try {
             CREATE TABLE IF NOT EXISTS `local_package_fares` (
                 `id` int(11) NOT NULL AUTO_INCREMENT,
                 `vehicle_id` varchar(50) NOT NULL,
-                `price_4hrs_40km` decimal(10,2) NOT NULL DEFAULT 0,
-                `price_8hrs_80km` decimal(10,2) NOT NULL DEFAULT 0,
-                `price_10hrs_100km` decimal(10,2) NOT NULL DEFAULT 0,
-                `price_extra_km` decimal(5,2) NOT NULL DEFAULT 0,
-                `price_extra_hour` decimal(5,2) NOT NULL DEFAULT 0,
+                `price_4hr_40km` decimal(10,2) NOT NULL DEFAULT 0,
+                `price_8hr_80km` decimal(10,2) NOT NULL DEFAULT 0,
+                `price_10hr_100km` decimal(10,2) NOT NULL DEFAULT 0,
+                `extra_km_rate` decimal(5,2) NOT NULL DEFAULT 0,
+                `extra_hour_rate` decimal(5,2) NOT NULL DEFAULT 0,
                 `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 PRIMARY KEY (`id`),
@@ -114,6 +114,50 @@ try {
         error_log("[$timestamp] Created vehicle_pricing table", 3, $logDir . '/sync-local-fares.log');
     }
     
+    // Get column names for the local_package_fares table - this helps deal with column name variations
+    $columnQuery = "SHOW COLUMNS FROM local_package_fares";
+    $columnResult = $conn->query($columnQuery);
+    $localColumns = [];
+    
+    while ($column = $columnResult->fetch_assoc()) {
+        $localColumns[] = $column['Field'];
+    }
+    
+    error_log("[$timestamp] Local package fares columns: " . implode(", ", $localColumns), 3, $logDir . '/sync-local-fares.log');
+    
+    // Map local_package_fares column names to their alternatives
+    $columnMappings = [
+        'price_4hr_40km' => ['price_4hrs_40km', 'price_4hr_40km', 'package_4hr'],
+        'price_8hr_80km' => ['price_8hrs_80km', 'price_8hr_80km', 'package_8hr'],
+        'price_10hr_100km' => ['price_10hrs_100km', 'price_10hr_100km', 'package_10hr'],
+        'extra_km_rate' => ['extra_km_rate', 'price_extra_km', 'extra_km_charge'],
+        'extra_hour_rate' => ['extra_hour_rate', 'price_extra_hour', 'extra_hour_charge']
+    ];
+    
+    // Match actual column names with preferred names
+    $actualColumns = [
+        'price_4hr' => null,
+        'price_8hr' => null,
+        'price_10hr' => null,
+        'extra_km' => null,
+        'extra_hour' => null
+    ];
+    
+    foreach ($columnMappings as $targetColumn => $alternatives) {
+        if (in_array($targetColumn, $localColumns)) {
+            $actualColumns[$targetColumn] = $targetColumn;
+        } else {
+            // If preferred column name doesn't exist, find an alternative
+            foreach ($alternatives as $alt) {
+                if (in_array($alt, $localColumns)) {
+                    $actualColumns[$targetColumn] = $alt;
+                    error_log("[$timestamp] Using alternative column $alt for $targetColumn", 3, $logDir . '/sync-local-fares.log');
+                    break;
+                }
+            }
+        }
+    }
+    
     // Begin transaction
     $conn->begin_transaction();
     
@@ -134,11 +178,54 @@ try {
                 $vehicleId = $fare['vehicle_id'];
                 $syncedIds[$vehicleId] = true;
                 
-                $price4hrs40km = $fare['price_4hrs_40km'];
-                $price8hrs80km = $fare['price_8hrs_80km'];
-                $price10hrs100km = $fare['price_10hrs_100km'];
-                $priceExtraKm = $fare['price_extra_km'];
-                $priceExtraHour = $fare['price_extra_hour'];
+                // Use column mapping to get values regardless of column names
+                $price4hr = 0;
+                $price8hr = 0;
+                $price10hr = 0;
+                $extraKm = 0;
+                $extraHour = 0;
+                
+                // Determine which field name to use for each value
+                foreach ($columnMappings as $standardField => $possibleFields) {
+                    foreach ($possibleFields as $field) {
+                        if (isset($fare[$field])) {
+                            switch ($standardField) {
+                                case 'price_4hr_40km':
+                                    $price4hr = $fare[$field];
+                                    break;
+                                case 'price_8hr_80km':
+                                    $price8hr = $fare[$field];
+                                    break;
+                                case 'price_10hr_100km':
+                                    $price10hr = $fare[$field];
+                                    break;
+                                case 'extra_km_rate':
+                                    $extraKm = $fare[$field];
+                                    break;
+                                case 'extra_hour_rate':
+                                    $extraHour = $fare[$field];
+                                    break;
+                            }
+                        }
+                    }
+                }
+                
+                // Alternative direct approach if the mapping doesn't work
+                if ($price4hr == 0 && isset($fare['price_4hr_40km'])) {
+                    $price4hr = $fare['price_4hr_40km'];
+                }
+                if ($price8hr == 0 && isset($fare['price_8hr_80km'])) {
+                    $price8hr = $fare['price_8hr_80km'];
+                }
+                if ($price10hr == 0 && isset($fare['price_10hr_100km'])) {
+                    $price10hr = $fare['price_10hr_100km'];
+                }
+                if ($extraKm == 0 && isset($fare['extra_km_rate'])) {
+                    $extraKm = $fare['extra_km_rate'];
+                }
+                if ($extraHour == 0 && isset($fare['extra_hour_rate'])) {
+                    $extraHour = $fare['extra_hour_rate'];
+                }
                 
                 // Check if record exists in vehicle_pricing - using vehicle_id column
                 $checkSql = "SELECT * FROM vehicle_pricing WHERE vehicle_id = ? AND trip_type = 'local'";
@@ -172,7 +259,7 @@ try {
                                     updated_at = CURRENT_TIMESTAMP
                                 WHERE vehicle_id = ? AND trip_type = 'local'";
                     $updateStmt = $conn->prepare($updateSql);
-                    $updateStmt->bind_param("ddddds", $price4hrs40km, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour, $vehicleId);
+                    $updateStmt->bind_param("ddddds", $price4hr, $price8hr, $price10hr, $extraKm, $extraHour, $vehicleId);
                     $updateStmt->execute();
                     $syncResults['localToVehiclePricing']++;
                 } else {
@@ -182,8 +269,8 @@ try {
                                 extra_km_charge, extra_hour_charge, base_fare, price_per_km, night_halt_charge, driver_allowance) 
                                 VALUES (?, 'local', ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                     $insertStmt = $conn->prepare($insertSql);
-                    $insertStmt->bind_param("sddddddddd", $vehicleId, $price4hrs40km, $price8hrs80km, $price10hrs100km, 
-                                          $priceExtraKm, $priceExtraHour, $baseFare, $pricePerKm, $nightHaltCharge, $driverAllowance);
+                    $insertStmt->bind_param("sddddddddd", $vehicleId, $price4hr, $price8hr, $price10hr, 
+                                          $extraKm, $extraHour, $baseFare, $pricePerKm, $nightHaltCharge, $driverAllowance);
                     $insertStmt->execute();
                     $syncResults['localToVehiclePricing']++;
                 }
@@ -212,11 +299,11 @@ try {
                 $syncedIds[$vehicleId] = true;
                 
                 // Get the values from vehicle_pricing
-                $price4hrs40km = $pricing['local_package_4hr'] ?? 0;
-                $price8hrs80km = $pricing['local_package_8hr'] ?? 0;
-                $price10hrs100km = $pricing['local_package_10hr'] ?? 0;
-                $priceExtraKm = $pricing['extra_km_charge'] ?? 0;
-                $priceExtraHour = $pricing['extra_hour_charge'] ?? 0;
+                $price4hr = $pricing['local_package_4hr'] ?? 0;
+                $price8hr = $pricing['local_package_8hr'] ?? 0;
+                $price10hr = $pricing['local_package_10hr'] ?? 0;
+                $extraKm = $pricing['extra_km_charge'] ?? 0;
+                $extraHour = $pricing['extra_hour_charge'] ?? 0;
                 
                 // Check if record exists in local_package_fares
                 $checkStmt = $conn->prepare("SELECT * FROM local_package_fares WHERE vehicle_id = ?");
@@ -228,22 +315,22 @@ try {
                 if ($lpfExists) {
                     // Update existing record
                     $updateStmt = $conn->prepare("UPDATE local_package_fares 
-                                            SET price_4hrs_40km = ?, 
-                                                price_8hrs_80km = ?, 
-                                                price_10hrs_100km = ?, 
-                                                price_extra_km = ?, 
-                                                price_extra_hour = ?,
+                                            SET price_4hr_40km = ?, 
+                                                price_8hr_80km = ?, 
+                                                price_10hr_100km = ?, 
+                                                extra_km_rate = ?, 
+                                                extra_hour_rate = ?,
                                                 updated_at = CURRENT_TIMESTAMP
                                             WHERE vehicle_id = ?");
-                    $updateStmt->bind_param("ddddds", $price4hrs40km, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour, $vehicleId);
+                    $updateStmt->bind_param("ddddds", $price4hr, $price8hr, $price10hr, $extraKm, $extraHour, $vehicleId);
                     $updateStmt->execute();
                 } else {
                     // Insert new record - no vehicle_type column in table
                     $insertStmt = $conn->prepare("INSERT INTO local_package_fares 
-                                            (vehicle_id, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, 
-                                            price_extra_km, price_extra_hour)
+                                            (vehicle_id, price_4hr_40km, price_8hr_80km, price_10hr_100km, 
+                                            extra_km_rate, extra_hour_rate)
                                             VALUES (?, ?, ?, ?, ?, ?)");
-                    $insertStmt->bind_param("sddddd", $vehicleId, $price4hrs40km, $price8hrs80km, $price10hrs100km, $priceExtraKm, $priceExtraHour);
+                    $insertStmt->bind_param("sddddd", $vehicleId, $price4hr, $price8hr, $price10hr, $extraKm, $extraHour);
                     $insertStmt->execute();
                 }
                 

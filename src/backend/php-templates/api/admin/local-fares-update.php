@@ -106,26 +106,28 @@ $knownMappings = [
     // Additional mappings for problematic IDs reported by user
     '1281' => 'MPV',
     '1282' => 'sedan',
+    '1,1266,180' => 'sedan', // Handle comma-separated IDs
 ];
 
 // Log the original and cleaned vehicleId
 error_log("[$timestamp] Original vehicle ID: $originalVehicleId, Cleaned: $vehicleId", 3, $logDir . '/local-fares.log');
 
 // CRITICAL CHECK: If this is ANY numeric ID, we MUST map it or reject it completely
-if (is_numeric($vehicleId)) {
+// Also handle comma-separated lists which could be slipping through
+if (is_numeric($vehicleId) || strpos($vehicleId, ',') !== false) {
     // If in mappings, use proper vehicle_id
     if (isset($knownMappings[$vehicleId])) {
         $numericId = $vehicleId;
         $vehicleId = $knownMappings[$vehicleId];
-        error_log("[$timestamp] Mapped numeric ID $numericId to vehicle_id: $vehicleId", 3, $logDir . '/local-fares.log');
+        error_log("[$timestamp] Mapped numeric/list ID $numericId to vehicle_id: $vehicleId", 3, $logDir . '/local-fares.log');
     }
     // If not in mappings, ALWAYS reject numeric IDs completely
     else {
-        error_log("[$timestamp] REJECTED unmapped numeric ID: $vehicleId - will not allow this to create a duplicate", 3, $logDir . '/local-fares.log');
+        error_log("[$timestamp] REJECTED unmapped numeric/list ID: $vehicleId - will not allow this to create a duplicate", 3, $logDir . '/local-fares.log');
         http_response_code(400);
         echo json_encode([
             'status' => 'error',
-            'message' => "Cannot use numeric ID '$vehicleId'. Please use proper vehicle_id like 'sedan', 'ertiga', 'etios', etc.",
+            'message' => "Cannot use ID '$vehicleId'. Please use proper vehicle_id like 'sedan', 'ertiga', 'etios', etc.",
             'isNumericId' => true,
             'originalId' => $originalVehicleId
         ]);
@@ -146,12 +148,12 @@ if (empty($vehicleId) || $vehicleId === 'undefined') {
 }
 
 // SECOND CHECK: Make sure we don't have any numeric ID at this point
-if (is_numeric($vehicleId)) {
-    error_log("[$timestamp] CRITICAL: Still have numeric ID after processing: $vehicleId", 3, $logDir . '/local-fares.log');
+if (is_numeric($vehicleId) || strpos($vehicleId, ',') !== false) {
+    error_log("[$timestamp] CRITICAL: Still have numeric/list ID after processing: $vehicleId", 3, $logDir . '/local-fares.log');
     http_response_code(400);
     echo json_encode([
         'status' => 'error',
-        'message' => "Cannot use numeric ID '$vehicleId'. Only string-based vehicle IDs are allowed.",
+        'message' => "Cannot use ID '$vehicleId'. Only string-based vehicle IDs are allowed.",
         'isNumericId' => true,
         'originalId' => $originalVehicleId
     ]);
