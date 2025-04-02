@@ -29,18 +29,29 @@ export function EditVehicleDialog({
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    // Ensure we start with numeric values for capacity and luggage capacity
-    const numCapacity = Number(initialVehicle.capacity || 4);
-    const numLuggageCapacity = Number(initialVehicle.luggageCapacity || 2);
-    
-    console.log('Initial vehicle capacity:', initialVehicle.capacity, 'parsed as:', numCapacity);
-    console.log('Initial luggage capacity:', initialVehicle.luggageCapacity, 'parsed as:', numLuggageCapacity);
-    
-    setVehicle({
-      ...initialVehicle,
-      capacity: numCapacity,
-      luggageCapacity: numLuggageCapacity
-    });
+    if (initialVehicle) {
+      // Convert string values to numbers to ensure consistency
+      const numCapacity = Number(initialVehicle.capacity || 4);
+      const numLuggageCapacity = Number(initialVehicle.luggageCapacity || 2);
+      const numBasePrice = Number(initialVehicle.basePrice || initialVehicle.price || 0);
+      const numPricePerKm = Number(initialVehicle.pricePerKm || 0);
+      const numDriverAllowance = Number(initialVehicle.driverAllowance || 250);
+      const numNightHaltCharge = Number(initialVehicle.nightHaltCharge || 700);
+      
+      console.log('Initial vehicle capacity:', initialVehicle.capacity, 'parsed as:', numCapacity);
+      console.log('Initial luggage capacity:', initialVehicle.luggageCapacity, 'parsed as:', numLuggageCapacity);
+      
+      setVehicle({
+        ...initialVehicle,
+        capacity: numCapacity,
+        luggageCapacity: numLuggageCapacity,
+        basePrice: numBasePrice,
+        price: numBasePrice, // sync price and basePrice
+        pricePerKm: numPricePerKm,
+        driverAllowance: numDriverAllowance,
+        nightHaltCharge: numNightHaltCharge
+      });
+    }
   }, [initialVehicle]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -48,16 +59,19 @@ export function EditVehicleDialog({
     setIsLoading(true);
     try {
       // Ensure all numeric fields are numbers before submitting
-      const updatedVehicle = {
+      const updatedVehicle: CabType = {
         ...vehicle,
         capacity: Number(vehicle.capacity),
         luggageCapacity: Number(vehicle.luggageCapacity),
-        basePrice: Number(vehicle.basePrice),
-        pricePerKm: Number(vehicle.pricePerKm),
-        nightHaltCharge: Number(vehicle.nightHaltCharge),
-        driverAllowance: Number(vehicle.driverAllowance)
+        basePrice: Number(vehicle.basePrice || 0),
+        price: Number(vehicle.basePrice || 0), // sync price and basePrice
+        pricePerKm: Number(vehicle.pricePerKm || 0),
+        nightHaltCharge: Number(vehicle.nightHaltCharge || 700),
+        driverAllowance: Number(vehicle.driverAllowance || 250)
       };
       
+      console.log("Original capacity value:", vehicle.capacity, "converted to:", updatedVehicle.capacity);
+      console.log("Original luggage capacity value:", vehicle.luggageCapacity, "converted to:", updatedVehicle.luggageCapacity);
       console.log("Submitting vehicle update with data:", updatedVehicle);
       
       await updateVehicle(updatedVehicle);
@@ -114,10 +128,13 @@ export function EditVehicleDialog({
                 type="number"
                 min={1}
                 value={vehicle.capacity || 4}
-                onChange={(e) => setVehicle({ 
-                  ...vehicle, 
-                  capacity: parseInt(e.target.value, 10) || 4 
-                })}
+                onChange={(e) => {
+                  const value = parseInt(e.target.value, 10);
+                  setVehicle({ 
+                    ...vehicle, 
+                    capacity: isNaN(value) ? 4 : value 
+                  });
+                }}
               />
               <p className="text-xs text-muted-foreground">Current value: {vehicle.capacity}</p>
             </div>
@@ -130,10 +147,13 @@ export function EditVehicleDialog({
                 type="number"
                 min={0}
                 value={vehicle.luggageCapacity || 2}
-                onChange={(e) => setVehicle({ 
-                  ...vehicle, 
-                  luggageCapacity: parseInt(e.target.value, 10) || 2
-                })}
+                onChange={(e) => {
+                  const value = parseInt(e.target.value, 10);
+                  setVehicle({ 
+                    ...vehicle, 
+                    luggageCapacity: isNaN(value) ? 2 : value
+                  });
+                }}
               />
               <p className="text-xs text-muted-foreground">Current value: {vehicle.luggageCapacity}</p>
             </div>
@@ -148,13 +168,13 @@ export function EditVehicleDialog({
                 type="number"
                 min={0}
                 step={100}
-                value={vehicle.basePrice || vehicle.price || 0}
+                value={vehicle.basePrice || 0}
                 onChange={(e) => {
                   const basePrice = parseFloat(e.target.value) || 0;
                   setVehicle({ 
                     ...vehicle, 
                     basePrice: basePrice,
-                    price: basePrice
+                    price: basePrice  // Keep price synchronized
                   });
                 }}
               />
@@ -169,10 +189,13 @@ export function EditVehicleDialog({
                 min={0}
                 step={0.5}
                 value={vehicle.pricePerKm || 0}
-                onChange={(e) => setVehicle({ 
-                  ...vehicle, 
-                  pricePerKm: parseFloat(e.target.value) || 0 
-                })}
+                onChange={(e) => {
+                  const value = parseFloat(e.target.value);
+                  setVehicle({ 
+                    ...vehicle, 
+                    pricePerKm: isNaN(value) ? 0 : value 
+                  });
+                }}
               />
             </div>
           </div>
@@ -187,10 +210,13 @@ export function EditVehicleDialog({
                 min={0}
                 step={50}
                 value={vehicle.driverAllowance || 250}
-                onChange={(e) => setVehicle({ 
-                  ...vehicle, 
-                  driverAllowance: parseFloat(e.target.value) || 250 
-                })}
+                onChange={(e) => {
+                  const value = parseFloat(e.target.value);
+                  setVehicle({ 
+                    ...vehicle, 
+                    driverAllowance: isNaN(value) ? 250 : value 
+                  });
+                }}
               />
             </div>
             
@@ -203,10 +229,13 @@ export function EditVehicleDialog({
                 min={0}
                 step={50}
                 value={vehicle.nightHaltCharge || 700}
-                onChange={(e) => setVehicle({ 
-                  ...vehicle, 
-                  nightHaltCharge: parseFloat(e.target.value) || 700 
-                })}
+                onChange={(e) => {
+                  const value = parseFloat(e.target.value);
+                  setVehicle({ 
+                    ...vehicle, 
+                    nightHaltCharge: isNaN(value) ? 700 : value 
+                  });
+                }}
               />
             </div>
           </div>
@@ -244,10 +273,14 @@ export function EditVehicleDialog({
                     id={`amenity-${amenity}`}
                     checked={vehicle.amenities?.includes(amenity) || false}
                     onCheckedChange={(checked) => {
-                      const currentAmenities = vehicle.amenities || [];
+                      const currentAmenities = Array.isArray(vehicle.amenities) 
+                        ? [...vehicle.amenities] 
+                        : [];
+                      
                       const newAmenities = checked
                         ? [...currentAmenities, amenity]
                         : currentAmenities.filter((a) => a !== amenity);
+                      
                       setVehicle({ ...vehicle, amenities: newAmenities });
                     }}
                   />

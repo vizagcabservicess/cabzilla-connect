@@ -49,6 +49,10 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
     console.log('Unexpected amenities format:', vehicle.amenities);
   }
   
+  // Ensure all price values are presented as numbers
+  const basePrice = Number(vehicle.price || vehicle.basePrice || 0);
+  const pricePerKm = Number(vehicle.pricePerKm || 0);
+  
   const handleDelete = async () => {
     try {
       setIsDeleting(true);
@@ -106,8 +110,8 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
               </div>
               
               <div className="mb-4">
-                <p className="text-sm font-medium text-gray-700">Base Price: ₹{vehicle.price || vehicle.basePrice || 0}</p>
-                <p className="text-sm text-gray-700">Per KM: ₹{vehicle.pricePerKm || 0}</p>
+                <p className="text-sm font-medium text-gray-700">Base Price: ₹{basePrice}</p>
+                <p className="text-sm text-gray-700">Per KM: ₹{pricePerKm}</p>
               </div>
               
               {vehicle.description && (
