@@ -67,9 +67,9 @@ export function EditVehicleDialog({
         if (typeof initialVehicle.amenities === 'string') {
           // Safe string handling
           if (initialVehicle.amenities !== '') {
-            processedAmenities = initialVehicle.amenities
-              .split(',')
-              .map(a => typeof a === 'string' ? a.trim() : a)
+            const parts = initialVehicle.amenities.split(',');
+            processedAmenities = parts
+              .map(a => typeof a === 'string' ? a.trim() : String(a))
               .filter(Boolean);
           }
         }

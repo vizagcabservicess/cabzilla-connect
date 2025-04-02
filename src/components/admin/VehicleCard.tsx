@@ -51,7 +51,8 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
       // Safe string handling
       const amenitiesString = vehicle.amenities;
       if (amenitiesString && amenitiesString !== '') {
-        amenities = amenitiesString.split(',').map(a => typeof a === 'string' ? a.trim() : a).filter(Boolean);
+        const parts = amenitiesString.split(',');
+        amenities = parts.map(a => typeof a === 'string' ? a.trim() : String(a)).filter(Boolean);
       }
     } else {
       // Log unexpected format for debugging
