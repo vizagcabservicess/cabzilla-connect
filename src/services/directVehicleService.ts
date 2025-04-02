@@ -16,6 +16,21 @@ const normalizeVehicleId = (id: string): string => {
   return id.trim();
 };
 
+// Helper function to ensure numeric values are always sent as numbers
+const ensureNumericValues = (vehicle: CabType): CabType => {
+  return {
+    ...vehicle,
+    // Ensure these are always numbers
+    capacity: Number(vehicle.capacity || 4),
+    luggageCapacity: Number(vehicle.luggageCapacity || 2),
+    basePrice: Number(vehicle.basePrice || vehicle.price || 0),
+    price: Number(vehicle.price || vehicle.basePrice || 0),
+    pricePerKm: Number(vehicle.pricePerKm || 0),
+    nightHaltCharge: Number(vehicle.nightHaltCharge || 700),
+    driverAllowance: Number(vehicle.driverAllowance || 250),
+  };
+};
+
 /**
  * Create a new vehicle
  */
@@ -23,20 +38,18 @@ export const createVehicle = async (vehicle: CabType): Promise<CabType> => {
   try {
     console.log('Creating vehicle:', vehicle);
     
-    // Normalize vehicle ID before sending
+    // Normalize vehicle ID and ensure numeric values
     const normalizedVehicle = {
-      ...vehicle,
+      ...ensureNumericValues(vehicle),
       id: normalizeVehicleId(vehicle.id || vehicle.vehicleId || ''),
       vehicleId: normalizeVehicleId(vehicle.id || vehicle.vehicleId || ''),
-      // Ensure numeric values are sent as numbers
-      capacity: Number(vehicle.capacity || 4),
-      luggageCapacity: Number(vehicle.luggageCapacity || 2),
-      luggage_capacity: Number(vehicle.luggageCapacity || 2),
     };
     
     // Use FormData instead of JSON for better PHP compatibility
     const formData = new FormData();
     Object.entries(normalizedVehicle).forEach(([key, value]) => {
+      if (value === undefined || value === null) return; // Skip undefined values
+      
       if (typeof value === 'object' && value !== null) {
         formData.append(key, JSON.stringify(value));
       } else {
@@ -92,25 +105,16 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
   try {
     console.log('Updating vehicle:', vehicle);
     
-    // CRITICAL: Preserve isActive status, don't convert to default values
+    // CRITICAL: Preserve isActive status and numeric values correctly
     const isActive = typeof vehicle.isActive === 'boolean' ? vehicle.isActive : true;
     
-    // Normalize vehicle ID before sending
+    // Normalize vehicle ID before sending and ensure all numeric values are actually numbers
     const normalizedVehicle = {
-      ...vehicle,
+      ...ensureNumericValues(vehicle),
       id: normalizeVehicleId(vehicle.id || vehicle.vehicleId || ''),
       vehicleId: normalizeVehicleId(vehicle.id || vehicle.vehicleId || ''),
       isActive: isActive,
       is_active: isActive,
-      // Ensure numeric values are properly formatted as numbers
-      capacity: Number(vehicle.capacity || 4),
-      luggageCapacity: Number(vehicle.luggageCapacity || 2),
-      luggage_capacity: Number(vehicle.luggageCapacity || 2),
-      price: Number(vehicle.price || vehicle.basePrice || 0),
-      basePrice: Number(vehicle.basePrice || vehicle.price || 0),
-      pricePerKm: Number(vehicle.pricePerKm || 0),
-      nightHaltCharge: Number(vehicle.nightHaltCharge || 700),
-      driverAllowance: Number(vehicle.driverAllowance || 250),
     };
     
     console.log('Normalized vehicle before update:', normalizedVehicle);
@@ -135,6 +139,13 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
         return;
       }
       
+      // Handle price fields specially to ensure they're numbers
+      if (key === 'basePrice' || key === 'pricePerKm' || key === 'nightHaltCharge' || key === 'driverAllowance') {
+        const numVal = parseFloat(String(value));
+        formData.append(key, String(isNaN(numVal) ? 0 : numVal));
+        return;
+      }
+      
       // Handle objects (like amenities array)
       if (typeof value === 'object' && value !== null) {
         formData.append(key, JSON.stringify(value));
@@ -143,6 +154,10 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
         formData.append(key, String(value));
       }
     });
+    
+    // Add explicit numeric fields to ensure they're included
+    formData.append('capacity_numeric', String(Number(normalizedVehicle.capacity)));
+    formData.append('luggage_capacity_numeric', String(Number(normalizedVehicle.luggageCapacity)));
     
     // Log FormData contents for debugging
     console.log('FormData contents for vehicle update:');

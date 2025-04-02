@@ -106,34 +106,68 @@ export const updateAirportFares = async (
  * Get outstation fares for all vehicles (force refresh to get live data)
  */
 export const getAllOutstationFares = async (): Promise<Record<string, any>> => {
-  console.log(`Fetching all outstation fares`);
+  console.log(`Fetching all outstation fares from API directly`);
   
   try {
-    // Use directVehicleOperation for direct API access with explicit force_sync parameter
-    const result = await directVehicleOperation('/api/admin/outstation-fares-update.php', 'GET', {
-      sync: 'true',
+    // First try the direct admin endpoint for outstation fares
+    const result = await directVehicleOperation('/api/admin/direct-outstation-fares.php', 'GET', {
+      getAllFares: 'true',
       force_sync: 'true', // Force synchronization with the database
-      includeInactive: 'true', // Include inactive vehicles for admin view
-      isAdminMode: 'true'      // Ensure admin mode is active
+      includeInactive: 'true' // Include inactive vehicles for admin view
     });
     
-    if (result && result.status === 'success' && result.fares) {
-      console.log(`Retrieved ${Object.keys(result.fares).length} outstation fares`);
+    if (result && result.fares && Object.keys(result.fares).length > 0) {
+      console.log(`Retrieved ${Object.keys(result.fares).length} outstation fares directly`);
       return result.fares;
-    } else {
-      // Fallback to another endpoint if first one fails
-      const fallbackResult = await directVehicleOperation('/api/admin/direct-outstation-fares.php', 'GET', {
-        getAllFares: 'true'
+    }
+    
+    // Try the fallback endpoint if first one returns empty
+    const fallbackResult = await directVehicleOperation('/api/admin/outstation-fares-update.php', 'GET', {
+      sync: 'true',
+      force_sync: 'true',
+      includeInactive: 'true', 
+      isAdminMode: 'true'
+    });
+    
+    if (fallbackResult && fallbackResult.fares && Object.keys(fallbackResult.fares).length > 0) {
+      console.log(`Retrieved ${Object.keys(fallbackResult.fares).length} outstation fares from fallback`);
+      return fallbackResult.fares;
+    }
+    
+    // If both methods fail, try to get vehicles directly and combine with any existing fare data
+    const vehiclesResult = await directVehicleOperation('/api/admin/get-vehicles.php', 'GET', { 
+      includeInactive: 'true',
+      force_sync: 'true'
+    });
+    
+    if (vehiclesResult && vehiclesResult.vehicles && vehiclesResult.vehicles.length > 0) {
+      console.log(`Retrieved ${vehiclesResult.vehicles.length} vehicles with outstation fare data`);
+      
+      const faresMap: Record<string, any> = {};
+      vehiclesResult.vehicles.forEach((vehicle: any) => {
+        if (vehicle.id || vehicle.vehicleId) {
+          const id = vehicle.id || vehicle.vehicleId;
+          faresMap[id] = {
+            id: id,
+            vehicleId: id,
+            name: vehicle.name || id,
+            basePrice: vehicle.outstation?.base_price || vehicle.base_price || vehicle.price || 0,
+            pricePerKm: vehicle.outstation?.price_per_km || vehicle.price_per_km || 0,
+            nightHaltCharge: vehicle.outstation?.night_halt_charge || vehicle.night_halt_charge || 700,
+            driverAllowance: vehicle.outstation?.driver_allowance || vehicle.driver_allowance || 300,
+            roundTripBasePrice: vehicle.outstation?.roundtrip_base_price || 0,
+            roundTripPricePerKm: vehicle.outstation?.roundtrip_price_per_km || 0
+          };
+        }
       });
       
-      if (fallbackResult && fallbackResult.fares) {
-        console.log(`Retrieved ${Object.keys(fallbackResult.fares).length} outstation fares from fallback`);
-        return fallbackResult.fares;
+      if (Object.keys(faresMap).length > 0) {
+        return faresMap;
       }
-      
-      console.warn('No outstation fares found or API returned error');
-      return {};
     }
+    
+    console.warn('No outstation fares found after trying multiple methods');
+    return {};
   } catch (error: any) {
     console.error(`Error fetching outstation fares: ${error.message}`, error);
     toast.error(`Failed to fetch outstation fares: ${error.message}`);
