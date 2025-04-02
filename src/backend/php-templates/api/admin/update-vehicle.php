@@ -27,7 +27,7 @@ function handleError($message) {
         'status' => 'error',
         'message' => $message,
         'timestamp' => time()
-    ]);
+    ], JSON_PARTIAL_OUTPUT_ON_ERROR);
     exit;
 }
 
@@ -59,6 +59,21 @@ if (empty($data) && !empty($rawInput)) {
 }
 
 try {
+    // Enable logging
+    $logDir = dirname(__FILE__) . '/../../logs';
+    if (!file_exists($logDir)) {
+        mkdir($logDir, 0755, true);
+    }
+    
+    $logFile = $logDir . '/update-vehicle-proxy.log';
+    error_log(date('Y-m-d H:i:s') . " - Received " . $_SERVER['REQUEST_METHOD'] . " request\n", 3, $logFile);
+    
+    if (!empty($data)) {
+        error_log(date('Y-m-d H:i:s') . " - Data: " . json_encode($data, JSON_PARTIAL_OUTPUT_ON_ERROR) . "\n", 3, $logFile);
+    } else {
+        error_log(date('Y-m-d H:i:s') . " - No data parsed, raw input length: " . strlen($rawInput) . "\n", 3, $logFile);
+    }
+    
     // Check if direct-vehicle-update.php exists
     $updateFile = __DIR__ . '/direct-vehicle-update.php';
     if (!file_exists($updateFile)) {
@@ -71,5 +86,6 @@ try {
     // Include the direct-vehicle-update.php file which has the full implementation
     include($updateFile);
 } catch (Exception $e) {
+    error_log(date('Y-m-d H:i:s') . " - Error: " . $e->getMessage() . "\n", 3, $logFile);
     handleError("Error in update-vehicle.php: " . $e->getMessage());
 }

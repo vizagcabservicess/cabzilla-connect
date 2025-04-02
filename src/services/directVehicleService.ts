@@ -93,8 +93,9 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
       basePrice: Number(vehicle.basePrice || vehicle.price || 0),
       price: Number(vehicle.price || vehicle.basePrice || 0),
       pricePerKm: Number(vehicle.pricePerKm || 0),
-      nightHaltCharge: Number(vehicle.nightHaltCharge || 700), // Default to 700 if null
-      driverAllowance: Number(vehicle.driverAllowance || 250)  // Default to 250 if null
+      // CRITICAL: Always provide default values for these fields to avoid NULL errors
+      nightHaltCharge: Number(vehicle.nightHaltCharge || 700), 
+      driverAllowance: Number(vehicle.driverAllowance || 250)  
     };
     
     console.log('Prepared vehicle data for update:', preparedVehicle);
@@ -130,7 +131,8 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
           try {
             responseData = JSON.parse(text);
           } catch (e) {
-            responseData = { status: 'error', message: text };
+            console.error('Failed to parse response text:', text);
+            responseData = { status: 'error', message: 'Invalid JSON response' };
           }
         }
       } catch (e) {
@@ -144,6 +146,54 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
       }
       
       console.warn('Direct form submission failed:', responseData);
+      
+      // If the error is "MySQL server has gone away", try the fix-vehicle-tables.php endpoint
+      if (responseData?.message && responseData.message.includes('MySQL server has gone away')) {
+        console.log('Detected "MySQL server has gone away" error, trying to fix database...');
+        
+        try {
+          const fixResponse = await fetch(`${apiBaseUrl}/api/admin/fix-vehicle-tables.php?_t=${Date.now()}`, {
+            method: 'GET',
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest',
+              'X-Force-Refresh': 'true',
+              'Cache-Control': 'no-cache, no-store, must-revalidate'
+            }
+          });
+          
+          const fixData = await fixResponse.json();
+          console.log('Database fix response:', fixData);
+          
+          // Try the update again after fixing
+          if (fixData.status === 'success') {
+            console.log('Database fixed, retrying update...');
+            
+            // Wait a bit before retrying
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            const retryResponse = await fetch(url, {
+              method: 'POST',
+              body: formData,
+              headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Force-Refresh': 'true',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'X-Admin-Mode': 'true'
+              }
+            });
+            
+            if (retryResponse.ok) {
+              const retryData = await retryResponse.json();
+              if (retryData.status === 'success') {
+                console.log('Vehicle updated successfully after database fix');
+                return retryData.vehicle || preparedVehicle;
+              }
+            }
+          }
+        } catch (fixError) {
+          console.error('Failed to fix database:', fixError);
+        }
+      }
     } catch (err) {
       console.error('Direct form submission error:', err);
     }
@@ -181,7 +231,9 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
     // If all endpoints failed, try a direct fetch as a last resort
     try {
       console.log('Trying direct fetch as last resort for vehicle update...');
-      const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-update.php?_t=${Date.now()}`, {
+      
+      // Use the direct-vehicle-modify.php endpoint which has better error handling
+      const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-modify.php?_t=${Date.now()}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

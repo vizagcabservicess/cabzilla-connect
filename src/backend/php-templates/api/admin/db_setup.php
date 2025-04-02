@@ -72,7 +72,7 @@ try {
     $conn->query($airport_fares_query);
     
     // CREATE OUTSTATION FARES TABLE IF IT DOESN'T EXIST
-    // MODIFIED to make night_halt_charge and driver_allowance NOT NULL with DEFAULT values
+    // CRITICAL: night_halt_charge and driver_allowance are NOT NULL with DEFAULT values
     $outstation_fares_query = "
     CREATE TABLE IF NOT EXISTS outstation_fares (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -90,6 +90,44 @@ try {
     ";
     
     $conn->query($outstation_fares_query);
+    
+    // Fix any existing tables with NULL values in critical fields
+    $fix_outstation_fares = "
+    ALTER TABLE outstation_fares 
+    MODIFY night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 700,
+    MODIFY driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 250;
+    ";
+    
+    try {
+        $conn->query($fix_outstation_fares);
+    } catch (Exception $e) {
+        // Ignore errors here, just log them
+        error_log("Error fixing outstation_fares table: " . $e->getMessage());
+    }
+    
+    // Update any NULL values in existing tables
+    $conn->query("UPDATE outstation_fares SET night_halt_charge = 700 WHERE night_halt_charge IS NULL");
+    $conn->query("UPDATE outstation_fares SET driver_allowance = 250 WHERE driver_allowance IS NULL");
+    
+    // Check for vehicles table and fix it if exists
+    $check_vehicles = $conn->query("SHOW TABLES LIKE 'vehicles'");
+    if ($check_vehicles->num_rows > 0) {
+        try {
+            // Fix night_halt_charge and driver_allowance to be NOT NULL with default values
+            $conn->query("
+                ALTER TABLE vehicles 
+                MODIFY night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 700,
+                MODIFY driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 250
+            ");
+            
+            // Update any NULL values
+            $conn->query("UPDATE vehicles SET night_halt_charge = 700 WHERE night_halt_charge IS NULL");
+            $conn->query("UPDATE vehicles SET driver_allowance = 250 WHERE driver_allowance IS NULL");
+        } catch (Exception $e) {
+            // Ignore errors here, just log them
+            error_log("Error fixing vehicles table: " . $e->getMessage());
+        }
+    }
     
     // Insert sample data if the drivers table is empty
     $result = $conn->query("SELECT COUNT(*) as count FROM drivers");
@@ -151,7 +189,7 @@ try {
     $outstation_row = $outstation_result->fetch_assoc();
     
     if ($outstation_row['count'] == 0) {
-        // Insert default outstation fares
+        // Insert default outstation fares with non-NULL values for night_halt_charge and driver_allowance
         $conn->query("
             INSERT INTO outstation_fares (vehicle_id, base_price, price_per_km, night_halt_charge, driver_allowance, 
                                         roundtrip_base_price, roundtrip_price_per_km) VALUES
@@ -164,6 +202,10 @@ try {
         
         echo "Sample outstation fares added.\n";
     }
+    
+    // Verify and fix any NULL values in these important fields
+    $conn->query("UPDATE outstation_fares SET night_halt_charge = 700 WHERE night_halt_charge IS NULL");
+    $conn->query("UPDATE outstation_fares SET driver_allowance = 250 WHERE driver_allowance IS NULL");
     
     echo "Database setup complete.";
     

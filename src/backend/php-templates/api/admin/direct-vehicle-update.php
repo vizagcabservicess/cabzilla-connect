@@ -1,3 +1,4 @@
+
 <?php
 /**
  * direct-vehicle-update.php - Update an existing vehicle and sync across all vehicle tables
@@ -17,7 +18,7 @@ ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
 // Create log directory if it doesn't exist
-$logDir = dirname(__FILE__) . '/../logs';
+$logDir = dirname(__FILE__) . '/../../logs';
 if (!file_exists($logDir)) {
     mkdir($logDir, 0755, true);
 }
@@ -91,7 +92,7 @@ try {
         throw new Exception("No vehicle data provided");
     }
     
-    logMessage("Vehicle data after parsing: " . json_encode($vehicleData));
+    logMessage("Vehicle data after parsing: " . json_encode($vehicleData, JSON_PARTIAL_OUTPUT_ON_ERROR));
     
     // Extract vehicle ID with fallbacks for different naming conventions
     $vehicleId = null;
@@ -110,35 +111,78 @@ try {
         throw new Exception("Vehicle ID is required");
     }
     
-    // Get database connection
-    try {
-        // First try to use config if available
-        if (file_exists(dirname(__FILE__) . '/../../config.php')) {
-            require_once dirname(__FILE__) . '/../../config.php';
-            $conn = getDbConnection();
-            logMessage("Connected to database using config.php");
-        } 
-        // Fallback to hardcoded credentials
-        else {
-            logMessage("Config file not found, using hardcoded credentials");
-            $dbHost = 'localhost';
-            $dbName = 'u644605165_new_bookingdb';
-            $dbUser = 'u644605165_new_bookingusr';
-            $dbPass = 'Vizag@1213';
-            
-            $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-            
-            if ($conn->connect_error) {
-                throw new Exception("Database connection failed: " . $conn->connect_error);
+    // Database connection function with retry mechanism
+    function getDbConnectionWithRetry($maxRetries = 3) {
+        $attempts = 0;
+        $lastError = null;
+        
+        while ($attempts < $maxRetries) {
+            try {
+                $attempts++;
+                
+                // First try to use config if available
+                if (file_exists(dirname(__FILE__) . '/../../config.php')) {
+                    require_once dirname(__FILE__) . '/../../config.php';
+                    $conn = getDbConnection();
+                    logMessage("Connected to database using config.php on attempt $attempts");
+                    
+                    // Test connection
+                    $testQuery = $conn->query('SELECT 1');
+                    if (!$testQuery) {
+                        throw new Exception("Database connection test failed on attempt $attempts");
+                    }
+                    
+                    return $conn;
+                } 
+                // Fallback to hardcoded credentials
+                else {
+                    logMessage("Config file not found, using hardcoded credentials (attempt $attempts)");
+                    $dbHost = 'localhost';
+                    $dbName = 'u644605165_new_bookingdb';
+                    $dbUser = 'u644605165_new_bookingusr';
+                    $dbPass = 'Vizag@1213';
+                    
+                    $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+                    
+                    if ($conn->connect_error) {
+                        throw new Exception("Database connection failed: " . $conn->connect_error);
+                    }
+                    
+                    // Test connection
+                    $testQuery = $conn->query('SELECT 1');
+                    if (!$testQuery) {
+                        throw new Exception("Database connection test failed");
+                    }
+                    
+                    logMessage("Connected to database using hardcoded credentials (attempt $attempts)");
+                    return $conn;
+                }
+            } catch (Exception $e) {
+                $lastError = $e;
+                logMessage("Connection attempt $attempts failed: " . $e->getMessage());
+                
+                if ($attempts < $maxRetries) {
+                    // Wait increasingly longer between retries
+                    $sleepTime = pow(2, $attempts - 1) * 500000; // 0.5s, 1s, 2s
+                    usleep($sleepTime);
+                    logMessage("Retrying connection after $sleepTime microseconds");
+                }
             }
-            
-            logMessage("Connected to database using hardcoded credentials");
         }
-    } catch (Exception $e) {
-        $response['message'] = 'Database connection failed: ' . $e->getMessage();
-        echo json_encode($response);
-        exit;
+        
+        // All attempts failed
+        throw new Exception("Failed to connect to database after $maxRetries attempts: " . $lastError->getMessage());
     }
+    
+    // Get database connection with retry
+    $conn = getDbConnectionWithRetry(3);
+    
+    // Set connection options for better stability
+    $conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 30);
+    $conn->query("SET SESSION wait_timeout=300"); // 5 minutes
+    $conn->query("SET SESSION interactive_timeout=300"); // 5 minutes
+    $conn->query("SET SESSION net_read_timeout=300"); // 5 minutes
+    $conn->query("SET SESSION net_write_timeout=300"); // 5 minutes
     
     // Begin transaction
     $conn->begin_transaction();
@@ -157,7 +201,7 @@ try {
         
         // Get existing vehicle data
         $existingVehicle = $checkResult->fetch_assoc();
-        logMessage("Existing vehicle data found: " . json_encode($existingVehicle));
+        logMessage("Existing vehicle data found: " . json_encode($existingVehicle, JSON_PARTIAL_OUTPUT_ON_ERROR));
         
         // CRITICAL: Handle the isActive flag with proper fallbacks (default to TRUE if not specified)
         $isActive = 1; // Default value is TRUE/active
@@ -213,11 +257,18 @@ try {
         $pricePerKm = isset($vehicleData['pricePerKm']) && !empty($vehicleData['pricePerKm']) ? floatval($vehicleData['pricePerKm']) : 
                      (isset($vehicleData['price_per_km']) && !empty($vehicleData['price_per_km']) ? floatval($vehicleData['price_per_km']) : $existingVehicle['price_per_km']);
         
+        // CRITICAL: Ensure night_halt_charge and driver_allowance are never NULL
         $nightHaltCharge = isset($vehicleData['nightHaltCharge']) && !empty($vehicleData['nightHaltCharge']) ? floatval($vehicleData['nightHaltCharge']) : 
-                          (isset($vehicleData['night_halt_charge']) && !empty($vehicleData['night_halt_charge']) ? floatval($vehicleData['night_halt_charge']) : $existingVehicle['night_halt_charge']);
+                          (isset($vehicleData['night_halt_charge']) && !empty($vehicleData['night_halt_charge']) ? floatval($vehicleData['night_halt_charge']) : 
+                          (isset($existingVehicle['night_halt_charge']) && !empty($existingVehicle['night_halt_charge']) ? floatval($existingVehicle['night_halt_charge']) : 700));
         
         $driverAllowance = isset($vehicleData['driverAllowance']) && !empty($vehicleData['driverAllowance']) ? floatval($vehicleData['driverAllowance']) : 
-                          (isset($vehicleData['driver_allowance']) && !empty($vehicleData['driver_allowance']) ? floatval($vehicleData['driver_allowance']) : $existingVehicle['driver_allowance']);
+                          (isset($vehicleData['driver_allowance']) && !empty($vehicleData['driver_allowance']) ? floatval($vehicleData['driver_allowance']) : 
+                          (isset($existingVehicle['driver_allowance']) && !empty($existingVehicle['driver_allowance']) ? floatval($existingVehicle['driver_allowance']) : 250));
+        
+        // Ensure these fields are never NULL or less than 0
+        $nightHaltCharge = max(0, $nightHaltCharge);
+        $driverAllowance = max(0, $driverAllowance);
         
         // Update vehicles table
         $updateVehicleQuery = "UPDATE vehicles SET 
@@ -396,6 +447,9 @@ try {
         ];
         
         logMessage("Error updating vehicle: " . $e->getMessage());
+    } finally {
+        // Always close the connection
+        $conn->close();
     }
     
 } catch (Exception $e) {
@@ -408,6 +462,6 @@ try {
     logMessage("Error in request processing: " . $e->getMessage());
 }
 
-// Send response
-echo json_encode($response);
+// Send response with proper JSON encoding
+echo json_encode($response, JSON_PARTIAL_OUTPUT_ON_ERROR);
 exit;
