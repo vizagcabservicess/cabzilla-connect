@@ -5,26 +5,6 @@ RewriteEngine On
 # Set the base directory
 RewriteBase /api/
 
-# CRITICAL: Respond with 200 OK for OPTIONS preflight requests (highest priority)
-<IfModule mod_headers.c>
-    <If "%{REQUEST_METHOD} == 'OPTIONS'">
-        Header always set Status "200 OK"
-        Header always set Access-Control-Allow-Origin "*" 
-        Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-        Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh, X-Admin-Mode, *"
-        Header always set Access-Control-Max-Age "86400"
-        Header always set Content-Type "text/plain"
-        Header always set Content-Length "0"
-    </If>
-</IfModule>
-
-# Set CORS headers for all responses
-<IfModule mod_headers.c>
-    Header always set Access-Control-Allow-Origin "*"
-    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-    Header always set Access-Control-Allow-Headers "*"
-</IfModule>
-
 # Don't apply rewriting to actual files or directories
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d

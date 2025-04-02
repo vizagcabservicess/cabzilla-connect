@@ -1,16 +1,13 @@
 import { toast } from 'sonner';
 import { apiBaseUrl } from '@/config/api';
 import { CabType } from '@/types/cab';
-import { directVehicleOperation, formatDataForMultipart } from '@/utils/apiHelper';
+import { directVehicleOperation } from '@/utils/apiHelper';
 
 const defaultHeaders = {
   'X-Force-Refresh': 'true',
   'Cache-Control': 'no-cache, no-store, must-revalidate',
   'Pragma': 'no-cache',
-  'Expires': '0',
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': '*'
+  'Expires': '0'
 };
 
 const pendingRequests: Record<string, Promise<any>> = {};
@@ -178,85 +175,53 @@ export const updateVehicle = async (vehicleData: CabType): Promise<any> => {
     let result;
     let error;
     
-    // Try our most reliable endpoints with multiple fallbacks
+    // Try our most reliable endpoint first
+    try {
+      console.log('Attempting to update vehicle using direct-vehicle-modify.php');
+      result = await directVehicleOperation('/api/admin/direct-vehicle-modify.php', 'POST', normalizedData);
+      
+      if (result && result.status === 'success') {
+        console.log('Successfully updated vehicle using direct-vehicle-modify.php');
+        
+        // Clear all pending vehicle requests to force a refresh
+        Object.keys(pendingRequests).forEach(key => {
+          if (key.startsWith('getVehicles-')) {
+            delete pendingRequests[key];
+          }
+        });
+        
+        return result;
+      }
+    } catch (directModifyError) {
+      console.log('Failed to update using direct-vehicle-modify.php:', directModifyError);
+      error = directModifyError;
+      // Continue to try other endpoints
+    }
+    
+    // Try other endpoints as fallbacks
     const possibleEndpoints = [
-      '/api/admin/direct-vehicle-modify.php',
       '/api/admin/update-vehicle.php',
+      '/api/admin/direct-vehicle-update.php',
       '/api/admin/vehicle-update.php',
-      '/api/admin/vehicles-update.php',
-      '/api/admin/direct-vehicle-update.php'
+      '/api/admin/vehicles-update.php'
     ];
     
-    // Try each endpoint in order until one succeeds
     for (const endpoint of possibleEndpoints) {
       try {
         console.log(`Attempting to update vehicle using endpoint: ${endpoint}`);
+        result = await directVehicleOperation(endpoint, 'POST', normalizedData);
         
-        // First try with JSON
-        try {
-          result = await directVehicleOperation(endpoint, 'POST', normalizedData);
+        if (result && result.status === 'success') {
+          console.log(`Successfully updated vehicle using endpoint: ${endpoint}`);
           
-          if (result && result.status === 'success') {
-            console.log(`Successfully updated vehicle using endpoint: ${endpoint}`);
-            
-            // Clear all pending vehicle requests to force a refresh
-            Object.keys(pendingRequests).forEach(key => {
-              if (key.startsWith('getVehicles-')) {
-                delete pendingRequests[key];
-              }
-            });
-            
-            return result;
-          }
-        } catch (jsonError) {
-          console.log(`JSON approach failed for ${endpoint}:`, jsonError);
-          
-          // If JSON fails, try FormData approach
-          const formData = formatDataForMultipart(normalizedData);
-          
-          const formResponse = await fetch(`${apiBaseUrl}${endpoint}`, {
-            method: 'POST',
-            body: formData,
-            headers: {
-              'X-Force-Refresh': 'true',
-              'X-Admin-Mode': 'true',
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
-              'Pragma': 'no-cache',
-              'Expires': '0',
-              'Access-Control-Allow-Origin': '*',
-              'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS'
-            },
-            mode: 'cors',
-            credentials: 'omit'
+          // Clear all pending vehicle requests to force a refresh
+          Object.keys(pendingRequests).forEach(key => {
+            if (key.startsWith('getVehicles-')) {
+              delete pendingRequests[key];
+            }
           });
           
-          if (formResponse.ok) {
-            const formResponseText = await formResponse.text();
-            let formResult;
-            
-            try {
-              formResult = JSON.parse(formResponseText);
-            } catch (e) {
-              formResult = {
-                status: 'success',
-                message: 'Vehicle updated successfully (raw response)',
-                raw: formResponseText
-              };
-            }
-            
-            if (formResult && (formResult.status === 'success' || formResponseText.includes('success'))) {
-              console.log(`Successfully updated vehicle using FormData with endpoint: ${endpoint}`);
-              
-              // Clear all pending vehicle requests to force a refresh
-              Object.keys(pendingRequests).forEach(key => {
-                if (key.startsWith('getVehicles-')) {
-                  delete pendingRequests[key];
-                }
-              });
-              
-              return formResult;
-            }
-          }
+          return result;
         }
       } catch (err) {
         console.log(`Failed to update using ${endpoint}:`, err);
@@ -264,9 +229,9 @@ export const updateVehicle = async (vehicleData: CabType): Promise<any> => {
       }
     }
     
-    // Last resort: try a direct fetch using FormData
+    // If all API methods failed, try a direct fetch as last resort
     try {
-      console.log('Trying direct fetch as absolute last resort...');
+      console.log('Trying direct fetch as last resort...');
       
       const formData = new FormData();
       Object.entries(normalizedData).forEach(([key, value]) => {
@@ -287,28 +252,20 @@ export const updateVehicle = async (vehicleData: CabType): Promise<any> => {
           'X-Admin-Mode': 'true',
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache',
-          'Expires': '0',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS'
-        },
-        mode: 'cors',
-        credentials: 'omit'
+          'Expires': '0'
+        }
       });
       
-      const responseText = await response.text();
-      let parsedResponse;
-      
-      try {
-        parsedResponse = JSON.parse(responseText);
-      } catch (e) {
-        parsedResponse = {
-          status: response.ok ? 'success' : 'error',
-          message: response.ok ? 'Vehicle updated successfully (raw response)' : 'Error updating vehicle',
-          raw: responseText
-        };
+      if (!response.ok) {
+        const statusText = response.statusText;
+        const status = response.status;
+        const responseBody = await response.text();
+        throw new Error(`HTTP error ${status} ${statusText}: ${responseBody}`);
       }
       
-      if (response.ok || responseText.includes('success')) {
+      result = await response.json();
+      
+      if (result && result.status === 'success') {
         console.log('Direct fetch update succeeded');
         
         // Clear all pending vehicle requests to force a refresh
@@ -318,10 +275,10 @@ export const updateVehicle = async (vehicleData: CabType): Promise<any> => {
           }
         });
         
-        return parsedResponse;
+        return result;
       }
       
-      throw new Error(parsedResponse?.message || responseText || 'Failed to update vehicle');
+      throw new Error(result?.message || 'Failed to update vehicle');
     } catch (lastResortError) {
       console.error('Last resort update also failed:', lastResortError);
       throw error || lastResortError;
@@ -357,10 +314,9 @@ export const deleteVehicle = async (id: string): Promise<any> => {
     let result;
     let error;
     
-    // Try each JSON endpoint in order until one succeeds
     for (const endpoint of possibleEndpoints) {
       try {
-        console.log(`Attempting to delete vehicle using JSON endpoint: ${endpoint}`);
+        console.log(`Attempting to delete vehicle using endpoint: ${endpoint}`);
         result = await directVehicleOperation(endpoint, 'POST', { id });
         
         if (result && result.status === 'success') {
@@ -376,68 +332,12 @@ export const deleteVehicle = async (id: string): Promise<any> => {
           return result;
         }
       } catch (err) {
-        console.log(`Failed to delete using ${endpoint} with JSON:`, err);
+        console.log(`Failed to delete using ${endpoint}:`, err);
         error = err;
-        
-        // If JSON fails, try FormData approach for the same endpoint
-        try {
-          console.log(`Attempting to delete vehicle using FormData endpoint: ${endpoint}`);
-          
-          const formData = new FormData();
-          formData.append('id', id);
-          formData.append('vehicleId', id);
-          formData.append('vehicle_id', id);
-          
-          const formResponse = await fetch(`${apiBaseUrl}${endpoint}`, {
-            method: 'POST',
-            body: formData,
-            headers: {
-              'X-Force-Refresh': 'true',
-              'X-Admin-Mode': 'true',
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
-              'Pragma': 'no-cache',
-              'Expires': '0',
-              'Access-Control-Allow-Origin': '*',
-              'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS'
-            },
-            mode: 'cors',
-            credentials: 'omit'
-          });
-          
-          if (formResponse.ok) {
-            const formResponseText = await formResponse.text();
-            let formResult;
-            
-            try {
-              formResult = JSON.parse(formResponseText);
-            } catch (e) {
-              formResult = {
-                status: 'success',
-                message: 'Vehicle deleted successfully (raw response)',
-                raw: formResponseText
-              };
-            }
-            
-            if (formResult && (formResult.status === 'success' || formResponseText.includes('success'))) {
-              console.log(`Successfully deleted vehicle using FormData with endpoint: ${endpoint}`);
-              
-              // Clear all pending vehicle requests to force a refresh
-              Object.keys(pendingRequests).forEach(key => {
-                if (key.startsWith('getVehicles-')) {
-                  delete pendingRequests[key];
-                }
-              });
-              
-              return formResult;
-            }
-          }
-        } catch (formErr) {
-          console.log(`Failed to delete using ${endpoint} with FormData:`, formErr);
-        }
       }
     }
     
-    // If all API methods failed, try a direct fetch as last resort with direct URL
+    // If all API methods failed, try a direct fetch as last resort
     try {
       console.log('Trying direct fetch as last resort for deletion...');
       
@@ -454,13 +354,15 @@ export const deleteVehicle = async (id: string): Promise<any> => {
           'X-Admin-Mode': 'true',
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache',
-          'Expires': '0',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS'
-        },
-        mode: 'cors',
-        credentials: 'omit'
+          'Expires': '0'
+        }
       });
+      
+      if (!response.ok) {
+        const statusText = response.statusText;
+        const status = response.status;
+        throw new Error(`HTTP error ${status} ${statusText}`);
+      }
       
       let responseText = await response.text();
       let responseData;
@@ -471,8 +373,8 @@ export const deleteVehicle = async (id: string): Promise<any> => {
       } catch (jsonError) {
         // If not valid JSON, create a formatted response
         responseData = {
-          status: response.ok ? 'success' : 'error',
-          message: response.ok ? 'Vehicle deleted successfully (raw response)' : 'Error deleting vehicle',
+          status: 'success',
+          message: 'Vehicle deleted successfully (raw response)',
           raw: responseText
         };
       }
@@ -495,8 +397,6 @@ export const deleteVehicle = async (id: string): Promise<any> => {
     // Enhance error message with more details
     if (error.message && error.message.includes('404')) {
       throw new Error('API endpoint not found (404): The delete-vehicle.php endpoint could not be found on the server. Please check your server configuration.');
-    } else if (error.message && error.message.includes('500')) {
-      throw new Error('Internal Server Error (500): The server encountered an issue processing your delete request.');
     }
     
     throw error;
