@@ -1,3 +1,4 @@
+
 <?php
 // direct-vehicle-update.php - Endpoint for updating vehicle data directly
 
@@ -49,6 +50,10 @@ $name = $_POST['name'] ?? '';
 $description = $_POST['description'] ?? '';
 $image = $_POST['image'] ?? '';
 
+// CRITICAL FIX: Dump all input data for better debugging
+file_put_contents($logFile, "ALL POST DATA: " . print_r($_POST, true) . "\n\n", FILE_APPEND);
+error_log("ALL POST DATA: " . print_r($_POST, true));
+
 // CRITICAL FIX: Handle capacities properly with additional logging
 $capacity = null;
 $luggageCapacity = null;
@@ -96,6 +101,10 @@ if (isset($_POST['luggageCapacity'])) {
 } else {
     $luggageCapacity = 2; // Default value
 }
+
+// CRITICAL FIX: Additional debug info for capacities
+error_log("CAPACITY VALUES AFTER PROCESSING: capacity=$capacity, luggageCapacity=$luggageCapacity");
+file_put_contents($logFile, "CAPACITY VALUES AFTER PROCESSING: capacity=$capacity, luggageCapacity=$luggageCapacity\n", FILE_APPEND);
 
 // Log the final capacity values after processing
 error_log("CAPACITY FINAL: capacity=" . $capacity . ", luggageCapacity=" . $luggageCapacity);
@@ -221,24 +230,31 @@ try {
         
         error_log("BINDING PARAMS: capacity=$capacity (type:" . gettype($capacity) . "), luggageCapacity=$luggageCapacity (type:" . gettype($luggageCapacity) . ")");
         
-        // CRITICAL FIX: Explicitly bind parameters with proper types
-        $stmt->bind_param(
-            "siiisssddddsis", 
-            $name, 
-            $capacity, 
-            $luggageCapacity, 
-            $ac, 
-            $image, 
-            $amenities, 
-            $description,
-            $basePrice,
-            $price,
-            $pricePerKm,
-            $nightHaltCharge,
-            $driverAllowance,
-            $isActive,
-            $vehicleId
-        );
+        // CRITICAL FIX: Explicitly bind parameters with proper types and log the actual values being bound
+        file_put_contents($logFile, "BINDING PARAMS FOR UPDATE: capacity=$capacity (type:" . gettype($capacity) . "), luggageCapacity=$luggageCapacity (type:" . gettype($luggageCapacity) . ")\n", FILE_APPEND);
+        
+        try {
+            $stmt->bind_param(
+                "siiisssddddsis", 
+                $name, 
+                $capacity, 
+                $luggageCapacity, 
+                $ac, 
+                $image, 
+                $amenities, 
+                $description,
+                $basePrice,
+                $price,
+                $pricePerKm,
+                $nightHaltCharge,
+                $driverAllowance,
+                $isActive,
+                $vehicleId
+            );
+        } catch (Exception $e) {
+            file_put_contents($logFile, "BIND PARAM ERROR: " . $e->getMessage() . "\n", FILE_APPEND);
+            throw new Exception("Error binding parameters: " . $e->getMessage());
+        }
         
         $success = $stmt->execute();
         if (!$success) {
@@ -325,7 +341,8 @@ try {
     http_response_code(500);
     echo json_encode([
         'status' => 'error',
-        'message' => $e->getMessage()
+        'message' => $e->getMessage(),
+        'trace' => $e->getTraceAsString() // Include stack trace for better debugging
     ]);
     
     // Log the error for debugging
@@ -360,8 +377,7 @@ function syncVehicleToVehiclesTable($conn, $vehicleId, $name, $capacity, $luggag
     
     if ($vehicleExists) {
         // Update the vehicle in the vehicles table
-        $stmt = $conn->prepare(
-            "UPDATE vehicles SET 
+        $sql = "UPDATE vehicles SET 
                 name = ?, 
                 capacity = ?, 
                 luggage_capacity = ?, 
@@ -370,8 +386,9 @@ function syncVehicleToVehiclesTable($conn, $vehicleId, $name, $capacity, $luggag
                 amenities = ?,
                 is_active = ?,
                 updated_at = NOW()
-            WHERE vehicle_id = ?"
-        );
+            WHERE vehicle_id = ?";
+            
+        $stmt = $conn->prepare($sql);
         
         if (!$stmt) {
             error_log("SYNC TO VEHICLES: Prepare statement failed: " . $conn->error);

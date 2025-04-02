@@ -1,3 +1,4 @@
+
 import { toast } from 'sonner';
 import { apiBaseUrl, directVehicleHeaders, apiTimeout } from '@/config/api';
 import { formatDataForMultipart } from '@/config/requestConfig';
@@ -107,9 +108,12 @@ export const directVehicleOperation = async (
         
         // Log FormData contents for debugging
         console.log('FormData contents in apiHelper:');
+        let formDataDebug = {};
         for (const pair of formData.entries()) {
           console.log(`${pair[0]}: ${pair[1]}`);
+          formDataDebug[pair[0]] = pair[1];
         }
+        console.log('FormData contents (object format):', formDataDebug);
         
         options.body = formData;
       }
