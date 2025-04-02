@@ -1,4 +1,3 @@
-
 /**
  * Direct vehicle service for operations that bypass API layers
  * This ensures consistent behavior for vehicle CRUD operations
@@ -128,7 +127,7 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
   try {
     console.log('Updating vehicle:', vehicle);
     
-    // CRITICAL: Preserve isActive status and numeric values correctly
+    // CRITICAL: Preserve isActive status and ensure all numeric values are actually numbers
     const isActive = typeof vehicle.isActive === 'boolean' ? vehicle.isActive : true;
     
     // Normalize vehicle ID before sending and ensure all numeric values are actually numbers
@@ -144,86 +143,17 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
     console.log('Capacity type after normalization:', typeof normalizedVehicle.capacity);
     console.log('Luggage capacity type after normalization:', typeof normalizedVehicle.luggageCapacity);
     
-    // Use FormData instead of JSON for better PHP compatibility
-    const formData = new FormData();
-    Object.entries(normalizedVehicle).forEach(([key, value]) => {
-      // Skip undefined or null values
-      if (value === undefined || value === null) return;
-      
-      // Handle isActive specially
-      if (key === 'isActive' || key === 'is_active') {
-        const boolValue = value === true || value === 'true' || value === 1 || value === '1';
-        formData.append(key, boolValue ? '1' : '0');
-        return;
-      }
-      
-      // Handle capacity and luggageCapacity specially to ensure they're numbers
-      if (key === 'capacity' || key === 'luggageCapacity' || key === 'luggage_capacity') {
-        let numVal = 0;
-        if (key === 'capacity') {
-          numVal = parseInt(String(value), 10);
-          formData.append(key, String(isNaN(numVal) ? 4 : numVal));
-          formData.append('capacity_numeric', String(isNaN(numVal) ? 4 : numVal));
-          formData.append('capacity_value', String(isNaN(numVal) ? 4 : numVal));
-          console.log(`Setting capacity form value: ${String(isNaN(numVal) ? 4 : numVal)}`);
-        } else {
-          numVal = parseInt(String(value), 10);
-          formData.append(key, String(isNaN(numVal) ? 2 : numVal));
-          // Also add with underscore variant for PHP backend compatibility
-          if (key === 'luggageCapacity') {
-            formData.append('luggage_capacity', String(isNaN(numVal) ? 2 : numVal));
-            formData.append('luggage_capacity_numeric', String(isNaN(numVal) ? 2 : numVal));
-            formData.append('luggage_capacity_value', String(isNaN(numVal) ? 2 : numVal));
-            console.log(`Setting luggage_capacity form value: ${String(isNaN(numVal) ? 2 : numVal)}`);
-          }
-        }
-        return;
-      }
-      
-      // Handle price fields specially to ensure they're numbers
-      if (key === 'basePrice' || key === 'pricePerKm' || key === 'nightHaltCharge' || key === 'driverAllowance') {
-        const numVal = parseFloat(String(value));
-        formData.append(key, String(isNaN(numVal) ? 0 : numVal));
-        return;
-      }
-      
-      // Handle objects (like amenities array)
-      if (typeof value === 'object' && value !== null) {
-        formData.append(key, JSON.stringify(value));
-      } else {
-        // Add everything else as string
-        formData.append(key, String(value));
-      }
-    });
-    
-    // Log FormData contents for debugging
-    console.log('FormData contents for vehicle update:');
-    for (const pair of formData.entries()) {
-      console.log(`${pair[0]}: ${pair[1]}`);
-    }
-    
-    // Make direct request to update endpoint with FormData
-    const url = `${apiBaseUrl}/api/admin/direct-vehicle-update.php?_t=${Date.now()}`;
-    
-    const response = await fetch(url, {
-      method: 'POST',
-      body: formData,
-      headers: getBypassHeaders(),
-      credentials: 'omit',
-      mode: 'cors',
-      cache: 'no-store'
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API request failed with status ${response.status}: ${errorText}`);
-    }
-    
-    const result = await response.json();
+    // IMPORTANT FIX: Use directVehicleOperation for better error handling and consistency
+    const result = await directVehicleOperation(
+      '/api/admin/direct-vehicle-update.php', 
+      'POST', 
+      normalizedVehicle
+    );
     
     if (result.status === 'success') {
-      // Clear any cached data
+      // Clear any cached data to ensure fresh data is loaded next time
       localStorage.removeItem('cachedVehicles');
+      localStorage.removeItem('localVehicles');
       
       // Dispatch event to notify other components about the change
       window.dispatchEvent(new CustomEvent('vehicle-data-changed'));
@@ -341,6 +271,7 @@ export const syncVehicleData = async (): Promise<boolean> => {
     
     // Clear any cached data
     localStorage.removeItem('cachedVehicles');
+    localStorage.removeItem('localVehicles');
     
     // Dispatch event to notify other components about the change
     window.dispatchEvent(new CustomEvent('vehicle-data-cache-cleared'));
@@ -376,6 +307,12 @@ export const syncVehicleTables = async (vehicleId: string): Promise<boolean> => 
     
     if (result.status === 'success') {
       console.log(`Vehicle ${vehicleId} synchronized across all tables`);
+      
+      // Force refresh cached data
+      localStorage.removeItem('cachedVehicles');
+      localStorage.removeItem('localVehicles');
+      window.dispatchEvent(new CustomEvent('vehicle-data-changed'));
+      
       return true;
     } else {
       console.error('Failed to sync vehicle tables:', result.message);

@@ -29,8 +29,22 @@ export function EditVehicleDialog({
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    setVehicle(initialVehicle);
-  }, [initialVehicle]);
+    if (open && initialVehicle) {
+      // CRITICAL FIX: Ensure capacity values are explicitly parsed as numbers
+      setVehicle({
+        ...initialVehicle,
+        capacity: parseInt(String(initialVehicle.capacity || 4), 10),
+        luggageCapacity: parseInt(String(initialVehicle.luggageCapacity || 2), 10)
+      });
+      
+      console.log("EditVehicleDialog initialized with:", {
+        capacity: initialVehicle.capacity,
+        luggageCapacity: initialVehicle.luggageCapacity,
+        parsed_capacity: parseInt(String(initialVehicle.capacity || 4), 10),
+        parsed_luggageCapacity: parseInt(String(initialVehicle.luggageCapacity || 2), 10)
+      });
+    }
+  }, [initialVehicle, open]);
 
   // Parse numeric value and ensure it's a number
   const parseNumericValue = (value: any, defaultValue: number = 0): number => {
@@ -52,13 +66,16 @@ export function EditVehicleDialog({
         capacity,
         luggageCapacity,
         rawCapacity: vehicle.capacity,
-        rawLuggageCapacity: vehicle.luggageCapacity
+        rawLuggageCapacity: vehicle.luggageCapacity,
+        type_capacity: typeof capacity,
+        type_luggageCapacity: typeof luggageCapacity
       });
       
       const updatedVehicle = {
         ...vehicle,
-        capacity,
-        luggageCapacity,
+        // CRITICAL FIX: Ensure these are explicitly numbers
+        capacity: capacity,
+        luggageCapacity: luggageCapacity,
         basePrice: parseNumericValue(vehicle.basePrice, 0),
         price: parseNumericValue(vehicle.price || vehicle.basePrice, 0),
         pricePerKm: parseNumericValue(vehicle.pricePerKm, 0),
@@ -66,12 +83,26 @@ export function EditVehicleDialog({
         driverAllowance: parseNumericValue(vehicle.driverAllowance, 250)
       };
       
-      console.log("EditVehicleDialog - Submitting vehicle update with data:", updatedVehicle);
+      console.log("EditVehicleDialog - Submitting vehicle update with data:", {
+        ...updatedVehicle,
+        capacity_type: typeof updatedVehicle.capacity,
+        luggageCapacity_type: typeof updatedVehicle.luggageCapacity
+      });
       
-      await updateVehicle(updatedVehicle);
+      // CRITICAL FIX: Explicitly set numeric properties to ensure they're treated as numbers
+      const result = await updateVehicle({
+        ...updatedVehicle,
+        capacity: Number(capacity),
+        luggageCapacity: Number(luggageCapacity)
+      });
+      
+      console.log("EditVehicleDialog - Update response:", result);
       toast.success(`Vehicle ${vehicle.name} updated successfully`);
       onEditVehicle(updatedVehicle);
       onClose();
+      
+      // Force refresh
+      window.dispatchEvent(new CustomEvent('vehicle-data-changed'));
     } catch (error: any) {
       console.error("Error updating vehicle:", error);
       toast.error(`Failed to update vehicle: ${error.message}`);
@@ -146,6 +177,9 @@ export function EditVehicleDialog({
                 value={vehicle.capacity || 4}
                 onChange={handleCapacityChange}
               />
+              <p className="text-xs text-muted-foreground">
+                Current value: {vehicle.capacity || 4} (type: {typeof vehicle.capacity})
+              </p>
             </div>
             
             <div className="space-y-2">
@@ -158,6 +192,9 @@ export function EditVehicleDialog({
                 value={vehicle.luggageCapacity || 2}
                 onChange={handleLuggageCapacityChange}
               />
+              <p className="text-xs text-muted-foreground">
+                Current value: {vehicle.luggageCapacity || 2} (type: {typeof vehicle.luggageCapacity})
+              </p>
             </div>
           </div>
           

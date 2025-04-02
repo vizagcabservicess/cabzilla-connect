@@ -1,4 +1,3 @@
-
 import { toast } from 'sonner';
 import { apiBaseUrl, directVehicleHeaders, apiTimeout } from '@/config/api';
 import { formatDataForMultipart } from '@/config/requestConfig';
@@ -81,18 +80,20 @@ export const directVehicleOperation = async (
             
             console.log(`apiHelper - Setting ${key} value: ${finalValue} (original: ${value}, type: ${typeof value})`);
             
+            // Send as string to ensure PHP gets it correctly
             formData.append(key, String(finalValue));
             
-            // Also add snake_case variant for PHP compatibility
+            // CRITICAL FIX: Send both camelCase and snake_case variants with the same value
             if (key === 'luggageCapacity') {
               formData.append('luggage_capacity', String(finalValue));
             } else if (key === 'luggage_capacity') {
               formData.append('luggageCapacity', String(finalValue));
             }
             
-            // Add additional fields for debugging
+            // Also add the raw numeric value under a different key for debugging
             formData.append(`${key}_numeric`, String(finalValue));
-            formData.append(`${key}_original_type`, String(typeof value));
+            formData.append(`${key}_asInt`, String(parseInt(String(finalValue), 10)));
+            formData.append(`${key}_orig_type`, String(typeof value));
             continue;
           }
           
@@ -131,11 +132,6 @@ export const directVehicleOperation = async (
     console.log('Response status:', response.status);
     
     if (!response.ok) {
-      if (response.status === 404) {
-        throw new Error(`API endpoint not found: ${endpoint}`);
-      }
-      
-      // Try to get error text
       let errorText;
       try {
         errorText = await response.text();
@@ -144,20 +140,36 @@ export const directVehicleOperation = async (
         errorText = `Status ${response.status}`;
       }
       
+      if (response.status === 404) {
+        throw new Error(`API endpoint not found: ${endpoint}`);
+      }
+      
       throw new Error(`API request failed with status ${response.status}: ${errorText}`);
     }
     
     // Try to parse as JSON first
+    let result;
     try {
-      const result = await response.json();
+      result = await response.json();
       console.log('API response:', result);
-      return result;
     } catch (parseError) {
       // If can't parse as JSON, return the raw text
       const text = await response.text();
       console.log('API response (text):', text);
-      return { raw: text, success: true };
+      result = { raw: text, success: true };
     }
+    
+    // CRITICAL FIX: Force refresh the page data after successful operation
+    if (result.status === 'success' && endpoint.includes('vehicle')) {
+      // Clear any cached vehicle data
+      localStorage.removeItem('cachedVehicles');
+      localStorage.removeItem('localVehicles');
+      
+      // Dispatch event to trigger refresh
+      window.dispatchEvent(new CustomEvent('vehicle-data-changed'));
+    }
+    
+    return result;
   } catch (error: any) {
     console.error(`Direct vehicle operation failed: ${error.message}`);
     toast.error(`Operation failed: ${error.message}`);
@@ -236,6 +248,12 @@ export const fixDatabaseTables = async (): Promise<boolean> => {
       
       if (result.status === 'success') {
         console.log('Database tables fixed successfully:', result);
+        
+        // CRITICAL FIX: Force refresh the cached data to reflect the fixes
+        localStorage.removeItem('cachedVehicles');
+        localStorage.removeItem('localVehicles');
+        window.dispatchEvent(new CustomEvent('vehicle-data-changed'));
+        
         return true;
       } else {
         console.error('Failed to fix database tables:', result.message || 'Unknown error');

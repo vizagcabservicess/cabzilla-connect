@@ -13,6 +13,7 @@ import { getVehicleData, clearVehicleDataCache } from "@/services/vehicleDataSer
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiBaseUrl } from '@/config/api';
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
+import { fixDatabaseTables } from '@/utils/apiHelper';
 
 export default function VehicleManagement() {
   const [isLoading, setIsLoading] = useState(true);
@@ -36,25 +37,20 @@ export default function VehicleManagement() {
     resetError();
     
     try {
-      // Try direct API call without CORS proxy
-      const response = await fetch(`${apiBaseUrl}/api/admin/fix-vehicle-tables.php`, {
-        method: 'GET',
-        credentials: 'omit',
-        mode: 'cors',
-        cache: 'no-store'
-      });
+      // Use the helper function from apiHelper for more robust error handling
+      const result = await fixDatabaseTables();
       
-      if (!response.ok) {
-        throw new Error(`Database fix failed with status: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      if (data.status === 'success') {
+      if (result) {
         toast.success("Database tables fixed successfully");
         await handleRefreshData();
       } else {
-        toast.error("Failed to fix database tables: " + (data.message || "Unknown error"));
+        toast.error("Failed to fix database tables");
+        
+        // Try recovering from local storage
+        if (loadVehiclesFromLocalStorage()) {
+          toast.info("Loaded vehicles from local cache");
+          setOfflineMode(true);
+        }
       }
     } catch (error) {
       console.error("Error fixing database:", error);
@@ -106,6 +102,7 @@ export default function VehicleManagement() {
       
       // Always try online mode first
       try {
+        // CRITICAL: Force fresh data by explicitly setting forceRefresh to true
         const fetchedVehicles = await getVehicleData(true, true);
         console.log(`Loaded ${fetchedVehicles.length} vehicles for admin view:`, fetchedVehicles);
         
@@ -116,13 +113,14 @@ export default function VehicleManagement() {
             const normalizedId = String(vehicle.id || vehicle.vehicleId || '').trim();
             if (!normalizedId) return;
             
-            // Create normalized vehicle object
+            // Create normalized vehicle object with explicit numeric conversions
             const normalizedVehicle: CabType = {
               ...vehicle,
               id: normalizedId,
               vehicleId: normalizedId,
               description: vehicle.description || '',
               isActive: vehicle.isActive === false ? false : true,
+              // CRITICAL FIX: Ensure capacity values are numbers
               capacity: Number(vehicle.capacity || 4),
               luggageCapacity: Number(vehicle.luggageCapacity || 2),
               price: Number(vehicle.price || vehicle.basePrice || 0), 
@@ -141,6 +139,9 @@ export default function VehicleManagement() {
                 ...normalizedVehicle,
                 description: normalizedVehicle.description || existing.description || '',
                 name: normalizedVehicle.name || existing.name || '',
+                // Preserve numeric values
+                capacity: normalizedVehicle.capacity || existing.capacity || 4,
+                luggageCapacity: normalizedVehicle.luggageCapacity || existing.luggageCapacity || 2,
                 nightHaltCharge: normalizedVehicle.nightHaltCharge || existing.nightHaltCharge || 700,
                 driverAllowance: normalizedVehicle.driverAllowance || existing.driverAllowance || 300
               };
@@ -208,7 +209,7 @@ export default function VehicleManagement() {
       setTimeout(() => loadVehicles(), 500);
     };
     
-    // Setup event listeners
+    // Setup event listeners with correct names
     window.addEventListener('vehicle-data-updated', handleVehicleDataUpdated);
     window.addEventListener('vehicle-data-refreshed', handleVehicleDataUpdated);
     window.addEventListener('vehicle-data-changed', handleVehicleDataUpdated);
@@ -238,7 +239,12 @@ export default function VehicleManagement() {
     try {
       setIsRefreshing(true);
       resetError();
+      
+      // CRITICAL FIX: Force a hard cache clear
+      localStorage.removeItem('cachedVehicles');
+      localStorage.removeItem('localVehicles');
       clearVehicleDataCache();
+      
       await loadVehicles();
       toast.success("Vehicle data refreshed successfully");
     } catch (error) {
@@ -262,6 +268,7 @@ export default function VehicleManagement() {
     }
     toast.success(`Vehicle ${newVehicle.name} added successfully`);
     
+    // Force a complete refresh to ensure data consistency
     setTimeout(() => {
       clearVehicleDataCache();
       loadVehicles();
@@ -271,13 +278,20 @@ export default function VehicleManagement() {
   const handleEditVehicle = (updatedVehicle: CabType) => {
     console.log("Handling edit vehicle callback with data:", updatedVehicle);
     
+    // Explicitly ensure numeric values
+    const parsedCapacity = parseInt(String(updatedVehicle.capacity), 10);
+    const parsedLuggageCapacity = parseInt(String(updatedVehicle.luggageCapacity), 10);
+    
+    const normalizedVehicle = {
+      ...updatedVehicle,
+      capacity: isNaN(parsedCapacity) ? 4 : parsedCapacity,
+      luggageCapacity: isNaN(parsedLuggageCapacity) ? 2 : parsedLuggageCapacity
+    };
+    
+    // Update local state immediately for UI responsiveness
     setVehicles((prev) =>
       prev.map((vehicle) =>
-        vehicle.id === updatedVehicle.id ? {
-          ...vehicle,
-          ...updatedVehicle,
-          description: updatedVehicle.description 
-        } : vehicle
+        vehicle.id === normalizedVehicle.id ? normalizedVehicle : vehicle
       )
     );
     
@@ -285,16 +299,18 @@ export default function VehicleManagement() {
     
     setSelectedVehicle(null);
     
+    // Force a complete refresh after update
     setTimeout(() => {
       clearVehicleDataCache();
       loadVehicles();
-    }, 1500);
+    }, 1000);
   };
 
   const handleDeleteVehicle = (vehicleId: string) => {
     setVehicles((prev) => prev.filter((vehicle) => vehicle.id !== vehicleId));
     toast.success("Vehicle deleted successfully");
     
+    // Force a complete refresh after delete
     setTimeout(() => {
       clearVehicleDataCache();
       loadVehicles();

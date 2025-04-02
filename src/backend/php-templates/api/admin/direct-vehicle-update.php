@@ -1,4 +1,3 @@
-
 <?php
 // direct-vehicle-update.php - Endpoint for updating vehicle data directly
 
@@ -34,6 +33,11 @@ file_put_contents($logFile, json_encode($requestData, JSON_PRETTY_PRINT) . "\n\n
 // Get database connection utilities
 require_once __DIR__ . '/../utils/database.php';
 
+// Debug: Log all incoming data
+error_log("VEHICLE UPDATE: POST data: " . print_r($_POST, true));
+error_log("VEHICLE UPDATE: GET data: " . print_r($_GET, true));
+error_log("VEHICLE UPDATE: Raw input: " . file_get_contents('php://input'));
+
 // Extract vehicle data
 $vehicleId = $_POST['vehicleId'] ?? $_POST['vehicle_id'] ?? $_POST['id'] ?? null;
 $name = $_POST['name'] ?? '';
@@ -41,9 +45,14 @@ $description = $_POST['description'] ?? '';
 $image = $_POST['image'] ?? '';
 
 // Ensure capacity and luggageCapacity are numeric
-$capacity = isset($_POST['capacity']) ? (int)$_POST['capacity'] : 4;
+// CRITICAL FIX: Add more debug and properly extract capacity values
+$capacity = isset($_POST['capacity']) ? (int)$_POST['capacity'] : 4; 
 $luggageCapacity = isset($_POST['luggageCapacity']) ? (int)$_POST['luggageCapacity'] : 
                   (isset($_POST['luggage_capacity']) ? (int)$_POST['luggage_capacity'] : 2);
+
+// Debug - log the extracted capacity values
+error_log("CAPACITY EXTRACT: capacity=" . $capacity . ", raw=" . $_POST['capacity'] . ", type=" . gettype($_POST['capacity']));
+error_log("LUGGAGE EXTRACT: luggageCapacity=" . $luggageCapacity . ", raw=" . ($_POST['luggageCapacity'] ?? $_POST['luggage_capacity'] ?? 'not set'));
 
 // Extract numeric fields
 $basePrice = isset($_POST['basePrice']) ? (float)$_POST['basePrice'] : 0;
@@ -180,6 +189,11 @@ try {
         );
         
         $success = $stmt->execute();
+        if (!$success) {
+            // Log detailed error
+            error_log("VEHICLE UPDATE ERROR: " . $stmt->error);
+            file_put_contents($logFile, "UPDATE ERROR: " . $stmt->error . "\n\n", FILE_APPEND);
+        }
         $stmt->close();
         
         if (!$success) {
@@ -227,6 +241,11 @@ try {
         );
         
         $success = $stmt->execute();
+        if (!$success) {
+            // Log detailed error
+            error_log("VEHICLE INSERT ERROR: " . $stmt->error);
+            file_put_contents($logFile, "INSERT ERROR: " . $stmt->error . "\n\n", FILE_APPEND);
+        }
         $stmt->close();
         
         if (!$success) {
@@ -252,6 +271,7 @@ try {
     syncVehicleFareTables($conn, $vehicleId, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
     
 } catch (Exception $e) {
+    error_log("VEHICLE UPDATE EXCEPTION: " . $e->getMessage());
     http_response_code(500);
     echo json_encode([
         'status' => 'error',
@@ -272,6 +292,9 @@ function syncVehicleToVehiclesTable($conn, $vehicleId, $name, $capacity, $luggag
         // Skip if the vehicles table doesn't exist
         return;
     }
+    
+    // DEBUG: Log the input values
+    error_log("SYNC TO VEHICLES: id=$vehicleId, capacity=$capacity, luggageCapacity=$luggageCapacity");
     
     // Check if the vehicle exists in the vehicles table
     $stmt = $conn->prepare("SELECT id FROM vehicles WHERE vehicle_id = ?");
@@ -297,8 +320,14 @@ function syncVehicleToVehiclesTable($conn, $vehicleId, $name, $capacity, $luggag
         );
         
         $stmt->bind_param("siisssis", $name, $capacity, $luggageCapacity, $image, $description, $amenities, $isActive, $vehicleId);
-        $stmt->execute();
+        $result = $stmt->execute();
+        if (!$result) {
+            error_log("SYNC TO VEHICLES UPDATE ERROR: " . $stmt->error);
+        }
         $stmt->close();
+        
+        // DEBUG: Log the update
+        error_log("UPDATED VEHICLE IN VEHICLES TABLE: id=$vehicleId, capacity=$capacity, luggageCapacity=$luggageCapacity");
     } else {
         // Insert the vehicle into the vehicles table
         $stmt = $conn->prepare(
@@ -308,8 +337,14 @@ function syncVehicleToVehiclesTable($conn, $vehicleId, $name, $capacity, $luggag
         );
         
         $stmt->bind_param("ssiisssi", $vehicleId, $name, $capacity, $luggageCapacity, $image, $description, $amenities, $isActive);
-        $stmt->execute();
+        $result = $stmt->execute();
+        if (!$result) {
+            error_log("SYNC TO VEHICLES INSERT ERROR: " . $stmt->error);
+        }
         $stmt->close();
+        
+        // DEBUG: Log the insert
+        error_log("INSERTED VEHICLE INTO VEHICLES TABLE: id=$vehicleId, capacity=$capacity, luggageCapacity=$luggageCapacity");
     }
 }
 
