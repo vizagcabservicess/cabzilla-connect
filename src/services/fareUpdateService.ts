@@ -3,15 +3,16 @@ import { toast } from 'sonner';
 import { apiBaseUrl } from '@/config/api';
 import { directVehicleOperation } from '@/utils/apiHelper';
 
-// Extended ID mapping with additional known numeric IDs
+// Expanded ID mapping with all known numeric IDs and their proper vehicle_ids
 const numericIdMapExtended: Record<string, string> = {
   '1': 'sedan',
   '2': 'ertiga',
   '180': 'etios',
   '1266': 'MPV',
   '592': 'Urbania',
-  '1270': '1266', // Special case: ID that was converted to vehicle_id
-  '1271': '180'   // Special case: ID that was converted to vehicle_id
+  '1270': 'MPV',   // Map these duplicates back to proper vehicle_id
+  '1271': 'etios', // Map these duplicates back to proper vehicle_id
+  '1272': 'etios'  // Map these duplicates back to proper vehicle_id
 };
 
 // Enhanced helper function to normalize vehicle IDs with more robust logic
@@ -33,21 +34,59 @@ const normalizeVehicleId = (vehicleId: string | number): string => {
     return normalizedId;
   }
   
-  // If it's purely numeric, it might be a DB record ID instead of a vehicle_id
+  // If it's in our mapping, always use the mapped value to prevent duplicate vehicles
+  if (numericIdMapExtended[normalizedId]) {
+    const mappedId = numericIdMapExtended[normalizedId];
+    console.log(`CRITICAL: Converting numeric ID ${normalizedId} to vehicle ID: ${mappedId}`);
+    return mappedId;
+  }
+  
+  // If it's purely numeric, we need to check the database for the actual vehicle_id
   if (/^\d+$/.test(normalizedId)) {
-    if (numericIdMapExtended[normalizedId]) {
-      const mappedId = numericIdMapExtended[normalizedId];
-      console.log(`Converted numeric ID ${normalizedId} to vehicle ID: ${mappedId}`);
-      return mappedId;
-    }
+    // Log a warning since this is potentially problematic
+    console.warn(`Potentially problematic numeric ID: ${normalizedId} - attempting to verify with check-vehicle.php`);
     
-    // If it's a large number, it's likely an internal database ID and not meant to be a vehicle_id
-    if (parseInt(normalizedId) > 100) {
-      console.warn(`Potentially problematic numeric ID: ${normalizedId} - this might create a duplicate vehicle`);
-    }
+    // We'll handle the verification in the API methods below
+    // For now, return the normalized ID
+    return normalizedId;
   }
   
   return normalizedId;
+};
+
+// Helper function to verify a vehicle ID exists before updating fares
+const verifyVehicleId = async (vehicleId: string): Promise<string> => {
+  try {
+    const normalizedId = normalizeVehicleId(vehicleId);
+    
+    // Use check-vehicle endpoint to verify this ID exists
+    const checkResult = await directVehicleOperation('/api/admin/check-vehicle.php', 'GET', {
+      vehicleId: normalizedId
+    });
+    
+    if (checkResult && checkResult.status === 'success' && checkResult.exists) {
+      // If we found the vehicle, use its actual vehicle_id from the database
+      const actualVehicleId = checkResult.vehicle.vehicle_id;
+      if (actualVehicleId && actualVehicleId !== normalizedId) {
+        console.log(`Using actual vehicle_id ${actualVehicleId} instead of ${normalizedId}`);
+        return actualVehicleId;
+      }
+      return normalizedId;
+    }
+    
+    // If we couldn't verify, log an error but return the normalized ID
+    console.error(`Could not verify vehicle ID: ${normalizedId}`, checkResult);
+    
+    // If this is numeric, throw an error to prevent creation of duplicate vehicles
+    if (/^\d+$/.test(normalizedId) && parseInt(normalizedId) > 10) {
+      throw new Error(`Cannot use numeric ID ${normalizedId} as it may create a duplicate vehicle`);
+    }
+    
+    return normalizedId;
+  } catch (error) {
+    console.error(`Error verifying vehicle ID: ${error}`);
+    throw error;
+  }
 };
 
 /**
@@ -62,14 +101,14 @@ export const updateOutstationFares = async (
   driverAllowance: number = 300,
   nightHaltCharge: number = 700
 ): Promise<any> => {
-  // Normalize the vehicle ID
-  const normalizedVehicleId = normalizeVehicleId(vehicleId);
-  console.log(`Updating outstation fares for vehicle ${vehicleId} (normalized: ${normalizedVehicleId})`);
-  
   try {
+    // Verify and normalize the vehicle ID first
+    const verifiedVehicleId = await verifyVehicleId(vehicleId);
+    console.log(`Updating outstation fares for vehicle ${vehicleId} (verified: ${verifiedVehicleId})`);
+    
     // Use directVehicleOperation for direct API access with explicit endpoint
     const result = await directVehicleOperation('/api/admin/direct-outstation-fares.php', 'POST', {
-      vehicleId: normalizedVehicleId,
+      vehicleId: verifiedVehicleId,
       basePrice: oneWayBasePrice,
       pricePerKm: oneWayPricePerKm,
       roundTripBasePrice: roundTripBasePrice || oneWayBasePrice * 0.9, // Default to 90% of one-way if not specified
@@ -79,7 +118,7 @@ export const updateOutstationFares = async (
     });
     
     if (result && result.status === 'success') {
-      toast.success(`Updated outstation fares for ${normalizedVehicleId}`);
+      toast.success(`Updated outstation fares for ${verifiedVehicleId}`);
       return result;
     } else {
       throw new Error(result?.message || 'Failed to update outstation fares');
@@ -100,53 +139,59 @@ export const updateLocalFares = async (
   extraHourRate: number = 0,
   packages: any[] = []
 ): Promise<any> => {
-  // Normalize the vehicle ID with enhanced logic
-  const normalizedVehicleId = normalizeVehicleId(vehicleId);
-  console.log(`Updating local fares for vehicle ${vehicleId} (normalized: ${normalizedVehicleId})`);
-  
-  // Add additional validation to prevent problematic IDs
-  if (!normalizedVehicleId || normalizedVehicleId === 'undefined' || normalizedVehicleId === 'null') {
-    console.error("Invalid vehicle ID provided to updateLocalFares:", vehicleId);
-    toast.error("Invalid vehicle ID. Please try again.");
-    return Promise.reject(new Error("Invalid vehicle ID"));
-  }
-  
   try {
-    // First verify this vehicle exists to prevent creation of new entries
-    const checkResult = await directVehicleOperation('/api/admin/check-vehicle.php', 'GET', {
-      vehicleId: normalizedVehicleId,
-      verifyOnly: 'true'
-    });
+    // Verify and normalize the vehicle ID first
+    const verifiedVehicleId = await verifyVehicleId(vehicleId);
+    console.log(`Updating local fares for vehicle ${vehicleId} (verified: ${verifiedVehicleId})`);
     
-    if (checkResult && checkResult.status === 'error') {
-      console.error(`Vehicle ID ${normalizedVehicleId} verification failed:`, checkResult.message);
-      toast.error(`Cannot update fares: ${checkResult.message}`);
-      return Promise.reject(new Error(checkResult.message));
+    // Add additional validation to prevent problematic IDs
+    if (!verifiedVehicleId || verifiedVehicleId === 'undefined' || verifiedVehicleId === 'null') {
+      console.error("Invalid vehicle ID provided to updateLocalFares:", vehicleId);
+      toast.error("Invalid vehicle ID. Please try again.");
+      return Promise.reject(new Error("Invalid vehicle ID"));
     }
     
-    // Try using the direct endpoint first which has better validation
+    // First try using the universal fare update endpoint which has better validation
+    const universalResult = await directVehicleOperation('/api/admin/fare-update.php', 'POST', {
+      tripType: 'local',
+      vehicleId: verifiedVehicleId,
+      extraKmRate,
+      extraHourRate,
+      price4hr: typeof packages === 'object' && packages['4hrs-40km'] ? packages['4hrs-40km'] : 0,
+      price8hr: typeof packages === 'object' && packages['8hrs-80km'] ? packages['8hrs-80km'] : 0,
+      price10hr: typeof packages === 'object' && packages['10hrs-100km'] ? packages['10hrs-100km'] : 0
+    });
+    
+    console.log("Universal endpoint response:", universalResult);
+    
+    if (universalResult && universalResult.status === 'success') {
+      toast.success(`Updated local fares for ${verifiedVehicleId}`);
+      return universalResult;
+    }
+    
+    // If universal endpoint fails, try the direct endpoint
     const directResult = await directVehicleOperation('/api/admin/direct-local-fares.php', 'POST', {
-      vehicleId: normalizedVehicleId,
+      vehicleId: verifiedVehicleId,
       extraKmRate,
       extraHourRate,
       packages: typeof packages === 'object' ? JSON.stringify(packages) : packages
     });
     
     if (directResult && directResult.status === 'success') {
-      toast.success(`Updated local fares for ${normalizedVehicleId}`);
+      toast.success(`Updated local fares for ${verifiedVehicleId}`);
       return directResult;
     }
     
     // Fall back to the older endpoint
     const result = await directVehicleOperation('/api/admin/local-package-fares-update.php', 'POST', {
-      vehicleId: normalizedVehicleId,
+      vehicleId: verifiedVehicleId,
       extraKmRate,
       extraHourRate,
       packages: typeof packages === 'object' ? JSON.stringify(packages) : packages
     });
     
     if (result && result.status === 'success') {
-      toast.success(`Updated local fares for ${normalizedVehicleId}`);
+      toast.success(`Updated local fares for ${verifiedVehicleId}`);
       return result;
     } else {
       throw new Error(result?.message || 'Failed to update local fares');
@@ -165,18 +210,18 @@ export const updateAirportFares = async (
   vehicleId: string,
   locationFares: Record<string, number>
 ): Promise<any> => {
-  // Normalize the vehicle ID
-  const normalizedVehicleId = normalizeVehicleId(vehicleId);
-  console.log(`Updating airport fares for vehicle ${vehicleId} (normalized: ${normalizedVehicleId})`);
-  
   try {
+    // Verify and normalize the vehicle ID first
+    const verifiedVehicleId = await verifyVehicleId(vehicleId);
+    console.log(`Updating airport fares for vehicle ${vehicleId} (verified: ${verifiedVehicleId})`);
+    
     const result = await directVehicleOperation('/api/admin/airport-fares-update.php', 'POST', {
-      vehicleId: normalizedVehicleId,
+      vehicleId: verifiedVehicleId,
       fares: locationFares
     });
     
     if (result && result.status === 'success') {
-      toast.success(`Updated airport fares for ${normalizedVehicleId}`);
+      toast.success(`Updated airport fares for ${verifiedVehicleId}`);
       return result;
     } else {
       throw new Error(result?.message || 'Failed to update airport fares');

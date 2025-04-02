@@ -43,13 +43,16 @@ function getDbConnection() {
     }
 }
 
-// Known vehicle ID mappings
+// Known vehicle ID mappings - Extended to include all known numeric IDs in the system
 $knownMappings = [
     '1' => 'sedan',
     '2' => 'ertiga',
     '180' => 'etios',
     '1266' => 'MPV',
-    '592' => 'Urbania'
+    '592' => 'Urbania',
+    '1270' => 'MPV',   // Map these duplicates back to their proper vehicle IDs
+    '1271' => 'etios', // Map these duplicates back to their proper vehicle IDs
+    '1272' => 'etios'  // Map these duplicates back to their proper vehicle IDs
 ];
 
 // Extract vehicle ID from request
@@ -62,16 +65,44 @@ if (isset($_GET['vehicleId'])) {
     $vehicleId = $_GET['vehicle_id'];
 }
 
-// Normalize vehicle ID
+// Improved vehicle ID normalization
 if (!empty($vehicleId)) {
     // Remove "item-" prefix if it exists
     if (strpos($vehicleId, 'item-') === 0) {
         $vehicleId = substr($vehicleId, 5);
     }
     
-    // Map numeric IDs to known vehicle_ids
-    if (is_numeric($vehicleId) && isset($knownMappings[$vehicleId])) {
+    // CRITICAL: If this is a known numeric ID, always map it to the proper vehicle_id
+    // This prevents creation of duplicate vehicles with numeric names
+    if (isset($knownMappings[$vehicleId])) {
+        // Log the mapping for debugging purposes
+        error_log("[$timestamp] Mapped numeric ID $vehicleId to {$knownMappings[$vehicleId]}", 3, $logDir . '/check-vehicle.log');
         $vehicleId = $knownMappings[$vehicleId];
+    }
+    
+    // If it's still a numeric ID, try to look up the proper vehicle_id
+    if (is_numeric($vehicleId)) {
+        try {
+            $conn = getDbConnection();
+            
+            // Try to find the actual vehicle_id for this numeric ID (which might be an internal database record ID)
+            $query = "SELECT vehicle_id FROM vehicles WHERE id = ? LIMIT 1";
+            $stmt = $conn->prepare($query);
+            $stmt->execute([$vehicleId]);
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            // If found, use the actual vehicle_id instead
+            if ($result && !empty($result['vehicle_id'])) {
+                $actualVehicleId = $result['vehicle_id'];
+                error_log("[$timestamp] Found actual vehicle_id '$actualVehicleId' for numeric ID $vehicleId", 3, $logDir . '/check-vehicle.log');
+                $vehicleId = $actualVehicleId;
+            }
+            
+            // Close connection
+            $conn = null;
+        } catch (Exception $e) {
+            error_log("[$timestamp] Error while looking up vehicle_id: " . $e->getMessage(), 3, $logDir . '/check-vehicle.log');
+        }
     }
 }
 
@@ -84,11 +115,19 @@ try {
     // Connect to database
     $conn = getDbConnection();
     
-    // Query to check if vehicle exists
-    $query = "SELECT id, vehicle_id, name FROM vehicles WHERE vehicle_id = ? OR id = ? LIMIT 1";
+    // Query to check if vehicle exists - First try to match by vehicle_id which is the preferred method
+    $query = "SELECT id, vehicle_id, name FROM vehicles WHERE vehicle_id = ? LIMIT 1";
     $stmt = $conn->prepare($query);
-    $stmt->execute([$vehicleId, $vehicleId]);
+    $stmt->execute([$vehicleId]);
     $vehicle = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    // If not found by vehicle_id, try by id as fallback
+    if (!$vehicle && is_numeric($vehicleId)) {
+        $query = "SELECT id, vehicle_id, name FROM vehicles WHERE id = ? LIMIT 1";
+        $stmt = $conn->prepare($query);
+        $stmt->execute([$vehicleId]);
+        $vehicle = $stmt->fetch(PDO::FETCH_ASSOC);
+    }
     
     // Return appropriate response
     if ($vehicle) {
@@ -100,6 +139,7 @@ try {
                 'vehicle_id' => $vehicle['vehicle_id'],
                 'name' => $vehicle['name']
             ],
+            'originalVehicleId' => $vehicleId, // Include the original ID that was passed for debugging
             'message' => "Vehicle found"
         ]);
     } else {
