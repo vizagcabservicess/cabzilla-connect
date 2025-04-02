@@ -1,4 +1,3 @@
-
 <?php
 // local-fares-update.php - Ultra simplified local fare update endpoint
 // No configuration files, no includes, pure standalone script
@@ -82,9 +81,41 @@ if (strpos($vehicleId, 'item-') === 0) {
 // Log the original and cleaned vehicleId
 error_log("[$timestamp] Original vehicle ID: $originalVehicleId, Cleaned: $vehicleId", 3, $logDir . '/local-fares.log');
 
-// CRITICAL FIX: If vehicleId is numeric and less than 1000, this is likely an internal ID 
-// rather than a vehicle_id. Check for the actual vehicle_id in the database.
-if (is_numeric($vehicleId) && intval($vehicleId) < 1000) {
+// Known vehicle ID mappings - CRITICAL for preventing duplicates
+$knownMappings = [
+    '1' => 'sedan',
+    '2' => 'ertiga',
+    '180' => 'etios',
+    '1266' => 'MPV',
+    '592' => 'Urbania',
+    '1270' => 'MPV',   // Map these duplicates back to proper vehicle IDs
+    '1271' => 'etios', // Map these duplicates back to proper vehicle IDs
+    '1272' => 'etios',  // Map these duplicates back to proper vehicle IDs
+    '1273' => 'etios',  // Add any new numeric IDs that have appeared
+    '1274' => 'etios',
+    '1275' => 'etios'
+];
+
+// If this is a known numeric ID mapping, use the proper vehicle_id
+if (is_numeric($vehicleId) && isset($knownMappings[$vehicleId])) {
+    $numericId = $vehicleId;
+    $vehicleId = $knownMappings[$vehicleId];
+    error_log("[$timestamp] Mapped numeric ID $numericId to vehicle_id: $vehicleId", 3, $logDir . '/local-fares.log');
+}
+// CRITICAL FIX: If vehicleId is numeric and large, reject it immediately
+else if (is_numeric($vehicleId) && intval($vehicleId) > 10) {
+    error_log("[$timestamp] REJECTED large numeric ID: $vehicleId - preventing duplicate vehicle creation", 3, $logDir . '/local-fares.log');
+    http_response_code(400);
+    echo json_encode([
+        'status' => 'error',
+        'message' => "Cannot use numeric ID '$vehicleId' directly as a vehicle identifier. Please use the proper vehicle ID instead.",
+        'isNumericId' => true,
+        'originalId' => $originalVehicleId
+    ]);
+    exit;
+}
+// For small numeric IDs, verify in the database
+else if (is_numeric($vehicleId)) {
     error_log("[$timestamp] Numeric vehicle ID detected: $vehicleId - will verify in database", 3, $logDir . '/local-fares.log');
     
     try {

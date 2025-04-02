@@ -12,7 +12,10 @@ const numericIdMapExtended: Record<string, string> = {
   '592': 'Urbania',
   '1270': 'MPV',   // Map these duplicates back to proper vehicle_id
   '1271': 'etios', // Map these duplicates back to proper vehicle_id
-  '1272': 'etios'  // Map these duplicates back to proper vehicle_id
+  '1272': 'etios', // Map these duplicates back to proper vehicle_id
+  '1273': 'etios', // Add any new numeric IDs that have appeared
+  '1274': 'etios',
+  '1275': 'etios'
 };
 
 // Enhanced helper function to normalize vehicle IDs with more robust logic
@@ -43,12 +46,15 @@ const normalizeVehicleId = (vehicleId: string | number): string => {
   
   // If it's purely numeric, we need to check the database for the actual vehicle_id
   if (/^\d+$/.test(normalizedId)) {
-    // Log a warning since this is potentially problematic
-    console.warn(`Potentially problematic numeric ID: ${normalizedId} - attempting to verify with check-vehicle.php`);
+    // STRICTER APPROACH: If this is a numeric ID above 10, BLOCK it completely
+    // This is more aggressive but necessary to prevent duplicate vehicles
+    if (parseInt(normalizedId) > 10) {
+      console.error(`REJECTED: Numeric ID ${normalizedId} not allowed as vehicle ID to prevent duplicates`);
+      throw new Error(`Cannot use numeric ID ${normalizedId} as a vehicle identifier. Please use the proper vehicle ID.`);
+    }
     
-    // We'll handle the verification in the API methods below
-    // For now, return the normalized ID
-    return normalizedId;
+    // If it's a small number (below 10), log a warning but allow it
+    console.warn(`Small numeric ID: ${normalizedId} - allowing but verifying with check-vehicle.php`);
   }
   
   return normalizedId;
@@ -57,12 +63,25 @@ const normalizeVehicleId = (vehicleId: string | number): string => {
 // Helper function to verify a vehicle ID exists before updating fares
 const verifyVehicleId = async (vehicleId: string): Promise<string> => {
   try {
-    const normalizedId = normalizeVehicleId(vehicleId);
+    // First normalize the ID using our enhanced function
+    let normalizedId;
+    try {
+      normalizedId = normalizeVehicleId(vehicleId);
+    } catch (error) {
+      console.error(`Error normalizing vehicle ID: ${error}`);
+      throw error; // Re-throw to prevent processing with invalid IDs
+    }
     
     // Use check-vehicle endpoint to verify this ID exists
     const checkResult = await directVehicleOperation('/api/admin/check-vehicle.php', 'GET', {
       vehicleId: normalizedId
     });
+    
+    // Check if the response indicates this is a problematic numeric ID
+    if (checkResult && checkResult.isNumericId === true) {
+      console.error(`Server rejected numeric ID: ${normalizedId}`);
+      throw new Error(checkResult.message || `Cannot use numeric ID ${normalizedId} as vehicle identifier`);
+    }
     
     if (checkResult && checkResult.status === 'success' && checkResult.exists) {
       // If we found the vehicle, use its actual vehicle_id from the database
@@ -77,8 +96,8 @@ const verifyVehicleId = async (vehicleId: string): Promise<string> => {
     // If we couldn't verify, log an error but return the normalized ID
     console.error(`Could not verify vehicle ID: ${normalizedId}`, checkResult);
     
-    // If this is numeric, throw an error to prevent creation of duplicate vehicles
-    if (/^\d+$/.test(normalizedId) && parseInt(normalizedId) > 10) {
+    // IMPORTANT: If this is numeric, throw an error to prevent creation of duplicate vehicles
+    if (/^\d+$/.test(normalizedId)) {
       throw new Error(`Cannot use numeric ID ${normalizedId} as it may create a duplicate vehicle`);
     }
     
