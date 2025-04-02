@@ -101,28 +101,40 @@ try {
     
     // If not found in GET, check POST data
     if (!$vehicleId) {
-        foreach ($possibleParams as $param) {
-            if (isset($_POST[$param]) && !empty($_POST[$param])) {
-                $vehicleId = $_POST[$param];
-                logMessage("Found vehicle ID in POST data parameter '$param': $vehicleId");
-                break;
-            }
-        }
-    }
-    
-    // If still not found, try JSON body
-    if (!$vehicleId) {
         $rawData = file_get_contents('php://input');
         if (!empty($rawData)) {
             $jsonData = json_decode($rawData, true);
             
-            if (json_last_error() === JSON_ERROR_NONE) {
+            if (json_last_error() === JSON_ERROR_NONE && is_array($jsonData)) {
                 foreach ($possibleParams as $param) {
                     if (isset($jsonData[$param]) && !empty($jsonData[$param])) {
                         $vehicleId = $jsonData[$param];
                         logMessage("Found vehicle ID in JSON body parameter '$param': $vehicleId");
                         break;
                     }
+                }
+            } else {
+                // Try to parse as URL-encoded
+                parse_str($rawData, $parsedData);
+                if (is_array($parsedData)) {
+                    foreach ($possibleParams as $param) {
+                        if (isset($parsedData[$param]) && !empty($parsedData[$param])) {
+                            $vehicleId = $parsedData[$param];
+                            logMessage("Found vehicle ID in URL-encoded data parameter '$param': $vehicleId");
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Check POST directly as fallback
+        if (!$vehicleId) {
+            foreach ($possibleParams as $param) {
+                if (isset($_POST[$param]) && !empty($_POST[$param])) {
+                    $vehicleId = $_POST[$param];
+                    logMessage("Found vehicle ID in POST data parameter '$param': $vehicleId");
+                    break;
                 }
             }
         }
@@ -158,11 +170,11 @@ try {
                 continue;
             }
             
-            $deleteQuery = "DELETE FROM $table WHERE vehicle_id = ?";
+            $deleteQuery = "DELETE FROM $table WHERE vehicle_id = ? OR id = ?";
             $deleteStmt = $conn->prepare($deleteQuery);
             
             if ($deleteStmt) {
-                $deleteStmt->bind_param('s', $vehicleId);
+                $deleteStmt->bind_param('ss', $vehicleId, $vehicleId);
                 $deleteStmt->execute();
                 $affectedRows = $deleteStmt->affected_rows;
                 logMessage("Deleted from $table: $affectedRows row(s)");
@@ -173,43 +185,6 @@ try {
                 $deleteStmt->close();
             } else {
                 logMessage("Error preparing delete statement for $table: " . $conn->error);
-            }
-        }
-        
-        if (!$deleted) {
-            // If no rows were affected, try with alternate ID columns
-            foreach ($tables as $table) {
-                $tableCheckResult = $conn->query("SHOW TABLES LIKE '$table'");
-                if ($tableCheckResult->num_rows == 0) {
-                    continue;
-                }
-                
-                $columnsResult = $conn->query("SHOW COLUMNS FROM $table");
-                $hasIdColumn = false;
-                
-                while ($column = $columnsResult->fetch_assoc()) {
-                    if ($column['Field'] === 'id') {
-                        $hasIdColumn = true;
-                        break;
-                    }
-                }
-                
-                if ($hasIdColumn) {
-                    $deleteQuery = "DELETE FROM $table WHERE id = ?";
-                    $deleteStmt = $conn->prepare($deleteQuery);
-                    
-                    if ($deleteStmt) {
-                        $deleteStmt->bind_param('s', $vehicleId);
-                        $deleteStmt->execute();
-                        $affectedRows = $deleteStmt->affected_rows;
-                        logMessage("Deleted from $table using 'id' column: $affectedRows row(s)");
-                        
-                        if ($affectedRows > 0) {
-                            $deleted = true;
-                        }
-                        $deleteStmt->close();
-                    }
-                }
             }
         }
         
@@ -237,3 +212,4 @@ try {
 
 // Send response
 echo json_encode($response);
+?>

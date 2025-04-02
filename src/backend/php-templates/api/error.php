@@ -6,8 +6,8 @@
 
 // Set CORS headers for error responses
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, PUT, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode');
 header('Content-Type: application/json');
 
 // Get the HTTP status code
@@ -30,8 +30,18 @@ $statusMessages = [
 // Get message for status code
 $message = $statusMessages[$status] ?? 'Unknown Error';
 
+// Add more details based on the URL
+$details = "";
+$path = $_SERVER['REQUEST_URI'] ?? '';
+
+if ($status == 404) {
+    $details = "The requested API endpoint '{$path}' could not be found. Please check the URL and try again.";
+} elseif ($status == 500) {
+    $details = "The server encountered an internal error processing your request. This might be due to database connectivity issues or server maintenance.";
+}
+
 // Log the error
-$logMessage = date('Y-m-d H:i:s') . " - Error {$status}: {$message} - " . $_SERVER['REQUEST_URI'];
+$logMessage = date('Y-m-d H:i:s') . " - Error {$status}: {$message} - " . $path;
 error_log($logMessage, 3, dirname(__FILE__) . '/../logs/api-errors.log');
 
 // Return JSON error response
@@ -39,7 +49,8 @@ echo json_encode([
     'status' => 'error',
     'code' => $status,
     'message' => "API Error: {$message}",
-    'path' => $_SERVER['REQUEST_URI'],
+    'details' => $details,
+    'path' => $path,
     'timestamp' => time()
 ]);
 ?>

@@ -15,18 +15,48 @@ export const directVehicleOperation = async (endpoint: string, method: string, d
       ? `${fullUrl}${fullUrl.includes('?') ? '&' : '?'}_t=${Date.now()}`
       : fullUrl;
     
+    // Serialize data properly to avoid JSON parsing errors
+    let body: string | FormData | undefined;
+    let contentType = 'application/json';
+    
+    if (method !== 'GET' && data) {
+      // If data contains File/Blob objects, use FormData
+      if (hasFileOrBlob(data)) {
+        body = formatDataForMultipart(data);
+        contentType = ''; // Let browser set content-type for multipart
+      } else {
+        try {
+          // First clean any invalid characters that might break JSON
+          const cleanedData = JSON.parse(JSON.stringify(data));
+          body = JSON.stringify(cleanedData);
+        } catch (e) {
+          // Fallback to FormData if JSON serialization fails
+          console.warn('JSON serialization failed, using FormData instead', e);
+          body = formatDataForMultipart(data);
+          contentType = ''; // Let browser set content-type for multipart
+        }
+      }
+    }
+    
+    // Prepare headers
+    const headers: Record<string, string> = {
+      'X-Requested-With': 'XMLHttpRequest',
+      'X-Force-Refresh': 'true',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'X-Admin-Mode': 'true'
+    };
+    
+    // Only add Content-Type if not using FormData
+    if (contentType) {
+      headers['Content-Type'] = contentType;
+    }
+    
     const response = await fetch(finalUrl, {
       method,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
-        'X-Force-Refresh': 'true',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0',
-        'X-Admin-Mode': 'true'
-      },
-      body: method !== 'GET' && data ? JSON.stringify(data) : undefined,
+      headers,
+      body,
       signal: AbortSignal.timeout(30000) // 30 second timeout
     });
     
@@ -49,12 +79,59 @@ export const directVehicleOperation = async (endpoint: string, method: string, d
     }
     
     // Parse response data
-    const responseData = await response.json();
-    return responseData;
+    const contentTypeHeader = response.headers.get('content-type');
+    
+    if (contentTypeHeader && contentTypeHeader.includes('application/json')) {
+      // JSON response
+      try {
+        const responseData = await response.json();
+        return responseData;
+      } catch (jsonError) {
+        console.error('Failed to parse JSON response', jsonError);
+        throw new Error(`Invalid JSON response: ${await response.text()}`);
+      }
+    } else {
+      // Non-JSON response
+      const textResponse = await response.text();
+      try {
+        // Try to parse as JSON anyway in case Content-Type is incorrect
+        return JSON.parse(textResponse);
+      } catch (jsonError) {
+        // Return plain text response as an object
+        return {
+          status: response.ok ? 'success' : 'error',
+          message: textResponse,
+          raw: textResponse
+        };
+      }
+    }
   } catch (error: any) {
     console.error(`Error in directVehicleOperation (${endpoint}):`, error);
     throw error;
   }
+};
+
+/**
+ * Check if an object contains any File or Blob instances
+ */
+const hasFileOrBlob = (data: any): boolean => {
+  if (!data || typeof data !== 'object') {
+    return false;
+  }
+  
+  for (const key in data) {
+    if (data[key] instanceof File || data[key] instanceof Blob) {
+      return true;
+    }
+    
+    if (typeof data[key] === 'object' && data[key] !== null) {
+      if (hasFileOrBlob(data[key])) {
+        return true;
+      }
+    }
+  }
+  
+  return false;
 };
 
 /**

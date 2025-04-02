@@ -1,5 +1,5 @@
 
-import { AlertTriangle, RefreshCw, Database, Terminal } from "lucide-react";
+import { AlertTriangle, RefreshCw, Database, Terminal, Trash } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";
@@ -52,11 +52,13 @@ export function FareUpdateError({
     }
   };
   
-  // Detect if we have a 404 error
+  // Detect if we have specific error types
   const is404Error = errorMessage.includes('404') || errorMessage.includes('not found');
   const isSqlError = errorMessage.includes('SQL') || errorMessage.includes('MySQL');
   const isServerError = errorMessage.includes('500') || errorMessage.includes('Internal Server Error');
   const isConnectionError = errorMessage.includes('connection') || errorMessage.includes('timeout');
+  const isJsonError = errorMessage.includes('JSON') || errorMessage.includes('SyntaxError') || errorMessage.includes('unexpected token');
+  const isDeleteError = errorMessage.includes('delete') || errorMessage.includes('Delete');
 
   return (
     <Card className="p-4 mb-4 border-red-200 bg-red-50 dark:bg-red-950 dark:border-red-800">
@@ -86,6 +88,30 @@ export function FareUpdateError({
                 <li>Server configuration issues</li>
                 <li>Missing files</li>
                 <li>URL path errors</li>
+              </ul>
+            </div>
+          )}
+          
+          {isJsonError && (
+            <div className="mb-3 text-xs bg-red-100 dark:bg-red-900 p-3 rounded border border-red-300 dark:border-red-800">
+              <p className="font-semibold mb-1">JSON Parsing Error</p>
+              <p>There was a problem with the data format. This might be due to:</p>
+              <ul className="list-disc list-inside mt-1">
+                <li>Invalid characters in the request or response</li>
+                <li>Malformed JSON data</li>
+                <li>Server returning HTML instead of JSON</li>
+              </ul>
+            </div>
+          )}
+          
+          {isDeleteError && (
+            <div className="mb-3 text-xs bg-red-100 dark:bg-red-900 p-3 rounded border border-red-300 dark:border-red-800">
+              <p className="font-semibold mb-1">Vehicle Deletion Error</p>
+              <p>There was a problem deleting the vehicle. This might be due to:</p>
+              <ul className="list-disc list-inside mt-1">
+                <li>Vehicle is referenced in bookings or other tables</li>
+                <li>Database permissions issue</li>
+                <li>Missing API endpoint on the server</li>
               </ul>
             </div>
           )}

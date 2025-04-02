@@ -1,14 +1,19 @@
 
-import React from 'react';
+import { useState } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Pencil, Trash2, Users, Briefcase, Check, X } from "lucide-react";
+import { Trash2, Edit, Eye, EyeOff, MoreHorizontal } from "lucide-react";
 import { CabType } from "@/types/cab";
-import { deleteVehicle } from "@/services/directVehicleService";
 import { toast } from "sonner";
-import { parseAmenities, parseNumericValue } from '@/utils/safeStringUtils';
 import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -18,6 +23,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { deleteVehicle } from "@/services/directVehicleService";
+import { Badge } from "@/components/ui/badge";
+import { FareUpdateError } from "@/components/cab-options/FareUpdateError";
 
 interface VehicleCardProps {
   vehicle: CabType;
@@ -26,161 +34,165 @@ interface VehicleCardProps {
 }
 
 export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
-  const [confirmDelete, setConfirmDelete] = React.useState(false);
-  const [isDeleting, setIsDeleting] = React.useState(false);
-  
-  // Ensure capacity and luggageCapacity are always parsed as numbers
-  const capacity = parseNumericValue(vehicle.capacity, 4);
-  const luggageCapacity = parseNumericValue(vehicle.luggageCapacity, 2);
-  
-  // Clean up and display amenities with proper type checking
-  const amenities = parseAmenities(vehicle.amenities);
-  
-  // Ensure all price values are presented as numbers
-  const basePrice = parseNumericValue(vehicle.price || vehicle.basePrice, 0);
-  const pricePerKm = parseNumericValue(vehicle.pricePerKm, 0);
-  
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const formatAmenities = (amenities: string[] | string): string => {
+    if (typeof amenities === 'string') {
+      return amenities;
+    }
+    return amenities?.slice(0, 3)?.join(', ') || '';
+  };
+
   const handleDelete = async () => {
+    setIsDeleting(true);
+    setError(null);
+
     try {
-      setIsDeleting(true);
-      // Add a retry mechanism for the delete operation
-      const maxRetries = 3;
-      let attempt = 0;
-      let success = false;
-      
-      while (attempt < maxRetries && !success) {
-        try {
-          await deleteVehicle(vehicle.id || '');
-          success = true;
-        } catch (error: any) {
-          attempt++;
-          console.error(`Delete attempt ${attempt} failed:`, error);
-          
-          if (attempt >= maxRetries) {
-            throw error; // Rethrow after max retries
-          }
-          
-          // Wait before retrying (exponential backoff)
-          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-        }
+      if (!vehicle.id && !vehicle.vehicleId) {
+        throw new Error("Cannot delete vehicle: Missing vehicle ID");
       }
+
+      const vehicleId = String(vehicle.id || vehicle.vehicleId || '');
+      console.log(`Deleting vehicle ID: ${vehicleId}`);
+
+      const response = await deleteVehicle(vehicleId);
       
-      toast.success(`Vehicle ${vehicle.name} deleted`);
-      onDelete(vehicle.id || '');
-    } catch (error: any) {
-      console.error('Error deleting vehicle:', error);
-      
-      // Show a more detailed error message to help with debugging
-      const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
-      const errorDetails = error.response?.data?.error || '';
-      
-      toast.error(`Failed to delete vehicle: ${errorMessage}${errorDetails ? ` (${errorDetails})` : ''}`);
+      if (response && response.status === 'success') {
+        toast.success(`Vehicle "${vehicle.name}" deleted successfully`);
+        onDelete(vehicleId);
+      } else {
+        throw new Error(response?.message || `Failed to delete vehicle ${vehicleId}`);
+      }
+    } catch (err: any) {
+      console.error("Error deleting vehicle:", err);
+      setError(err);
+      toast.error(`Failed to delete vehicle: ${err.message}`);
     } finally {
       setIsDeleting(false);
-      setConfirmDelete(false);
+      setShowDeleteConfirm(false);
     }
   };
-  
-  return (
-    <>
+
+  const resetError = () => setError(null);
+
+  const { name, capacity, image } = vehicle;
+
+  if (error) {
+    return (
       <Card className="overflow-hidden">
-        <CardContent className="p-0">
-          <div className="relative pt-4">
-            {!vehicle.isActive && (
-              <div className="absolute top-2 right-2">
-                <Badge variant="destructive">Inactive</Badge>
-              </div>
-            )}
-            
-            <div className="p-4">
-              <div className="flex justify-between items-start mb-2">
-                <h3 className="text-lg font-semibold">{vehicle.name}</h3>
-                <span className="text-xs bg-slate-100 px-2 py-1 rounded">ID: {vehicle.id}</span>
-              </div>
-              
-              <div className="flex flex-wrap gap-2 mb-4">
-                <div className="flex items-center gap-1 text-sm">
-                  <Users className="h-4 w-4" />
-                  <span>{capacity} seats</span>
-                </div>
-                
-                <div className="flex items-center gap-1 text-sm">
-                  <Briefcase className="h-4 w-4" />
-                  <span>{luggageCapacity} luggage</span>
-                </div>
-                
-                {vehicle.ac !== false ? (
-                  <div className="flex items-center gap-1 text-sm text-green-600">
-                    <Check className="h-4 w-4" />
-                    <span>AC</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1 text-sm text-red-600">
-                    <X className="h-4 w-4" />
-                    <span>Non-AC</span>
-                  </div>
-                )}
-              </div>
-              
-              <div className="mb-4">
-                <p className="text-sm font-medium text-gray-700">Base Price: ₹{basePrice.toFixed(0)}</p>
-                <p className="text-sm text-gray-700">Per KM: ₹{pricePerKm.toFixed(0)}</p>
-              </div>
-              
-              {vehicle.description && (
-                <p className="text-sm text-gray-600 mb-4">{vehicle.description}</p>
-              )}
-              
-              {amenities.length > 0 && (
-                <div className="flex flex-wrap gap-1 mb-4">
-                  {amenities.map((amenity, index) => (
-                    <Badge key={index} variant="outline" className="text-xs">{amenity}</Badge>
-                  ))}
-                </div>
-              )}
-              
-              <div className="flex justify-end gap-2 mt-4">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={onEdit}
-                >
-                  <Pencil className="h-4 w-4 mr-1" /> Edit
-                </Button>
-                <Button 
-                  variant="destructive" 
-                  size="sm"
-                  onClick={() => setConfirmDelete(true)}
-                  disabled={isDeleting}
-                >
-                  <Trash2 className="h-4 w-4 mr-1" /> Delete
-                </Button>
-              </div>
-            </div>
+        <CardContent className="p-4">
+          <FareUpdateError
+            error={error}
+            onRetry={() => {
+              resetError();
+              handleDelete();
+            }}
+            title="Delete Error"
+            description={`Failed to delete vehicle "${name}".`}
+            isAdmin={true}
+          />
+          <div className="flex justify-end mt-2">
+            <Button size="sm" variant="outline" onClick={resetError}>
+              Back
+            </Button>
           </div>
         </CardContent>
       </Card>
-      
-      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete the vehicle "{vehicle.name}". This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleDelete} 
-              disabled={isDeleting}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              {isDeleting ? 'Deleting...' : 'Delete'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
+    );
+  }
+
+  return (
+    <Card className="overflow-hidden">
+      <CardContent className="p-4">
+        <div className="flex justify-between items-start">
+          <div>
+            <h3 className="font-semibold text-lg">{name}</h3>
+            <div className="flex items-center gap-1 mt-1 text-sm text-gray-500">
+              <span>{capacity} Seats</span>
+              <span className="mx-1">•</span>
+              <span>{vehicle.luggageCapacity} Luggage</span>
+            </div>
+            <p className="text-sm mt-2 text-gray-600 line-clamp-2">
+              {formatAmenities(vehicle.amenities || [])}
+            </p>
+          </div>
+          
+          <div className="flex gap-2 items-start">
+            {!vehicle.isActive && (
+              <Badge variant="outline" className="bg-gray-100">Inactive</Badge>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={onEdit}>
+                  <Edit className="h-4 w-4 mr-2" /> Edit
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="text-red-600 focus:text-red-600"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" /> Delete
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  {vehicle.isActive ? (
+                    <>
+                      <EyeOff className="h-4 w-4 mr-2" /> Deactivate
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="h-4 w-4 mr-2" /> Activate
+                    </>
+                  )}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+        
+        <div className="mt-4 flex justify-between items-center">
+          <div>
+            <span className="text-lg font-bold">₹{vehicle.basePrice || vehicle.price || 0}</span>
+            <span className="text-sm text-gray-500 ml-1">base price</span>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={onEdit}>
+              Edit
+            </Button>
+          </div>
+        </div>
+
+        <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Vehicle</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete {name}? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleDelete();
+                }}
+                disabled={isDeleting}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {isDeleting ? "Deleting..." : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </CardContent>
+    </Card>
   );
 }

@@ -15,6 +15,10 @@ RewriteRule ^admin/vehicle-update\.php$ /api/admin/direct-vehicle-modify.php [L]
 RewriteRule ^admin/vehicles-update\.php$ /api/admin/direct-vehicle-modify.php [L]
 RewriteRule ^admin/direct-vehicle-update\.php$ /api/admin/direct-vehicle-modify.php [L]
 
+# Map vehicle delete endpoints to our direct-vehicle-delete.php
+RewriteRule ^admin/delete-vehicle\.php$ /api/admin/direct-vehicle-delete.php [L]
+RewriteRule ^admin/vehicle-delete\.php$ /api/admin/direct-vehicle-delete.php [L]
+
 # Set PHP settings for this directory
 <IfModule mod_php7.c>
     php_value max_execution_time 120

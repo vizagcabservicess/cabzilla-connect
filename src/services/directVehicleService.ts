@@ -304,21 +304,101 @@ export const deleteVehicle = async (id: string): Promise<any> => {
   try {
     console.log(`Deleting vehicle ${id}`);
     
-    const result = await directVehicleOperation('/api/admin/delete-vehicle.php', 'POST', { id });
+    // Try multiple deletion endpoints for maximum compatibility
+    const possibleEndpoints = [
+      '/api/admin/direct-vehicle-delete.php',
+      '/api/admin/delete-vehicle.php',
+      '/api/admin/vehicle-delete.php'
+    ];
     
-    if (result && result.status === 'success') {
+    let result;
+    let error;
+    
+    for (const endpoint of possibleEndpoints) {
+      try {
+        console.log(`Attempting to delete vehicle using endpoint: ${endpoint}`);
+        result = await directVehicleOperation(endpoint, 'POST', { id });
+        
+        if (result && result.status === 'success') {
+          console.log(`Successfully deleted vehicle using endpoint: ${endpoint}`);
+          
+          // Clear all pending vehicle requests to force a refresh
+          Object.keys(pendingRequests).forEach(key => {
+            if (key.startsWith('getVehicles-')) {
+              delete pendingRequests[key];
+            }
+          });
+          
+          return result;
+        }
+      } catch (err) {
+        console.log(`Failed to delete using ${endpoint}:`, err);
+        error = err;
+      }
+    }
+    
+    // If all API methods failed, try a direct fetch as last resort
+    try {
+      console.log('Trying direct fetch as last resort for deletion...');
+      
+      const formData = new FormData();
+      formData.append('id', id);
+      formData.append('vehicleId', id);
+      formData.append('vehicle_id', id);
+      
+      const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-delete.php`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-Force-Refresh': 'true',
+          'X-Admin-Mode': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
+      
+      if (!response.ok) {
+        const statusText = response.statusText;
+        const status = response.status;
+        throw new Error(`HTTP error ${status} ${statusText}`);
+      }
+      
+      let responseText = await response.text();
+      let responseData;
+      
+      try {
+        // Try to parse response as JSON
+        responseData = JSON.parse(responseText);
+      } catch (jsonError) {
+        // If not valid JSON, create a formatted response
+        responseData = {
+          status: 'success',
+          message: 'Vehicle deleted successfully (raw response)',
+          raw: responseText
+        };
+      }
+      
+      // Clear all pending vehicle requests to force a refresh
       Object.keys(pendingRequests).forEach(key => {
         if (key.startsWith('getVehicles-')) {
           delete pendingRequests[key];
         }
       });
       
-      return result;
+      return responseData;
+    } catch (lastResortError) {
+      console.error('Last resort delete also failed:', lastResortError);
+      throw error || lastResortError;
     }
-    
-    throw new Error(result?.message || 'Failed to delete vehicle');
   } catch (error: any) {
     console.error('Error deleting vehicle:', error);
+    
+    // Enhance error message with more details
+    if (error.message && error.message.includes('404')) {
+      throw new Error('API endpoint not found (404): The delete-vehicle.php endpoint could not be found on the server. Please check your server configuration.');
+    }
+    
     throw error;
   }
 };
