@@ -28,6 +28,8 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
   
+  console.log("Vehicle card rendering with data:", vehicle);
+  
   // Ensure capacity and luggageCapacity are always parsed as numbers
   const capacity = typeof vehicle.capacity === 'string' 
     ? parseInt(vehicle.capacity, 10) 
@@ -45,7 +47,7 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
     amenities = vehicle.amenities.filter(Boolean);
   } else if (typeof vehicle.amenities === 'string') {
     // If amenities is a string, split it only if it's not empty
-    const amenitiesString = vehicle.amenities as string; // Explicit type assertion
+    const amenitiesString = vehicle.amenities as string;
     if (amenitiesString.trim() !== '') {
       amenities = amenitiesString.split(',').map(a => a.trim()).filter(Boolean);
     }
@@ -55,13 +57,22 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
   }
   
   // Ensure all price values are presented as numbers
-  const basePrice = typeof vehicle.price === 'string' 
-    ? parseFloat(vehicle.price) 
-    : Number(vehicle.price || vehicle.basePrice || 0);
+  const basePrice = typeof vehicle.basePrice === 'string' 
+    ? parseFloat(vehicle.basePrice) 
+    : typeof vehicle.price === 'string'
+      ? parseFloat(vehicle.price)
+      : Number(vehicle.basePrice || vehicle.price || 0);
     
   const pricePerKm = typeof vehicle.pricePerKm === 'string' 
     ? parseFloat(vehicle.pricePerKm) 
     : Number(vehicle.pricePerKm || 0);
+  
+  console.log(`Vehicle ${vehicle.name} parsed values:`, { 
+    capacity, 
+    luggageCapacity, 
+    basePrice, 
+    pricePerKm 
+  });
   
   const handleDelete = async () => {
     try {

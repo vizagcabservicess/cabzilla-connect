@@ -1,3 +1,4 @@
+
 /**
  * Direct vehicle service for operations that bypass API layers
  * This ensures consistent behavior for vehicle CRUD operations
@@ -17,6 +18,8 @@ const normalizeVehicleId = (id: string): string => {
 
 // Helper function to ensure numeric values are always sent as numbers
 const ensureNumericValues = (vehicle: CabType): CabType => {
+  console.log("Ensuring numeric values for vehicle:", vehicle);
+  
   // First ensure all fields exist before attempting to parse them
   // Handle capacity and luggageCapacity, ensuring they are numbers
   const capacity = typeof vehicle.capacity === 'string' 
@@ -54,6 +57,8 @@ const ensureNumericValues = (vehicle: CabType): CabType => {
   console.log('- basePrice:', vehicle.basePrice, '->', basePrice);
   console.log('- price:', vehicle.price, '->', price);
   console.log('- pricePerKm:', vehicle.pricePerKm, '->', pricePerKm);
+  console.log('- nightHaltCharge:', vehicle.nightHaltCharge, '->', nightHaltCharge);
+  console.log('- driverAllowance:', vehicle.driverAllowance, '->', driverAllowance);
   
   return {
     ...vehicle,
@@ -159,6 +164,18 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
     console.log(`Original capacity value: ${vehicle.capacity}, type: ${typeof vehicle.capacity}, parsed: ${capacity}`);
     console.log(`Original luggage capacity value: ${vehicle.luggageCapacity}, type: ${typeof vehicle.luggageCapacity}, parsed: ${luggageCapacity}`);
     
+    // Get price fields as numbers
+    const basePrice = typeof vehicle.basePrice === 'string'
+      ? parseFloat(vehicle.basePrice)
+      : Number(vehicle.basePrice || 0);
+      
+    const pricePerKm = typeof vehicle.pricePerKm === 'string'
+      ? parseFloat(vehicle.pricePerKm)
+      : Number(vehicle.pricePerKm || 0);
+    
+    console.log(`Original basePrice value: ${vehicle.basePrice}, type: ${typeof vehicle.basePrice}, parsed: ${basePrice}`);
+    console.log(`Original pricePerKm value: ${vehicle.pricePerKm}, type: ${typeof vehicle.pricePerKm}, parsed: ${pricePerKm}`);
+    
     // Normalize vehicle ID before sending and ensure all numeric values are actually numbers
     const normalizedVehicle = {
       ...ensureNumericValues(vehicle),
@@ -170,6 +187,12 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
       capacity: isNaN(capacity) ? 4 : capacity,
       luggageCapacity: isNaN(luggageCapacity) ? 2 : luggageCapacity,
       luggage_capacity: isNaN(luggageCapacity) ? 2 : luggageCapacity,
+      // Force price values to be numbers
+      basePrice: isNaN(basePrice) ? 0 : basePrice,
+      base_price: isNaN(basePrice) ? 0 : basePrice,
+      price: isNaN(basePrice) ? 0 : basePrice,
+      pricePerKm: isNaN(pricePerKm) ? 0 : pricePerKm,
+      price_per_km: isNaN(pricePerKm) ? 0 : pricePerKm,
     };
     
     console.log('Normalized vehicle before update:', normalizedVehicle);
@@ -256,6 +279,7 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
     }
     
     const result = await response.json();
+    console.log("Vehicle update API response:", result);
     
     if (result.status === 'success') {
       // Clear any cached data
