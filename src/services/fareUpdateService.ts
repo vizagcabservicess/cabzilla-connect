@@ -3,32 +3,47 @@ import { toast } from 'sonner';
 import { apiBaseUrl } from '@/config/api';
 import { directVehicleOperation } from '@/utils/apiHelper';
 
-// Helper function to normalize vehicle IDs
+// Extended ID mapping with additional known numeric IDs
+const numericIdMapExtended: Record<string, string> = {
+  '1': 'sedan',
+  '2': 'ertiga',
+  '180': 'etios',
+  '1266': 'MPV',
+  '592': 'Urbania',
+  '1270': '1266', // Special case: ID that was converted to vehicle_id
+  '1271': '180'   // Special case: ID that was converted to vehicle_id
+};
+
+// Enhanced helper function to normalize vehicle IDs with more robust logic
 const normalizeVehicleId = (vehicleId: string | number): string => {
   if (!vehicleId) return '';
   
-  // Convert to string
-  let normalizedId = String(vehicleId);
+  // Convert to string and trim
+  let normalizedId = String(vehicleId).trim();
   
   // Remove item- prefix if it exists
   if (normalizedId.startsWith('item-')) {
     normalizedId = normalizedId.substring(5);
   }
   
+  // Check if this is already a known vehicle ID string
+  const knownVehicleIds = ['sedan', 'ertiga', 'etios', 'MPV', 'Urbania'];
+  if (knownVehicleIds.includes(normalizedId)) {
+    console.log(`Using known vehicle ID: ${normalizedId}`);
+    return normalizedId;
+  }
+  
   // If it's purely numeric, it might be a DB record ID instead of a vehicle_id
-  // Try to map common numeric IDs to their known vehicle_ids
   if (/^\d+$/.test(normalizedId)) {
-    const numericIdMap: Record<string, string> = {
-      '1': 'sedan',
-      '2': 'ertiga',
-      '180': 'etios',
-      '1266': 'MPV',
-      '592': 'Urbania'
-    };
+    if (numericIdMapExtended[normalizedId]) {
+      const mappedId = numericIdMapExtended[normalizedId];
+      console.log(`Converted numeric ID ${normalizedId} to vehicle ID: ${mappedId}`);
+      return mappedId;
+    }
     
-    if (numericIdMap[normalizedId]) {
-      console.log(`Converted numeric ID ${normalizedId} to vehicle ID: ${numericIdMap[normalizedId]}`);
-      return numericIdMap[normalizedId];
+    // If it's a large number, it's likely an internal database ID and not meant to be a vehicle_id
+    if (parseInt(normalizedId) > 100) {
+      console.warn(`Potentially problematic numeric ID: ${normalizedId} - this might create a duplicate vehicle`);
     }
   }
   
@@ -85,19 +100,31 @@ export const updateLocalFares = async (
   extraHourRate: number = 0,
   packages: any[] = []
 ): Promise<any> => {
-  // Normalize the vehicle ID
+  // Normalize the vehicle ID with enhanced logic
   const normalizedVehicleId = normalizeVehicleId(vehicleId);
   console.log(`Updating local fares for vehicle ${vehicleId} (normalized: ${normalizedVehicleId})`);
   
-  // Ensure vehicleId is properly formatted
-  if (!normalizedVehicleId) {
+  // Add additional validation to prevent problematic IDs
+  if (!normalizedVehicleId || normalizedVehicleId === 'undefined' || normalizedVehicleId === 'null') {
     console.error("Invalid vehicle ID provided to updateLocalFares:", vehicleId);
     toast.error("Invalid vehicle ID. Please try again.");
     return Promise.reject(new Error("Invalid vehicle ID"));
   }
   
   try {
-    // Try using the direct endpoint first
+    // First verify this vehicle exists to prevent creation of new entries
+    const checkResult = await directVehicleOperation('/api/admin/check-vehicle.php', 'GET', {
+      vehicleId: normalizedVehicleId,
+      verifyOnly: 'true'
+    });
+    
+    if (checkResult && checkResult.status === 'error') {
+      console.error(`Vehicle ID ${normalizedVehicleId} verification failed:`, checkResult.message);
+      toast.error(`Cannot update fares: ${checkResult.message}`);
+      return Promise.reject(new Error(checkResult.message));
+    }
+    
+    // Try using the direct endpoint first which has better validation
     const directResult = await directVehicleOperation('/api/admin/direct-local-fares.php', 'POST', {
       vehicleId: normalizedVehicleId,
       extraKmRate,

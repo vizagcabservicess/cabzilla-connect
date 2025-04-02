@@ -38,19 +38,54 @@ function handleError($message) {
 // Function to get the actual vehicle_id for numeric IDs
 function getActualVehicleId($numericId, $conn) {
     try {
-        $query = "SELECT vehicle_id FROM vehicles WHERE id = ?";
+        // First try direct vehicle_id lookup
+        $query = "SELECT vehicle_id, name FROM vehicles WHERE id = ? LIMIT 1";
         $stmt = $conn->prepare($query);
         $stmt->bind_param('s', $numericId);
         $stmt->execute();
         $result = $stmt->get_result();
         
         if ($row = $result->fetch_assoc()) {
-            return $row['vehicle_id'];
+            logMessage("Found vehicle_id '{$row['vehicle_id']}' for numeric ID $numericId", 'vehicle-update-debug.log');
+            return $row['vehicle_id'] ?: $row['name'];
         }
+        
+        // If not found by ID, check known mappings (this is our failsafe)
+        $knownMappings = [
+            '1' => 'sedan',
+            '2' => 'ertiga',
+            '180' => 'etios',
+            '1266' => 'MPV',
+            '592' => 'Urbania'
+        ];
+        
+        if (isset($knownMappings[$numericId])) {
+            logMessage("Using known mapping for numeric ID $numericId: {$knownMappings[$numericId]}", 'vehicle-update-debug.log');
+            return $knownMappings[$numericId];
+        }
+        
+        logMessage("No mapping found for numeric ID $numericId", 'vehicle-update-debug.log');
         return null;
     } catch (Exception $e) {
         logMessage("Error in getActualVehicleId: " . $e->getMessage(), 'vehicle-update-errors.log');
         return null;
+    }
+}
+
+// Function to check if a vehicle already exists to prevent duplicates
+function vehicleExists($vehicleId, $conn) {
+    try {
+        $query = "SELECT COUNT(*) as count FROM vehicles WHERE vehicle_id = ? OR id = ?";
+        $stmt = $conn->prepare($query);
+        $stmt->bind_param('ss', $vehicleId, $vehicleId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result->fetch_assoc();
+        
+        return ($row['count'] > 0);
+    } catch (Exception $e) {
+        logMessage("Error in vehicleExists: " . $e->getMessage(), 'vehicle-update-errors.log');
+        return false;
     }
 }
 
@@ -78,10 +113,12 @@ if (empty($data) && !empty($rawInput)) {
 
 // Better vehicle ID normalization before checking existence
 $vehicleId = null;
+$originalVehicleId = null;
 
 // Check all possible field names for the vehicle ID
 foreach (['id', 'vehicleId', 'vehicle_id', 'vehicle'] as $key) {
     if (!empty($data[$key])) {
+        $originalVehicleId = $data[$key];
         $vehicleId = trim($data[$key]);
         // Remove any "item-" prefix if it exists
         if (strpos($vehicleId, 'item-') === 0) {
@@ -92,10 +129,11 @@ foreach (['id', 'vehicleId', 'vehicle_id', 'vehicle'] as $key) {
 }
 
 // Log the initial vehicle ID found for debugging
-logMessage("Initial vehicle ID found: $vehicleId", 'vehicle-update-debug.log');
+logMessage("Initial vehicle ID found: $vehicleId (original: $originalVehicleId)", 'vehicle-update-debug.log');
 
-// Convert numeric IDs to actual vehicle_id if possible
-if (!empty($vehicleId) && is_numeric($vehicleId) && intval($vehicleId) > 0) {
+// CRITICAL: Special handling for problematic numeric IDs that create duplicates
+$knownVehicleIds = ['sedan', 'ertiga', 'etios', 'MPV', 'Urbania'];
+if (!in_array($vehicleId, $knownVehicleIds) && is_numeric($vehicleId) && intval($vehicleId) > 0) {
     try {
         $conn = getDbConnectionWithRetry();
         $actualId = getActualVehicleId($vehicleId, $conn);
@@ -110,6 +148,9 @@ if (!empty($vehicleId) && is_numeric($vehicleId) && intval($vehicleId) > 0) {
                     $data[$key] = $vehicleId;
                 }
             }
+        } else {
+            // If we can't convert the ID but it's numeric, this is a dangerous operation - log it
+            logMessage("WARNING: Unable to map numeric ID $vehicleId to a known vehicle_id. This may create duplicates.", 'vehicle-update-warning.log');
         }
         $conn->close();
     } catch (Exception $e) {
@@ -132,16 +173,15 @@ if (!empty($vehicleId)) {
     try {
         // Try to check if vehicle exists in database
         $conn = getDbConnectionWithRetry();
-        $query = "SELECT COUNT(*) as count FROM vehicles WHERE id = ? OR vehicle_id = ?";
-        $stmt = $conn->prepare($query);
-        $stmt->bind_param('ss', $vehicleId, $vehicleId);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $row = $result->fetch_assoc();
         
-        if ($row['count'] == 0) {
-            // Vehicle doesn't exist, log this but don't exit as it might be a new vehicle
-            logMessage("Warning: Vehicle with ID '$vehicleId' not found in database. This might be a new vehicle.", 'vehicle-update-warning.log');
+        // First check if this is a numeric ID that doesn't exist but might be used as a vehicle_id
+        if (is_numeric($vehicleId) && !vehicleExists($vehicleId, $conn)) {
+            logMessage("WARNING: Numeric ID $vehicleId doesn't exist as a vehicle. This operation might create a duplicate entry!", 'vehicle-update-warning.log');
+            
+            // If this looks like an integer ID, try to prevent creation of a duplicate
+            if (intval($vehicleId) > 100) { // Probably a database ID and not a vehicle_id string
+                handleError("Cannot update vehicle with ID '$vehicleId'. This appears to be a database ID and not a valid vehicle identifier.");
+            }
         }
         
         $conn->close();
