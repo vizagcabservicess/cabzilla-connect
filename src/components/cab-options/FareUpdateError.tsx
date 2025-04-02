@@ -7,7 +7,8 @@ import { fixDatabaseTables } from "@/utils/apiHelper";
 import { toast } from "sonner";
 
 interface FareUpdateErrorProps {
-  message: string;
+  message?: string;
+  error?: Error;
   onRetry: () => void;
   isAdmin?: boolean;
   title?: string;
@@ -16,11 +17,15 @@ interface FareUpdateErrorProps {
 
 export function FareUpdateError({
   message,
+  error,
   onRetry,
   isAdmin = false,
   title = "Update Error",
   description = "There was a problem updating data. This is often due to a connection issue."
 }: FareUpdateErrorProps) {
+  // Use error.message if message is not provided
+  const errorMessage = message || (error?.message || "Unknown error occurred");
+
   const handleFixDatabase = async () => {
     try {
       toast.loading("Fixing database tables...");
@@ -48,9 +53,9 @@ export function FareUpdateError({
   };
   
   // Detect if we have a 404 error
-  const is404Error = message.includes('404') || message.includes('not found');
-  const isSqlError = message.includes('SQL') || message.includes('MySQL');
-  const isConnectionError = message.includes('connection') || message.includes('timeout');
+  const is404Error = errorMessage.includes('404') || errorMessage.includes('not found');
+  const isSqlError = errorMessage.includes('SQL') || errorMessage.includes('MySQL');
+  const isConnectionError = errorMessage.includes('connection') || errorMessage.includes('timeout');
 
   return (
     <Card className="p-4 mb-4 border-red-200 bg-red-50 dark:bg-red-950 dark:border-red-800">
@@ -63,7 +68,7 @@ export function FareUpdateError({
         
         <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
           <p className="font-mono bg-red-100 dark:bg-red-900 p-2 rounded my-2 overflow-auto max-h-24">
-            {message}
+            {errorMessage}
           </p>
           
           {is404Error && (
