@@ -103,6 +103,9 @@ $knownMappings = [
     '102' => 'sedan',
     '200' => 'ertiga',
     '201' => 'ertiga',
+    // Additional mappings for problematic IDs reported by user
+    '1281' => 'MPV',
+    '1282' => 'sedan',
 ];
 
 // Log the original and cleaned vehicleId
@@ -267,12 +270,12 @@ try {
         $vehicleName = ucfirst(str_replace(['_', '-'], ' ', $vehicleId));
         
         $insertVehicleQuery = "
-            INSERT INTO vehicles (id, vehicle_id, name, is_active, created_at, updated_at)
-            VALUES (?, ?, ?, 1, NOW(), NOW())
+            INSERT INTO vehicles (vehicle_id, name, is_active, created_at, updated_at)
+            VALUES (?, ?, 1, NOW(), NOW())
         ";
         
         $insertStmt = $conn->prepare($insertVehicleQuery);
-        $insertStmt->bind_param("sss", $vehicleId, $vehicleId, $vehicleName);
+        $insertStmt->bind_param("ss", $vehicleId, $vehicleName);
         $insertStmt->execute();
         
         error_log("[$timestamp] Created new vehicle: $vehicleId", 3, $logDir . '/local-fares.log');
