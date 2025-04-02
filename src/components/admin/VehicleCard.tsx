@@ -34,10 +34,12 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
   
   // Clean up and display amenities with proper type checking
   let amenities: string[] = ['AC'];
+  
   if (Array.isArray(vehicle.amenities)) {
     amenities = vehicle.amenities.filter(Boolean);
-  } else if (typeof vehicle.amenities === 'string') {
-    amenities = vehicle.amenities.split(',').map(a => a.trim());
+  } else if (typeof vehicle.amenities === 'string' && vehicle.amenities) {
+    // Explicitly check that it's a string AND not empty before calling split
+    amenities = vehicle.amenities.split(',').map(a => a.trim()).filter(Boolean);
   }
   
   const handleDelete = async () => {
