@@ -7,6 +7,11 @@ header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: *');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
+// Enable error reporting for debugging
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 // Handle CORS preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -44,15 +49,56 @@ $name = $_POST['name'] ?? '';
 $description = $_POST['description'] ?? '';
 $image = $_POST['image'] ?? '';
 
-// Ensure capacity and luggageCapacity are numeric
-// CRITICAL FIX: Add more debug and properly extract capacity values
-$capacity = isset($_POST['capacity']) ? (int)$_POST['capacity'] : 4; 
-$luggageCapacity = isset($_POST['luggageCapacity']) ? (int)$_POST['luggageCapacity'] : 
-                  (isset($_POST['luggage_capacity']) ? (int)$_POST['luggage_capacity'] : 2);
+// CRITICAL FIX: Handle capacities properly with additional logging
+$capacity = null;
+$luggageCapacity = null;
 
-// Debug - log the extracted capacity values
-error_log("CAPACITY EXTRACT: capacity=" . $capacity . ", raw=" . $_POST['capacity'] . ", type=" . gettype($_POST['capacity']));
-error_log("LUGGAGE EXTRACT: luggageCapacity=" . $luggageCapacity . ", raw=" . ($_POST['luggageCapacity'] ?? $_POST['luggage_capacity'] ?? 'not set'));
+// Log detailed debugging for capacities
+error_log("CAPACITY DEBUG: capacity POST value: " . (isset($_POST['capacity']) ? $_POST['capacity'] : 'not set') . 
+          ", type: " . (isset($_POST['capacity']) ? gettype($_POST['capacity']) : 'N/A'));
+error_log("CAPACITY DEBUG: luggageCapacity POST value: " . (isset($_POST['luggageCapacity']) ? $_POST['luggageCapacity'] : 'not set') . 
+          ", type: " . (isset($_POST['luggageCapacity']) ? gettype($_POST['luggageCapacity']) : 'N/A'));
+error_log("CAPACITY DEBUG: luggage_capacity POST value: " . (isset($_POST['luggage_capacity']) ? $_POST['luggage_capacity'] : 'not set') . 
+          ", type: " . (isset($_POST['luggage_capacity']) ? gettype($_POST['luggage_capacity']) : 'N/A'));
+              
+// Set capacity with proper fallbacks
+if (isset($_POST['capacity'])) {
+    // Cast to int with explicit check
+    $capacity = filter_var($_POST['capacity'], FILTER_VALIDATE_INT);
+    if ($capacity === false) {
+        // Try parsing it manually
+        $capacity = intval($_POST['capacity']);
+        if ($capacity === 0 && $_POST['capacity'] !== '0') {
+            $capacity = 4; // Default value if parsing fails
+        }
+    }
+} else {
+    $capacity = 4; // Default value
+}
+
+// Set luggage capacity with proper fallbacks
+if (isset($_POST['luggageCapacity'])) {
+    $luggageCapacity = filter_var($_POST['luggageCapacity'], FILTER_VALIDATE_INT);
+    if ($luggageCapacity === false) {
+        $luggageCapacity = intval($_POST['luggageCapacity']);
+        if ($luggageCapacity === 0 && $_POST['luggageCapacity'] !== '0') {
+            $luggageCapacity = 2; // Default value if parsing fails
+        }
+    }
+} else if (isset($_POST['luggage_capacity'])) {
+    $luggageCapacity = filter_var($_POST['luggage_capacity'], FILTER_VALIDATE_INT);
+    if ($luggageCapacity === false) {
+        $luggageCapacity = intval($_POST['luggage_capacity']);
+        if ($luggageCapacity === 0 && $_POST['luggage_capacity'] !== '0') {
+            $luggageCapacity = 2; // Default value if parsing fails
+        }
+    }
+} else {
+    $luggageCapacity = 2; // Default value
+}
+
+// Log the final capacity values after processing
+error_log("CAPACITY FINAL: capacity=" . $capacity . ", luggageCapacity=" . $luggageCapacity);
 
 // Extract numeric fields
 $basePrice = isset($_POST['basePrice']) ? (float)$_POST['basePrice'] : 0;
@@ -151,8 +197,7 @@ try {
     
     if ($result->num_rows > 0) {
         // Vehicle exists, update it
-        $stmt = $conn->prepare(
-            "UPDATE vehicle_types SET 
+        $sql = "UPDATE vehicle_types SET 
                 name = ?, 
                 capacity = ?, 
                 luggage_capacity = ?, 
@@ -167,9 +212,16 @@ try {
                 driver_allowance = ?,
                 is_active = ?,
                 updated_at = NOW()
-            WHERE vehicle_id = ?"
-        );
+            WHERE vehicle_id = ?";
         
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            throw new Exception("Prepare statement failed: " . $conn->error . " for SQL: " . $sql);
+        }
+        
+        error_log("BINDING PARAMS: capacity=$capacity (type:" . gettype($capacity) . "), luggageCapacity=$luggageCapacity (type:" . gettype($luggageCapacity) . ")");
+        
+        // CRITICAL FIX: Explicitly bind parameters with proper types
         $stmt->bind_param(
             "siiisssddddsis", 
             $name, 
@@ -193,12 +245,9 @@ try {
             // Log detailed error
             error_log("VEHICLE UPDATE ERROR: " . $stmt->error);
             file_put_contents($logFile, "UPDATE ERROR: " . $stmt->error . "\n\n", FILE_APPEND);
+            throw new Exception("Error executing update: " . $stmt->error);
         }
         $stmt->close();
-        
-        if (!$success) {
-            throw new Exception("Error updating vehicle: " . $conn->error);
-        }
         
         // Log the SQL update for debugging
         file_put_contents($logFile, "Updated vehicle with ID: $vehicleId\nAffected rows: " . $conn->affected_rows . "\n\n", FILE_APPEND);
@@ -221,6 +270,10 @@ try {
                 base_price, price, price_per_km, night_halt_charge, driver_allowance, is_active
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
+        
+        if (!$stmt) {
+            throw new Exception("Prepare statement failed: " . $conn->error);
+        }
         
         $stmt->bind_param(
             "ssiissssdddddi", 
@@ -245,12 +298,9 @@ try {
             // Log detailed error
             error_log("VEHICLE INSERT ERROR: " . $stmt->error);
             file_put_contents($logFile, "INSERT ERROR: " . $stmt->error . "\n\n", FILE_APPEND);
+            throw new Exception("Error executing insert: " . $stmt->error);
         }
         $stmt->close();
-        
-        if (!$success) {
-            throw new Exception("Error inserting vehicle: " . $conn->error);
-        }
         
         // Log the SQL insert for debugging
         file_put_contents($logFile, "Inserted new vehicle with ID: $vehicleId\n\n", FILE_APPEND);
@@ -271,7 +321,7 @@ try {
     syncVehicleFareTables($conn, $vehicleId, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
     
 } catch (Exception $e) {
-    error_log("VEHICLE UPDATE EXCEPTION: " . $e->getMessage());
+    error_log("VEHICLE UPDATE EXCEPTION: " . $e->getMessage() . "\n" . $e->getTraceAsString());
     http_response_code(500);
     echo json_encode([
         'status' => 'error',
@@ -293,8 +343,8 @@ function syncVehicleToVehiclesTable($conn, $vehicleId, $name, $capacity, $luggag
         return;
     }
     
-    // DEBUG: Log the input values
-    error_log("SYNC TO VEHICLES: id=$vehicleId, capacity=$capacity, luggageCapacity=$luggageCapacity");
+    // CRITICAL FIX: Add more debug logging
+    error_log("SYNC TO VEHICLES: id=$vehicleId, capacity=$capacity (" . gettype($capacity) . "), luggageCapacity=$luggageCapacity (" . gettype($luggageCapacity) . ")");
     
     // Check if the vehicle exists in the vehicles table
     $stmt = $conn->prepare("SELECT id FROM vehicles WHERE vehicle_id = ?");
@@ -303,6 +353,10 @@ function syncVehicleToVehiclesTable($conn, $vehicleId, $name, $capacity, $luggag
     $result = $stmt->get_result();
     $vehicleExists = $result->num_rows > 0;
     $stmt->close();
+    
+    // CRITICAL FIX: Force capacity and luggage_capacity to be integers
+    $capacityInt = (int)$capacity;
+    $luggageCapacityInt = (int)$luggageCapacity;
     
     if ($vehicleExists) {
         // Update the vehicle in the vehicles table
@@ -319,15 +373,20 @@ function syncVehicleToVehiclesTable($conn, $vehicleId, $name, $capacity, $luggag
             WHERE vehicle_id = ?"
         );
         
-        $stmt->bind_param("siisssis", $name, $capacity, $luggageCapacity, $image, $description, $amenities, $isActive, $vehicleId);
+        if (!$stmt) {
+            error_log("SYNC TO VEHICLES: Prepare statement failed: " . $conn->error);
+            return;
+        }
+        
+        $stmt->bind_param("siisssis", $name, $capacityInt, $luggageCapacityInt, $image, $description, $amenities, $isActive, $vehicleId);
         $result = $stmt->execute();
         if (!$result) {
             error_log("SYNC TO VEHICLES UPDATE ERROR: " . $stmt->error);
+        } else {
+            // DEBUG: Log the update
+            error_log("UPDATED VEHICLE IN VEHICLES TABLE: id=$vehicleId, capacity=$capacityInt, luggageCapacity=$luggageCapacityInt, affected rows=" . $stmt->affected_rows);
         }
         $stmt->close();
-        
-        // DEBUG: Log the update
-        error_log("UPDATED VEHICLE IN VEHICLES TABLE: id=$vehicleId, capacity=$capacity, luggageCapacity=$luggageCapacity");
     } else {
         // Insert the vehicle into the vehicles table
         $stmt = $conn->prepare(
@@ -336,16 +395,31 @@ function syncVehicleToVehiclesTable($conn, $vehicleId, $name, $capacity, $luggag
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
         );
         
-        $stmt->bind_param("ssiisssi", $vehicleId, $name, $capacity, $luggageCapacity, $image, $description, $amenities, $isActive);
+        if (!$stmt) {
+            error_log("SYNC TO VEHICLES: Prepare statement failed: " . $conn->error);
+            return;
+        }
+        
+        $stmt->bind_param("ssiisssi", $vehicleId, $name, $capacityInt, $luggageCapacityInt, $image, $description, $amenities, $isActive);
         $result = $stmt->execute();
         if (!$result) {
             error_log("SYNC TO VEHICLES INSERT ERROR: " . $stmt->error);
+        } else {
+            // DEBUG: Log the insert
+            error_log("INSERTED VEHICLE INTO VEHICLES TABLE: id=$vehicleId, capacity=$capacityInt, luggageCapacity=$luggageCapacityInt, insert id=" . $stmt->insert_id);
         }
         $stmt->close();
-        
-        // DEBUG: Log the insert
-        error_log("INSERTED VEHICLE INTO VEHICLES TABLE: id=$vehicleId, capacity=$capacity, luggageCapacity=$luggageCapacity");
     }
+    
+    // CRITICAL FIX: Verify the data was actually written
+    $verifyStmt = $conn->prepare("SELECT capacity, luggage_capacity FROM vehicles WHERE vehicle_id = ?");
+    $verifyStmt->bind_param("s", $vehicleId);
+    $verifyStmt->execute();
+    $verifyResult = $verifyStmt->get_result();
+    if ($verifyRow = $verifyResult->fetch_assoc()) {
+        error_log("VERIFY VEHICLES TABLE: id=$vehicleId, capacity=" . $verifyRow['capacity'] . ", luggage_capacity=" . $verifyRow['luggage_capacity']);
+    }
+    $verifyStmt->close();
 }
 
 /**

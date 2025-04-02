@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -31,32 +30,38 @@ export function EditVehicleDialog({
   useEffect(() => {
     if (open && initialVehicle) {
       // CRITICAL FIX: Ensure capacity values are explicitly parsed as numbers
-      setVehicle({
+      const parsedVehicle = {
         ...initialVehicle,
         capacity: parseInt(String(initialVehicle.capacity || 4), 10),
         luggageCapacity: parseInt(String(initialVehicle.luggageCapacity || 2), 10)
-      });
+      };
+      
+      setVehicle(parsedVehicle);
       
       console.log("EditVehicleDialog initialized with:", {
-        capacity: initialVehicle.capacity,
-        luggageCapacity: initialVehicle.luggageCapacity,
-        parsed_capacity: parseInt(String(initialVehicle.capacity || 4), 10),
-        parsed_luggageCapacity: parseInt(String(initialVehicle.luggageCapacity || 2), 10)
+        initialCapacity: initialVehicle.capacity,
+        initialLuggageCapacity: initialVehicle.luggageCapacity,
+        parsedCapacity: parsedVehicle.capacity,
+        parsedLuggageCapacity: parsedVehicle.luggageCapacity,
+        capacityType: typeof parsedVehicle.capacity,
+        luggageCapacityType: typeof parsedVehicle.luggageCapacity
       });
     }
   }, [initialVehicle, open]);
 
   // Parse numeric value and ensure it's a number
   const parseNumericValue = (value: any, defaultValue: number = 0): number => {
-    const parsed = Number(value);
+    if (value === null || value === undefined) return defaultValue;
+    const parsed = parseInt(String(value), 10);
     return isNaN(parsed) ? defaultValue : parsed;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    
     try {
-      // Ensure capacity and luggageCapacity are explicit numbers
+      // CRITICAL FIX: Ensure capacity and luggageCapacity are explicit numbers
       const capacity = parseNumericValue(vehicle.capacity, 4);
       const luggageCapacity = parseNumericValue(vehicle.luggageCapacity, 2);
       
@@ -76,6 +81,8 @@ export function EditVehicleDialog({
         // CRITICAL FIX: Ensure these are explicitly numbers
         capacity: capacity,
         luggageCapacity: luggageCapacity,
+        // Also include snake_case version for PHP compatibility
+        luggage_capacity: luggageCapacity,
         basePrice: parseNumericValue(vehicle.basePrice, 0),
         price: parseNumericValue(vehicle.price || vehicle.basePrice, 0),
         pricePerKm: parseNumericValue(vehicle.pricePerKm, 0),
@@ -89,11 +96,12 @@ export function EditVehicleDialog({
         luggageCapacity_type: typeof updatedVehicle.luggageCapacity
       });
       
-      // CRITICAL FIX: Explicitly set numeric properties to ensure they're treated as numbers
+      // Send request to update the vehicle with explicit number type for capacity values
       const result = await updateVehicle({
         ...updatedVehicle,
         capacity: Number(capacity),
-        luggageCapacity: Number(luggageCapacity)
+        luggageCapacity: Number(luggageCapacity),
+        luggage_capacity: Number(luggageCapacity)
       });
       
       console.log("EditVehicleDialog - Update response:", result);
@@ -101,8 +109,14 @@ export function EditVehicleDialog({
       onEditVehicle(updatedVehicle);
       onClose();
       
-      // Force refresh
+      // Force refresh data
       window.dispatchEvent(new CustomEvent('vehicle-data-changed'));
+      
+      // Clear all caches to ensure fresh data
+      localStorage.removeItem('cachedVehicles');
+      localStorage.removeItem('localVehicles');
+      sessionStorage.removeItem('vehicleCache');
+      
     } catch (error: any) {
       console.error("Error updating vehicle:", error);
       toast.error(`Failed to update vehicle: ${error.message}`);
@@ -114,7 +128,7 @@ export function EditVehicleDialog({
   const handleCapacityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     const numericValue = parseInt(value, 10);
-    console.log(`EditVehicleDialog - Capacity changed to: ${value}, parsed as: ${numericValue}`);
+    console.log(`EditVehicleDialog - Capacity changed to: ${value}, parsed as: ${numericValue}, type: ${typeof numericValue}`);
     setVehicle({ 
       ...vehicle, 
       capacity: isNaN(numericValue) ? 4 : numericValue
@@ -124,7 +138,7 @@ export function EditVehicleDialog({
   const handleLuggageCapacityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     const numericValue = parseInt(value, 10);
-    console.log(`EditVehicleDialog - Luggage capacity changed to: ${value}, parsed as: ${numericValue}`);
+    console.log(`EditVehicleDialog - Luggage capacity changed to: ${value}, parsed as: ${numericValue}, type: ${typeof numericValue}`);
     setVehicle({ 
       ...vehicle, 
       luggageCapacity: isNaN(numericValue) ? 2 : numericValue

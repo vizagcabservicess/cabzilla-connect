@@ -24,9 +24,9 @@ const ensureNumericValues = (vehicle: CabType): CabType => {
     type_luggageCapacity: typeof vehicle.luggageCapacity
   });
   
-  // Force parse all numeric fields to ensure they're stored as numbers
-  const capacity = parseInt(String(vehicle.capacity), 10);
-  const luggageCapacity = parseInt(String(vehicle.luggageCapacity), 10);
+  // CRITICAL FIX: Use parseInt with radix 10 for all numeric values
+  const capacity = parseInt(String(vehicle.capacity || 4), 10);
+  const luggageCapacity = parseInt(String(vehicle.luggageCapacity || 2), 10);
   const basePrice = parseFloat(String(vehicle.basePrice || vehicle.price || 0));
   const price = parseFloat(String(vehicle.price || vehicle.basePrice || 0));
   const pricePerKm = parseFloat(String(vehicle.pricePerKm || 0));
@@ -42,7 +42,7 @@ const ensureNumericValues = (vehicle: CabType): CabType => {
   
   return {
     ...vehicle,
-    // Ensure these are always numbers by explicitly parsing
+    // CRITICAL FIX: Ensure these are always numbers by explicitly parsing
     capacity: isNaN(capacity) ? 4 : capacity,
     luggageCapacity: isNaN(luggageCapacity) ? 2 : luggageCapacity,
     basePrice: isNaN(basePrice) ? 0 : basePrice,
@@ -130,6 +130,10 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
     // CRITICAL: Preserve isActive status and ensure all numeric values are actually numbers
     const isActive = typeof vehicle.isActive === 'boolean' ? vehicle.isActive : true;
     
+    // CRITICAL FIX: Force parse capacity and luggage_capacity as integers
+    const capacity = parseInt(String(vehicle.capacity), 10) || 4;
+    const luggageCapacity = parseInt(String(vehicle.luggageCapacity), 10) || 2;
+    
     // Normalize vehicle ID before sending and ensure all numeric values are actually numbers
     const normalizedVehicle = {
       ...ensureNumericValues(vehicle),
@@ -137,28 +141,43 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
       vehicleId: normalizeVehicleId(vehicle.id || vehicle.vehicleId || ''),
       isActive: isActive,
       is_active: isActive,
+      // CRITICAL FIX: Force these as explicit numbers to ensure PHP doesn't get confused
+      capacity: capacity,
+      luggageCapacity: luggageCapacity,
+      // Also include snake_case version for PHP compatibility
+      luggage_capacity: luggageCapacity
     };
     
     console.log('Normalized vehicle before update:', normalizedVehicle);
     console.log('Capacity type after normalization:', typeof normalizedVehicle.capacity);
     console.log('Luggage capacity type after normalization:', typeof normalizedVehicle.luggageCapacity);
     
+    // CRITICAL FIX: Add cache-busting timestamp to force fresh request
+    const timestamp = Date.now();
+    const endpoint = `/api/admin/direct-vehicle-update.php?_t=${timestamp}`;
+    
     // IMPORTANT FIX: Use directVehicleOperation for better error handling and consistency
-    const result = await directVehicleOperation(
-      '/api/admin/direct-vehicle-update.php', 
-      'POST', 
-      normalizedVehicle
-    );
+    const result = await directVehicleOperation(endpoint, 'POST', normalizedVehicle);
     
     if (result.status === 'success') {
-      // Clear any cached data to ensure fresh data is loaded next time
+      // CRITICAL FIX: Aggressively clear ALL cached data to ensure fresh data is loaded next time
       localStorage.removeItem('cachedVehicles');
       localStorage.removeItem('localVehicles');
+      sessionStorage.removeItem('vehicleCache');
       
       // Dispatch event to notify other components about the change
       window.dispatchEvent(new CustomEvent('vehicle-data-changed'));
       
-      return normalizedVehicle;
+      // Force the browser to refresh the page after a short delay (better UX)
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('vehicle-data-refresh-needed'));
+      }, 500);
+      
+      return {
+        ...normalizedVehicle,
+        capacity: capacity,
+        luggageCapacity: luggageCapacity
+      };
     } else {
       throw new Error(result.message || 'Failed to update vehicle');
     }

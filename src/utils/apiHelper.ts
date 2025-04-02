@@ -64,7 +64,7 @@ export const directVehicleOperation = async (
             continue;
           }
           
-          // Special case for capacity and luggage capacity - ensure they're sent as numbers
+          // CRITICAL FIX: Special case for capacities - ensure they're sent as explicit string integers
           if (key === 'capacity' || key === 'luggageCapacity' || key === 'luggage_capacity') {
             // Try to convert to number first
             let numValue: number;
@@ -78,9 +78,9 @@ export const directVehicleOperation = async (
             const defaultValue = key === 'capacity' ? 4 : 2;
             const finalValue = isNaN(numValue) ? defaultValue : numValue;
             
-            console.log(`apiHelper - Setting ${key} value: ${finalValue} (original: ${value}, type: ${typeof value})`);
+            console.log(`apiHelper - CRITICAL FIX: Setting ${key} value: ${finalValue} (original: ${value}, type: ${typeof value})`);
             
-            // Send as string to ensure PHP gets it correctly
+            // Send as string integer to ensure PHP gets it correctly
             formData.append(key, String(finalValue));
             
             // CRITICAL FIX: Send both camelCase and snake_case variants with the same value
@@ -90,10 +90,8 @@ export const directVehicleOperation = async (
               formData.append('luggageCapacity', String(finalValue));
             }
             
-            // Also add the raw numeric value under a different key for debugging
-            formData.append(`${key}_numeric`, String(finalValue));
-            formData.append(`${key}_asInt`, String(parseInt(String(finalValue), 10)));
-            formData.append(`${key}_orig_type`, String(typeof value));
+            // Also add debugging fields
+            formData.append(`${key}_debug`, `Original value: ${value}, type: ${typeof value}, final: ${finalValue}`);
             continue;
           }
           
@@ -131,36 +129,33 @@ export const directVehicleOperation = async (
     
     console.log('Response status:', response.status);
     
+    // CRITICAL FIX: Log all response information for better debugging
+    const responseText = await response.text();
+    console.log('Response text:', responseText);
+    
     if (!response.ok) {
-      let errorText;
-      try {
-        errorText = await response.text();
-        console.error('Error response:', errorText);
-      } catch (e) {
-        errorText = `Status ${response.status}`;
-      }
+      console.error('Error response:', responseText);
       
       if (response.status === 404) {
         throw new Error(`API endpoint not found: ${endpoint}`);
       }
       
-      throw new Error(`API request failed with status ${response.status}: ${errorText}`);
+      throw new Error(`API request failed with status ${response.status}: ${responseText}`);
     }
     
     // Try to parse as JSON first
     let result;
     try {
-      result = await response.json();
-      console.log('API response:', result);
+      result = JSON.parse(responseText);
+      console.log('API response (parsed):', result);
     } catch (parseError) {
       // If can't parse as JSON, return the raw text
-      const text = await response.text();
-      console.log('API response (text):', text);
-      result = { raw: text, success: true };
+      console.log('API response (raw text):', responseText);
+      result = { raw: responseText, success: true };
     }
     
     // CRITICAL FIX: Force refresh the page data after successful operation
-    if (result.status === 'success' && endpoint.includes('vehicle')) {
+    if ((result.status === 'success' || result.success === true) && endpoint.includes('vehicle')) {
       // Clear any cached vehicle data
       localStorage.removeItem('cachedVehicles');
       localStorage.removeItem('localVehicles');
