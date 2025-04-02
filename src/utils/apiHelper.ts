@@ -62,64 +62,77 @@ export const directVehicleOperation = async (endpoint: string, method: string, d
       cache: 'no-store'
     });
     
-    // Clone the response before reading its body to prevent the "already read" error
-    const responseClone = response.clone();
+    // IMPROVED ERROR HANDLING: Create clean copy of response for parsing
+    const responseStatus = response.status;
+    const responseStatusText = response.statusText;
+    const responseHeaders = new Headers();
+    response.headers.forEach((value, key) => responseHeaders.set(key, value));
     
     // Handle different error status codes
     if (!response.ok) {
-      const errorStatusCode = response.status;
+      const errorStatusCode = responseStatus;
       let errorText;
+      let responseBody;
       
       try {
-        // Try to get JSON error message
-        const errorData = await responseClone.json();
-        errorText = errorData.message || errorData.error || response.statusText;
-      } catch (parseError) {
-        // Fall back to status text if JSON parsing fails
-        errorText = response.statusText;
+        // Get response text first
+        responseBody = await response.text();
+        
+        // Try to parse as JSON
+        try {
+          const errorData = JSON.parse(responseBody);
+          errorText = errorData.message || errorData.error || responseStatusText;
+        } catch (jsonError) {
+          // Not JSON, use text as is
+          errorText = responseBody || responseStatusText;
+        }
+      } catch (readError) {
+        errorText = `Error reading response: ${readError.message}`;
       }
       
       // Create detailed error message with status code
-      throw new Error(`API error: ${errorStatusCode} - ${errorText}`);
+      throw new Error(`API error ${errorStatusCode}: ${errorText}`);
     }
     
-    // Parse response data from the cloned response
-    const contentTypeHeader = responseClone.headers.get('content-type');
+    // Get response type to determine how to parse
+    const contentTypeHeader = response.headers.get('content-type') || '';
+    let result;
+    let responseBody;
     
-    if (contentTypeHeader && contentTypeHeader.includes('application/json')) {
-      // JSON response
+    // First get the raw response text to avoid streaming issues
+    try {
+      responseBody = await response.text();
+    } catch (textError) {
+      console.error('Error reading response body:', textError);
+      throw new Error(`Failed to read response: ${textError.message}`);
+    }
+    
+    // Try to parse as JSON if it's a JSON content type
+    if (contentTypeHeader.includes('application/json') || 
+        (responseBody && responseBody.trim().startsWith('{'))) {
       try {
-        const responseData = await responseClone.json();
-        return responseData;
+        result = JSON.parse(responseBody);
       } catch (jsonError) {
         console.error('Failed to parse JSON response', jsonError);
+        console.log('Raw response:', responseBody);
         
-        // Try to get text response as fallback
-        const textResponse = await response.text();
-        console.log('Raw response:', textResponse);
-        
-        // Try to parse the text response as JSON
-        try {
-          return JSON.parse(textResponse);
-        } catch (e) {
-          throw new Error(`Invalid JSON response: ${textResponse}`);
-        }
-      }
-    } else {
-      // Non-JSON response
-      const textResponse = await responseClone.text();
-      try {
-        // Try to parse as JSON anyway in case Content-Type is incorrect
-        return JSON.parse(textResponse);
-      } catch (jsonError) {
-        // Return plain text response as an object
-        return {
+        // Return raw response if JSON parsing fails
+        result = {
           status: response.ok ? 'success' : 'error',
-          message: textResponse,
-          raw: textResponse
+          message: responseBody,
+          raw: responseBody
         };
       }
+    } else {
+      // For non-JSON responses, return as object
+      result = {
+        status: response.ok ? 'success' : 'error',
+        message: responseBody,
+        raw: responseBody
+      };
     }
+    
+    return result;
   } catch (error: any) {
     console.error(`Error in directVehicleOperation (${endpoint}):`, error);
     throw error;

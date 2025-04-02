@@ -1,4 +1,3 @@
-
 <?php
 /**
  * direct-vehicle-delete.php - Direct implementation for vehicle deletion
@@ -244,5 +243,6 @@ try {
 }
 
 // Send response
+logMessage("Sending response: " . json_encode($response));
 echo json_encode($response);
 ?>

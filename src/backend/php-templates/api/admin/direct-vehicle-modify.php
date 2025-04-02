@@ -14,7 +14,7 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
-// Enable error reporting for debugging
+// Enable error reporting for debugging but don't display to client
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
@@ -23,13 +23,16 @@ ini_set('max_execution_time', 120); // 120 seconds
 ini_set('mysql.connect_timeout', 60); // 60 seconds
 ini_set('default_socket_timeout', 60); // 60 seconds
 
+// Create log directory if it doesn't exist
+$logDir = dirname(__FILE__) . '/../../logs';
+if (!file_exists($logDir)) {
+    mkdir($logDir, 0755, true);
+}
+
 // Logging function
 function logMessage($message) {
+    global $logDir;
     $timestamp = date('Y-m-d H:i:s');
-    $logDir = dirname(__FILE__) . '/../../logs';
-    if (!file_exists($logDir)) {
-        mkdir($logDir, 0755, true);
-    }
     error_log("[$timestamp] " . $message . "\n", 3, $logDir . '/vehicle-modify.log');
 }
 
@@ -156,7 +159,12 @@ try {
             throw new Exception("Error preparing check query: " . $conn->error);
         }
         $checkStmt->bind_param('ss', $vehicleId, $vehicleId);
-        $checkStmt->execute();
+        
+        // Execute with error handling
+        if (!$checkStmt->execute()) {
+            throw new Exception("Error executing vehicle check: " . $checkStmt->error);
+        }
+        
         $checkResult = $checkStmt->get_result();
         
         // Process vehicle data and update
@@ -234,6 +242,7 @@ try {
                 throw new Exception("Error preparing update statement: " . $conn->error);
             }
             
+            // Use explicit variable types for bind_param to avoid issues
             $updateStmt->bind_param(
                 'siiiisssdddss',
                 $vehicleName,
@@ -256,6 +265,7 @@ try {
                 throw new Exception("Error executing update: " . $updateStmt->error);
             }
             
+            // Log success
             logMessage("Successfully updated vehicles table for $vehicleId");
             
             // Commit the transaction
@@ -292,10 +302,13 @@ try {
             $response['message'] = "Vehicle with ID '$vehicleId' not found";
             $response['error'] = "NOT_FOUND";
             $response['vehicleId'] = $vehicleId;
+            
+            // Log the error
+            logMessage("Error: Vehicle with ID '$vehicleId' not found");
         }
     } catch (Exception $e) {
         // Log detailed error and rollback transaction
-        logMessage("Error in transaction: " . $e->getMessage() . "\n" . $e->getTraceAsString());
+        logMessage("Error in transaction: " . $e->getMessage());
         $conn->rollback();
         throw $e;
     }
@@ -304,9 +317,9 @@ try {
     $errorMessage = "Error updating vehicle: " . $e->getMessage();
     $response['message'] = $errorMessage;
     $response['error'] = $e->getMessage();
-    $response['trace'] = $e->getTraceAsString();
     logMessage($errorMessage);
 }
 
-// Send response
+// Send response and log it
+logMessage("Sending response: " . json_encode($response));
 echo json_encode($response);
