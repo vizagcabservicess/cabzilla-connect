@@ -41,6 +41,9 @@ export const addVehicle = async (vehicle: CabType): Promise<CabType> => {
   }
 };
 
+// Add an alias for addVehicle as createVehicle for backward compatibility
+export const createVehicle = addVehicle;
+
 /**
  * Update an existing vehicle
  */
@@ -108,7 +111,7 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
 /**
  * Delete a vehicle
  */
-export const deleteVehicle = async (vehicleId: string): Promise<void> => {
+export const deleteVehicle = async (vehicleId: string): Promise<{ status: string, message?: string }> => {
   try {
     // Try multiple endpoints in sequence to ensure higher success rate
     const endpoints = [
@@ -125,7 +128,7 @@ export const deleteVehicle = async (vehicleId: string): Promise<void> => {
         const response = await directVehicleOperation(endpoint, 'POST', { vehicleId });
         
         if (response && response.status === 'success') {
-          return;
+          return { status: 'success' };
         }
       } catch (error: any) {
         lastError = error;
@@ -136,9 +139,9 @@ export const deleteVehicle = async (vehicleId: string): Promise<void> => {
     
     // If we've reached here, all endpoints failed
     throw lastError || new Error('Failed to delete vehicle');
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to delete vehicle:', error);
-    throw error;
+    throw new Error(error.message || 'Failed to delete vehicle');
   }
 };
 
@@ -157,5 +160,23 @@ export const getVehicle = async (vehicleId: string): Promise<CabType> => {
   } catch (error) {
     console.error('Failed to get vehicle:', error);
     throw error;
+  }
+};
+
+/**
+ * Get all vehicles - added to fix the missing export error
+ */
+export const getVehicles = async (includeInactive = false): Promise<CabType[]> => {
+  try {
+    const response = await directVehicleOperation(`api/admin/vehicles-data.php?includeInactive=${includeInactive ? 'true' : 'false'}`, 'GET');
+    
+    if (response && response.vehicles && Array.isArray(response.vehicles)) {
+      return response.vehicles;
+    }
+    
+    return [];
+  } catch (error) {
+    console.error('Failed to get vehicles:', error);
+    return [];
   }
 };

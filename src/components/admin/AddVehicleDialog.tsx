@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -6,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { createVehicle } from '@/services/directVehicleService';
+import { addVehicle } from '@/services/directVehicleService';
 import { CabType } from '@/types/cab';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -51,7 +50,6 @@ export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDial
         : value
     }));
     
-    // Automatically generate vehicleId from name if empty
     if (name === 'name' && !formData.vehicleId) {
       const generatedId = value.toLowerCase().replace(/\s+/g, '_');
       setFormData((prev) => ({
@@ -83,18 +81,14 @@ export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDial
     setError(null);
     
     try {
-      // Validate required fields
       if (!formData.vehicleId || !formData.name) {
         throw new Error('Vehicle ID and Name are required fields');
       }
 
-      // Create the vehicle
-      const newVehicle = await createVehicle(formData as CabType);
+      const newVehicle = await addVehicle(formData as CabType);
       
-      // Notify the parent component
       onAddVehicle(newVehicle);
       
-      // Reset form and close dialog
       setFormData({
         vehicleId: '',
         name: '',

@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -57,14 +56,10 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
       const vehicleId = String(vehicle.id || vehicle.vehicleId || '');
       console.log(`Deleting vehicle ID: ${vehicleId}`);
 
-      const response = await deleteVehicle(vehicleId);
+      await deleteVehicle(vehicleId);
       
-      if (response && response.status === 'success') {
-        toast.success(`Vehicle "${vehicle.name}" deleted successfully`);
-        onDelete(vehicleId);
-      } else {
-        throw new Error(response?.message || `Failed to delete vehicle ${vehicleId}`);
-      }
+      toast.success(`Vehicle "${vehicle.name}" deleted successfully`);
+      onDelete(vehicleId);
     } catch (err: any) {
       console.error("Error deleting vehicle:", err);
       setError(err);
