@@ -71,24 +71,16 @@ export default function VehicleManagement() {
     resetError();
     
     try {
-      const response = await fetch(`${apiBaseUrl}/api/admin/fix-vehicle-tables.php`, {
-        method: 'GET',
-        credentials: 'omit',
-        mode: 'cors',
-        cache: 'no-store'
-      });
+      // Use the utility from apiHelper to ensure proper synchronization
+      const success = await import('@/utils/apiHelper').then(({ fixDatabaseTables }) => 
+        fixDatabaseTables()
+      );
       
-      if (!response.ok) {
-        throw new Error(`Database fix failed with status: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      if (data.status === 'success') {
+      if (success) {
         toast.success("Database tables fixed successfully");
         await handleRefreshData(true);
       } else {
-        toast.error("Failed to fix database tables: " + (data.message || "Unknown error"));
+        toast.error("Failed to fix database tables");
       }
     } catch (error) {
       console.error("Error fixing database:", error);
@@ -152,69 +144,15 @@ export default function VehicleManagement() {
       console.log("Admin: Fetching all vehicles (forceRefresh=", forceRefresh, ")");
       
       try {
-        const fetchedVehicles = await getVehicleData(forceRefresh, true);
-        console.log(`Loaded ${fetchedVehicles.length} vehicles for admin view:`, fetchedVehicles);
-        
+        // Use the utility from apiHelper for better refresh behavior
+        const fetchedVehicles = await import('@/utils/apiHelper').then(({ forceVehicleDataRefresh }) => 
+          forceVehicleDataRefresh()
+        );
+            
         if (fetchedVehicles && fetchedVehicles.length > 0) {
-          const deduplicatedVehicles: Record<string, CabType> = {};
-          
-          fetchedVehicles.forEach(vehicle => {
-            const normalizedId = String(vehicle.id || vehicle.vehicleId || '').trim();
-            if (!normalizedId) return;
-            
-            const parsedAmenities = parseAmenities(vehicle.amenities);
-            
-            const normalizedVehicle: CabType = {
-              ...vehicle,
-              id: normalizedId,
-              vehicleId: normalizedId,
-              description: vehicle.description || '',
-              isActive: vehicle.isActive === false ? false : true,
-              capacity: Number(vehicle.capacity || 4),
-              luggageCapacity: Number(vehicle.luggageCapacity || 2),
-              price: Number(vehicle.price || vehicle.basePrice || 0), 
-              basePrice: Number(vehicle.basePrice || vehicle.price || 0),
-              pricePerKm: Number(vehicle.pricePerKm || 0),
-              amenities: parsedAmenities,
-              nightHaltCharge: Number(vehicle.nightHaltCharge || 700),
-              driverAllowance: Number(vehicle.driverAllowance || 300)
-            };
-            
-            console.log(`Vehicle ${normalizedId} numeric fields:`, {
-              capacity: normalizedVehicle.capacity,
-              luggageCapacity: normalizedVehicle.luggageCapacity,
-              basePrice: normalizedVehicle.basePrice,
-              pricePerKm: normalizedVehicle.pricePerKm
-            });
-            
-            if (deduplicatedVehicles[normalizedId]) {
-              const existing = deduplicatedVehicles[normalizedId];
-              
-              deduplicatedVehicles[normalizedId] = {
-                ...existing,
-                ...normalizedVehicle,
-                description: normalizedVehicle.description || existing.description || '',
-                name: normalizedVehicle.name || existing.name || '',
-                nightHaltCharge: normalizedVehicle.nightHaltCharge || existing.nightHaltCharge || 700,
-                driverAllowance: normalizedVehicle.driverAllowance || existing.driverAllowance || 300
-              };
-            } else {
-              deduplicatedVehicles[normalizedId] = normalizedVehicle;
-            }
-          });
-          
-          const uniqueVehicles = Object.values(deduplicatedVehicles);
-          
-          console.log(`Deduplicated to ${uniqueVehicles.length} unique vehicles`);
-          setVehicles(uniqueVehicles);
+          console.log(`Loaded ${fetchedVehicles.length} vehicles for admin view:`, fetchedVehicles);
+          setVehicles(fetchedVehicles);
           setOfflineMode(false);
-          
-          try {
-            localStorage.setItem('cachedVehicles', JSON.stringify(uniqueVehicles));
-            localStorage.setItem('localVehicles', JSON.stringify(uniqueVehicles));
-          } catch (cacheError) {
-            console.error("Error caching vehicles:", cacheError);
-          }
         } else {
           console.log("No vehicles returned from API, trying localStorage");
           if (!loadVehiclesFromLocalStorage()) {
@@ -244,7 +182,7 @@ export default function VehicleManagement() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [canRefresh, debounce]);
+  }, [canRefresh]);
 
   const loadVehicles = useCallback((force = false) => {
     if (debounce(() => handleRefreshData(force), 300)) {

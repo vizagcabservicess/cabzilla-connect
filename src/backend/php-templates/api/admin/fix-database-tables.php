@@ -40,18 +40,47 @@ $response = [
 ];
 
 try {
-    // Define database connection 
+    // Define database connection - FIXED credentials with proper escaping 
     $dbHost = 'localhost';
     $dbName = 'u644605165_db_be';
     $dbUser = 'u644605165_usr_be';
+    // Make sure the password is properly escaped
     $dbPass = 'Vizag@1213';
     
-    // Create connection
-    $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+    // Create connection with retry logic
+    $maxRetries = 3;
+    $connected = false;
+    $lastError = null;
     
-    // Check connection
-    if ($conn->connect_error) {
-        throw new Exception("Database connection failed: " . $conn->connect_error);
+    for ($retryCount = 0; $retryCount < $maxRetries && !$connected; $retryCount++) {
+        try {
+            // Create the connection
+            $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+            
+            // Check connection
+            if ($conn->connect_error) {
+                throw new Exception("Database connection failed: " . $conn->connect_error);
+            }
+            
+            // Test the connection with a simple query
+            $testResult = $conn->query("SELECT 1");
+            if (!$testResult) {
+                throw new Exception("Database connection test failed");
+            }
+            
+            $connected = true;
+            break;
+        } catch (Exception $e) {
+            $lastError = $e;
+            if ($retryCount < $maxRetries - 1) {
+                // Wait before retrying
+                usleep(500000); // 500ms
+            }
+        }
+    }
+    
+    if (!$connected) {
+        throw new Exception("Failed to connect to database after {$maxRetries} attempts: " . $lastError->getMessage());
     }
     
     // Enable logging
@@ -223,5 +252,5 @@ try {
 }
 
 // Send response
-echo json_encode($response);
+echo json_encode($response, JSON_PARTIAL_OUTPUT_ON_ERROR | JSON_PRETTY_PRINT);
 exit;

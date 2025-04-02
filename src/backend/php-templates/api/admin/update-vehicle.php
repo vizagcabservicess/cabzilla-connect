@@ -27,7 +27,7 @@ function handleError($message) {
         'status' => 'error',
         'message' => $message,
         'timestamp' => time()
-    ], JSON_PARTIAL_OUTPUT_ON_ERROR);
+    ], JSON_PARTIAL_OUTPUT_ON_ERROR | JSON_PRETTY_PRINT);
     exit;
 }
 
@@ -41,13 +41,8 @@ if (isset($_POST) && !empty($_POST)) {
 } else {
     // Try parsing JSON
     try {
-        $data = json_decode($rawInput, true);
+        $data = json_decode($rawInput, true, 512, JSON_THROW_ON_ERROR);
         $isJSON = true;
-        
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            $jsonError = json_last_error_msg();
-            handleError("JSON parse error: " . $jsonError);
-        }
     } catch (Exception $e) {
         handleError("Failed to parse input data: " . $e->getMessage());
     }

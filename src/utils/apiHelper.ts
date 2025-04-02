@@ -20,14 +20,15 @@ export const fixDatabaseTables = async (): Promise<boolean> => {
     
     // Add timestamp to prevent caching
     const timestamp = Date.now();
-    const response = await axios.get(`${apiBaseUrl}/admin/fix-database-tables.php?_t=${timestamp}`, {
+    const response = await axios.get(`${apiBaseUrl}/api/admin/fix-database-tables.php?_t=${timestamp}`, {
       headers: {
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache',
         'Expires': '0',
         'X-Admin-Mode': 'true',
         'X-Force-Refresh': 'true'
-      }
+      },
+      timeout: 30000 // 30 second timeout
     });
     
     if (response.data && response.data.status === 'success') {
@@ -50,17 +51,21 @@ export const fixDatabaseTables = async (): Promise<boolean> => {
       try {
         await getVehicleData(true, true);
         console.log('Vehicle data refreshed after database fix');
+        toast.success('Database fixed and vehicle data refreshed successfully');
       } catch (refreshError) {
         console.error('Error refreshing vehicle data:', refreshError);
+        toast.error('Database fixed but failed to refresh vehicle data');
       }
       
       return true;
     } else {
       console.error('Failed to fix database tables:', response.data);
+      toast.error('Failed to fix database tables: ' + (response.data?.message || 'Unknown error'));
       return false;
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fixing database tables:', error);
+    toast.error('Failed to fix database tables: ' + (error?.message || 'Network error'));
     throw error;
   }
 };
@@ -91,6 +96,7 @@ export const forceVehicleDataRefresh = async () => {
     // Force reload vehicle data
     const vehicles = await getVehicleData(true, true);
     console.log(`Refreshed ${vehicles.length} vehicles`);
+    toast.success(`Successfully refreshed ${vehicles.length} vehicles`);
     
     // Clean up flags
     setTimeout(() => {
@@ -112,7 +118,7 @@ export const forceVehicleDataRefresh = async () => {
 export const checkBackendAvailable = async (): Promise<boolean> => {
   try {
     const timestamp = Date.now();
-    const response = await axios.get(`${apiBaseUrl}/admin/check-connection.php?_t=${timestamp}`, { 
+    const response = await axios.get(`${apiBaseUrl}/api/admin/check-connection.php?_t=${timestamp}`, { 
       timeout: 5000,
       headers: {
         'Cache-Control': 'no-cache, no-store, must-revalidate'
@@ -158,6 +164,23 @@ export const directVehicleOperation = async (
     
     console.log(`Making ${method} request to ${fullEndpoint}`);
     const response = await axios(requestConfig);
+    
+    // If this was a successful update operation, force a data refresh
+    if (
+      (method === 'POST' || method === 'PUT') && 
+      response.data && 
+      response.data.status === 'success' &&
+      (endpoint.includes('update') || endpoint.includes('modify'))
+    ) {
+      // Delay refresh slightly to allow server to process changes
+      setTimeout(() => {
+        try {
+          forceVehicleDataRefresh();
+        } catch (refreshErr) {
+          console.error('Error auto-refreshing data after update:', refreshErr);
+        }
+      }, 1000);
+    }
     
     return response.data;
   } catch (error: any) {

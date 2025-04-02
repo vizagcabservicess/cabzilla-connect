@@ -25,7 +25,7 @@ $response = [
 ];
 
 try {
-    // Define database connection with updated credentials
+    // Define database connection with correct credentials
     $dbHost = 'localhost';
     $dbName = 'u644605165_db_be';
     $dbUser = 'u644605165_usr_be';
@@ -91,5 +91,5 @@ try {
 }
 
 // Send response
-echo json_encode($response);
+echo json_encode($response, JSON_PRETTY_PRINT);
 exit;
