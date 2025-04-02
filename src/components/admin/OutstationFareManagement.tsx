@@ -93,7 +93,8 @@ export function OutstationFareManagement() {
       try {
         const directResponse = await directVehicleOperation(
           '/api/admin/get-vehicles.php?includeInactive=false',
-          'GET'
+          'GET',
+          {}  // Add empty object as third argument
         );
         
         if (directResponse && Array.isArray(directResponse)) {

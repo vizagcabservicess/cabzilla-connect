@@ -5,7 +5,7 @@ import { apiBaseUrl } from '@/config/api';
 /**
  * Helper function for direct vehicle operations with better error handling
  */
-export const directVehicleOperation = async (endpoint: string, method: string, data: any) => {
+export const directVehicleOperation = async (endpoint: string, method: string, data?: any) => {
   try {
     const fullUrl = `${apiBaseUrl}${endpoint}`;
     console.log(`Direct vehicle operation: ${method} ${fullUrl}`);
@@ -21,7 +21,7 @@ export const directVehicleOperation = async (endpoint: string, method: string, d
         'Expires': '0',
         'X-Admin-Mode': 'true'
       },
-      body: method !== 'GET' ? JSON.stringify(data) : undefined
+      body: method !== 'GET' && data ? JSON.stringify(data) : undefined
     });
     
     if (!response.ok) {
