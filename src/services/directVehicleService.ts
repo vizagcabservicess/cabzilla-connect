@@ -18,15 +18,42 @@ const normalizeVehicleId = (id: string): string => {
 // Helper function to ensure numeric values are always sent as numbers
 const ensureNumericValues = (vehicle: CabType): CabType => {
   // First ensure all fields exist before attempting to parse them
-  const capacity = vehicle.capacity !== undefined ? parseInt(String(vehicle.capacity), 10) : 4;
-  const luggageCapacity = vehicle.luggageCapacity !== undefined ? parseInt(String(vehicle.luggageCapacity), 10) : 2;
+  // Handle capacity and luggageCapacity, ensuring they are numbers
+  const capacity = typeof vehicle.capacity === 'string' 
+    ? parseInt(vehicle.capacity, 10) 
+    : Number(vehicle.capacity || 4);
+    
+  const luggageCapacity = typeof vehicle.luggageCapacity === 'string' 
+    ? parseInt(vehicle.luggageCapacity, 10) 
+    : Number(vehicle.luggageCapacity || 2);
   
-  // Handle pricing fields
-  const basePrice = vehicle.basePrice !== undefined ? parseFloat(String(vehicle.basePrice)) : 
-                   (vehicle.price !== undefined ? parseFloat(String(vehicle.price)) : 0);
+  // Handle pricing fields, ensuring they are numbers
+  const basePrice = typeof vehicle.basePrice === 'string'
+    ? parseFloat(vehicle.basePrice)
+    : Number(vehicle.basePrice || vehicle.price || 0);
+    
+  const price = typeof vehicle.price === 'string'
+    ? parseFloat(vehicle.price)
+    : Number(vehicle.price || vehicle.basePrice || 0);
+    
+  const pricePerKm = typeof vehicle.pricePerKm === 'string'
+    ? parseFloat(vehicle.pricePerKm)
+    : Number(vehicle.pricePerKm || 0);
+    
+  const nightHaltCharge = typeof vehicle.nightHaltCharge === 'string'
+    ? parseFloat(vehicle.nightHaltCharge)
+    : Number(vehicle.nightHaltCharge || 700);
+    
+  const driverAllowance = typeof vehicle.driverAllowance === 'string'
+    ? parseFloat(vehicle.driverAllowance)
+    : Number(vehicle.driverAllowance || 250);
   
-  const price = vehicle.price !== undefined ? parseFloat(String(vehicle.price)) : 
-               (vehicle.basePrice !== undefined ? parseFloat(String(vehicle.basePrice)) : 0);
+  console.log('Normalizing numeric values:');
+  console.log('- capacity:', vehicle.capacity, '->', capacity);
+  console.log('- luggageCapacity:', vehicle.luggageCapacity, '->', luggageCapacity);
+  console.log('- basePrice:', vehicle.basePrice, '->', basePrice);
+  console.log('- price:', vehicle.price, '->', price);
+  console.log('- pricePerKm:', vehicle.pricePerKm, '->', pricePerKm);
   
   return {
     ...vehicle,
@@ -35,9 +62,9 @@ const ensureNumericValues = (vehicle: CabType): CabType => {
     luggageCapacity: isNaN(luggageCapacity) ? 2 : luggageCapacity,
     basePrice: isNaN(basePrice) ? 0 : basePrice,
     price: isNaN(price) ? 0 : price,
-    pricePerKm: parseFloat(String(vehicle.pricePerKm || 0)),
-    nightHaltCharge: parseFloat(String(vehicle.nightHaltCharge || 700)),
-    driverAllowance: parseFloat(String(vehicle.driverAllowance || 250)),
+    pricePerKm: isNaN(pricePerKm) ? 0 : pricePerKm,
+    nightHaltCharge: isNaN(nightHaltCharge) ? 700 : nightHaltCharge,
+    driverAllowance: isNaN(driverAllowance) ? 250 : driverAllowance,
   };
 };
 
@@ -121,11 +148,16 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
     const isActive = typeof vehicle.isActive === 'boolean' ? vehicle.isActive : true;
     
     // Explicitly get capacity and luggage_capacity as numbers
-    const capacity = parseInt(String(vehicle.capacity), 10);
-    const luggageCapacity = parseInt(String(vehicle.luggageCapacity), 10);
+    const capacity = typeof vehicle.capacity === 'string'
+      ? parseInt(vehicle.capacity, 10)
+      : Number(vehicle.capacity || 4);
+      
+    const luggageCapacity = typeof vehicle.luggageCapacity === 'string'
+      ? parseInt(vehicle.luggageCapacity, 10)
+      : Number(vehicle.luggageCapacity || 2);
     
-    console.log(`Original capacity value: ${vehicle.capacity}, parsed: ${capacity}`);
-    console.log(`Original luggage capacity value: ${vehicle.luggageCapacity}, parsed: ${luggageCapacity}`);
+    console.log(`Original capacity value: ${vehicle.capacity}, type: ${typeof vehicle.capacity}, parsed: ${capacity}`);
+    console.log(`Original luggage capacity value: ${vehicle.luggageCapacity}, type: ${typeof vehicle.luggageCapacity}, parsed: ${luggageCapacity}`);
     
     // Normalize vehicle ID before sending and ensure all numeric values are actually numbers
     const normalizedVehicle = {
@@ -161,6 +193,13 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
     formData.append('luggage_capacity_value', String(normalizedVehicle.luggageCapacity));
     formData.append('luggage_capacity_numeric', String(normalizedVehicle.luggageCapacity));
     
+    // Add price fields explicitly
+    formData.append('basePrice', String(normalizedVehicle.basePrice));
+    formData.append('base_price', String(normalizedVehicle.basePrice));
+    formData.append('price', String(normalizedVehicle.price));
+    formData.append('pricePerKm', String(normalizedVehicle.pricePerKm));
+    formData.append('price_per_km', String(normalizedVehicle.pricePerKm));
+    
     // Add is_active flags explicitly
     formData.append('isActive', normalizedVehicle.isActive ? '1' : '0');
     formData.append('is_active', normalizedVehicle.isActive ? '1' : '0');
@@ -169,10 +208,16 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
     Object.entries(normalizedVehicle).forEach(([key, value]) => {
       // Skip undefined or null values and already added critical fields
       if (value === undefined || value === null) return;
-      if (['id', 'vehicleId', 'vehicle_id', 'capacity', 'luggageCapacity', 'luggage_capacity', 'isActive', 'is_active'].includes(key)) return;
+      if ([
+        'id', 'vehicleId', 'vehicle_id', 
+        'capacity', 'luggageCapacity', 'luggage_capacity', 
+        'basePrice', 'base_price', 'price', 
+        'pricePerKm', 'price_per_km',
+        'isActive', 'is_active'
+      ].includes(key)) return;
       
       // Handle price fields specially to ensure they're numbers
-      if (key === 'basePrice' || key === 'pricePerKm' || key === 'nightHaltCharge' || key === 'driverAllowance') {
+      if (key === 'nightHaltCharge' || key === 'driverAllowance') {
         const numVal = parseFloat(String(value));
         formData.append(key, String(isNaN(numVal) ? 0 : numVal));
         return;

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -31,15 +30,34 @@ export function EditVehicleDialog({
   useEffect(() => {
     if (initialVehicle) {
       // Convert string values to numbers to ensure consistency
-      const numCapacity = Number(initialVehicle.capacity || 4);
-      const numLuggageCapacity = Number(initialVehicle.luggageCapacity || 2);
-      const numBasePrice = Number(initialVehicle.basePrice || initialVehicle.price || 0);
-      const numPricePerKm = Number(initialVehicle.pricePerKm || 0);
-      const numDriverAllowance = Number(initialVehicle.driverAllowance || 250);
-      const numNightHaltCharge = Number(initialVehicle.nightHaltCharge || 700);
+      const numCapacity = typeof initialVehicle.capacity === 'string' 
+        ? parseInt(initialVehicle.capacity, 10) 
+        : Number(initialVehicle.capacity || 4);
+        
+      const numLuggageCapacity = typeof initialVehicle.luggageCapacity === 'string' 
+        ? parseInt(initialVehicle.luggageCapacity, 10) 
+        : Number(initialVehicle.luggageCapacity || 2);
+        
+      const numBasePrice = typeof initialVehicle.basePrice === 'string'
+        ? parseFloat(initialVehicle.basePrice)
+        : Number(initialVehicle.basePrice || initialVehicle.price || 0);
+        
+      const numPricePerKm = typeof initialVehicle.pricePerKm === 'string'
+        ? parseFloat(initialVehicle.pricePerKm)
+        : Number(initialVehicle.pricePerKm || 0);
+        
+      const numDriverAllowance = typeof initialVehicle.driverAllowance === 'string'
+        ? parseFloat(initialVehicle.driverAllowance)
+        : Number(initialVehicle.driverAllowance || 250);
+        
+      const numNightHaltCharge = typeof initialVehicle.nightHaltCharge === 'string'
+        ? parseFloat(initialVehicle.nightHaltCharge)
+        : Number(initialVehicle.nightHaltCharge || 700);
       
       console.log('Initial vehicle capacity:', initialVehicle.capacity, 'parsed as:', numCapacity);
       console.log('Initial luggage capacity:', initialVehicle.luggageCapacity, 'parsed as:', numLuggageCapacity);
+      console.log('Initial base price:', initialVehicle.basePrice, 'parsed as:', numBasePrice);
+      console.log('Initial price per km:', initialVehicle.pricePerKm, 'parsed as:', numPricePerKm);
       
       setVehicle({
         ...initialVehicle,
@@ -72,6 +90,8 @@ export function EditVehicleDialog({
       
       console.log("Original capacity value:", vehicle.capacity, "converted to:", updatedVehicle.capacity);
       console.log("Original luggage capacity value:", vehicle.luggageCapacity, "converted to:", updatedVehicle.luggageCapacity);
+      console.log("Original base price:", vehicle.basePrice, "converted to:", updatedVehicle.basePrice);
+      console.log("Original price per km:", vehicle.pricePerKm, "converted to:", updatedVehicle.pricePerKm);
       console.log("Submitting vehicle update with data:", updatedVehicle);
       
       await updateVehicle(updatedVehicle);
@@ -136,7 +156,6 @@ export function EditVehicleDialog({
                   });
                 }}
               />
-              <p className="text-xs text-muted-foreground">Current value: {vehicle.capacity}</p>
             </div>
             
             <div className="space-y-2">
@@ -155,7 +174,6 @@ export function EditVehicleDialog({
                   });
                 }}
               />
-              <p className="text-xs text-muted-foreground">Current value: {vehicle.luggageCapacity}</p>
             </div>
           </div>
           

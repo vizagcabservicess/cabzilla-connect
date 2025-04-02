@@ -28,9 +28,14 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
   
-  // Ensure capacity and luggageCapacity are always numbers
-  const capacity = Number(vehicle.capacity || 4);
-  const luggageCapacity = Number(vehicle.luggageCapacity || 2);
+  // Ensure capacity and luggageCapacity are always parsed as numbers
+  const capacity = typeof vehicle.capacity === 'string' 
+    ? parseInt(vehicle.capacity, 10) 
+    : Number(vehicle.capacity || 4);
+  
+  const luggageCapacity = typeof vehicle.luggageCapacity === 'string' 
+    ? parseInt(vehicle.luggageCapacity, 10) 
+    : Number(vehicle.luggageCapacity || 2);
   
   // Clean up and display amenities with proper type checking
   let amenities: string[] = ['AC'];
@@ -50,8 +55,13 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
   }
   
   // Ensure all price values are presented as numbers
-  const basePrice = Number(vehicle.price || vehicle.basePrice || 0);
-  const pricePerKm = Number(vehicle.pricePerKm || 0);
+  const basePrice = typeof vehicle.price === 'string' 
+    ? parseFloat(vehicle.price) 
+    : Number(vehicle.price || vehicle.basePrice || 0);
+    
+  const pricePerKm = typeof vehicle.pricePerKm === 'string' 
+    ? parseFloat(vehicle.pricePerKm) 
+    : Number(vehicle.pricePerKm || 0);
   
   const handleDelete = async () => {
     try {
@@ -110,8 +120,8 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
               </div>
               
               <div className="mb-4">
-                <p className="text-sm font-medium text-gray-700">Base Price: ₹{basePrice}</p>
-                <p className="text-sm text-gray-700">Per KM: ₹{pricePerKm}</p>
+                <p className="text-sm font-medium text-gray-700">Base Price: ₹{basePrice.toFixed(0)}</p>
+                <p className="text-sm text-gray-700">Per KM: ₹{pricePerKm.toFixed(0)}</p>
               </div>
               
               {vehicle.description && (
