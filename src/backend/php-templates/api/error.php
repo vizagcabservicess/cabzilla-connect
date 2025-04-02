@@ -43,7 +43,10 @@ $requestInfo = [
     'script_name' => $server['SCRIPT_NAME'] ?? 'unknown',
     'query_string' => $server['QUERY_STRING'] ?? '',
     'remote_addr' => $server['REMOTE_ADDR'] ?? 'unknown',
-    'request_method' => $server['REQUEST_METHOD'] ?? 'unknown'
+    'request_method' => $server['REQUEST_METHOD'] ?? 'unknown',
+    'server_software' => $server['SERVER_SOFTWARE'] ?? 'unknown',
+    'http_host' => $server['HTTP_HOST'] ?? 'unknown',
+    'http_user_agent' => $server['HTTP_USER_AGENT'] ?? 'unknown'
 ];
 
 if ($status == 404) {
@@ -56,9 +59,17 @@ if ($status == 404) {
     $details = "The server encountered an internal error processing your request. This might be due to database connectivity issues or server maintenance.";
 }
 
-// Log the error with more context
-$logMessage = date('Y-m-d H:i:s') . " - Error {$status}: {$message} - Original URL: {$originalUrl}, Request URI: {$path}";
-error_log($logMessage, 3, dirname(__FILE__) . '/../logs/api-errors.log');
+// Enhanced logging with environment info
+$logMessage = date('Y-m-d H:i:s') . " - Error {$status}: {$message} - Original URL: {$originalUrl}, Request URI: {$path}, Method: {$requestInfo['request_method']}";
+$logFile = dirname(__FILE__) . '/../logs/api-errors.log';
+
+// Create logs directory if it doesn't exist
+$logsDir = dirname(__FILE__) . '/../logs';
+if (!file_exists($logsDir)) {
+    mkdir($logsDir, 0755, true);
+}
+
+error_log($logMessage, 3, $logFile);
 
 // Return JSON error response
 echo json_encode([

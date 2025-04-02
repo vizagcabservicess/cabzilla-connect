@@ -22,11 +22,16 @@ RewriteRule ^admin/(.*)$ /index.html [L]
 RewriteRule ^api/admin$ /api/admin/status.php [L]
 RewriteRule ^api/admin/$ /api/admin/status.php [L]
 
+# HIGHEST PRIORITY: Direct vehicle operations
 # Map vehicle update endpoints to our direct-vehicle-modify.php
-RewriteRule ^api/admin/update-vehicle\.php$ /api/admin/direct-vehicle-modify.php [L]
 RewriteRule ^api/admin/vehicle-update\.php$ /api/admin/direct-vehicle-modify.php [L]
+RewriteRule ^api/admin/update-vehicle\.php$ /api/admin/direct-vehicle-modify.php [L]
 RewriteRule ^api/admin/vehicles-update\.php$ /api/admin/direct-vehicle-modify.php [L]
 RewriteRule ^api/admin/direct-vehicle-update\.php$ /api/admin/direct-vehicle-modify.php [L]
+
+# Map vehicle create endpoints to our direct-vehicle-create.php
+RewriteRule ^api/admin/vehicle-create\.php$ /api/admin/direct-vehicle-create.php [L]
+RewriteRule ^api/admin/add-vehicle\.php$ /api/admin/direct-vehicle-create.php [L]
 
 # Map vehicle delete endpoints to our direct-vehicle-delete.php
 RewriteRule ^api/admin/delete-vehicle\.php$ /api/admin/direct-vehicle-delete.php [L]
