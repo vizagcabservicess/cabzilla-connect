@@ -422,23 +422,27 @@ function processVehicles(vehicles: any[]): CabType[] {
       isActive = false;
     }
     
-    // Process capacity from various possible sources
+    // Process capacity from various possible sources - ENSURE WE PRESERVE THE ORIGINAL VALUES
     let capacity = 4; // Default
     if (vehicle.capacity !== undefined && vehicle.capacity !== null) {
-      capacity = parseInt(String(vehicle.capacity), 10);
+      const parsedCapacity = parseInt(String(vehicle.capacity), 10);
+      capacity = isNaN(parsedCapacity) ? 4 : parsedCapacity;
     } else if (vehicle.seats !== undefined && vehicle.seats !== null) {
-      capacity = parseInt(String(vehicle.seats), 10);
+      const parsedSeats = parseInt(String(vehicle.seats), 10);
+      capacity = isNaN(parsedSeats) ? 4 : parsedSeats;
     }
-    if (isNaN(capacity)) capacity = 4; // Fallback if parsing failed
     
-    // Process luggage capacity from various possible sources
+    // Process luggage capacity from various possible sources - ENSURE WE PRESERVE THE ORIGINAL VALUES
     let luggageCapacity = 2; // Default
     if (vehicle.luggageCapacity !== undefined && vehicle.luggageCapacity !== null) {
-      luggageCapacity = parseInt(String(vehicle.luggageCapacity), 10);
+      const parsedLuggage = parseInt(String(vehicle.luggageCapacity), 10);
+      luggageCapacity = isNaN(parsedLuggage) ? 2 : parsedLuggage;
     } else if (vehicle.luggage_capacity !== undefined && vehicle.luggage_capacity !== null) {
-      luggageCapacity = parseInt(String(vehicle.luggage_capacity), 10);
+      const parsedLuggage = parseInt(String(vehicle.luggage_capacity), 10);
+      luggageCapacity = isNaN(parsedLuggage) ? 2 : parsedLuggage;
     }
-    if (isNaN(luggageCapacity)) luggageCapacity = 2; // Fallback if parsing failed
+    
+    console.log(`Processing vehicle ${id}: capacity=${vehicle.capacity}->${capacity}, luggage=${vehicle.luggageCapacity}->${luggageCapacity}`);
     
     // Ensure all properties have appropriate defaults
     return {

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -28,10 +29,17 @@ export function EditVehicleDialog({
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
+    // Ensure we start with numeric values for capacity and luggage capacity
+    const numCapacity = Number(initialVehicle.capacity || 4);
+    const numLuggageCapacity = Number(initialVehicle.luggageCapacity || 2);
+    
+    console.log('Initial vehicle capacity:', initialVehicle.capacity, 'parsed as:', numCapacity);
+    console.log('Initial luggage capacity:', initialVehicle.luggageCapacity, 'parsed as:', numLuggageCapacity);
+    
     setVehicle({
       ...initialVehicle,
-      capacity: Number(initialVehicle.capacity || 4),
-      luggageCapacity: Number(initialVehicle.luggageCapacity || 2)
+      capacity: numCapacity,
+      luggageCapacity: numLuggageCapacity
     });
   }, [initialVehicle]);
 
@@ -39,6 +47,7 @@ export function EditVehicleDialog({
     e.preventDefault();
     setIsLoading(true);
     try {
+      // Ensure all numeric fields are numbers before submitting
       const updatedVehicle = {
         ...vehicle,
         capacity: Number(vehicle.capacity),
@@ -110,6 +119,7 @@ export function EditVehicleDialog({
                   capacity: parseInt(e.target.value, 10) || 4 
                 })}
               />
+              <p className="text-xs text-muted-foreground">Current value: {vehicle.capacity}</p>
             </div>
             
             <div className="space-y-2">
@@ -125,6 +135,7 @@ export function EditVehicleDialog({
                   luggageCapacity: parseInt(e.target.value, 10) || 2
                 })}
               />
+              <p className="text-xs text-muted-foreground">Current value: {vehicle.luggageCapacity}</p>
             </div>
           </div>
           

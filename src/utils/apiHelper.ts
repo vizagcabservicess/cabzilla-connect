@@ -1,4 +1,3 @@
-
 import { toast } from 'sonner';
 import { apiBaseUrl, directVehicleHeaders, apiTimeout } from '@/config/api';
 import { formatDataForMultipart } from '@/config/requestConfig';
@@ -65,7 +64,7 @@ export const directVehicleOperation = async (
             continue;
           }
           
-          // CRITICAL: Special handling for capacity to ensure it's sent correctly as a number
+          // CRITICAL: Enhanced handling for capacity to ensure it's sent correctly as a number
           if (key === 'capacity') {
             // Ensure capacity is a valid number (default to 4 if invalid)
             const numValue = parseInt(String(value), 10);
@@ -73,10 +72,12 @@ export const directVehicleOperation = async (
             formData.append(key, String(validValue));
             // Also include a numeric version for PHP
             formData.append('capacity_value', String(validValue));
+            // Add both versions for maximum compatibility
+            formData.append('capacity_num', String(validValue));
             continue;
           }
           
-          // CRITICAL: Special handling for luggageCapacity to ensure it's sent in both formats
+          // CRITICAL: Enhanced handling for luggageCapacity to ensure it's sent in all formats
           if (key === 'luggageCapacity' || key === 'luggage_capacity') {
             // Ensure luggage capacity is a valid number (default to 2 if invalid)
             const numValue = parseInt(String(value), 10);
@@ -87,6 +88,7 @@ export const directVehicleOperation = async (
             formData.append('luggage_capacity', String(validValue));
             // Also include numeric versions for PHP
             formData.append('luggage_capacity_value', String(validValue));
+            formData.append('luggage_capacity_num', String(validValue));
             continue;
           }
           
@@ -112,15 +114,17 @@ export const directVehicleOperation = async (
         // Add explicit numeric fields to ensure they're included correctly
         if (data.capacity !== undefined) {
           const capacityValue = parseInt(String(data.capacity), 10);
-          formData.append('capacity_numeric', String(isNaN(capacityValue) ? 4 : capacityValue));
+          const validCapacity = isNaN(capacityValue) ? 4 : capacityValue;
+          formData.append('capacity_numeric', String(validCapacity));
         }
         
         if (data.luggageCapacity !== undefined) {
           const luggageValue = parseInt(String(data.luggageCapacity), 10);
-          formData.append('luggage_capacity_numeric', String(isNaN(luggageValue) ? 2 : luggageValue));
+          const validLuggage = isNaN(luggageValue) ? 2 : luggageValue;
+          formData.append('luggage_capacity_numeric', String(validLuggage));
         }
         
-        // Log FormData contents for debugging
+        // Debug: Log FormData contents
         console.log('FormData contents:');
         for (const pair of formData.entries()) {
           console.log(`${pair[0]}: ${pair[1]}`);

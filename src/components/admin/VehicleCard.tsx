@@ -1,14 +1,22 @@
 
-import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React from 'react';
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Trash2, Users, Briefcase, Car, Clock, Info } from "lucide-react";
+import { Pencil, Trash2, Users, Briefcase, Check, X } from "lucide-react";
 import { CabType } from "@/types/cab";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { deleteVehicle } from "@/services/directVehicleService";
 import { toast } from "sonner";
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface VehicleCardProps {
   vehicle: CabType;
@@ -17,141 +25,129 @@ interface VehicleCardProps {
 }
 
 export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const [isDeleting, setIsDeleting] = React.useState(false);
   
-  // Make sure we use the most reliable ID form for this vehicle
-  const vehicleId = vehicle.id || vehicle.vehicleId || '';
+  // Ensure capacity and luggageCapacity are always numbers
+  const capacity = Number(vehicle.capacity || 4);
+  const luggageCapacity = Number(vehicle.luggageCapacity || 2);
+  
+  // Clean up and display amenities
+  const amenities = Array.isArray(vehicle.amenities) 
+    ? vehicle.amenities.filter(Boolean) 
+    : (typeof vehicle.amenities === 'string' ? vehicle.amenities.split(',').map(a => a.trim()) : ['AC']);
   
   const handleDelete = async () => {
     try {
       setIsDeleting(true);
-      console.log(`Deleting vehicle with ID: ${vehicleId}`);
-      
-      if (!vehicleId) {
-        throw new Error("Vehicle ID is missing");
-      }
-      
-      await deleteVehicle(vehicleId);
-      toast.success(`Vehicle ${vehicle.name} deleted successfully`);
-      onDelete(vehicleId);
-    } catch (error) {
-      console.error("Error deleting vehicle:", error);
-      toast.error(`Failed to delete vehicle: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      await deleteVehicle(vehicle.id || '');
+      toast.success(`Vehicle ${vehicle.name} deleted`);
+      onDelete(vehicle.id || '');
+    } catch (error: any) {
+      console.error('Error deleting vehicle:', error);
+      toast.error(`Failed to delete vehicle: ${error.message}`);
     } finally {
       setIsDeleting(false);
+      setConfirmDelete(false);
     }
   };
-
+  
   return (
-    <Card className={`overflow-hidden ${!vehicle.isActive ? 'border-dashed border-gray-300 bg-gray-50' : ''}`}>
-      <CardHeader className="pb-2">
-        <div className="flex justify-between items-start">
-          <CardTitle className="text-lg leading-tight">{vehicle.name}</CardTitle>
-          <div className="flex items-center space-x-1">
+    <>
+      <Card className="overflow-hidden">
+        <CardContent className="p-0">
+          <div className="relative pt-4">
             {!vehicle.isActive && (
-              <Badge variant="outline" className="text-gray-500 border-gray-300">
-                Inactive
-              </Badge>
+              <div className="absolute top-2 right-2">
+                <Badge variant="destructive">Inactive</Badge>
+              </div>
             )}
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="pt-2">
-        <div className="grid grid-cols-2 gap-2 text-sm text-gray-500 mb-3">
-          <div className="flex items-center gap-1">
-            <Users className="h-4 w-4" />
-            <span>{vehicle.capacity} seats</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Briefcase className="h-4 w-4" />
-            <span>{vehicle.luggageCapacity} luggage</span>
-          </div>
-          <div className="flex items-center gap-1 truncate">
-            <Car className="h-4 w-4 flex-shrink-0" />
-            <span>ID: {vehicleId}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Clock className="h-4 w-4" />
-            <span>₹{vehicle.pricePerKm || 0}/km</span>
-          </div>
-        </div>
-        
-        <div className="text-xs text-gray-500 mb-3 line-clamp-2">
-          {vehicle.description || 'No description available'}
-        </div>
-        
-        <div className="flex flex-wrap gap-1 mb-3">
-          {Array.isArray(vehicle.amenities) ? (
-            vehicle.amenities.map((amenity, index) => (
-              <Badge key={index} variant="secondary" className="text-xs">
-                {amenity}
-              </Badge>
-            ))
-          ) : vehicle.amenities ? (
-            <Badge variant="secondary" className="text-xs">
-              {String(vehicle.amenities)}
-            </Badge>
-          ) : (
-            <Badge variant="secondary" className="text-xs">AC</Badge>
-          )}
-        </div>
-        
-        <div className="flex justify-between mt-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onEdit}
-            className="flex gap-1 items-center"
-          >
-            <Edit className="h-3.5 w-3.5" />
-            Edit
-          </Button>
-          
-          <TooltipProvider>
-            <AlertDialog>
-              <Tooltip>
-                <AlertDialogTrigger asChild>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-red-500 hover:text-red-600 hover:bg-red-50 flex gap-1 items-center"
-                      disabled={isDeleting}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      {isDeleting ? 'Deleting...' : 'Delete'}
-                    </Button>
-                  </TooltipTrigger>
-                </AlertDialogTrigger>
-                <TooltipContent>
-                  <p>Delete this vehicle</p>
-                </TooltipContent>
-              </Tooltip>
+            
+            <div className="p-4">
+              <div className="flex justify-between items-start mb-2">
+                <h3 className="text-lg font-semibold">{vehicle.name}</h3>
+                <span className="text-xs bg-slate-100 px-2 py-1 rounded">ID: {vehicle.id}</span>
+              </div>
               
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will permanently delete the {vehicle.name} (ID: {vehicleId}). This action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction 
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleDelete();
-                    }} 
-                    className="bg-red-500 hover:bg-red-600"
-                  >
-                    {isDeleting ? "Deleting..." : "Delete"}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </TooltipProvider>
-        </div>
-      </CardContent>
-    </Card>
+              <div className="flex flex-wrap gap-2 mb-4">
+                <div className="flex items-center gap-1 text-sm">
+                  <Users className="h-4 w-4" />
+                  <span>{capacity} seats</span>
+                </div>
+                
+                <div className="flex items-center gap-1 text-sm">
+                  <Briefcase className="h-4 w-4" />
+                  <span>{luggageCapacity} luggage</span>
+                </div>
+                
+                {vehicle.ac !== false ? (
+                  <div className="flex items-center gap-1 text-sm text-green-600">
+                    <Check className="h-4 w-4" />
+                    <span>AC</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 text-sm text-red-600">
+                    <X className="h-4 w-4" />
+                    <span>Non-AC</span>
+                  </div>
+                )}
+              </div>
+              
+              <div className="mb-4">
+                <p className="text-sm font-medium text-gray-700">Base Price: ₹{vehicle.price || vehicle.basePrice || 0}</p>
+                <p className="text-sm text-gray-700">Per KM: ₹{vehicle.pricePerKm || 0}</p>
+              </div>
+              
+              {vehicle.description && (
+                <p className="text-sm text-gray-600 mb-4">{vehicle.description}</p>
+              )}
+              
+              {amenities.length > 0 && (
+                <div className="flex flex-wrap gap-1 mb-4">
+                  {amenities.map((amenity, index) => (
+                    <Badge key={index} variant="outline" className="text-xs">{amenity}</Badge>
+                  ))}
+                </div>
+              )}
+              
+              <div className="flex justify-end gap-2 mt-4">
+                <Button variant="outline" size="sm" onClick={onEdit}>
+                  <Pencil className="h-4 w-4 mr-1" /> Edit
+                </Button>
+                <Button 
+                  variant="destructive" 
+                  size="sm"
+                  onClick={() => setConfirmDelete(true)}
+                  disabled={isDeleting}
+                >
+                  <Trash2 className="h-4 w-4 mr-1" /> Delete
+                </Button>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+      
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the vehicle "{vehicle.name}". This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDelete} 
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

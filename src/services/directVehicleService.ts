@@ -1,4 +1,3 @@
-
 /**
  * Direct vehicle service for operations that bypass API layers
  * This ensures consistent behavior for vehicle CRUD operations
@@ -31,7 +30,7 @@ const ensureNumericValues = (vehicle: CabType): CabType => {
   
   return {
     ...vehicle,
-    // Force these to be valid numbers
+    // Force these to be valid numbers and preserve original values
     capacity: isNaN(capacity) ? 4 : capacity,
     luggageCapacity: isNaN(luggageCapacity) ? 2 : luggageCapacity,
     basePrice: isNaN(basePrice) ? 0 : basePrice,
@@ -116,10 +115,17 @@ export const createVehicle = async (vehicle: CabType): Promise<CabType> => {
  */
 export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
   try {
-    console.log('Updating vehicle:', vehicle);
+    console.log('Updating vehicle with original data:', vehicle);
     
     // CRITICAL: Preserve isActive status and numeric values correctly
     const isActive = typeof vehicle.isActive === 'boolean' ? vehicle.isActive : true;
+    
+    // Explicitly get capacity and luggage_capacity as numbers
+    const capacity = parseInt(String(vehicle.capacity), 10);
+    const luggageCapacity = parseInt(String(vehicle.luggageCapacity), 10);
+    
+    console.log(`Original capacity value: ${vehicle.capacity}, parsed: ${capacity}`);
+    console.log(`Original luggage capacity value: ${vehicle.luggageCapacity}, parsed: ${luggageCapacity}`);
     
     // Normalize vehicle ID before sending and ensure all numeric values are actually numbers
     const normalizedVehicle = {
@@ -128,41 +134,42 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
       vehicleId: normalizeVehicleId(vehicle.id || vehicle.vehicleId || ''),
       isActive: isActive,
       is_active: isActive,
+      // Force capacity values to be numbers
+      capacity: isNaN(capacity) ? 4 : capacity,
+      luggageCapacity: isNaN(luggageCapacity) ? 2 : luggageCapacity,
+      luggage_capacity: isNaN(luggageCapacity) ? 2 : luggageCapacity,
     };
     
     console.log('Normalized vehicle before update:', normalizedVehicle);
     
     // Use FormData instead of JSON for better PHP compatibility
     const formData = new FormData();
+    
+    // Add critical fields explicitly first to ensure they're included
+    formData.append('id', String(normalizedVehicle.id));
+    formData.append('vehicleId', String(normalizedVehicle.id));
+    formData.append('vehicle_id', String(normalizedVehicle.id));
+    
+    // Explicitly add capacity in all forms
+    formData.append('capacity', String(normalizedVehicle.capacity));
+    formData.append('capacity_value', String(normalizedVehicle.capacity));
+    formData.append('capacity_numeric', String(normalizedVehicle.capacity));
+    
+    // Explicitly add luggage capacity in all forms
+    formData.append('luggageCapacity', String(normalizedVehicle.luggageCapacity));
+    formData.append('luggage_capacity', String(normalizedVehicle.luggageCapacity));
+    formData.append('luggage_capacity_value', String(normalizedVehicle.luggageCapacity));
+    formData.append('luggage_capacity_numeric', String(normalizedVehicle.luggageCapacity));
+    
+    // Add is_active flags explicitly
+    formData.append('isActive', normalizedVehicle.isActive ? '1' : '0');
+    formData.append('is_active', normalizedVehicle.isActive ? '1' : '0');
+    
+    // Add other fields
     Object.entries(normalizedVehicle).forEach(([key, value]) => {
-      // Skip undefined or null values
+      // Skip undefined or null values and already added critical fields
       if (value === undefined || value === null) return;
-      
-      // Handle isActive specially
-      if (key === 'isActive' || key === 'is_active') {
-        const boolValue = value === true || value === 'true' || value === 1 || value === '1';
-        formData.append(key, boolValue ? '1' : '0');
-        return;
-      }
-      
-      // Handle capacity specially to ensure it's a number
-      if (key === 'capacity') {
-        const numVal = parseInt(String(value), 10);
-        const validValue = isNaN(numVal) ? 4 : numVal;
-        formData.append('capacity', String(validValue));
-        formData.append('capacity_value', String(validValue)); // Add numeric version for PHP
-        return;
-      }
-      
-      // Handle luggageCapacity specially to ensure it's a number
-      if (key === 'luggageCapacity' || key === 'luggage_capacity') {
-        const numVal = parseInt(String(value), 10);
-        const validValue = isNaN(numVal) ? 2 : numVal;
-        formData.append('luggageCapacity', String(validValue));
-        formData.append('luggage_capacity', String(validValue)); // Add snake_case version for PHP
-        formData.append('luggage_capacity_value', String(validValue)); // Add numeric version for PHP
-        return;
-      }
+      if (['id', 'vehicleId', 'vehicle_id', 'capacity', 'luggageCapacity', 'luggage_capacity', 'isActive', 'is_active'].includes(key)) return;
       
       // Handle price fields specially to ensure they're numbers
       if (key === 'basePrice' || key === 'pricePerKm' || key === 'nightHaltCharge' || key === 'driverAllowance') {
@@ -179,13 +186,6 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
         formData.append(key, String(value));
       }
     });
-    
-    // Add explicit numeric fields to ensure they're included
-    const capacityValue = parseInt(String(normalizedVehicle.capacity), 10);
-    formData.append('capacity_numeric', String(isNaN(capacityValue) ? 4 : capacityValue));
-    
-    const luggageValue = parseInt(String(normalizedVehicle.luggageCapacity), 10);
-    formData.append('luggage_capacity_numeric', String(isNaN(luggageValue) ? 2 : luggageValue));
     
     // Log FormData contents for debugging
     console.log('FormData contents for vehicle update:');
