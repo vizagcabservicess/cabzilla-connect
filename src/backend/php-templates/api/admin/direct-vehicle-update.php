@@ -1,4 +1,3 @@
-
 <?php
 /**
  * direct-vehicle-update.php - Update an existing vehicle and sync across all vehicle tables
@@ -33,10 +32,6 @@ function logMessage($message) {
 // Log request information
 logMessage("Vehicle update request received: " . $_SERVER['REQUEST_METHOD']);
 
-// Log POST data for debugging
-logMessage("POST data: " . json_encode($_POST, JSON_PRETTY_PRINT));
-logMessage("Request body: " . file_get_contents('php://input'));
-
 // Handle OPTIONS preflight request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -57,67 +52,46 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' && $_SERVER['REQUEST_METHOD'] !== 'PUT
     exit;
 }
 
-// Get database connection
-try {
-    // First try to use config if available
-    if (file_exists(dirname(__FILE__) . '/../../config.php')) {
-        require_once dirname(__FILE__) . '/../../config.php';
-        $conn = getDbConnection();
-        logMessage("Connected to database using config.php");
-    } 
-    // Fallback to hardcoded credentials
-    else {
-        logMessage("Config file not found, using hardcoded credentials");
-        $dbHost = 'localhost';
-        $dbName = 'u644605165_new_bookingdb';
-        $dbUser = 'u644605165_new_bookingusr';
-        $dbPass = 'Vizag@1213';
-        
-        $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-        
-        if ($conn->connect_error) {
-            throw new Exception("Database connection failed: " . $conn->connect_error);
-        }
-        
-        logMessage("Connected to database using hardcoded credentials");
-    }
-} catch (Exception $e) {
-    $response['message'] = 'Database connection failed: ' . $e->getMessage();
-    echo json_encode($response);
-    exit;
-}
+// Log POST data for debugging
+logMessage("POST data: " . json_encode($_POST, JSON_PRETTY_PRINT));
 
 // Get vehicle data from the request
 try {
     // Parse input data (support both JSON and form data)
     $vehicleData = [];
-    $rawInput = file_get_contents('php://input');
     
-    // Try to parse as JSON
-    $jsonData = json_decode($rawInput, true);
-    if (json_last_error() === JSON_ERROR_NONE && !empty($jsonData)) {
-        $vehicleData = $jsonData;
-        logMessage("Parsed vehicle data from JSON");
-    }
-    // Fallback to POST data
-    else if (!empty($_POST)) {
+    // Try using POST data first (most reliable with multipart/form-data)
+    if (!empty($_POST)) {
         $vehicleData = $_POST;
-        logMessage("Using standard POST data for vehicle");
-    }
-    // Try to parse as URL-encoded
+        logMessage("Using standard POST data for vehicle update");
+    } 
+    // If no POST data, try to parse JSON from request body
     else {
-        parse_str($rawInput, $parsedData);
-        if (!empty($parsedData)) {
-            $vehicleData = $parsedData;
-            logMessage("Parsed vehicle data as URL-encoded");
+        // Read raw input once and store it
+        $rawInput = file_get_contents('php://input');
+        logMessage("Raw input: " . $rawInput);
+        
+        // Try to parse as JSON
+        $jsonData = json_decode($rawInput, true);
+        if (json_last_error() === JSON_ERROR_NONE && !empty($jsonData)) {
+            $vehicleData = $jsonData;
+            logMessage("Parsed vehicle data from JSON");
+        }
+        // Try to parse as URL-encoded
+        else {
+            parse_str($rawInput, $parsedData);
+            if (!empty($parsedData)) {
+                $vehicleData = $parsedData;
+                logMessage("Parsed vehicle data as URL-encoded");
+            }
         }
     }
-    
-    logMessage("Vehicle data before processing: " . json_encode($vehicleData, JSON_PRETTY_PRINT));
     
     if (empty($vehicleData)) {
         throw new Exception("No vehicle data provided");
     }
+    
+    logMessage("Vehicle data after parsing: " . json_encode($vehicleData));
     
     // Extract vehicle ID with fallbacks for different naming conventions
     $vehicleId = null;
@@ -134,6 +108,36 @@ try {
     // Make sure we have a vehicle ID
     if (empty($vehicleId)) {
         throw new Exception("Vehicle ID is required");
+    }
+    
+    // Get database connection
+    try {
+        // First try to use config if available
+        if (file_exists(dirname(__FILE__) . '/../../config.php')) {
+            require_once dirname(__FILE__) . '/../../config.php';
+            $conn = getDbConnection();
+            logMessage("Connected to database using config.php");
+        } 
+        // Fallback to hardcoded credentials
+        else {
+            logMessage("Config file not found, using hardcoded credentials");
+            $dbHost = 'localhost';
+            $dbName = 'u644605165_new_bookingdb';
+            $dbUser = 'u644605165_new_bookingusr';
+            $dbPass = 'Vizag@1213';
+            
+            $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+            
+            if ($conn->connect_error) {
+                throw new Exception("Database connection failed: " . $conn->connect_error);
+            }
+            
+            logMessage("Connected to database using hardcoded credentials");
+        }
+    } catch (Exception $e) {
+        $response['message'] = 'Database connection failed: ' . $e->getMessage();
+        echo json_encode($response);
+        exit;
     }
     
     // Begin transaction
@@ -256,7 +260,10 @@ try {
         
         logMessage("Successfully updated vehicles table for $vehicleId");
         
-        // Check if vehicle_types table exists, then update
+        // Optional: Update other related tables if they exist
+        // This code can be kept as is since it checks for table existence first
+        
+        // Update vehicle_types table
         $checkTypesTableResult = $conn->query("SHOW TABLES LIKE 'vehicle_types'");
         if ($checkTypesTableResult->num_rows > 0) {
             $updateVehicleTypeQuery = "UPDATE vehicle_types SET 
@@ -352,24 +359,28 @@ try {
         $conn->commit();
         
         // Prepare successful response
-        $response['status'] = 'success';
-        $response['message'] = "Vehicle '$vehicleName' updated successfully";
-        $response['vehicleId'] = $vehicleId;
-        $response['vehicle'] = [
-            'id' => $vehicleId,
+        $response = [
+            'status' => 'success',
+            'message' => "Vehicle '$vehicleName' updated successfully",
             'vehicleId' => $vehicleId,
-            'name' => $vehicleName,
-            'capacity' => $capacity,
-            'luggageCapacity' => $luggageCapacity,
-            'ac' => $ac == 1,
-            'image' => $image,
-            'description' => $description,
-            'isActive' => $isActive == 1,
-            'basePrice' => $basePrice,
-            'price' => $basePrice,
-            'pricePerKm' => $pricePerKm,
-            'nightHaltCharge' => $nightHaltCharge,
-            'driverAllowance' => $driverAllowance
+            'vehicle' => [
+                'id' => $vehicleId,
+                'vehicleId' => $vehicleId,
+                'name' => $vehicleName,
+                'capacity' => $capacity,
+                'luggageCapacity' => $luggageCapacity,
+                'ac' => $ac == 1,
+                'image' => $image,
+                'description' => $description,
+                'isActive' => $isActive == 1,
+                'basePrice' => $basePrice,
+                'price' => $basePrice,
+                'pricePerKm' => $pricePerKm,
+                'nightHaltCharge' => $nightHaltCharge,
+                'driverAllowance' => $driverAllowance,
+                'amenities' => $amenities,
+            ],
+            'timestamp' => time()
         ];
         
         logMessage("Vehicle '$vehicleName' updated successfully with ID: $vehicleId");
@@ -377,13 +388,26 @@ try {
     } catch (Exception $e) {
         // Rollback transaction on error
         $conn->rollback();
-        throw $e;
+        
+        $response = [
+            'status' => 'error',
+            'message' => $e->getMessage(),
+            'timestamp' => time()
+        ];
+        
+        logMessage("Error updating vehicle: " . $e->getMessage());
     }
     
 } catch (Exception $e) {
-    $response['message'] = $e->getMessage();
-    logMessage("Error updating vehicle: " . $e->getMessage());
+    $response = [
+        'status' => 'error',
+        'message' => $e->getMessage(),
+        'timestamp' => time()
+    ];
+    
+    logMessage("Error in request processing: " . $e->getMessage());
 }
 
 // Send response
 echo json_encode($response);
+exit;

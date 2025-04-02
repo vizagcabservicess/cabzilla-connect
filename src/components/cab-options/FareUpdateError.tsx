@@ -1,7 +1,9 @@
 
 import { Button } from "@/components/ui/button";
-import { AlertCircle, RefreshCcw, Database, ExternalLink } from "lucide-react";
+import { AlertCircle, RefreshCcw, Database, ExternalLink, FileJson } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { fixDatabaseTables } from "@/utils/apiHelper";
+import { toast } from "sonner";
 
 interface FareUpdateErrorProps {
   error: Error;
@@ -25,6 +27,25 @@ export function FareUpdateError({
   directDatabaseAccess
 }: FareUpdateErrorProps) {
   const errorMessage = message || error?.message || "Unknown error";
+  
+  // Default handler for database fixes
+  const handleFixDatabase = async () => {
+    try {
+      toast.loading("Attempting to fix database tables...");
+      const success = await fixDatabaseTables();
+      if (success) {
+        toast.success("Database tables fixed successfully");
+        if (onRetry) {
+          setTimeout(onRetry, 500);
+        }
+      } else {
+        toast.error("Failed to fix database tables");
+      }
+    } catch (err) {
+      console.error("Error fixing database tables:", err);
+      toast.error("Failed to fix database tables");
+    }
+  };
 
   return (
     <Alert variant="destructive" className="mb-4">
@@ -43,8 +64,8 @@ export function FareUpdateError({
             </Button>
           )}
           
-          {isAdmin && fixDatabaseHandler && (
-            <Button size="sm" variant="outline" onClick={fixDatabaseHandler} className="flex items-center">
+          {isAdmin && (fixDatabaseHandler || handleFixDatabase) && (
+            <Button size="sm" variant="outline" onClick={fixDatabaseHandler || handleFixDatabase} className="flex items-center">
               <Database className="mr-2 h-4 w-4" />
               Fix Database
             </Button>
@@ -54,6 +75,13 @@ export function FareUpdateError({
             <Button size="sm" variant="outline" onClick={directDatabaseAccess} className="flex items-center">
               <ExternalLink className="mr-2 h-4 w-4" />
               Direct Database Access
+            </Button>
+          )}
+
+          {isAdmin && errorMessage.includes('JSON') && (
+            <Button size="sm" variant="outline" onClick={() => toast.info("Response format issue detected")} className="flex items-center">
+              <FileJson className="mr-2 h-4 w-4" />
+              Check Response Format
             </Button>
           )}
         </div>

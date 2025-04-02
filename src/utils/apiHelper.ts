@@ -80,11 +80,18 @@ export const directVehicleOperation = async (endpoint: string, method: string, d
         let errorText;
         
         try {
-          // Try to get JSON error message
-          const errorData = await response.json();
-          errorText = errorData.message || errorData.error || response.statusText;
-        } catch (parseError) {
-          // Fall back to status text if JSON parsing fails
+          // Try to get response as text first
+          const responseText = await response.text();
+          try {
+            // Then try to parse it as JSON
+            const errorData = JSON.parse(responseText);
+            errorText = errorData.message || errorData.error || response.statusText;
+          } catch (parseError) {
+            // If JSON parsing fails, use the text directly
+            errorText = responseText || response.statusText;
+          }
+        } catch (textError) {
+          // Fall back to status text if text extraction fails
           errorText = response.statusText;
         }
         
@@ -92,39 +99,36 @@ export const directVehicleOperation = async (endpoint: string, method: string, d
         throw new Error(`API error: ${errorStatusCode} - ${errorText}`);
       }
       
-      // Parse response data
-      const contentTypeHeader = response.headers.get('content-type');
+      // Clone the response before consuming it
+      const responseClone = response.clone();
       
-      if (contentTypeHeader && contentTypeHeader.includes('application/json')) {
-        // JSON response
-        try {
-          const responseData = await response.json();
-          return responseData;
-        } catch (jsonError) {
-          console.error('Failed to parse JSON response', jsonError);
-          
-          // Try to get the text and parse as JSON anyway
-          const textResponse = await response.text();
-          try {
-            return JSON.parse(textResponse);
-          } catch {
-            throw new Error(`Invalid JSON response: ${textResponse}`);
-          }
+      // First try to get the response as text
+      const responseText = await responseClone.text();
+      
+      // If empty response, return a simple success object
+      if (!responseText || responseText.trim() === '') {
+        return { status: 'success', message: 'Operation completed successfully (empty response)' };
+      }
+      
+      // Try to parse the text as JSON
+      try {
+        return JSON.parse(responseText);
+      } catch (jsonError) {
+        console.error('Failed to parse response as JSON:', jsonError, responseText);
+        
+        // Check if response contains HTML or PHP error messages
+        if (responseText.includes('<?php') || responseText.includes('<!DOCTYPE') || 
+            responseText.includes('<html') || responseText.includes('Warning:') || 
+            responseText.includes('Fatal error:')) {
+          throw new Error('Server returned HTML or PHP error instead of JSON');
         }
-      } else {
-        // Non-JSON response
-        const textResponse = await response.text();
-        try {
-          // Try to parse as JSON anyway in case Content-Type is incorrect
-          return JSON.parse(textResponse);
-        } catch (jsonError) {
-          // Return plain text response as an object
-          return {
-            status: response.ok ? 'success' : 'error',
-            message: textResponse,
-            raw: textResponse
-          };
-        }
+        
+        // Return text response as an object
+        return {
+          status: response.ok ? 'success' : 'error',
+          message: responseText,
+          raw: responseText
+        };
       }
     } finally {
       clearTimeout(timeoutId);

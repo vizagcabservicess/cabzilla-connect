@@ -13,6 +13,8 @@ import { updateVehicle } from "@/services/directVehicleService";
 import { parseAmenities, parseNumericValue } from '@/utils/safeStringUtils';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { FareUpdateError } from '@/components/cab-options/FareUpdateError';
+import { fixDatabaseTables, formatDataForMultipart } from '@/utils/apiHelper';
+import { apiBaseUrl } from '@/config/api';
 
 interface EditVehicleDialogProps {
   open: boolean;
@@ -72,6 +74,81 @@ export function EditVehicleDialog({
     }
   }, [initialVehicle, open]);
 
+  const handleDirectUpdate = async () => {
+    try {
+      setIsLoading(true);
+      toast.loading("Attempting direct update via form submission...");
+      
+      // Create FormData for more reliable PHP handling
+      const formData = formatDataForMultipart({
+        ...vehicle,
+        id: vehicle.id || vehicle.vehicleId,
+        vehicleId: vehicle.vehicleId || vehicle.id
+      });
+      
+      const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-update.php?_t=${Date.now()}`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-Force-Refresh': 'true',
+          'X-Admin-Mode': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+        }
+      });
+      
+      const text = await response.text();
+      
+      if (response.ok) {
+        try {
+          const data = JSON.parse(text);
+          if (data.status === 'success') {
+            toast.success(`Vehicle ${vehicle.name} updated successfully`);
+            onEditVehicle(vehicle);
+            onClose();
+          } else {
+            throw new Error(data.message || 'Unknown error');
+          }
+        } catch (e) {
+          console.error('Failed to parse response:', e, text);
+          throw new Error('Invalid server response format');
+        }
+      } else {
+        throw new Error(`Server error: ${response.status} ${response.statusText}`);
+      }
+    } catch (error: any) {
+      console.error("Direct update failed:", error);
+      toast.error(`Direct update failed: ${error.message}`);
+      
+      // Continue with regular update as fallback
+      handleSubmit(new Event('submit') as any);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fixDatabase = async () => {
+    try {
+      setIsLoading(true);
+      toast.loading("Attempting to fix database tables...");
+      
+      const success = await fixDatabaseTables();
+      
+      if (success) {
+        toast.success("Database tables fixed successfully");
+        handleSubmit(new Event('submit') as any);
+      } else {
+        toast.error("Failed to fix database tables");
+        setServerError("Database fix failed. Please try again or contact support.");
+      }
+    } catch (error) {
+      console.error("Error fixing database:", error);
+      toast.error("Error fixing database tables");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -103,6 +180,7 @@ export function EditVehicleDialog({
           if (attempt > 0) {
             const delay = 1000 * (attempt) + Math.random() * 500;
             await new Promise(resolve => setTimeout(resolve, delay));
+            toast.loading(`Update attempt ${attempt + 1}/${maxRetries}...`);
           }
           
           console.log(`Update attempt ${attempt + 1}/${maxRetries} for vehicle ${vehicle.id}`);
@@ -177,6 +255,8 @@ export function EditVehicleDialog({
             isAdmin={true}
             title="Database Error"
             description="There was an issue connecting to the database. This could be due to a temporary network issue or server maintenance."
+            fixDatabaseHandler={fixDatabase}
+            directDatabaseAccess={handleDirectUpdate}
           />
         )}
         
@@ -403,6 +483,22 @@ export function EditVehicleDialog({
           <DialogFooter className="mt-4 pt-2 border-t">
             <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>
               Cancel
+            </Button>
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={handleDirectUpdate}
+              disabled={isLoading}
+              className="mr-2"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                "Direct Update"
+              )}
             </Button>
             <Button type="submit" disabled={isLoading}>
               {isLoading ? (
