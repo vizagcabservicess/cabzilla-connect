@@ -4,8 +4,8 @@ import { OutstationFare, LocalFare, AirportFare } from '@/types/cab';
 import { toast } from 'sonner';
 
 // Reduced cache durations to ensure fresher data
-const JSON_CACHE_DURATION = 30 * 1000; // 30 seconds in milliseconds
-const API_CACHE_DURATION = 15 * 1000; // 15 seconds in milliseconds
+const JSON_CACHE_DURATION = 20 * 1000; // 20 seconds in milliseconds
+const API_CACHE_DURATION = 10 * 1000; // 10 seconds in milliseconds
 
 // Store fetched vehicle data in memory to reduce API calls
 let cachedVehicles: {
@@ -284,7 +284,9 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
     const finalResponse = await fetch(finalUrl, {
       headers: {
         ...forceRefreshHeaders,
-        'X-Admin-Mode': includeInactive ? 'true' : 'false'
+        'X-Admin-Mode': includeInactive ? 'true' : 'false',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
       },
       mode: 'cors',
       cache: 'no-store'
@@ -311,6 +313,16 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
         } catch (e) {
           console.error('Error caching vehicles to localStorage:', e);
         }
+        
+        // Dispatch event with the updated data
+        window.dispatchEvent(new CustomEvent('vehicle-data-updated', {
+          detail: { 
+            count: processedVehicles.length,
+            timestamp: now,
+            vehicles: processedVehicles,
+            source: 'database-fix'
+          }
+        }));
         
         return filterVehicles(processedVehicles, includeInactive);
       }
@@ -393,9 +405,16 @@ function processVehicles(vehicles: any[]): CabType[] {
     } else if (typeof vehicle.amenities === 'string') {
       try {
         // Try to parse as JSON
-        const parsedAmenities = JSON.parse(vehicle.amenities);
-        if (Array.isArray(parsedAmenities)) {
-          amenities = parsedAmenities;
+        if (vehicle.amenities.trim() === '') {
+          amenities = ['AC'];
+        } else if (vehicle.amenities.startsWith('[') && vehicle.amenities.endsWith(']')) {
+          const parsedAmenities = JSON.parse(vehicle.amenities);
+          if (Array.isArray(parsedAmenities)) {
+            amenities = parsedAmenities;
+          } else {
+            // Try to parse as comma-separated string
+            amenities = vehicle.amenities.split(',').map((a: string) => a.trim());
+          }
         } else {
           // Try to parse as comma-separated string
           amenities = vehicle.amenities.split(',').map((a: string) => a.trim());
@@ -425,24 +444,28 @@ function processVehicles(vehicles: any[]): CabType[] {
     // Process capacity from various possible sources - ENSURE WE PRESERVE THE ORIGINAL VALUES
     let capacity = 4; // Default
     if (vehicle.capacity !== undefined && vehicle.capacity !== null) {
-      const parsedCapacity = parseInt(String(vehicle.capacity), 10);
-      capacity = isNaN(parsedCapacity) ? 4 : parsedCapacity;
+      capacity = Number(vehicle.capacity);
+      console.log(`Processing vehicle ${vehicle.id || 'unknown'} capacity: original=${vehicle.capacity}, parsed=${capacity}`);
     } else if (vehicle.seats !== undefined && vehicle.seats !== null) {
-      const parsedSeats = parseInt(String(vehicle.seats), 10);
-      capacity = isNaN(parsedSeats) ? 4 : parsedSeats;
+      capacity = Number(vehicle.seats);
     }
     
-    // Process luggage capacity from various possible sources - ENSURE WE PRESERVE THE ORIGINAL VALUES
+    // Process luggage capacity from various possible sources
     let luggageCapacity = 2; // Default
     if (vehicle.luggageCapacity !== undefined && vehicle.luggageCapacity !== null) {
-      const parsedLuggage = parseInt(String(vehicle.luggageCapacity), 10);
-      luggageCapacity = isNaN(parsedLuggage) ? 2 : parsedLuggage;
+      luggageCapacity = Number(vehicle.luggageCapacity);
+      console.log(`Processing vehicle ${vehicle.id || 'unknown'} luggage: original=${vehicle.luggageCapacity}, parsed=${luggageCapacity}`);
     } else if (vehicle.luggage_capacity !== undefined && vehicle.luggage_capacity !== null) {
-      const parsedLuggage = parseInt(String(vehicle.luggage_capacity), 10);
-      luggageCapacity = isNaN(parsedLuggage) ? 2 : parsedLuggage;
+      luggageCapacity = Number(vehicle.luggage_capacity);
     }
     
-    console.log(`Processing vehicle ${id}: capacity=${vehicle.capacity}->${capacity}, luggage=${vehicle.luggageCapacity}->${luggageCapacity}`);
+    // Process price values
+    const basePrice = vehicle.basePrice !== undefined ? Number(vehicle.basePrice) : 
+                     vehicle.price !== undefined ? Number(vehicle.price) : 
+                     vehicle.base_price !== undefined ? Number(vehicle.base_price) : 0;
+                     
+    const pricePerKm = vehicle.pricePerKm !== undefined ? Number(vehicle.pricePerKm) : 
+                      vehicle.price_per_km !== undefined ? Number(vehicle.price_per_km) : 0;
     
     // Ensure all properties have appropriate defaults
     return {
@@ -451,14 +474,15 @@ function processVehicles(vehicles: any[]): CabType[] {
       name: vehicle.name || ucwords(id.replace(/_/g, ' ')),
       capacity: capacity,
       luggageCapacity: luggageCapacity,
-      price: parseFloat(String(vehicle.price || vehicle.basePrice || vehicle.base_price || 0)),
-      pricePerKm: parseFloat(String(vehicle.pricePerKm || vehicle.price_per_km || 0)),
+      price: basePrice,
+      basePrice: basePrice,
+      pricePerKm: pricePerKm,
       image: vehicle.image || `/cars/${id}.png`.toLowerCase(),
       amenities: amenities.filter(a => a), // Filter empty amenities
       description: vehicle.description || '',
       ac: vehicle.ac === false ? false : true,
-      nightHaltCharge: parseFloat(String(vehicle.nightHaltCharge || vehicle.night_halt_charge || 700)),
-      driverAllowance: parseFloat(String(vehicle.driverAllowance || vehicle.driver_allowance || 300)),
+      nightHaltCharge: Number(vehicle.nightHaltCharge || vehicle.night_halt_charge || 700),
+      driverAllowance: Number(vehicle.driverAllowance || vehicle.driver_allowance || 300),
       isActive: isActive
     };
   });

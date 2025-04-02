@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -28,7 +27,6 @@ export default function VehicleManagement() {
   const [error, setError] = useState<Error | null>(null);
   const [offlineMode, setOfflineMode] = useState(false);
 
-  // Reset error state when needed
   const resetError = () => setError(null);
 
   const fixDatabase = async () => {
@@ -36,7 +34,6 @@ export default function VehicleManagement() {
     resetError();
     
     try {
-      // Try direct API call without CORS proxy
       const response = await fetch(`${apiBaseUrl}/api/admin/fix-vehicle-tables.php`, {
         method: 'GET',
         credentials: 'omit',
@@ -60,7 +57,6 @@ export default function VehicleManagement() {
       console.error("Error fixing database:", error);
       toast.error("Failed to fix database tables. Using offline mode.");
       
-      // Attempt to load vehicles from cache even if DB fix failed
       try {
         loadVehiclesFromLocalStorage();
         toast.info("Loaded vehicles from local cache");
@@ -91,9 +87,9 @@ export default function VehicleManagement() {
     return false;
   };
 
-  const loadVehicles = useCallback(async () => {
+  const loadVehicles = useCallback(async (forceRefreshOverride = false) => {
     const now = Date.now();
-    if (now - lastRefreshTime < 1000 && lastRefreshTime !== 0) {
+    if (!forceRefreshOverride && now - lastRefreshTime < 1000 && lastRefreshTime !== 0) {
       console.log("Refresh throttled, skipping...");
       return;
     }
@@ -104,7 +100,8 @@ export default function VehicleManagement() {
       setLastRefreshTime(now);
       console.log("Admin: Fetching all vehicles...");
       
-      // Always try online mode first
+      clearVehicleDataCache();
+      
       try {
         const fetchedVehicles = await getVehicleData(true, true);
         console.log(`Loaded ${fetchedVehicles.length} vehicles for admin view:`, fetchedVehicles);
@@ -116,7 +113,6 @@ export default function VehicleManagement() {
             const normalizedId = String(vehicle.id || vehicle.vehicleId || '').trim();
             if (!normalizedId) return;
             
-            // Create normalized vehicle object
             const normalizedVehicle: CabType = {
               ...vehicle,
               id: normalizedId,
@@ -132,7 +128,6 @@ export default function VehicleManagement() {
               driverAllowance: Number(vehicle.driverAllowance || 300)
             };
             
-            // Handle duplicates by merging properties
             if (deduplicatedVehicles[normalizedId]) {
               const existing = deduplicatedVehicles[normalizedId];
               
@@ -155,7 +150,6 @@ export default function VehicleManagement() {
           setVehicles(uniqueVehicles);
           setOfflineMode(false);
           
-          // Cache the results
           try {
             localStorage.setItem('cachedVehicles', JSON.stringify(uniqueVehicles));
             localStorage.setItem('localVehicles', JSON.stringify(uniqueVehicles));
@@ -177,7 +171,6 @@ export default function VehicleManagement() {
       } catch (apiError) {
         console.error("API error:", apiError);
         
-        // Try loading from localStorage as a fallback
         if (loadVehiclesFromLocalStorage()) {
           toast.warning("Working in offline mode. Changes will be saved locally.");
           setOfflineMode(true);
@@ -188,7 +181,6 @@ export default function VehicleManagement() {
     } catch (error) {
       console.error("Error loading vehicles:", error);
       
-      // Try loading from localStorage as a fallback
       if (loadVehiclesFromLocalStorage()) {
         toast.warning("Working in offline mode. Changes will be saved locally.");
         setOfflineMode(true);
@@ -205,16 +197,14 @@ export default function VehicleManagement() {
     
     const handleVehicleDataUpdated = () => {
       console.log("Vehicle data updated event received");
-      setTimeout(() => loadVehicles(), 500);
+      setTimeout(() => loadVehicles(true), 500);
     };
     
-    // Setup event listeners
     window.addEventListener('vehicle-data-updated', handleVehicleDataUpdated);
     window.addEventListener('vehicle-data-refreshed', handleVehicleDataUpdated);
     window.addEventListener('vehicle-data-changed', handleVehicleDataUpdated);
     window.addEventListener('vehicle-data-cache-cleared', handleVehicleDataUpdated);
     
-    // Network status change handler
     const handleOnline = () => {
       console.log("Network back online, refreshing data");
       if (offlineMode) {
@@ -239,13 +229,12 @@ export default function VehicleManagement() {
       setIsRefreshing(true);
       resetError();
       clearVehicleDataCache();
-      await loadVehicles();
+      await loadVehicles(true);
       toast.success("Vehicle data refreshed successfully");
     } catch (error) {
       console.error("Error refreshing vehicle data:", error);
       toast.error("Failed to refresh vehicle data. Trying offline mode.");
       
-      // Try loading from localStorage as a fallback
       if (loadVehiclesFromLocalStorage()) {
         setOfflineMode(true);
       } else {
@@ -264,7 +253,7 @@ export default function VehicleManagement() {
     
     setTimeout(() => {
       clearVehicleDataCache();
-      loadVehicles();
+      loadVehicles(true);
     }, 1000);
   };
 
@@ -274,9 +263,12 @@ export default function VehicleManagement() {
     setVehicles((prev) =>
       prev.map((vehicle) =>
         vehicle.id === updatedVehicle.id ? {
-          ...vehicle,
           ...updatedVehicle,
-          description: updatedVehicle.description 
+          capacity: Number(updatedVehicle.capacity),
+          luggageCapacity: Number(updatedVehicle.luggageCapacity),
+          basePrice: Number(updatedVehicle.basePrice || 0),
+          price: Number(updatedVehicle.basePrice || 0),
+          pricePerKm: Number(updatedVehicle.pricePerKm || 0)
         } : vehicle
       )
     );
@@ -287,8 +279,8 @@ export default function VehicleManagement() {
     
     setTimeout(() => {
       clearVehicleDataCache();
-      loadVehicles();
-    }, 1500);
+      loadVehicles(true);
+    }, 500);
   };
 
   const handleDeleteVehicle = (vehicleId: string) => {
@@ -297,7 +289,7 @@ export default function VehicleManagement() {
     
     setTimeout(() => {
       clearVehicleDataCache();
-      loadVehicles();
+      loadVehicles(true);
     }, 1000);
   };
 
@@ -307,7 +299,6 @@ export default function VehicleManagement() {
     (vehicle.description && vehicle.description.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
-  // If there's an error, show the error fallback
   if (error) {
     return (
       <div className="space-y-4">

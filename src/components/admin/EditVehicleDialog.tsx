@@ -58,6 +58,16 @@ export function EditVehicleDialog({
       const numNightHaltCharge = typeof initialVehicle.nightHaltCharge === 'string'
         ? parseFloat(initialVehicle.nightHaltCharge)
         : Number(initialVehicle.nightHaltCharge || 700);
+
+      let processedAmenities: string[] = ['AC'];
+      
+      if (Array.isArray(initialVehicle.amenities)) {
+        processedAmenities = initialVehicle.amenities.filter(Boolean);
+      } else if (typeof initialVehicle.amenities === 'string') {
+        if (initialVehicle.amenities.trim() !== '') {
+          processedAmenities = initialVehicle.amenities.split(',').map(a => a.trim()).filter(Boolean);
+        }
+      }
       
       console.log('Parsed numeric values for dialog:');
       console.log('- capacity:', initialVehicle.capacity, '→', numCapacity);
@@ -66,6 +76,7 @@ export function EditVehicleDialog({
       console.log('- price per km:', initialVehicle.pricePerKm, '→', numPricePerKm);
       console.log('- driver allowance:', initialVehicle.driverAllowance, '→', numDriverAllowance);
       console.log('- night halt charge:', initialVehicle.nightHaltCharge, '→', numNightHaltCharge);
+      console.log('- amenities:', initialVehicle.amenities, '→', processedAmenities);
       
       setVehicle({
         ...initialVehicle,
@@ -76,11 +87,7 @@ export function EditVehicleDialog({
         pricePerKm: numPricePerKm,
         driverAllowance: numDriverAllowance,
         nightHaltCharge: numNightHaltCharge,
-        amenities: Array.isArray(initialVehicle.amenities) 
-          ? initialVehicle.amenities 
-          : typeof initialVehicle.amenities === 'string' && initialVehicle.amenities.trim() !== '' 
-            ? initialVehicle.amenities.split(',').map(a => a.trim()).filter(Boolean)
-            : ['AC']
+        amenities: processedAmenities
       });
     }
   }, [initialVehicle, open]);
