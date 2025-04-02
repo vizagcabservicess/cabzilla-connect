@@ -1,4 +1,3 @@
-
 /**
  * Direct vehicle service for operations that bypass API layers
  * This ensures consistent behavior for vehicle CRUD operations
@@ -18,16 +17,25 @@ const normalizeVehicleId = (id: string): string => {
 
 // Helper function to ensure numeric values are always sent as numbers
 const ensureNumericValues = (vehicle: CabType): CabType => {
+  // Force parse all numeric fields to ensure they're stored as numbers
+  const capacity = parseInt(String(vehicle.capacity), 10);
+  const luggageCapacity = parseInt(String(vehicle.luggageCapacity), 10);
+  const basePrice = parseFloat(String(vehicle.basePrice || vehicle.price || 0));
+  const price = parseFloat(String(vehicle.price || vehicle.basePrice || 0));
+  const pricePerKm = parseFloat(String(vehicle.pricePerKm || 0));
+  const nightHaltCharge = parseFloat(String(vehicle.nightHaltCharge || 700));
+  const driverAllowance = parseFloat(String(vehicle.driverAllowance || 250));
+  
   return {
     ...vehicle,
     // Ensure these are always numbers by explicitly parsing
-    capacity: Number(vehicle.capacity || 4),
-    luggageCapacity: Number(vehicle.luggageCapacity || 2),
-    basePrice: Number(vehicle.basePrice || vehicle.price || 0),
-    price: Number(vehicle.price || vehicle.basePrice || 0),
-    pricePerKm: Number(vehicle.pricePerKm || 0),
-    nightHaltCharge: Number(vehicle.nightHaltCharge || 700),
-    driverAllowance: Number(vehicle.driverAllowance || 250),
+    capacity: isNaN(capacity) ? 4 : capacity,
+    luggageCapacity: isNaN(luggageCapacity) ? 2 : luggageCapacity,
+    basePrice: isNaN(basePrice) ? 0 : basePrice,
+    price: isNaN(price) ? 0 : price,
+    pricePerKm: isNaN(pricePerKm) ? 0 : pricePerKm,
+    nightHaltCharge: isNaN(nightHaltCharge) ? 700 : nightHaltCharge,
+    driverAllowance: isNaN(driverAllowance) ? 250 : driverAllowance,
   };
 };
 
@@ -134,11 +142,21 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
       
       // Handle capacity and luggageCapacity specially to ensure they're numbers
       if (key === 'capacity' || key === 'luggageCapacity' || key === 'luggage_capacity') {
-        const numVal = parseInt(String(value), 10);
-        formData.append(key, String(isNaN(numVal) ? 4 : numVal));
-        // Also add with underscore variant for PHP backend compatibility
-        if (key === 'luggageCapacity') {
-          formData.append('luggage_capacity', String(isNaN(numVal) ? 2 : numVal));
+        let numVal = 0;
+        if (key === 'capacity') {
+          numVal = parseInt(String(value), 10);
+          formData.append(key, String(isNaN(numVal) ? 4 : numVal));
+          formData.append('capacity_numeric', String(isNaN(numVal) ? 4 : numVal));
+          formData.append('capacity_value', String(isNaN(numVal) ? 4 : numVal));
+        } else {
+          numVal = parseInt(String(value), 10);
+          formData.append(key, String(isNaN(numVal) ? 2 : numVal));
+          // Also add with underscore variant for PHP backend compatibility
+          if (key === 'luggageCapacity') {
+            formData.append('luggage_capacity', String(isNaN(numVal) ? 2 : numVal));
+            formData.append('luggage_capacity_numeric', String(isNaN(numVal) ? 2 : numVal));
+            formData.append('luggage_capacity_value', String(isNaN(numVal) ? 2 : numVal));
+          }
         }
         return;
       }
@@ -158,14 +176,6 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
         formData.append(key, String(value));
       }
     });
-    
-    // Add explicit numeric fields to ensure they're included
-    formData.append('capacity_numeric', String(Number(normalizedVehicle.capacity)));
-    formData.append('luggage_capacity_numeric', String(Number(normalizedVehicle.luggageCapacity)));
-    
-    // Add fields in PHP format to ensure backward compatibility
-    formData.append('capacity_value', String(Number(normalizedVehicle.capacity)));
-    formData.append('luggage_capacity_value', String(Number(normalizedVehicle.luggageCapacity)));
     
     // Log FormData contents for debugging
     console.log('FormData contents for vehicle update:');

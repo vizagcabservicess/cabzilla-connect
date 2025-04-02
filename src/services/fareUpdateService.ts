@@ -1,4 +1,3 @@
-
 import { toast } from 'sonner';
 import { apiBaseUrl } from '@/config/api';
 import { directVehicleOperation } from '@/utils/apiHelper';
@@ -115,11 +114,15 @@ export const getAllOutstationFares = async (): Promise<Record<string, any>> => {
       force_refresh: 'true', // Force synchronization with the database
       force_sync: 'true',   // Additional parameter to ensure fresh data
       includeInactive: 'true', // Include inactive vehicles for admin view
-      isAdminMode: 'true'    // Ensure we're in admin mode
+      isAdminMode: 'true',    // Ensure we're in admin mode
+      _t: Date.now() // Add timestamp to prevent caching
     });
     
     if (result && result.fares && Object.keys(result.fares).length > 0) {
       console.log(`Retrieved ${Object.keys(result.fares).length} outstation fares directly`);
+      // Clean up local storage to prevent using cached data
+      localStorage.removeItem('cachedVehicles');
+      localStorage.removeItem('localVehicles');
       return result.fares;
     }
     
@@ -129,11 +132,15 @@ export const getAllOutstationFares = async (): Promise<Record<string, any>> => {
       force_sync: 'true',
       force_refresh: 'true',
       includeInactive: 'true', 
-      isAdminMode: 'true'
+      isAdminMode: 'true',
+      _t: Date.now() // Add timestamp to prevent caching
     });
     
     if (fallbackResult && fallbackResult.fares && Object.keys(fallbackResult.fares).length > 0) {
       console.log(`Retrieved ${Object.keys(fallbackResult.fares).length} outstation fares from fallback`);
+      // Clean up local storage to prevent using cached data
+      localStorage.removeItem('cachedVehicles');
+      localStorage.removeItem('localVehicles');
       return fallbackResult.fares;
     }
     
@@ -142,7 +149,8 @@ export const getAllOutstationFares = async (): Promise<Record<string, any>> => {
       includeInactive: 'true',
       force_sync: 'true',
       force_refresh: 'true',
-      isAdminMode: 'true'
+      isAdminMode: 'true',
+      _t: Date.now() // Add timestamp to prevent caching
     });
     
     if (vehiclesResult && vehiclesResult.vehicles && vehiclesResult.vehicles.length > 0) {
@@ -167,6 +175,9 @@ export const getAllOutstationFares = async (): Promise<Record<string, any>> => {
       });
       
       if (Object.keys(faresMap).length > 0) {
+        // Clean up local storage to prevent using cached data
+        localStorage.removeItem('cachedVehicles');
+        localStorage.removeItem('localVehicles');
         return faresMap;
       }
     }
