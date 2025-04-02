@@ -45,7 +45,10 @@ export const directVehicleOperation = async (endpoint: string, method: string, d
       'Cache-Control': 'no-cache, no-store, must-revalidate',
       'Pragma': 'no-cache',
       'Expires': '0',
-      'X-Admin-Mode': 'true'
+      'X-Admin-Mode': 'true',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': '*'
     };
     
     // Only add Content-Type if not using FormData
@@ -59,7 +62,9 @@ export const directVehicleOperation = async (endpoint: string, method: string, d
       headers,
       body,
       signal: AbortSignal.timeout(30000), // 30 second timeout
-      cache: 'no-store'
+      cache: 'no-store',
+      mode: 'cors',
+      credentials: 'omit'
     });
     
     // IMPROVED ERROR HANDLING: Create clean copy of response for parsing
@@ -94,6 +99,10 @@ export const directVehicleOperation = async (endpoint: string, method: string, d
       throw new Error(`API error ${errorStatusCode}: ${errorText}`);
     }
     
+    // Make a clone of the response before using it
+    // This fixes the issue where the response body stream can only be read once
+    const clonedResponse = response.clone();
+    
     // Get response type to determine how to parse
     const contentTypeHeader = response.headers.get('content-type') || '';
     let result;
@@ -104,7 +113,13 @@ export const directVehicleOperation = async (endpoint: string, method: string, d
       responseBody = await response.text();
     } catch (textError) {
       console.error('Error reading response body:', textError);
-      throw new Error(`Failed to read response: ${textError.message}`);
+      
+      // Try using the cloned response as a fallback
+      try {
+        responseBody = await clonedResponse.text();
+      } catch (cloneError) {
+        throw new Error(`Failed to read response: ${textError.message}`);
+      }
     }
     
     // Try to parse as JSON if it's a JSON content type
@@ -253,7 +268,10 @@ export const getBypassHeaders = (forceRefresh = false, isAdminMode = false) => {
     'X-Admin-Mode': isAdminMode ? 'true' : 'false',
     'Cache-Control': forceRefresh ? 'no-cache, no-store, must-revalidate' : 'max-age=300',
     'Pragma': forceRefresh ? 'no-cache' : '',
-    'Expires': forceRefresh ? '0' : ''
+    'Expires': forceRefresh ? '0' : '',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': '*'
   };
 };
 
@@ -264,6 +282,8 @@ export const getForcedRequestConfig = (isAdminMode = false) => {
   return {
     headers: getBypassHeaders(true, isAdminMode),
     cache: 'no-store' as RequestCache,
-    next: { revalidate: 0 }
+    next: { revalidate: 0 },
+    mode: 'cors' as RequestMode,
+    credentials: 'omit' as RequestCredentials
   };
 };
