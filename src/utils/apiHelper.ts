@@ -97,3 +97,35 @@ export const directVehicleOperation = async (
   console.error(`All ${maxRetries + 1} attempts to ${endpoint} failed`);
   throw lastError || new Error(`Failed to complete operation after ${maxRetries + 1} attempts`);
 };
+
+/**
+ * Utility function to fix database tables
+ * 
+ * @returns Promise<boolean> True if fix was successful
+ */
+export const fixDatabaseTables = async (): Promise<boolean> => {
+  try {
+    const response = await fetch(`${apiBaseUrl}/api/admin/fix-vehicle-tables.php`, {
+      method: 'GET',
+      headers: {
+        'X-Force-Refresh': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      },
+      credentials: 'omit',
+      mode: 'cors',
+      cache: 'no-store'
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Database fix failed with status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return data.status === 'success';
+  } catch (error) {
+    console.error("Error fixing database:", error);
+    return false;
+  }
+};

@@ -337,7 +337,8 @@ export default function VehicleManagement() {
     return searchTerms.every(term => vehicleText.includes(term));
   });
 
-  const handleRefreshButtonClick = () => {
+  const handleRefreshButtonClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
     handleRefreshData(true);
   };
 

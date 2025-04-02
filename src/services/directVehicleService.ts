@@ -291,3 +291,71 @@ export const addVehicle = async (vehicleData: CabType): Promise<any> => {
     throw error;
   }
 };
+
+/**
+ * Create a new vehicle (alias for addVehicle for better API naming)
+ */
+export const createVehicle = async (vehicleData: CabType): Promise<any> => {
+  try {
+    console.log('Creating new vehicle:', vehicleData);
+    return await addVehicle(vehicleData);
+  } catch (error: any) {
+    console.error('Error creating vehicle:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get vehicle by ID (alias for getVehicle for better API naming)
+ */
+export const getVehicleById = async (id: string): Promise<CabType | null> => {
+  return getVehicle(id);
+};
+
+/**
+ * Update vehicle fares
+ */
+export const updateVehicleFares = async (vehicleId: string, fareData: any): Promise<any> => {
+  try {
+    console.log(`Updating fares for vehicle ${vehicleId}`, fareData);
+    
+    // Format the data for the API
+    const requestData = {
+      vehicleId,
+      ...fareData
+    };
+    
+    // Use the direct operation helper
+    const result = await directVehicleOperation('/api/admin/direct-vehicle-pricing.php', 'POST', requestData);
+    
+    if (result && result.status === 'success') {
+      return result;
+    }
+    
+    throw new Error(result?.message || 'Failed to update vehicle fares');
+  } catch (error: any) {
+    console.error('Error updating vehicle fares:', error);
+    throw error;
+  }
+};
+
+/**
+ * Sync vehicle data with backend
+ */
+export const syncVehicleData = async (forceRefresh = false): Promise<CabType[]> => {
+  try {
+    // Clear any pending requests for getVehicles
+    const pendingKeys = Object.keys(pendingRequests).filter(key => key.startsWith('getVehicles-'));
+    pendingKeys.forEach(key => delete pendingRequests[key]);
+    
+    // Get fresh vehicle data
+    const vehicles = await getVehicles(forceRefresh, true, true);
+    
+    console.log(`Synced ${vehicles.length} vehicles with backend`);
+    return vehicles;
+  } catch (error: any) {
+    console.error('Error syncing vehicle data:', error);
+    toast.error('Failed to sync vehicle data. Please try again.');
+    throw error;
+  }
+};

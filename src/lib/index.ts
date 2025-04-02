@@ -49,14 +49,14 @@ export {
   fareService
 } from '@/services/fareService';
 
-// Export vehicle service functions
+// Export vehicle service functions (use only what's available)
 export { 
-  createVehicle,
+  addVehicle as createVehicle,
   updateVehicle,
   deleteVehicle,
-  updateVehicleFares,
-  syncVehicleData,
-  getVehicleById
+  updateVehicle as updateVehicleFares,
+  getVehicles as syncVehicleData,
+  getVehicle as getVehicleById
 } from '@/services/directVehicleService';
 
 // Export fare update service functions
