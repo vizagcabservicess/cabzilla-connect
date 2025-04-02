@@ -65,9 +65,11 @@ if (empty($data) && !empty($_GET)) {
 
 // Extract vehicle ID and normalize using any of the possible field names
 $vehicleId = '';
+$originalVehicleId = '';
 foreach (['vehicleId', 'vehicle_id', 'vehicleType', 'vehicle_type', 'id'] as $field) {
     if (!empty($data[$field])) {
-        $vehicleId = $data[$field];
+        $originalVehicleId = $data[$field]; // Keep original for debugging
+        $vehicleId = trim($data[$field]);
         break;
     }
 }
@@ -75,6 +77,54 @@ foreach (['vehicleId', 'vehicle_id', 'vehicleType', 'vehicle_type', 'id'] as $fi
 // Clean vehicleId - remove "item-" prefix if exists
 if (strpos($vehicleId, 'item-') === 0) {
     $vehicleId = substr($vehicleId, 5);
+}
+
+// Log the original and cleaned vehicleId
+error_log("[$timestamp] Original vehicle ID: $originalVehicleId, Cleaned: $vehicleId", 3, $logDir . '/local-fares.log');
+
+// CRITICAL FIX: If vehicleId is numeric and less than 1000, this is likely an internal ID 
+// rather than a vehicle_id. Check for the actual vehicle_id in the database.
+if (is_numeric($vehicleId) && intval($vehicleId) < 1000) {
+    error_log("[$timestamp] Numeric vehicle ID detected: $vehicleId - will verify in database", 3, $logDir . '/local-fares.log');
+    
+    try {
+        // Create database connection - hardcoded for maximum reliability
+        $dbHost = 'localhost';
+        $dbName = 'u644605165_new_bookingdb';
+        $dbUser = 'u644605165_new_bookingusr';
+        $dbPass = 'Vizag@1213';
+        
+        // Try to connect to the database
+        $pdo = new PDO("mysql:host=$dbHost;dbname=$dbName", $dbUser, $dbPass);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        
+        // Look up the actual vehicle_id for this numeric ID
+        $stmt = $pdo->prepare("SELECT vehicle_id FROM vehicles WHERE id = ?");
+        $stmt->execute([$vehicleId]);
+        $vehicleData = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($vehicleData && !empty($vehicleData['vehicle_id'])) {
+            $actualVehicleId = $vehicleData['vehicle_id'];
+            error_log("[$timestamp] Found actual vehicle_id: $actualVehicleId for numeric ID: $vehicleId", 3, $logDir . '/local-fares.log');
+            $vehicleId = $actualVehicleId;
+        } else {
+            error_log("[$timestamp] Could not find actual vehicle_id for numeric ID: $vehicleId", 3, $logDir . '/local-fares.log');
+        }
+    } catch (Exception $dbError) {
+        error_log("[$timestamp] Database error while checking vehicle ID: " . $dbError->getMessage(), 3, $logDir . '/local-fares.log');
+    }
+}
+
+// If vehicleId is still empty or invalid, report error
+if (empty($vehicleId) || $vehicleId === 'undefined') {
+    http_response_code(400);
+    echo json_encode([
+        'status' => 'error',
+        'message' => 'Valid vehicle ID is required',
+        'received_data' => $data,
+        'original_id' => $originalVehicleId
+    ]);
+    exit;
 }
 
 // Extract pricing data with multiple fallbacks
@@ -278,7 +328,32 @@ if (!empty($vehicleId) && ($package4hr > 0 || $package8hr > 0 || $package10hr > 
         
         // Try to update the local_package_fares table
         try {
-            // Check if record exists
+            // IMPORTANT: Before updating, verify if this vehicle_id actually exists in the vehicles table
+            // This prevents creating fares for non-existent vehicles
+            $checkVehicleSQL = "SELECT COUNT(*) as count FROM vehicles WHERE vehicle_id = ?";
+            $checkVehicleStmt = $pdo->prepare($checkVehicleSQL);
+            $checkVehicleStmt->execute([$vehicleId]);
+            $vehicleExists = $checkVehicleStmt->fetch(PDO::FETCH_ASSOC);
+            
+            // Log whether the vehicle exists
+            error_log("[$timestamp] Vehicle exists check for '$vehicleId': " . ($vehicleExists['count'] > 0 ? "Yes" : "No"), 3, $logDir . '/local-fares.log');
+            
+            if ($vehicleExists['count'] == 0) {
+                // Vehicle doesn't exist in the database! 
+                // Log this issue and return an error to prevent ghost entries
+                error_log("[$timestamp] ERROR: Attempted to update fares for non-existent vehicle: $vehicleId", 3, $logDir . '/local-fares.log');
+                
+                // Return an error response
+                http_response_code(400);
+                echo json_encode([
+                    'status' => 'error',
+                    'message' => "Vehicle with ID '$vehicleId' doesn't exist in the database. Please create the vehicle first.",
+                    'vehicleId' => $vehicleId
+                ]);
+                exit;
+            }
+            
+            // Now check if record exists in local_package_fares
             $checkSql = "SELECT id FROM local_package_fares WHERE vehicle_id = ?";
             $checkStmt = $pdo->prepare($checkSql);
             $checkStmt->execute([$vehicleId]);
@@ -324,6 +399,24 @@ if (!empty($vehicleId) && ($package4hr > 0 || $package8hr > 0 || $package10hr > 
             }
             
             $responseData['database'] = 'Updated successfully';
+            
+            // Sync this change to the vehicles table as well to ensure consistency
+            try {
+                $syncSql = "UPDATE vehicles SET local_package_4hr = ?, local_package_8hr = ?, local_package_10hr = ?, 
+                           local_extra_km = ?, local_extra_hour = ? WHERE vehicle_id = ?";
+                $syncStmt = $pdo->prepare($syncSql);
+                $syncStmt->execute([
+                    $package4hr, 
+                    $package8hr, 
+                    $package10hr, 
+                    $extraKmRate, 
+                    $extraHourRate,
+                    $vehicleId
+                ]);
+                error_log("[$timestamp] Synced local fares to vehicles table for $vehicleId", 3, $logDir . '/local-fares.log');
+            } catch (Exception $syncError) {
+                error_log("[$timestamp] Warning: Could not sync to vehicles table: " . $syncError->getMessage(), 3, $logDir . '/local-fares.log');
+            }
         } catch (PDOException $e) {
             error_log("[$timestamp] Error updating local_package_fares: " . $e->getMessage(), 3, $logDir . '/local-fares.log');
             $databaseError = "Error updating local_package_fares: " . $e->getMessage();

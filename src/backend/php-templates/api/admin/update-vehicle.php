@@ -57,31 +57,49 @@ if (empty($data) && !empty($rawInput)) {
     $_SERVER['RAW_HTTP_INPUT'] = $rawInput;
 }
 
-// If possible, do a quick check to see if vehicle exists before forwarding
-if (!empty($data) && (isset($data['id']) || isset($data['vehicleId']) || isset($data['vehicle_id']))) {
-    $vehicleId = $data['id'] ?? $data['vehicleId'] ?? $data['vehicle_id'] ?? '';
-    
-    if (!empty($vehicleId)) {
-        try {
-            // Try to check if vehicle exists in database
-            $conn = getDbConnectionWithRetry();
-            $query = "SELECT COUNT(*) as count FROM vehicles WHERE id = ? OR vehicle_id = ?";
-            $stmt = $conn->prepare($query);
-            $stmt->bind_param('ss', $vehicleId, $vehicleId);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            $row = $result->fetch_assoc();
-            
-            if ($row['count'] == 0) {
-                $conn->close();
-                handleError("Vehicle with ID '$vehicleId' not found in database");
-            }
-            
-            $conn->close();
-        } catch (Exception $e) {
-            // If we can't check, continue anyway - the update endpoint will handle it
-            logMessage("Warning: Could not verify vehicle exists: " . $e->getMessage(), 'vehicle-update-warning.log');
+// Better vehicle ID normalization before checking existence
+$vehicleId = null;
+
+// Check all possible field names for the vehicle ID
+foreach (['id', 'vehicleId', 'vehicle_id', 'vehicle'] as $key) {
+    if (!empty($data[$key])) {
+        $vehicleId = trim($data[$key]);
+        // Remove any "item-" prefix if it exists
+        if (strpos($vehicleId, 'item-') === 0) {
+            $vehicleId = substr($vehicleId, 5);
         }
+        // Store the normalized vehicle ID back in the data array with all common keys
+        $data['id'] = $vehicleId;
+        $data['vehicleId'] = $vehicleId;
+        $data['vehicle_id'] = $vehicleId;
+        break;
+    }
+}
+
+// Log the vehicle ID we found for debugging
+logMessage("Processing update for vehicle ID: $vehicleId", 'vehicle-update-debug.log');
+
+// Only perform the database check if we have a valid vehicle ID
+if (!empty($vehicleId)) {
+    try {
+        // Try to check if vehicle exists in database
+        $conn = getDbConnectionWithRetry();
+        $query = "SELECT COUNT(*) as count FROM vehicles WHERE id = ? OR vehicle_id = ?";
+        $stmt = $conn->prepare($query);
+        $stmt->bind_param('ss', $vehicleId, $vehicleId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result->fetch_assoc();
+        
+        if ($row['count'] == 0) {
+            // Vehicle doesn't exist, log this but don't exit as it might be a new vehicle
+            logMessage("Warning: Vehicle with ID '$vehicleId' not found in database. This might be a new vehicle.", 'vehicle-update-warning.log');
+        }
+        
+        $conn->close();
+    } catch (Exception $e) {
+        // If we can't check, continue anyway - the update endpoint will handle it
+        logMessage("Warning: Could not verify vehicle exists: " . $e->getMessage(), 'vehicle-update-warning.log');
     }
 }
 

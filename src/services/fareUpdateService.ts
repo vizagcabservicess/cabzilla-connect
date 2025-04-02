@@ -53,12 +53,39 @@ export const updateLocalFares = async (
 ): Promise<any> => {
   console.log(`Updating local fares for vehicle ${vehicleId}`);
   
+  // Ensure vehicleId is a string and properly formatted
+  if (!vehicleId || vehicleId === 'undefined') {
+    console.error("Invalid vehicle ID provided to updateLocalFares:", vehicleId);
+    toast.error("Invalid vehicle ID. Please try again.");
+    return Promise.reject(new Error("Invalid vehicle ID"));
+  }
+  
+  // Clean the vehicleId if it contains a prefix
+  if (typeof vehicleId === 'string' && vehicleId.startsWith('item-')) {
+    vehicleId = vehicleId.substring(5);
+    console.log(`Cleaned vehicleId to: ${vehicleId}`);
+  }
+  
   try {
+    // Try using the direct endpoint first
+    const directResult = await directVehicleOperation('/api/admin/direct-local-fares.php', 'POST', {
+      vehicleId,
+      extraKmRate,
+      extraHourRate,
+      packages: typeof packages === 'object' ? JSON.stringify(packages) : packages
+    });
+    
+    if (directResult && directResult.status === 'success') {
+      toast.success(`Updated local fares for ${vehicleId}`);
+      return directResult;
+    }
+    
+    // Fall back to the older endpoint
     const result = await directVehicleOperation('/api/admin/local-package-fares-update.php', 'POST', {
       vehicleId,
       extraKmRate,
       extraHourRate,
-      packages: JSON.stringify(packages)
+      packages: typeof packages === 'object' ? JSON.stringify(packages) : packages
     });
     
     if (result && result.status === 'success') {
