@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,6 +27,7 @@ export default function VehicleManagement() {
   const [error, setError] = useState<Error | null>(null);
   const [offlineMode, setOfflineMode] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
+  const [refreshAttempts, setRefreshAttempts] = useState(0);
   
   const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const mountedRef = useRef<boolean>(true);
@@ -38,8 +40,30 @@ export default function VehicleManagement() {
   const canRefresh = useCallback(() => {
     const now = Date.now();
     const timeSinceLastRefresh = now - lastRefreshTime;
-    return timeSinceLastRefresh > 5000 || lastRefreshTime === 0;
+    return timeSinceLastRefresh > 2000 || lastRefreshTime === 0; // Reduced throttle to 2 seconds
   }, [lastRefreshTime]);
+  
+  const checkDatabaseConnection = async () => {
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/admin/check-connection.php?_t=${Date.now()}`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-Admin-Mode': 'true'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error ${response.status}`);
+      }
+      
+      const data = await response.json();
+      return data.connection === true;
+    } catch (error) {
+      console.error("Error checking database connection:", error);
+      return false;
+    }
+  };
 
   const debounce = useCallback((fn: Function, delay: number) => {
     if (isDebouncingRef.current) {
@@ -61,7 +85,7 @@ export default function VehicleManagement() {
     if (isFixingDb) return; // Prevent duplicate calls
     
     const now = Date.now();
-    if (now - lastEventTimeRef.current < 10000) {
+    if (now - lastEventTimeRef.current < 5000) { // Reduced throttle to 5 seconds
       console.log('Fix database throttled');
       return;
     }
@@ -71,6 +95,13 @@ export default function VehicleManagement() {
     resetError();
     
     try {
+      // First check database connection
+      const isConnected = await checkDatabaseConnection();
+      
+      if (!isConnected) {
+        toast.warning("Database connection is unavailable. Attempting to fix...");
+      }
+      
       // Use the utility from apiHelper to ensure proper synchronization
       const success = await import('@/utils/apiHelper').then(({ fixDatabaseTables }) => 
         fixDatabaseTables()
@@ -78,9 +109,44 @@ export default function VehicleManagement() {
       
       if (success) {
         toast.success("Database tables fixed successfully");
+        
+        // Clear all caches
+        clearVehicleDataCache();
+        
+        // Completely refresh data
         await handleRefreshData(true);
+        
+        // Force a second refresh after a delay to ensure we get the latest data
+        setTimeout(() => {
+          if (mountedRef.current) {
+            handleRefreshData(true);
+          }
+        }, 1500);
       } else {
         toast.error("Failed to fix database tables");
+        
+        // Try a different approach to fix
+        try {
+          const fixResponse = await fetch(`${apiBaseUrl}/api/admin/fix-vehicle-tables.php?_t=${Date.now()}`, {
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'X-Requested-With': 'XMLHttpRequest',
+              'X-Admin-Mode': 'true'
+            }
+          });
+          
+          if (fixResponse.ok) {
+            toast.success("Database tables fixed successfully with alternative method");
+            clearVehicleDataCache();
+            await handleRefreshData(true);
+          } else {
+            throw new Error("Alternative fix method failed");
+          }
+        } catch (altFixError) {
+          console.error("Error with alternative fix:", altFixError);
+          toast.error("All database fix attempts failed. Using offline mode.");
+          setOfflineMode(true);
+        }
       }
     } catch (error) {
       console.error("Error fixing database:", error);
@@ -123,40 +189,81 @@ export default function VehicleManagement() {
     }
     
     refreshCountRef.current += 1;
-    if (refreshCountRef.current > 3 && !forceRefresh) {
-      console.log(`Too many refreshes (${refreshCountRef.current}), cooling down...`);
-      
-      if (!refreshTimeoutRef.current) {
-        refreshTimeoutRef.current = setTimeout(() => {
-          refreshCountRef.current = 0;
-          refreshTimeoutRef.current = null;
-        }, 30000);
-      }
-      
-      return;
-    }
-    
-    setIsRefreshing(true);
     setLastRefreshTime(Date.now());
+    setIsRefreshing(true);
     
     try {
       resetError();
       console.log("Admin: Fetching all vehicles (forceRefresh=", forceRefresh, ")");
       
+      // Clear caches first if this is a forced refresh
+      if (forceRefresh) {
+        clearVehicleDataCache();
+        setRefreshAttempts(prev => prev + 1);
+      }
+      
       try {
-        // Use the utility from apiHelper for better refresh behavior
-        const fetchedVehicles = await import('@/utils/apiHelper').then(({ forceVehicleDataRefresh }) => 
-          forceVehicleDataRefresh()
-        );
+        // Direct call to getVehicleData with admin mode
+        const fetchedVehicles = await getVehicleData(true, true);
             
         if (fetchedVehicles && fetchedVehicles.length > 0) {
           console.log(`Loaded ${fetchedVehicles.length} vehicles for admin view:`, fetchedVehicles);
           setVehicles(fetchedVehicles);
           setOfflineMode(false);
+          
+          // If this is our first successful fetch, attempt another one after a delay
+          // to ensure we're getting the latest data (helps with cache inconsistencies)
+          if (refreshAttempts === 1 && forceRefresh) {
+            setTimeout(() => {
+              if (mountedRef.current) {
+                handleRefreshData(true);
+              }
+            }, 1000);
+          }
+          
+          return;
         } else {
           console.log("No vehicles returned from API, trying localStorage");
+          
+          // If at first attempt and no vehicles, try the backup method
+          if (refreshAttempts < 3) {
+            console.log(`Attempt ${refreshAttempts + 1}: Trying alternative refresh method`);
+            
+            try {
+              const response = await fetch(`${apiBaseUrl}/api/vehicles-data.php?_t=${Date.now()}&includeInactive=true&force=true`, {
+                headers: {
+                  'Cache-Control': 'no-cache, no-store, must-revalidate',
+                  'X-Requested-With': 'XMLHttpRequest',
+                  'X-Force-Refresh': 'true',
+                  'X-Admin-Mode': 'true'
+                }
+              });
+              
+              const data = await response.json();
+              
+              if (data && data.vehicles && data.vehicles.length > 0) {
+                console.log(`Alternative method loaded ${data.vehicles.length} vehicles`);
+                setVehicles(data.vehicles);
+                setOfflineMode(false);
+                return;
+              }
+            } catch (alternativeError) {
+              console.error("Alternative method failed:", alternativeError);
+            }
+            
+            // If we're still here, try once more after a delay
+            if (refreshAttempts < 2) {
+              setTimeout(() => {
+                if (mountedRef.current) {
+                  handleRefreshData(true);
+                }
+              }, 1500);
+            }
+          }
+          
+          // Try localStorage as last resort
           if (!loadVehiclesFromLocalStorage()) {
-            toast.error("Failed to load vehicles. Please try refreshing the page.");
+            toast.error("Failed to load vehicles. Please try fixing the database.");
           }
         }
       } catch (apiError) {
@@ -182,7 +289,7 @@ export default function VehicleManagement() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [canRefresh]);
+  }, [canRefresh, refreshAttempts]);
 
   const loadVehicles = useCallback((force = false) => {
     if (debounce(() => handleRefreshData(force), 300)) {
@@ -192,22 +299,15 @@ export default function VehicleManagement() {
 
   useEffect(() => {
     mountedRef.current = true;
-    const initialLoad = localStorage.getItem('initialVehicleLoad');
     
-    if (!initialLoad) {
-      loadVehicles(false);
-      localStorage.setItem('initialVehicleLoad', 'true');
-    } else {
-      if (!loadVehiclesFromLocalStorage()) {
-        loadVehicles(false);
-      }
-    }
+    // Always load vehicles on component mount
+    loadVehicles(true);
     
     const handleDataEvent = (event: Event) => {
       const now = Date.now();
       const eventType = event.type;
       
-      if (now - lastEventTimeRef.current < 10000) {
+      if (now - lastEventTimeRef.current < 5000) { // Reduced to 5 seconds
         console.log(`Event ${eventType} throttled (last event was ${(now - lastEventTimeRef.current) / 1000}s ago)`);
         return;
       }
@@ -241,10 +341,17 @@ export default function VehicleManagement() {
         window.removeEventListener(type, handleDataEvent);
       });
     };
-  }, [loadVehicles, debounce]);
+  }, [loadVehicles, debounce, isRefreshing]);
 
   const handleAddVehicle = (newVehicle: CabType) => {
     setVehicles(prevVehicles => [...prevVehicles, newVehicle]);
+    
+    // Re-fetch data after a brief delay to ensure we have the latest from the server
+    setTimeout(() => {
+      if (mountedRef.current) {
+        handleRefreshData(true);
+      }
+    }, 1000);
   };
 
   const handleEditVehicle = (editedVehicle: CabType) => {
@@ -254,10 +361,28 @@ export default function VehicleManagement() {
       )
     );
     setSelectedVehicle(null);
+    
+    // Clear cache and re-fetch data to ensure we have the latest
+    clearVehicleDataCache();
+    
+    // Re-fetch data after a brief delay
+    setTimeout(() => {
+      if (mountedRef.current) {
+        handleRefreshData(true);
+      }
+    }, 1000);
   };
 
   const handleDeleteVehicle = (id: string) => {
     setVehicles(prevVehicles => prevVehicles.filter(vehicle => vehicle.id !== id));
+    
+    // Clear cache and re-fetch after deletion
+    setTimeout(() => {
+      if (mountedRef.current) {
+        clearVehicleDataCache();
+        handleRefreshData(true);
+      }
+    }, 1000);
   };
 
   const filteredVehicles = vehicles.filter(vehicle => {
@@ -277,6 +402,8 @@ export default function VehicleManagement() {
 
   const handleRefreshButtonClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
+    clearVehicleDataCache(); // Clear cache on manual refresh
+    setRefreshAttempts(0); // Reset attempts counter
     handleRefreshData(true);
   };
 

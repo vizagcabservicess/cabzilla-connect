@@ -7,7 +7,7 @@
 // Set CORS headers
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, X-Admin-Mode');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, X-Admin-Mode, Origin');
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
@@ -168,29 +168,41 @@ try {
         
         // Extract updated vehicle properties with fallback to existing values
         $vehicleName = isset($vehicleData['name']) && !empty($vehicleData['name']) ? $vehicleData['name'] : $existingVehicle['name'];
-        $basePrice = isset($vehicleData['basePrice']) ? floatval($vehicleData['basePrice']) : 
-                    (isset($vehicleData['base_price']) ? floatval($vehicleData['base_price']) : 
-                    (isset($existingVehicle['base_price']) ? floatval($existingVehicle['base_price']) : 0));
-        $pricePerKm = isset($vehicleData['pricePerKm']) ? floatval($vehicleData['pricePerKm']) : 
-                     (isset($vehicleData['price_per_km']) ? floatval($vehicleData['price_per_km']) : 
-                     (isset($existingVehicle['price_per_km']) ? floatval($existingVehicle['price_per_km']) : 0));
+        
+        // CRITICAL: Handle price fields properly
+        $basePrice = isset($vehicleData['basePrice']) && $vehicleData['basePrice'] !== "" ? floatval($vehicleData['basePrice']) : 
+                    (isset($vehicleData['base_price']) && $vehicleData['base_price'] !== "" ? floatval($vehicleData['base_price']) : 
+                    (isset($existingVehicle['base_price']) && $existingVehicle['base_price'] !== null ? floatval($existingVehicle['base_price']) : 0));
+        
+        $pricePerKm = isset($vehicleData['pricePerKm']) && $vehicleData['pricePerKm'] !== "" ? floatval($vehicleData['pricePerKm']) : 
+                     (isset($vehicleData['price_per_km']) && $vehicleData['price_per_km'] !== "" ? floatval($vehicleData['price_per_km']) : 
+                     (isset($existingVehicle['price_per_km']) && $existingVehicle['price_per_km'] !== null ? floatval($existingVehicle['price_per_km']) : 0));
+        
+        // Log price values for debugging
+        logMessage("Base price being set to: " . $basePrice, 'direct-vehicle-update.log');
+        logMessage("Price per km being set to: " . $pricePerKm, 'direct-vehicle-update.log');
+        
         $ac = isset($vehicleData['ac']) ? (filter_var($vehicleData['ac'], FILTER_VALIDATE_BOOLEAN) ? 1 : 0) : 
              (isset($existingVehicle['ac']) ? intval($existingVehicle['ac']) : 1);
         
         // CRITICAL: Handle night halt charge and driver allowance with default non-null values
-        $nightHaltCharge = isset($vehicleData['nightHaltCharge']) ? floatval($vehicleData['nightHaltCharge']) : 
-                          (isset($vehicleData['night_halt_charge']) ? floatval($vehicleData['night_halt_charge']) : 
+        $nightHaltCharge = isset($vehicleData['nightHaltCharge']) && $vehicleData['nightHaltCharge'] !== "" ? floatval($vehicleData['nightHaltCharge']) : 
+                          (isset($vehicleData['night_halt_charge']) && $vehicleData['night_halt_charge'] !== "" ? floatval($vehicleData['night_halt_charge']) : 
                           (isset($existingVehicle['night_halt_charge']) && $existingVehicle['night_halt_charge'] !== null ? 
                            floatval($existingVehicle['night_halt_charge']) : 700));
         
-        $driverAllowance = isset($vehicleData['driverAllowance']) ? floatval($vehicleData['driverAllowance']) : 
-                           (isset($vehicleData['driver_allowance']) ? floatval($vehicleData['driver_allowance']) : 
+        $driverAllowance = isset($vehicleData['driverAllowance']) && $vehicleData['driverAllowance'] !== "" ? floatval($vehicleData['driverAllowance']) : 
+                           (isset($vehicleData['driver_allowance']) && $vehicleData['driver_allowance'] !== "" ? floatval($vehicleData['driver_allowance']) : 
                            (isset($existingVehicle['driver_allowance']) && $existingVehicle['driver_allowance'] !== null ? 
                             floatval($existingVehicle['driver_allowance']) : 250));
         
         // Ensure night_halt_charge and driver_allowance are never NULL
         $nightHaltCharge = $nightHaltCharge ?: 700;
         $driverAllowance = $driverAllowance ?: 250;
+        
+        // Log additional values for debugging
+        logMessage("Night halt charge being set to: " . $nightHaltCharge, 'direct-vehicle-update.log');
+        logMessage("Driver allowance being set to: " . $driverAllowance, 'direct-vehicle-update.log');
         
         // Handle description (could be blank)
         $description = isset($vehicleData['description']) ? $vehicleData['description'] : 
@@ -264,6 +276,11 @@ try {
         ";
         
         $updateStmt = $conn->prepare($updateVehicleQuery);
+        
+        if (!$updateStmt) {
+            throw new Exception("Failed to prepare update statement: " . $conn->error);
+        }
+        
         $updateStmt->bind_param(
             'siiisssddddss',
             $vehicleName,
@@ -366,14 +383,62 @@ try {
         $selectStmt->execute();
         $updatedVehicle = $selectStmt->get_result()->fetch_assoc();
         
+        if (!$updatedVehicle) {
+            throw new Exception("Failed to retrieve updated vehicle data");
+        }
+        
+        // Transform the updated vehicle data to match frontend format
+        $formattedVehicle = [
+            'id' => $updatedVehicle['id'] ?? $updatedVehicle['vehicle_id'] ?? '',
+            'vehicleId' => $updatedVehicle['vehicle_id'] ?? $updatedVehicle['id'] ?? '',
+            'name' => $updatedVehicle['name'] ?? '',
+            'capacity' => (int)($updatedVehicle['capacity'] ?? 4),
+            'luggageCapacity' => (int)($updatedVehicle['luggage_capacity'] ?? 2),
+            'price' => (float)($updatedVehicle['base_price'] ?? 0),
+            'basePrice' => (float)($updatedVehicle['base_price'] ?? 0),
+            'pricePerKm' => (float)($updatedVehicle['price_per_km'] ?? 0),
+            'image' => $updatedVehicle['image'] ?? '/cars/sedan.png',
+            'description' => $updatedVehicle['description'] ?? '',
+            'ac' => (bool)$updatedVehicle['ac'],
+            'nightHaltCharge' => (float)($updatedVehicle['night_halt_charge'] ?? 700),
+            'driverAllowance' => (float)($updatedVehicle['driver_allowance'] ?? 250),
+            'isActive' => (bool)$updatedVehicle['is_active']
+        ];
+        
+        // Parse amenities
+        try {
+            $amenitiesValue = $updatedVehicle['amenities'] ?? '[]';
+            if (is_string($amenitiesValue)) {
+                $parsedAmenities = json_decode($amenitiesValue, true);
+                if (is_array($parsedAmenities)) {
+                    $formattedVehicle['amenities'] = $parsedAmenities;
+                } else {
+                    $formattedVehicle['amenities'] = explode(',', str_replace(['[', ']', '"', "'"], '', $amenitiesValue));
+                }
+            } else {
+                $formattedVehicle['amenities'] = is_array($amenitiesValue) ? $amenitiesValue : ['AC'];
+            }
+        } catch (Exception $e) {
+            $formattedVehicle['amenities'] = ['AC'];
+        }
+        
         // Format response with the updated vehicle data
         $response = [
             'status' => 'success',
             'message' => 'Vehicle updated successfully',
             'id' => $vehicleId,
             'timestamp' => time(),
-            'vehicle' => $updatedVehicle
+            'vehicle' => $formattedVehicle
         ];
+        
+        // Clear any vehicle data cache files
+        $cacheDir = dirname(__FILE__) . '/../../cache';
+        if (file_exists($cacheDir)) {
+            $cacheFiles = glob($cacheDir . '/vehicles*.json');
+            foreach ($cacheFiles as $file) {
+                @unlink($file);
+            }
+        }
         
     } catch (Exception $e) {
         // Rollback transaction on error

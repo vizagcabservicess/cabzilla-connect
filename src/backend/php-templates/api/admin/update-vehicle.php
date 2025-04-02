@@ -8,7 +8,7 @@
 // Set CORS headers
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, X-Admin-Mode');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, X-Admin-Mode, X-Debug, Origin');
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
@@ -20,8 +20,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+// Include the database helper
+require_once dirname(__FILE__) . '/../common/db_helper.php';
+
 // Simple error handler
 function handleError($message) {
+    logMessage("Error in update-vehicle.php: $message", 'vehicle-update-errors.log');
     http_response_code(500);
     echo json_encode([
         'status' => 'error',
@@ -53,6 +57,34 @@ if (empty($data) && !empty($rawInput)) {
     $_SERVER['RAW_HTTP_INPUT'] = $rawInput;
 }
 
+// If possible, do a quick check to see if vehicle exists before forwarding
+if (!empty($data) && (isset($data['id']) || isset($data['vehicleId']) || isset($data['vehicle_id']))) {
+    $vehicleId = $data['id'] ?? $data['vehicleId'] ?? $data['vehicle_id'] ?? '';
+    
+    if (!empty($vehicleId)) {
+        try {
+            // Try to check if vehicle exists in database
+            $conn = getDbConnectionWithRetry();
+            $query = "SELECT COUNT(*) as count FROM vehicles WHERE id = ? OR vehicle_id = ?";
+            $stmt = $conn->prepare($query);
+            $stmt->bind_param('ss', $vehicleId, $vehicleId);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $row = $result->fetch_assoc();
+            
+            if ($row['count'] == 0) {
+                $conn->close();
+                handleError("Vehicle with ID '$vehicleId' not found in database");
+            }
+            
+            $conn->close();
+        } catch (Exception $e) {
+            // If we can't check, continue anyway - the update endpoint will handle it
+            logMessage("Warning: Could not verify vehicle exists: " . $e->getMessage(), 'vehicle-update-warning.log');
+        }
+    }
+}
+
 try {
     // Enable logging
     $logDir = dirname(__FILE__) . '/../../logs';
@@ -61,12 +93,12 @@ try {
     }
     
     $logFile = $logDir . '/update-vehicle-proxy.log';
-    error_log(date('Y-m-d H:i:s') . " - Received " . $_SERVER['REQUEST_METHOD'] . " request\n", 3, $logFile);
+    logMessage("Received " . $_SERVER['REQUEST_METHOD'] . " request", 'update-vehicle-proxy.log');
     
     if (!empty($data)) {
-        error_log(date('Y-m-d H:i:s') . " - Data: " . json_encode($data, JSON_PARTIAL_OUTPUT_ON_ERROR) . "\n", 3, $logFile);
+        logMessage("Data: " . json_encode($data, JSON_PARTIAL_OUTPUT_ON_ERROR), 'update-vehicle-proxy.log');
     } else {
-        error_log(date('Y-m-d H:i:s') . " - No data parsed, raw input length: " . strlen($rawInput) . "\n", 3, $logFile);
+        logMessage("No data parsed, raw input length: " . strlen($rawInput), 'update-vehicle-proxy.log');
     }
     
     // Use direct-vehicle-modify.php instead (more reliable implementation)
@@ -85,6 +117,6 @@ try {
     // Include the direct implementation file which has the full implementation
     include($updateFile);
 } catch (Exception $e) {
-    error_log(date('Y-m-d H:i:s') . " - Error: " . $e->getMessage() . "\n", 3, $logFile);
+    logMessage("Error: " . $e->getMessage(), 'update-vehicle-proxy.log');
     handleError("Error in update-vehicle.php: " . $e->getMessage());
 }

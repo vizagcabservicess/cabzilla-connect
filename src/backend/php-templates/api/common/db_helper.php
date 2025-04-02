@@ -31,23 +31,28 @@ function getDbConnectionWithRetry($maxRetries = 3) {
                 throw new Exception("Connection failed: " . $conn->connect_error);
             }
             
-            // Test the connection
+            // Test the connection with a simple query
             $testResult = $conn->query("SELECT 1");
             if (!$testResult) {
-                throw new Exception("Test query failed");
+                throw new Exception("Test query failed: " . $conn->error);
             }
             
-            // Set connection timeout settings
+            // Set connection timeout and character set
             $conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 30);
+            $conn->set_charset('utf8mb4');
             $conn->query("SET SESSION wait_timeout=300"); // 5 minutes
             $conn->query("SET SESSION interactive_timeout=300"); // 5 minutes
+            
+            // Log successful connection
+            logMessage("Database connection established successfully", 'db_connection.log');
             
             // Success - return the connection
             return $conn;
         } catch (Exception $e) {
             $lastError = $e;
+            logMessage("Connection attempt {$attempts} failed: " . $e->getMessage(), 'db_connection.log');
             
-            // Wait before retry
+            // Wait before retry with increasing delay
             if ($attempts < $maxRetries) {
                 usleep(500000 * $attempts); // Increase wait time with each attempt
             }
@@ -55,6 +60,7 @@ function getDbConnectionWithRetry($maxRetries = 3) {
     }
     
     // All attempts failed
+    logMessage("Failed to connect to database after {$maxRetries} attempts: " . $lastError->getMessage(), 'db_connection.log');
     throw new Exception("Failed to connect to database after $maxRetries attempts: " . $lastError->getMessage());
 }
 
@@ -84,6 +90,53 @@ function logMessage($message, $logFileName = 'application.log') {
  */
 function sendJsonResponse($data, $statusCode = 200) {
     http_response_code($statusCode);
+    header('Content-Type: application/json');
     echo json_encode($data, JSON_PARTIAL_OUTPUT_ON_ERROR | JSON_PRETTY_PRINT);
     exit;
+}
+
+/**
+ * Check database connection and return status
+ * 
+ * @return array Connection status information
+ */
+function checkDatabaseConnection() {
+    try {
+        $conn = getDbConnectionWithRetry(2);
+        
+        // Check if vehicles table exists
+        $tableCheckResult = $conn->query("SHOW TABLES LIKE 'vehicles'");
+        $vehiclesTableExists = $tableCheckResult->num_rows > 0;
+        
+        // Get row count if table exists
+        $vehicleCount = 0;
+        if ($vehiclesTableExists) {
+            $countResult = $conn->query("SELECT COUNT(*) as count FROM vehicles");
+            if ($countResult) {
+                $vehicleCount = $countResult->fetch_assoc()['count'];
+            }
+        }
+        
+        // Close connection
+        $conn->close();
+        
+        return [
+            'status' => 'success',
+            'connection' => true,
+            'tables' => [
+                'vehicles' => [
+                    'exists' => $vehiclesTableExists,
+                    'count' => $vehicleCount
+                ]
+            ],
+            'timestamp' => time()
+        ];
+    } catch (Exception $e) {
+        return [
+            'status' => 'error',
+            'message' => $e->getMessage(),
+            'connection' => false,
+            'timestamp' => time()
+        ];
+    }
 }

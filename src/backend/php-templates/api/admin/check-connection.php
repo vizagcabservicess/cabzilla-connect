@@ -9,6 +9,7 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
 header('Content-Type: application/json');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 // Handle OPTIONS preflight request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -16,80 +17,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Response object
-$response = [
-    'status' => 'error',
-    'message' => 'Unknown error',
-    'connection' => false,
-    'timestamp' => time()
-];
+// Include the database helper
+require_once dirname(__FILE__) . '/../common/db_helper.php';
 
 try {
-    // Define database connection with correct credentials
-    $dbHost = 'localhost';
-    $dbName = 'u644605165_db_be';
-    $dbUser = 'u644605165_usr_be';
-    $dbPass = 'Vizag@1213';
+    // Use the reusable database connection checker
+    $connectionStatus = checkDatabaseConnection();
     
-    // Create connection with retry mechanism
-    $maxRetries = 3;
-    $retryCount = 0;
-    $lastError = null;
-    $connected = false;
-    
-    while ($retryCount < $maxRetries && !$connected) {
-        try {
-            $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-            
-            // Check connection
-            if ($conn->connect_error) {
-                throw new Exception("Connection failed: " . $conn->connect_error);
-            }
-            
-            // Test query
-            $testResult = $conn->query("SELECT 1");
-            if (!$testResult) {
-                throw new Exception("Test query failed");
-            }
-            
-            $connected = true;
-            $response['status'] = 'success';
-            $response['message'] = 'Database connection successful';
-            $response['connection'] = true;
-            
-            // Get database info
-            $dbInfoResult = $conn->query("SELECT VERSION() as version");
-            if ($dbInfoResult && $row = $dbInfoResult->fetch_assoc()) {
-                $response['version'] = $row['version'];
-            }
-            
-            // Check tables
-            $tableCountResult = $conn->query("SHOW TABLES");
-            $response['tables'] = $tableCountResult ? $tableCountResult->num_rows : 0;
-            
-            // Close connection
-            $conn->close();
-            
-        } catch (Exception $e) {
-            $lastError = $e;
-            $retryCount++;
-            
-            // Wait before retry
-            if ($retryCount < $maxRetries) {
-                usleep(500000); // 500ms
-            }
+    // Add database info if connected
+    if ($connectionStatus['connection']) {
+        // Try to get database info
+        $conn = getDbConnectionWithRetry(2);
+        $dbInfoResult = $conn->query("SELECT VERSION() as version");
+        if ($dbInfoResult && $row = $dbInfoResult->fetch_assoc()) {
+            $connectionStatus['version'] = $row['version'];
         }
+        
+        // Check vehicles table structure
+        $structureResult = $conn->query("DESCRIBE vehicles");
+        if ($structureResult) {
+            $fields = [];
+            while ($field = $structureResult->fetch_assoc()) {
+                $fields[] = $field['Field'];
+            }
+            $connectionStatus['structure'] = [
+                'vehicles' => [
+                    'fields' => $fields,
+                    'field_count' => count($fields)
+                ]
+            ];
+        }
+        
+        // Close connection
+        $conn->close();
     }
     
-    if (!$connected) {
-        throw new Exception("Failed to connect to database after $maxRetries attempts: " . $lastError->getMessage());
-    }
+    // Send the response
+    echo json_encode($connectionStatus, JSON_PRETTY_PRINT);
     
 } catch (Exception $e) {
-    $response['status'] = 'error';
-    $response['message'] = $e->getMessage();
+    echo json_encode([
+        'status' => 'error',
+        'message' => $e->getMessage(),
+        'connection' => false,
+        'timestamp' => time()
+    ], JSON_PRETTY_PRINT);
 }
-
-// Send response
-echo json_encode($response, JSON_PRETTY_PRINT);
-exit;
