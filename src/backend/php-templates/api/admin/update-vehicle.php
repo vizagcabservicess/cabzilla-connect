@@ -35,6 +35,25 @@ function handleError($message) {
     exit;
 }
 
+// Function to get the actual vehicle_id for numeric IDs
+function getActualVehicleId($numericId, $conn) {
+    try {
+        $query = "SELECT vehicle_id FROM vehicles WHERE id = ?";
+        $stmt = $conn->prepare($query);
+        $stmt->bind_param('s', $numericId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($row = $result->fetch_assoc()) {
+            return $row['vehicle_id'];
+        }
+        return null;
+    } catch (Exception $e) {
+        logMessage("Error in getActualVehicleId: " . $e->getMessage(), 'vehicle-update-errors.log');
+        return null;
+    }
+}
+
 // Get raw input data (handle both form data and raw JSON)
 $rawInput = file_get_contents('php://input');
 $isJSON = false;
@@ -68,12 +87,41 @@ foreach (['id', 'vehicleId', 'vehicle_id', 'vehicle'] as $key) {
         if (strpos($vehicleId, 'item-') === 0) {
             $vehicleId = substr($vehicleId, 5);
         }
-        // Store the normalized vehicle ID back in the data array with all common keys
-        $data['id'] = $vehicleId;
-        $data['vehicleId'] = $vehicleId;
-        $data['vehicle_id'] = $vehicleId;
         break;
     }
+}
+
+// Log the initial vehicle ID found for debugging
+logMessage("Initial vehicle ID found: $vehicleId", 'vehicle-update-debug.log');
+
+// Convert numeric IDs to actual vehicle_id if possible
+if (!empty($vehicleId) && is_numeric($vehicleId) && intval($vehicleId) > 0) {
+    try {
+        $conn = getDbConnectionWithRetry();
+        $actualId = getActualVehicleId($vehicleId, $conn);
+        
+        if (!empty($actualId)) {
+            logMessage("Converted numeric ID $vehicleId to actual vehicle_id: $actualId", 'vehicle-update-debug.log');
+            $vehicleId = $actualId;
+            
+            // Update the data array with the actual vehicle ID
+            foreach (['id', 'vehicleId', 'vehicle_id', 'vehicle'] as $key) {
+                if (isset($data[$key])) {
+                    $data[$key] = $vehicleId;
+                }
+            }
+        }
+        $conn->close();
+    } catch (Exception $e) {
+        logMessage("Warning: Could not convert numeric ID: " . $e->getMessage(), 'vehicle-update-warning.log');
+    }
+}
+
+// Store the normalized vehicle ID back in the data array with all common keys
+if (!empty($vehicleId)) {
+    $data['id'] = $vehicleId;
+    $data['vehicleId'] = $vehicleId;
+    $data['vehicle_id'] = $vehicleId;
 }
 
 // Log the vehicle ID we found for debugging

@@ -3,6 +3,38 @@ import { toast } from 'sonner';
 import { apiBaseUrl } from '@/config/api';
 import { directVehicleOperation } from '@/utils/apiHelper';
 
+// Helper function to normalize vehicle IDs
+const normalizeVehicleId = (vehicleId: string | number): string => {
+  if (!vehicleId) return '';
+  
+  // Convert to string
+  let normalizedId = String(vehicleId);
+  
+  // Remove item- prefix if it exists
+  if (normalizedId.startsWith('item-')) {
+    normalizedId = normalizedId.substring(5);
+  }
+  
+  // If it's purely numeric, it might be a DB record ID instead of a vehicle_id
+  // Try to map common numeric IDs to their known vehicle_ids
+  if (/^\d+$/.test(normalizedId)) {
+    const numericIdMap: Record<string, string> = {
+      '1': 'sedan',
+      '2': 'ertiga',
+      '180': 'etios',
+      '1266': 'MPV',
+      '592': 'Urbania'
+    };
+    
+    if (numericIdMap[normalizedId]) {
+      console.log(`Converted numeric ID ${normalizedId} to vehicle ID: ${numericIdMap[normalizedId]}`);
+      return numericIdMap[normalizedId];
+    }
+  }
+  
+  return normalizedId;
+};
+
 /**
  * Update outstation fares for a specific vehicle
  */
@@ -15,12 +47,14 @@ export const updateOutstationFares = async (
   driverAllowance: number = 300,
   nightHaltCharge: number = 700
 ): Promise<any> => {
-  console.log(`Updating outstation fares for vehicle ${vehicleId}`);
+  // Normalize the vehicle ID
+  const normalizedVehicleId = normalizeVehicleId(vehicleId);
+  console.log(`Updating outstation fares for vehicle ${vehicleId} (normalized: ${normalizedVehicleId})`);
   
   try {
     // Use directVehicleOperation for direct API access with explicit endpoint
     const result = await directVehicleOperation('/api/admin/direct-outstation-fares.php', 'POST', {
-      vehicleId,
+      vehicleId: normalizedVehicleId,
       basePrice: oneWayBasePrice,
       pricePerKm: oneWayPricePerKm,
       roundTripBasePrice: roundTripBasePrice || oneWayBasePrice * 0.9, // Default to 90% of one-way if not specified
@@ -30,7 +64,7 @@ export const updateOutstationFares = async (
     });
     
     if (result && result.status === 'success') {
-      toast.success(`Updated outstation fares for ${vehicleId}`);
+      toast.success(`Updated outstation fares for ${normalizedVehicleId}`);
       return result;
     } else {
       throw new Error(result?.message || 'Failed to update outstation fares');
@@ -51,45 +85,41 @@ export const updateLocalFares = async (
   extraHourRate: number = 0,
   packages: any[] = []
 ): Promise<any> => {
-  console.log(`Updating local fares for vehicle ${vehicleId}`);
+  // Normalize the vehicle ID
+  const normalizedVehicleId = normalizeVehicleId(vehicleId);
+  console.log(`Updating local fares for vehicle ${vehicleId} (normalized: ${normalizedVehicleId})`);
   
-  // Ensure vehicleId is a string and properly formatted
-  if (!vehicleId || vehicleId === 'undefined') {
+  // Ensure vehicleId is properly formatted
+  if (!normalizedVehicleId) {
     console.error("Invalid vehicle ID provided to updateLocalFares:", vehicleId);
     toast.error("Invalid vehicle ID. Please try again.");
     return Promise.reject(new Error("Invalid vehicle ID"));
   }
   
-  // Clean the vehicleId if it contains a prefix
-  if (typeof vehicleId === 'string' && vehicleId.startsWith('item-')) {
-    vehicleId = vehicleId.substring(5);
-    console.log(`Cleaned vehicleId to: ${vehicleId}`);
-  }
-  
   try {
     // Try using the direct endpoint first
     const directResult = await directVehicleOperation('/api/admin/direct-local-fares.php', 'POST', {
-      vehicleId,
+      vehicleId: normalizedVehicleId,
       extraKmRate,
       extraHourRate,
       packages: typeof packages === 'object' ? JSON.stringify(packages) : packages
     });
     
     if (directResult && directResult.status === 'success') {
-      toast.success(`Updated local fares for ${vehicleId}`);
+      toast.success(`Updated local fares for ${normalizedVehicleId}`);
       return directResult;
     }
     
     // Fall back to the older endpoint
     const result = await directVehicleOperation('/api/admin/local-package-fares-update.php', 'POST', {
-      vehicleId,
+      vehicleId: normalizedVehicleId,
       extraKmRate,
       extraHourRate,
       packages: typeof packages === 'object' ? JSON.stringify(packages) : packages
     });
     
     if (result && result.status === 'success') {
-      toast.success(`Updated local fares for ${vehicleId}`);
+      toast.success(`Updated local fares for ${normalizedVehicleId}`);
       return result;
     } else {
       throw new Error(result?.message || 'Failed to update local fares');
@@ -108,16 +138,18 @@ export const updateAirportFares = async (
   vehicleId: string,
   locationFares: Record<string, number>
 ): Promise<any> => {
-  console.log(`Updating airport fares for vehicle ${vehicleId}`);
+  // Normalize the vehicle ID
+  const normalizedVehicleId = normalizeVehicleId(vehicleId);
+  console.log(`Updating airport fares for vehicle ${vehicleId} (normalized: ${normalizedVehicleId})`);
   
   try {
     const result = await directVehicleOperation('/api/admin/airport-fares-update.php', 'POST', {
-      vehicleId,
+      vehicleId: normalizedVehicleId,
       fares: locationFares
     });
     
     if (result && result.status === 'success') {
-      toast.success(`Updated airport fares for ${vehicleId}`);
+      toast.success(`Updated airport fares for ${normalizedVehicleId}`);
       return result;
     } else {
       throw new Error(result?.message || 'Failed to update airport fares');
