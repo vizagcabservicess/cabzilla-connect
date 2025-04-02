@@ -66,13 +66,16 @@ export const directVehicleOperation = async (
           }
           
           // Special case for capacity and luggage capacity - ensure they're sent as numbers
-          if (key === 'capacity' || key === 'luggageCapacity' || key === 'luggage_capacity') {
+          if (key === 'capacity') {
             const numValue = Number(value) || 4; // Default to 4 if invalid
             formData.append(key, String(numValue));
-            // Also add snake_case variant for PHP compatibility
-            if (key === 'luggageCapacity') {
-              formData.append('luggage_capacity', String(numValue));
-            }
+            continue;
+          }
+          
+          if (key === 'luggageCapacity' || key === 'luggage_capacity') {
+            const numValue = Number(value) || 2; // Default to 2 if invalid
+            formData.append('luggageCapacity', String(numValue));
+            formData.append('luggage_capacity', String(numValue)); // Add snake_case version for PHP
             continue;
           }
           

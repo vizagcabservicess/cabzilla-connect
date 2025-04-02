@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,8 @@ export function EditVehicleDialog({
         nightHaltCharge: Number(vehicle.nightHaltCharge),
         driverAllowance: Number(vehicle.driverAllowance)
       };
+      
+      console.log("Submitting vehicle update with data:", updatedVehicle);
       
       await updateVehicle(updatedVehicle);
       toast.success(`Vehicle ${vehicle.name} updated successfully`);

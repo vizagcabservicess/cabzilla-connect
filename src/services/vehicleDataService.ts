@@ -1,4 +1,3 @@
-
 import { CabType } from '@/types/cab';
 import { apiBaseUrl, getApiUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
 import { OutstationFare, LocalFare, AirportFare } from '@/types/cab';
@@ -423,13 +422,31 @@ function processVehicles(vehicles: any[]): CabType[] {
       isActive = false;
     }
     
+    // Process capacity from various possible sources
+    let capacity = 4; // Default
+    if (vehicle.capacity !== undefined && vehicle.capacity !== null) {
+      capacity = parseInt(String(vehicle.capacity), 10);
+    } else if (vehicle.seats !== undefined && vehicle.seats !== null) {
+      capacity = parseInt(String(vehicle.seats), 10);
+    }
+    if (isNaN(capacity)) capacity = 4; // Fallback if parsing failed
+    
+    // Process luggage capacity from various possible sources
+    let luggageCapacity = 2; // Default
+    if (vehicle.luggageCapacity !== undefined && vehicle.luggageCapacity !== null) {
+      luggageCapacity = parseInt(String(vehicle.luggageCapacity), 10);
+    } else if (vehicle.luggage_capacity !== undefined && vehicle.luggage_capacity !== null) {
+      luggageCapacity = parseInt(String(vehicle.luggage_capacity), 10);
+    }
+    if (isNaN(luggageCapacity)) luggageCapacity = 2; // Fallback if parsing failed
+    
     // Ensure all properties have appropriate defaults
     return {
       id: id,
       vehicleId: id,
       name: vehicle.name || ucwords(id.replace(/_/g, ' ')),
-      capacity: parseInt(String(vehicle.capacity || vehicle.seats || 4), 10),
-      luggageCapacity: parseInt(String(vehicle.luggageCapacity || vehicle.luggage_capacity || 2), 10),
+      capacity: capacity,
+      luggageCapacity: luggageCapacity,
       price: parseFloat(String(vehicle.price || vehicle.basePrice || vehicle.base_price || 0)),
       pricePerKm: parseFloat(String(vehicle.pricePerKm || vehicle.price_per_km || 0)),
       image: vehicle.image || `/cars/${id}.png`.toLowerCase(),
