@@ -32,12 +32,13 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
   const capacity = Number(vehicle.capacity || 4);
   const luggageCapacity = Number(vehicle.luggageCapacity || 2);
   
-  // Clean up and display amenities - fixed the type issue with vehicle.amenities
-  const amenities = Array.isArray(vehicle.amenities) 
-    ? vehicle.amenities.filter(Boolean) 
-    : (typeof vehicle.amenities === 'string' 
-        ? vehicle.amenities.split(',').map(a => a.trim()) 
-        : ['AC']);
+  // Clean up and display amenities with proper type checking
+  let amenities: string[] = ['AC'];
+  if (Array.isArray(vehicle.amenities)) {
+    amenities = vehicle.amenities.filter(Boolean);
+  } else if (typeof vehicle.amenities === 'string') {
+    amenities = vehicle.amenities.split(',').map(a => a.trim());
+  }
   
   const handleDelete = async () => {
     try {
