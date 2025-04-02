@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -39,8 +40,9 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
     amenities = vehicle.amenities.filter(Boolean);
   } else if (typeof vehicle.amenities === 'string') {
     // If amenities is a string, split it only if it's not empty
-    if (vehicle.amenities.trim() !== '') {
-      amenities = vehicle.amenities.split(',').map(a => a.trim()).filter(Boolean);
+    const amenitiesString = vehicle.amenities as string; // Explicit type assertion
+    if (amenitiesString.trim() !== '') {
+      amenities = amenitiesString.split(',').map(a => a.trim()).filter(Boolean);
     }
   } else {
     // If amenities is undefined, null, or some other type, keep the default ['AC']
