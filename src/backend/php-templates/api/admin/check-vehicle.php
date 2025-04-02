@@ -43,16 +43,16 @@ function getDbConnection() {
     }
 }
 
-// SUPER AGGRESSIVE: Expanded list of known vehicle ID mappings - needed to prevent duplicates
+// CRITICAL POLICY: Never allow pure numeric IDs - they must be mapped to proper vehicle_ids
 $knownMappings = [
     '1' => 'sedan',
     '2' => 'ertiga',
     '180' => 'etios',
     '1266' => 'MPV',
     '592' => 'Urbania',
-    '1270' => 'MPV',   // Map these duplicates back to proper vehicle IDs
-    '1271' => 'etios', // Map these duplicates back to proper vehicle IDs
-    '1272' => 'etios', // Map these duplicates back to proper vehicle IDs
+    '1270' => 'MPV',
+    '1271' => 'etios',
+    '1272' => 'etios',
     '1273' => 'etios',
     '1274' => 'etios',
     '1275' => 'etios',
@@ -61,7 +61,6 @@ $knownMappings = [
     '1278' => 'etios',
     '1279' => 'etios',
     '1280' => 'etios',
-    // Additional mappings
     '100' => 'sedan',
     '101' => 'sedan',
     '102' => 'sedan',
@@ -83,15 +82,15 @@ if (isset($_GET['vehicleId'])) {
 $originalId = $vehicleId;
 error_log("[$timestamp] Original vehicle ID: $originalId", 3, $logDir . '/check-vehicle.log');
 
-// CRITICAL CHECK: Remove "item-" prefix if it exists
+// Remove "item-" prefix if it exists
 if (strpos($vehicleId, 'item-') === 0) {
     $vehicleId = substr($vehicleId, 5);
     error_log("[$timestamp] Removed 'item-' prefix: $vehicleId", 3, $logDir . '/check-vehicle.log');
 }
 
-// ABSOLUTELY CRITICAL: If numeric, NEVER allow this ID to proceed without mapping
+// CRITICAL: Numeric ID detection and rejection/mapping
 if (is_numeric($vehicleId)) {
-    error_log("[$timestamp] Numeric ID detected: $vehicleId - must map or reject", 3, $logDir . '/check-vehicle.log');
+    error_log("[$timestamp] Numeric ID detected: $vehicleId - applying mapping", 3, $logDir . '/check-vehicle.log');
     
     // Check our known mappings first
     if (isset($knownMappings[$vehicleId])) {
@@ -99,7 +98,7 @@ if (is_numeric($vehicleId)) {
         error_log("[$timestamp] Mapped numeric ID $vehicleId to {$mappedId}", 3, $logDir . '/check-vehicle.log');
         $vehicleId = $mappedId;
     }
-    // SUPER AGGRESSIVE: Always reject numeric IDs that don't have explicit mappings
+    // REJECT any unmapped numeric IDs
     else {
         error_log("[$timestamp] REJECTED: Unmapped numeric ID $vehicleId is not allowed", 3, $logDir . '/check-vehicle.log');
         echo json_encode([
@@ -124,7 +123,7 @@ if (empty($vehicleId)) {
     exit;
 }
 
-// TRIPLE CHECK: Make sure we don't have a numeric ID at this point
+// FINAL CHECK: Make sure we don't have a numeric ID at this point
 if (is_numeric($vehicleId)) {
     error_log("[$timestamp] CRITICAL FAILURE: Vehicle ID is still numeric after processing: $vehicleId", 3, $logDir . '/check-vehicle.log');
     echo json_encode([
@@ -140,11 +139,19 @@ try {
     // Connect to database
     $conn = getDbConnection();
     
-    // Query to check if vehicle exists - First try to match by vehicle_id which is preferred
+    // CRITICAL FIX: Always query by vehicle_id, NEVER by the numeric id column
     $query = "SELECT id, vehicle_id, name FROM vehicles WHERE vehicle_id = ? LIMIT 1";
     $stmt = $conn->prepare($query);
     $stmt->execute([$vehicleId]);
     $vehicle = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    // If not found, make one final attempt with a case-insensitive search
+    if (!$vehicle) {
+        $query = "SELECT id, vehicle_id, name FROM vehicles WHERE LOWER(vehicle_id) = LOWER(?) LIMIT 1";
+        $stmt = $conn->prepare($query);
+        $stmt->execute([$vehicleId]);
+        $vehicle = $stmt->fetch(PDO::FETCH_ASSOC);
+    }
     
     // Return appropriate response
     if ($vehicle) {
@@ -153,9 +160,10 @@ try {
             'status' => 'success',
             'exists' => true,
             'vehicle' => [
-                'id' => $vehicle['id'],
+                'id' => $vehicle['vehicle_id'], // CRITICAL FIX: Always return vehicle_id as the id
                 'vehicle_id' => $vehicle['vehicle_id'],
-                'name' => $vehicle['name']
+                'name' => $vehicle['name'],
+                'db_id' => $vehicle['id'] // Include the database ID for debugging but don't use it for operations
             ],
             'originalVehicleId' => $originalId,
             'message' => "Vehicle found"
