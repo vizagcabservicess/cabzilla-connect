@@ -35,9 +35,20 @@ $details = "";
 $path = $_SERVER['REQUEST_URI'] ?? '';
 $originalUrl = $_SERVER['REDIRECT_URL'] ?? $path;
 
+// Add debugging info to understand what's happening
+$server = $_SERVER;
+$requestInfo = [
+    'requested_path' => $path,
+    'redirect_url' => $originalUrl,
+    'script_name' => $server['SCRIPT_NAME'] ?? 'unknown',
+    'query_string' => $server['QUERY_STRING'] ?? '',
+    'remote_addr' => $server['REMOTE_ADDR'] ?? 'unknown',
+    'request_method' => $server['REQUEST_METHOD'] ?? 'unknown'
+];
+
 if ($status == 404) {
     if (strpos($originalUrl, '/admin') === 0 || strpos($path, '/admin') === 0) {
-        $details = "The requested admin endpoint '{$originalUrl}' could not be found. Please check that the API is properly configured with admin routes.";
+        $details = "The requested admin endpoint '{$originalUrl}' could not be found. This might indicate a routing configuration issue between the frontend and API.";
     } else {
         $details = "The requested API endpoint '{$originalUrl}' could not be found. Please check the URL and try again.";
     }
@@ -57,6 +68,7 @@ echo json_encode([
     'details' => $details,
     'path' => $originalUrl,
     'requestUri' => $path,
+    'requestInfo' => $requestInfo,
     'timestamp' => time()
 ]);
 ?>

@@ -5,23 +5,32 @@ RewriteEngine On
 # Set the base directory
 RewriteBase /api/
 
-# Don't apply rewriting to actual files or directories
+# Handle OPTIONS requests for CORS preflight - immediately return 200
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule .* - [R=200,L]
+
+# CRITICAL: Don't apply rewriting to actual files or directories
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 
+# IMPORTANT: Redirect all /admin/* requests to the frontend
+# This prevents admin API routes from intercepting frontend routes
+RewriteRule ^admin/?$ /index.html [L]
+RewriteRule ^admin/(.*)$ /index.html [L]
+
 # Handle the root admin path for dashboard access
-RewriteRule ^admin$ /api/admin/status.php [L]
-RewriteRule ^admin/$ /api/admin/status.php [L]
+RewriteRule ^api/admin$ /api/admin/status.php [L]
+RewriteRule ^api/admin/$ /api/admin/status.php [L]
 
 # Map vehicle update endpoints to our direct-vehicle-modify.php
-RewriteRule ^admin/update-vehicle\.php$ /api/admin/direct-vehicle-modify.php [L]
-RewriteRule ^admin/vehicle-update\.php$ /api/admin/direct-vehicle-modify.php [L]
-RewriteRule ^admin/vehicles-update\.php$ /api/admin/direct-vehicle-modify.php [L]
-RewriteRule ^admin/direct-vehicle-update\.php$ /api/admin/direct-vehicle-modify.php [L]
+RewriteRule ^api/admin/update-vehicle\.php$ /api/admin/direct-vehicle-modify.php [L]
+RewriteRule ^api/admin/vehicle-update\.php$ /api/admin/direct-vehicle-modify.php [L]
+RewriteRule ^api/admin/vehicles-update\.php$ /api/admin/direct-vehicle-modify.php [L]
+RewriteRule ^api/admin/direct-vehicle-update\.php$ /api/admin/direct-vehicle-modify.php [L]
 
 # Map vehicle delete endpoints to our direct-vehicle-delete.php
-RewriteRule ^admin/delete-vehicle\.php$ /api/admin/direct-vehicle-delete.php [L]
-RewriteRule ^admin/vehicle-delete\.php$ /api/admin/direct-vehicle-delete.php [L]
+RewriteRule ^api/admin/delete-vehicle\.php$ /api/admin/direct-vehicle-delete.php [L]
+RewriteRule ^api/admin/vehicle-delete\.php$ /api/admin/direct-vehicle-delete.php [L]
 
 # Set PHP settings for this directory
 <IfModule mod_php7.c>

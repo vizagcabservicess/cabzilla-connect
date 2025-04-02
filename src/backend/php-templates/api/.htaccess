@@ -35,6 +35,14 @@ RewriteEngine On
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
 
+# CRITICAL: Ensure API endpoints are properly handled
+# Map API-specific admin endpoints correctly
+RewriteRule ^status$ status.php [L,QSA]
+
+# Admin status endpoint should be accessible
+RewriteRule ^admin/status$ admin/status.php [L,QSA]
+RewriteRule ^admin/status\.php$ admin/status.php [L,QSA]
+
 # Added: Direct access to CORS fixer with highest priority
 RewriteRule ^fix-cors$ admin/fix-cors.php [L,QSA]
 RewriteRule ^fix-cors\.php$ admin/fix-cors.php [L,QSA]
