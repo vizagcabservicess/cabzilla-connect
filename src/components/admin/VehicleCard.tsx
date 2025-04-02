@@ -45,10 +45,10 @@ export function VehicleCard({ vehicle, onEdit, onDelete }: VehicleCardProps) {
   if (Array.isArray(vehicle.amenities)) {
     // If amenities is already an array, use it directly
     amenities = vehicle.amenities.filter(Boolean);
-  } else if (typeof vehicle.amenities === 'string') {
+  } else if (typeof vehicle.amenities === 'string' && vehicle.amenities !== null) {
     // If amenities is a string, split it only if it's not empty
     const amenitiesString = vehicle.amenities;
-    if (amenitiesString && amenitiesString.trim() !== '') {
+    if (amenitiesString && typeof amenitiesString === 'string' && amenitiesString.trim() !== '') {
       amenities = amenitiesString.split(',').map(a => a.trim()).filter(Boolean);
     }
   } else {

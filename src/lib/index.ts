@@ -56,6 +56,9 @@ export {
   deleteVehicle
 } from '@/services/directVehicleService';
 
+// Export syncVehicleData from its own module
+export { syncVehicleData } from './syncVehicleData';
+
 // Export fare update service functions
 export {
   updateOutstationFares,
