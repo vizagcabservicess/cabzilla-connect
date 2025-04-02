@@ -64,8 +64,9 @@ export function EditVehicleDialog({
       if (Array.isArray(initialVehicle.amenities)) {
         processedAmenities = initialVehicle.amenities.filter(Boolean);
       } else if (typeof initialVehicle.amenities === 'string') {
-        if (initialVehicle.amenities.trim() !== '') {
-          processedAmenities = initialVehicle.amenities.split(',').map(a => a.trim()).filter(Boolean);
+        const amenitiesString = initialVehicle.amenities;
+        if (amenitiesString && amenitiesString.trim() !== '') {
+          processedAmenities = amenitiesString.split(',').map(a => a.trim()).filter(Boolean);
         }
       }
       
