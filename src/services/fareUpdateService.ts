@@ -109,11 +109,13 @@ export const getAllOutstationFares = async (): Promise<Record<string, any>> => {
   console.log(`Fetching all outstation fares from API directly`);
   
   try {
-    // First try the direct admin endpoint for outstation fares
+    // First try the direct admin endpoint for outstation fares with explicit force_refresh
     const result = await directVehicleOperation('/api/admin/direct-outstation-fares.php', 'GET', {
       getAllFares: 'true',
-      force_sync: 'true', // Force synchronization with the database
-      includeInactive: 'true' // Include inactive vehicles for admin view
+      force_refresh: 'true', // Force synchronization with the database
+      force_sync: 'true',   // Additional parameter to ensure fresh data
+      includeInactive: 'true', // Include inactive vehicles for admin view
+      isAdminMode: 'true'    // Ensure we're in admin mode
     });
     
     if (result && result.fares && Object.keys(result.fares).length > 0) {
@@ -125,6 +127,7 @@ export const getAllOutstationFares = async (): Promise<Record<string, any>> => {
     const fallbackResult = await directVehicleOperation('/api/admin/outstation-fares-update.php', 'GET', {
       sync: 'true',
       force_sync: 'true',
+      force_refresh: 'true',
       includeInactive: 'true', 
       isAdminMode: 'true'
     });
@@ -137,7 +140,9 @@ export const getAllOutstationFares = async (): Promise<Record<string, any>> => {
     // If both methods fail, try to get vehicles directly and combine with any existing fare data
     const vehiclesResult = await directVehicleOperation('/api/admin/get-vehicles.php', 'GET', { 
       includeInactive: 'true',
-      force_sync: 'true'
+      force_sync: 'true',
+      force_refresh: 'true',
+      isAdminMode: 'true'
     });
     
     if (vehiclesResult && vehiclesResult.vehicles && vehiclesResult.vehicles.length > 0) {

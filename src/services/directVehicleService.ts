@@ -20,7 +20,7 @@ const normalizeVehicleId = (id: string): string => {
 const ensureNumericValues = (vehicle: CabType): CabType => {
   return {
     ...vehicle,
-    // Ensure these are always numbers
+    // Ensure these are always numbers by explicitly parsing
     capacity: Number(vehicle.capacity || 4),
     luggageCapacity: Number(vehicle.luggageCapacity || 2),
     basePrice: Number(vehicle.basePrice || vehicle.price || 0),
@@ -136,6 +136,10 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
       if (key === 'capacity' || key === 'luggageCapacity' || key === 'luggage_capacity') {
         const numVal = parseInt(String(value), 10);
         formData.append(key, String(isNaN(numVal) ? 4 : numVal));
+        // Also add with underscore variant for PHP backend compatibility
+        if (key === 'luggageCapacity') {
+          formData.append('luggage_capacity', String(isNaN(numVal) ? 2 : numVal));
+        }
         return;
       }
       
@@ -158,6 +162,10 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
     // Add explicit numeric fields to ensure they're included
     formData.append('capacity_numeric', String(Number(normalizedVehicle.capacity)));
     formData.append('luggage_capacity_numeric', String(Number(normalizedVehicle.luggageCapacity)));
+    
+    // Add fields in PHP format to ensure backward compatibility
+    formData.append('capacity_value', String(Number(normalizedVehicle.capacity)));
+    formData.append('luggage_capacity_value', String(Number(normalizedVehicle.luggageCapacity)));
     
     // Log FormData contents for debugging
     console.log('FormData contents for vehicle update:');

@@ -71,6 +71,106 @@ if (empty($data)) {
     $data = [];
 }
 
+// Handle GET request for retrieving all fares
+if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    try {
+        $conn = getDbConnection();
+        
+        if (!$conn) {
+            throw new Exception("Database connection failed");
+        }
+        
+        // Check if outstation_fares table exists
+        $checkTableStmt = $conn->query("SHOW TABLES LIKE 'outstation_fares'");
+        if ($checkTableStmt->num_rows === 0) {
+            // Table doesn't exist, create it
+            $createTableSql = "
+                CREATE TABLE IF NOT EXISTS outstation_fares (
+                    id INT(11) NOT NULL AUTO_INCREMENT,
+                    vehicle_id VARCHAR(50) NOT NULL,
+                    base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
+                    roundtrip_base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    roundtrip_price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
+                    driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    PRIMARY KEY (id),
+                    UNIQUE KEY vehicle_id (vehicle_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            ";
+            $conn->query($createTableSql);
+        }
+        
+        // First get the vehicle list to ensure we have complete data
+        $vehicleStmt = $conn->query("
+            SELECT v.id, v.vehicle_id, v.name, v.capacity, v.luggage_capacity, v.is_active 
+            FROM vehicles v
+            ORDER BY v.name
+        ");
+        
+        $vehicles = [];
+        if ($vehicleStmt) {
+            while ($vehicle = $vehicleStmt->fetch_assoc()) {
+                $vehicles[$vehicle['id']] = $vehicle;
+            }
+        }
+        
+        // Now get the outstation fares
+        $fareStmt = $conn->query("
+            SELECT 
+                of.vehicle_id,
+                of.base_price,
+                of.price_per_km,
+                of.roundtrip_base_price,
+                of.roundtrip_price_per_km,
+                of.driver_allowance,
+                of.night_halt_charge,
+                of.updated_at
+            FROM 
+                outstation_fares of
+            ORDER BY 
+                of.vehicle_id
+        ");
+        
+        $fares = [];
+        if ($fareStmt) {
+            while ($fare = $fareStmt->fetch_assoc()) {
+                $vehicleId = $fare['vehicle_id'];
+                $fares[$vehicleId] = $fare;
+                
+                // Merge with vehicle data if available
+                if (isset($vehicles[$vehicleId])) {
+                    $fares[$vehicleId]['name'] = $vehicles[$vehicleId]['name'];
+                    $fares[$vehicleId]['capacity'] = (int)$vehicles[$vehicleId]['capacity'];
+                    $fares[$vehicleId]['luggage_capacity'] = (int)$vehicles[$vehicleId]['luggage_capacity'];
+                    $fares[$vehicleId]['is_active'] = (bool)$vehicles[$vehicleId]['is_active'];
+                }
+            }
+        }
+        
+        // Return the fares
+        echo json_encode([
+            'status' => 'success',
+            'fares' => $fares,
+            'count' => count($fares),
+            'includeInactive' => true,
+            'isAdminMode' => true,
+            'timestamp' => time()
+        ]);
+        exit;
+    } catch (Exception $e) {
+        error_log("Error retrieving outstation fares: " . $e->getMessage());
+        http_response_code(500);
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'Failed to retrieve outstation fares: ' . $e->getMessage()
+        ]);
+        exit;
+    }
+}
+
 // Log received data for debugging
 error_log('Final outstation fares update data: ' . print_r($data, true));
 
