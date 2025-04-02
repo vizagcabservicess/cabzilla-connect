@@ -43,7 +43,7 @@ function getDbConnection() {
     }
 }
 
-// CRITICAL FIX: Expanded list of known vehicle ID mappings - needed to prevent duplicates
+// SUPER AGGRESSIVE: Expanded list of known vehicle ID mappings - needed to prevent duplicates
 $knownMappings = [
     '1' => 'sedan',
     '2' => 'ertiga',
@@ -60,7 +60,13 @@ $knownMappings = [
     '1277' => 'etios',
     '1278' => 'etios',
     '1279' => 'etios',
-    '1280' => 'etios'
+    '1280' => 'etios',
+    // Additional mappings
+    '100' => 'sedan',
+    '101' => 'sedan',
+    '102' => 'sedan',
+    '200' => 'ertiga',
+    '201' => 'ertiga'
 ];
 
 // Extract vehicle ID from request
@@ -73,90 +79,64 @@ if (isset($_GET['vehicleId'])) {
     $vehicleId = $_GET['vehicle_id'];
 }
 
-// CRITICAL FIX: Improved vehicle ID normalization with explicit rejection
-if (!empty($vehicleId)) {
-    // Record the original ID for logging
-    $originalId = $vehicleId;
-    
-    // Remove "item-" prefix if it exists
-    if (strpos($vehicleId, 'item-') === 0) {
-        $vehicleId = substr($vehicleId, 5);
-        error_log("[$timestamp] Removed 'item-' prefix: $vehicleId", 3, $logDir . '/check-vehicle.log');
-    }
-    
-    // ABSOLUTELY CRITICAL: If numeric, NEVER allow this ID to proceed without mapping
-    if (is_numeric($vehicleId)) {
-        error_log("[$timestamp] Numeric ID detected: $vehicleId - must map or reject", 3, $logDir . '/check-vehicle.log');
-        
-        // Check our known mappings first
-        if (isset($knownMappings[$vehicleId])) {
-            $mappedId = $knownMappings[$vehicleId];
-            error_log("[$timestamp] Mapped numeric ID $vehicleId to {$mappedId}", 3, $logDir . '/check-vehicle.log');
-            $vehicleId = $mappedId;
-        }
-        // If numeric and not in mappings, try to look up actual vehicle_id
-        else {
-            try {
-                $conn = getDbConnection();
-                
-                // Try to find the actual vehicle_id for this numeric ID
-                $query = "SELECT vehicle_id, name FROM vehicles WHERE id = ? LIMIT 1";
-                $stmt = $conn->prepare($query);
-                $stmt->execute([$vehicleId]);
-                $result = $stmt->fetch(PDO::FETCH_ASSOC);
-                
-                // If found, use the actual vehicle_id 
-                if ($result && !empty($result['vehicle_id']) && !is_numeric($result['vehicle_id'])) {
-                    error_log("[$timestamp] Found actual vehicle_id '{$result['vehicle_id']}' for numeric ID $vehicleId", 3, $logDir . '/check-vehicle.log');
-                    $vehicleId = $result['vehicle_id'];
-                }
-                // If no proper vehicle_id but we have a non-numeric name, use that
-                else if ($result && !empty($result['name']) && !is_numeric($result['name'])) {
-                    error_log("[$timestamp] Using name '{$result['name']}' for numeric ID $vehicleId", 3, $logDir . '/check-vehicle.log');
-                    $vehicleId = $result['name'];
-                }
-                // CRITICAL: Any numeric ID that isn't mapped and doesn't have a proper name must be rejected
-                else {
-                    error_log("[$timestamp] WARNING: Numeric ID $vehicleId cannot be used - rejected", 3, $logDir . '/check-vehicle.log');
-                    
-                    echo json_encode([
-                        'status' => 'error',
-                        'exists' => false,
-                        'isNumericId' => true,
-                        'originalId' => $originalId,
-                        'message' => "Cannot use numeric ID '$vehicleId' as a vehicle identifier. Please use a proper vehicle ID."
-                    ]);
-                    exit;
-                }
-                
-                // Close connection
-                $conn = null;
-            } catch (Exception $e) {
-                error_log("[$timestamp] Error while looking up vehicle_id: " . $e->getMessage(), 3, $logDir . '/check-vehicle.log');
-                throw $e;
-            }
-        }
-    }
+// Log the original ID
+$originalId = $vehicleId;
+error_log("[$timestamp] Original vehicle ID: $originalId", 3, $logDir . '/check-vehicle.log');
+
+// CRITICAL CHECK: Remove "item-" prefix if it exists
+if (strpos($vehicleId, 'item-') === 0) {
+    $vehicleId = substr($vehicleId, 5);
+    error_log("[$timestamp] Removed 'item-' prefix: $vehicleId", 3, $logDir . '/check-vehicle.log');
 }
 
-try {
-    // Check if vehicle ID is provided
-    if (empty($vehicleId)) {
-        throw new Exception("Vehicle ID is required");
-    }
+// ABSOLUTELY CRITICAL: If numeric, NEVER allow this ID to proceed without mapping
+if (is_numeric($vehicleId)) {
+    error_log("[$timestamp] Numeric ID detected: $vehicleId - must map or reject", 3, $logDir . '/check-vehicle.log');
     
-    // CRITICAL: Double-check that we don't have a numeric ID at this point
-    if (is_numeric($vehicleId)) {
-        error_log("[$timestamp] REJECTED vehicle ID is still numeric: $vehicleId", 3, $logDir . '/check-vehicle.log');
+    // Check our known mappings first
+    if (isset($knownMappings[$vehicleId])) {
+        $mappedId = $knownMappings[$vehicleId];
+        error_log("[$timestamp] Mapped numeric ID $vehicleId to {$mappedId}", 3, $logDir . '/check-vehicle.log');
+        $vehicleId = $mappedId;
+    }
+    // SUPER AGGRESSIVE: Always reject numeric IDs that don't have explicit mappings
+    else {
+        error_log("[$timestamp] REJECTED: Unmapped numeric ID $vehicleId is not allowed", 3, $logDir . '/check-vehicle.log');
         echo json_encode([
             'status' => 'error',
             'exists' => false,
             'isNumericId' => true,
-            'message' => "Cannot use numeric ID '$vehicleId' as a vehicle identifier. Please use a proper vehicle ID."
+            'originalId' => $originalId,
+            'message' => "Cannot use numeric ID '$vehicleId'. Please use a proper vehicle ID like 'sedan', 'ertiga', etc."
         ]);
         exit;
     }
-    
+}
+
+// Make sure we have a vehicle ID at this point
+if (empty($vehicleId)) {
+    error_log("[$timestamp] Empty vehicle ID after processing", 3, $logDir . '/check-vehicle.log');
+    echo json_encode([
+        'status' => 'error',
+        'exists' => false,
+        'message' => "Vehicle ID is required"
+    ]);
+    exit;
+}
+
+// TRIPLE CHECK: Make sure we don't have a numeric ID at this point
+if (is_numeric($vehicleId)) {
+    error_log("[$timestamp] CRITICAL FAILURE: Vehicle ID is still numeric after processing: $vehicleId", 3, $logDir . '/check-vehicle.log');
+    echo json_encode([
+        'status' => 'error',
+        'exists' => false,
+        'isNumericId' => true,
+        'message' => "Cannot use numeric ID '$vehicleId'. This is a critical error."
+    ]);
+    exit;
+}
+
+try {
     // Connect to database
     $conn = getDbConnection();
     
@@ -168,6 +148,7 @@ try {
     
     // Return appropriate response
     if ($vehicle) {
+        error_log("[$timestamp] Vehicle found: " . json_encode($vehicle), 3, $logDir . '/check-vehicle.log');
         echo json_encode([
             'status' => 'success',
             'exists' => true,
@@ -176,18 +157,21 @@ try {
                 'vehicle_id' => $vehicle['vehicle_id'],
                 'name' => $vehicle['name']
             ],
-            'originalVehicleId' => $vehicleId,
+            'originalVehicleId' => $originalId,
             'message' => "Vehicle found"
         ]);
     } else {
+        error_log("[$timestamp] Vehicle not found with ID: $vehicleId", 3, $logDir . '/check-vehicle.log');
         echo json_encode([
             'status' => 'error',
             'exists' => false,
             'vehicleId' => $vehicleId,
+            'originalId' => $originalId,
             'message' => "Vehicle with ID '$vehicleId' not found"
         ]);
     }
 } catch (Exception $e) {
+    error_log("[$timestamp] Error checking vehicle: " . $e->getMessage(), 3, $logDir . '/check-vehicle.log');
     http_response_code(500);
     echo json_encode([
         'status' => 'error',

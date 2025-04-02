@@ -1,3 +1,4 @@
+
 <?php
 // local-fares-update.php - Ultra simplified local fare update endpoint
 // No configuration files, no includes, pure standalone script
@@ -78,71 +79,54 @@ if (strpos($vehicleId, 'item-') === 0) {
     $vehicleId = substr($vehicleId, 5);
 }
 
-// Log the original and cleaned vehicleId
-error_log("[$timestamp] Original vehicle ID: $originalVehicleId, Cleaned: $vehicleId", 3, $logDir . '/local-fares.log');
-
-// Known vehicle ID mappings - CRITICAL for preventing duplicates
+// CRITICAL FIX: Expanded ID mapping with all known numeric IDs - THIS IS THE KEY CHANGE
 $knownMappings = [
     '1' => 'sedan',
     '2' => 'ertiga',
     '180' => 'etios',
     '1266' => 'MPV',
     '592' => 'Urbania',
-    '1270' => 'MPV',   // Map these duplicates back to proper vehicle IDs
-    '1271' => 'etios', // Map these duplicates back to proper vehicle IDs
-    '1272' => 'etios',  // Map these duplicates back to proper vehicle IDs
-    '1273' => 'etios',  // Add any new numeric IDs that have appeared
+    '1270' => 'MPV',
+    '1271' => 'etios',
+    '1272' => 'etios',
+    '1273' => 'etios',
     '1274' => 'etios',
-    '1275' => 'etios'
+    '1275' => 'etios',
+    '1276' => 'etios',
+    '1277' => 'etios',
+    '1278' => 'etios',
+    '1279' => 'etios',
+    '1280' => 'etios',
+    // Special cases observed in logs
+    '100' => 'sedan',
+    '101' => 'sedan',
+    '102' => 'sedan',
+    '200' => 'ertiga',
+    '201' => 'ertiga',
 ];
 
-// If this is a known numeric ID mapping, use the proper vehicle_id
-if (is_numeric($vehicleId) && isset($knownMappings[$vehicleId])) {
-    $numericId = $vehicleId;
-    $vehicleId = $knownMappings[$vehicleId];
-    error_log("[$timestamp] Mapped numeric ID $numericId to vehicle_id: $vehicleId", 3, $logDir . '/local-fares.log');
-}
-// CRITICAL FIX: If vehicleId is numeric and large, reject it immediately
-else if (is_numeric($vehicleId) && intval($vehicleId) > 10) {
-    error_log("[$timestamp] REJECTED large numeric ID: $vehicleId - preventing duplicate vehicle creation", 3, $logDir . '/local-fares.log');
-    http_response_code(400);
-    echo json_encode([
-        'status' => 'error',
-        'message' => "Cannot use numeric ID '$vehicleId' directly as a vehicle identifier. Please use the proper vehicle ID instead.",
-        'isNumericId' => true,
-        'originalId' => $originalVehicleId
-    ]);
-    exit;
-}
-// For small numeric IDs, verify in the database
-else if (is_numeric($vehicleId)) {
-    error_log("[$timestamp] Numeric vehicle ID detected: $vehicleId - will verify in database", 3, $logDir . '/local-fares.log');
-    
-    try {
-        // Create database connection - hardcoded for maximum reliability
-        $dbHost = 'localhost';
-        $dbName = 'u644605165_new_bookingdb';
-        $dbUser = 'u644605165_new_bookingusr';
-        $dbPass = 'Vizag@1213';
-        
-        // Try to connect to the database
-        $pdo = new PDO("mysql:host=$dbHost;dbname=$dbName", $dbUser, $dbPass);
-        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        
-        // Look up the actual vehicle_id for this numeric ID
-        $stmt = $pdo->prepare("SELECT vehicle_id FROM vehicles WHERE id = ?");
-        $stmt->execute([$vehicleId]);
-        $vehicleData = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        if ($vehicleData && !empty($vehicleData['vehicle_id'])) {
-            $actualVehicleId = $vehicleData['vehicle_id'];
-            error_log("[$timestamp] Found actual vehicle_id: $actualVehicleId for numeric ID: $vehicleId", 3, $logDir . '/local-fares.log');
-            $vehicleId = $actualVehicleId;
-        } else {
-            error_log("[$timestamp] Could not find actual vehicle_id for numeric ID: $vehicleId", 3, $logDir . '/local-fares.log');
-        }
-    } catch (Exception $dbError) {
-        error_log("[$timestamp] Database error while checking vehicle ID: " . $dbError->getMessage(), 3, $logDir . '/local-fares.log');
+// Log the original and cleaned vehicleId
+error_log("[$timestamp] Original vehicle ID: $originalVehicleId, Cleaned: $vehicleId", 3, $logDir . '/local-fares.log');
+
+// CRITICAL CHECK: If this is ANY numeric ID, we MUST map it or reject it completely
+if (is_numeric($vehicleId)) {
+    // If in mappings, use proper vehicle_id
+    if (isset($knownMappings[$vehicleId])) {
+        $numericId = $vehicleId;
+        $vehicleId = $knownMappings[$vehicleId];
+        error_log("[$timestamp] Mapped numeric ID $numericId to vehicle_id: $vehicleId", 3, $logDir . '/local-fares.log');
+    }
+    // If not in mappings, ALWAYS reject numeric IDs completely
+    else {
+        error_log("[$timestamp] REJECTED unmapped numeric ID: $vehicleId - will not allow this to create a duplicate", 3, $logDir . '/local-fares.log');
+        http_response_code(400);
+        echo json_encode([
+            'status' => 'error',
+            'message' => "Cannot use numeric ID '$vehicleId'. Please use a proper vehicle ID like 'sedan', 'ertiga', 'etios', etc.",
+            'isNumericId' => true,
+            'originalId' => $originalVehicleId
+        ]);
+        exit;
     }
 }
 
@@ -154,6 +138,19 @@ if (empty($vehicleId) || $vehicleId === 'undefined') {
         'message' => 'Valid vehicle ID is required',
         'received_data' => $data,
         'original_id' => $originalVehicleId
+    ]);
+    exit;
+}
+
+// SECOND CHECK: Make sure we don't have any numeric ID at this point
+if (is_numeric($vehicleId)) {
+    error_log("[$timestamp] CRITICAL: Still have numeric ID after processing: $vehicleId", 3, $logDir . '/local-fares.log');
+    http_response_code(400);
+    echo json_encode([
+        'status' => 'error',
+        'message' => "Cannot use numeric ID '$vehicleId'. Only string-based vehicle IDs are allowed.",
+        'isNumericId' => true,
+        'originalId' => $originalVehicleId
     ]);
     exit;
 }
@@ -276,7 +273,7 @@ if ($extraHourRate === 0 && $package8hr > 0) {
 }
 
 // Log the received values
-error_log("[$timestamp] Vehicle ID: $vehicleId", 3, $logDir . '/local-fares.log');
+error_log("[$timestamp] Final vehicle ID being used: $vehicleId", 3, $logDir . '/local-fares.log');
 error_log("[$timestamp] 4hr Package: $package4hr", 3, $logDir . '/local-fares.log');
 error_log("[$timestamp] 8hr Package: $package8hr", 3, $logDir . '/local-fares.log');
 error_log("[$timestamp] 10hr Package: $package10hr", 3, $logDir . '/local-fares.log');
@@ -319,6 +316,12 @@ if (!empty($vehicleId) && ($package4hr > 0 || $package8hr > 0 || $package10hr > 
             error_log("[$timestamp] Database connection error: " . $e->getMessage(), 3, $logDir . '/local-fares.log');
             $databaseError = "Database connection error: " . $e->getMessage();
             throw $e;
+        }
+        
+        // CRITICAL: Check that vehicleId is not numeric AGAIN just before DB operations
+        if (is_numeric($vehicleId)) {
+            error_log("[$timestamp] CRITICAL SAFETY CHECK: Numeric vehicle ID detected before DB operation: $vehicleId", 3, $logDir . '/local-fares.log');
+            throw new Exception("Cannot use numeric ID '$vehicleId' as a valid vehicle identifier");
         }
         
         // First check if local_package_fares table exists
@@ -412,14 +415,17 @@ if (!empty($vehicleId) && ($package4hr > 0 || $package8hr > 0 || $package10hr > 
                 error_log("[$timestamp] Updated existing record in local_package_fares for $vehicleId", 3, $logDir . '/local-fares.log');
             } else {
                 // Insert new record
+                $vehicleType = isset($data['vehicleType']) ? $data['vehicleType'] : 
+                              (isset($data['vehicle_type']) ? $data['vehicle_type'] : $vehicleId);
+                
                 $insertSql = "INSERT INTO local_package_fares 
                               (vehicle_id, vehicle_type, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, 
-                               price_extra_km, price_extra_hour)
+                               price_extra_km, price_extra_hour) 
                               VALUES (?, ?, ?, ?, ?, ?, ?)";
                 $insertStmt = $pdo->prepare($insertSql);
                 $insertStmt->execute([
                     $vehicleId,
-                    $vehicleId, // Use vehicle_id as vehicle_type if not provided
+                    $vehicleType,
                     $package4hr, 
                     $package8hr, 
                     $package10hr, 

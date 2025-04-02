@@ -1,3 +1,4 @@
+
 import { toast } from 'sonner';
 import { apiBaseUrl } from '@/config/api';
 import { directVehicleOperation } from '@/utils/apiHelper';
@@ -19,19 +20,31 @@ const numericIdMapExtended: Record<string, string> = {
   '1277': 'etios',
   '1278': 'etios',
   '1279': 'etios',
-  '1280': 'etios'
+  '1280': 'etios',
+  // Add any additional mappings needed
+  '100': 'sedan',
+  '101': 'sedan',
+  '102': 'sedan',
+  '103': 'sedan',
+  '200': 'ertiga',
+  '201': 'ertiga'
 };
 
-// CRITICAL FIX: Enhanced helper function to normalize vehicle IDs with more aggressive logic
+// SUPER AGGRESSIVE FIX: ZERO TOLERANCE policy for numeric IDs
 const normalizeVehicleId = (vehicleId: string | number): string => {
-  if (!vehicleId) return '';
+  if (!vehicleId) {
+    console.error('Empty vehicleId provided to normalizeVehicleId');
+    throw new Error('Vehicle ID is required');
+  }
   
   // Convert to string and trim
   let normalizedId = String(vehicleId).trim();
+  console.log(`Normalizing vehicle ID: ${normalizedId}`);
   
   // Remove item- prefix if it exists
   if (normalizedId.startsWith('item-')) {
     normalizedId = normalizedId.substring(5);
+    console.log(`Removed item- prefix, now: ${normalizedId}`);
   }
   
   // Check if this is already a known vehicle ID string
@@ -41,64 +54,73 @@ const normalizeVehicleId = (vehicleId: string | number): string => {
     return normalizedId;
   }
   
-  // CRITICAL: If it's in our mapping, always use the mapped value to prevent duplicate vehicles
+  // ESSENTIAL: If it's in our mapping, always use the mapped value to prevent duplicate vehicles
   if (numericIdMapExtended[normalizedId]) {
     const mappedId = numericIdMapExtended[normalizedId];
     console.log(`CRITICAL: Converting numeric ID ${normalizedId} to vehicle ID: ${mappedId}`);
     return mappedId;
   }
   
-  // If it's purely numeric, we MUST reject it completely
+  // If it's purely numeric, we MUST reject it completely - ZERO TOLERANCE POLICY
   if (/^\d+$/.test(normalizedId)) {
     console.error(`REJECTED: Numeric ID ${normalizedId} not allowed as vehicle ID to prevent duplicates`);
-    throw new Error(`Cannot use numeric ID ${normalizedId} as a vehicle identifier. Please use the proper vehicle ID.`);
+    throw new Error(`Cannot use numeric ID ${normalizedId} as a vehicle identifier. Please use the proper vehicle ID like 'sedan', 'ertiga', 'etios', etc.`);
   }
   
   return normalizedId;
 };
 
-// CRITICAL FIX: Enhanced helper function to verify a vehicle ID exists before updating fares
+// Enhanced verification function with multiple safety checks
 const verifyVehicleId = async (vehicleId: string): Promise<string> => {
   try {
-    // First normalize the ID using our enhanced function
+    console.log(`Starting vehicle ID verification for: ${vehicleId}`);
+    
+    // First normalize the ID - this will reject any unmapped numeric IDs immediately
     let normalizedId;
     try {
       normalizedId = normalizeVehicleId(vehicleId);
+      console.log(`After normalization: ${normalizedId}`);
     } catch (error) {
       console.error(`Error normalizing vehicle ID: ${error}`);
       throw error; // Re-throw to prevent processing with invalid IDs
     }
     
-    // CRITICAL: After normalization, check again that it's not numeric
+    // CRITICAL DOUBLE CHECK: After normalization, check again that it's not numeric
     if (/^\d+$/.test(normalizedId)) {
       console.error(`EMERGENCY: Normalized vehicle ID '${normalizedId}' is still numeric. Rejecting.`);
-      throw new Error(`Cannot use numeric ID ${normalizedId} as it would create a duplicate vehicle.`);
+      throw new Error(`Cannot use numeric ID ${normalizedId}. Please use a proper vehicle ID like 'sedan'.`);
     }
     
     // Use check-vehicle endpoint to verify this ID exists
-    const checkResult = await directVehicleOperation('/api/admin/check-vehicle.php', 'GET', {
-      vehicleId: normalizedId
-    });
-    
-    // Check if the response indicates this is a problematic numeric ID
-    if (checkResult && checkResult.isNumericId === true) {
-      console.error(`Server rejected numeric ID: ${normalizedId}`);
-      throw new Error(checkResult.message || `Cannot use numeric ID ${normalizedId} as vehicle identifier`);
-    }
-    
-    if (checkResult && checkResult.status === 'success' && checkResult.exists) {
-      // If we found the vehicle, use its actual vehicle_id from the database
-      const actualVehicleId = checkResult.vehicle.vehicle_id;
-      if (actualVehicleId && actualVehicleId !== normalizedId && !(/^\d+$/.test(actualVehicleId))) {
-        console.log(`Using actual vehicle_id ${actualVehicleId} instead of ${normalizedId}`);
-        return actualVehicleId;
+    console.log(`Verifying vehicle ID exists: ${normalizedId}`);
+    try {
+      const checkResult = await directVehicleOperation('/api/admin/check-vehicle.php', 'GET', {
+        vehicleId: normalizedId
+      });
+      
+      // Check if the response indicates this is a problematic numeric ID
+      if (checkResult && checkResult.isNumericId === true) {
+        console.error(`Server rejected numeric ID: ${normalizedId}`);
+        throw new Error(checkResult.message || `Cannot use numeric ID ${normalizedId} as vehicle identifier`);
       }
-      return normalizedId;
+      
+      if (checkResult && checkResult.status === 'success' && checkResult.exists) {
+        // If we found the vehicle, use its actual vehicle_id from the database
+        const actualVehicleId = checkResult.vehicle.vehicle_id;
+        if (actualVehicleId && actualVehicleId !== normalizedId && !(/^\d+$/.test(actualVehicleId))) {
+          console.log(`Using actual vehicle_id ${actualVehicleId} instead of ${normalizedId}`);
+          return actualVehicleId;
+        }
+        return normalizedId;
+      }
+      
+      // If we couldn't verify, log an error
+      console.error(`Could not verify vehicle ID: ${normalizedId}`, checkResult);
+      throw new Error(`Vehicle with ID ${normalizedId} not found in database. Cannot update fares.`);
+    } catch (checkError) {
+      console.error(`Error checking vehicle ID: ${checkError}`);
+      throw checkError;
     }
-    
-    // If we couldn't verify, log an error
-    console.error(`Could not verify vehicle ID: ${normalizedId}`, checkResult);
-    throw new Error(`Vehicle with ID ${normalizedId} not found in database. Cannot update fares.`);
   } catch (error) {
     console.error(`Error verifying vehicle ID: ${error}`);
     throw error;
@@ -156,18 +178,26 @@ export const updateLocalFares = async (
   packages: any[] = []
 ): Promise<any> => {
   try {
-    console.log(`Starting fare update for local packages with vehicle ID ${vehicleId}`);
+    console.log(`Starting local fare update for vehicle ID ${vehicleId}`);
     
-    // CRITICAL FIX: Verify and normalize the vehicle ID first with stronger checks
+    // CRITICAL FIX: First check - reject numeric IDs immediately, no exceptions
+    if (/^\d+$/.test(String(vehicleId))) {
+      const errorMsg = `Cannot use numeric ID ${vehicleId} directly. Please use the proper vehicle ID.`;
+      console.error(errorMsg);
+      toast.error(errorMsg);
+      return Promise.reject(new Error(errorMsg));
+    }
+    
+    // CRITICAL FIX: Second check - verify and normalize with extreme prejudice
     let verifiedVehicleId;
     try {
       verifiedVehicleId = await verifyVehicleId(vehicleId);
-      console.log(`Updating local fares for vehicle ${vehicleId} (verified: ${verifiedVehicleId})`);
+      console.log(`Verified vehicle ID: ${verifiedVehicleId} (original: ${vehicleId})`);
       
-      // One final check after verification - reject if still numeric
+      // Triple check - one final verification after all processing
       if (/^\d+$/.test(verifiedVehicleId)) {
-        console.error(`REJECTED: Verified ID ${verifiedVehicleId} is still numeric after verification!`);
-        throw new Error(`Cannot use numeric ID ${verifiedVehicleId} as it would create a duplicate vehicle.`);
+        console.error(`CRITICAL ERROR: Verified ID ${verifiedVehicleId} is still numeric!`);
+        throw new Error(`Cannot use numeric ID ${verifiedVehicleId}. Please use the proper vehicle ID.`);
       }
     } catch (error) {
       console.error(`Vehicle verification failed: ${error}`);
@@ -175,16 +205,44 @@ export const updateLocalFares = async (
       return Promise.reject(error);
     }
     
-    // Add additional validation to prevent problematic IDs
+    // Extra validation to prevent problematic IDs
     if (!verifiedVehicleId || verifiedVehicleId === 'undefined' || verifiedVehicleId === 'null') {
       console.error("Invalid vehicle ID provided to updateLocalFares:", vehicleId);
       toast.error("Invalid vehicle ID. Please try again.");
       return Promise.reject(new Error("Invalid vehicle ID"));
     }
     
-    console.log(`Trying direct local fares endpoint`);
+    // CRITICAL FIX: Final check - make absolutely sure the ID is valid
+    if (verifiedVehicleId !== 'sedan' && 
+        verifiedVehicleId !== 'ertiga' && 
+        verifiedVehicleId !== 'etios' && 
+        verifiedVehicleId !== 'MPV' && 
+        verifiedVehicleId !== 'Urbania' && 
+        !['sedan', 'ertiga', 'etios', 'MPV', 'Urbania'].includes(verifiedVehicleId)) {
+      
+      console.warn(`Unusual vehicle ID being used: ${verifiedVehicleId} - checking if this is valid`);
+      
+      // Double check with check-vehicle again
+      try {
+        const doubleCheck = await directVehicleOperation('/api/admin/check-vehicle.php', 'GET', {
+          vehicleId: verifiedVehicleId
+        });
+        
+        if (!doubleCheck || !doubleCheck.exists) {
+          console.error(`Final verification failed for vehicle ID: ${verifiedVehicleId}`);
+          throw new Error(`Vehicle ID ${verifiedVehicleId} failed final verification.`);
+        }
+      } catch (doubleCheckError) {
+        console.error(`Double check error: ${doubleCheckError}`);
+        throw doubleCheckError;
+      }
+    }
+    
+    console.log(`Using final verified ID for local fares: ${verifiedVehicleId}`);
+    
+    // Try the direct endpoint first which has the most aggressive validation
     try {
-      // Try the direct endpoint first which has the most aggressive validation
+      console.log(`Trying direct local fares endpoint with ID: ${verifiedVehicleId}`);
       const directResult = await directVehicleOperation('/api/admin/direct-local-fares.php', 'POST', {
         vehicleId: verifiedVehicleId,
         extraKmRate,
@@ -203,8 +261,30 @@ export const updateLocalFares = async (
       // Continue to next method - don't return yet
     }
     
+    // Try using the local-fares-update endpoint (our newly fixed version)
+    console.log(`Trying local-fares-update endpoint with ID: ${verifiedVehicleId}`);
+    try {
+      const localResult = await directVehicleOperation('/api/admin/local-fares-update.php', 'POST', {
+        vehicleId: verifiedVehicleId,
+        extraKmRate,
+        extraHourRate,
+        package4hr40km: typeof packages === 'object' && packages['4hrs-40km'] ? packages['4hrs-40km'] : 0,
+        package8hr80km: typeof packages === 'object' && packages['8hrs-80km'] ? packages['8hrs-80km'] : 0, 
+        package10hr100km: typeof packages === 'object' && packages['10hrs-100km'] ? packages['10hrs-100km'] : 0
+      });
+      
+      console.log("local-fares-update endpoint response:", localResult);
+      
+      if (localResult && localResult.status === 'success') {
+        toast.success(`Updated local fares for ${verifiedVehicleId}`);
+        return localResult;
+      }
+    } catch (localError) {
+      console.error(`Error with local-fares-update endpoint: ${localError}`);
+    }
+    
     // Try using the universal fare update endpoint as fallback
-    console.log(`Trying universal fare update endpoint`);
+    console.log(`Trying universal fare update endpoint with ID: ${verifiedVehicleId}`);
     try {
       const universalResult = await directVehicleOperation('/api/admin/fare-update.php', 'POST', {
         tripType: 'local',
@@ -224,11 +304,10 @@ export const updateLocalFares = async (
       }
     } catch (universalError) {
       console.error(`Error with universal endpoint: ${universalError}`);
-      // Continue to next method - don't return yet
     }
     
     // Fall back to the older endpoint as last resort
-    console.log(`Trying older local package fares update endpoint`);
+    console.log(`Trying older local package fares update endpoint with ID: ${verifiedVehicleId}`);
     try {
       const result = await directVehicleOperation('/api/admin/local-package-fares-update.php', 'POST', {
         vehicleId: verifiedVehicleId,
