@@ -28,6 +28,10 @@ export const createVehicle = async (vehicle: CabType): Promise<CabType> => {
       ...vehicle,
       id: normalizeVehicleId(vehicle.id || vehicle.vehicleId || ''),
       vehicleId: normalizeVehicleId(vehicle.id || vehicle.vehicleId || ''),
+      // Ensure numeric values are sent as numbers
+      capacity: Number(vehicle.capacity || 4),
+      luggageCapacity: Number(vehicle.luggageCapacity || 2),
+      luggage_capacity: Number(vehicle.luggageCapacity || 2),
     };
     
     // Use FormData instead of JSON for better PHP compatibility
@@ -126,7 +130,8 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
       
       // Handle capacity and luggageCapacity specially to ensure they're numbers
       if (key === 'capacity' || key === 'luggageCapacity' || key === 'luggage_capacity') {
-        formData.append(key, String(Number(value) || 4));
+        const numVal = parseInt(String(value), 10);
+        formData.append(key, String(isNaN(numVal) ? 4 : numVal));
         return;
       }
       

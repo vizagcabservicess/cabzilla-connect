@@ -109,10 +109,10 @@ export const getAllOutstationFares = async (): Promise<Record<string, any>> => {
   console.log(`Fetching all outstation fares`);
   
   try {
-    // Use directVehicleOperation for direct API access
+    // Use directVehicleOperation for direct API access with explicit force_sync parameter
     const result = await directVehicleOperation('/api/admin/outstation-fares-update.php', 'GET', {
       sync: 'true',
-      force_sync: 'true',
+      force_sync: 'true', // Force synchronization with the database
       includeInactive: 'true', // Include inactive vehicles for admin view
       isAdminMode: 'true'      // Ensure admin mode is active
     });
@@ -121,6 +121,16 @@ export const getAllOutstationFares = async (): Promise<Record<string, any>> => {
       console.log(`Retrieved ${Object.keys(result.fares).length} outstation fares`);
       return result.fares;
     } else {
+      // Fallback to another endpoint if first one fails
+      const fallbackResult = await directVehicleOperation('/api/admin/direct-outstation-fares.php', 'GET', {
+        getAllFares: 'true'
+      });
+      
+      if (fallbackResult && fallbackResult.fares) {
+        console.log(`Retrieved ${Object.keys(fallbackResult.fares).length} outstation fares from fallback`);
+        return fallbackResult.fares;
+      }
+      
       console.warn('No outstation fares found or API returned error');
       return {};
     }

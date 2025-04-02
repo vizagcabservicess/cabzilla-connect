@@ -18,10 +18,12 @@ import {
   getAllAirportFares
 } from "@/services/fareUpdateService";
 import { getVehicleTypes } from '@/services/vehicleDataService';
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertTriangle } from "lucide-react";
 import { toast } from 'sonner';
 import { directVehicleOperation } from '@/utils/apiHelper';
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Card, CardContent } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface VehicleTripFaresFormProps {
   tripType: 'outstation' | 'local' | 'airport';
@@ -34,6 +36,7 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
   const [vehicles, setVehicles] = useState<{id: string, name: string}[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<string>('');
   const [allFares, setAllFares] = useState<Record<string, any>>({});
+  const [loadingError, setLoadingError] = useState<string | null>(null);
   
   // Outstation fare state
   const [basePrice, setBasePrice] = useState<number>(0);
@@ -61,33 +64,111 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
   useEffect(() => {
     const loadVehicles = async () => {
       setIsLoading(true);
+      setLoadingError(null);
       try {
         console.log(`Loading vehicles for ${tripType} management...`);
         
         // Array to collect all vehicles from different sources
         let allVehicles: {id: string, name: string}[] = [];
         
-        // Try to get vehicles from API first
-        try {
-          const apiResponse = await directVehicleOperation('/api/admin/get-vehicles.php', 'GET', {
-            includeInactive: 'true',
-            isAdminMode: 'true'
-          });
-          
-          if (apiResponse && apiResponse.vehicles && Array.isArray(apiResponse.vehicles)) {
-            console.log(`Received ${apiResponse.vehicles.length} vehicles from API`);
+        // Try to get specific fare vehicles first
+        if (tripType === 'outstation') {
+          try {
+            console.log("Fetching outstation fares directly");
+            const outFares = await getAllOutstationFares();
+            console.log('Loaded outstation fares:', outFares);
+            setAllFares(outFares);
             
-            const apiVehicles = apiResponse.vehicles.map((v: any) => ({
-              id: v.id || v.vehicleId || v.vehicle_id,
-              name: v.name || v.id || 'Unknown'
-            }));
+            // Add outstation fare vehicles to the list
+            Object.keys(outFares).forEach(vehicleId => {
+              if (vehicleId) {
+                // Create a nice display name from ID if needed
+                const displayName = outFares[vehicleId].name || 
+                                   vehicleId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                
+                allVehicles.push({
+                  id: vehicleId,
+                  name: displayName
+                });
+              }
+            });
             
-            // Add all API vehicles
-            allVehicles = [...apiVehicles];
-            console.log('Loaded vehicles from API:', allVehicles);
+            console.log(`Added ${allVehicles.length} vehicles from outstation fares`);
+            
+            // Try direct vehicle API endpoint for more vehicles
+            try {
+              const apiResponse = await directVehicleOperation('/api/admin/get-vehicles.php', 'GET', {
+                includeInactive: 'true',
+                isAdminMode: 'true',
+                force_sync: 'true'
+              });
+              
+              if (apiResponse && apiResponse.vehicles && Array.isArray(apiResponse.vehicles)) {
+                console.log(`Received ${apiResponse.vehicles.length} vehicles from API`);
+                
+                apiResponse.vehicles.forEach((v: any) => {
+                  const vehicleId = v.id || v.vehicleId || '';
+                  if (vehicleId && !allVehicles.some(existing => existing.id === vehicleId)) {
+                    allVehicles.push({
+                      id: vehicleId,
+                      name: v.name || vehicleId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+                    });
+                  }
+                });
+              }
+            } catch (apiError) {
+              console.error("Error fetching from direct API:", apiError);
+            }
+            
+            // If still not enough vehicles, try legacy endpoint
+            if (allVehicles.length < 3) {
+              const legacyResult = await directVehicleOperation('/api/admin/direct-vehicle-pricing.php', 'GET');
+              if (legacyResult && legacyResult.vehicles) {
+                Object.keys(legacyResult.vehicles).forEach(vehicleId => {
+                  if (!allVehicles.some(v => v.id === vehicleId)) {
+                    allVehicles.push({
+                      id: vehicleId,
+                      name: legacyResult.vehicles[vehicleId].name || vehicleId
+                    });
+                  }
+                });
+              }
+            }
+          } catch (fareError) {
+            console.error("Error loading outstation fares:", fareError);
           }
-        } catch (apiError) {
-          console.error('Error fetching vehicles from API:', apiError);
+        } else if (tripType === 'local') {
+          try {
+            const localFares = await getAllLocalFares();
+            setAllFares(localFares);
+            
+            // Add local fare vehicles that aren't in the list
+            Object.keys(localFares).forEach(vehicleId => {
+              const displayName = vehicleId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+              allVehicles.push({
+                id: vehicleId,
+                name: displayName
+              });
+            });
+          } catch (error) {
+            console.error('Error fetching local fares:', error);
+          }
+        } else if (tripType === 'airport') {
+          try {
+            const airportFares = await getAllAirportFares();
+            setAllFares(airportFares);
+            
+            // Add airport fare vehicles that aren't in the list
+            Object.keys(airportFares).forEach(vehicleId => {
+              const displayName = vehicleId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+              allVehicles.push({
+                id: vehicleId,
+                name: displayName
+              });
+            });
+          } catch (error) {
+            console.error('Error fetching airport fares:', error);
+          }
         }
         
         // Also get the standard vehicle types as fallback
@@ -105,99 +186,31 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
           console.error('Error loading vehicle types:', error);
         }
         
-        // For outstation specifically, get the fare data too
-        if (tripType === 'outstation') {
+        // Try to get vehicles from API if still not enough
+        if (allVehicles.length < 3) {
           try {
-            const outFares = await getAllOutstationFares();
-            console.log('Loaded outstation fares:', outFares);
-            setAllFares(outFares);
-            
-            // Add outstation fare vehicles that aren't in the list
-            Object.keys(outFares).forEach(vehicleId => {
-              if (!allVehicles.some(v => v.id === vehicleId)) {
-                // Create a nice display name from ID if needed
-                const displayName = vehicleId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                allVehicles.push({
-                  id: vehicleId,
-                  name: displayName
-                });
-              }
+            const apiResponse = await directVehicleOperation('/api/admin/get-vehicles.php', 'GET', {
+              includeInactive: 'true',
+              isAdminMode: 'true'
             });
             
-            // Also try the direct endpoint
-            const result = await directVehicleOperation('/api/admin/outstation-fares-update.php', 'GET', {
-              sync: 'true',
-              includeInactive: 'true'
-            });
-            
-            if (result && result.fares) {
-              console.log(`Retrieved ${Object.keys(result.fares).length} outstation fares from direct endpoint`);
+            if (apiResponse && apiResponse.vehicles && Array.isArray(apiResponse.vehicles)) {
+              console.log(`Received ${apiResponse.vehicles.length} vehicles from API`);
               
-              // Add outstation fare vehicles that aren't in the list
-              Object.keys(result.fares).forEach(vehicleId => {
-                if (!allVehicles.some(v => v.id === vehicleId)) {
-                  // Try to find a name from the fare data
-                  const fare = result.fares[vehicleId];
-                  const displayName = fare.name || vehicleId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                  
-                  allVehicles.push({
-                    id: vehicleId,
-                    name: displayName
-                  });
+              const apiVehicles = apiResponse.vehicles.map((v: any) => ({
+                id: v.id || v.vehicleId || v.vehicle_id,
+                name: v.name || v.id || 'Unknown'
+              }));
+              
+              // Add API vehicles that aren't already in the list
+              apiVehicles.forEach(apiVehicle => {
+                if (!allVehicles.some(v => v.id === apiVehicle.id)) {
+                  allVehicles.push(apiVehicle);
                 }
               });
             }
-            
-            // If still no vehicles, try another endpoint
-            if (allVehicles.length === 0) {
-              const legacyResult = await directVehicleOperation('/api/admin/direct-vehicle-pricing.php', 'GET');
-              if (legacyResult && legacyResult.vehicles) {
-                Object.keys(legacyResult.vehicles).forEach(vehicleId => {
-                  allVehicles.push({
-                    id: vehicleId,
-                    name: legacyResult.vehicles[vehicleId].name || vehicleId
-                  });
-                });
-              }
-            }
-          } catch (error) {
-            console.error('Error fetching outstation fares data:', error);
-          }
-        } else if (tripType === 'local') {
-          try {
-            const localFares = await getAllLocalFares();
-            setAllFares(localFares);
-            
-            // Add local fare vehicles that aren't in the list
-            Object.keys(localFares).forEach(vehicleId => {
-              if (!allVehicles.some(v => v.id === vehicleId)) {
-                const displayName = vehicleId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                allVehicles.push({
-                  id: vehicleId,
-                  name: displayName
-                });
-              }
-            });
-          } catch (error) {
-            console.error('Error fetching local fares:', error);
-          }
-        } else if (tripType === 'airport') {
-          try {
-            const airportFares = await getAllAirportFares();
-            setAllFares(airportFares);
-            
-            // Add airport fare vehicles that aren't in the list
-            Object.keys(airportFares).forEach(vehicleId => {
-              if (!allVehicles.some(v => v.id === vehicleId)) {
-                const displayName = vehicleId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                allVehicles.push({
-                  id: vehicleId,
-                  name: displayName
-                });
-              }
-            });
-          } catch (error) {
-            console.error('Error fetching airport fares:', error);
+          } catch (apiError) {
+            console.error('Error fetching vehicles from API:', apiError);
           }
         }
         
@@ -210,10 +223,15 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
         );
         
         console.log(`Final list of ${uniqueVehicles.length} vehicles for ${tripType} management:`, uniqueVehicles);
-        setVehicles(uniqueVehicles);
+        
+        if (uniqueVehicles.length === 0) {
+          setLoadingError('No vehicles found. Please check your connection or try again.');
+        } else {
+          setVehicles(uniqueVehicles);
+        }
       } catch (error) {
         console.error('Error loading vehicle data:', error);
-        toast.error('Failed to load vehicles');
+        setLoadingError('Failed to load vehicles. Please check your connection and try again.');
       } finally {
         setIsLoading(false);
       }
@@ -409,296 +427,310 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
         </Select>
       </div>
       
-      {tripType === 'outstation' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label htmlFor="base-price" className="text-sm font-medium">
-                One Way Base Price (₹)
-              </label>
-              <Input
-                id="base-price"
-                type="number"
-                min="0"
-                step="100"
-                value={basePrice || ''}
-                onChange={(e) => setBasePrice(Number(e.target.value))}
-                placeholder="e.g. 3000"
-                className="w-full"
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="price-per-km" className="text-sm font-medium">
-                One Way Price Per KM (₹)
-              </label>
-              <Input
-                id="price-per-km"
-                type="number"
-                min="0"
-                step="0.5"
-                value={pricePerKm || ''}
-                onChange={(e) => setPricePerKm(Number(e.target.value))}
-                placeholder="e.g. 15"
-                className="w-full"
-              />
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label htmlFor="round-trip-base-price" className="text-sm font-medium">
-                Round Trip Base Price (₹)
-              </label>
-              <Input
-                id="round-trip-base-price"
-                type="number"
-                min="0"
-                step="100"
-                value={roundTripBasePrice || ''}
-                onChange={(e) => setRoundTripBasePrice(Number(e.target.value))}
-                placeholder="Optional - defaults to 90% of one way"
-                className="w-full"
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="round-trip-price-per-km" className="text-sm font-medium">
-                Round Trip Price Per KM (₹)
-              </label>
-              <Input
-                id="round-trip-price-per-km"
-                type="number"
-                min="0"
-                step="0.5"
-                value={roundTripPricePerKm || ''}
-                onChange={(e) => setRoundTripPricePerKm(Number(e.target.value))}
-                placeholder="Optional - defaults to 85% of one way"
-                className="w-full"
-              />
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label htmlFor="driver-allowance" className="text-sm font-medium">
-                Driver Allowance (₹)
-              </label>
-              <Input
-                id="driver-allowance"
-                type="number"
-                min="0"
-                step="50"
-                value={driverAllowance || ''}
-                onChange={(e) => setDriverAllowance(Number(e.target.value))}
-                placeholder="e.g. 300"
-                className="w-full"
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="night-halt-charge" className="text-sm font-medium">
-                Night Halt Charge (₹)
-              </label>
-              <Input
-                id="night-halt-charge"
-                type="number"
-                min="0"
-                step="100"
-                value={nightHaltCharge || ''}
-                onChange={(e) => setNightHaltCharge(Number(e.target.value))}
-                placeholder="e.g. 700"
-                className="w-full"
-              />
-            </div>
-          </div>
-        </div>
+      {loadingError && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{loadingError}</AlertDescription>
+        </Alert>
       )}
       
-      {tripType === 'local' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label htmlFor="extra-km-rate" className="text-sm font-medium">
-                Extra KM Rate (₹)
-              </label>
-              <Input
-                id="extra-km-rate"
-                type="number"
-                min="0"
-                step="0.5"
-                value={extraKmRate || ''}
-                onChange={(e) => setExtraKmRate(Number(e.target.value))}
-                placeholder="e.g. 15"
-                className="w-full"
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="extra-hour-rate" className="text-sm font-medium">
-                Extra Hour Rate (₹)
-              </label>
-              <Input
-                id="extra-hour-rate"
-                type="number"
-                min="0"
-                step="50"
-                value={extraHourRate || ''}
-                onChange={(e) => setExtraHourRate(Number(e.target.value))}
-                placeholder="e.g. 200"
-                className="w-full"
-              />
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <label htmlFor="package-4hr-40km" className="text-sm font-medium">
-                4 Hours / 40 KM (₹)
-              </label>
-              <Input
-                id="package-4hr-40km"
-                type="number"
-                min="0"
-                step="100"
-                value={package4hr40km || ''}
-                onChange={(e) => setPackage4hr40km(Number(e.target.value))}
-                placeholder="e.g. 1200"
-                className="w-full"
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="package-8hr-80km" className="text-sm font-medium">
-                8 Hours / 80 KM (₹)
-              </label>
-              <Input
-                id="package-8hr-80km"
-                type="number"
-                min="0"
-                step="100"
-                value={package8hr80km || ''}
-                onChange={(e) => setPackage8hr80km(Number(e.target.value))}
-                placeholder="e.g. 2200"
-                className="w-full"
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="package-12hr-120km" className="text-sm font-medium">
-                12 Hours / 120 KM (₹)
-              </label>
-              <Input
-                id="package-12hr-120km"
-                type="number"
-                min="0"
-                step="100"
-                value={package12hr120km || ''}
-                onChange={(e) => setPackage12hr120km(Number(e.target.value))}
-                placeholder="e.g. 3000"
-                className="w-full"
-              />
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {tripType === 'airport' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label htmlFor="pickup-price" className="text-sm font-medium">
-                Airport Pickup Price (₹)
-              </label>
-              <Input
-                id="pickup-price"
-                type="number"
-                min="0"
-                step="100"
-                value={pickupPrice || ''}
-                onChange={(e) => setPickupPrice(Number(e.target.value))}
-                placeholder="e.g. 800"
-                className="w-full"
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="drop-price" className="text-sm font-medium">
-                Airport Drop Price (₹)
-              </label>
-              <Input
-                id="drop-price"
-                type="number"
-                min="0"
-                step="100"
-                value={dropPrice || ''}
-                onChange={(e) => setDropPrice(Number(e.target.value))}
-                placeholder="e.g. 800"
-                className="w-full"
-              />
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label htmlFor="tier1-price" className="text-sm font-medium">
-                Tier 1 Location Price (₹)
-              </label>
-              <Input
-                id="tier1-price"
-                type="number"
-                min="0"
-                step="100"
-                value={tier1Price || ''}
-                onChange={(e) => setTier1Price(Number(e.target.value))}
-                placeholder="e.g. 600"
-                className="w-full"
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="tier2-price" className="text-sm font-medium">
-                Tier 2 Location Price (₹)
-              </label>
-              <Input
-                id="tier2-price"
-                type="number"
-                min="0"
-                step="100"
-                value={tier2Price || ''}
-                onChange={(e) => setTier2Price(Number(e.target.value))}
-                placeholder="e.g. 800"
-                className="w-full"
-              />
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label htmlFor="tier3-price" className="text-sm font-medium">
-                Tier 3 Location Price (₹)
-              </label>
-              <Input
-                id="tier3-price"
-                type="number"
-                min="0"
-                step="100"
-                value={tier3Price || ''}
-                onChange={(e) => setTier3Price(Number(e.target.value))}
-                placeholder="e.g. 1000"
-                className="w-full"
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="tier4-price" className="text-sm font-medium">
-                Tier 4 Location Price (₹)
-              </label>
-              <Input
-                id="tier4-price"
-                type="number"
-                min="0"
-                step="100"
-                value={tier4Price || ''}
-                onChange={(e) => setTier4Price(Number(e.target.value))}
-                placeholder="e.g. 1200"
-                className="w-full"
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      <Card>
+        <CardContent className="pt-6">
+          <ScrollArea className="h-[400px]">
+            {tripType === 'outstation' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label htmlFor="base-price" className="text-sm font-medium">
+                      One Way Base Price (₹)
+                    </label>
+                    <Input
+                      id="base-price"
+                      type="number"
+                      min="0"
+                      step="100"
+                      value={basePrice || ''}
+                      onChange={(e) => setBasePrice(Number(e.target.value))}
+                      placeholder="e.g. 3000"
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="price-per-km" className="text-sm font-medium">
+                      One Way Price Per KM (₹)
+                    </label>
+                    <Input
+                      id="price-per-km"
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      value={pricePerKm || ''}
+                      onChange={(e) => setPricePerKm(Number(e.target.value))}
+                      placeholder="e.g. 15"
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label htmlFor="round-trip-base-price" className="text-sm font-medium">
+                      Round Trip Base Price (₹)
+                    </label>
+                    <Input
+                      id="round-trip-base-price"
+                      type="number"
+                      min="0"
+                      step="100"
+                      value={roundTripBasePrice || ''}
+                      onChange={(e) => setRoundTripBasePrice(Number(e.target.value))}
+                      placeholder="Optional - defaults to 90% of one way"
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="round-trip-price-per-km" className="text-sm font-medium">
+                      Round Trip Price Per KM (₹)
+                    </label>
+                    <Input
+                      id="round-trip-price-per-km"
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      value={roundTripPricePerKm || ''}
+                      onChange={(e) => setRoundTripPricePerKm(Number(e.target.value))}
+                      placeholder="Optional - defaults to 85% of one way"
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label htmlFor="driver-allowance" className="text-sm font-medium">
+                      Driver Allowance (₹)
+                    </label>
+                    <Input
+                      id="driver-allowance"
+                      type="number"
+                      min="0"
+                      step="50"
+                      value={driverAllowance || ''}
+                      onChange={(e) => setDriverAllowance(Number(e.target.value))}
+                      placeholder="e.g. 300"
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="night-halt-charge" className="text-sm font-medium">
+                      Night Halt Charge (₹)
+                    </label>
+                    <Input
+                      id="night-halt-charge"
+                      type="number"
+                      min="0"
+                      step="100"
+                      value={nightHaltCharge || ''}
+                      onChange={(e) => setNightHaltCharge(Number(e.target.value))}
+                      placeholder="e.g. 700"
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {tripType === 'local' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label htmlFor="extra-km-rate" className="text-sm font-medium">
+                      Extra KM Rate (₹)
+                    </label>
+                    <Input
+                      id="extra-km-rate"
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      value={extraKmRate || ''}
+                      onChange={(e) => setExtraKmRate(Number(e.target.value))}
+                      placeholder="e.g. 15"
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="extra-hour-rate" className="text-sm font-medium">
+                      Extra Hour Rate (₹)
+                    </label>
+                    <Input
+                      id="extra-hour-rate"
+                      type="number"
+                      min="0"
+                      step="50"
+                      value={extraHourRate || ''}
+                      onChange={(e) => setExtraHourRate(Number(e.target.value))}
+                      placeholder="e.g. 200"
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <label htmlFor="package-4hr-40km" className="text-sm font-medium">
+                      4 Hours / 40 KM (₹)
+                    </label>
+                    <Input
+                      id="package-4hr-40km"
+                      type="number"
+                      min="0"
+                      step="100"
+                      value={package4hr40km || ''}
+                      onChange={(e) => setPackage4hr40km(Number(e.target.value))}
+                      placeholder="e.g. 1200"
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="package-8hr-80km" className="text-sm font-medium">
+                      8 Hours / 80 KM (₹)
+                    </label>
+                    <Input
+                      id="package-8hr-80km"
+                      type="number"
+                      min="0"
+                      step="100"
+                      value={package8hr80km || ''}
+                      onChange={(e) => setPackage8hr80km(Number(e.target.value))}
+                      placeholder="e.g. 2200"
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="package-12hr-120km" className="text-sm font-medium">
+                      12 Hours / 120 KM (₹)
+                    </label>
+                    <Input
+                      id="package-12hr-120km"
+                      type="number"
+                      min="0"
+                      step="100"
+                      value={package12hr120km || ''}
+                      onChange={(e) => setPackage12hr120km(Number(e.target.value))}
+                      placeholder="e.g. 3000"
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {tripType === 'airport' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label htmlFor="pickup-price" className="text-sm font-medium">
+                      Airport Pickup Price (₹)
+                    </label>
+                    <Input
+                      id="pickup-price"
+                      type="number"
+                      min="0"
+                      step="100"
+                      value={pickupPrice || ''}
+                      onChange={(e) => setPickupPrice(Number(e.target.value))}
+                      placeholder="e.g. 800"
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="drop-price" className="text-sm font-medium">
+                      Airport Drop Price (₹)
+                    </label>
+                    <Input
+                      id="drop-price"
+                      type="number"
+                      min="0"
+                      step="100"
+                      value={dropPrice || ''}
+                      onChange={(e) => setDropPrice(Number(e.target.value))}
+                      placeholder="e.g. 800"
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label htmlFor="tier1-price" className="text-sm font-medium">
+                      Tier 1 Location Price (₹)
+                    </label>
+                    <Input
+                      id="tier1-price"
+                      type="number"
+                      min="0"
+                      step="100"
+                      value={tier1Price || ''}
+                      onChange={(e) => setTier1Price(Number(e.target.value))}
+                      placeholder="e.g. 600"
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="tier2-price" className="text-sm font-medium">
+                      Tier 2 Location Price (₹)
+                    </label>
+                    <Input
+                      id="tier2-price"
+                      type="number"
+                      min="0"
+                      step="100"
+                      value={tier2Price || ''}
+                      onChange={(e) => setTier2Price(Number(e.target.value))}
+                      placeholder="e.g. 800"
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label htmlFor="tier3-price" className="text-sm font-medium">
+                      Tier 3 Location Price (₹)
+                    </label>
+                    <Input
+                      id="tier3-price"
+                      type="number"
+                      min="0"
+                      step="100"
+                      value={tier3Price || ''}
+                      onChange={(e) => setTier3Price(Number(e.target.value))}
+                      placeholder="e.g. 1000"
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="tier4-price" className="text-sm font-medium">
+                      Tier 4 Location Price (₹)
+                    </label>
+                    <Input
+                      id="tier4-price"
+                      type="number"
+                      min="0"
+                      step="100"
+                      value={tier4Price || ''}
+                      onChange={(e) => setTier4Price(Number(e.target.value))}
+                      placeholder="e.g. 1200"
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </ScrollArea>
+        </CardContent>
+      </Card>
       
       <Button
         type="submit"
