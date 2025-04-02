@@ -1,3 +1,4 @@
+
 <?php
 // outstation-fares-update.php - Dedicated endpoint for updating outstation fares
 
@@ -32,6 +33,44 @@ error_log("REQUEST METHOD: " . $_SERVER['REQUEST_METHOD']);
 error_log("CONTENT TYPE: " . $_SERVER['CONTENT_TYPE'] ?? 'not set');
 error_log("ALL HEADERS: " . json_encode(getallheaders()));
 
+// Get data from request
+$rawInput = file_get_contents('php://input');
+error_log("Raw input: " . $rawInput);
+
+// Try multiple approaches to get the request data
+$data = [];
+
+// Try 1: Parse JSON
+$jsonData = json_decode($rawInput, true);
+if (json_last_error() === JSON_ERROR_NONE && !empty($jsonData)) {
+    $data = $jsonData;
+    error_log("Successfully parsed JSON data: " . print_r($data, true));
+} 
+// Try 2: Parse form-urlencoded
+else {
+    parse_str($rawInput, $formData);
+    if (!empty($formData)) {
+        $data = $formData;
+        error_log("Successfully parsed form-urlencoded data: " . print_r($data, true));
+    } 
+    // Try 3: Use $_POST or $_REQUEST
+    else {
+        if (!empty($_POST)) {
+            $data = $_POST;
+            error_log("Using POST data: " . print_r($data, true));
+        } else if (!empty($_REQUEST)) {
+            $data = $_REQUEST;
+            error_log("Using REQUEST data: " . print_r($data, true));
+        }
+    }
+}
+
+// Final fallback: Check if no data was extracted
+if (empty($data)) {
+    error_log("Could not extract data from request. Using empty array.");
+    $data = [];
+}
+
 // Handle GET request for retrieving all fares
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     try {
@@ -64,40 +103,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $conn->query($createTableSql);
         }
         
-        // CRITICAL CHANGE: First get the vehicle list to ensure we have ALL vehicles 
-        // regardless of whether they have entries in outstation_fares
+        // First get the vehicle list to ensure we have complete data
         $vehicleStmt = $conn->query("
-            SELECT v.id, v.vehicle_id, v.name, v.capacity, v.luggage_capacity, v.is_active,
-                   v.base_price, v.price_per_km, v.night_halt_charge, v.driver_allowance
+            SELECT v.id, v.vehicle_id, v.name, v.capacity, v.luggage_capacity, v.is_active 
             FROM vehicles v
             ORDER BY v.name
         ");
         
         $vehicles = [];
-        $vehicleIds = [];
         if ($vehicleStmt) {
             while ($vehicle = $vehicleStmt->fetch_assoc()) {
-                $vehicleId = $vehicle['id'] ?: $vehicle['vehicle_id'];
-                $vehicles[$vehicleId] = [
-                    'vehicle_id' => $vehicleId, 
-                    'name' => $vehicle['name'],
-                    'capacity' => (int)$vehicle['capacity'],
-                    'luggage_capacity' => (int)$vehicle['luggage_capacity'],
-                    'is_active' => (bool)$vehicle['is_active'],
-                    'base_price' => (float)$vehicle['base_price'],
-                    'price_per_km' => (float)$vehicle['price_per_km'],
-                    'night_halt_charge' => (float)$vehicle['night_halt_charge'],
-                    'driver_allowance' => (float)$vehicle['driver_allowance'],
-                    'roundtrip_base_price' => (float)$vehicle['base_price'] * 0.95, // Default to 95% of one-way
-                    'roundtrip_price_per_km' => (float)$vehicle['price_per_km'] * 0.85, // Default to 85% of one-way
-                ];
-                $vehicleIds[] = $vehicleId;
+                $vehicles[$vehicle['id']] = $vehicle;
             }
         }
         
-        // Now get the outstation fares for vehicles that have entries
-        $placeholders = str_repeat('?,', count($vehicleIds) - 1) . '?';
-        $fareQuery = "
+        // Now get the outstation fares
+        $fareStmt = $conn->query("
             SELECT 
                 of.vehicle_id,
                 of.base_price,
@@ -109,43 +130,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 of.updated_at
             FROM 
                 outstation_fares of
-            WHERE 
-                of.vehicle_id IN ($placeholders)
             ORDER BY 
                 of.vehicle_id
-        ";
+        ");
         
-        $fareStmt = $conn->prepare($fareQuery);
-        
-        // Only bind and execute if we have vehicles
-        if (!empty($vehicleIds)) {
-            $types = str_repeat('s', count($vehicleIds));
-            $fareStmt->bind_param($types, ...$vehicleIds);
-            $fareStmt->execute();
-            $fareResult = $fareStmt->get_result();
-            
-            // Override default values with actual outstation fare data where available
-            if ($fareResult) {
-                while ($fare = $fareResult->fetch_assoc()) {
-                    $vehicleId = $fare['vehicle_id'];
-                    if (isset($vehicles[$vehicleId])) {
-                        // Override with outstation specific values
-                        $vehicles[$vehicleId]['base_price'] = (float)$fare['base_price'];
-                        $vehicles[$vehicleId]['price_per_km'] = (float)$fare['price_per_km'];
-                        $vehicles[$vehicleId]['roundtrip_base_price'] = (float)$fare['roundtrip_base_price'];
-                        $vehicles[$vehicleId]['roundtrip_price_per_km'] = (float)$fare['roundtrip_price_per_km'];
-                        $vehicles[$vehicleId]['driver_allowance'] = (float)$fare['driver_allowance'];
-                        $vehicles[$vehicleId]['night_halt_charge'] = (float)$fare['night_halt_charge'];
-                    }
+        $fares = [];
+        if ($fareStmt) {
+            while ($fare = $fareStmt->fetch_assoc()) {
+                $vehicleId = $fare['vehicle_id'];
+                $fares[$vehicleId] = $fare;
+                
+                // Merge with vehicle data if available
+                if (isset($vehicles[$vehicleId])) {
+                    $fares[$vehicleId]['name'] = $vehicles[$vehicleId]['name'];
+                    $fares[$vehicleId]['capacity'] = (int)$vehicles[$vehicleId]['capacity'];
+                    $fares[$vehicleId]['luggage_capacity'] = (int)$vehicles[$vehicleId]['luggage_capacity'];
+                    $fares[$vehicleId]['is_active'] = (bool)$vehicles[$vehicleId]['is_active'];
                 }
             }
         }
         
-        // Return ALL vehicles with their fares (actual or default values)
+        // Return the fares
         echo json_encode([
             'status' => 'success',
-            'fares' => $vehicles,
-            'count' => count($vehicles),
+            'fares' => $fares,
+            'count' => count($fares),
             'includeInactive' => true,
             'isAdminMode' => true,
             'timestamp' => time()

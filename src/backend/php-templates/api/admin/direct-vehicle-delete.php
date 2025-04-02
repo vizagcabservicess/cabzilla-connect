@@ -1,7 +1,7 @@
+
 <?php
 /**
- * direct-vehicle-delete.php - Direct implementation for vehicle deletion
- * This provides robust error handling for vehicle deletion
+ * direct-vehicle-delete.php - Delete a vehicle from all related tables
  */
 
 // Set CORS headers
@@ -13,12 +13,12 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
-// Enable error reporting for debugging
-ini_set('display_errors', 0);
+// Enable error reporting for debug
+ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
 // Create log directory if it doesn't exist
-$logDir = dirname(__FILE__) . '/../../logs';
+$logDir = dirname(__FILE__) . '/../logs';
 if (!file_exists($logDir)) {
     mkdir($logDir, 0755, true);
 }
@@ -27,13 +27,12 @@ if (!file_exists($logDir)) {
 function logMessage($message) {
     global $logDir;
     $timestamp = date('Y-m-d H:i:s');
-    error_log("[$timestamp] " . $message . "\n", 3, $logDir . '/vehicle-delete.log');
+    error_log("[$timestamp] " . $message . "\n", 3, $logDir . '/direct-vehicle-delete.log');
 }
 
 // Log request information
 logMessage("Vehicle delete request received: " . $_SERVER['REQUEST_METHOD']);
-logMessage("Request URI: " . $_SERVER['REQUEST_URI']);
-logMessage("Request body: " . file_get_contents('php://input'));
+logMessage("Query string: " . $_SERVER['QUERY_STRING']);
 
 // Handle OPTIONS preflight request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -47,6 +46,13 @@ $response = [
     'message' => 'Unknown error',
     'timestamp' => time()
 ];
+
+// Allow POST/DELETE methods
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' && $_SERVER['REQUEST_METHOD'] !== 'DELETE' && $_SERVER['REQUEST_METHOD'] !== 'GET') {
+    $response['message'] = 'Only POST, DELETE, or GET methods are allowed';
+    echo json_encode($response);
+    exit;
+}
 
 // Get database connection
 try {
@@ -72,163 +78,126 @@ try {
         
         logMessage("Connected to database using hardcoded credentials");
     }
-    
-    // Extract vehicle ID from various sources
+} catch (Exception $e) {
+    $response['message'] = 'Database connection failed: ' . $e->getMessage();
+    echo json_encode($response);
+    exit;
+}
+
+try {
+    // Get vehicle ID from request parameters or body
     $vehicleId = null;
     
-    // Check request method to determine how to get the vehicle ID
-    if ($_SERVER['REQUEST_METHOD'] === 'DELETE' || $_SERVER['REQUEST_METHOD'] === 'POST') {
-        // Try to parse JSON body first
-        $rawInput = file_get_contents('php://input');
-        $jsonData = json_decode($rawInput, true);
-        
-        if (json_last_error() === JSON_ERROR_NONE && !empty($jsonData)) {
-            if (isset($jsonData['id'])) {
-                $vehicleId = $jsonData['id'];
-            } else if (isset($jsonData['vehicleId'])) {
-                $vehicleId = $jsonData['vehicleId'];
-            } else if (isset($jsonData['vehicle_id'])) {
-                $vehicleId = $jsonData['vehicle_id'];
+    // Check URL parameters - try multiple common parameter names
+    $possibleParams = ['vehicleId', 'vehicle_id', 'id', 'vehicle-id', 'cab_id', 'cabId'];
+    
+    foreach ($possibleParams as $param) {
+        if (isset($_GET[$param]) && !empty($_GET[$param])) {
+            $vehicleId = $_GET[$param];
+            logMessage("Found vehicle ID in query parameter '$param': $vehicleId");
+            break;
+        }
+    }
+    
+    // If not found in GET, check POST data
+    if (!$vehicleId) {
+        $rawData = file_get_contents('php://input');
+        if (!empty($rawData)) {
+            $jsonData = json_decode($rawData, true);
+            
+            if (json_last_error() === JSON_ERROR_NONE && is_array($jsonData)) {
+                foreach ($possibleParams as $param) {
+                    if (isset($jsonData[$param]) && !empty($jsonData[$param])) {
+                        $vehicleId = $jsonData[$param];
+                        logMessage("Found vehicle ID in JSON body parameter '$param': $vehicleId");
+                        break;
+                    }
+                }
+            } else {
+                // Try to parse as URL-encoded
+                parse_str($rawData, $parsedData);
+                if (is_array($parsedData)) {
+                    foreach ($possibleParams as $param) {
+                        if (isset($parsedData[$param]) && !empty($parsedData[$param])) {
+                            $vehicleId = $parsedData[$param];
+                            logMessage("Found vehicle ID in URL-encoded data parameter '$param': $vehicleId");
+                            break;
+                        }
+                    }
+                }
             }
         }
         
-        // Try POST data if no ID found in JSON
-        if (empty($vehicleId)) {
-            if (isset($_POST['id'])) {
-                $vehicleId = $_POST['id'];
-            } else if (isset($_POST['vehicleId'])) {
-                $vehicleId = $_POST['vehicleId'];
-            } else if (isset($_POST['vehicle_id'])) {
-                $vehicleId = $_POST['vehicle_id'];
+        // Check POST directly as fallback
+        if (!$vehicleId) {
+            foreach ($possibleParams as $param) {
+                if (isset($_POST[$param]) && !empty($_POST[$param])) {
+                    $vehicleId = $_POST[$param];
+                    logMessage("Found vehicle ID in POST data parameter '$param': $vehicleId");
+                    break;
+                }
             }
         }
     }
     
-    // Try GET parameters as a last resort
-    if (empty($vehicleId)) {
-        if (isset($_GET['id'])) {
-            $vehicleId = $_GET['id'];
-        } else if (isset($_GET['vehicleId'])) {
-            $vehicleId = $_GET['vehicleId'];
-        } else if (isset($_GET['vehicle_id'])) {
-            $vehicleId = $_GET['vehicle_id'];
-        }
+    if (!$vehicleId) {
+        throw new Exception("Vehicle ID is required. Please check your request.");
     }
     
-    // Extract from URL if still not found
-    if (empty($vehicleId)) {
-        $uri = $_SERVER['REQUEST_URI'];
-        if (preg_match('/\/([^\/\?]+)(?:\?|$)/', $uri, $matches)) {
-            $vehicleId = $matches[1];
-        }
-    }
-    
-    // Check if ID was found
-    if (empty($vehicleId)) {
-        throw new Exception("Vehicle ID is required");
-    }
-    
-    logMessage("Attempting to delete vehicle with ID: " . $vehicleId);
+    logMessage("Final vehicle ID to delete: $vehicleId");
     
     // Begin transaction
     $conn->begin_transaction();
     
     try {
-        // First check if vehicle exists
-        $checkQuery = "SELECT * FROM vehicles WHERE id = ? OR vehicle_id = ?";
-        $checkStmt = $conn->prepare($checkQuery);
+        // Instead of checking first, try direct delete from all tables
+        $tables = [
+            'vehicles',
+            'vehicle_types',
+            'vehicle_pricing',
+            'local_package_fares',
+            'airport_transfer_fares',
+            'outstation_fares'
+        ];
         
-        if (!$checkStmt) {
-            throw new Exception("Error preparing check query: " . $conn->error);
-        }
+        $deleted = false;
         
-        $checkStmt->bind_param('ss', $vehicleId, $vehicleId);
-        $checkStmt->execute();
-        $result = $checkStmt->get_result();
-        
-        if ($result->num_rows === 0) {
-            throw new Exception("Vehicle with ID '$vehicleId' not found");
-        }
-        
-        // Get vehicle details before deletion
-        $vehicle = $result->fetch_assoc();
-        $vehicleName = $vehicle['name'];
-        
-        // Delete from vehicles table
-        $deleteQuery = "DELETE FROM vehicles WHERE id = ? OR vehicle_id = ?";
-        $deleteStmt = $conn->prepare($deleteQuery);
-        
-        if (!$deleteStmt) {
-            throw new Exception("Error preparing delete query: " . $conn->error);
-        }
-        
-        $deleteStmt->bind_param('ss', $vehicleId, $vehicleId);
-        if (!$deleteStmt->execute()) {
-            throw new Exception("Error executing delete: " . $deleteStmt->error);
-        }
-        
-        $rowsAffected = $deleteStmt->affected_rows;
-        logMessage("Deleted from vehicles table: $rowsAffected rows affected");
-        
-        // Try to delete from vehicle_types if table exists
-        try {
-            $checkTypesTable = $conn->query("SHOW TABLES LIKE 'vehicle_types'");
-            if ($checkTypesTable->num_rows > 0) {
-                $typeDeleteQuery = "DELETE FROM vehicle_types WHERE id = ? OR vehicle_id = ?";
-                $typeDeleteStmt = $conn->prepare($typeDeleteQuery);
-                $typeDeleteStmt->bind_param('ss', $vehicleId, $vehicleId);
-                $typeDeleteStmt->execute();
-                $typeRowsAffected = $typeDeleteStmt->affected_rows;
-                logMessage("Deleted from vehicle_types table: $typeRowsAffected rows affected");
+        foreach ($tables as $table) {
+            // Check if the table exists first
+            $tableCheckResult = $conn->query("SHOW TABLES LIKE '$table'");
+            if ($tableCheckResult->num_rows == 0) {
+                logMessage("Table $table does not exist, skipping");
+                continue;
             }
-        } catch (Exception $e) {
-            logMessage("Notice: Could not delete from vehicle_types: " . $e->getMessage());
-            // Continue with transaction, this is not critical
-        }
-        
-        // Try to delete from outstation_fares if table exists
-        try {
-            $checkFaresTable = $conn->query("SHOW TABLES LIKE 'outstation_fares'");
-            if ($checkFaresTable->num_rows > 0) {
-                $faresDeleteQuery = "DELETE FROM outstation_fares WHERE vehicle_id = ?";
-                $faresDeleteStmt = $conn->prepare($faresDeleteQuery);
-                $faresDeleteStmt->bind_param('s', $vehicleId);
-                $faresDeleteStmt->execute();
-                $faresRowsAffected = $faresDeleteStmt->affected_rows;
-                logMessage("Deleted from outstation_fares table: $faresRowsAffected rows affected");
+            
+            $deleteQuery = "DELETE FROM $table WHERE vehicle_id = ? OR id = ?";
+            $deleteStmt = $conn->prepare($deleteQuery);
+            
+            if ($deleteStmt) {
+                $deleteStmt->bind_param('ss', $vehicleId, $vehicleId);
+                $deleteStmt->execute();
+                $affectedRows = $deleteStmt->affected_rows;
+                logMessage("Deleted from $table: $affectedRows row(s)");
+                
+                if ($affectedRows > 0) {
+                    $deleted = true;
+                }
+                $deleteStmt->close();
+            } else {
+                logMessage("Error preparing delete statement for $table: " . $conn->error);
             }
-        } catch (Exception $e) {
-            logMessage("Notice: Could not delete from outstation_fares: " . $e->getMessage());
-            // Continue with transaction, this is not critical
-        }
-        
-        // Try to delete from vehicle_pricing if table exists
-        try {
-            $checkPricingTable = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'");
-            if ($checkPricingTable->num_rows > 0) {
-                $pricingDeleteQuery = "DELETE FROM vehicle_pricing WHERE vehicle_id = ?";
-                $pricingDeleteStmt = $conn->prepare($pricingDeleteQuery);
-                $pricingDeleteStmt->bind_param('s', $vehicleId);
-                $pricingDeleteStmt->execute();
-                $pricingRowsAffected = $pricingDeleteStmt->affected_rows;
-                logMessage("Deleted from vehicle_pricing table: $pricingRowsAffected rows affected");
-            }
-        } catch (Exception $e) {
-            logMessage("Notice: Could not delete from vehicle_pricing: " . $e->getMessage());
-            // Continue with transaction, this is not critical
         }
         
         // Commit transaction
         $conn->commit();
         
-        // Build success response
-        $response = [
-            'status' => 'success',
-            'message' => "Vehicle '$vehicleName' deleted successfully",
-            'vehicleId' => $vehicleId,
-            'rowsAffected' => $rowsAffected,
-            'timestamp' => time()
-        ];
+        // Prepare successful response
+        $response['status'] = 'success';
+        $response['message'] = "Vehicle '$vehicleId' deleted successfully";
+        $response['vehicleId'] = $vehicleId;
+        $response['deleted'] = $deleted;
+        
+        logMessage("Vehicle deletion process completed for ID: $vehicleId");
         
     } catch (Exception $e) {
         // Rollback transaction on error
@@ -237,12 +206,10 @@ try {
     }
     
 } catch (Exception $e) {
-    $response['message'] = "Error deleting vehicle: " . $e->getMessage();
-    $response['error'] = $e->getMessage();
+    $response['message'] = $e->getMessage();
     logMessage("Error deleting vehicle: " . $e->getMessage());
 }
 
 // Send response
-logMessage("Sending response: " . json_encode($response));
 echo json_encode($response);
 ?>

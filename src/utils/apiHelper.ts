@@ -53,86 +53,58 @@ export const directVehicleOperation = async (endpoint: string, method: string, d
       headers['Content-Type'] = contentType;
     }
     
-    // Important: Specify 'no-store' to prevent issues with response body stream
     const response = await fetch(finalUrl, {
       method,
       headers,
       body,
-      signal: AbortSignal.timeout(30000), // 30 second timeout
-      cache: 'no-store'
+      signal: AbortSignal.timeout(30000) // 30 second timeout
     });
-    
-    // IMPROVED ERROR HANDLING: Create clean copy of response for parsing
-    const responseStatus = response.status;
-    const responseStatusText = response.statusText;
-    const responseHeaders = new Headers();
-    response.headers.forEach((value, key) => responseHeaders.set(key, value));
     
     // Handle different error status codes
     if (!response.ok) {
-      const errorStatusCode = responseStatus;
+      const errorStatusCode = response.status;
       let errorText;
-      let responseBody;
       
       try {
-        // Get response text first
-        responseBody = await response.text();
-        
-        // Try to parse as JSON
-        try {
-          const errorData = JSON.parse(responseBody);
-          errorText = errorData.message || errorData.error || responseStatusText;
-        } catch (jsonError) {
-          // Not JSON, use text as is
-          errorText = responseBody || responseStatusText;
-        }
-      } catch (readError) {
-        errorText = `Error reading response: ${readError.message}`;
+        // Try to get JSON error message
+        const errorData = await response.json();
+        errorText = errorData.message || errorData.error || response.statusText;
+      } catch (parseError) {
+        // Fall back to status text if JSON parsing fails
+        errorText = response.statusText;
       }
       
       // Create detailed error message with status code
-      throw new Error(`API error ${errorStatusCode}: ${errorText}`);
+      throw new Error(`API error: ${errorStatusCode} - ${errorText}`);
     }
     
-    // Get response type to determine how to parse
-    const contentTypeHeader = response.headers.get('content-type') || '';
-    let result;
-    let responseBody;
+    // Parse response data
+    const contentTypeHeader = response.headers.get('content-type');
     
-    // First get the raw response text to avoid streaming issues
-    try {
-      responseBody = await response.text();
-    } catch (textError) {
-      console.error('Error reading response body:', textError);
-      throw new Error(`Failed to read response: ${textError.message}`);
-    }
-    
-    // Try to parse as JSON if it's a JSON content type
-    if (contentTypeHeader.includes('application/json') || 
-        (responseBody && responseBody.trim().startsWith('{'))) {
+    if (contentTypeHeader && contentTypeHeader.includes('application/json')) {
+      // JSON response
       try {
-        result = JSON.parse(responseBody);
+        const responseData = await response.json();
+        return responseData;
       } catch (jsonError) {
         console.error('Failed to parse JSON response', jsonError);
-        console.log('Raw response:', responseBody);
-        
-        // Return raw response if JSON parsing fails
-        result = {
-          status: response.ok ? 'success' : 'error',
-          message: responseBody,
-          raw: responseBody
-        };
+        throw new Error(`Invalid JSON response: ${await response.text()}`);
       }
     } else {
-      // For non-JSON responses, return as object
-      result = {
-        status: response.ok ? 'success' : 'error',
-        message: responseBody,
-        raw: responseBody
-      };
+      // Non-JSON response
+      const textResponse = await response.text();
+      try {
+        // Try to parse as JSON anyway in case Content-Type is incorrect
+        return JSON.parse(textResponse);
+      } catch (jsonError) {
+        // Return plain text response as an object
+        return {
+          status: response.ok ? 'success' : 'error',
+          message: textResponse,
+          raw: textResponse
+        };
+      }
     }
-    
-    return result;
   } catch (error: any) {
     console.error(`Error in directVehicleOperation (${endpoint}):`, error);
     throw error;
