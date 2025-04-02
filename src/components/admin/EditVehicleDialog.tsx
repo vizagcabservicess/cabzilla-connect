@@ -81,8 +81,6 @@ export function EditVehicleDialog({
         // CRITICAL FIX: Ensure these are explicitly numbers
         capacity: capacity,
         luggageCapacity: luggageCapacity,
-        // Also include snake_case version for PHP compatibility
-        luggage_capacity: luggageCapacity,
         basePrice: parseNumericValue(vehicle.basePrice, 0),
         price: parseNumericValue(vehicle.price || vehicle.basePrice, 0),
         pricePerKm: parseNumericValue(vehicle.pricePerKm, 0),
@@ -100,8 +98,7 @@ export function EditVehicleDialog({
       const result = await updateVehicle({
         ...updatedVehicle,
         capacity: Number(capacity),
-        luggageCapacity: Number(luggageCapacity),
-        luggage_capacity: Number(luggageCapacity)
+        luggageCapacity: Number(luggageCapacity)
       });
       
       console.log("EditVehicleDialog - Update response:", result);
@@ -152,9 +149,7 @@ export function EditVehicleDialog({
           <DialogTitle>Edit Vehicle</DialogTitle>
         </DialogHeader>
         
-        {/* Add overflow-y-auto to make the form scrollable */}
         <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto px-1 py-2" style={{ maxHeight: "calc(80vh - 120px)" }}>
-          {/* Basic Vehicle Information */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="id">Vehicle ID</Label>
@@ -212,7 +207,6 @@ export function EditVehicleDialog({
             </div>
           </div>
           
-          {/* Pricing */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="basePrice">Base Price</Label>
@@ -285,7 +279,6 @@ export function EditVehicleDialog({
             </div>
           </div>
           
-          {/* Vehicle Image and Description */}
           <div className="space-y-2">
             <Label htmlFor="image">Image URL</Label>
             <Input
@@ -310,7 +303,6 @@ export function EditVehicleDialog({
             />
           </div>
           
-          {/* Amenities */}
           <div className="space-y-2">
             <Label>Amenities</Label>
             <div className="grid grid-cols-2 gap-2">
@@ -338,7 +330,6 @@ export function EditVehicleDialog({
             </div>
           </div>
           
-          {/* AC and Active Status */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex items-center space-x-2">
               <Switch
@@ -380,7 +371,6 @@ export function EditVehicleDialog({
   );
 }
 
-// List of common amenities
 const amenitiesList = [
   "AC",
   "Bottle Water",

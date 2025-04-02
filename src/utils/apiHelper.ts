@@ -65,7 +65,7 @@ export const directVehicleOperation = async (
           }
           
           // CRITICAL FIX: Special case for capacities - ensure they're sent as explicit string integers
-          if (key === 'capacity' || key === 'luggageCapacity' || key === 'luggage_capacity') {
+          if (key === 'capacity' || key === 'luggageCapacity') {
             // Try to convert to number first
             let numValue: number;
             if (typeof value === 'number') {
@@ -83,11 +83,9 @@ export const directVehicleOperation = async (
             // Send as string integer to ensure PHP gets it correctly
             formData.append(key, String(finalValue));
             
-            // CRITICAL FIX: Send both camelCase and snake_case variants with the same value
+            // If this is luggageCapacity, also send the snake_case version for PHP compatibility
             if (key === 'luggageCapacity') {
               formData.append('luggage_capacity', String(finalValue));
-            } else if (key === 'luggage_capacity') {
-              formData.append('luggageCapacity', String(finalValue));
             }
             
             // Also add debugging fields

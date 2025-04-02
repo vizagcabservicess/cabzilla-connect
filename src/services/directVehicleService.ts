@@ -143,9 +143,7 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
       is_active: isActive,
       // CRITICAL FIX: Force these as explicit numbers to ensure PHP doesn't get confused
       capacity: capacity,
-      luggageCapacity: luggageCapacity,
-      // Also include snake_case version for PHP compatibility
-      luggage_capacity: luggageCapacity
+      luggageCapacity: luggageCapacity
     };
     
     console.log('Normalized vehicle before update:', normalizedVehicle);
