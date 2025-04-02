@@ -55,76 +55,79 @@ export function FareUpdateError({
   // Detect if we have a 404 error
   const is404Error = errorMessage.includes('404') || errorMessage.includes('not found');
   const isSqlError = errorMessage.includes('SQL') || errorMessage.includes('MySQL');
+  const isServerError = errorMessage.includes('500') || errorMessage.includes('Internal Server Error');
   const isConnectionError = errorMessage.includes('connection') || errorMessage.includes('timeout');
 
   return (
     <Card className="p-4 mb-4 border-red-200 bg-red-50 dark:bg-red-950 dark:border-red-800">
-      <Alert variant="destructive" className="bg-transparent border-none p-0">
-        <AlertTriangle className="h-5 w-5" />
-        <AlertTitle className="text-red-600 dark:text-red-400">{title}</AlertTitle>
-        <AlertDescription className="text-gray-700 dark:text-gray-300">
-          {description}
-        </AlertDescription>
-        
-        <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-          <p className="font-mono bg-red-100 dark:bg-red-900 p-2 rounded my-2 overflow-auto max-h-24">
-            {errorMessage}
-          </p>
+      <Alert variant="destructive" className="border-0 bg-transparent">
+        <AlertTriangle className="h-4 w-4" />
+        <AlertTitle className="font-bold">{title}</AlertTitle>
+        <AlertDescription className="mt-2">
+          <p className="text-sm mb-3">{description}</p>
+          
+          {isServerError && (
+            <div className="mb-3 text-xs bg-red-100 dark:bg-red-900 p-3 rounded border border-red-300 dark:border-red-800">
+              <p className="font-semibold mb-1">Internal Server Error (500)</p>
+              <p>The server encountered an issue processing your request. This might be due to:</p>
+              <ul className="list-disc list-inside mt-1">
+                <li>Database connection issues</li>
+                <li>Server maintenance</li>
+                <li>Resource limitations</li>
+              </ul>
+            </div>
+          )}
           
           {is404Error && (
-            <p className="mt-2">
-              <strong>API Endpoint Not Found:</strong> The system couldn't find the correct API endpoint. 
-              This could be due to a server configuration issue.
-            </p>
+            <div className="mb-3 text-xs bg-red-100 dark:bg-red-900 p-3 rounded border border-red-300 dark:border-red-800">
+              <p className="font-semibold mb-1">Resource Not Found (404)</p>
+              <p>The requested API endpoint could not be found. This might be due to:</p>
+              <ul className="list-disc list-inside mt-1">
+                <li>Server configuration issues</li>
+                <li>Missing files</li>
+                <li>URL path errors</li>
+              </ul>
+            </div>
           )}
           
-          {isSqlError && (
-            <p className="mt-2">
-              <strong>Database Error:</strong> There appears to be an issue with the database. 
-              Try fixing the database tables or contact your administrator.
-            </p>
-          )}
+          <div className="p-2 mt-1 mb-3 bg-red-100 dark:bg-red-900 rounded text-xs font-mono overflow-x-auto">
+            {errorMessage}
+          </div>
           
-          {isConnectionError && (
-            <p className="mt-2">
-              <strong>Connection Error:</strong> Could not connect to the server. 
-              Please check your network connection and try again.
-            </p>
-          )}
-        </div>
-        
-        <div className="flex flex-wrap gap-2 mt-4">
-          <Button 
-            variant="secondary" 
-            size="sm" 
-            onClick={onRetry}
-            className="flex items-center gap-1"
-          >
-            <RefreshCw className="w-4 h-4" /> Retry
-          </Button>
-          
-          {isAdmin && (
-            <>
+          <div className="flex flex-wrap gap-2">
+            <Button 
+              size="sm" 
+              variant="default" 
+              onClick={onRetry}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className="h-3 w-3" /> 
+              Retry
+            </Button>
+            
+            <Button 
+              size="sm" 
+              variant="outline" 
+              onClick={handleFixDatabase}
+              className="flex items-center gap-2"
+            >
+              <Database className="h-3 w-3" /> 
+              Fix Database
+            </Button>
+            
+            {isAdmin && (
               <Button 
-                variant="outline" 
                 size="sm" 
-                onClick={handleFixDatabase}
-                className="flex items-center gap-1"
-              >
-                <Database className="w-4 h-4" /> Initialize Database
-              </Button>
-              
-              <Button 
                 variant="outline" 
-                size="sm" 
                 onClick={handleDirectAccess}
-                className="flex items-center gap-1"
+                className="flex items-center gap-2"
               >
-                <Terminal className="w-4 h-4" /> Direct Database Access
+                <Terminal className="h-3 w-3" /> 
+                Direct Database Access
               </Button>
-            </>
-          )}
-        </div>
+            )}
+          </div>
+        </AlertDescription>
       </Alert>
     </Card>
   );

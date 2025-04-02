@@ -10,7 +10,12 @@ export const directVehicleOperation = async (endpoint: string, method: string, d
     const fullUrl = `${apiBaseUrl}${endpoint}`;
     console.log(`Direct vehicle operation: ${method} ${fullUrl}`);
     
-    const response = await fetch(fullUrl, {
+    // Add timestamp to URL to avoid caching for GET requests
+    const finalUrl = method === 'GET' && !fullUrl.includes('_t=') 
+      ? `${fullUrl}${fullUrl.includes('?') ? '&' : '?'}_t=${Date.now()}`
+      : fullUrl;
+    
+    const response = await fetch(finalUrl, {
       method,
       headers: {
         'Content-Type': 'application/json',
@@ -21,14 +26,31 @@ export const directVehicleOperation = async (endpoint: string, method: string, d
         'Expires': '0',
         'X-Admin-Mode': 'true'
       },
-      body: method !== 'GET' && data ? JSON.stringify(data) : undefined
+      body: method !== 'GET' && data ? JSON.stringify(data) : undefined,
+      signal: AbortSignal.timeout(30000) // 30 second timeout
     });
     
+    // Handle different error status codes
     if (!response.ok) {
-      throw new Error(`API error: ${response.status} ${response.statusText}`);
+      const errorStatusCode = response.status;
+      let errorText;
+      
+      try {
+        // Try to get JSON error message
+        const errorData = await response.json();
+        errorText = errorData.message || errorData.error || response.statusText;
+      } catch (parseError) {
+        // Fall back to status text if JSON parsing fails
+        errorText = response.statusText;
+      }
+      
+      // Create detailed error message with status code
+      throw new Error(`API error: ${errorStatusCode} - ${errorText}`);
     }
     
-    return await response.json();
+    // Parse response data
+    const responseData = await response.json();
+    return responseData;
   } catch (error: any) {
     console.error(`Error in directVehicleOperation (${endpoint}):`, error);
     throw error;

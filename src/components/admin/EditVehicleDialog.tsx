@@ -100,6 +100,12 @@ export function EditVehicleDialog({
       
       while (attempt < maxRetries && !success) {
         try {
+          if (attempt > 0) {
+            const delay = 1000 * (attempt) + Math.random() * 500;
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
+          
+          console.log(`Update attempt ${attempt + 1}/${maxRetries} for vehicle ${vehicle.id}`);
           const response = await updateVehicle(updatedVehicle);
           console.log("Vehicle update API response:", response);
           success = true;
@@ -115,26 +121,36 @@ export function EditVehicleDialog({
           
           if (error.message && (error.message.includes('404') || error.response?.status === 404)) {
             console.error("404 error detected - API endpoint not found");
-            throw new Error(`API endpoint not found (404): The update-vehicle.php endpoint could not be found on the server. Please check your server configuration.`);
+            setServerError(`API endpoint not found (404): The vehicle update endpoint could not be found on the server.`);
+            break; // Don't retry 404 errors
+          }
+          
+          if (error.message && (error.message.includes('500') || error.response?.status === 500)) {
+            console.error("500 error detected - Internal server error");
+            setServerError(`Database Error: The server encountered an issue processing your request. This might be due to database connectivity or server maintenance.`);
+            
+            // Keep retrying, but with a little more delay
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
           }
           
           if (attempt >= maxRetries) {
             throw error; // Rethrow after max retries
           }
-          
-          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
         }
       }
       
-      if (lastError) throw lastError;
+      if (lastError && !success) throw lastError;
       
     } catch (error: any) {
       console.error("Error updating vehicle:", error);
       
       const errorMessage = error.response?.data?.message || error.message || "Unknown error";
-      const errorDetails = error.response?.data?.data || error.response?.data?.error || {};
       
-      setServerError(`Failed to update vehicle: ${errorMessage}`);
+      if (errorMessage.includes('500')) {
+        setServerError(`Failed to update vehicle: Internal Server Error (500). The server encountered an issue processing your request.`);
+      } else {
+        setServerError(`Failed to update vehicle: ${errorMessage}`);
+      }
       
       toast.error(`Failed to update vehicle: ${errorMessage}`);
     } finally {

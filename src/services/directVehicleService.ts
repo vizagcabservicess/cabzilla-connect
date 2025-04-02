@@ -1,4 +1,3 @@
-
 import { toast } from 'sonner';
 import { apiBaseUrl } from '@/config/api';
 import { CabType } from '@/types/cab';
@@ -176,7 +175,30 @@ export const updateVehicle = async (vehicleData: CabType): Promise<any> => {
     let result;
     let error;
     
-    // UPDATED: Try different endpoint patterns to maximize compatibility
+    // Try our most reliable endpoint first
+    try {
+      console.log('Attempting to update vehicle using direct-vehicle-modify.php');
+      result = await directVehicleOperation('/api/admin/direct-vehicle-modify.php', 'POST', normalizedData);
+      
+      if (result && result.status === 'success') {
+        console.log('Successfully updated vehicle using direct-vehicle-modify.php');
+        
+        // Clear all pending vehicle requests to force a refresh
+        Object.keys(pendingRequests).forEach(key => {
+          if (key.startsWith('getVehicles-')) {
+            delete pendingRequests[key];
+          }
+        });
+        
+        return result;
+      }
+    } catch (directModifyError) {
+      console.log('Failed to update using direct-vehicle-modify.php:', directModifyError);
+      error = directModifyError;
+      // Continue to try other endpoints
+    }
+    
+    // Try other endpoints as fallbacks
     const possibleEndpoints = [
       '/api/admin/update-vehicle.php',
       '/api/admin/direct-vehicle-update.php',
@@ -191,62 +213,84 @@ export const updateVehicle = async (vehicleData: CabType): Promise<any> => {
         
         if (result && result.status === 'success') {
           console.log(`Successfully updated vehicle using endpoint: ${endpoint}`);
-          break;
+          
+          // Clear all pending vehicle requests to force a refresh
+          Object.keys(pendingRequests).forEach(key => {
+            if (key.startsWith('getVehicles-')) {
+              delete pendingRequests[key];
+            }
+          });
+          
+          return result;
         }
       } catch (err) {
         console.log(`Failed to update using ${endpoint}:`, err);
-        error = err;
+        error = error || err;
       }
     }
     
-    if (!result || result.status !== 'success') {
-      try {
-        console.log('Trying fallback direct update method...');
-        // Try absolute URL as a last resort
-        const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-update.php`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-Force-Refresh': 'true',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
-          },
-          body: JSON.stringify(normalizedData)
+    // If all API methods failed, try a direct fetch as last resort
+    try {
+      console.log('Trying direct fetch as last resort...');
+      
+      const formData = new FormData();
+      Object.entries(normalizedData).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          if (typeof value === 'object') {
+            formData.append(key, JSON.stringify(value));
+          } else {
+            formData.append(key, value.toString());
+          }
+        }
+      });
+      
+      const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-modify.php`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-Force-Refresh': 'true',
+          'X-Admin-Mode': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
+      
+      if (!response.ok) {
+        const statusText = response.statusText;
+        const status = response.status;
+        const responseBody = await response.text();
+        throw new Error(`HTTP error ${status} ${statusText}: ${responseBody}`);
+      }
+      
+      result = await response.json();
+      
+      if (result && result.status === 'success') {
+        console.log('Direct fetch update succeeded');
+        
+        // Clear all pending vehicle requests to force a refresh
+        Object.keys(pendingRequests).forEach(key => {
+          if (key.startsWith('getVehicles-')) {
+            delete pendingRequests[key];
+          }
         });
         
-        if (!response.ok) {
-          throw new Error(`HTTP error: ${response.status}`);
-        }
-        
-        result = await response.json();
-        
-        if (result && result.status === 'success') {
-          console.log('Fallback update method succeeded');
-        } else {
-          throw new Error(result?.message || 'Failed to update vehicle');
-        }
-      } catch (fallbackErr) {
-        console.error('Fallback update also failed:', fallbackErr);
-        throw error || fallbackErr;
+        return result;
       }
+      
+      throw new Error(result?.message || 'Failed to update vehicle');
+    } catch (lastResortError) {
+      console.error('Last resort update also failed:', lastResortError);
+      throw error || lastResortError;
     }
-    
-    // Clear all pending vehicle requests to force a refresh
-    Object.keys(pendingRequests).forEach(key => {
-      if (key.startsWith('getVehicles-')) {
-        delete pendingRequests[key];
-      }
-    });
-    
-    return result;
   } catch (error: any) {
     console.error('Error updating vehicle:', error);
     
-    // Enhance error message for 404s
-    if (error.message && error.message.includes('404')) {
-      throw new Error(`API endpoint not found (404): The update-vehicle.php endpoint could not be found on the server. Please check your server configuration.`);
+    // Enhance error message with more details
+    if (error.message && error.message.includes('500')) {
+      throw new Error('Internal Server Error (500): The server encountered an issue processing your request. This might be due to database connectivity or server maintenance.');
+    } else if (error.message && error.message.includes('404')) {
+      throw new Error('API endpoint not found (404): The update-vehicle.php endpoint could not be found on the server. Please check your server configuration.');
     }
     
     throw error;
