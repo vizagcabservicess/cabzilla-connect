@@ -1,3 +1,4 @@
+
 <?php
 /**
  * db_helper.php - Common database connection helper
@@ -18,21 +19,12 @@ function getDbConnectionWithRetry($maxRetries = 3) {
         try {
             $attempts++;
             
-            // CRITICAL FIX: Make sure database credentials are consistent across all endpoints
+            // Define database connection with correct credentials
             $dbHost = 'localhost';
             $dbName = 'u644605165_db_be';
             $dbUser = 'u644605165_usr_be';
             $dbPass = 'Vizag@1213';
             
-            // Log database connection attempt
-            $logDir = dirname(__FILE__) . '/../../logs';
-            if (!file_exists($logDir)) {
-                mkdir($logDir, 0755, true);
-            }
-            
-            error_log("Attempting database connection (attempt $attempts) to $dbHost/$dbName as $dbUser", 3, $logDir . '/db_connection.log');
-            
-            // IMPROVEMENT: Set connection options before connecting
             $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
             
             if ($conn->connect_error) {
@@ -52,19 +44,13 @@ function getDbConnectionWithRetry($maxRetries = 3) {
             $conn->query("SET SESSION interactive_timeout=300"); // 5 minutes
             
             // Log successful connection
-            error_log("Database connection established successfully", 3, $logDir . '/db_connection.log');
+            logMessage("Database connection established successfully", 'db_connection.log');
             
             // Success - return the connection
             return $conn;
         } catch (Exception $e) {
             $lastError = $e;
-            
-            $logDir = dirname(__FILE__) . '/../../logs';
-            if (!file_exists($logDir)) {
-                mkdir($logDir, 0755, true);
-            }
-            
-            error_log("Connection attempt {$attempts} failed: " . $e->getMessage(), 3, $logDir . '/db_connection.log');
+            logMessage("Connection attempt {$attempts} failed: " . $e->getMessage(), 'db_connection.log');
             
             // Wait before retry with increasing delay
             if ($attempts < $maxRetries) {
@@ -74,12 +60,7 @@ function getDbConnectionWithRetry($maxRetries = 3) {
     }
     
     // All attempts failed
-    $logDir = dirname(__FILE__) . '/../../logs';
-    if (!file_exists($logDir)) {
-        mkdir($logDir, 0755, true);
-    }
-    
-    error_log("Failed to connect to database after {$maxRetries} attempts: " . $lastError->getMessage(), 3, $logDir . '/db_connection.log');
+    logMessage("Failed to connect to database after {$maxRetries} attempts: " . $lastError->getMessage(), 'db_connection.log');
     throw new Exception("Failed to connect to database after $maxRetries attempts: " . $lastError->getMessage());
 }
 
@@ -157,103 +138,5 @@ function checkDatabaseConnection() {
             'connection' => false,
             'timestamp' => time()
         ];
-    }
-}
-
-/**
- * Check if local_package_fares table exists, create if it doesn't
- * Ensures consistent column naming across the application
- * 
- * @param mysqli $conn Database connection
- * @return bool Success status
- */
-function ensureLocalPackageFaresTable($conn) {
-    try {
-        // Check if the table exists
-        $tableCheckResult = $conn->query("SHOW TABLES LIKE 'local_package_fares'");
-        $tableExists = ($tableCheckResult && $tableCheckResult->num_rows > 0);
-        
-        if (!$tableExists) {
-            // Create the table with columns matching what's in your database (without 's')
-            $createTableQuery = "
-                CREATE TABLE `local_package_fares` (
-                  `id` int(11) NOT NULL AUTO_INCREMENT,
-                  `vehicle_id` varchar(50) NOT NULL,
-                  `price_4hr_40km` decimal(10,2) NOT NULL DEFAULT 0.00,
-                  `price_8hr_80km` decimal(10,2) NOT NULL DEFAULT 0.00,
-                  `price_10hr_100km` decimal(10,2) NOT NULL DEFAULT 0.00,
-                  `price_extra_km` decimal(5,2) NOT NULL DEFAULT 0.00,
-                  `price_extra_hour` decimal(5,2) NOT NULL DEFAULT 0.00,
-                  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-                  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-                  PRIMARY KEY (`id`),
-                  UNIQUE KEY `vehicle_id` (`vehicle_id`)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-            ";
-            
-            $result = $conn->query($createTableQuery);
-            if (!$result) {
-                logMessage("Failed to create local_package_fares table: " . $conn->error, 'db_helper.log');
-                return false;
-            }
-            
-            logMessage("Created local_package_fares table successfully", 'db_helper.log');
-            return true;
-        }
-        
-        // Table exists, check the column names and adapt to what's in the database
-        $checkColumnsQuery = "DESCRIBE local_package_fares";
-        $columnResult = $conn->query($checkColumnsQuery);
-        
-        if ($columnResult) {
-            $columns = [];
-            
-            while ($column = $columnResult->fetch_assoc()) {
-                $columns[] = $column['Field'];
-            }
-            
-            // Log all columns for debugging
-            logMessage("Current columns in local_package_fares: " . implode(", ", $columns), 'db_helper.log');
-            
-            // Add any missing columns if needed, but don't try to change existing ones
-            // Check for missing columns
-            if (!in_array('price_4hr_40km', $columns) && !in_array('price_4hrs_40km', $columns)) {
-                $conn->query("ALTER TABLE local_package_fares ADD `price_4hr_40km` decimal(10,2) NOT NULL DEFAULT 0.00");
-                logMessage("Added missing column price_4hr_40km", 'db_helper.log');
-            }
-            
-            if (!in_array('price_8hr_80km', $columns) && !in_array('price_8hrs_80km', $columns)) {
-                $conn->query("ALTER TABLE local_package_fares ADD `price_8hr_80km` decimal(10,2) NOT NULL DEFAULT 0.00");
-                logMessage("Added missing column price_8hr_80km", 'db_helper.log');
-            }
-            
-            if (!in_array('price_10hr_100km', $columns) && !in_array('price_10hrs_100km', $columns)) {
-                $conn->query("ALTER TABLE local_package_fares ADD `price_10hr_100km` decimal(10,2) NOT NULL DEFAULT 0.00");
-                logMessage("Added missing column price_10hr_100km", 'db_helper.log');
-            }
-            
-            if (!in_array('price_extra_km', $columns)) {
-                $conn->query("ALTER TABLE local_package_fares ADD `price_extra_km` decimal(5,2) NOT NULL DEFAULT 0.00");
-                logMessage("Added missing column price_extra_km", 'db_helper.log');
-            }
-            
-            if (!in_array('price_extra_hour', $columns)) {
-                $conn->query("ALTER TABLE local_package_fares ADD `price_extra_hour` decimal(5,2) NOT NULL DEFAULT 0.00");
-                logMessage("Added missing column price_extra_hour", 'db_helper.log');
-            }
-        }
-        
-        return true;
-    } catch (Exception $e) {
-        logMessage("Error in ensureLocalPackageFaresTable: " . $e->getMessage(), 'db_helper.log');
-        return false;
-    }
-}
-
-// Fix for missing functions
-if (!function_exists('getApiUrl')) {
-    function getApiUrl($path) {
-        $apiBaseUrl = defined('API_BASE_URL') ? API_BASE_URL : 'https://vizagup.com';
-        return $apiBaseUrl . $path;
     }
 }

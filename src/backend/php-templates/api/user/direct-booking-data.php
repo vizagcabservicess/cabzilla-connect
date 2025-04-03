@@ -32,12 +32,7 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
     // Try to connect to database
     $conn = null;
     try {
-        // Use retry connection for better reliability
-        require_once __DIR__ . '/../common/db_helper.php';
-        $conn = getDbConnectionWithRetry();
-        
-        // Ensure table has correct column names
-        ensureLocalPackageFaresTable($conn);
+        $conn = getDbConnection();
     } catch (Exception $e) {
         error_log("Database connection failed in direct-booking-data.php: " . $e->getMessage());
     }
@@ -49,13 +44,6 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
             $tableExists = ($tableCheckResult->num_rows > 0);
             
             if ($tableExists) {
-                // Check for columns to confirm structure
-                $columnsResult = $conn->query("SHOW COLUMNS FROM local_package_fares");
-                $columns = [];
-                while ($column = $columnsResult->fetch_assoc()) {
-                    $columns[] = $column['Field'];
-                }
-                
                 // Query for the vehicle's fare data
                 $query = "SELECT * FROM local_package_fares WHERE vehicle_id = ?";
                 $stmt = $conn->prepare($query);
@@ -71,13 +59,12 @@ if (isset($_GET['check_sync']) && isset($_GET['vehicle_id'])) {
                         'exists' => true,
                         'data' => [
                             'vehicleId' => $row['vehicle_id'],
-                            'price4hrs40km' => floatval($row['price_4hrs_40km'] ?? 0),
-                            'price8hrs80km' => floatval($row['price_8hrs_80km'] ?? 0),
-                            'price10hrs100km' => floatval($row['price_10hrs_100km'] ?? 0),
-                            'priceExtraKm' => floatval($row['price_extra_km'] ?? 0),
-                            'priceExtraHour' => floatval($row['price_extra_hour'] ?? 0),
+                            'price4hrs40km' => floatval($row['price_4hrs_40km']),
+                            'price8hrs80km' => floatval($row['price_8hrs_80km']),
+                            'price10hrs100km' => floatval($row['price_10hrs_100km']),
+                            'priceExtraKm' => floatval($row['price_extra_km']),
+                            'priceExtraHour' => floatval($row['price_extra_hour']),
                         ],
-                        'columns' => $columns,
                         'timestamp' => time()
                     ]);
                     exit;
@@ -230,9 +217,7 @@ try {
     // Try to connect to database (wrapped in try-catch to prevent failures)
     $conn = null;
     try {
-        // Use retry connection for better reliability
-        require_once __DIR__ . '/../common/db_helper.php';
-        $conn = getDbConnectionWithRetry();
+        $conn = getDbConnection();
     } catch (Exception $e) {
         error_log("Database connection failed in direct-booking-data.php: " . $e->getMessage());
     }

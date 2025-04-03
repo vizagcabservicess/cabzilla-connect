@@ -5,7 +5,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { fixDatabaseTables } from "@/utils/apiHelper";
 import { toast } from "sonner";
 import { clearVehicleDataCache } from "@/services/vehicleDataService";
-import { getApiUrl } from '@/config/api';
 
 interface FareUpdateErrorProps {
   error: Error;
@@ -30,33 +29,24 @@ export function FareUpdateError({
 }: FareUpdateErrorProps) {
   const errorMessage = message || error?.message || "Unknown error";
   
+  // Enhanced handler for database fixes with improved error handling
   const handleFixDatabase = async () => {
     try {
       toast.loading("Attempting to fix database tables...");
       
+      // First, clear any cached vehicle data
       clearVehicleDataCache();
-      
-      const syncResponse = await fetch(`${getApiUrl('/api/admin/sync-local-fares')}?_t=${Date.now()}`, {
-        method: 'GET',
-        headers: {
-          'X-Admin-Mode': 'true',
-          'X-Force-Refresh': 'true',
-          'X-Bypass-Cache': 'true',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-        }
-      });
-      
-      console.log('Sync response:', syncResponse.ok);
       
       const success = await fixDatabaseTables();
       if (success) {
         toast.success("Database tables fixed successfully");
+        // Trigger event to refresh data everywhere
         window.dispatchEvent(new CustomEvent('database-fixed', { 
           detail: { timestamp: Date.now() }
         }));
         
         if (onRetry) {
-          setTimeout(onRetry, 800);
+          setTimeout(onRetry, 800); // Give a bit more time for the event to be processed
         }
       } else {
         toast.error("Failed to fix database tables");
@@ -64,6 +54,7 @@ export function FareUpdateError({
     } catch (err: any) {
       console.error("Error fixing database tables:", err);
       
+      // More descriptive error message based on error type
       if (err.message && (err.message.includes('Access denied') || err.message.includes('connect'))) {
         toast.error(`Database connection error: ${err.message || 'Check credentials'}`);
       } else if (err.message && err.message.includes('JSON')) {
@@ -74,16 +65,7 @@ export function FareUpdateError({
     }
   };
 
-  // Additional error detection for column naming issues
-  const hasColumnNameIssue = 
-    errorMessage.includes('Unknown column') || 
-    errorMessage.includes('price_4hr_40km') || 
-    errorMessage.includes('price_4hrs_40km') ||
-    errorMessage.includes('price_8hr_80km') ||
-    errorMessage.includes('price_8hrs_80km') ||
-    errorMessage.includes('price_10hr_100km') ||
-    errorMessage.includes('price_10hrs_100km');
-
+  // Look for specific SQL errors in the message
   const hasSqlError = errorMessage.includes('MySQL') || 
     errorMessage.includes('SQL') || 
     errorMessage.includes('database') ||
@@ -94,10 +76,6 @@ export function FareUpdateError({
   const hasConnectionError = errorMessage.includes('connect') || 
     errorMessage.includes('Access denied') ||
     errorMessage.includes('localhost');
-    
-  const hasColumnNameError = errorMessage.includes('price_4hr_40km') || 
-    errorMessage.includes('Unknown column') ||
-    errorMessage.includes('price_4hrs_40km');
 
   return (
     <Alert variant="destructive" className="mb-4">
@@ -108,12 +86,6 @@ export function FareUpdateError({
         <div className="bg-red-50 p-3 rounded text-red-900 text-sm overflow-x-auto">
           {errorMessage}
         </div>
-        {(hasColumnNameError || hasColumnNameIssue) && (
-          <div className="bg-amber-50 p-3 rounded text-amber-900 text-sm">
-            <p className="font-semibold">Column Name Issue Detected</p>
-            <p>A database column naming mismatch was detected between the code and database. Try using the "Fix Database" button to correct it.</p>
-          </div>
-        )}
         <div className="flex flex-wrap gap-2 mt-2">
           {onRetry && (
             <Button size="sm" variant="outline" onClick={onRetry} className="flex items-center">
@@ -131,7 +103,6 @@ export function FareUpdateError({
             >
               <Database className="mr-2 h-4 w-4" />
               Fix Database {hasConnectionError ? "(Connection Error)" : ""}
-              {hasColumnNameError || hasColumnNameIssue ? " (Column Names)" : ""}
             </Button>
           )}
           
