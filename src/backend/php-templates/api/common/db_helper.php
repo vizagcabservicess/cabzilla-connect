@@ -26,7 +26,7 @@ function getDbConnectionWithRetry($maxRetries = 3) {
             $dbPass = 'Vizag@1213';
             
             // Log database connection attempt
-            logMessage("Attempting database connection (attempt $attempts) to $dbHost/$dbName as $dbUser", 'db_connection.log');
+            error_log("Attempting database connection (attempt $attempts) to $dbHost/$dbName as $dbUser", 3, dirname(__FILE__) . '/../../logs/db_connection.log');
             
             // IMPROVEMENT: Add connection timeout
             $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
@@ -48,13 +48,13 @@ function getDbConnectionWithRetry($maxRetries = 3) {
             $conn->query("SET SESSION interactive_timeout=300"); // 5 minutes
             
             // Log successful connection
-            logMessage("Database connection established successfully", 'db_connection.log');
+            error_log("Database connection established successfully", 3, dirname(__FILE__) . '/../../logs/db_connection.log');
             
             // Success - return the connection
             return $conn;
         } catch (Exception $e) {
             $lastError = $e;
-            logMessage("Connection attempt {$attempts} failed: " . $e->getMessage(), 'db_connection.log');
+            error_log("Connection attempt {$attempts} failed: " . $e->getMessage(), 3, dirname(__FILE__) . '/../../logs/db_connection.log');
             
             // Wait before retry with increasing delay
             if ($attempts < $maxRetries) {
@@ -64,7 +64,7 @@ function getDbConnectionWithRetry($maxRetries = 3) {
     }
     
     // All attempts failed
-    logMessage("Failed to connect to database after {$maxRetries} attempts: " . $lastError->getMessage(), 'db_connection.log');
+    error_log("Failed to connect to database after {$maxRetries} attempts: " . $lastError->getMessage(), 3, dirname(__FILE__) . '/../../logs/db_connection.log');
     throw new Exception("Failed to connect to database after $maxRetries attempts: " . $lastError->getMessage());
 }
 
@@ -142,5 +142,13 @@ function checkDatabaseConnection() {
             'connection' => false,
             'timestamp' => time()
         ];
+    }
+}
+
+// Fix for missing functions
+if (!function_exists('getApiUrl')) {
+    function getApiUrl($path) {
+        $apiBaseUrl = defined('API_BASE_URL') ? API_BASE_URL : 'https://vizagup.com';
+        return $apiBaseUrl . $path;
     }
 }

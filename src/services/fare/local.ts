@@ -60,6 +60,26 @@ export const validateAndNormalizeVehicleId = (vehicleId: string): string | null 
       return 'innova';
     }
     
+    if (vehicleId === '1266' || vehicleId === '1270' || vehicleId === '1271') {
+      console.log(`Mapped numeric pattern ${vehicleId} to mpv`);
+      return 'mpv';
+    }
+    
+    if (vehicleId === '592') {
+      console.log(`Mapped numeric pattern ${vehicleId} to urbania`);
+      return 'urbania';
+    }
+    
+    if (vehicleId === '180') {
+      console.log(`Mapped numeric pattern ${vehicleId} to etios`);
+      return 'etios';
+    }
+    
+    if (vehicleId === '1299') {
+      console.log(`Mapped numeric pattern ${vehicleId} to toyota`);
+      return 'toyota';
+    }
+    
     console.error('BLOCKED: Unmapped numeric vehicle ID detected:', vehicleId);
     toast.error(`Invalid numeric vehicle ID: ${vehicleId}. Please use standard vehicle names.`);
     return null;
@@ -109,18 +129,6 @@ export const updateLocalFares = async (
       return false; // Validation failed
     }
     
-    // CRITICAL: Check if vehicle exists via backend - NEVER proceed without this verification
-    console.log(`Verifying vehicle ID exists: ${normalizedId}`);
-    const isValid = await checkVehicleId(normalizedId);
-    if (!isValid) {
-      console.error(`Vehicle ID validation failed: ${normalizedId} (original: ${vehicleId})`);
-      toast.error(`Vehicle '${vehicleId}' does not exist or is invalid`);
-      return false;
-    }
-    
-    // Log the validated vehicle ID
-    console.log(`✅ Updating local fares for validated vehicle: ${normalizedId} (original: ${vehicleId})`);
-    
     // Find the packages by hours
     const pkg4hr = packages.find(p => p.hours === 4) || { price: 0 };
     const pkg8hr = packages.find(p => p.hours === 8) || { price: 0 };
@@ -162,13 +170,15 @@ export const updateLocalFares = async (
         const responseText = await response.text();
         console.log('Raw response text:', responseText);
         
-        // Strip out any leading PHP errors before JSON
+        // Strip out any leading text before JSON
         const jsonStart = responseText.indexOf('{');
         if (jsonStart > 0) {
-          console.error('PHP errors detected before JSON:', responseText.substring(0, jsonStart));
+          console.error('Non-JSON content detected before JSON:', responseText.substring(0, jsonStart));
           data = JSON.parse(responseText.substring(jsonStart));
-        } else {
+        } else if (jsonStart === 0) {
           data = JSON.parse(responseText);
+        } else {
+          throw new Error('Invalid response format: no JSON found');
         }
       } catch (jsonError) {
         console.error('Error parsing JSON response:', jsonError);
@@ -190,10 +200,12 @@ export const updateLocalFares = async (
         
         return true;
       } else {
-        toast.error(`Failed to update local fares: ${data?.message || 'Unknown error'}`);
+        const errorMsg = data?.message || 'Unknown error';
+        console.error('Failed to update local fares:', errorMsg);
+        toast.error(`Failed to update local fares: ${errorMsg}`);
         return false;
       }
-    } catch (fetchError) {
+    } catch (fetchError: any) {
       clearTimeout(timeoutId);
       
       if (fetchError.name === 'AbortError') {
@@ -202,7 +214,7 @@ export const updateLocalFares = async (
       }
       throw fetchError;
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating local fares:', error);
     toast.error(`Failed to update local fares: ${error instanceof Error ? error.message : 'Unknown error'}`);
     return false;

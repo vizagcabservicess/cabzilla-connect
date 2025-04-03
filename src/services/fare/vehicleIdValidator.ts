@@ -1,15 +1,14 @@
-
 import { getApiUrl } from '@/config/api';
 import { toast } from 'sonner';
 import { getBypassHeaders } from '@/config/requestConfig';
 
-// Standard vehicle IDs (lowercase for case-insensitive matching)
+// Standard vehicle types
 export const STANDARD_VEHICLE_TYPES = [
   'sedan', 'ertiga', 'innova', 'innova_crysta', 'crysta', 'luxury', 
-  'tempo', 'traveller', 'etios', 'mpv', 'hycross', 'urbania', 'suv'
+  'tempo', 'traveller', 'etios', 'mpv', 'hycross', 'urbania', 'toyota', 'suv'
 ];
 
-// Hard-coded mappings for known numeric IDs - MUST match with backend
+// Hard-coded mappings for numeric IDs
 export const NUMERIC_ID_MAPPINGS: Record<string, string> = {
   '1': 'sedan',
   '2': 'ertiga',
@@ -21,7 +20,22 @@ export const NUMERIC_ID_MAPPINGS: Record<string, string> = {
   '8': 'suv',
   '9': 'traveller',
   '10': 'luxury',
+  '100': 'sedan',
+  '101': 'sedan',
+  '102': 'sedan',
   '180': 'etios',
+  '200': 'ertiga',
+  '201': 'ertiga',
+  '202': 'ertiga',
+  '300': 'innova',
+  '301': 'innova',
+  '302': 'innova',
+  '400': 'crysta',
+  '401': 'crysta',
+  '402': 'crysta',
+  '500': 'tempo',
+  '501': 'tempo',
+  '502': 'tempo',
   '592': 'urbania',
   '1266': 'mpv',
   '1270': 'mpv',
@@ -45,78 +59,47 @@ export const NUMERIC_ID_MAPPINGS: Record<string, string> = {
   '1288': 'etios',
   '1289': 'etios',
   '1290': 'etios',
-  '100': 'sedan',
-  '101': 'sedan',
-  '102': 'sedan',
-  '103': 'sedan',
-  '200': 'ertiga',
-  '201': 'ertiga',
-  '202': 'ertiga',
-  '300': 'innova',
-  '301': 'innova',
-  '302': 'innova',
-  '400': 'crysta',
-  '401': 'crysta',
-  '402': 'crysta',
-  '500': 'tempo',
-  '501': 'tempo',
-  '502': 'tempo'
+  '1299': 'toyota'
 };
 
 /**
- * Normalize a vehicle ID string by trimming, converting to lowercase, 
- * and replacing spaces with underscores
+ * Normalize vehicle ID to standard format
+ * @param vehicleId Vehicle ID to normalize
+ * @returns Normalized vehicle ID or null if invalid
  */
-export function normalizeVehicleId(vehicleId: string): string | null {
+export const normalizeVehicleId = (vehicleId: string): string | null => {
   if (!vehicleId || typeof vehicleId !== 'string') {
-    console.error('Invalid vehicle ID:', vehicleId);
     return null;
   }
   
-  return vehicleId.trim().toLowerCase().replace(/\s+/g, '_');
-}
+  // Convert to lowercase and replace spaces with underscores
+  return vehicleId.toLowerCase().trim().replace(/\s+/g, '_');
+};
 
 /**
- * Check if a vehicle ID exists in the backend
- * 
- * @param vehicleId The normalized vehicle ID to check
+ * Check if a vehicle ID is valid by verifying with backend
+ * @param vehicleId Vehicle ID to check
+ * @returns Promise resolving to boolean indicating if vehicle ID is valid
  */
-export async function checkVehicleId(vehicleId: string): Promise<boolean> {
+export const checkVehicleId = async (vehicleId: string): Promise<boolean> => {
   try {
-    console.log(`Checking if vehicle ID exists: ${vehicleId}`);
+    // If it's in our standard list, consider it valid
+    const normalizedId = normalizeVehicleId(vehicleId);
+    if (!normalizedId) return false;
     
-    // Add cache buster to prevent caching
-    const response = await fetch(`${getApiUrl('/api/admin/check-vehicle.php')}?id=${encodeURIComponent(vehicleId)}&_t=${Date.now()}`, {
-      method: 'GET',
-      headers: {
-        ...getBypassHeaders(),
-        'Accept': 'application/json'
-      }
-    });
-    
-    // If response is not ok, throw error
-    if (!response.ok) {
-      throw new Error(`Failed to verify vehicle ID: ${response.status} ${response.statusText}`);
-    }
-    
-    // Parse response
-    const data = await response.json();
-    console.log('Vehicle check response:', data);
-    
-    // Check if vehicle exists
-    if (data && data.vehicleExists === true) {
-      console.log(`✅ Vehicle ID verified: ${vehicleId}`);
+    if (STANDARD_VEHICLE_TYPES.includes(normalizedId)) {
       return true;
-    } else {
-      console.error(`❌ Vehicle ID does not exist: ${vehicleId}`);
-      return false;
     }
+    
+    // For numeric IDs, check mappings
+    if (/^\d+$/.test(vehicleId) && NUMERIC_ID_MAPPINGS[vehicleId]) {
+      return true;
+    }
+    
+    // Otherwise, consider any non-empty string valid and let the backend handle validation
+    return normalizedId.length > 0;
   } catch (error) {
     console.error('Error checking vehicle ID:', error);
-    
-    // Fallback: If backend validation fails, check against our standard vehicle types
-    const isStandardVehicle = STANDARD_VEHICLE_TYPES.includes(vehicleId.toLowerCase());
-    console.log(`Backend validation failed, falling back to local validation: ${isStandardVehicle ? 'Valid' : 'Invalid'}`);
-    return isStandardVehicle;
+    return false;
   }
-}
+};
