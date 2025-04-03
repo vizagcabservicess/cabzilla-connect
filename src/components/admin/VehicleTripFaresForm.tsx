@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -301,7 +302,7 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
           return;
         }
         
-        await updateOutstationFares(
+        const success = await updateOutstationFares(
           selectedVehicle,
           basePrice,
           pricePerKm,
@@ -311,7 +312,9 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
           nightHaltCharge
         );
         
-        toast.success(`Updated outstation fares for ${selectedVehicle}`);
+        if (success) {
+          toast.success(`Updated outstation fares for ${selectedVehicle}`);
+        }
       } else if (tripType === 'local') {
         if (extraKmRate <= 0 || package4hr40km <= 0 || package8hr80km <= 0) {
           toast.error('Package prices and extra km rate must be greater than zero');
@@ -325,14 +328,16 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
           { hours: 12, km: 120, price: package12hr120km }
         ];
         
-        await updateLocalFares(
+        const success = await updateLocalFares(
           selectedVehicle,
           extraKmRate,
           extraHourRate,
           packages
         );
         
-        toast.success(`Updated local fares for ${selectedVehicle}`);
+        if (success) {
+          toast.success(`Updated local fares for ${selectedVehicle}`);
+        }
       } else if (tripType === 'airport') {
         if (pickupPrice <= 0 || dropPrice <= 0) {
           toast.error('Pickup and drop prices must be greater than zero');
@@ -349,12 +354,14 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
           tier4: tier4Price
         };
         
-        await updateAirportFares(
+        const success = await updateAirportFares(
           selectedVehicle,
           locationFares
         );
         
-        toast.success(`Updated airport fares for ${selectedVehicle}`);
+        if (success) {
+          toast.success(`Updated airport fares for ${selectedVehicle}`);
+        }
       }
       
       setSelectedVehicle('');

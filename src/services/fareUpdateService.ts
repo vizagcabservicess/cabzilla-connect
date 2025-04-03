@@ -81,20 +81,95 @@ const checkVehicleId = async (vehicleId: string): Promise<boolean> => {
 };
 
 /**
+ * Get all outstation fares from the backend
+ */
+export const getAllOutstationFares = async (): Promise<Record<string, any>> => {
+  try {
+    const response = await fetch(`${getApiUrl('/api/outstation-fares')}?_t=${Date.now()}`, {
+      method: 'GET',
+      headers: {
+        ...getBypassHeaders()
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch outstation fares: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return data.fares || {};
+  } catch (error) {
+    console.error('Error fetching outstation fares:', error);
+    toast.error('Failed to load outstation fares');
+    return {};
+  }
+};
+
+/**
+ * Get all local fares from the backend
+ */
+export const getAllLocalFares = async (): Promise<Record<string, any>> => {
+  try {
+    const response = await fetch(`${getApiUrl('/api/local-fares')}?_t=${Date.now()}`, {
+      method: 'GET',
+      headers: {
+        ...getBypassHeaders()
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch local fares: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return data.fares || {};
+  } catch (error) {
+    console.error('Error fetching local fares:', error);
+    toast.error('Failed to load local fares');
+    return {};
+  }
+};
+
+/**
+ * Get all airport fares from the backend
+ */
+export const getAllAirportFares = async (): Promise<Record<string, any>> => {
+  try {
+    const response = await fetch(`${getApiUrl('/api/airport-fares')}?_t=${Date.now()}`, {
+      method: 'GET',
+      headers: {
+        ...getBypassHeaders()
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch airport fares: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return data.fares || {};
+  } catch (error) {
+    console.error('Error fetching airport fares:', error);
+    toast.error('Failed to load airport fares');
+    return {};
+  }
+};
+
+/**
  * Update outstation fares for a vehicle
  */
-export const updateOutstationFares = async (params: {
-  vehicleId: string;
-  basePrice: number;
-  pricePerKm: number;
-  roundtripBasePrice?: number;
-  roundtripPricePerKm?: number;
-  driverAllowance?: number;
-  nightHaltCharge?: number;
-}): Promise<boolean> => {
+export const updateOutstationFares = async (
+  vehicleId: string,
+  basePrice: number,
+  pricePerKm: number,
+  roundTripBasePrice?: number,
+  roundTripPricePerKm?: number,
+  driverAllowance?: number,
+  nightHaltCharge?: number
+): Promise<boolean> => {
   try {
     // Validate vehicle ID first
-    const normalizedId = normalizeVehicleId(params.vehicleId);
+    const normalizedId = normalizeVehicleId(vehicleId);
     if (!normalizedId) {
       toast.error('Invalid vehicle ID');
       return false;
@@ -102,14 +177,19 @@ export const updateOutstationFares = async (params: {
     
     const isValid = await checkVehicleId(normalizedId);
     if (!isValid) {
-      toast.error(`Invalid vehicle: ${params.vehicleId}`);
+      toast.error(`Invalid vehicle: ${vehicleId}`);
       return false;
     }
     
     // Prepare request with normalized ID
     const requestData = {
-      ...params,
-      vehicleId: normalizedId
+      vehicleId: normalizedId,
+      basePrice,
+      pricePerKm,
+      roundtripBasePrice: roundTripBasePrice,
+      roundtripPricePerKm: roundTripPricePerKm,
+      driverAllowance,
+      nightHaltCharge
     };
     
     // Send request to update fares
@@ -155,17 +235,15 @@ export const updateOutstationFares = async (params: {
 /**
  * Update local fares for a vehicle
  */
-export const updateLocalFares = async (params: {
-  vehicleId: string;
-  price_4hrs_40km: number;
-  price_8hrs_80km: number;
-  price_10hrs_100km: number;
-  price_extra_km: number;
-  price_extra_hour: number;
-}): Promise<boolean> => {
+export const updateLocalFares = async (
+  vehicleId: string,
+  extraKmRate: number,
+  extraHourRate: number,
+  packages: Array<{ hours: number, km: number, price: number }>
+): Promise<boolean> => {
   try {
     // CRITICAL FIX: Validate the vehicle ID first
-    const normalizedId = normalizeVehicleId(params.vehicleId);
+    const normalizedId = normalizeVehicleId(vehicleId);
     if (!normalizedId) {
       toast.error('Invalid vehicle ID');
       return false;
@@ -174,17 +252,26 @@ export const updateLocalFares = async (params: {
     // Check if vehicle exists via backend
     const isValid = await checkVehicleId(normalizedId);
     if (!isValid) {
-      toast.error(`Invalid vehicle: ${params.vehicleId}`);
+      toast.error(`Invalid vehicle: ${vehicleId}`);
       return false;
     }
     
     // Log the validated vehicle ID
-    console.log(`Updating local fares for validated vehicle: ${normalizedId} (original: ${params.vehicleId})`);
+    console.log(`Updating local fares for validated vehicle: ${normalizedId} (original: ${vehicleId})`);
     
-    // Prepare request with normalized ID
+    // Find the packages by hours
+    const pkg4hr = packages.find(p => p.hours === 4) || { price: 0 };
+    const pkg8hr = packages.find(p => p.hours === 8) || { price: 0 };
+    const pkg12hr = packages.find(p => p.hours === 12 || p.hours === 10) || { price: 0 };
+    
+    // Prepare request with normalized ID and package prices
     const requestData = {
-      ...params,
-      vehicleId: normalizedId
+      vehicleId: normalizedId,
+      price_extra_km: extraKmRate,
+      price_extra_hour: extraHourRate,
+      price_4hrs_40km: pkg4hr.price,
+      price_8hrs_80km: pkg8hr.price,
+      price_10hrs_100km: pkg12hr.price
     };
     
     // Send request to update local fares
@@ -230,21 +317,20 @@ export const updateLocalFares = async (params: {
 /**
  * Update airport fares for a vehicle
  */
-export const updateAirportFares = async (params: {
-  vehicleId: string;
-  basePrice?: number;
-  dropPrice?: number;
-  pickupPrice?: number;
-  pricePerKm?: number;
-  extraKmCharge?: number;
-  tier1Price?: number;
-  tier2Price?: number;
-  tier3Price?: number;
-  tier4Price?: number;
-}): Promise<boolean> => {
+export const updateAirportFares = async (
+  vehicleId: string,
+  locationFares: {
+    pickup?: number;
+    drop?: number;
+    tier1?: number;
+    tier2?: number;
+    tier3?: number;
+    tier4?: number;
+  }
+): Promise<boolean> => {
   try {
     // Validate vehicle ID first
-    const normalizedId = normalizeVehicleId(params.vehicleId);
+    const normalizedId = normalizeVehicleId(vehicleId);
     if (!normalizedId) {
       toast.error('Invalid vehicle ID');
       return false;
@@ -252,14 +338,19 @@ export const updateAirportFares = async (params: {
     
     const isValid = await checkVehicleId(normalizedId);
     if (!isValid) {
-      toast.error(`Invalid vehicle: ${params.vehicleId}`);
+      toast.error(`Invalid vehicle: ${vehicleId}`);
       return false;
     }
     
     // Prepare request with normalized ID
     const requestData = {
-      ...params,
-      vehicleId: normalizedId
+      vehicleId: normalizedId,
+      pickupPrice: locationFares.pickup,
+      dropPrice: locationFares.drop,
+      tier1Price: locationFares.tier1,
+      tier2Price: locationFares.tier2,
+      tier3Price: locationFares.tier3,
+      tier4Price: locationFares.tier4
     };
     
     // Send request to update airport fares
