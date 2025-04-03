@@ -4,8 +4,8 @@ require_once '../config.php';
 
 // Set headers for CORS
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode, Origin');
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
@@ -16,6 +16,10 @@ header('X-Debug-File: local-fares.php');
 header('X-API-Version: 1.0.3');
 header('X-Timestamp: ' . time());
 
+// Clear any existing output buffer to prevent corrupt JSON
+ob_clean();
+ob_start();
+
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -23,7 +27,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 try {
-    $conn = getDbConnection();
+    // Include the database helper to ensure the function is available
+    require_once __DIR__ . '/common/db_helper.php';
+    
+    $conn = getDbConnectionWithRetry();
     
     // Check if the connection was successful
     if (!$conn) {
@@ -37,6 +44,9 @@ try {
     error_log("Local fares request: " . json_encode([
         'vehicle_id' => $vehicleId
     ]));
+    
+    // Ensure the local_package_fares table has the correct columns
+    ensureLocalPackageFaresTable($conn);
     
     // First check if local_package_fares table exists
     $localFaresTableExists = $conn->query("SHOW TABLES LIKE 'local_package_fares'")->num_rows > 0;
@@ -66,7 +76,7 @@ try {
     if (!$vehiclePricingTableExists) {
         $createVehiclePricingTable = "CREATE TABLE IF NOT EXISTS `vehicle_pricing` (
             `id` INT NOT NULL AUTO_INCREMENT,
-            `vehicle_type` VARCHAR(50) NOT NULL,
+            `vehicle_id` VARCHAR(50) NOT NULL,
             `trip_type` VARCHAR(20) NOT NULL,
             `local_package_4hr` DECIMAL(10,2) NOT NULL DEFAULT 0,
             `local_package_8hr` DECIMAL(10,2) NOT NULL DEFAULT 0,
@@ -78,7 +88,7 @@ try {
             `night_halt_charge` DECIMAL(10,2) NOT NULL DEFAULT 0,
             `driver_allowance` DECIMAL(10,2) NOT NULL DEFAULT 0,
             PRIMARY KEY (`id`),
-            UNIQUE KEY `vehicle_trip` (`vehicle_type`, `trip_type`)
+            UNIQUE KEY `vehicle_trip` (`vehicle_id`, `trip_type`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
         
         $conn->query($createVehiclePricingTable);
@@ -91,6 +101,30 @@ try {
     
     // Try to fetch from local_package_fares first (preferred source)
     if ($localFaresTableExists) {
+        $columnsResult = $conn->query("SHOW COLUMNS FROM local_package_fares");
+        $columns = [];
+        while ($column = $columnsResult->fetch_assoc()) {
+            $columns[] = $column['Field'];
+        }
+        
+        error_log("Available columns in local_package_fares: " . implode(", ", $columns));
+        
+        // Check if we need to fix old column names
+        $hasOldColumnNames = in_array('price_4hr_40km', $columns);
+        if ($hasOldColumnNames) {
+            error_log("Found old column names, fixing...");
+            try {
+                // Try to fix column names
+                $conn->query("ALTER TABLE local_package_fares CHANGE `price_4hr_40km` `price_4hrs_40km` DECIMAL(10,2) NOT NULL DEFAULT 0");
+                $conn->query("ALTER TABLE local_package_fares CHANGE `price_8hr_80km` `price_8hrs_80km` DECIMAL(10,2) NOT NULL DEFAULT 0");
+                $conn->query("ALTER TABLE local_package_fares CHANGE `price_10hr_100km` `price_10hrs_100km` DECIMAL(10,2) NOT NULL DEFAULT 0");
+                
+                error_log("Fixed local_package_fares column names");
+            } catch (Exception $e) {
+                error_log("Error fixing columns: " . $e->getMessage());
+            }
+        }
+        
         $query = "
             SELECT 
                 vehicle_id,
@@ -161,7 +195,7 @@ try {
     if (empty($fares) && $vehiclePricingTableExists) {
         $query = "
             SELECT 
-                vehicle_type as vehicle_id,
+                vehicle_id as vehicle_id,
                 local_package_4hr,
                 local_package_8hr,
                 local_package_10hr,
@@ -175,7 +209,7 @@ try {
         
         // If vehicle_id parameter is provided, filter by it
         if ($vehicleId) {
-            $query .= " AND vehicle_type = '$vehicleId'";
+            $query .= " AND vehicle_id = '$vehicleId'";
         }
         
         error_log("Using vehicle_pricing table with query: $query");
@@ -230,7 +264,7 @@ try {
     error_log("Total fares found: " . count($fares));
     
     // Return response
-    echo json_encode([
+    $response = [
         'fares' => $fares,
         'timestamp' => time(),
         'sourceTable' => $sourceTable,
@@ -240,11 +274,17 @@ try {
             'local_package_fares' => $localFaresTableExists,
             'vehicle_pricing' => $vehiclePricingTableExists
         ]
-    ]);
+    ];
+    
+    // Send the JSON response and clear any buffer
+    ob_end_clean();
+    echo json_encode($response);
     
 } catch (Exception $e) {
     error_log("Error in local-fares.php: " . $e->getMessage());
     http_response_code(500);
+    
+    ob_end_clean();
     echo json_encode([
         'error' => $e->getMessage(),
         'timestamp' => time()

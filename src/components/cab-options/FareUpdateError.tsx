@@ -37,6 +37,20 @@ export function FareUpdateError({
       // First, clear any cached vehicle data
       clearVehicleDataCache();
       
+      // Attempt to sync local fares tables first
+      const syncResponse = await fetch(`${getApiUrl('/api/admin/sync-local-fares')}?_t=${Date.now()}`, {
+        method: 'GET',
+        headers: {
+          'X-Admin-Mode': 'true',
+          'X-Force-Refresh': 'true',
+          'X-Bypass-Cache': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+        }
+      });
+      
+      console.log('Sync response:', syncResponse.ok);
+      
+      // Then attempt general database fixes
       const success = await fixDatabaseTables();
       if (success) {
         toast.success("Database tables fixed successfully");
@@ -76,6 +90,9 @@ export function FareUpdateError({
   const hasConnectionError = errorMessage.includes('connect') || 
     errorMessage.includes('Access denied') ||
     errorMessage.includes('localhost');
+    
+  const hasColumnNameError = errorMessage.includes('price_4hr_40km') || 
+    errorMessage.includes('Unknown column');
 
   return (
     <Alert variant="destructive" className="mb-4">
@@ -86,6 +103,12 @@ export function FareUpdateError({
         <div className="bg-red-50 p-3 rounded text-red-900 text-sm overflow-x-auto">
           {errorMessage}
         </div>
+        {hasColumnNameError && (
+          <div className="bg-amber-50 p-3 rounded text-amber-900 text-sm">
+            <p className="font-semibold">Column Name Issue Detected</p>
+            <p>A database column naming mismatch was detected. Try using the "Fix Database" button to correct it.</p>
+          </div>
+        )}
         <div className="flex flex-wrap gap-2 mt-2">
           {onRetry && (
             <Button size="sm" variant="outline" onClick={onRetry} className="flex items-center">
@@ -103,6 +126,7 @@ export function FareUpdateError({
             >
               <Database className="mr-2 h-4 w-4" />
               Fix Database {hasConnectionError ? "(Connection Error)" : ""}
+              {hasColumnNameError ? " (Column Names)" : ""}
             </Button>
           )}
           

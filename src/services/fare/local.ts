@@ -209,20 +209,18 @@ export const updateLocalFares = async (
         
         // Also try the admin endpoint as a backup to ensure data consistency
         try {
-          const adminEndpoint = `${getApiUrl('/api/admin/direct-local-fares')}?_t=${Date.now()}`;
+          const adminEndpoint = `${getApiUrl('/api/admin/sync-local-fares')}?_t=${Date.now()}`;
           const adminResponse = await fetch(adminEndpoint, {
-            method: 'POST',
+            method: 'GET',
             headers: {
-              ...getBypassHeaders(),
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(requestData)
+              ...getBypassHeaders()
+            }
           });
           
-          console.log('Admin endpoint update result:', adminResponse.ok);
+          console.log('Admin sync triggered:', adminResponse.ok);
         } catch (adminError) {
           // Silently ignore admin endpoint errors as it's just a backup
-          console.log('Admin endpoint update failed, but main update succeeded');
+          console.log('Admin sync failed, but main update succeeded');
         }
         
         return true;
