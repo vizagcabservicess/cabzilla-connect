@@ -31,6 +31,29 @@ function logMessage($message) {
     file_put_contents($logFile, "[$timestamp] $message\n", FILE_APPEND);
 }
 
+// Prevent multiple executions within a short time window (anti-loop protection)
+$lockFile = $logDir . '/sync_airport_fares.lock';
+$now = time();
+
+if (file_exists($lockFile)) {
+    $lastRun = (int)file_get_contents($lockFile);
+    if ($now - $lastRun < 30) { // 30-second cooldown
+        logMessage('Sync operation throttled - last run was less than 30 seconds ago');
+        
+        echo json_encode([
+            'status' => 'throttled',
+            'message' => 'Airport fares sync was recently performed. Please wait at least 30 seconds between syncs.',
+            'lastSync' => $lastRun,
+            'nextAvailable' => $lastRun + 30,
+            'currentTime' => $now
+        ]);
+        exit;
+    }
+}
+
+// Update lock file with current timestamp
+file_put_contents($lockFile, $now);
+
 // In this mock version, we'll simulate a successful synchronization
 // In a real implementation, this would connect to the database and perform the sync
 
@@ -56,5 +79,5 @@ echo json_encode([
     'message' => 'Airport fares synced successfully',
     'synced' => $syncedCount,
     'vehicles' => $vehicles,
-    'timestamp' => time()
+    'timestamp' => $now
 ]);

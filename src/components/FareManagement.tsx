@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -48,20 +47,27 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
   const mountedRef = useRef<boolean>(true);
   const fetchAttempts = useRef<number>(0);
   const maxFetchAttempts = 3;
+  const lastRefreshTimeRef = useRef<number>(0);
+  const lastSaveTimeRef = useRef<number>(0);
+  const refreshCooldownMs = 5000; // 5 seconds between refreshes
+  const saveCooldownMs = 2000; // 2 seconds between saves
   
   // Load fare data based on fare type
   const loadFareData = async () => {
+    // Strict throttling for API requests
+    const now = Date.now();
+    if (now - lastRefreshTimeRef.current < refreshCooldownMs) {
+      console.log(`Refresh throttled, last refresh was ${(now - lastRefreshTimeRef.current)/1000}s ago`);
+      return;
+    }
+    
+    // Prevent concurrent requests
     if (requestInProgress.current) {
       console.log('Request already in progress, skipping...');
       return;
     }
     
-    const now = Date.now();
-    if (now - lastFetchTime.current < 5000 && fetchAttempts.current > 0) {
-      console.log('Throttling fare data fetch request');
-      return;
-    }
-    
+    // Prevent excessive attempts
     if (fetchAttempts.current >= maxFetchAttempts) {
       console.log('Max fetch attempts reached, not trying again');
       return;
@@ -72,6 +78,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       return;
     }
     
+    lastRefreshTimeRef.current = now;
     lastFetchTime.current = now;
     requestInProgress.current = true;
     fetchAttempts.current += 1;
@@ -95,14 +102,23 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       if (result && result.status === 'success' && result.fares && result.fares.length > 0) {
         const loadedFare = result.fares[0];
         console.log(`Loaded ${fareType} fare data:`, loadedFare);
+        
+        // Ensure we always have the vehicle ID set correctly
         setFareData({
           ...loadedFare,
-          vehicleId: vehicleId
+          vehicleId: vehicleId,
+          vehicle_id: vehicleId
         });
+        
         setError(null);
       } else {
         console.warn('No fare data returned:', result);
-        setFareData({ vehicleId });
+        
+        // Initialize with default structure but keep vehicleId
+        setFareData({ 
+          vehicleId,
+          vehicle_id: vehicleId 
+        });
         
         if (result && result.status === 'error') {
           setError(result.message || 'Failed to load fare data');
@@ -113,7 +129,10 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       setError(`Failed to load fare data. ${err instanceof Error ? err.message : ''}`);
       
       // Set default empty fare data
-      setFareData({ vehicleId });
+      setFareData({ 
+        vehicleId,
+        vehicle_id: vehicleId 
+      });
     } finally {
       if (mountedRef.current) {
         setIsLoading(false);
@@ -122,10 +141,17 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     }
   };
   
-  // Save fare data
+  // Save fare data with throttling
   const saveFareData = async () => {
+    const now = Date.now();
+    if (now - lastSaveTimeRef.current < saveCooldownMs) {
+      toast.info("Please wait a moment before saving again");
+      return;
+    }
+    
     if (!vehicleId || isSaving) return;
     
+    lastSaveTimeRef.current = now;
     setIsSaving(true);
     setError(null);
     
@@ -151,12 +177,11 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       if (result && result.status === 'success') {
         toast.success(`${fareType.charAt(0).toUpperCase() + fareType.slice(1)} fares updated successfully`);
         
-        // Reload fare data after a short delay
-        setTimeout(() => {
-          if (mountedRef.current) {
-            loadFareData();
-          }
-        }, 1000);
+        // Update lastFetchTime to prevent immediate reload after save
+        lastFetchTime.current = Date.now();
+        
+        // Reset fetch attempts counter after successful save
+        fetchAttempts.current = 0;
       } else {
         console.error('Error saving fare data:', result);
         toast.error('Failed to update fares');
@@ -173,10 +198,17 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     }
   };
   
-  // Sync fares from pricing tables
+  // Sync fares from pricing tables with strict throttling
   const syncFares = async () => {
+    const now = Date.now();
+    if (now - lastRefreshTimeRef.current < refreshCooldownMs) {
+      toast.info("Please wait a moment before syncing again");
+      return;
+    }
+    
     if (isSyncingFares) return;
     
+    lastRefreshTimeRef.current = now;
     setIsSyncingFares(true);
     setError(null);
     
@@ -193,15 +225,22 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       
       const result = await directVehicleOperation(endpoint, 'GET');
       
-      if (result && result.status === 'success') {
-        toast.success(`${fareType.charAt(0).toUpperCase() + fareType.slice(1)} fares synced successfully`);
-        
-        // Reload fare data after sync
-        setTimeout(() => {
-          if (mountedRef.current) {
-            loadFareData();
-          }
-        }, 1000);
+      if (result && (result.status === 'success' || result.status === 'throttled')) {
+        if (result.status === 'throttled') {
+          toast.info(result.message || "Sync operation throttled. Please try again in a few moments.");
+        } else {
+          toast.success(`${fareType.charAt(0).toUpperCase() + fareType.slice(1)} fares synced successfully`);
+          
+          // Reset the fetch attempts counter after successful sync
+          fetchAttempts.current = 0;
+          
+          // Wait a moment before reloading data to allow database to update
+          setTimeout(() => {
+            if (mountedRef.current) {
+              loadFareData();
+            }
+          }, 1500);
+        }
       } else {
         console.error('Error syncing fares:', result);
         toast.error('Failed to sync fares');
@@ -414,7 +453,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
                 variant="outline"
                 size="sm"
                 onClick={syncFares}
-                disabled={isSyncingFares || !vehicleId}
+                disabled={isSyncingFares || !vehicleId || (Date.now() - lastRefreshTimeRef.current < refreshCooldownMs)}
               >
                 <RefreshCw className={`h-4 w-4 mr-2 ${isSyncingFares ? 'animate-spin' : ''}`} />
                 Sync Fares
@@ -436,7 +475,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
         <div className="flex justify-end w-full">
           <Button
             onClick={saveFareData}
-            disabled={isSaving || isLoading || !vehicleId}
+            disabled={isSaving || isLoading || !vehicleId || (Date.now() - lastSaveTimeRef.current < saveCooldownMs)}
             className="mr-2"
           >
             {isSaving ? <Spinner size="sm" className="mr-2" /> : <Save className="h-4 w-4 mr-2" />}
@@ -445,7 +484,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
           <Button
             variant="outline"
             onClick={loadFareData}
-            disabled={isLoading || !vehicleId}
+            disabled={isLoading || !vehicleId || (Date.now() - lastRefreshTimeRef.current < refreshCooldownMs)}
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
             Refresh
