@@ -1,228 +1,338 @@
 
 import React, { useEffect, useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { FareData, fetchLocalFares, fetchAirportFares, updateLocalFares, updateAirportFares } from '@/services/fareManagementService';
+import { getApiUrl } from '@/config/api';
+import { formatDataForMultipart } from '@/utils/apiHelper';
 
 interface FareManagementProps {
   vehicleId: string;
   fareType: 'local' | 'airport';
 }
 
+interface LocalFare {
+  vehicleId: string;
+  price4hrs40km: number;
+  price8hrs80km: number;
+  price10hrs100km: number;
+  priceExtraKm: number;
+  priceExtraHour: number;
+}
+
+interface AirportFare {
+  vehicleId: string;
+  priceOneWay: number;
+  priceRoundTrip: number;
+  nightCharges: number;
+  extraWaitingCharges: number;
+}
+
+type Fare = LocalFare | AirportFare;
+
 export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareType }) => {
-  const [fareData, setFareData] = useState<FareData>({
-    vehicleId: vehicleId,
-    basePrice: 0,
-    pricePerKm: 0,
-  });
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [fare, setFare] = useState<Fare | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const loadFares = async () => {
+    const loadFareData = async () => {
       try {
         setIsLoading(true);
-        const fetchFn = fareType === 'local' ? fetchLocalFares : fetchAirportFares;
-        const fares = await fetchFn(vehicleId);
-        if (fares.length > 0) {
-          setFareData({ ...fares[0], vehicleId });
+        setError(null);
+
+        const endpoint = fareType === 'local' 
+          ? `api/admin/direct-local-fares.php?vehicle_id=${vehicleId}&_t=${Date.now()}` 
+          : `api/admin/direct-airport-fares.php?vehicle_id=${vehicleId}&_t=${Date.now()}`;
+        
+        const response = await fetch(getApiUrl(endpoint), {
+          method: 'GET',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'X-Force-Refresh': 'true'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to load ${fareType} fare data`);
         }
-      } catch (error) {
-        console.error(`Error loading ${fareType} fares:`, error);
-        toast.error(`Failed to load ${fareType} fares`);
+
+        const data = await response.json();
+
+        if (data.status === 'success' && data.fares && data.fares.length > 0) {
+          setFare(data.fares[0]);
+          console.log(`Loaded ${fareType} fare data:`, data.fares[0]);
+        } else if (data.status === 'success' && (!data.fares || data.fares.length === 0)) {
+          // Create default fare structure if none exists
+          const defaultFare = createDefaultFare(vehicleId, fareType);
+          setFare(defaultFare);
+          console.log(`No ${fareType} fare found, using default:`, defaultFare);
+        } else {
+          throw new Error(data.message || `Failed to load ${fareType} fare data`);
+        }
+      } catch (err) {
+        console.error(`Error loading ${fareType} fares:`, err);
+        setError(`Error loading ${fareType} fare data. Please try again.`);
+        // Create default fare structure on error
+        const defaultFare = createDefaultFare(vehicleId, fareType);
+        setFare(defaultFare);
       } finally {
         setIsLoading(false);
       }
     };
 
     if (vehicleId) {
-      loadFares();
+      loadFareData();
     }
   }, [vehicleId, fareType]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      setIsLoading(true);
-      const updateFn = fareType === 'local' ? updateLocalFares : updateAirportFares;
-      await updateFn(fareData);
-      toast.success(`${fareType.charAt(0).toUpperCase() + fareType.slice(1)} fares updated successfully`);
-    } catch (error) {
-      console.error(`Error updating ${fareType} fares:`, error);
-      toast.error(`Failed to update ${fareType} fares`);
-    } finally {
-      setIsLoading(false);
+  const createDefaultFare = (vehicleId: string, type: 'local' | 'airport'): Fare => {
+    if (type === 'local') {
+      return {
+        vehicleId,
+        price4hrs40km: 0,
+        price8hrs80km: 0,
+        price10hrs100km: 0,
+        priceExtraKm: 0,
+        priceExtraHour: 0
+      } as LocalFare;
+    } else {
+      return {
+        vehicleId,
+        priceOneWay: 0,
+        priceRoundTrip: 0,
+        nightCharges: 0,
+        extraWaitingCharges: 0
+      } as AirportFare;
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFareData(prev => ({
-      ...prev,
-      [name]: value === '' ? 0 : Number(value)
-    }));
+  const handleChange = (field: string, value: string) => {
+    if (!fare) return;
+    
+    const numericValue = parseFloat(value) || 0;
+    
+    setFare({
+      ...fare,
+      [field]: numericValue
+    });
   };
 
+  const handleSave = async () => {
+    if (!fare || !vehicleId) return;
+    
+    try {
+      setIsSaving(true);
+      setError(null);
+
+      // Determine the correct endpoint based on the fare type
+      const endpoint = fareType === 'local' 
+        ? 'api/admin/local-fares-update.php'
+        : 'api/admin/airport-fares-update.php';
+
+      // Create form data
+      const formData = formatDataForMultipart({
+        ...fare,
+        vehicle_id: vehicleId // Ensure we have the vehicle ID
+      });
+
+      // Make the API call
+      const response = await fetch(getApiUrl(endpoint), {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-Force-Refresh': 'true'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to save ${fareType} fare data`);
+      }
+
+      const result = await response.json();
+
+      if (result.status === 'success') {
+        toast.success(`${fareType.charAt(0).toUpperCase() + fareType.slice(1)} fare updated successfully`);
+      } else {
+        throw new Error(result.message || `Failed to save ${fareType} fare data`);
+      }
+    } catch (err: any) {
+      console.error(`Error saving ${fareType} fare:`, err);
+      setError(`Error saving ${fareType} fare data: ${err.message}`);
+      toast.error(`Failed to save ${fareType} fare data`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <Card className="w-full">
+        <CardContent className="p-6 flex justify-center items-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <span className="ml-2">Loading {fareType} fare data...</span>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
-    <Card className="p-4">
-      <h3 className="text-lg font-semibold mb-4">
-        {fareType === 'local' ? 'Local Package Fares' : 'Airport Transfer Fares'}
-      </h3>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {fareType === 'local' ? (
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle>
+          {fareType === 'local' ? 'Local Package Fares' : 'Airport Transfer Fares'}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-6">
+        {error && (
+          <div className="bg-destructive/15 text-destructive p-3 rounded-md mb-4">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} className="space-y-4">
+          {fareType === 'local' && fare && (
             <>
-              <div>
-                <label className="block text-sm font-medium mb-1">4 Hours 40 KM Price</label>
-                <Input
-                  type="number"
-                  name="price4hrs40km"
-                  value={fareData.price4hrs40km || 0}
-                  onChange={handleInputChange}
-                  min={0}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">8 Hours 80 KM Price</label>
-                <Input
-                  type="number"
-                  name="price8hrs80km"
-                  value={fareData.price8hrs80km || 0}
-                  onChange={handleInputChange}
-                  min={0}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">10 Hours 100 KM Price</label>
-                <Input
-                  type="number"
-                  name="price10hrs100km"
-                  value={fareData.price10hrs100km || 0}
-                  onChange={handleInputChange}
-                  min={0}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Extra Hour Price</label>
-                <Input
-                  type="number"
-                  name="priceExtraHour"
-                  value={fareData.priceExtraHour || 0}
-                  onChange={handleInputChange}
-                  min={0}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Extra KM Price</label>
-                <Input
-                  type="number"
-                  name="pricePerKm"
-                  value={fareData.pricePerKm || 0}
-                  onChange={handleInputChange}
-                  min={0}
-                />
-              </div>
-            </>
-          ) : (
-            <>
-              <div>
-                <label className="block text-sm font-medium mb-1">Base Price</label>
-                <Input
-                  type="number"
-                  name="basePrice"
-                  value={fareData.basePrice || 0}
-                  onChange={handleInputChange}
-                  min={0}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Price Per KM</label>
-                <Input
-                  type="number"
-                  name="pricePerKm"
-                  value={fareData.pricePerKm || 0}
-                  onChange={handleInputChange}
-                  min={0}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Pickup Price</label>
-                <Input
-                  type="number"
-                  name="pickupPrice"
-                  value={fareData.pickupPrice || 0}
-                  onChange={handleInputChange}
-                  min={0}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Drop Price</label>
-                <Input
-                  type="number"
-                  name="dropPrice"
-                  value={fareData.dropPrice || 0}
-                  onChange={handleInputChange}
-                  min={0}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Tier 1 Price</label>
-                <Input
-                  type="number"
-                  name="tier1Price"
-                  value={fareData.tier1Price || 0}
-                  onChange={handleInputChange}
-                  min={0}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Tier 2 Price</label>
-                <Input
-                  type="number"
-                  name="tier2Price"
-                  value={fareData.tier2Price || 0}
-                  onChange={handleInputChange}
-                  min={0}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Tier 3 Price</label>
-                <Input
-                  type="number"
-                  name="tier3Price"
-                  value={fareData.tier3Price || 0}
-                  onChange={handleInputChange}
-                  min={0}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Tier 4 Price</label>
-                <Input
-                  type="number"
-                  name="tier4Price"
-                  value={fareData.tier4Price || 0}
-                  onChange={handleInputChange}
-                  min={0}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Extra KM Charge</label>
-                <Input
-                  type="number"
-                  name="extraKmCharge"
-                  value={fareData.extraKmCharge || 0}
-                  onChange={handleInputChange}
-                  min={0}
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="price4hrs40km">4 Hours / 40 KM (₹)</Label>
+                  <Input
+                    id="price4hrs40km"
+                    type="number"
+                    value={(fare as LocalFare).price4hrs40km}
+                    onChange={(e) => handleChange('price4hrs40km', e.target.value)}
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="price8hrs80km">8 Hours / 80 KM (₹)</Label>
+                  <Input
+                    id="price8hrs80km"
+                    type="number"
+                    value={(fare as LocalFare).price8hrs80km}
+                    onChange={(e) => handleChange('price8hrs80km', e.target.value)}
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="price10hrs100km">10 Hours / 100 KM (₹)</Label>
+                  <Input
+                    id="price10hrs100km"
+                    type="number"
+                    value={(fare as LocalFare).price10hrs100km}
+                    onChange={(e) => handleChange('price10hrs100km', e.target.value)}
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="priceExtraKm">Extra KM (₹)</Label>
+                  <Input
+                    id="priceExtraKm"
+                    type="number"
+                    value={(fare as LocalFare).priceExtraKm}
+                    onChange={(e) => handleChange('priceExtraKm', e.target.value)}
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="priceExtraHour">Extra Hour (₹)</Label>
+                  <Input
+                    id="priceExtraHour"
+                    type="number"
+                    value={(fare as LocalFare).priceExtraHour}
+                    onChange={(e) => handleChange('priceExtraHour', e.target.value)}
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
               </div>
             </>
           )}
-        </div>
-        <Button type="submit" disabled={isLoading}>
-          {isLoading ? 'Updating...' : 'Update Fares'}
-        </Button>
-      </form>
+
+          {fareType === 'airport' && fare && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="priceOneWay">One Way (₹)</Label>
+                  <Input
+                    id="priceOneWay"
+                    type="number"
+                    value={(fare as AirportFare).priceOneWay}
+                    onChange={(e) => handleChange('priceOneWay', e.target.value)}
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="priceRoundTrip">Round Trip (₹)</Label>
+                  <Input
+                    id="priceRoundTrip"
+                    type="number"
+                    value={(fare as AirportFare).priceRoundTrip}
+                    onChange={(e) => handleChange('priceRoundTrip', e.target.value)}
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="nightCharges">Night Charges (₹)</Label>
+                  <Input
+                    id="nightCharges"
+                    type="number"
+                    value={(fare as AirportFare).nightCharges}
+                    onChange={(e) => handleChange('nightCharges', e.target.value)}
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="extraWaitingCharges">Extra Waiting Charges (₹/hr)</Label>
+                  <Input
+                    id="extraWaitingCharges"
+                    type="number"
+                    value={(fare as AirportFare).extraWaitingCharges}
+                    onChange={(e) => handleChange('extraWaitingCharges', e.target.value)}
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          <div className="flex justify-end mt-6">
+            <Button type="submit" disabled={isSaving}>
+              {isSaving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Saving...
+                </>
+              ) : (
+                'Save Fare Details'
+              )}
+            </Button>
+          </div>
+        </form>
+      </CardContent>
     </Card>
   );
 };

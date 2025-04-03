@@ -1,0 +1,26 @@
+
+# Ensure vehicle create endpoints are accessible
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # Allow OPTIONS requests for CORS
+    RewriteCond %{REQUEST_METHOD} OPTIONS
+    RewriteRule .* - [R=200,L]
+    
+    # Set CORS headers for all responses
+    <IfModule mod_headers.c>
+        Header always set Access-Control-Allow-Origin "*"
+        Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Header always set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh, X-Admin-Mode"
+        Header always set Access-Control-Max-Age "86400"
+    </IfModule>
+    
+    # Direct access to PHP scripts
+    RewriteCond %{REQUEST_FILENAME} -f
+    RewriteRule .* - [L]
+    
+    # Fallback for direct-vehicle-create.php
+    RewriteRule ^direct-vehicle-create$ direct-vehicle-create.php [L]
+    RewriteRule ^add-vehicle$ direct-vehicle-create.php [L]
+    RewriteRule ^vehicle-create$ direct-vehicle-create.php [L]
+</IfModule>

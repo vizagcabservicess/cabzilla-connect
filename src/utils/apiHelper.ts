@@ -1,3 +1,4 @@
+
 import { apiBaseUrl } from '@/config/api';
 import { toast } from 'sonner';
 
@@ -55,136 +56,65 @@ export const directVehicleOperation = async (endpoint: string, method: string, d
       return JSON.parse(text);
     } catch (e) {
       console.error('Failed to parse response as JSON:', text);
-      if (text.trim() === '') {
-        return { status: 'success', message: 'Operation completed' };
-      }
-      throw new Error('Invalid JSON response from server');
+      return text;
     }
-  } catch (error: any) {
-    console.error('API request failed:', error);
+  } catch (error) {
+    console.error(`API operation error for ${endpoint}:`, error);
     throw error;
   }
 };
 
-// Convert Javascript object to FormData for multipart/form-data requests
+// Helper function to convert data to FormData for multipart/form-data submissions
 export const formatDataForMultipart = (data: any): FormData => {
   const formData = new FormData();
   
-  // Recursively add all fields to FormData, handling nested objects and arrays
-  const addToFormData = (obj: any, prefix = '') => {
-    // Convert simple values directly
-    if (typeof obj !== 'object' || obj === null) {
-      formData.append(prefix, String(obj));
-      return;
-    }
+  // Recursively append nested objects
+  const appendData = (obj: any, prefix = '') => {
+    if (obj === null || obj === undefined) return;
     
-    // Handle arrays
-    if (Array.isArray(obj)) {
-      if (obj.length === 0) {
-        formData.append(`${prefix}[]`, '');
-      } else if (typeof obj[0] !== 'object') {
-        // For simple arrays, convert to JSON string
-        formData.append(prefix, JSON.stringify(obj));
-      } else {
-        // For arrays of objects, append each with index notation
-        obj.forEach((value, index) => {
-          addToFormData(value, `${prefix}[${index}]`);
-        });
-      }
-      return;
+    if (typeof obj === 'object' && !(obj instanceof File) && !Array.isArray(obj)) {
+      // Handle nested objects
+      Object.keys(obj).forEach(key => {
+        const value = obj[key];
+        const keyPath = prefix ? `${prefix}[${key}]` : key;
+        appendData(value, keyPath);
+      });
+    } else if (Array.isArray(obj)) {
+      // Handle arrays
+      obj.forEach((item, index) => {
+        const keyPath = `${prefix}[${index}]`;
+        appendData(item, keyPath);
+      });
+    } else {
+      // Handle primitive values and Files
+      formData.append(prefix, obj);
     }
-    
-    // Handle objects by recursively adding each property
-    Object.keys(obj).forEach(key => {
-      const value = obj[key];
-      const keyPath = prefix ? `${prefix}[${key}]` : key;
-      
-      if (value === undefined || value === null) {
-        formData.append(keyPath, '');
-        return;
-      }
-      
-      if (typeof value === 'object' && !(value instanceof File) && !(value instanceof Blob)) {
-        // For nested objects
-        addToFormData(value, keyPath);
-      } else {
-        // For primitive values, File and Blob
-        formData.append(keyPath, value);
-      }
-    });
   };
   
-  addToFormData(data);
+  appendData(data);
   return formData;
 };
 
-// Function to fix database tables
+// Utility function to fix database tables
 export const fixDatabaseTables = async (): Promise<boolean> => {
   try {
-    const urls = [
-      `${apiBaseUrl}/api/admin/fix-vehicle-tables.php`,
-      `${apiBaseUrl}/api/admin/repair-database.php`,
-      `${apiBaseUrl}/api/admin/sync-vehicle-tables.php`
-    ];
-    
-    let fixed = false;
-    
-    // Try each URL in sequence
-    for (const url of urls) {
-      try {
-        console.log(`Attempting to fix database tables using ${url}`);
-        
-        const response = await fetch(`${url}?_t=${Date.now()}`, {
-          method: 'GET',
-          headers: {
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-Force-Refresh': 'true',
-            'X-Admin-Mode': 'true',
-            'Cache-Control': 'no-cache, no-store, must-revalidate'
-          }
-        });
-        
-        const result = await response.json();
-        
-        if (result && (result.status === 'success' || result.success === true)) {
-          console.log(`Successfully fixed database tables using ${url}`);
-          fixed = true;
-          break;
-        }
-      } catch (error) {
-        console.error(`Failed to fix database tables using ${url}:`, error);
+    const response = await fetch(`${apiBaseUrl}/api/admin/fix-database.php?_t=${Date.now()}`, {
+      method: 'GET',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'X-Admin-Mode': 'true'
       }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fix database tables: ${response.statusText}`);
     }
     
-    return fixed;
+    const result = await response.json();
+    return result.status === 'success';
   } catch (error) {
-    console.error('Failed to fix database tables:', error);
+    console.error('Error fixing database tables:', error);
     return false;
   }
-};
-
-// New helper function to standardize response formatting
-export const formatApiResponse = <T>(data: any): { status: string; data: T | null; message?: string } => {
-  if (!data) {
-    return { status: 'error', data: null, message: 'No data received' };
-  }
-  
-  // Check if response has expected format
-  if (data.status === 'success' || data.status === 'error') {
-    return {
-      status: data.status,
-      data: data.data || data.fares || data.result || null,
-      message: data.message
-    };
-  }
-  
-  // If response doesn't follow standard format but has useful data
-  if (Array.isArray(data) || (data && typeof data === 'object' && Object.keys(data).length > 0)) {
-    return {
-      status: 'success',
-      data: data
-    };
-  }
-  
-  return { status: 'error', data: null, message: 'Invalid response format' };
 };
