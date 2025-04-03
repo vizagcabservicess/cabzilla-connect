@@ -279,16 +279,18 @@ try {
                     $vehicleId = $caseResult['vehicle_id']; // Use the existing case
                     logMessage("Found vehicle with case-insensitive match. Using: " . $vehicleId);
                 } else {
-                    // CRITICAL: If vehicle doesn't exist, DON'T create it
-                    $conn->rollBack();
-                    logMessage("REJECTED: Vehicle does not exist: " . $vehicleId);
-                    echo json_encode([
-                        'status' => 'error',
-                        'message' => "Vehicle '$vehicleId' does not exist. Please create the vehicle first.",
-                        'action' => 'createVehicle',
-                        'vehicleId' => $vehicleId
-                    ]);
-                    exit;
+                    // Vehicle doesn't exist, create it
+                    $vehicleName = ucfirst(str_replace(['_', '-'], ' ', $vehicleId));
+                    
+                    $insertVehicleQuery = "
+                        INSERT INTO vehicles (vehicle_id, name, is_active, created_at, updated_at)
+                        VALUES (?, ?, 1, NOW(), NOW())
+                    ";
+                    
+                    $insertVehicleStmt = $conn->prepare($insertVehicleQuery);
+                    $insertVehicleStmt->execute([$vehicleId, $vehicleName]);
+                    
+                    logMessage("Created new vehicle: " . $vehicleId);
                 }
             } else {
                 logMessage("Vehicle exists: " . json_encode($vehicleExists));
