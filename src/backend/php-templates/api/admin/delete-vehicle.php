@@ -5,7 +5,7 @@
  * This endpoint ensures proper handling of vehicle IDs before proxying to direct-vehicle-delete.php
  */
 
-// Set CORS headers
+// Set CORS headers - don't set Origin header
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, X-Admin-Mode');

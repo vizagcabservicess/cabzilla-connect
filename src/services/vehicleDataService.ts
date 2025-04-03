@@ -18,6 +18,7 @@ let cachedVehicles: {
 // Keep track of last successful refresh
 let lastSuccessfulRefresh = 0;
 let pendingRefreshPromise: Promise<CabType[]> | null = null;
+let clearCacheInProgress = false; // Flag to prevent recursion
 
 // Default vehicles as fallback
 const DEFAULT_VEHICLES: CabType[] = [
@@ -69,37 +70,49 @@ const DEFAULT_VEHICLES: CabType[] = [
 ];
 
 /**
- * Clear all vehicle data caches
+ * Clear all vehicle data caches - with recursion protection
  */
 export const clearVehicleDataCache = () => {
-  console.log('Clearing vehicle data cache');
-  cachedVehicles = {};
-  lastSuccessfulRefresh = 0;
-  pendingRefreshPromise = null;
-  
-  try {
-    // Clear all localStorage cache keys related to vehicles
-    const keysToRemove = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && (key.startsWith('cachedVehicles') || key.startsWith('localVehicles') || key.startsWith('cabOptions_'))) {
-        keysToRemove.push(key);
-      }
-    }
-    
-    keysToRemove.forEach(key => localStorage.removeItem(key));
-    
-    localStorage.removeItem('cachedVehicles');
-    localStorage.removeItem('cachedVehiclesTimestamp');
-    localStorage.removeItem('localVehicles');
-  } catch (e) {
-    console.error('Error clearing cached vehicles from localStorage:', e);
+  if (clearCacheInProgress) {
+    console.warn('Preventing recursive clearVehicleDataCache call');
+    return;
   }
   
-  // Dispatch event to notify components about the cache clear
-  window.dispatchEvent(new CustomEvent('vehicle-data-cache-cleared', {
-    detail: { timestamp: Date.now() }
-  }));
+  clearCacheInProgress = true;
+  try {
+    console.log('Clearing vehicle data cache');
+    cachedVehicles = {};
+    lastSuccessfulRefresh = 0;
+    pendingRefreshPromise = null;
+    
+    // Safely clear localStorage
+    const keysToRemove: string[] = [];
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith('cachedVehicles') || key.startsWith('localVehicles') || key.startsWith('cabOptions_'))) {
+          keysToRemove.push(key);
+        }
+      }
+      
+      keysToRemove.forEach(key => {
+        try {
+          localStorage.removeItem(key);
+        } catch (err) {
+          console.error(`Error removing key ${key}:`, err);
+        }
+      });
+    } catch (e) {
+      console.error('Error clearing cached vehicles from localStorage:', e);
+    }
+    
+    // Dispatch event to notify components about the cache clear
+    window.dispatchEvent(new CustomEvent('vehicle-data-cache-cleared', {
+      detail: { timestamp: Date.now() }
+    }));
+  } finally {
+    clearCacheInProgress = false;
+  }
 };
 
 /**

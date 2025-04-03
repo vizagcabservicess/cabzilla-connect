@@ -2,7 +2,7 @@
 <?php
 // status.php - A simple endpoint to check API status with database connectivity test
 
-// Set CORS headers to allow requests from anywhere
+// Set CORS headers to allow requests from anywhere - don't set Origin header
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept, Authorization');

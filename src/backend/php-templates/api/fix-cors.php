@@ -4,14 +4,14 @@
  * fix-cors.php - Set proper CORS headers for preflight and test connectivity
  */
 
-// Set comprehensive CORS headers
+// Set comprehensive CORS headers - don't try to set Origin header
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, Origin, X-Force-Refresh, *');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, *');
 header('Access-Control-Max-Age: 86400');
 header('Access-Control-Expose-Headers: *');
 
@@ -22,7 +22,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
         'status' => 'success',
         'message' => 'CORS preflight request successful',
         'cors' => 'enabled',
-        'origin' => $_SERVER['HTTP_ORIGIN'] ?? 'unknown',
         'timestamp' => time()
     ]);
     exit;
@@ -38,7 +37,7 @@ if (!empty($_POST)) {
     $params['post'] = $_POST;
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && $_SERVER['CONTENT_TYPE'] === 'application/json') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['CONTENT_TYPE']) && strpos($_SERVER['CONTENT_TYPE'], 'application/json') !== false) {
     $jsonData = file_get_contents('php://input');
     if ($jsonData) {
         $params['json'] = json_decode($jsonData, true);
