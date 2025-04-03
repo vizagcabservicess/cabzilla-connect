@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -17,6 +16,7 @@ import { fareService } from '@/services/fareService';
 import { hourlyPackages } from '@/lib/packageData';
 import { FareUpdateError } from '../cab-options/FareUpdateError';
 import axios from 'axios';
+import { updateLocalFares, validateAndNormalizeVehicleId } from '@/services/fare/local';
 
 const formSchema = z.object({
   cabType: z.string().min(1, { message: "Cab type is required" }),
@@ -108,211 +108,78 @@ export function LocalFareManagement() {
       setIsLoading(true);
       setError(null);
       
-      toast.info(`Updating local fares for ${values.cabType}...`);
-      console.log('Starting fare update for local packages with vehicle ID', values.cabType);
-      
-      // Use FormData for more reliable transport
-      const formData = new FormData();
-      formData.append('vehicleId', values.cabType);
-      formData.append('tripType', 'local');
-      formData.append('price4hrs40km', values.package4hr40km.toString());
-      formData.append('price8hrs80km', values.package8hr80km.toString());
-      formData.append('price10hrs100km', values.package10hr100km.toString());
-      formData.append('priceExtraKm', values.extraKmRate.toString());
-      formData.append('priceExtraHour', values.extraHourRate.toString());
-      
-      // Package names for compatibility with all endpoints
-      formData.append('package4hr40km', values.package4hr40km.toString());
-      formData.append('package8hr80km', values.package8hr80km.toString());
-      formData.append('package10hr100km', values.package10hr100km.toString());
-      formData.append('extraKmRate', values.extraKmRate.toString());
-      formData.append('extraHourRate', values.extraHourRate.toString());
-      
-      // Try multiple methods to update fares, starting with the dedicated endpoint
-      let success = false;
-      let updateSuccess = false;
-      let errorMessage = '';
-      
-      // Method 1: Try direct-local-fares.php endpoint first
-      try {
-        const directLocalEndpoint = `${apiBaseUrl}/api/direct-local-fares.php`;
-        console.log(`Trying direct local fares endpoint: ${directLocalEndpoint}`);
-        
-        const directResponse = await axios.post(directLocalEndpoint, formData, {
-          headers: {
-            ...fareService.getBypassHeaders(),
-            'Content-Type': 'multipart/form-data',
-          },
-          timeout: 10000 // 10 second timeout
-        });
-        
-        console.log('Direct local update response:', directResponse.data);
-        if (directResponse.data && directResponse.data.success) {
-          success = true;
-          updateSuccess = true;
-          console.log('Successfully updated fares via direct local fares endpoint');
-        } else {
-          errorMessage = directResponse.data?.error || 'Update response was not successful';
-          console.error('Method 1 failed:', errorMessage);
-        }
-      } catch (directError) {
-        console.error('Error using direct local fares endpoint:', directError);
-        errorMessage = directError instanceof Error ? directError.message : 'Network error';
+      // Validate vehicle ID first to prevent numeric IDs
+      const normalizedId = validateAndNormalizeVehicleId(values.cabType);
+      if (!normalizedId) {
+        toast.error(`Invalid vehicle ID: ${values.cabType}. Please use standard vehicle names.`);
+        setIsLoading(false);
+        return;
       }
       
-      // Method 2: Try the direct-fare-update.php universal endpoint
-      if (!success) {
+      toast.info(`Updating local fares for ${normalizedId}...`);
+      console.log('Starting fare update for local packages with vehicle ID', normalizedId);
+      
+      // Use our enhanced updateLocalFares function
+      const result = await updateLocalFares(
+        normalizedId,
+        values.extraKmRate,
+        values.extraHourRate,
+        [
+          { hours: 4, km: 40, price: values.package4hr40km },
+          { hours: 8, km: 80, price: values.package8hr80km },
+          { hours: 10, km: 100, price: values.package10hr100km }
+        ]
+      );
+      
+      if (result) {
+        // Update local storage cache
         try {
-          const universalEndpoint = `${apiBaseUrl}/api/admin/direct-fare-update.php?tripType=local&_t=${Date.now()}`;
-          console.log(`Trying universal fare update endpoint: ${universalEndpoint}`);
+          // Get the price matrix from localStorage
+          const storedMatrix = localStorage.getItem('localPackagePriceMatrix');
+          let matrix = storedMatrix ? JSON.parse(storedMatrix) : {};
           
-          const universalResponse = await axios.post(universalEndpoint, formData, {
-            headers: {
-              ...fareService.getBypassHeaders(),
-              'Content-Type': 'multipart/form-data',
-            },
-            timeout: 10000
+          // Initialize the matrix structure if it doesn't exist
+          if (!matrix) matrix = {};
+          ['4hrs-40km', '8hrs-80km', '10hrs-100km'].forEach(pkg => {
+            if (!matrix[pkg]) matrix[pkg] = {};
           });
           
-          console.log('Universal endpoint response:', universalResponse.data);
-          if (universalResponse.data && universalResponse.data.status === 'success') {
-            success = true;
-            updateSuccess = true;
-            console.log('Successfully updated fares via universal endpoint');
-          } else {
-            if (!errorMessage) {
-              errorMessage = universalResponse.data?.message || 'Update failed';
-              console.error('Method 2 failed:', errorMessage);
-            }
-          }
-        } catch (universalError) {
-          console.error('Error using universal endpoint:', universalError);
-          if (!errorMessage) {
-            errorMessage = universalError instanceof Error ? universalError.message : 'Network error';
-          }
-        }
-      }
-      
-      // Method 3: Try using the fareService as a fallback
-      if (!success) {
-        try {
-          const result = await fareService.directFareUpdate('local', values.cabType, {
-            package4hr40km: values.package4hr40km,
-            package8hr80km: values.package8hr80km,
-            package10hr100km: values.package10hr100km,
-            extraKmRate: values.extraKmRate,
-            extraHourRate: values.extraHourRate
-          });
+          // Update the prices in the matrix
+          matrix['4hrs-40km'][normalizedId] = values.package4hr40km;
+          matrix['8hrs-80km'][normalizedId] = values.package8hr80km;
+          matrix['10hrs-100km'][normalizedId] = values.package10hr100km;
           
-          console.log('Server response method 3:', result);
+          // Handle vehicle ID variations (innova_crysta -> innova, luxury -> luxury sedan)
+          if (normalizedId === 'innova_crysta' || normalizedId === 'innova crysta') {
+            matrix['4hrs-40km']['innova'] = values.package4hr40km;
+            matrix['8hrs-80km']['innova'] = values.package8hr80km;
+            matrix['10hrs-100km']['innova'] = values.package10hr100km;
+          }
           
-          if (result && result.status === 'success') {
-            success = true;
-            updateSuccess = true;
-          } else {
-            if (!errorMessage) {
-              errorMessage = result?.message || 'Update service failed';
-              console.error('Method 3 failed:', errorMessage);
-            }
+          if (normalizedId === 'luxury') {
+            matrix['4hrs-40km']['luxury sedan'] = values.package4hr40km;
+            matrix['8hrs-80km']['luxury sedan'] = values.package8hr80km;
+            matrix['10hrs-100km']['luxury sedan'] = values.package10hr100km;
           }
-        } catch (serviceError) {
-          console.error('Method 3 service error:', serviceError);
-          if (!errorMessage) {
-            errorMessage = serviceError instanceof Error ? serviceError.message : 'Service error';
-          }
+          
+          // Save the updated matrix back to localStorage
+          localStorage.setItem('localPackagePriceMatrix', JSON.stringify(matrix));
+          localStorage.setItem('localPackagePriceMatrixUpdated', Date.now().toString());
+          
+          console.log('Updated localPackagePriceMatrix in localStorage:', matrix);
+        } catch (cacheError) {
+          console.error('Error updating local cache:', cacheError);
         }
-      }
-      
-      // After updating, if successful, force sync between tables
-      if (success) {
-        try {
-          console.log("Syncing local_package_fares with vehicle_pricing");
-          const syncResponse = await axios.get(`${apiBaseUrl}/api/admin/sync-local-fares.php`, {
-            params: { 
-              _t: Date.now() // Cache busting
-            },
-            headers: fareService.getBypassHeaders()
-          });
-          console.log('Sync response:', syncResponse.data);
-        } catch (syncError) {
-          console.error('Error syncing tables after update:', syncError);
-          // Continue anyway - this is just an additional step
-        }
-      }
-      
-      // Update local storage cache
-      try {
-        // Get the price matrix from localStorage
-        const storedMatrix = localStorage.getItem('localPackagePriceMatrix');
-        let matrix = storedMatrix ? JSON.parse(storedMatrix) : {};
-        
-        // Initialize the matrix structure if it doesn't exist
-        if (!matrix) matrix = {};
-        ['4hrs-40km', '8hrs-80km', '10hrs-100km'].forEach(pkg => {
-          if (!matrix[pkg]) matrix[pkg] = {};
-        });
-        
-        // Update the prices in the matrix
-        const normalizedVehicleId = values.cabType.toLowerCase();
-        
-        matrix['4hrs-40km'][normalizedVehicleId] = values.package4hr40km;
-        matrix['8hrs-80km'][normalizedVehicleId] = values.package8hr80km;
-        matrix['10hrs-100km'][normalizedVehicleId] = values.package10hr100km;
-        
-        // Handle vehicle ID variations (innova_crysta -> innova, luxury -> luxury sedan)
-        if (normalizedVehicleId === 'innova_crysta' || normalizedVehicleId === 'innova crysta') {
-          matrix['4hrs-40km']['innova'] = values.package4hr40km;
-          matrix['8hrs-80km']['innova'] = values.package8hr80km;
-          matrix['10hrs-100km']['innova'] = values.package10hr100km;
-        }
-        
-        if (normalizedVehicleId === 'luxury') {
-          matrix['4hrs-40km']['luxury sedan'] = values.package4hr40km;
-          matrix['8hrs-80km']['luxury sedan'] = values.package8hr80km;
-          matrix['10hrs-100km']['luxury sedan'] = values.package10hr100km;
-        }
-        
-        // Save the updated matrix back to localStorage
-        localStorage.setItem('localPackagePriceMatrix', JSON.stringify(matrix));
-        localStorage.setItem('localPackagePriceMatrixUpdated', Date.now().toString());
-        
-        console.log('Updated localPackagePriceMatrix in localStorage:', matrix);
-        
-        // Force local cache update for better UI feedback even if server update fails
-        updateSuccess = true;
-      } catch (cacheError) {
-        console.error('Error updating local cache:', cacheError);
-      }
-      
-      // Trigger UI refresh events
-      if (updateSuccess) {
-        // Dispatch events to update UI components
-        window.dispatchEvent(new CustomEvent('local-fares-updated', {
-          detail: {
-            timestamp: Date.now(),
-            vehicleId: values.cabType,
-            packages: {
-              '4hrs-40km': values.package4hr40km,
-              '8hrs-80km': values.package8hr80km,
-              '10hrs-100km': values.package10hr100km
-            },
-            prices: {
-              '4hrs-40km': values.package4hr40km,
-              '8hrs-80km': values.package8hr80km,
-              '10hrs-100km': values.package10hr100km
-            }
-          }
-        }));
         
         // Clear cache and force update
         fareService.clearCache();
         window.dispatchEvent(new CustomEvent('fare-cache-cleared'));
         localStorage.setItem('forceCacheRefresh', 'true');
         
-        toast.success(`Local fares updated for ${values.cabType}`);
+        toast.success(`Local fares updated for ${normalizedId}`);
       } else {
-        setError(new Error(errorMessage || 'Failed to update local fares'));
-        toast.error(`Failed to update local fares: ${errorMessage || 'Unknown error'}`);
+        setError(new Error('Failed to update local fares'));
+        toast.error('Failed to update local fares');
       }
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to update local fares'));
@@ -333,12 +200,20 @@ export function LocalFareManagement() {
     try {
       setIsLoading(true);
       
+      // Validate vehicle ID first
+      const normalizedId = validateAndNormalizeVehicleId(vehicleId);
+      if (!normalizedId) {
+        toast.error(`Invalid vehicle ID: ${vehicleId}. Please use standard vehicle names.`);
+        setIsLoading(false);
+        return;
+      }
+      
       // First try the direct endpoint
       try {
         await axios.get(`${apiBaseUrl}/api/local-package-fares.php`, {
           params: { 
             check_sync: 'true',
-            vehicle_id: vehicleId,
+            vehicle_id: normalizedId,
             _t: Date.now()
           },
           headers: fareService.getBypassHeaders(),
@@ -351,7 +226,7 @@ export function LocalFareManagement() {
       
       // Try to get local fares via the service
       try {
-        const fareData = await fareService.getLocalFaresForVehicle(vehicleId);
+        const fareData = await fareService.getLocalFaresForVehicle(normalizedId);
         
         if (fareData) {
           console.log("Loaded local package fares for vehicle:", fareData);
@@ -364,7 +239,7 @@ export function LocalFareManagement() {
           return;
         }
       } catch (error) {
-        console.error(`Failed to load fares for ${vehicleId}:`, error);
+        console.error(`Failed to load fares for ${normalizedId}:`, error);
       }
       
       // Try loading from localStorage as a fallback
@@ -372,13 +247,12 @@ export function LocalFareManagement() {
       if (storedMatrix) {
         try {
           const matrix = JSON.parse(storedMatrix);
-          const normalizedVehicleId = vehicleId.toLowerCase();
           
-          if (matrix && matrix['4hrs-40km'] && matrix['4hrs-40km'][normalizedVehicleId]) {
+          if (matrix && matrix['4hrs-40km'] && matrix['4hrs-40km'][normalizedId]) {
             console.log("Using cached local package fares from localStorage");
-            form.setValue("package4hr40km", matrix['4hrs-40km'][normalizedVehicleId] || 0);
-            form.setValue("package8hr80km", matrix['8hrs-80km'][normalizedVehicleId] || 0);
-            form.setValue("package10hr100km", matrix['10hrs-100km'][normalizedVehicleId] || 0);
+            form.setValue("package4hr40km", matrix['4hrs-40km'][normalizedId] || 0);
+            form.setValue("package8hr80km", matrix['8hrs-80km'][normalizedId] || 0);
+            form.setValue("package10hr100km", matrix['10hrs-100km'][normalizedId] || 0);
             setIsLoading(false);
             return;
           }
@@ -389,7 +263,7 @@ export function LocalFareManagement() {
       
       // If all else fails, use default values
       console.log('No existing fares found for vehicle, using defaults');
-      setDefaultPricesForVehicle(vehicleId);
+      setDefaultPricesForVehicle(normalizedId);
       setIsLoading(false);
     } catch (err) {
       console.error("Error loading fare data:", err);
