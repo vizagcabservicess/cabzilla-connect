@@ -137,10 +137,14 @@ try {
                 if (is_array($data)) {
                     $persistentData = $data;
                     logMessage("Loaded " . count($persistentData) . " vehicles from persistent cache");
+                } else {
+                    logMessage("ERROR: Persistent data is not an array - initializing empty array");
+                    $persistentData = [];
                 }
             } catch (Exception $e) {
                 // Failed to parse JSON, start fresh
                 logMessage("Error parsing persistent data: " . $e->getMessage());
+                $persistentData = [];
             }
         }
     } else {
@@ -164,30 +168,117 @@ try {
     $vehicleName = isset($vehicleData['name']) && !empty($vehicleData['name']) ? $vehicleData['name'] : $vehicleId;
     
     // Handle capacity and luggage capacity
-    $capacity = isset($vehicleData['capacity']) ? intval($vehicleData['capacity']) : 4;
-    $luggageCapacity = isset($vehicleData['luggageCapacity']) ? intval($vehicleData['luggageCapacity']) : 
-                      (isset($vehicleData['luggage_capacity']) ? intval($vehicleData['luggage_capacity']) : 2);
+    $capacity = isset($vehicleData['capacity']) && $vehicleData['capacity'] !== "" ? intval($vehicleData['capacity']) : 4;
+    $luggageCapacity = isset($vehicleData['luggageCapacity']) && $vehicleData['luggageCapacity'] !== "" ? intval($vehicleData['luggageCapacity']) : 
+                      (isset($vehicleData['luggage_capacity']) && $vehicleData['luggage_capacity'] !== "" ? intval($vehicleData['luggage_capacity']) : 2);
+    
+    // Find if the vehicle already exists in persistent data
+    $vehicleIndex = -1;
+    $existingVehicle = null;
+    
+    foreach ($persistentData as $index => $vehicle) {
+        if (isset($vehicle['id']) && $vehicle['id'] === $vehicleId) {
+            $vehicleIndex = $index;
+            $existingVehicle = $vehicle;
+            break;
+        }
+    }
     
     // Handle price fields - DON'T RESET THESE TO ZERO!!
-    $basePrice = isset($vehicleData['basePrice']) && $vehicleData['basePrice'] !== "" ? floatval($vehicleData['basePrice']) : 
-                (isset($vehicleData['base_price']) && $vehicleData['base_price'] !== "" ? floatval($vehicleData['base_price']) : 
-                (isset($vehicleData['price']) && $vehicleData['price'] !== "" ? floatval($vehicleData['price']) : 0));
+    // If vehicle exists and incoming value is empty or zero, use existing value
+    $basePrice = 0;
+    $pricePerKm = 0;
+    $nightHaltCharge = 0;
+    $driverAllowance = 0;
     
-    $pricePerKm = isset($vehicleData['pricePerKm']) && $vehicleData['pricePerKm'] !== "" ? floatval($vehicleData['pricePerKm']) : 
-                 (isset($vehicleData['price_per_km']) && $vehicleData['price_per_km'] !== "" ? floatval($vehicleData['price_per_km']) : 0);
+    if (isset($vehicleData['basePrice']) && $vehicleData['basePrice'] !== "" && $vehicleData['basePrice'] > 0) {
+        $basePrice = floatval($vehicleData['basePrice']);
+    } else if (isset($vehicleData['base_price']) && $vehicleData['base_price'] !== "" && $vehicleData['base_price'] > 0) {
+        $basePrice = floatval($vehicleData['base_price']);
+    } else if (isset($vehicleData['price']) && $vehicleData['price'] !== "" && $vehicleData['price'] > 0) {
+        $basePrice = floatval($vehicleData['price']);
+    } else if ($existingVehicle && isset($existingVehicle['basePrice']) && $existingVehicle['basePrice'] > 0) {
+        $basePrice = $existingVehicle['basePrice'];
+        logMessage("Using existing basePrice: $basePrice");
+    } else if ($existingVehicle && isset($existingVehicle['price']) && $existingVehicle['price'] > 0) {
+        $basePrice = $existingVehicle['price'];
+        logMessage("Using existing price as basePrice: $basePrice");
+    } else {
+        // Default values based on vehicle type
+        $basePrice = ($vehicleId === 'sedan') ? 2500 : 
+                    (($vehicleId === 'ertiga') ? 3200 : 
+                    (($vehicleId === 'innova_crysta') ? 3800 : 
+                    (($vehicleId === 'luxury') ? 4500 : 
+                    (($vehicleId === 'tempo_traveller') ? 5500 : 2000))));
+        logMessage("Using default basePrice: $basePrice");
+    }
     
-    $nightHaltCharge = isset($vehicleData['nightHaltCharge']) && $vehicleData['nightHaltCharge'] !== "" ? floatval($vehicleData['nightHaltCharge']) : 
-                      (isset($vehicleData['night_halt_charge']) && $vehicleData['night_halt_charge'] !== "" ? floatval($vehicleData['night_halt_charge']) : 700);
+    // Price per km
+    if (isset($vehicleData['pricePerKm']) && $vehicleData['pricePerKm'] !== "" && $vehicleData['pricePerKm'] > 0) {
+        $pricePerKm = floatval($vehicleData['pricePerKm']);
+    } else if (isset($vehicleData['price_per_km']) && $vehicleData['price_per_km'] !== "" && $vehicleData['price_per_km'] > 0) {
+        $pricePerKm = floatval($vehicleData['price_per_km']);
+    } else if ($existingVehicle && isset($existingVehicle['pricePerKm']) && $existingVehicle['pricePerKm'] > 0) {
+        $pricePerKm = $existingVehicle['pricePerKm'];
+        logMessage("Using existing pricePerKm: $pricePerKm");
+    } else {
+        // Default values
+        $pricePerKm = ($vehicleId === 'sedan') ? 14 : 
+                     (($vehicleId === 'ertiga') ? 18 : 
+                     (($vehicleId === 'innova_crysta') ? 20 : 
+                     (($vehicleId === 'luxury') ? 25 : 
+                     (($vehicleId === 'tempo_traveller') ? 22 : 15))));
+        logMessage("Using default pricePerKm: $pricePerKm");
+    }
     
-    $driverAllowance = isset($vehicleData['driverAllowance']) && $vehicleData['driverAllowance'] !== "" ? floatval($vehicleData['driverAllowance']) : 
-                      (isset($vehicleData['driver_allowance']) && $vehicleData['driver_allowance'] !== "" ? floatval($vehicleData['driver_allowance']) : 250);
+    // Night halt charge
+    if (isset($vehicleData['nightHaltCharge']) && $vehicleData['nightHaltCharge'] !== "" && $vehicleData['nightHaltCharge'] > 0) {
+        $nightHaltCharge = floatval($vehicleData['nightHaltCharge']);
+    } else if (isset($vehicleData['night_halt_charge']) && $vehicleData['night_halt_charge'] !== "" && $vehicleData['night_halt_charge'] > 0) {
+        $nightHaltCharge = floatval($vehicleData['night_halt_charge']);
+    } else if ($existingVehicle && isset($existingVehicle['nightHaltCharge']) && $existingVehicle['nightHaltCharge'] > 0) {
+        $nightHaltCharge = $existingVehicle['nightHaltCharge'];
+        logMessage("Using existing nightHaltCharge: $nightHaltCharge");
+    } else {
+        $nightHaltCharge = ($vehicleId === 'luxury' || $vehicleId === 'tempo_traveller') ? 1200 : 700;
+        logMessage("Using default nightHaltCharge: $nightHaltCharge");
+    }
+    
+    // Driver allowance
+    if (isset($vehicleData['driverAllowance']) && $vehicleData['driverAllowance'] !== "" && $vehicleData['driverAllowance'] > 0) {
+        $driverAllowance = floatval($vehicleData['driverAllowance']);
+    } else if (isset($vehicleData['driver_allowance']) && $vehicleData['driver_allowance'] !== "" && $vehicleData['driver_allowance'] > 0) {
+        $driverAllowance = floatval($vehicleData['driver_allowance']);
+    } else if ($existingVehicle && isset($existingVehicle['driverAllowance']) && $existingVehicle['driverAllowance'] > 0) {
+        $driverAllowance = $existingVehicle['driverAllowance'];
+        logMessage("Using existing driverAllowance: $driverAllowance");
+    } else {
+        $driverAllowance = ($vehicleId === 'luxury' || $vehicleId === 'tempo_traveller') ? 300 : 250;
+        logMessage("Using default driverAllowance: $driverAllowance");
+    }
     
     // Handle AC field
-    $ac = isset($vehicleData['ac']) ? (filter_var($vehicleData['ac'], FILTER_VALIDATE_BOOLEAN) ? 1 : 0) : 1;
+    $ac = 1; // Default to true
+    if (isset($vehicleData['ac'])) {
+        $ac = filter_var($vehicleData['ac'], FILTER_VALIDATE_BOOLEAN) ? 1 : 0;
+    } else if ($existingVehicle && isset($existingVehicle['ac'])) {
+        $ac = filter_var($existingVehicle['ac'], FILTER_VALIDATE_BOOLEAN) ? 1 : 0;
+    }
     
     // Handle description and image path
     $description = isset($vehicleData['description']) ? $vehicleData['description'] : '';
-    $image = isset($vehicleData['image']) && !empty($vehicleData['image']) ? $vehicleData['image'] : "/cars/$vehicleId.png";
+    if (empty($description) && $existingVehicle && !empty($existingVehicle['description'])) {
+        $description = $existingVehicle['description'];
+    }
+    
+    $image = '';
+    if (isset($vehicleData['image']) && !empty($vehicleData['image'])) {
+        $image = $vehicleData['image'];
+    } else if ($existingVehicle && isset($existingVehicle['image']) && !empty($existingVehicle['image'])) {
+        $image = $existingVehicle['image'];
+    } else {
+        $image = "/cars/$vehicleId.png";
+    }
     
     // Process amenities
     $amenities = [];
@@ -209,10 +300,12 @@ try {
                 $amenities = array_map('trim', explode(',', $vehicleData['amenities']));
             }
         }
+    } else if ($existingVehicle && isset($existingVehicle['amenities']) && !empty($existingVehicle['amenities'])) {
+        $amenities = $existingVehicle['amenities'];
     }
     
     if (empty($amenities)) {
-        $amenities = ['AC']; // Default amenity
+        $amenities = ['AC', 'Bottle Water', 'Music System']; // Default amenities
     }
     
     // Prepare the final vehicle data
@@ -234,14 +327,7 @@ try {
         'isActive' => $isActive == 1
     ];
     
-    // Find if vehicle already exists in persistent data
-    $vehicleIndex = -1;
-    foreach ($persistentData as $index => $vehicle) {
-        if (isset($vehicle['id']) && $vehicle['id'] === $vehicleId) {
-            $vehicleIndex = $index;
-            break;
-        }
-    }
+    logMessage("Final formatted vehicle data: " . json_encode($formattedVehicle, JSON_PARTIAL_OUTPUT_ON_ERROR));
     
     // Update or add the vehicle in persistent data
     if ($vehicleIndex >= 0) {
@@ -255,10 +341,16 @@ try {
     }
     
     // Save the updated data back to the persistent cache file
-    if (file_put_contents($persistentCacheFile, json_encode($persistentData, JSON_PRETTY_PRINT))) {
+    $jsonOptions = defined('JSON_PRETTY_PRINT') ? JSON_PRETTY_PRINT | JSON_PARTIAL_OUTPUT_ON_ERROR : 0;
+    $jsonData = json_encode($persistentData, $jsonOptions);
+    
+    if ($jsonData && file_put_contents($persistentCacheFile, $jsonData)) {
         logMessage("Successfully saved persistent vehicle data with " . count($persistentData) . " vehicles");
     } else {
         logMessage("Failed to save persistent vehicle data");
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            logMessage("JSON encoding error: " . json_last_error_msg());
+        }
     }
     
     // Clear any regular cache files to ensure fresh data is loaded

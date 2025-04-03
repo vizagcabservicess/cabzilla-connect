@@ -38,7 +38,8 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
   const [isSyncingFares, setIsSyncingFares] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fareData, setFareData] = useState<FareData>({
-    vehicleId: vehicleId
+    vehicleId: vehicleId,
+    vehicle_id: vehicleId
   });
   
   // Use refs to prevent unnecessary re-renders and infinite loops
@@ -73,7 +74,8 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       return;
     }
     
-    if (!vehicleId) {
+    // ENSURE VEHICLE ID IS VALID BEFORE PROCEEDING
+    if (!vehicleId || vehicleId.trim() === '') {
       setError('No vehicle selected');
       return;
     }
@@ -90,26 +92,30 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       let endpoint = '';
       
       if (fareType === 'local') {
-        endpoint = `api/admin/direct-local-fares.php?vehicle_id=${vehicleId}&_t=${Date.now()}`;
+        endpoint = `api/admin/direct-local-fares.php?vehicle_id=${encodeURIComponent(vehicleId)}&_t=${Date.now()}`;
       } else if (fareType === 'airport') {
-        endpoint = `api/admin/direct-airport-fares.php?vehicle_id=${vehicleId}&_t=${Date.now()}`;
+        endpoint = `api/admin/direct-airport-fares.php?vehicle_id=${encodeURIComponent(vehicleId)}&_t=${Date.now()}`;
       }
       
       console.log(`Loading ${fareType} fare data from ${endpoint}`);
       
-      const result = await directVehicleOperation(endpoint, 'GET');
+      const result = await directVehicleOperation(endpoint, 'GET', {
+        'X-Admin-Mode': 'true',
+        'X-Debug': 'true'
+      });
       
       if (result && result.status === 'success' && result.fares && result.fares.length > 0) {
         const loadedFare = result.fares[0];
         console.log(`Loaded ${fareType} fare data:`, loadedFare);
         
-        // Ensure we always have the vehicle ID set correctly
-        setFareData({
+        // Ensure we always have the vehicle ID set correctly in both formats
+        const updatedFare = {
           ...loadedFare,
           vehicleId: vehicleId,
           vehicle_id: vehicleId
-        });
+        };
         
+        setFareData(updatedFare);
         setError(null);
       } else {
         console.warn('No fare data returned:', result);
@@ -149,7 +155,12 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       return;
     }
     
-    if (!vehicleId || isSaving) return;
+    if (!vehicleId || vehicleId.trim() === '' || isSaving) {
+      if (!vehicleId || vehicleId.trim() === '') {
+        setError("Vehicle ID is missing. Cannot save fares.");
+      }
+      return;
+    }
     
     lastSaveTimeRef.current = now;
     setIsSaving(true);
@@ -166,13 +177,19 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       
       console.log(`Saving ${fareType} fare data to ${endpoint}:`, fareData);
       
+      // ENSURE BOTH VEHICLE ID FORMATS ARE INCLUDED
       const dataToSave = {
         ...fareData,
         vehicleId: vehicleId,
-        vehicle_id: vehicleId // Include both formats for compatibility
+        vehicle_id: vehicleId
       };
       
-      const result = await directVehicleOperation(endpoint, 'POST', dataToSave);
+      console.log('Final fare data being sent:', dataToSave);
+      
+      const result = await directVehicleOperation(endpoint, 'POST', {
+        'X-Admin-Mode': 'true',
+        'X-Debug': 'true'
+      }, dataToSave);
       
       if (result && result.status === 'success') {
         toast.success(`${fareType.charAt(0).toUpperCase() + fareType.slice(1)} fares updated successfully`);
@@ -184,7 +201,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
         fetchAttempts.current = 0;
       } else {
         console.error('Error saving fare data:', result);
-        toast.error('Failed to update fares');
+        toast.error(result?.message || 'Failed to update fares');
         setError(result?.message || 'Failed to update fares');
       }
     } catch (err) {
@@ -223,7 +240,10 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       
       console.log(`Syncing ${fareType} fares from database tables`);
       
-      const result = await directVehicleOperation(endpoint, 'GET');
+      const result = await directVehicleOperation(endpoint, 'GET', {
+        'X-Admin-Mode': 'true',
+        'X-Debug': 'true'
+      });
       
       if (result && (result.status === 'success' || result.status === 'throttled')) {
         if (result.status === 'throttled') {
@@ -243,7 +263,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
         }
       } else {
         console.error('Error syncing fares:', result);
-        toast.error('Failed to sync fares');
+        toast.error(result?.message || 'Failed to sync fares');
         setError(result?.message || 'Failed to sync fares');
       }
     } catch (err) {
@@ -266,7 +286,10 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     
     setFareData(prev => ({
       ...prev,
-      [name]: numericValue
+      [name]: numericValue,
+      // ALWAYS maintain both vehicle ID formats
+      vehicleId: vehicleId,
+      vehicle_id: vehicleId
     }));
   };
   
@@ -275,7 +298,14 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     mountedRef.current = true;
     fetchAttempts.current = 0;
     
-    if (vehicleId) {
+    // ALWAYS set both vehicle ID formats in the fare data when vehicleId changes
+    setFareData(prev => ({
+      ...prev,
+      vehicleId: vehicleId,
+      vehicle_id: vehicleId
+    }));
+    
+    if (vehicleId && vehicleId.trim() !== '') {
       loadFareData();
     }
     
@@ -301,7 +331,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       window.removeEventListener('fare-data-updated', handleFareDataUpdated);
     };
   }, [vehicleId, fareType]);
-  
+
   // Render different forms based on fare type
   const renderFareFields = () => {
     if (fareType === 'local') {

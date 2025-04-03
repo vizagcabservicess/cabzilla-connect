@@ -1,12 +1,12 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FareManagement } from './FareManagement';
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { directVehicleOperation } from '@/utils/apiHelper';
+import { directVehicleOperation, fixDatabaseTables } from '@/utils/apiHelper';
 import { toast } from 'sonner';
 
 interface VehicleManagementProps {
@@ -14,36 +14,89 @@ interface VehicleManagementProps {
 }
 
 export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId }) => {
-  const [error, setError] = React.useState<string | null>(null);
-  const [isFixing, setIsFixing] = React.useState(false);
-  const [activeTab, setActiveTab] = React.useState<string>("local");
+  const [error, setError] = useState<string | null>(null);
+  const [isFixing, setIsFixing] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>("local");
+  const [refreshCount, setRefreshCount] = useState(0);
+  const maxAttempts = 3;
   
   // Check if vehicle exists
-  React.useEffect(() => {
+  useEffect(() => {
     const checkVehicle = async () => {
+      // Only try to check a few times to avoid infinite loops
+      if (refreshCount >= maxAttempts) {
+        console.log(`Max refresh attempts (${maxAttempts}) reached, skipping vehicle check`);
+        return;
+      }
+
       try {
-        await directVehicleOperation(`api/admin/check-vehicle.php?id=${vehicleId}`, 'GET');
-        setError(null);
+        // Add timestamp to URL to prevent caching
+        const endpoint = `api/admin/check-vehicle.php?id=${encodeURIComponent(vehicleId)}&_t=${Date.now()}`;
+        console.log(`Checking vehicle with endpoint: ${endpoint}`);
+        
+        const result = await directVehicleOperation(endpoint, 'GET', {
+          'X-Admin-Mode': 'true',
+          'X-Debug': 'true'
+        });
+        
+        console.log('Vehicle check result:', result);
+        
+        if (result && result.status === 'success') {
+          setError(null);
+        } else {
+          setError(`Could not verify vehicle with ID: ${vehicleId}. Some features might not work correctly.`);
+        }
       } catch (err) {
         console.error('Error checking vehicle:', err);
         setError(`Could not verify vehicle with ID: ${vehicleId}. Some features might not work correctly.`);
+      } finally {
+        // Increment refresh count regardless of outcome
+        setRefreshCount(prev => prev + 1);
       }
     };
     
     if (vehicleId) {
       checkVehicle();
     }
-  }, [vehicleId]);
+  }, [vehicleId, refreshCount]);
   
   const handleFixDatabase = async () => {
     setIsFixing(true);
+    setError(null);
+    
     try {
-      const result = await directVehicleOperation('api/admin/fix-database.php', 'GET');
-      if (result.status === 'success') {
+      toast.info('Attempting to fix database...');
+      console.log('Fixing database...');
+      
+      const fixed = await fixDatabaseTables();
+      
+      if (fixed) {
         toast.success('Database fixed successfully');
         setError(null);
+        // Reset refresh count to trigger a new check
+        setRefreshCount(0);
       } else {
         toast.error('Failed to fix database');
+        
+        // Try alternate method
+        try {
+          console.log('Trying alternate fix method...');
+          const result = await directVehicleOperation('api/admin/fix-database.php', 'GET', {
+            'X-Admin-Mode': 'true',
+            'X-Debug': 'true'
+          });
+          
+          if (result && result.status === 'success') {
+            toast.success('Database fixed successfully with alternate method');
+            setError(null);
+            setRefreshCount(0);
+          } else {
+            toast.error('All database fix attempts failed');
+          }
+        } catch (altError) {
+          console.error('Error with alternate fix:', altError);
+          toast.error('All database fix attempts failed');
+        }
       }
     } catch (err) {
       console.error('Error fixing database:', err);

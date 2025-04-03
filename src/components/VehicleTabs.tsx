@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +15,8 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [isFixing, setIsFixing] = useState(false);
+  const [refreshAttempts, setRefreshAttempts] = useState(0);
+  const maxAttempts = 3;
 
   useEffect(() => {
     const loadData = async () => {
@@ -29,7 +30,12 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
         console.log(`Loading data for vehicle: ${vehicleId}`);
         
         // Check if the vehicle exists first
-        const response = await directVehicleOperation(`api/admin/vehicles-data.php?id=${vehicleId}&_t=${Date.now()}`, 'GET');
+        const response = await directVehicleOperation(
+          `api/admin/vehicles-data.php?id=${vehicleId}&_t=${Date.now()}`, 
+          'GET',
+          { 'X-Admin-Mode': 'true' }
+        );
+        
         console.log('Vehicle check result:', response);
         
         if (response && response.vehicles && response.vehicles.length > 0) {
@@ -43,8 +49,11 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
           
           setError('Failed to load vehicle data. The vehicle may not exist.');
           
-          // Try to fix database tables
-          tryFixDatabase();
+          // Try to fix database tables if we haven't exceeded max attempts
+          if (refreshAttempts < maxAttempts) {
+            setRefreshAttempts(prev => prev + 1);
+            tryFixDatabase();
+          }
         }
       } catch (err) {
         console.error('Error loading vehicle data:', err);
@@ -57,8 +66,11 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
         
         setError('Failed to load vehicle data. The vehicle may not exist.');
         
-        // Try to fix database tables
-        tryFixDatabase();
+        // Try to fix database tables if we haven't exceeded max attempts
+        if (refreshAttempts < maxAttempts) {
+          setRefreshAttempts(prev => prev + 1);
+          tryFixDatabase();
+        }
       }
     };
 
@@ -75,7 +87,11 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
           toast.success('Database tables fixed successfully. Try again.');
           // Try loading data again
           try {
-            const vehicleData = await directVehicleOperation(`api/admin/vehicles-data.php?id=${vehicleId}&_t=${Date.now()}`, 'GET');
+            const vehicleData = await directVehicleOperation(
+              `api/admin/vehicles-data.php?id=${vehicleId}&_t=${Date.now()}`,
+              'GET',
+              { 'X-Admin-Mode': 'true' }
+            );
             console.log('Vehicle check result after database fix:', vehicleData);
             setLoaded(true);
             setError(null);
@@ -106,7 +122,7 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
     };
 
     loadData();
-  }, [vehicleId]);
+  }, [vehicleId, refreshAttempts]);
 
   if (error) {
     return (

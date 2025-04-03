@@ -8,7 +8,7 @@
 // Set headers for CORS
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode, X-Debug');
 header('Content-Type: application/json');
 
 // Handle OPTIONS preflight request
@@ -71,6 +71,7 @@ if (file_exists($persistentCacheFile)) {
             $persistentData = json_decode($persistentJson, true);
             if (!is_array($persistentData)) {
                 $persistentData = [];
+                logMessage("Error: Persistent data is not an array");
             } else {
                 logMessage("Loaded " . count($persistentData) . " vehicles from persistent data");
             }
@@ -84,7 +85,7 @@ if (file_exists($persistentCacheFile)) {
 // Get all vehicle IDs from persistent data
 $vehicleIds = [];
 foreach ($persistentData as $vehicle) {
-    if (isset($vehicle['id'])) {
+    if (isset($vehicle['id']) && !empty($vehicle['id'])) {
         $vehicleIds[] = $vehicle['id'];
     }
 }
@@ -115,4 +116,4 @@ echo json_encode([
     'synced' => count($vehicleIds),
     'vehicles' => $vehicleIds,
     'timestamp' => $now
-]);
+], JSON_PARTIAL_OUTPUT_ON_ERROR);
