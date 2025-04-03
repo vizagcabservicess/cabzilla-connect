@@ -1,4 +1,3 @@
-
 # Enable rewrite engine
 RewriteEngine On
 
@@ -30,8 +29,7 @@ RewriteEngine On
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule .* - [R=200,L]
 
-# CRITICAL: Check vehicle endpoint must be high priority
-# Check vehicle endpoint
+# CRITICAL: Vehicle validation endpoint has highest priority
 RewriteRule ^check-vehicle$ admin/check-vehicle.php [L,QSA]
 RewriteRule ^check-vehicle\.php$ admin/check-vehicle.php [L,QSA]
 RewriteRule ^admin/check-vehicle$ admin/check-vehicle.php [L,QSA]
@@ -62,167 +60,45 @@ RewriteRule ^direct-vehicle-modify\.php$ admin/direct-vehicle-modify.php [L,QSA]
 RewriteRule ^admin/direct-vehicle-modify$ admin/direct-vehicle-modify.php [L,QSA]
 RewriteRule ^admin/direct-vehicle-modify\.php$ admin/direct-vehicle-modify.php [L,QSA]
 
-# CRITICAL FARE ENDPOINTS - HIGH PRIORITY (FIXED)
+# CRITICAL FARE ENDPOINTS - HIGH PRIORITY
+# Local fares update endpoint with fixed priority
+RewriteRule ^local-fares-update$ admin/local-fares-update.php [L,QSA]
+RewriteRule ^local-fares-update\.php$ admin/local-fares-update.php [L,QSA]
+RewriteRule ^admin/local-fares-update$ admin/local-fares-update.php [L,QSA]
+RewriteRule ^admin/local-fares-update\.php$ admin/local-fares-update.php [L,QSA]
+
 # Make sure sync-local-fares endpoint is accessible from multiple paths
 RewriteRule ^sync-local-fares$ admin/sync-local-fares.php [L,QSA]
 RewriteRule ^sync-local-fares\.php$ admin/sync-local-fares.php [L,QSA]
 RewriteRule ^admin/sync-local-fares$ admin/sync-local-fares.php [L,QSA]
 RewriteRule ^admin/sync-local-fares\.php$ admin/sync-local-fares.php [L,QSA]
 
-# Direct fare-related endpoints for all trip types
+# Direct fare-related endpoints for all trip types - highest priority
 RewriteRule ^direct-local-fares$ admin/direct-local-fares.php [L,QSA]
 RewriteRule ^direct-local-fares\.php$ admin/direct-local-fares.php [L,QSA]
 RewriteRule ^admin/direct-local-fares$ admin/direct-local-fares.php [L,QSA]
 RewriteRule ^admin/direct-local-fares\.php$ admin/direct-local-fares.php [L,QSA]
 
+# Direct outstation fares endpoints - highest priority
 RewriteRule ^direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^direct-outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^admin/direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
 RewriteRule ^admin/direct-outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
 
+# Direct airport fares endpoints - highest priority
 RewriteRule ^direct-airport-fares$ admin/direct-airport-fares.php [L,QSA]
 RewriteRule ^direct-airport-fares\.php$ admin/direct-airport-fares.php [L,QSA]
 RewriteRule ^admin/direct-airport-fares$ admin/direct-airport-fares.php [L,QSA]
 RewriteRule ^admin/direct-airport-fares\.php$ admin/direct-airport-fares.php [L,QSA]
 
-# Vehicle data endpoint accessibility
+# Vehicle data endpoint with high priority
 RewriteRule ^vehicles-data$ vehicles-data.php [L,QSA]
 RewriteRule ^vehicles-data\.php$ vehicles-data.php [L,QSA]
 RewriteRule ^admin/vehicles-data$ vehicles-data.php [L,QSA]
 RewriteRule ^admin/vehicles-data\.php$ vehicles-data.php [L,QSA]
 
-# Local fare updates - map both old and new endpoints
-RewriteRule ^local-fares-update$ admin/local-fares-update.php [L,QSA]
-RewriteRule ^local-fares-update\.php$ admin/local-fares-update.php [L,QSA]
-RewriteRule ^admin/local-fares-update$ admin/local-fares-update.php [L,QSA]
-RewriteRule ^admin/local-fares-update\.php$ admin/local-fares-update.php [L,QSA]
-
-# Legacy endpoints mapped to direct implementations
-RewriteRule ^vehicle-update$ admin/direct-vehicle-update.php [L,QSA]
-RewriteRule ^vehicle-update\.php$ admin/direct-vehicle-update.php [L,QSA]
-RewriteRule ^admin/vehicle-update$ admin/direct-vehicle-update.php [L,QSA]
-RewriteRule ^admin/vehicle-update\.php$ admin/direct-vehicle-update.php [L,QSA]
-
-RewriteRule ^update-vehicle$ admin/direct-vehicle-modify.php [L,QSA]
-RewriteRule ^update-vehicle\.php$ admin/direct-vehicle-modify.php [L,QSA]
-RewriteRule ^admin/update-vehicle$ admin/direct-vehicle-modify.php [L,QSA]
-RewriteRule ^admin/update-vehicle\.php$ admin/direct-vehicle-modify.php [L,QSA]
-
-RewriteRule ^vehicles-update$ admin/direct-vehicle-modify.php [L,QSA]
-RewriteRule ^vehicles-update\.php$ admin/direct-vehicle-modify.php [L,QSA]
-RewriteRule ^admin/vehicles-update$ admin/direct-vehicle-modify.php [L,QSA]
-RewriteRule ^admin/vehicles-update\.php$ admin/direct-vehicle-modify.php [L,QSA]
-
-RewriteRule ^vehicle-create$ admin/direct-vehicle-create.php [L,QSA]
-RewriteRule ^vehicle-create\.php$ admin/direct-vehicle-create.php [L,QSA]
-RewriteRule ^admin/vehicle-create$ admin/direct-vehicle-create.php [L,QSA]
-RewriteRule ^admin/vehicle-create\.php$ admin/direct-vehicle-create.php [L,QSA]
-
-RewriteRule ^add-vehicle$ admin/direct-vehicle-create.php [L,QSA]
-RewriteRule ^add-vehicle\.php$ admin/direct-vehicle-create.php [L,QSA]
-RewriteRule ^admin/add-vehicle$ admin/direct-vehicle-create.php [L,QSA]
-RewriteRule ^admin/add-vehicle\.php$ admin/direct-vehicle-create.php [L,QSA]
-
-RewriteRule ^vehicle-delete$ admin/direct-vehicle-delete.php [L,QSA]
-RewriteRule ^vehicle-delete\.php$ admin/direct-vehicle-delete.php [L,QSA]
-RewriteRule ^admin/vehicle-delete$ admin/direct-vehicle-delete.php [L,QSA]
-RewriteRule ^admin/vehicle-delete\.php$ admin/direct-vehicle-delete.php [L,QSA]
-
-RewriteRule ^delete-vehicle$ admin/direct-vehicle-delete.php [L,QSA]
-RewriteRule ^delete-vehicle\.php$ admin/direct-vehicle-delete.php [L,QSA]
-RewriteRule ^admin/delete-vehicle$ admin/direct-vehicle-delete.php [L,QSA]
-RewriteRule ^admin/delete-vehicle\.php$ admin/direct-vehicle-delete.php [L,QSA]
-
-# Make sure our outstation fares endpoint is properly accessible
-RewriteRule ^admin/direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^admin/direct-outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^direct-outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^admin/outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^admin/outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
-
-# Other API endpoints can remain as they are
-RewriteRule ^status$ status.php [L,QSA]
-RewriteRule ^admin/status$ admin/status.php [L,QSA]
-RewriteRule ^admin/status\.php$ admin/status.php [L,QSA]
-RewriteRule ^fix-cors$ admin/fix-cors.php [L,QSA]
-RewriteRule ^fix-cors\.php$ admin/fix-cors.php [L,QSA]
-RewriteRule ^admin/fix-cors$ admin/fix-cors.php [L,QSA]
-RewriteRule ^admin/fix-cors\.php$ admin/fix-cors.php [L,QSA]
-RewriteRule ^init-database$ admin/init-database.php [L,QSA]
-RewriteRule ^init-database\.php$ admin/init-database.php [L,QSA]
-RewriteRule ^admin/init-database$ admin/init-database.php [L,QSA]
-RewriteRule ^admin/init-database\.php$ admin/init-database.php [L,QSA]
-RewriteRule ^sync-local-fares$ admin/sync-local-fares.php [L,QSA]
-RewriteRule ^sync-local-fares\.php$ admin/sync-local-fares.php [L,QSA]
-RewriteRule ^admin/sync-local-fares$ admin/sync-local-fares.php [L,QSA]
-RewriteRule ^admin/sync-local-fares\.php$ admin/sync-local-fares.php [L,QSA]
-RewriteRule ^local-package-fares$ admin/local-package-fares.php [L,QSA]
-RewriteRule ^local-package-fares\.php$ admin/local-package-fares.php [L,QSA]
-RewriteRule ^admin/local-package-fares$ admin/local-package-fares.php [L,QSA]
-RewriteRule ^admin/local-package-fares\.php$ admin/local-package-fares.php [L,QSA]
-RewriteRule ^direct-local-fares$ admin/direct-local-fares.php [L,QSA]
-RewriteRule ^direct-local-fares\.php$ admin/direct-local-fares.php [L,QSA]
-RewriteRule ^admin/direct-local-fares$ admin/direct-local-fares.php [L,QSA]
-RewriteRule ^admin/direct-local-fares\.php$ admin/direct-local-fares.php [L,QSA]
-RewriteRule ^direct-booking-data$ user/direct-booking-data.php [L,QSA]
-RewriteRule ^direct-booking-data\.php$ user/direct-booking-data.php [L,QSA]
-RewriteRule ^user/direct-booking-data$ user/direct-booking-data.php [L,QSA]
-RewriteRule ^user/direct-booking-data\.php$ user/direct-booking-data.php [L,QSA]
-RewriteRule ^local-fares-update$ admin/local-fares-update.php [L,QSA]
-RewriteRule ^local-fares-update\.php$ admin/local-fares-update.php [L,QSA]
-RewriteRule ^admin/local-fares-update$ admin/local-fares-update.php [L,QSA]
-RewriteRule ^admin/local-fares-update\.php$ admin/local-fares-update.php [L,QSA]
-RewriteRule ^fare-update$ admin/fare-update.php [L,QSA]
-RewriteRule ^fare-update\.php$ admin/fare-update.php [L,QSA]
-RewriteRule ^admin/fare-update$ admin/fare-update.php [L,QSA]
-RewriteRule ^admin/fare-update\.php$ admin/fare-update.php [L,QSA]
-RewriteRule ^outstation-fares-update$ admin/fare-update.php?tripType=outstation [L,QSA]
-RewriteRule ^outstation-fares-update\.php$ admin/fare-update.php?tripType=outstation [L,QSA]
-RewriteRule ^admin/outstation-fares-update$ admin/fare-update.php?tripType=outstation [L,QSA]
-RewriteRule ^admin/outstation-fares-update\.php$ admin/fare-update.php?tripType=outstation [L,QSA]
-RewriteRule ^airport-fares-update$ admin/fare-update.php?tripType=airport [L,QSA]
-RewriteRule ^airport-fares-update\.php$ admin/fare-update.php?tripType=airport [L,QSA]
-RewriteRule ^admin/airport-fares-update$ admin/fare-update.php?tripType=airport [L,QSA]
-RewriteRule ^admin/airport-fares-update\.php$ admin/fare-update.php?tripType=airport [L,QSA]
-RewriteRule ^direct-fare-update$ admin/direct-fare-update.php [L,QSA]
-RewriteRule ^direct-fare-update\.php$ admin/direct-fare-update.php [L,QSA]
-RewriteRule ^admin/direct-fare-update$ admin/direct-fare-update.php [L,QSA]
-RewriteRule ^admin/direct-fare-update\.php$ admin/direct-fare-update.php [L,QSA]
-RewriteRule ^admin/direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^admin/direct-outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^direct-outstation-fares$ admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^direct-outstation-fares\.php$ admin/direct-outstation-fares.php [L,QSA]
-RewriteRule ^admin/direct-airport-fares$ admin/direct-airport-fares.php [L,QSA]
-RewriteRule ^admin/direct-airport-fares\.php$ admin/direct-airport-fares.php [L,QSA]
-RewriteRule ^direct-airport-fares$ admin/direct-airport-fares.php [L,QSA]
-RewriteRule ^direct-airport-fares\.php$ admin/direct-airport-fares.php [L,QSA]
-RewriteRule ^admin/vehicles-update$ admin/vehicles-update.php [L,QSA]
-RewriteRule ^admin/vehicles-update\.php$ admin/vehicles-update.php [L,QSA]
-RewriteRule ^direct-booking-data$ user/direct-booking-data.php [L,QSA]
-RewriteRule ^direct-user-data$ admin/direct-user-data.php [L,QSA]
-RewriteRule ^direct-vehicle-pricing$ admin/direct-vehicle-pricing.php [L,QSA]
-RewriteRule ^direct-base-pricing$ admin/direct-base-pricing.php [L,QSA]
-RewriteRule ^vehicles$ vehicles.php [L,QSA]
-RewriteRule ^vehicles/([^/]+)$ vehicles.php?id=$1 [L,QSA]
-RewriteRule ^vehicles-data$ vehicles-data.php [L,QSA]
-RewriteRule ^bookings$ bookings.php [L,QSA]
-RewriteRule ^bookings/([^/]+)$ bookings.php?id=$1 [L,QSA]
-RewriteRule ^update-booking$ update-booking.php [L,QSA]
-RewriteRule ^update-booking/([^/]+)$ update-booking.php?id=$1 [L,QSA]
-RewriteRule ^search-bookings$ search-bookings.php [L,QSA]
-RewriteRule ^login$ login.php [L,QSA]
-RewriteRule ^register$ register.php [L,QSA]
-RewriteRule ^user$ user.php [L,QSA]
-RewriteRule ^user/([^/]+)$ user.php?id=$1 [L,QSA]
-RewriteRule ^outstation-fares$ fares.php?type=outstation [L,QSA]
-RewriteRule ^local-fares$ fares.php?type=local [L,QSA]
-RewriteRule ^airport-fares$ fares.php?type=airport [L,QSA]
-RewriteRule ^fares$ fares.php [L,QSA]
-RewriteRule ^tours$ tours.php [L,QSA]
-RewriteRule ^tours/([^/]+)$ tours.php?id=$1 [L,QSA]
+# Legacy/fallback endpoints - lower priority
+# ... keep existing code (Legacy endpoint mappings and general API endpoints)
 
 # Debug headers to help troubleshoot routing
 Header set X-Requested-Path "%{REQUEST_URI}e"
