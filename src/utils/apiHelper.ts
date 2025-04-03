@@ -12,6 +12,9 @@ export const isPreviewMode = (): boolean => {
      window.location.hostname.includes('localhost'));
 };
 
+// Re-export formatDataForMultipart from config/requestConfig
+export { formatDataForMultipart };
+
 /**
  * Unified API operation function for direct vehicle operations
  * @param endpoint - API endpoint to call
