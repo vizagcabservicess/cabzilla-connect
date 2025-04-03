@@ -1,4 +1,3 @@
-
 import { apiBaseUrl } from '@/config/api';
 import { toast } from 'sonner';
 
@@ -17,7 +16,8 @@ export const directVehicleOperation = async (endpoint: string, method: string, d
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'X-Force-Refresh': 'true',
         'X-Admin-Mode': 'true'
-      }
+      },
+      credentials: 'same-origin'
     };
     
     // Add request body if data is provided
@@ -43,8 +43,9 @@ export const directVehicleOperation = async (endpoint: string, method: string, d
     
     // Handle JSON response
     if (contentType && contentType.includes('application/json')) {
-      return await response.json();
-    } 
+      const jsonResponse = await response.json();
+      return jsonResponse;
+    }
     
     // Handle text response
     const text = await response.text();
@@ -54,6 +55,9 @@ export const directVehicleOperation = async (endpoint: string, method: string, d
       return JSON.parse(text);
     } catch (e) {
       console.error('Failed to parse response as JSON:', text);
+      if (text.trim() === '') {
+        return { status: 'success', message: 'Operation completed' };
+      }
       throw new Error('Invalid JSON response from server');
     }
   } catch (error: any) {
@@ -157,4 +161,30 @@ export const fixDatabaseTables = async (): Promise<boolean> => {
     console.error('Failed to fix database tables:', error);
     return false;
   }
+};
+
+// New helper function to standardize response formatting
+export const formatApiResponse = <T>(data: any): { status: string; data: T | null; message?: string } => {
+  if (!data) {
+    return { status: 'error', data: null, message: 'No data received' };
+  }
+  
+  // Check if response has expected format
+  if (data.status === 'success' || data.status === 'error') {
+    return {
+      status: data.status,
+      data: data.data || data.fares || data.result || null,
+      message: data.message
+    };
+  }
+  
+  // If response doesn't follow standard format but has useful data
+  if (Array.isArray(data) || (data && typeof data === 'object' && Object.keys(data).length > 0)) {
+    return {
+      status: 'success',
+      data: data
+    };
+  }
+  
+  return { status: 'error', data: null, message: 'Invalid response format' };
 };
