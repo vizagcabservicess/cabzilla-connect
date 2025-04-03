@@ -35,8 +35,10 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
         console.log(`Checking vehicle with endpoint: ${endpoint}`);
         
         const result = await directVehicleOperation(endpoint, 'GET', {
-          'X-Admin-Mode': 'true',
-          'X-Debug': 'true'
+          headers: {
+            'X-Admin-Mode': 'true',
+            'X-Debug': 'true'
+          }
         });
         
         console.log('Vehicle check result:', result);
@@ -82,8 +84,10 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
         try {
           console.log('Trying alternate fix method...');
           const result = await directVehicleOperation('api/admin/fix-database.php', 'GET', {
-            'X-Admin-Mode': 'true',
-            'X-Debug': 'true'
+            headers: {
+              'X-Admin-Mode': 'true',
+              'X-Debug': 'true'
+            }
           });
           
           if (result && result.status === 'success') {

@@ -1,4 +1,3 @@
-
 import { CabType } from '@/types/cab';
 import { apiBaseUrl } from '@/config/api';
 import { directVehicleOperation, formatDataForMultipart } from '@/utils/apiHelper';
@@ -279,7 +278,13 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
         const timestampedEndpoint = `${endpoint}?_t=${Date.now()}`;
         console.log(`Trying vehicle update endpoint: ${apiBaseUrl}/${timestampedEndpoint}`);
         
-        const response = await directVehicleOperation(timestampedEndpoint, 'POST', preparedVehicle);
+        const response = await directVehicleOperation(timestampedEndpoint, 'POST', {
+          headers: {
+            'X-Admin-Mode': 'true',
+            'X-Debug': 'true'
+          },
+          data: preparedVehicle
+        });
         
         if (response && response.status === 'success') {
           return response.vehicle || preparedVehicle;
@@ -389,7 +394,13 @@ export const deleteVehicle = async (vehicleId: string): Promise<{ status: string
         const timestampedEndpoint = `${endpoint}?_t=${Date.now()}`;
         console.log(`Trying vehicle deletion endpoint: ${apiBaseUrl}/${timestampedEndpoint}`);
         
-        const response = await directVehicleOperation(timestampedEndpoint, 'POST', { vehicleId });
+        const response = await directVehicleOperation(timestampedEndpoint, 'POST', {
+          headers: {
+            'X-Admin-Mode': 'true',
+            'X-Debug': 'true'
+          },
+          data: { vehicleId }
+        });
         
         if (response && response.status === 'success') {
           return { status: 'success' };
@@ -456,8 +467,14 @@ export const getVehicle = async (vehicleId: string): Promise<CabType> => {
 export const getVehicles = async (includeInactive = false): Promise<CabType[]> => {
   try {
     const response = await directVehicleOperation(
-      `api/admin/vehicles-data.php?includeInactive=${includeInactive ? 'true' : 'false'}&_t=${Date.now()}`, 
-      'GET'
+      `api/admin/vehicles-data.php`, 
+      'GET',
+      {
+        data: {
+          includeInactive: includeInactive ? 'true' : 'false',
+          _t: Date.now()
+        }
+      }
     );
     
     if (response && response.vehicles && Array.isArray(response.vehicles)) {

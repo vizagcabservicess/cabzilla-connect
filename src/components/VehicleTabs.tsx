@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,7 +34,11 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
         const response = await directVehicleOperation(
           `api/admin/vehicles-data.php?id=${vehicleId}&_t=${Date.now()}`, 
           'GET',
-          { 'X-Admin-Mode': 'true' }
+          { 
+            headers: {
+              'X-Admin-Mode': 'true'
+            }
+          }
         );
         
         console.log('Vehicle check result:', response);
@@ -90,7 +95,11 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
             const vehicleData = await directVehicleOperation(
               `api/admin/vehicles-data.php?id=${vehicleId}&_t=${Date.now()}`,
               'GET',
-              { 'X-Admin-Mode': 'true' }
+              {
+                headers: {
+                  'X-Admin-Mode': 'true'
+                }
+              }
             );
             console.log('Vehicle check result after database fix:', vehicleData);
             setLoaded(true);

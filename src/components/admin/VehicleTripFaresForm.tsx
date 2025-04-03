@@ -73,10 +73,15 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
         // First try to get vehicles from the direct API endpoint
         try {
           const apiResponse = await directVehicleOperation('/api/admin/get-vehicles.php', 'GET', {
-            includeInactive: 'true',
-            isAdminMode: 'true',
-            force_sync: 'true',
-            _t: Date.now() // Add timestamp to prevent caching
+            headers: {
+              'X-Admin-Mode': 'true',
+              'X-Debug': 'true'
+            },
+            data: {
+              includeInactive: 'true',
+              force_sync: 'true',
+              _t: Date.now() // Add timestamp to prevent caching
+            }
           });
           
           if (apiResponse && apiResponse.vehicles && Array.isArray(apiResponse.vehicles)) {
@@ -122,8 +127,14 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
           if (allVehicles.length < 3) {
             try {
               const legacyResult = await directVehicleOperation('/api/admin/direct-vehicle-pricing.php', 'GET', {
-                force_sync: 'true',
-                _t: Date.now()
+                headers: {
+                  'X-Admin-Mode': 'true',
+                  'X-Debug': 'true'
+                },
+                data: {
+                  force_sync: 'true',
+                  _t: Date.now()
+                }
               });
               
               if (legacyResult && legacyResult.vehicles) {
