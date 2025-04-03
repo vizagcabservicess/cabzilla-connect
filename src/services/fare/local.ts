@@ -41,7 +41,7 @@ export const updateLocalFares = async (
   try {
     console.log(`Starting local fares update for vehicle ID: ${vehicleId}`);
     
-    // STRICT VALIDATION: First check if vehicle ID is numeric
+    // CRITICAL: First check if vehicle ID is numeric
     if (/^\d+$/.test(vehicleId)) {
       console.error('Rejecting numeric vehicle ID:', vehicleId);
       toast.error(`Invalid numeric vehicle ID: ${vehicleId}. Please use standard vehicle names.`);
@@ -63,7 +63,7 @@ export const updateLocalFares = async (
       return false;
     }
     
-    // Check if vehicle exists via backend
+    // Check if vehicle exists via backend - CRITICAL STEP
     const isValid = await checkVehicleId(normalizedId);
     if (!isValid) {
       console.error(`Vehicle ID validation failed: ${normalizedId} (original: ${vehicleId})`);
@@ -89,8 +89,8 @@ export const updateLocalFares = async (
       price_10hrs_100km: pkg12hr.price
     };
     
-    // Send request to update local fares
-    const response = await fetch(`${getApiUrl('/api/local-fares-update')}?_t=${Date.now()}`, {
+    // CHANGE: Use direct-local-fares endpoint instead of local-fares-update for consistency with airport
+    const response = await fetch(`${getApiUrl('/api/direct-local-fares')}?_t=${Date.now()}`, {
       method: 'POST',
       headers: {
         ...getBypassHeaders(),
