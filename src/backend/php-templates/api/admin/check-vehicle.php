@@ -209,15 +209,16 @@ try {
             
             logMessage("Vehicle exists in vehicle_types: " . json_encode($vehicle));
         } else {
-            // Vehicle does not exist but is a standard type
-            $response['status'] = 'warning';
-            $response['message'] = 'Vehicle does not exist but is a standard type';
+            // CRITICAL: Always respond with false for vehicleExists if not found
+            // Never set canCreate = true (prevent auto-creation)
+            $response['status'] = 'error';
+            $response['message'] = 'Vehicle does not exist. Please create it first.';
             $response['vehicleExists'] = false;
             $response['originalId'] = $vehicleId;
             $response['mappedId'] = $normalizedId;
-            $response['canCreate'] = $isStandardVehicle;
+            $response['canCreate'] = false; // CRITICAL: Prevent auto-creation
             
-            logMessage("Vehicle does not exist but is standard type: $normalizedId");
+            logMessage("Vehicle does not exist: $normalizedId - Preventing auto-creation");
         }
     }
     

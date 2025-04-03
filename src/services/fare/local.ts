@@ -39,17 +39,35 @@ export const updateLocalFares = async (
   packages: Array<{ hours: number, km: number, price: number }>
 ): Promise<boolean> => {
   try {
-    // Validate vehicle ID first
+    console.log(`Starting local fares update for vehicle ID: ${vehicleId}`);
+    
+    // STRICT VALIDATION: First check if vehicle ID is numeric
+    if (/^\d+$/.test(vehicleId)) {
+      console.error('Rejecting numeric vehicle ID:', vehicleId);
+      toast.error(`Invalid numeric vehicle ID: ${vehicleId}. Please use standard vehicle names.`);
+      return false;
+    }
+    
+    // Validate vehicle ID through normalizer
     const normalizedId = normalizeVehicleId(vehicleId);
     if (!normalizedId) {
-      toast.error(`Invalid vehicle ID: ${vehicleId}`);
+      console.error(`Failed to normalize invalid vehicle ID: ${vehicleId}`);
+      toast.error(`Invalid vehicle ID: ${vehicleId}. Please use standard vehicle names.`);
+      return false;
+    }
+    
+    // Double-check the ID doesn't become numeric after normalization (shouldn't happen, but safety check)
+    if (/^\d+$/.test(normalizedId)) {
+      console.error('Normalized ID became numeric, rejecting:', normalizedId);
+      toast.error(`Invalid vehicle ID format: ${vehicleId}`);
       return false;
     }
     
     // Check if vehicle exists via backend
     const isValid = await checkVehicleId(normalizedId);
     if (!isValid) {
-      toast.error(`Invalid vehicle: ${vehicleId}`);
+      console.error(`Vehicle ID validation failed: ${normalizedId} (original: ${vehicleId})`);
+      toast.error(`Vehicle '${vehicleId}' does not exist or is invalid`);
       return false;
     }
     
