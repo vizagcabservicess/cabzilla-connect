@@ -8,7 +8,7 @@
 // Set CORS headers
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode, X-Debug');
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
@@ -18,6 +18,13 @@ header('Expires: 0');
 $logDir = __DIR__ . '/../../logs';
 if (!file_exists($logDir)) {
     mkdir($logDir, 0755, true);
+}
+
+// Function to log messages to file
+function logMessage($message) {
+    $timestamp = date('Y-m-d H:i:s');
+    $logMessage = "[$timestamp] $message\n";
+    error_log($logMessage, 3, __DIR__ . '/../../logs/direct-local-fares.log');
 }
 
 // Handle preflight OPTIONS request
@@ -40,13 +47,6 @@ function getDbConnection() {
     } catch (Exception $e) {
         throw new Exception("Database connection error: " . $e->getMessage());
     }
-}
-
-// Log message to file
-function logMessage($message) {
-    $timestamp = date('Y-m-d H:i:s');
-    $logMessage = "[$timestamp] $message\n";
-    error_log($logMessage, 3, __DIR__ . '/../../logs/direct-local-fares.log');
 }
 
 // ENHANCED: More comprehensive ID mapping with all known numeric IDs
@@ -139,6 +139,7 @@ try {
             ];
         }
         
+        // FIX: Ensure we output valid JSON
         echo json_encode([
             'status' => 'success',
             'fares' => $fares,
@@ -484,18 +485,31 @@ try {
             // Rollback on error
             $conn->rollBack();
             logMessage("Error updating fares: " . $e->getMessage());
-            throw $e;
+            
+            // FIX: Ensure proper JSON error response
+            http_response_code(500); // Set appropriate error code
+            echo json_encode([
+                'status' => 'error',
+                'message' => $e->getMessage()
+            ]);
+            exit;
         }
     } else {
+        // FIX: Ensure proper JSON response for invalid methods
         echo json_encode([
             'status' => 'error',
             'message' => 'Invalid request method'
         ]);
+        exit;
     }
 } catch (Exception $e) {
     logMessage("ERROR: " . $e->getMessage());
+    
+    // FIX: Ensure proper JSON error response
+    http_response_code(500); // Set appropriate error code
     echo json_encode([
         'status' => 'error',
         'message' => $e->getMessage()
     ]);
+    exit;
 }

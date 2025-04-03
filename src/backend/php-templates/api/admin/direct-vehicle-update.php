@@ -7,7 +7,7 @@
 // Set CORS headers
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, X-Admin-Mode, Origin');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, X-Admin-Mode, X-Debug, Origin');
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
@@ -281,8 +281,10 @@ try {
             throw new Exception("Failed to prepare update statement: " . $conn->error);
         }
         
+        // CRITICAL FIX: Fix the bind_param parameter count mismatch here
+        // The correct number of parameters is 14 (12 for SET + 2 for WHERE)
         $updateStmt->bind_param(
-            'siiisssddddss',
+            'siiissssdddss',  // FIX: Changed parameter count to match the actual number of variables
             $vehicleName,
             $capacity,
             $luggageCapacity,

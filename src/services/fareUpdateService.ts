@@ -1,6 +1,7 @@
+
 import { toast } from 'sonner';
 import { apiBaseUrl } from '@/config/api';
-import { directVehicleOperation } from '@/utils/apiHelper';
+import { directVehicleOperation, formatDataForMultipart } from '@/utils/apiHelper';
 
 // Comprehensive ID mapping with all known numeric IDs and their proper vehicle_ids
 const numericIdMapExtended: Record<string, string> = {
@@ -139,9 +140,22 @@ const verifyVehicleId = async (vehicleId: string): Promise<string> => {
     // Use check-vehicle endpoint to verify this ID exists
     console.log(`Verifying vehicle ID exists: ${normalizedId}`);
     try {
-      const checkResult = await directVehicleOperation('/api/admin/check-vehicle.php', 'GET', {
-        vehicleId: normalizedId
+      // FIX: Use direct fetch instead of directVehicleOperation to avoid CORS issues
+      const response = await fetch(`${apiBaseUrl}/api/admin/check-vehicle.php?vehicleId=${normalizedId}&_t=${Date.now()}`, {
+        method: 'GET',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-Force-Refresh': 'true', 
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'X-Admin-Mode': 'true'
+        }
       });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to verify vehicle ID: ${response.status} ${response.statusText}`);
+      }
+      
+      const checkResult = await response.json();
       
       // Check if the response indicates this is a problematic numeric ID
       if (checkResult && checkResult.isNumericId === true) {
@@ -207,18 +221,34 @@ export const updateOutstationFares = async (
     const verifiedVehicleId = await verifyVehicleId(vehicleId);
     console.log(`Updating outstation fares for vehicle ${vehicleId} (verified: ${verifiedVehicleId})`);
     
-    // Use directVehicleOperation for direct API access with explicit endpoint
-    const result = await directVehicleOperation('/api/admin/direct-outstation-fares.php', 'POST', {
-      vehicleId: verifiedVehicleId,
-      vehicle_id: verifiedVehicleId, // Add this to be extra sure
-      basePrice: oneWayBasePrice,
-      pricePerKm: oneWayPricePerKm,
-      roundTripBasePrice: roundTripBasePrice || oneWayBasePrice * 0.9,
-      roundTripPricePerKm: roundTripPricePerKm || oneWayPricePerKm * 0.85,
-      driverAllowance,
-      nightHaltCharge,
-      use_vehicle_id: 'true' // Signal to backend to explicitly use vehicle_id instead of id
+    // FIX: Use direct fetch with FormData instead of directVehicleOperation
+    const formData = new FormData();
+    formData.append('vehicleId', verifiedVehicleId);
+    formData.append('vehicle_id', verifiedVehicleId);
+    formData.append('basePrice', oneWayBasePrice.toString());
+    formData.append('pricePerKm', oneWayPricePerKm.toString());
+    formData.append('roundTripBasePrice', (roundTripBasePrice || oneWayBasePrice * 0.9).toString());
+    formData.append('roundTripPricePerKm', (roundTripPricePerKm || oneWayPricePerKm * 0.85).toString());
+    formData.append('driverAllowance', driverAllowance.toString());
+    formData.append('nightHaltCharge', nightHaltCharge.toString());
+    formData.append('use_vehicle_id', 'true');
+    
+    const response = await fetch(`${apiBaseUrl}/api/admin/direct-outstation-fares.php?_t=${Date.now()}`, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-Force-Refresh': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'X-Admin-Mode': 'true'
+      }
     });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to update outstation fares: ${response.status} ${response.statusText}`);
+    }
+    
+    const result = await response.json();
     
     if (result && result.status === 'success') {
       toast.success(`Updated outstation fares for ${verifiedVehicleId}`);
@@ -292,20 +322,57 @@ export const updateLocalFares = async (
     
     console.log(`Using final verified ID for local fares: ${verifiedVehicleId}`);
     
+    // FIX: Use direct fetch with FormData instead of directVehicleOperation
+    const formData = new FormData();
+    formData.append('vehicleId', verifiedVehicleId);
+    formData.append('vehicle_id', verifiedVehicleId);
+    formData.append('extraKmRate', extraKmRate.toString());
+    formData.append('extraHourRate', extraHourRate.toString());
+    formData.append('use_vehicle_id', 'true');
+    
+    // Add package prices if provided
+    if (typeof packages === 'object') {
+      if (packages['4hrs-40km']) {
+        formData.append('price4hr40km', String(packages['4hrs-40km']));
+      }
+      if (packages['8hrs-80km']) {
+        formData.append('price8hr80km', String(packages['8hrs-80km']));
+      }
+      if (packages['10hrs-100km']) {
+        formData.append('price10hr100km', String(packages['10hrs-100km']));
+      }
+      formData.append('packages', JSON.stringify(packages));
+    }
+    
     // Try the new direct endpoint first
     try {
       console.log(`Trying direct-local-fares endpoint with ID: ${verifiedVehicleId}`);
-      const directResult = await directVehicleOperation('/api/admin/direct-local-fares.php', 'POST', {
-        vehicleId: verifiedVehicleId,  // CRITICAL: Always use the vehicle_id field!
-        vehicle_id: verifiedVehicleId, // Add this to be extra sure
-        extraKmRate,
-        extraHourRate,
-        price4hr40km: typeof packages === 'object' && packages['4hrs-40km'] ? packages['4hrs-40km'] : 0,
-        price8hr80km: typeof packages === 'object' && packages['8hrs-80km'] ? packages['8hrs-80km'] : 0,
-        price10hr100km: typeof packages === 'object' && packages['10hrs-100km'] ? packages['10hrs-100km'] : 0,
-        packages: typeof packages === 'object' ? JSON.stringify(packages) : packages,
-        use_vehicle_id: 'true' // Signal to backend to explicitly use vehicle_id instead of id
+      
+      const response = await fetch(`${apiBaseUrl}/api/admin/direct-local-fares.php?_t=${Date.now()}`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'X-Admin-Mode': 'true'
+        }
       });
+      
+      if (!response.ok) {
+        console.warn(`Direct local fares endpoint failed with status: ${response.status}`);
+        throw new Error(`Failed to update local fares: ${response.status} ${response.statusText}`);
+      }
+      
+      const responseText = await response.text();
+      let directResult;
+      
+      try {
+        directResult = JSON.parse(responseText);
+      } catch (e) {
+        console.error('Failed to parse response as JSON:', responseText);
+        throw new Error('Invalid JSON response from server');
+      }
       
       if (directResult && directResult.status === 'success') {
         toast.success(`Updated local fares for ${verifiedVehicleId}`);
@@ -321,16 +388,51 @@ export const updateLocalFares = async (
     // Try using the local-fares-update endpoint
     console.log(`Trying local-fares-update endpoint with ID: ${verifiedVehicleId}`);
     try {
-      const localResult = await directVehicleOperation('/api/admin/local-fares-update.php', 'POST', {
-        vehicleId: verifiedVehicleId,
-        vehicle_id: verifiedVehicleId, // Add this to be extra sure
-        extraKmRate,
-        extraHourRate,
-        package4hr40km: typeof packages === 'object' && packages['4hrs-40km'] ? packages['4hrs-40km'] : 0,
-        package8hr80km: typeof packages === 'object' && packages['8hrs-80km'] ? packages['8hrs-80km'] : 0, 
-        package10hr100km: typeof packages === 'object' && packages['10hrs-100km'] ? packages['10hrs-100km'] : 0,
-        use_vehicle_id: 'true' // Signal to backend to explicitly use vehicle_id instead of id
+      // Create new FormData for this request to ensure fresh data
+      const localFormData = new FormData();
+      localFormData.append('vehicleId', verifiedVehicleId);
+      localFormData.append('vehicle_id', verifiedVehicleId);
+      localFormData.append('extraKmRate', extraKmRate.toString());
+      localFormData.append('extraHourRate', extraHourRate.toString());
+      localFormData.append('use_vehicle_id', 'true');
+      
+      if (typeof packages === 'object') {
+        if (packages['4hrs-40km']) {
+          localFormData.append('package4hr40km', String(packages['4hrs-40km']));
+        }
+        if (packages['8hrs-80km']) {
+          localFormData.append('package8hr80km', String(packages['8hrs-80km']));
+        }
+        if (packages['10hrs-100km']) {
+          localFormData.append('package10hr100km', String(packages['10hrs-100km']));
+        }
+      }
+      
+      const localResponse = await fetch(`${apiBaseUrl}/api/admin/local-fares-update.php?_t=${Date.now()}`, {
+        method: 'POST',
+        body: localFormData,
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'X-Admin-Mode': 'true'
+        }
       });
+      
+      if (!localResponse.ok) {
+        console.warn(`local-fares-update endpoint failed with status: ${localResponse.status}`);
+        throw new Error(`Failed to update local fares: ${localResponse.status} ${localResponse.statusText}`);
+      }
+      
+      const localResponseText = await localResponse.text();
+      let localResult;
+      
+      try {
+        localResult = JSON.parse(localResponseText);
+      } catch (e) {
+        console.error('Failed to parse response as JSON:', localResponseText);
+        throw new Error('Invalid JSON response from server');
+      }
       
       console.log("local-fares-update endpoint response:", localResult);
       
@@ -345,20 +447,46 @@ export const updateLocalFares = async (
     // Fall back to the older endpoint as last resort
     console.log(`Trying older local package fares update endpoint with ID: ${verifiedVehicleId}`);
     try {
-      const result = await directVehicleOperation('/api/admin/local-package-fares-update.php', 'POST', {
-        vehicleId: verifiedVehicleId,
-        vehicle_id: verifiedVehicleId, // Add this to be extra sure
-        extraKmRate,
-        extraHourRate,
-        packages: typeof packages === 'object' ? JSON.stringify(packages) : packages,
-        use_vehicle_id: 'true' // Signal to backend to explicitly use vehicle_id instead of id
+      // Create new FormData for this request to ensure fresh data
+      const legacyFormData = new FormData();
+      legacyFormData.append('vehicleId', verifiedVehicleId);
+      legacyFormData.append('vehicle_id', verifiedVehicleId);
+      legacyFormData.append('extraKmRate', extraKmRate.toString());
+      legacyFormData.append('extraHourRate', extraHourRate.toString());
+      legacyFormData.append('use_vehicle_id', 'true');
+      legacyFormData.append('packages', typeof packages === 'object' ? JSON.stringify(packages) : '{}');
+      
+      const legacyResponse = await fetch(`${apiBaseUrl}/api/admin/local-package-fares-update.php?_t=${Date.now()}`, {
+        method: 'POST',
+        body: legacyFormData,
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'X-Admin-Mode': 'true'
+        }
       });
       
-      if (result && result.status === 'success') {
+      if (!legacyResponse.ok) {
+        console.warn(`legacy endpoint failed with status: ${legacyResponse.status}`);
+        throw new Error(`Failed to update local fares: ${legacyResponse.status} ${legacyResponse.statusText}`);
+      }
+      
+      const legacyResponseText = await legacyResponse.text();
+      let legacyResult;
+      
+      try {
+        legacyResult = JSON.parse(legacyResponseText);
+      } catch (e) {
+        console.error('Failed to parse response as JSON:', legacyResponseText);
+        throw new Error('Invalid JSON response from server');
+      }
+      
+      if (legacyResult && legacyResult.status === 'success') {
         toast.success(`Updated local fares for ${verifiedVehicleId}`);
-        return result;
+        return legacyResult;
       } else {
-        throw new Error(result?.message || 'Failed to update local fares with any endpoint');
+        throw new Error(legacyResult?.message || 'Failed to update local fares with any endpoint');
       }
     } catch (error: any) {
       console.error(`Error updating local fares with legacy endpoint: ${error.message}`, error);
@@ -384,18 +512,42 @@ export const updateAirportFares = async (
     const verifiedVehicleId = await verifyVehicleId(vehicleId);
     console.log(`Updating airport fares for vehicle ${vehicleId} (verified: ${verifiedVehicleId})`);
     
-    const result = await directVehicleOperation('/api/admin/airport-fares-update.php', 'POST', {
-      vehicleId: verifiedVehicleId,
-      vehicle_id: verifiedVehicleId, // Add this to be extra sure
-      fares: locationFares,
-      use_vehicle_id: 'true' // Signal to backend to explicitly use vehicle_id instead of id
+    // FIX: Use direct fetch with FormData instead of directVehicleOperation
+    const formData = new FormData();
+    formData.append('vehicleId', verifiedVehicleId);
+    formData.append('vehicle_id', verifiedVehicleId);
+    formData.append('use_vehicle_id', 'true');
+    formData.append('fares', JSON.stringify(locationFares));
+    
+    const response = await fetch(`${apiBaseUrl}/api/admin/airport-fares-update.php?_t=${Date.now()}`, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-Force-Refresh': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'X-Admin-Mode': 'true'
+      }
     });
     
-    if (result && result.status === 'success') {
-      toast.success(`Updated airport fares for ${verifiedVehicleId}`);
-      return result;
-    } else {
-      throw new Error(result?.message || 'Failed to update airport fares');
+    if (!response.ok) {
+      throw new Error(`Failed to update airport fares: ${response.status} ${response.statusText}`);
+    }
+    
+    const responseText = await response.text();
+    
+    try {
+      const result = JSON.parse(responseText);
+      
+      if (result && result.status === 'success') {
+        toast.success(`Updated airport fares for ${verifiedVehicleId}`);
+        return result;
+      } else {
+        throw new Error(result?.message || 'Failed to update airport fares');
+      }
+    } catch (e) {
+      console.error('Failed to parse response as JSON:', responseText);
+      throw new Error('Invalid JSON response from server');
     }
   } catch (error: any) {
     console.error(`Error updating airport fares: ${error.message}`, error);
@@ -412,13 +564,30 @@ export const getAllOutstationFares = async (): Promise<Record<string, any>> => {
   
   try {
     // First try the direct admin endpoint for outstation fares with explicit force_refresh
-    const result = await directVehicleOperation('/api/admin/direct-outstation-fares.php', 'GET', {
-      getAllFares: 'true',
-      force_refresh: 'true', // Force synchronization with the database
-      force_sync: 'true',   // Additional parameter to ensure fresh data
-      includeInactive: 'true', // Include inactive vehicles for admin view
-      isAdminMode: 'true'    // Ensure we're in admin mode
+    const response = await fetch(`${apiBaseUrl}/api/admin/direct-outstation-fares.php?getAllFares=true&force_refresh=true&force_sync=true&includeInactive=true&isAdminMode=true&_t=${Date.now()}`, {
+      method: 'GET',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-Force-Refresh': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'X-Admin-Mode': 'true'
+      }
     });
+    
+    if (!response.ok) {
+      console.warn(`Outstation fares fetch failed with status: ${response.status}`);
+      throw new Error(`Failed to fetch outstation fares: ${response.status} ${response.statusText}`);
+    }
+    
+    const responseText = await response.text();
+    let result;
+    
+    try {
+      result = JSON.parse(responseText);
+    } catch (e) {
+      console.error('Failed to parse response as JSON:', responseText);
+      throw new Error('Invalid JSON response from server');
+    }
     
     if (result && result.fares && Object.keys(result.fares).length > 0) {
       console.log(`Retrieved ${Object.keys(result.fares).length} outstation fares directly`);
@@ -426,13 +595,30 @@ export const getAllOutstationFares = async (): Promise<Record<string, any>> => {
     }
     
     // Try the fallback endpoint if first one returns empty
-    const fallbackResult = await directVehicleOperation('/api/admin/outstation-fares-update.php', 'GET', {
-      sync: 'true',
-      force_sync: 'true',
-      force_refresh: 'true',
-      includeInactive: 'true', 
-      isAdminMode: 'true'
+    const fallbackResponse = await fetch(`${apiBaseUrl}/api/admin/outstation-fares-update.php?sync=true&force_sync=true&force_refresh=true&includeInactive=true&isAdminMode=true&_t=${Date.now()}`, {
+      method: 'GET',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-Force-Refresh': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'X-Admin-Mode': 'true'
+      }
     });
+    
+    if (!fallbackResponse.ok) {
+      console.warn(`Fallback outstation fares fetch failed with status: ${fallbackResponse.status}`);
+      throw new Error(`Failed to fetch outstation fares: ${fallbackResponse.status} ${fallbackResponse.statusText}`);
+    }
+    
+    const fallbackResponseText = await fallbackResponse.text();
+    let fallbackResult;
+    
+    try {
+      fallbackResult = JSON.parse(fallbackResponseText);
+    } catch (e) {
+      console.error('Failed to parse fallback response as JSON:', fallbackResponseText);
+      throw new Error('Invalid JSON response from server');
+    }
     
     if (fallbackResult && fallbackResult.fares && Object.keys(fallbackResult.fares).length > 0) {
       console.log(`Retrieved ${Object.keys(fallbackResult.fares).length} outstation fares from fallback`);
@@ -440,12 +626,30 @@ export const getAllOutstationFares = async (): Promise<Record<string, any>> => {
     }
     
     // If both methods fail, try to get vehicles directly and combine with any existing fare data
-    const vehiclesResult = await directVehicleOperation('/api/admin/get-vehicles.php', 'GET', { 
-      includeInactive: 'true',
-      force_sync: 'true',
-      force_refresh: 'true',
-      isAdminMode: 'true'
+    const vehiclesResponse = await fetch(`${apiBaseUrl}/api/admin/get-vehicles.php?includeInactive=true&force_sync=true&force_refresh=true&isAdminMode=true&_t=${Date.now()}`, {
+      method: 'GET',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-Force-Refresh': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'X-Admin-Mode': 'true'
+      }
     });
+    
+    if (!vehiclesResponse.ok) {
+      console.warn(`Vehicles fetch failed with status: ${vehiclesResponse.status}`);
+      return {};
+    }
+    
+    const vehiclesResponseText = await vehiclesResponse.text();
+    let vehiclesResult;
+    
+    try {
+      vehiclesResult = JSON.parse(vehiclesResponseText);
+    } catch (e) {
+      console.error('Failed to parse vehicles response as JSON:', vehiclesResponseText);
+      return {};
+    }
     
     if (vehiclesResult && vehiclesResult.vehicles && vehiclesResult.vehicles.length > 0) {
       console.log(`Retrieved ${vehiclesResult.vehicles.length} vehicles with outstation fare data`);
@@ -490,11 +694,30 @@ export const getAllLocalFares = async (): Promise<Record<string, any>> => {
   
   try {
     // First try the new direct-local-fares endpoint
-    const directResult = await directVehicleOperation('/api/admin/direct-local-fares.php', 'GET', {
-      includeInactive: 'true',
-      isAdminMode: 'true',
-      force_refresh: 'true'
+    const response = await fetch(`${apiBaseUrl}/api/admin/direct-local-fares.php?includeInactive=true&isAdminMode=true&force_refresh=true&_t=${Date.now()}`, {
+      method: 'GET',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-Force-Refresh': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'X-Admin-Mode': 'true'
+      }
     });
+    
+    if (!response.ok) {
+      console.warn(`Local fares fetch failed with status: ${response.status}`);
+      throw new Error(`Failed to fetch local fares: ${response.status} ${response.statusText}`);
+    }
+    
+    const responseText = await response.text();
+    let directResult;
+    
+    try {
+      directResult = JSON.parse(responseText);
+    } catch (e) {
+      console.error('Failed to parse response as JSON:', responseText);
+      throw new Error('Invalid JSON response from server');
+    }
     
     if (directResult && directResult.status === 'success' && directResult.fares) {
       console.log(`Retrieved ${Object.keys(directResult.fares).length} local fares from direct endpoint`);
@@ -502,11 +725,30 @@ export const getAllLocalFares = async (): Promise<Record<string, any>> => {
     }
 
     // Fallback to the older endpoint
-    const result = await directVehicleOperation('/api/admin/local-fares-update.php', 'GET', {
-      sync: 'true',
-      includeInactive: 'true',
-      isAdminMode: 'true'
+    const fallbackResponse = await fetch(`${apiBaseUrl}/api/admin/local-fares-update.php?sync=true&includeInactive=true&isAdminMode=true&_t=${Date.now()}`, {
+      method: 'GET',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-Force-Refresh': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'X-Admin-Mode': 'true'
+      }
     });
+    
+    if (!fallbackResponse.ok) {
+      console.warn(`Fallback local fares fetch failed with status: ${fallbackResponse.status}`);
+      return {};
+    }
+    
+    const fallbackResponseText = await fallbackResponse.text();
+    let result;
+    
+    try {
+      result = JSON.parse(fallbackResponseText);
+    } catch (e) {
+      console.error('Failed to parse fallback response as JSON:', fallbackResponseText);
+      return {};
+    }
     
     if (result && result.status === 'success' && result.fares) {
       console.log(`Retrieved ${Object.keys(result.fares).length} local fares from fallback endpoint`);
@@ -528,10 +770,30 @@ export const getAllAirportFares = async (): Promise<Record<string, any>> => {
   console.log(`Fetching all airport fares`);
   
   try {
-    const result = await directVehicleOperation('/api/admin/airport-fares-update.php', 'GET', {
-      includeInactive: 'true',
-      isAdminMode: 'true'
+    const response = await fetch(`${apiBaseUrl}/api/admin/airport-fares-update.php?includeInactive=true&isAdminMode=true&_t=${Date.now()}`, {
+      method: 'GET',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-Force-Refresh': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'X-Admin-Mode': 'true'
+      }
     });
+    
+    if (!response.ok) {
+      console.warn(`Airport fares fetch failed with status: ${response.status}`);
+      return {};
+    }
+    
+    const responseText = await response.text();
+    let result;
+    
+    try {
+      result = JSON.parse(responseText);
+    } catch (e) {
+      console.error('Failed to parse response as JSON:', responseText);
+      return {};
+    }
     
     if (result && result.status === 'success' && result.fares) {
       console.log(`Retrieved ${Object.keys(result.fares).length} airport fares`);

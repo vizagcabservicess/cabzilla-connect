@@ -109,6 +109,7 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
       const url = `${apiBaseUrl}/api/admin/direct-vehicle-update.php?_t=${unique}`;
       console.log('Trying direct form submission to:', url);
       
+      // FIX: Remove origin header as browsers prevent setting this header manually
       const response = await fetch(url, {
         method: 'POST',
         body: formData,
