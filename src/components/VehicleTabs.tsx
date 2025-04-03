@@ -19,12 +19,33 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
 
   useEffect(() => {
     const loadData = async () => {
+      if (!vehicleId) {
+        setLoaded(true);
+        return;
+      }
+      
       try {
         setError(null);
+        console.log(`Loading data for vehicle: ${vehicleId}`);
+        
         // Check if the vehicle exists first
-        const vehicleData = await directVehicleOperation(`api/admin/check-vehicle.php?id=${vehicleId}`, 'GET');
-        console.log('Vehicle check result:', vehicleData);
-        setLoaded(true);
+        const response = await directVehicleOperation(`api/admin/vehicles-data.php?id=${vehicleId}&_t=${Date.now()}`, 'GET');
+        console.log('Vehicle check result:', response);
+        
+        if (response && response.vehicles && response.vehicles.length > 0) {
+          setLoaded(true);
+        } else {
+          if (isPreviewMode()) {
+            console.log('In preview mode, proceeding with mock data for vehicle:', vehicleId);
+            setLoaded(true);
+            return;
+          }
+          
+          setError('Failed to load vehicle data. The vehicle may not exist.');
+          
+          // Try to fix database tables
+          tryFixDatabase();
+        }
       } catch (err) {
         console.error('Error loading vehicle data:', err);
         
@@ -54,7 +75,7 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
           toast.success('Database tables fixed successfully. Try again.');
           // Try loading data again
           try {
-            const vehicleData = await directVehicleOperation(`api/admin/check-vehicle.php?id=${vehicleId}`, 'GET');
+            const vehicleData = await directVehicleOperation(`api/admin/vehicles-data.php?id=${vehicleId}&_t=${Date.now()}`, 'GET');
             console.log('Vehicle check result after database fix:', vehicleData);
             setLoaded(true);
             setError(null);
@@ -62,18 +83,29 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
             console.error('Error loading vehicle data after fix:', loadErr);
           }
         } else {
-          toast.error('Could not fix database tables.');
+          // Even if fix fails, still show the management screen in preview mode
+          if (isPreviewMode()) {
+            console.log('In preview mode, proceeding despite database fix failure');
+            setLoaded(true);
+            setError(null);
+          } else {
+            toast.error('Could not fix database tables.');
+          }
         }
       } catch (fixErr) {
         console.error('Error fixing database tables:', fixErr);
+        
+        // Even if fix fails, still show the management screen in preview mode
+        if (isPreviewMode()) {
+          setLoaded(true);
+          setError(null);
+        }
       } finally {
         setIsFixing(false);
       }
     };
 
-    if (vehicleId) {
-      loadData();
-    }
+    loadData();
   }, [vehicleId]);
 
   if (error) {

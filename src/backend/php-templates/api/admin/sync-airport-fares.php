@@ -71,8 +71,11 @@ if (file_exists($persistentCacheFile)) {
             $persistentData = json_decode($persistentJson, true);
             if (!is_array($persistentData)) {
                 $persistentData = [];
+            } else {
+                logMessage("Loaded " . count($persistentData) . " vehicles from persistent data");
             }
         } catch (Exception $e) {
+            logMessage("Error parsing persistent data: " . $e->getMessage());
             $persistentData = [];
         }
     }
@@ -95,8 +98,13 @@ if (empty($vehicleIds)) {
         'luxury',
         'tempo_traveller'
     ];
+    logMessage("No vehicles found in persistent data, using default list");
+} else {
+    logMessage("Using " . count($vehicleIds) . " vehicles from persistent data");
 }
 
+// In a real environment, we would now sync the airport fares table with these vehicle IDs
+// For this mock implementation, we'll just log that the sync would occur
 logMessage('Starting airport fares synchronization for vehicles: ' . implode(', ', $vehicleIds));
 logMessage("Synced fares for " . count($vehicleIds) . " vehicles");
 

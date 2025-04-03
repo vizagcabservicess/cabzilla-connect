@@ -1,4 +1,3 @@
-
 <?php
 // Alias for vehicle-update.php
 // This file simply includes the main vehicle-update.php file for compatibility
@@ -38,60 +37,62 @@ if (!$vehicleData && $_POST) {
     file_put_contents($logFile, "[$timestamp] Using POST data instead\n", FILE_APPEND);
 }
 
+// Load the existing vehicle data from persistent storage to avoid data loss
+$cacheDir = __DIR__ . '/../../cache';
+$persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
+$savedVehicleData = null;
+
+// Check if we can read from persistent storage to fill in missing values
+if (file_exists($persistentCacheFile)) {
+    $persistentJson = file_get_contents($persistentCacheFile);
+    if ($persistentJson) {
+        try {
+            $persistentData = json_decode($persistentJson, true);
+            if (is_array($persistentData)) {
+                // Find existing vehicle data
+                $vehicleId = $vehicleData['id'] ?? $vehicleData['vehicleId'] ?? null;
+                foreach ($persistentData as $existingVehicle) {
+                    if ($existingVehicle['id'] === $vehicleId || $existingVehicle['vehicleId'] === $vehicleId) {
+                        // Save existing vehicle data for reference
+                        $savedVehicleData = $existingVehicle;
+                        file_put_contents($logFile, "[$timestamp] Found existing data for vehicle: $vehicleId\n", FILE_APPEND);
+                        break;
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            file_put_contents($logFile, "[$timestamp] Error reading persistent data: {$e->getMessage()}\n", FILE_APPEND);
+        }
+    }
+}
+
 // Force values to be set when passed to the update script
 if ($vehicleData) {
     // If id/vehicleId is provided but no price data, keep these fields non-zero
     // to prevent data loss during refresh
-    if (!isset($vehicleData['price']) || $vehicleData['price'] === 0) {
-        // Try to look up current price from database or use a default
-        $vehicleData['price'] = $vehicleData['basePrice'] ?? 1500;
+    if ((!isset($vehicleData['price']) || $vehicleData['price'] === 0) && $savedVehicleData) {
+        $vehicleData['price'] = $savedVehicleData['price'] ?? $savedVehicleData['basePrice'] ?? 1500;
+        file_put_contents($logFile, "[$timestamp] Restored price from saved data: {$vehicleData['price']}\n", FILE_APPEND);
     }
     
-    if (!isset($vehicleData['basePrice']) || $vehicleData['basePrice'] === 0) {
-        $vehicleData['basePrice'] = $vehicleData['price'] ?? 1500;
+    if ((!isset($vehicleData['basePrice']) || $vehicleData['basePrice'] === 0) && $savedVehicleData) {
+        $vehicleData['basePrice'] = $savedVehicleData['basePrice'] ?? $savedVehicleData['price'] ?? 1500;
+        file_put_contents($logFile, "[$timestamp] Restored basePrice from saved data: {$vehicleData['basePrice']}\n", FILE_APPEND);
     }
     
-    if (!isset($vehicleData['pricePerKm']) || $vehicleData['pricePerKm'] === 0) {
-        $vehicleData['pricePerKm'] = 14; // Default value
+    if ((!isset($vehicleData['pricePerKm']) || $vehicleData['pricePerKm'] === 0) && $savedVehicleData) {
+        $vehicleData['pricePerKm'] = $savedVehicleData['pricePerKm'] ?? 14;
+        file_put_contents($logFile, "[$timestamp] Restored pricePerKm from saved data: {$vehicleData['pricePerKm']}\n", FILE_APPEND);
     }
     
-    if (!isset($vehicleData['isActive'])) {
-        $vehicleData['isActive'] = true;
+    if ((!isset($vehicleData['amenities']) || empty($vehicleData['amenities'])) && $savedVehicleData) {
+        $vehicleData['amenities'] = $savedVehicleData['amenities'] ?? ['AC', 'Bottle Water', 'Music System'];
+        file_put_contents($logFile, "[$timestamp] Restored amenities from saved data\n", FILE_APPEND);
     }
     
-    if (empty($vehicleData['amenities'])) {
-        $vehicleData['amenities'] = ['AC', 'Bottle Water', 'Music System'];
-    }
-    
-    // Check if we can read from persistent storage to fill in missing values
-    $cacheDir = __DIR__ . '/../../cache';
-    $persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
-    
-    if (file_exists($persistentCacheFile)) {
-        $persistentJson = file_get_contents($persistentCacheFile);
-        if ($persistentJson) {
-            try {
-                $persistentData = json_decode($persistentJson, true);
-                if (is_array($persistentData)) {
-                    // Find existing vehicle data
-                    $vehicleId = $vehicleData['id'] ?? $vehicleData['vehicleId'] ?? null;
-                    foreach ($persistentData as $existingVehicle) {
-                        if ($existingVehicle['id'] === $vehicleId || $existingVehicle['vehicleId'] === $vehicleId) {
-                            // Fill in missing values from persistent storage
-                            foreach ($existingVehicle as $key => $value) {
-                                if (!isset($vehicleData[$key]) || 
-                                    (is_numeric($vehicleData[$key]) && $vehicleData[$key] === 0)) {
-                                    $vehicleData[$key] = $value;
-                                }
-                            }
-                            break;
-                        }
-                    }
-                }
-            } catch (Exception $e) {
-                file_put_contents($logFile, "[$timestamp] Error reading persistent data: {$e->getMessage()}\n", FILE_APPEND);
-            }
-        }
+    if (!isset($vehicleData['isActive']) && $savedVehicleData) {
+        $vehicleData['isActive'] = $savedVehicleData['isActive'];
+        file_put_contents($logFile, "[$timestamp] Restored isActive from saved data\n", FILE_APPEND);
     }
     
     // Make sure the data is available to vehicle-update.php

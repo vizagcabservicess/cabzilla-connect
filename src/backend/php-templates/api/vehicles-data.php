@@ -69,17 +69,30 @@ if (!file_exists($cacheDir)) {
 // Create a persistent cache file to store updated vehicle data
 $persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
 
-// Try to load persistent cache first
+// Create log directory if needed
+$logDir = __DIR__ . '/../../logs';
+if (!file_exists($logDir)) {
+    @mkdir($logDir, 0755, true);
+}
+
+$logFile = $logDir . '/vehicles_data_' . date('Y-m-d') . '.log';
+$timestamp = date('Y-m-d H:i:s');
+$logMessage = "[$timestamp] Vehicles data request with includeInactive=$includeInactive, forceRefresh=$forceRefresh, isAdminMode=$isAdminMode" . ($vehicleId ? ", vehicleId=$vehicleId" : "") . "\n";
+file_put_contents($logFile, $logMessage, FILE_APPEND);
+
+// Try to load persistent cache first - this is CRITICAL for persistence
 $persistentData = [];
 if (file_exists($persistentCacheFile)) {
     $persistentJson = file_get_contents($persistentCacheFile);
     if ($persistentJson) {
         try {
-            $persistentData = json_decode($persistentJson, true);
-            if (!is_array($persistentData)) {
-                $persistentData = [];
+            $data = json_decode($persistentJson, true);
+            if (is_array($data)) {
+                file_put_contents($logFile, "[$timestamp] Loaded " . count($data) . " vehicles from persistent cache\n", FILE_APPEND);
+                $persistentData = $data;
             }
         } catch (Exception $e) {
+            file_put_contents($logFile, "[$timestamp] Failed to parse persistent JSON: " . $e->getMessage() . "\n", FILE_APPEND);
             $persistentData = [];
         }
     }
@@ -174,51 +187,52 @@ $defaultVehicles = [
     ]
 ];
 
-// Merge default vehicles with persistent data
-$vehicles = [];
+// If we have no persistent data, use the default data and save it as persistent
+if (empty($persistentData)) {
+    $persistentData = $defaultVehicles;
+    file_put_contents($persistentCacheFile, json_encode($persistentData, JSON_PRETTY_PRINT));
+    file_put_contents($logFile, "[$timestamp] No persistent data found, initialized with default vehicles\n", FILE_APPEND);
+}
+
+// Merge default vehicles with persistent data - ensuring we have all required vehicles
+$knownVehicleIds = array_column($persistentData, 'id');
 foreach ($defaultVehicles as $defaultVehicle) {
-    $vehicleId = $defaultVehicle['id'];
-    $found = false;
-    
-    // Look for this vehicle in persistent data
-    foreach ($persistentData as $persistentVehicle) {
-        if (isset($persistentVehicle['id']) && $persistentVehicle['id'] === $vehicleId) {
-            // Use the persistent data, but ensure all required fields exist
-            $mergedVehicle = array_merge($defaultVehicle, $persistentVehicle);
-            $vehicles[] = $mergedVehicle;
-            $found = true;
-            break;
-        }
-    }
-    
-    // If not found in persistent data, use default
-    if (!$found) {
-        $vehicles[] = $defaultVehicle;
+    if (!in_array($defaultVehicle['id'], $knownVehicleIds)) {
+        $persistentData[] = $defaultVehicle;
+        file_put_contents($logFile, "[$timestamp] Added missing default vehicle: {$defaultVehicle['id']}\n", FILE_APPEND);
     }
 }
+
+// Always use the persistent data as our vehicle source
+$vehicles = $persistentData;
+file_put_contents($logFile, "[$timestamp] Using " . count($vehicles) . " vehicles from persistent data\n", FILE_APPEND);
 
 // Filter inactive vehicles if needed
 if (!$includeInactive) {
     $filteredVehicles = [];
     foreach ($vehicles as $vehicle) {
-        if ($vehicle['isActive'] === true) {
+        if (isset($vehicle['isActive']) && $vehicle['isActive'] === true) {
             $filteredVehicles[] = $vehicle;
         }
     }
     $vehicles = $filteredVehicles;
+    file_put_contents($logFile, "[$timestamp] Filtered to " . count($vehicles) . " active vehicles\n", FILE_APPEND);
 }
 
 // Filter by vehicle ID if specified
 if ($vehicleId) {
     $filteredVehicles = [];
     foreach ($vehicles as $vehicle) {
-        if ($vehicle['id'] === $vehicleId || $vehicle['vehicleId'] === $vehicleId) {
+        if ((isset($vehicle['id']) && $vehicle['id'] === $vehicleId) || 
+            (isset($vehicle['vehicleId']) && $vehicle['vehicleId'] === $vehicleId)) {
             $filteredVehicles[] = $vehicle;
             break;
         }
     }
+    
     if (!empty($filteredVehicles)) {
         $vehicles = $filteredVehicles;
+        file_put_contents($logFile, "[$timestamp] Filtered to vehicle ID: $vehicleId\n", FILE_APPEND);
     }
 }
 
@@ -227,8 +241,12 @@ echo json_encode([
     'status' => 'success',
     'message' => 'Vehicles retrieved successfully',
     'vehicles' => $vehicles,
+    'count' => count($vehicles),
     'timestamp' => time(),
     'includeInactive' => $includeInactive,
     'forceRefresh' => $forceRefresh,
     'isAdminMode' => $isAdminMode
 ]);
+
+// Save the persistent data back if it was changed
+file_put_contents($persistentCacheFile, json_encode($persistentData, JSON_PRETTY_PRINT));

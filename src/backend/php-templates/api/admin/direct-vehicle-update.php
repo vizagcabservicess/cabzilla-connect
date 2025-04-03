@@ -23,6 +23,12 @@ if (!file_exists($logDir)) {
     mkdir($logDir, 0755, true);
 }
 
+// Create cache directory if needed
+$cacheDir = __DIR__ . '/../../cache';
+if (!file_exists($cacheDir)) {
+    mkdir($cacheDir, 0755, true);
+}
+
 // Function to log messages to a file
 function logMessage($message, $filename = 'direct-vehicle-update.log') {
     global $logDir;
@@ -118,16 +124,10 @@ try {
         throw new Exception("Vehicle ID is required");
     }
     
-    // Create cache directory if needed
-    $cacheDir = __DIR__ . '/../../cache';
-    if (!file_exists($cacheDir)) {
-        mkdir($cacheDir, 0755, true);
-    }
-    
     // The persistent cache file path
     $persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
     
-    // Try to load existing persistent data
+    // Try to load existing persistent data - CRITICAL FOR CONSISTENCY
     $persistentData = [];
     if (file_exists($persistentCacheFile)) {
         $persistentJson = file_get_contents($persistentCacheFile);
@@ -136,12 +136,15 @@ try {
                 $data = json_decode($persistentJson, true);
                 if (is_array($data)) {
                     $persistentData = $data;
+                    logMessage("Loaded " . count($persistentData) . " vehicles from persistent cache");
                 }
             } catch (Exception $e) {
                 // Failed to parse JSON, start fresh
                 logMessage("Error parsing persistent data: " . $e->getMessage());
             }
         }
+    } else {
+        logMessage("Persistent cache file not found, will create a new one");
     }
     
     // CRITICAL: Handle the isActive flag with proper fallbacks (default to TRUE if not specified)
@@ -165,7 +168,7 @@ try {
     $luggageCapacity = isset($vehicleData['luggageCapacity']) ? intval($vehicleData['luggageCapacity']) : 
                       (isset($vehicleData['luggage_capacity']) ? intval($vehicleData['luggage_capacity']) : 2);
     
-    // Handle price fields
+    // Handle price fields - DON'T RESET THESE TO ZERO!!
     $basePrice = isset($vehicleData['basePrice']) && $vehicleData['basePrice'] !== "" ? floatval($vehicleData['basePrice']) : 
                 (isset($vehicleData['base_price']) && $vehicleData['base_price'] !== "" ? floatval($vehicleData['base_price']) : 
                 (isset($vehicleData['price']) && $vehicleData['price'] !== "" ? floatval($vehicleData['price']) : 0));
@@ -242,7 +245,7 @@ try {
     
     // Update or add the vehicle in persistent data
     if ($vehicleIndex >= 0) {
-        // Update existing vehicle
+        // Update existing vehicle - IMPORTANT: Merge to preserve existing fields
         $persistentData[$vehicleIndex] = array_merge($persistentData[$vehicleIndex], $formattedVehicle);
         logMessage("Updated existing vehicle in persistent data");
     } else {
@@ -253,7 +256,7 @@ try {
     
     // Save the updated data back to the persistent cache file
     if (file_put_contents($persistentCacheFile, json_encode($persistentData, JSON_PRETTY_PRINT))) {
-        logMessage("Successfully saved persistent vehicle data");
+        logMessage("Successfully saved persistent vehicle data with " . count($persistentData) . " vehicles");
     } else {
         logMessage("Failed to save persistent vehicle data");
     }
@@ -263,6 +266,7 @@ try {
     foreach ($cacheFiles as $file) {
         if ($file !== $persistentCacheFile) {
             @unlink($file);
+            logMessage("Cleared cache file: " . basename($file));
         }
     }
     
