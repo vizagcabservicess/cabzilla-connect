@@ -1,4 +1,3 @@
-
 <?php
 /**
  * Direct Local Fares Endpoint 
@@ -8,14 +7,18 @@
 
 // Set headers for CORS - FIX: Set these headers consistently
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, X-Admin-Mode');
+header('Access-Control-Allow-Methods: GET, POST, PUT, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, X-Admin-Mode, Origin');
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
-// CRITICAL FIX: Turn off error output to response
+// CRITICAL FIX: Clear any existing output before processing
+ob_clean();
+ob_start();
+
+// Turn off errors to prevent them from being output in the JSON response
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
@@ -89,13 +92,13 @@ try {
         }
         
         // Extract fare data with fallbacks for different field names
-        $price4hr40km = isset($data['price_4hrs_40km']) ? floatval($data['price_4hrs_40km']) : 
+        $price4hrs40km = isset($data['price_4hrs_40km']) ? floatval($data['price_4hrs_40km']) : 
                        (isset($data['package4hr40km']) ? floatval($data['package4hr40km']) : 0);
                        
-        $price8hr80km = isset($data['price_8hrs_80km']) ? floatval($data['price_8hrs_80km']) : 
+        $price8hrs80km = isset($data['price_8hrs_80km']) ? floatval($data['price_8hrs_80km']) : 
                        (isset($data['package8hr80km']) ? floatval($data['package8hr80km']) : 0);
                        
-        $price10hr100km = isset($data['price_10hrs_100km']) ? floatval($data['price_10hrs_100km']) : 
+        $price10hrs100km = isset($data['price_10hrs_100km']) ? floatval($data['price_10hrs_100km']) : 
                          (isset($data['package10hr100km']) ? floatval($data['package10hr100km']) : 0);
                          
         $extraKmRate = isset($data['price_extra_km']) ? floatval($data['price_extra_km']) : 
@@ -110,7 +113,7 @@ try {
         // Normalize vehicle ID (lowercase, and map numeric IDs if needed)
         $originalId = $vehicleId;
         
-        // Hard-coded mappings for numeric IDs
+        // Hard-coded mappings for numeric IDs - KEEP IN SYNC WITH FRONTEND
         $numericMappings = [
             '1' => 'sedan',
             '2' => 'ertiga', 
@@ -125,7 +128,16 @@ try {
             '180' => 'etios',
             '592' => 'urbania',
             '1266' => 'mpv',
-            '1299' => 'toyota'
+            '1270' => 'mpv',
+            '1271' => 'etios',
+            '1272' => 'etios',
+            '1273' => 'etios',
+            '1299' => 'toyota',
+            '100' => 'sedan',
+            '101' => 'sedan',
+            '102' => 'sedan',
+            '200' => 'ertiga',
+            '201' => 'ertiga'
         ];
         
         // Check if vehicleId is numeric and has a mapping
@@ -137,37 +149,14 @@ try {
         // Normalize to lowercase and replace spaces with underscores
         $vehicleId = strtolower(str_replace(' ', '_', trim($vehicleId)));
         
-        // Check if local_package_fares table exists, create it if not
-        $tableCheckResult = $conn->query("SHOW TABLES LIKE 'local_package_fares'");
-        $tableExists = $tableCheckResult && $tableCheckResult->num_rows > 0;
-        
-        if (!$tableExists) {
-            // Create the table with the correct field names
-            $createTableQuery = "
-                CREATE TABLE `local_package_fares` (
-                  `id` int(11) NOT NULL AUTO_INCREMENT,
-                  `vehicle_id` varchar(50) NOT NULL,
-                  `price_4hrs_40km` decimal(10,2) NOT NULL DEFAULT 0.00,
-                  `price_8hrs_80km` decimal(10,2) NOT NULL DEFAULT 0.00,
-                  `price_10hrs_100km` decimal(10,2) NOT NULL DEFAULT 0.00,
-                  `price_extra_km` decimal(5,2) NOT NULL DEFAULT 0.00,
-                  `price_extra_hour` decimal(5,2) NOT NULL DEFAULT 0.00,
-                  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-                  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-                  PRIMARY KEY (`id`),
-                  UNIQUE KEY `vehicle_id` (`vehicle_id`)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-            ";
-            
-            $conn->query($createTableQuery);
-            logMessage("Created local_package_fares table");
-        }
+        // CRITICAL: Ensure the table exists with standardized column names
+        ensureLocalPackageFaresTable($conn);
         
         // Begin transaction
         $conn->begin_transaction();
         
         try {
-            // Insert or update record in local_package_fares table
+            // Insert or update record in local_package_fares table with STANDARDIZED column names
             $insertQuery = "
                 INSERT INTO local_package_fares (
                     vehicle_id, 
@@ -195,9 +184,9 @@ try {
             $stmt->bind_param(
                 "sddddd",
                 $vehicleId,
-                $price4hr40km,
-                $price8hr80km,
-                $price10hr100km,
+                $price4hrs40km,
+                $price8hrs80km,
+                $price10hrs100km,
                 $extraKmRate,
                 $extraHourRate
             );
@@ -232,9 +221,9 @@ try {
                     
                     $updateStmt->bind_param(
                         "ddddds",
-                        $price4hr40km,
-                        $price8hr80km,
-                        $price10hr100km,
+                        $price4hrs40km,
+                        $price8hrs80km,
+                        $price10hrs100km,
                         $extraKmRate,
                         $extraHourRate,
                         $vehicleId
@@ -260,9 +249,9 @@ try {
                     $insertVpStmt->bind_param(
                         "sddddd",
                         $vehicleId,
-                        $price4hr40km,
-                        $price8hr80km,
-                        $price10hr100km,
+                        $price4hrs40km,
+                        $price8hrs80km,
+                        $price10hrs100km,
                         $extraKmRate,
                         $extraHourRate
                     );
@@ -280,9 +269,9 @@ try {
                 'vehicleId' => $vehicleId,
                 'originalId' => $originalId,
                 'data' => [
-                    'price_4hrs_40km' => $price4hr40km,
-                    'price_8hrs_80km' => $price8hr80km,
-                    'price_10hrs_100km' => $price10hr100km,
+                    'price_4hrs_40km' => $price4hrs40km,
+                    'price_8hrs_80km' => $price8hrs80km,
+                    'price_10hrs_100km' => $price10hrs100km,
                     'price_extra_km' => $extraKmRate,
                     'price_extra_hour' => $extraHourRate
                 ],
@@ -308,6 +297,6 @@ try {
 }
 
 // Ensure clean output (no PHP errors)
-ob_clean();
+ob_end_clean();
 echo json_encode($response);
 exit;

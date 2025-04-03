@@ -1,17 +1,30 @@
-import { getApiUrl } from '@/config/api';
-import { toast } from 'sonner';
-import { getBypassHeaders } from '@/config/requestConfig';
 
-// Standard vehicle types
+/**
+ * Standard vehicle types that are consistently supported across all endpoints
+ */
 export const STANDARD_VEHICLE_TYPES = [
-  'sedan', 'ertiga', 'innova', 'innova_crysta', 'crysta', 'luxury', 
-  'tempo', 'traveller', 'etios', 'mpv', 'hycross', 'urbania', 'toyota', 'suv'
+  'sedan', 
+  'ertiga', 
+  'innova', 
+  'innova_crysta', 
+  'crysta', 
+  'tempo', 
+  'tempo_traveller',
+  'traveller', 
+  'luxury', 
+  'suv',
+  'etios',
+  'mpv',
+  'urbania'
 ];
 
-// Hard-coded mappings for numeric IDs
+/**
+ * Hard-coded mappings for numeric IDs - KEEP IN SYNC WITH BACKEND
+ */
 export const NUMERIC_ID_MAPPINGS: Record<string, string> = {
+  // Basic mappings
   '1': 'sedan',
-  '2': 'ertiga',
+  '2': 'ertiga', 
   '3': 'innova',
   '4': 'crysta',
   '5': 'tempo',
@@ -20,24 +33,11 @@ export const NUMERIC_ID_MAPPINGS: Record<string, string> = {
   '8': 'suv',
   '9': 'traveller',
   '10': 'luxury',
-  '100': 'sedan',
-  '101': 'sedan',
-  '102': 'sedan',
   '180': 'etios',
-  '200': 'ertiga',
-  '201': 'ertiga',
-  '202': 'ertiga',
-  '300': 'innova',
-  '301': 'innova',
-  '302': 'innova',
-  '400': 'crysta',
-  '401': 'crysta',
-  '402': 'crysta',
-  '500': 'tempo',
-  '501': 'tempo',
-  '502': 'tempo',
   '592': 'urbania',
   '1266': 'mpv',
+  
+  // Extended mappings from backend
   '1270': 'mpv',
   '1271': 'etios',
   '1272': 'etios',
@@ -49,21 +49,32 @@ export const NUMERIC_ID_MAPPINGS: Record<string, string> = {
   '1278': 'etios',
   '1279': 'etios',
   '1280': 'etios',
-  '1281': 'mpv',
-  '1282': 'sedan',
-  '1283': 'sedan',
-  '1284': 'etios',
-  '1285': 'etios',
-  '1286': 'etios',
-  '1287': 'etios',
-  '1288': 'etios',
-  '1289': 'etios',
-  '1290': 'etios',
-  '1299': 'toyota'
+  '1299': 'toyota',
+  '100': 'sedan',
+  '101': 'sedan',
+  '102': 'sedan',
+  '103': 'sedan',
+  '200': 'ertiga',
+  '201': 'ertiga',
+  '202': 'ertiga',
+  '300': 'innova',
+  '301': 'innova',
+  '302': 'innova',
+  '400': 'crysta',
+  '401': 'crysta',
+  '402': 'crysta',
+  '500': 'tempo',
+  '501': 'tempo',
+  '502': 'tempo'
 };
 
 /**
- * Normalize vehicle ID to standard format
+ * Normalize vehicle ID by:
+ * - Converting to lowercase
+ * - Replace spaces with underscores
+ * - Trim whitespace
+ * - Map vehicle ID aliases to standard names
+ * 
  * @param vehicleId Vehicle ID to normalize
  * @returns Normalized vehicle ID or null if invalid
  */
@@ -72,34 +83,42 @@ export const normalizeVehicleId = (vehicleId: string): string | null => {
     return null;
   }
   
-  // Convert to lowercase and replace spaces with underscores
-  return vehicleId.toLowerCase().trim().replace(/\s+/g, '_');
+  // Normalize to lowercase, replace spaces with underscores, trim whitespace
+  const normalized = vehicleId.toLowerCase().trim().replace(/\s+/g, '_');
+  
+  // Handle common aliases
+  const aliases: Record<string, string> = {
+    'innova_hycross': 'innova_crysta',
+    'hycross': 'innova_crysta',
+    'innova_crysta': 'innova_crysta',
+    'crysta': 'innova_crysta',
+    'dzire': 'sedan',
+    'swift': 'sedan',
+    'toyota': 'innova',
+    'tempo_traveller': 'tempo',
+    'traveller': 'tempo'
+  };
+  
+  return aliases[normalized] || normalized;
 };
 
 /**
- * Check if a vehicle ID is valid by verifying with backend
+ * Check if the given vehicle ID is valid
+ * 
  * @param vehicleId Vehicle ID to check
- * @returns Promise resolving to boolean indicating if vehicle ID is valid
+ * @returns True if vehicle ID is valid, false otherwise
  */
-export const checkVehicleId = async (vehicleId: string): Promise<boolean> => {
-  try {
-    // If it's in our standard list, consider it valid
-    const normalizedId = normalizeVehicleId(vehicleId);
-    if (!normalizedId) return false;
-    
-    if (STANDARD_VEHICLE_TYPES.includes(normalizedId)) {
-      return true;
-    }
-    
-    // For numeric IDs, check mappings
-    if (/^\d+$/.test(vehicleId) && NUMERIC_ID_MAPPINGS[vehicleId]) {
-      return true;
-    }
-    
-    // Otherwise, consider any non-empty string valid and let the backend handle validation
-    return normalizedId.length > 0;
-  } catch (error) {
-    console.error('Error checking vehicle ID:', error);
-    return false;
+export const checkVehicleId = (vehicleId: string): boolean => {
+  if (!vehicleId) return false;
+  
+  // Handle numeric IDs
+  if (/^\d+$/.test(vehicleId)) {
+    return vehicleId in NUMERIC_ID_MAPPINGS;
   }
+  
+  const normalized = normalizeVehicleId(vehicleId);
+  if (!normalized) return false;
+  
+  // Check against standard vehicle types (case-insensitive)
+  return STANDARD_VEHICLE_TYPES.some(type => type.toLowerCase() === normalized.toLowerCase());
 };

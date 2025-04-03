@@ -9,10 +9,15 @@ import { normalizeVehicleId, checkVehicleId, STANDARD_VEHICLE_TYPES, NUMERIC_ID_
  */
 export const getAllLocalFares = async (): Promise<Record<string, any>> => {
   try {
-    const response = await fetch(`${getApiUrl('/api/local-fares')}?_t=${Date.now()}`, {
+    // Add cache-busting timestamp to prevent stale data
+    const timestamp = Date.now();
+    const response = await fetch(`${getApiUrl('/api/local-fares')}?_t=${timestamp}`, {
       method: 'GET',
       headers: {
-        ...getBypassHeaders()
+        ...getBypassHeaders(),
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
       }
     });
     
@@ -151,12 +156,16 @@ export const updateLocalFares = async (
     const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
     
     try {
-      // Use direct-local-fares endpoint with consistent field naming
-      const response = await fetch(`${getApiUrl('/api/direct-local-fares')}?_t=${Date.now()}`, {
+      // Use the standardized direct endpoint with consistent field names
+      const timestamp = Date.now(); // Add cache busting
+      const response = await fetch(`${getApiUrl('/api/direct-local-fares')}?_t=${timestamp}`, {
         method: 'POST',
         headers: {
           ...getBypassHeaders(),
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
         },
         body: JSON.stringify(requestData),
         signal: controller.signal
@@ -198,6 +207,24 @@ export const updateLocalFares = async (
           }
         }));
         
+        // Also try the admin endpoint as a backup to ensure data consistency
+        try {
+          const adminEndpoint = `${getApiUrl('/api/admin/direct-local-fares')}?_t=${Date.now()}`;
+          const adminResponse = await fetch(adminEndpoint, {
+            method: 'POST',
+            headers: {
+              ...getBypassHeaders(),
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestData)
+          });
+          
+          console.log('Admin endpoint update result:', adminResponse.ok);
+        } catch (adminError) {
+          // Silently ignore admin endpoint errors as it's just a backup
+          console.log('Admin endpoint update failed, but main update succeeded');
+        }
+        
         return true;
       } else {
         const errorMsg = data?.message || 'Unknown error';
@@ -217,6 +244,55 @@ export const updateLocalFares = async (
   } catch (error: any) {
     console.error('Error updating local fares:', error);
     toast.error(`Failed to update local fares: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    
+    // Try direct local fares endpoint as fallback
+    try {
+      console.log('Attempting fallback direct update method...');
+      
+      // Find the packages by hours
+      const pkg4hr = packages.find(p => p.hours === 4) || { price: 0 };
+      const pkg8hr = packages.find(p => p.hours === 8) || { price: 0 };
+      const pkg12hr = packages.find(p => p.hours === 12 || p.hours === 10) || { price: 0 };
+      
+      const normalizedId = validateAndNormalizeVehicleId(vehicleId);
+      if (!normalizedId) return false;
+      
+      const fallbackData = new FormData();
+      fallbackData.append('vehicleId', normalizedId);
+      fallbackData.append('price_4hrs_40km', pkg4hr.price.toString());
+      fallbackData.append('price_8hrs_80km', pkg8hr.price.toString());
+      fallbackData.append('price_10hrs_100km', pkg12hr.price.toString());
+      fallbackData.append('price_extra_km', extraKmRate.toString());
+      fallbackData.append('price_extra_hour', extraHourRate.toString());
+      
+      const timestamp = Date.now();
+      const fallbackResponse = await fetch(`${getApiUrl('/api/local-package-fares')}?_t=${timestamp}`, {
+        method: 'POST',
+        headers: {
+          ...getBypassHeaders()
+        },
+        body: fallbackData
+      });
+      
+      const fallbackResult = await fallbackResponse.json();
+      console.log('Fallback update result:', fallbackResult);
+      
+      if (fallbackResult && fallbackResult.status === 'success') {
+        toast.success('Local package fares updated using fallback method');
+        
+        window.dispatchEvent(new CustomEvent('local-fares-updated', {
+          detail: {
+            vehicleId: normalizedId,
+            timestamp: Date.now()
+          }
+        }));
+        
+        return true;
+      }
+    } catch (fallbackError) {
+      console.error('Fallback update also failed:', fallbackError);
+    }
+    
     return false;
   }
 };
