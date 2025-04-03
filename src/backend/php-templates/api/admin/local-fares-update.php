@@ -2,6 +2,7 @@
 <?php
 /**
  * local-fares-update.php - Updated with stricter validation to prevent numeric vehicle IDs
+ * and to handle column name variations (with/without 's' in hour names)
  */
 
 // Set CORS headers
@@ -156,53 +157,41 @@ if (!$isStandardVehicle) {
     }
 }
 
-// Extract pricing information
-$packages = [
-    '4hrs_40km' => [
-        'name' => 'price_4hrs_40km',
-        'required' => true,
-        'value' => null
-    ],
-    '8hrs_80km' => [
-        'name' => 'price_8hrs_80km',
-        'required' => true,
-        'value' => null
-    ],
-    '10hrs_100km' => [
-        'name' => 'price_10hrs_100km',
-        'required' => true,
-        'value' => null
-    ],
-    'extra_km' => [
-        'name' => 'price_extra_km',
-        'required' => true,
-        'value' => null
-    ],
-    'extra_hour' => [
-        'name' => 'price_extra_hour',
-        'required' => true,
-        'value' => null
-    ]
+// Check for both versions of package field names (with and without 's')
+$packageKeys = [
+    '4hr_40km' => ['price_4hr_40km', 'price_4hrs_40km'],
+    '8hr_80km' => ['price_8hr_80km', 'price_8hrs_80km'],
+    '10hr_100km' => ['price_10hr_100km', 'price_10hrs_100km'],
+    'extra_km' => ['price_extra_km', 'extraKmRate'],
+    'extra_hour' => ['price_extra_hour', 'extraHourRate']
 ];
 
-// Parse package pricing
-foreach ($packages as $key => $package) {
-    $fieldName = $package['name'];
+$packages = [];
+
+foreach ($packageKeys as $key => $fieldNames) {
+    $packages[$key] = [
+        'required' => true,
+        'value' => null
+    ];
     
-    if (isset($data[$fieldName])) {
-        $packages[$key]['value'] = floatval($data[$fieldName]);
-    }
-    // Check for alternative field names
-    elseif (isset($data['local'][$fieldName])) {
-        $packages[$key]['value'] = floatval($data['local'][$fieldName]);
-    }
-    elseif (isset($data['local'][$key])) {
-        $packages[$key]['value'] = floatval($data['local'][$key]);
+    // Try each possible field name
+    foreach ($fieldNames as $fieldName) {
+        if (isset($data[$fieldName])) {
+            $packages[$key]['value'] = floatval($data[$fieldName]);
+            $packages[$key]['field'] = $fieldName;
+            break;
+        }
+        // Check nested under 'local' key
+        elseif (isset($data['local'][$fieldName])) {
+            $packages[$key]['value'] = floatval($data['local'][$fieldName]);
+            $packages[$key]['field'] = $fieldName;
+            break;
+        }
     }
     
     // Validate required fields
-    if ($package['required'] && $packages[$key]['value'] === null) {
-        $response['message'] = "Missing required pricing: $fieldName";
+    if ($packages[$key]['required'] && $packages[$key]['value'] === null) {
+        $response['message'] = "Missing required pricing for $key";
         echo json_encode($response);
         exit;
     }
@@ -257,6 +246,19 @@ try {
     // Begin transaction
     $conn->begin_transaction();
     
+    // Check table structure to see what column names we have
+    $columnsInfo = $conn->query("DESCRIBE local_package_fares");
+    $columns = [];
+    while ($col = $columnsInfo->fetch_assoc()) {
+        $columns[] = $col['Field'];
+    }
+    logMessage("Found columns in local_package_fares: " . implode(", ", $columns));
+    
+    // Determine which column names to use (with or without 's')
+    $use4hrColumn = in_array('price_4hr_40km', $columns) ? 'price_4hr_40km' : 'price_4hrs_40km';
+    $use8hrColumn = in_array('price_8hr_80km', $columns) ? 'price_8hr_80km' : 'price_8hrs_80km';
+    $use10hrColumn = in_array('price_10hr_100km', $columns) ? 'price_10hr_100km' : 'price_10hrs_100km';
+    
     // Check if record exists
     $stmt = $conn->prepare("SELECT * FROM local_package_fares WHERE LOWER(vehicle_id) = LOWER(?)");
     $stmt->bind_param('s', $vehicleId);
@@ -264,46 +266,50 @@ try {
     $result = $stmt->get_result();
     
     if ($result->num_rows > 0) {
-        // Update existing record
-        $stmt = $conn->prepare("UPDATE local_package_fares SET 
-            price_4hrs_40km = ?,
-            price_8hrs_80km = ?,
-            price_10hrs_100km = ?,
+        // Update existing record - use dynamic column names based on what we found
+        $updateQuery = "UPDATE local_package_fares SET 
+            $use4hrColumn = ?,
+            $use8hrColumn = ?,
+            $use10hrColumn = ?,
             price_extra_km = ?,
             price_extra_hour = ?,
             updated_at = NOW()
-            WHERE LOWER(vehicle_id) = LOWER(?)");
+            WHERE LOWER(vehicle_id) = LOWER(?)";
+        
+        $stmt = $conn->prepare($updateQuery);
         
         $stmt->bind_param(
             'ddddds',
-            $packages['4hrs_40km']['value'],
-            $packages['8hrs_80km']['value'],
-            $packages['10hrs_100km']['value'],
+            $packages['4hr_40km']['value'],
+            $packages['8hr_80km']['value'],
+            $packages['10hr_100km']['value'],
             $packages['extra_km']['value'],
             $packages['extra_hour']['value'],
             $vehicleId
         );
         
         $stmt->execute();
-        logMessage("Updated local_package_fares for vehicle: $vehicleId");
+        logMessage("Updated local_package_fares for vehicle: $vehicleId using columns: $use4hrColumn, $use8hrColumn, $use10hrColumn");
     } else {
-        // Insert new record
-        $stmt = $conn->prepare("INSERT INTO local_package_fares 
-            (vehicle_id, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())");
+        // Insert new record - use dynamic column names based on what we found
+        $insertQuery = "INSERT INTO local_package_fares 
+            (vehicle_id, $use4hrColumn, $use8hrColumn, $use10hrColumn, price_extra_km, price_extra_hour, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())";
+        
+        $stmt = $conn->prepare($insertQuery);
         
         $stmt->bind_param(
             'sddddd',
             $vehicleId,
-            $packages['4hrs_40km']['value'],
-            $packages['8hrs_80km']['value'],
-            $packages['10hrs_100km']['value'],
+            $packages['4hr_40km']['value'],
+            $packages['8hr_80km']['value'],
+            $packages['10hr_100km']['value'],
             $packages['extra_km']['value'],
             $packages['extra_hour']['value']
         );
         
         $stmt->execute();
-        logMessage("Inserted local_package_fares for vehicle: $vehicleId");
+        logMessage("Inserted local_package_fares for vehicle: $vehicleId using columns: $use4hrColumn, $use8hrColumn, $use10hrColumn");
     }
     
     // Commit transaction
@@ -315,6 +321,11 @@ try {
     $response['vehicleId'] = $vehicleId;
     $response['originalId'] = $originalId;
     $response['packages'] = $packages;
+    $response['columnsUsed'] = [
+        '4hr' => $use4hrColumn,
+        '8hr' => $use8hrColumn,
+        '10hr' => $use10hrColumn
+    ];
     
     // Trigger refresh in the UI
     $response['refresh'] = true;

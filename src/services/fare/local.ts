@@ -141,13 +141,14 @@ export const updateLocalFares = async (
     const pkg12hr = packages.find(p => p.hours === 12 || p.hours === 10) || { price: 0 };
     
     // Prepare request with normalized ID and package prices
+    // Use column names that match your database (without the 's')
     const requestData = {
       vehicleId: normalizedId,
       price_extra_km: extraKmRate,
       price_extra_hour: extraHourRate,
-      price_4hrs_40km: pkg4hr.price,
-      price_8hrs_80km: pkg8hr.price,
-      price_10hrs_100km: pkg12hr.price
+      price_4hr_40km: pkg4hr.price,
+      price_8hr_80km: pkg8hr.price,
+      price_10hr_100km: pkg12hr.price
     };
     
     console.log('Sending local fare update with data:', requestData);
@@ -258,9 +259,10 @@ export const updateLocalFares = async (
       
       const fallbackData = new FormData();
       fallbackData.append('vehicleId', normalizedId);
-      fallbackData.append('price_4hrs_40km', pkg4hr.price.toString());
-      fallbackData.append('price_8hrs_80km', pkg8hr.price.toString());
-      fallbackData.append('price_10hrs_100km', pkg12hr.price.toString());
+      // Use column names that match your database (without the 's')
+      fallbackData.append('price_4hr_40km', pkg4hr.price.toString());
+      fallbackData.append('price_8hr_80km', pkg8hr.price.toString());
+      fallbackData.append('price_10hr_100km', pkg12hr.price.toString());
       fallbackData.append('price_extra_km', extraKmRate.toString());
       fallbackData.append('price_extra_hour', extraHourRate.toString());
       
