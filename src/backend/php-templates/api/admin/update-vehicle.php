@@ -1,3 +1,4 @@
+
 <?php
 // Alias for vehicle-update.php
 // This file simply includes the main vehicle-update.php file for compatibility
@@ -60,6 +61,37 @@ if ($vehicleData) {
     
     if (empty($vehicleData['amenities'])) {
         $vehicleData['amenities'] = ['AC', 'Bottle Water', 'Music System'];
+    }
+    
+    // Check if we can read from persistent storage to fill in missing values
+    $cacheDir = __DIR__ . '/../../cache';
+    $persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
+    
+    if (file_exists($persistentCacheFile)) {
+        $persistentJson = file_get_contents($persistentCacheFile);
+        if ($persistentJson) {
+            try {
+                $persistentData = json_decode($persistentJson, true);
+                if (is_array($persistentData)) {
+                    // Find existing vehicle data
+                    $vehicleId = $vehicleData['id'] ?? $vehicleData['vehicleId'] ?? null;
+                    foreach ($persistentData as $existingVehicle) {
+                        if ($existingVehicle['id'] === $vehicleId || $existingVehicle['vehicleId'] === $vehicleId) {
+                            // Fill in missing values from persistent storage
+                            foreach ($existingVehicle as $key => $value) {
+                                if (!isset($vehicleData[$key]) || 
+                                    (is_numeric($vehicleData[$key]) && $vehicleData[$key] === 0)) {
+                                    $vehicleData[$key] = $value;
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+            } catch (Exception $e) {
+                file_put_contents($logFile, "[$timestamp] Error reading persistent data: {$e->getMessage()}\n", FILE_APPEND);
+            }
+        }
     }
     
     // Make sure the data is available to vehicle-update.php

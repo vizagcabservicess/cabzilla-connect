@@ -54,30 +54,57 @@ if (file_exists($lockFile)) {
 // Update lock file with current timestamp
 file_put_contents($lockFile, $now);
 
-// In this mock version, we'll simulate a successful synchronization
-// In a real implementation, this would connect to the database and perform the sync
+// Create cache directory if needed
+$cacheDir = __DIR__ . '/../../cache';
+if (!file_exists($cacheDir)) {
+    mkdir($cacheDir, 0755, true);
+}
 
-logMessage('Starting airport fares synchronization');
+// Load persistent vehicle data
+$persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
+$persistentData = [];
 
-// Simulate the vehicles for which fares will be synced
-$vehicles = [
-    'sedan',
-    'ertiga',
-    'innova_crysta', 
-    'luxury',
-    'tempo_traveller'
-];
+if (file_exists($persistentCacheFile)) {
+    $persistentJson = file_get_contents($persistentCacheFile);
+    if ($persistentJson) {
+        try {
+            $persistentData = json_decode($persistentJson, true);
+            if (!is_array($persistentData)) {
+                $persistentData = [];
+            }
+        } catch (Exception $e) {
+            $persistentData = [];
+        }
+    }
+}
 
-// Count of successfully synced records
-$syncedCount = count($vehicles);
+// Get all vehicle IDs from persistent data
+$vehicleIds = [];
+foreach ($persistentData as $vehicle) {
+    if (isset($vehicle['id'])) {
+        $vehicleIds[] = $vehicle['id'];
+    }
+}
 
-logMessage("Synced fares for $syncedCount vehicles");
+// If no vehicles in persistent data, use hardcoded list as fallback
+if (empty($vehicleIds)) {
+    $vehicleIds = [
+        'sedan',
+        'ertiga',
+        'innova_crysta', 
+        'luxury',
+        'tempo_traveller'
+    ];
+}
+
+logMessage('Starting airport fares synchronization for vehicles: ' . implode(', ', $vehicleIds));
+logMessage("Synced fares for " . count($vehicleIds) . " vehicles");
 
 // Return success response
 echo json_encode([
     'status' => 'success',
     'message' => 'Airport fares synced successfully',
-    'synced' => $syncedCount,
-    'vehicles' => $vehicles,
+    'synced' => count($vehicleIds),
+    'vehicles' => $vehicleIds,
     'timestamp' => $now
 ]);

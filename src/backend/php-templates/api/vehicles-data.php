@@ -26,7 +26,7 @@ header('Vary: Origin, Access-Control-Request-Method, Access-Control-Request-Head
 header('X-Content-Type-Options: nosniff');
 
 // Add debugging headers
-header('X-API-Version: 1.4.0');
+header('X-API-Version: 1.5.0');
 header('X-CORS-Status: Ultra-Enhanced');
 header('X-Debug-Endpoint: vehicles-data');
 header('X-Debug-Origin: ' . ($_SERVER['HTTP_ORIGIN'] ?? 'none'));
@@ -60,8 +60,33 @@ if ($isAdminMode) {
     $includeInactive = true;
 }
 
-// Hardcoded vehicle data for demonstration
-$vehicles = [
+// Create cache directory if needed
+$cacheDir = __DIR__ . '/../../cache';
+if (!file_exists($cacheDir)) {
+    @mkdir($cacheDir, 0755, true);
+}
+
+// Create a persistent cache file to store updated vehicle data
+$persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
+
+// Try to load persistent cache first
+$persistentData = [];
+if (file_exists($persistentCacheFile)) {
+    $persistentJson = file_get_contents($persistentCacheFile);
+    if ($persistentJson) {
+        try {
+            $persistentData = json_decode($persistentJson, true);
+            if (!is_array($persistentData)) {
+                $persistentData = [];
+            }
+        } catch (Exception $e) {
+            $persistentData = [];
+        }
+    }
+}
+
+// Hardcoded vehicle data for demonstration/fallback
+$defaultVehicles = [
     [
         'id' => 'sedan',
         'vehicleId' => 'sedan',
@@ -145,9 +170,32 @@ $vehicles = [
         'ac' => true,
         'nightHaltCharge' => 1200,
         'driverAllowance' => 300,
-        'isActive' => false
+        'isActive' => true
     ]
 ];
+
+// Merge default vehicles with persistent data
+$vehicles = [];
+foreach ($defaultVehicles as $defaultVehicle) {
+    $vehicleId = $defaultVehicle['id'];
+    $found = false;
+    
+    // Look for this vehicle in persistent data
+    foreach ($persistentData as $persistentVehicle) {
+        if (isset($persistentVehicle['id']) && $persistentVehicle['id'] === $vehicleId) {
+            // Use the persistent data, but ensure all required fields exist
+            $mergedVehicle = array_merge($defaultVehicle, $persistentVehicle);
+            $vehicles[] = $mergedVehicle;
+            $found = true;
+            break;
+        }
+    }
+    
+    // If not found in persistent data, use default
+    if (!$found) {
+        $vehicles[] = $defaultVehicle;
+    }
+}
 
 // Filter inactive vehicles if needed
 if (!$includeInactive) {

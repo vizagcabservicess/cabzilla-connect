@@ -34,6 +34,9 @@ $logFile = $logDir . '/admin_vehicles_data_' . date('Y-m-d') . '.log';
 $timestamp = date('Y-m-d H:i:s');
 file_put_contents($logFile, "[$timestamp] Admin vehicles data request: includeInactive=$includeInactive, forceRefresh=$forceRefresh" . ($vehicleId ? ", vehicleId=$vehicleId" : "") . "\n", FILE_APPEND);
 
-// This endpoint should return the same data as the main vehicles-data.php
-// but with admin-specific fields included
+// This endpoint should always return the same data as the main vehicles-data.php
+// but ensure we're passing the admin mode flag
+$_SERVER['HTTP_X_ADMIN_MODE'] = 'true';
+
+// Just include the main vehicles-data.php which now has persistent storage logic
 require_once __DIR__ . '/../vehicles-data.php';
