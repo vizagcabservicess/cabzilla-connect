@@ -4,11 +4,11 @@
  * status.php - Simple API health check endpoint
  */
 
-// Set CORS headers - don't try to set Origin header
+// Set CORS headers
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, X-Health-Check, Authorization, X-Requested-With');
+header('Access-Control-Allow-Headers: Content-Type, X-Health-Check');
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -31,7 +31,7 @@ echo json_encode([
     'status' => 'success',
     'message' => 'API is operational',
     'timestamp' => time(),
-    'version' => '1.0.5',
+    'version' => '1.0.4',
     'server_time' => date('Y-m-d H:i:s'),
     'server_info' => [
         'php_version' => phpversion(),

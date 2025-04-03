@@ -12,25 +12,6 @@ function App() {
     // Set page title
     document.title = 'Vizag Cabs - Book Cabs in Visakhapatnam';
     
-    // Prevent recursive cache clearing that causes stack overflow
-    const originalClearCache = window.clearCache;
-    if (typeof originalClearCache === 'function') {
-      let clearCacheInProgress = false;
-      window.clearCache = function() {
-        if (clearCacheInProgress) {
-          console.warn('Preventing recursive clearCache call');
-          return false;
-        }
-        
-        clearCacheInProgress = true;
-        try {
-          return originalClearCache.apply(this, arguments);
-        } finally {
-          clearCacheInProgress = false;
-        }
-      };
-    }
-    
     // Log navigation for debugging routes
     const handleRouteChange = () => {
       console.log('Route changed to:', window.location.pathname);

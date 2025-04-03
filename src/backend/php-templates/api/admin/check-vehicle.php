@@ -1,15 +1,37 @@
 
 <?php
 /**
- * check-vehicle.php - Check if a vehicle exists without modifying it
- * Used to validate vehicle IDs before performing operations
+ * check-vehicle.php - Validate vehicle ID exists and provide mapping if needed
  */
 
 // Set CORS headers
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, X-Admin-Mode');
 header('Content-Type: application/json');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
+
+// Enable error reporting for debugging
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
+
+// Create log directory if it doesn't exist
+$logDir = dirname(__FILE__) . '/../../logs';
+if (!file_exists($logDir)) {
+    mkdir($logDir, 0755, true);
+}
+
+// Logging function
+function logMessage($message, $file = 'check-vehicle.log') {
+    global $logDir;
+    $timestamp = date('Y-m-d H:i:s');
+    error_log("[$timestamp] " . $message . "\n", 3, $logDir . '/' . $file);
+}
+
+// Log request information
+logMessage("Check vehicle request received: " . $_SERVER['REQUEST_METHOD']);
 
 // Handle OPTIONS preflight request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -17,213 +39,195 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Create log directory if it doesn't exist
-$logDir = __DIR__ . '/../../logs';
-if (!file_exists($logDir)) {
-    mkdir($logDir, 0755, true);
-}
-
-// Log request for debugging
-$timestamp = date('Y-m-d H:i:s');
-error_log("[$timestamp] Vehicle check request: " . $_SERVER['QUERY_STRING'], 3, $logDir . '/check-vehicle.log');
-
-// Function to get database connection
-function getDbConnection() {
-    try {
-        $host = 'localhost';
-        $dbname = 'u644605165_db_be'; 
-        $username = 'u644605165_usr_be';
-        $password = 'Vizag@1213';
-        
-        $conn = new PDO("mysql:host=$host;dbname=$dbname", $username, $password);
-        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        return $conn;
-    } catch (Exception $e) {
-        throw new Exception("Database connection error: " . $e->getMessage());
-    }
-}
-
-// ENHANCED: More comprehensive ID mapping with all known numeric IDs and additional common IDs
-$knownMappings = [
-    '1' => 'sedan',
-    '2' => 'ertiga',
-    '3' => 'innova',
-    '4' => 'crysta',
-    '5' => 'tempo',
-    '6' => 'bus',
-    '7' => 'van',
-    '8' => 'suv',
-    '9' => 'traveller',
-    '10' => 'luxury',
-    '180' => 'etios',
-    '592' => 'urbania',
-    '1266' => 'mpv',
-    '1270' => 'mpv',
-    '1271' => 'etios',
-    '1272' => 'etios',
-    '1273' => 'etios',
-    '1274' => 'etios',
-    '1275' => 'etios',
-    '1276' => 'etios',
-    '1277' => 'etios',
-    '1278' => 'etios',
-    '1279' => 'etios',
-    '1280' => 'etios',
-    '1281' => 'mpv',
-    '1282' => 'sedan',
-    '1283' => 'sedan',
-    '1284' => 'etios',
-    '1285' => 'etios',
-    '1286' => 'etios',
-    '1287' => 'etios',
-    '1288' => 'etios',
-    '1289' => 'etios',
-    '1290' => 'etios',
-    '100' => 'sedan',
-    '101' => 'sedan',
-    '102' => 'sedan',
-    '103' => 'sedan',
-    '200' => 'ertiga',
-    '201' => 'ertiga',
-    '202' => 'ertiga',
-    '300' => 'innova',
-    '301' => 'innova',
-    '302' => 'innova',
-    '400' => 'crysta',
-    '401' => 'crysta',
-    '402' => 'crysta',
-    '500' => 'tempo',
-    '501' => 'tempo',
-    '502' => 'tempo'
+// Initialize response
+$response = [
+    'status' => 'error',
+    'message' => 'Unknown error',
+    'timestamp' => time(),
+    'vehicleExists' => false
 ];
 
-// Extract vehicle ID from request
-$vehicleId = null;
-if (isset($_GET['vehicleId'])) {
-    $vehicleId = $_GET['vehicleId'];
-} else if (isset($_GET['id'])) {
-    $vehicleId = $_GET['id'];
-} else if (isset($_GET['vehicle_id'])) {
-    $vehicleId = $_GET['vehicle_id'];
-}
+// Define standard vehicle IDs - ALL LOWERCASE for case-insensitive comparison
+$standardVehicles = [
+    'sedan', 'ertiga', 'innova', 'innova_crysta', 'luxury', 'tempo', 'traveller', 'etios', 'mpv', 'hycross', 'urbania'
+];
 
-// Log the original ID
-$originalId = $vehicleId;
-error_log("[$timestamp] Original vehicle ID: $originalId", 3, $logDir . '/check-vehicle.log');
+// Get vehicle ID from request with fallbacks
+$vehicleId = '';
 
-// Remove "item-" prefix if it exists
-if (strpos($vehicleId, 'item-') === 0) {
-    $vehicleId = substr($vehicleId, 5);
-    error_log("[$timestamp] Removed 'item-' prefix: $vehicleId", 3, $logDir . '/check-vehicle.log');
-}
-
-// ENHANCED: Check for comma-separated lists and extract first ID
-if (strpos($vehicleId, ',') !== false) {
-    $idParts = explode(',', $vehicleId);
-    $oldId = $vehicleId;
-    $vehicleId = trim($idParts[0]);
-    error_log("[$timestamp] Found comma-separated list, using first ID: $vehicleId", 3, $logDir . '/check-vehicle.log');
-}
-
-// CRITICAL: Numeric ID detection and rejection/mapping
-if (is_numeric($vehicleId)) {
-    error_log("[$timestamp] Numeric ID detected: $vehicleId - applying mapping", 3, $logDir . '/check-vehicle.log');
-    
-    // Check our known mappings first
-    if (isset($knownMappings[$vehicleId])) {
-        $mappedId = $knownMappings[$vehicleId];
-        error_log("[$timestamp] Mapped numeric ID $vehicleId to {$mappedId}", 3, $logDir . '/check-vehicle.log');
-        $vehicleId = $mappedId;
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Try using POST data first
+    if (!empty($_POST['vehicleId'])) {
+        $vehicleId = $_POST['vehicleId'];
+    } elseif (!empty($_POST['vehicle_id'])) {
+        $vehicleId = $_POST['vehicle_id'];
+    } elseif (!empty($_POST['id'])) {
+        $vehicleId = $_POST['id'];
+    } else {
+        // Try to parse JSON from request body
+        $rawInput = file_get_contents('php://input');
+        $jsonData = json_decode($rawInput, true);
+        
+        if (json_last_error() === JSON_ERROR_NONE && !empty($jsonData)) {
+            if (!empty($jsonData['vehicleId'])) {
+                $vehicleId = $jsonData['vehicleId'];
+            } elseif (!empty($jsonData['vehicle_id'])) {
+                $vehicleId = $jsonData['vehicle_id'];
+            } elseif (!empty($jsonData['id'])) {
+                $vehicleId = $jsonData['id'];
+            }
+        }
     }
-    // REJECT any unmapped numeric IDs
-    else {
-        error_log("[$timestamp] REJECTED: Unmapped numeric ID $vehicleId is not allowed", 3, $logDir . '/check-vehicle.log');
-        echo json_encode([
-            'status' => 'error',
-            'exists' => false,
-            'isNumericId' => true,
-            'originalId' => $originalId,
-            'message' => "Cannot use numeric ID '$vehicleId'. Please use a proper vehicle ID like 'sedan', 'ertiga', etc."
-        ]);
+} elseif ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    if (!empty($_GET['vehicleId'])) {
+        $vehicleId = $_GET['vehicleId'];
+    } elseif (!empty($_GET['vehicle_id'])) {
+        $vehicleId = $_GET['vehicle_id'];
+    } elseif (!empty($_GET['id'])) {
+        $vehicleId = $_GET['id'];
+    }
+}
+
+// Log the received vehicle ID
+logMessage("Received vehicle ID: " . $vehicleId);
+
+// CRITICAL FIX: Block all numeric IDs that are not explicitly mapped
+// Hard-coded mappings for known numeric IDs
+$numericMappings = [
+    '1' => 'sedan',
+    '2' => 'ertiga', 
+    '180' => 'etios',
+    '1266' => 'innova',
+    '592' => 'urbania',
+    '1290' => 'sedan',
+    '1291' => 'etios',
+    '1292' => 'sedan',
+    '1293' => 'urbania'
+];
+
+// Check if vehicle ID is a numeric value
+if (is_numeric($vehicleId)) {
+    logMessage("WARNING: Received numeric vehicle ID: $vehicleId");
+    
+    // Only allow specific mapped numeric IDs
+    if (isset($numericMappings[$vehicleId])) {
+        $originalId = $vehicleId;
+        $vehicleId = $numericMappings[$vehicleId];
+        logMessage("Mapped numeric ID $originalId to standard vehicle ID: $vehicleId");
+        $response['mapped_id'] = $vehicleId;
+        $response['original_id'] = $originalId;
+    } else {
+        // BLOCK ALL other numeric IDs
+        $response['status'] = 'error';
+        $response['message'] = 'Invalid numeric vehicle ID. Please use standard vehicle names.';
+        $response['validOptions'] = $standardVehicles;
+        $response['mapped_ids'] = array_keys($numericMappings);
+        
+        logMessage("BLOCKED unmapped numeric ID: $vehicleId");
+        echo json_encode($response);
         exit;
     }
 }
 
-// Make sure we have a vehicle ID at this point
+// Validate vehicle ID
 if (empty($vehicleId)) {
-    error_log("[$timestamp] Empty vehicle ID after processing", 3, $logDir . '/check-vehicle.log');
-    echo json_encode([
-        'status' => 'error',
-        'exists' => false,
-        'message' => "Vehicle ID is required"
-    ]);
+    $response['message'] = 'Vehicle ID is required';
+    echo json_encode($response);
     exit;
 }
 
-// Normalize vehicle ID (convert to lowercase)
-$vehicleId = strtolower($vehicleId);
-error_log("[$timestamp] Normalized vehicle ID to lowercase: $vehicleId", 3, $logDir . '/check-vehicle.log');
+// Normalize vehicle ID (lowercase, replace spaces with underscores)
+$normalizedId = strtolower(str_replace(' ', '_', trim($vehicleId)));
 
-// FINAL CHECK: Make sure we don't have a numeric ID at this point
-if (is_numeric($vehicleId)) {
-    error_log("[$timestamp] CRITICAL FAILURE: Vehicle ID is still numeric after processing: $vehicleId", 3, $logDir . '/check-vehicle.log');
-    echo json_encode([
-        'status' => 'error',
-        'exists' => false,
-        'isNumericId' => true,
-        'message' => "Cannot use numeric ID '$vehicleId'. This is a critical error."
-    ]);
-    exit;
+// Check if the normalized ID is a standard vehicle type
+$isStandardVehicle = in_array($normalizedId, $standardVehicles);
+
+if (!$isStandardVehicle) {
+    // Map common variations
+    if ($normalizedId == 'mpv' || $normalizedId == 'innova_hycross' || $normalizedId == 'hycross') {
+        $normalizedId = 'innova_crysta';
+        $isStandardVehicle = true;
+    } elseif ($normalizedId == 'dzire' || $normalizedId == 'swift') {
+        $normalizedId = 'sedan';
+        $isStandardVehicle = true;
+    }
+    
+    // If it's still not a standard vehicle, reject it
+    if (!$isStandardVehicle) {
+        $response['status'] = 'error';
+        $response['message'] = 'Invalid vehicle type. Please use standard vehicle names.';
+        $response['validOptions'] = $standardVehicles;
+        
+        logMessage("REJECTED non-standard vehicle type: $vehicleId -> $normalizedId");
+        echo json_encode($response);
+        exit;
+    }
 }
+
+// Include database helper
+require_once dirname(__FILE__) . '/../common/db_helper.php';
 
 try {
-    // Connect to database
-    $conn = getDbConnection();
+    // Get database connection
+    $conn = getDbConnectionWithRetry();
     
-    // CRITICAL FIX: Always query by vehicle_id, NEVER by the numeric id column
-    $query = "SELECT id, vehicle_id, name FROM vehicles WHERE vehicle_id = ? LIMIT 1";
-    $stmt = $conn->prepare($query);
-    $stmt->execute([$vehicleId]);
-    $vehicle = $stmt->fetch(PDO::FETCH_ASSOC);
+    // Check if vehicle exists in vehicles table
+    $stmt = $conn->prepare("SELECT id, vehicle_id, name FROM vehicles WHERE vehicle_id = ? OR id = ? OR name = ?");
+    $stmt->bind_param('sss', $normalizedId, $normalizedId, $vehicleId);
+    $stmt->execute();
+    $result = $stmt->get_result();
     
-    // If not found, make one final attempt with a case-insensitive search
-    if (!$vehicle) {
-        $query = "SELECT id, vehicle_id, name FROM vehicles WHERE LOWER(vehicle_id) = LOWER(?) LIMIT 1";
-        $stmt = $conn->prepare($query);
-        $stmt->execute([$vehicleId]);
-        $vehicle = $stmt->fetch(PDO::FETCH_ASSOC);
-    }
-    
-    // Return appropriate response
-    if ($vehicle) {
-        error_log("[$timestamp] Vehicle found: " . json_encode($vehicle), 3, $logDir . '/check-vehicle.log');
-        echo json_encode([
-            'status' => 'success',
-            'exists' => true,
-            'vehicle' => [
-                'id' => $vehicle['vehicle_id'], // CRITICAL FIX: Always return vehicle_id as the id
-                'vehicle_id' => $vehicle['vehicle_id'],
-                'name' => $vehicle['name'],
-                'db_id' => $vehicle['id'] // Include the database ID for debugging but don't use it for operations
-            ],
-            'originalVehicleId' => $originalId,
-            'message' => "Vehicle found"
-        ]);
+    if ($result->num_rows > 0) {
+        $vehicle = $result->fetch_assoc();
+        
+        // Vehicle exists
+        $response['status'] = 'success';
+        $response['message'] = 'Vehicle exists';
+        $response['vehicleExists'] = true;
+        $response['vehicle'] = $vehicle;
+        $response['originalId'] = $vehicleId;
+        $response['mappedId'] = $normalizedId;
+        
+        logMessage("Vehicle exists: " . json_encode($vehicle));
     } else {
-        error_log("[$timestamp] Vehicle not found with ID: $vehicleId", 3, $logDir . '/check-vehicle.log');
-        echo json_encode([
-            'status' => 'error',
-            'exists' => false,
-            'vehicleId' => $vehicleId,
-            'originalId' => $originalId,
-            'message' => "Vehicle with ID '$vehicleId' not found"
-        ]);
+        // Check vehicle_types table as fallback
+        $stmt = $conn->prepare("SELECT vehicle_id, name FROM vehicle_types WHERE vehicle_id = ?");
+        $stmt->bind_param('s', $normalizedId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($result->num_rows > 0) {
+            $vehicle = $result->fetch_assoc();
+            
+            // Vehicle exists in vehicle_types
+            $response['status'] = 'success';
+            $response['message'] = 'Vehicle exists in vehicle_types';
+            $response['vehicleExists'] = true;
+            $response['vehicle'] = $vehicle;
+            $response['originalId'] = $vehicleId;
+            $response['mappedId'] = $normalizedId;
+            
+            logMessage("Vehicle exists in vehicle_types: " . json_encode($vehicle));
+        } else {
+            // CRITICAL: Always respond with false for vehicleExists if not found
+            // Never set canCreate = true (prevent auto-creation)
+            $response['status'] = 'error';
+            $response['message'] = 'Vehicle does not exist. Please create it first.';
+            $response['vehicleExists'] = false;
+            $response['originalId'] = $vehicleId;
+            $response['mappedId'] = $normalizedId;
+            $response['canCreate'] = false; // CRITICAL: Prevent auto-creation
+            
+            logMessage("Vehicle does not exist: $normalizedId - Preventing auto-creation");
+        }
     }
+    
+    $conn->close();
 } catch (Exception $e) {
-    error_log("[$timestamp] Error checking vehicle: " . $e->getMessage(), 3, $logDir . '/check-vehicle.log');
-    http_response_code(500);
-    echo json_encode([
-        'status' => 'error',
-        'message' => $e->getMessage()
-    ]);
+    $response['message'] = 'Database error: ' . $e->getMessage();
+    logMessage("Database error: " . $e->getMessage());
 }
+
+// Return response as JSON
+echo json_encode($response);
+?>

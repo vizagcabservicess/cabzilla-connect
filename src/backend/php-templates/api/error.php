@@ -4,14 +4,11 @@
  * Error handler page for API errors
  */
 
-// Set CORS headers for error responses - more comprehensive headers
+// Set CORS headers for error responses
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode, X-Debug');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode');
 header('Content-Type: application/json');
-header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-header('Pragma: no-cache');
-header('Expires: 0');
 
 // Get the HTTP status code
 $status = $_SERVER['REDIRECT_STATUS'] ?? 500;
