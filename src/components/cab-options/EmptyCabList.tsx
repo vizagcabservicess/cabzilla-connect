@@ -13,7 +13,10 @@ interface EmptyCabListProps {
 export function EmptyCabList({ onRefresh, isRefreshing }: EmptyCabListProps) {
   const [isResetting, setIsResetting] = useState(false);
   
-  const handleReload = () => {
+  const handleClearCache = () => {
+    localStorage.removeItem('cachedVehicles');
+    localStorage.removeItem('localVehicles');
+    sessionStorage.clear();
     window.location.reload();
   };
   
@@ -98,8 +101,12 @@ export function EmptyCabList({ onRefresh, isRefreshing }: EmptyCabListProps) {
         console.error('Error initializing database tables:', error);
       }
       
+      // Clear all caches
+      localStorage.removeItem('cachedVehicles');
+      sessionStorage.clear();
+      
       // Show success toast
-      toast.success('Default vehicles restored. Reloading page...', { duration: 3000 });
+      toast.success('System reset and default vehicles restored. Reloading page...', { duration: 3000 });
       
       // Trigger the custom event
       window.dispatchEvent(new CustomEvent('vehicle-data-changed', {
@@ -120,6 +127,11 @@ export function EmptyCabList({ onRefresh, isRefreshing }: EmptyCabListProps) {
     }
   };
   
+  const goToDatabaseTroubleshooting = () => {
+    // This would link to a new page with database troubleshooting tools
+    toast.info('Opening troubleshooting tools...', { duration: 2000 });
+  };
+  
   return (
     <div className="p-8 text-center border rounded-lg bg-gray-50">
       <div className="flex justify-center mb-4">
@@ -135,11 +147,11 @@ export function EmptyCabList({ onRefresh, isRefreshing }: EmptyCabListProps) {
       <div className="flex flex-col sm:flex-row justify-center gap-3 mt-2">
         <Button 
           variant="outline"
-          onClick={handleReload}
+          onClick={handleClearCache}
           className="flex items-center justify-center"
         >
           <Database className="h-4 w-4 mr-2" />
-          Reload Page
+          Clear Cache & Reload
         </Button>
         <Button 
           variant="outline"

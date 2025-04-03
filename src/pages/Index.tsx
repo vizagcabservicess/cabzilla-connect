@@ -3,6 +3,8 @@ import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { ClearCacheButton } from "@/components/buttons/ClearCacheButton";
+import { resetApplication } from "@/lib/cacheManager";
 
 const Index = () => {
   useEffect(() => {
@@ -58,6 +60,15 @@ const Index = () => {
         <div className="border rounded-lg bg-white p-6 space-y-4">
           <h2 className="text-xl font-semibold">System Tools</h2>
           <div className="flex flex-wrap gap-3">
+            <ClearCacheButton />
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="border-red-200 hover:bg-red-50"
+              onClick={resetApplication}
+            >
+              Reset Application
+            </Button>
             <Button 
               variant="outline" 
               size="sm" 
@@ -65,6 +76,11 @@ const Index = () => {
             >
               <Link to="/admin">Admin Panel</Link>
             </Button>
+          </div>
+          
+          <div className="text-xs text-gray-500 mt-2">
+            <p>If you experience any issues with data loading or outdated information, try clearing the cache.</p>
+            <p>Last cache clear: {localStorage.getItem('fareCacheLastCleared') ? new Date(parseInt(localStorage.getItem('fareCacheLastCleared') || '0')).toLocaleString() : 'Never'}</p>
           </div>
         </div>
       </div>
