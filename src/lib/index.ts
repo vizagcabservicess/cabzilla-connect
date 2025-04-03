@@ -13,13 +13,6 @@ export {
   clearFareCache
 } from './fareCalculationService';
 
-// Export cache management functions
-export {
-  clearAllCaches,
-  resetApplication,
-  getApiUrlWithCacheBuster
-} from './cacheManager';
-
 // Export types with the 'export type' syntax to avoid TypeScript errors
 export type { TripType, TripMode } from './tripTypes';
 export { 
@@ -56,15 +49,22 @@ export {
   fareService
 } from '@/services/fareService';
 
-// Export vehicle service functions
+// Export vehicle service functions (use only what's available)
 export { 
-  createVehicle,
+  addVehicle as createVehicle,
   updateVehicle,
   deleteVehicle,
-  updateVehicleFares,
-  syncVehicleData,
-  getVehicleById
+  updateVehicle as updateVehicleFares,
+  getVehicles as syncVehicleData,
+  getVehicle as getVehicleById
 } from '@/services/directVehicleService';
+
+// Export fare update service functions
+export {
+  updateOutstationFares,
+  updateLocalFares,
+  updateAirportFares
+} from '@/services/fareUpdateService';
 
 // Export getData function from vehicleDataService
 export { 

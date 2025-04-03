@@ -1,66 +1,68 @@
-
 <?php
 /**
  * Database utility functions
  */
 
-/**
- * Get database connection
- *
- * @return mysqli Database connection
- * @throws Exception If connection fails
- */
-function getDbConnection() {
-    global $config;
-    
-    if (!isset($config) || !isset($config['db'])) {
-        // If config is not available, try to load it
-        if (file_exists(__DIR__ . '/../../config.php')) {
-            require_once __DIR__ . '/../../config.php';
-        } else {
-            throw new Exception("Database configuration not found");
+// Prevent redeclaration errors with function_exists checks
+if (!function_exists('getDbConnection')) {
+    /**
+     * Get database connection
+     *
+     * @return mysqli Database connection
+     * @throws Exception If connection fails
+     */
+    function getDbConnection() {
+        global $config;
+        
+        // If config is not available or doesn't have valid database settings, use hardcoded credentials
+        $dbHost = 'localhost';
+        $dbName = 'u644605165_db_be';
+        $dbUser = 'u644605165_usr_be';
+        $dbPass = 'Vizag@1213';
+        
+        // Use config variables if available
+        if (isset($config) && isset($config['db'])) {
+            $dbHost = $config['db']['host'] ?? $dbHost;
+            $dbName = $config['db']['database'] ?? $dbName;
+            $dbUser = $config['db']['username'] ?? $dbUser;
+            $dbPass = $config['db']['password'] ?? $dbPass;
         }
-    }
-    
-    // Try to create a new connection with error logging and retry
-    $maxRetries = 3;
-    $retryCount = 0;
-    $lastError = null;
-    
-    while ($retryCount < $maxRetries) {
-        try {
-            $conn = new mysqli(
-                $config['db']['host'] ?? 'localhost',
-                $config['db']['username'] ?? 'root',
-                $config['db']['password'] ?? '',
-                $config['db']['database'] ?? 'cab_booking'
-            );
-            
-            // Check connection
-            if ($conn->connect_error) {
-                throw new Exception("Connection failed: " . $conn->connect_error);
-            }
-            
-            // Set charset
-            $conn->set_charset("utf8mb4");
-            
-            // Return successful connection
-            return $conn;
-        } catch (Exception $e) {
-            $lastError = $e;
-            $retryCount++;
-            error_log("Database connection attempt $retryCount failed: " . $e->getMessage());
-            
-            // Wait a bit before retrying
-            if ($retryCount < $maxRetries) {
-                usleep(500000); // 500ms delay between retries
+        
+        // Try to create a new connection with error logging and retry
+        $maxRetries = 3;
+        $retryCount = 0;
+        $lastError = null;
+        
+        while ($retryCount < $maxRetries) {
+            try {
+                $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+                
+                // Check connection
+                if ($conn->connect_error) {
+                    throw new Exception("Connection failed: " . $conn->connect_error);
+                }
+                
+                // Set charset
+                $conn->set_charset("utf8mb4");
+                
+                // Return successful connection
+                return $conn;
+            } catch (Exception $e) {
+                $lastError = $e;
+                $retryCount++;
+                error_log("Database connection attempt $retryCount failed: " . $e->getMessage());
+                
+                // Wait a bit before retrying
+                if ($retryCount < $maxRetries) {
+                    usleep(500000); // 500ms delay between retries
+                }
             }
         }
+        
+        // Log the final failure and throw exception
+        error_log("All database connection attempts failed. Last error: " . $lastError->getMessage());
+        throw new Exception("Failed to connect to database after $maxRetries attempts: " . $lastError->getMessage());
     }
-    
-    // Log the final failure and throw exception
-    error_log("All database connection attempts failed. Last error: " . $lastError->getMessage());
-    throw new Exception("Failed to connect to database after $maxRetries attempts: " . $lastError->getMessage());
 }
 
 /**
@@ -412,4 +414,15 @@ function debugSqlQuery($sql, $params = [], $types = '', $logToFile = false) {
     }
     
     return $formattedQuery;
+}
+
+/**
+ * Safely get a value with a default fallback if NULL
+ * 
+ * @param mixed $value The value to check
+ * @param mixed $default Default value if $value is NULL
+ * @return mixed The original value or the default
+ */
+function safeValue($value, $default) {
+    return $value !== NULL ? $value : $default;
 }

@@ -24,20 +24,28 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
   const vehicleDataCache = useRef<Map<string, { data: CabType[], timestamp: number }>>(new Map());
   const eventThrottleTimestamps = useRef<Record<string, number>>({});
   const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const mountedRef = useRef<boolean>(true);
+  const lastEventTypeRef = useRef<string>('');
+  const lastTripTypeRef = useRef<string>(tripType);
 
   useEffect(() => {
+    mountedRef.current = true;
+    
     if (isLoading) {
       if (loadingTimeoutRef.current) {
         clearTimeout(loadingTimeoutRef.current);
       }
       loadingTimeoutRef.current = setTimeout(() => {
-        console.log('Loading timeout reached, forcing loading state to complete');
-        setIsLoading(false);
-        loadingRef.current = false;
+        if (mountedRef.current) {
+          console.log('Loading timeout reached, forcing loading state to complete');
+          setIsLoading(false);
+          loadingRef.current = false;
+        }
       }, 8000);
     }
 
     return () => {
+      mountedRef.current = false;
       if (loadingTimeoutRef.current) {
         clearTimeout(loadingTimeoutRef.current);
       }
@@ -48,11 +56,17 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
     const now = Date.now();
     const lastTime = eventThrottleTimestamps.current[eventType] || 0;
     
+    if (lastEventTypeRef.current === eventType && now - lastTime < throttleDuration * 2) {
+      console.log(`useCabOptions: Throttling repeated ${eventType} event (strict throttle)`);
+      return true;
+    }
+    
     if (now - lastTime < throttleDuration) {
       console.log(`useCabOptions: Throttling ${eventType} event (last occurred ${Math.round((now - lastTime)/1000)}s ago)`);
       return true;
     }
     
+    lastEventTypeRef.current = eventType;
     eventThrottleTimestamps.current[eventType] = now;
     return false;
   };
@@ -63,13 +77,21 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
       return cabOptions;
     }
     
+    const tripTypeChanged = lastTripTypeRef.current !== tripType;
+    lastTripTypeRef.current = tripType;
+    
+    if (!tripTypeChanged && forceRefresh && refreshCountRef.current > 2) {
+      console.log('Refresh count exceeded and trip type has not changed - throttling');
+      return cabOptions;
+    }
+    
     const isAdminTrip = isAdminTripType(tripType);
     if (isAdminTrip) {
       forceRefresh = true;
       console.log('Admin trip type detected, forcing refresh');
     }
     
-    const throttleDuration = isAdminTrip ? 5000 : 15000;
+    const throttleDuration = isAdminTrip ? 5000 : 30000;
     
     if (forceRefresh && !isAdminTrip) {
       if (shouldThrottleEvent('force-refresh', throttleDuration)) {
@@ -308,12 +330,15 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
   };
 
   useEffect(() => {
+    mountedRef.current = true;
+    
     const isAdmin = isAdminTripType(tripType);
     console.log(`Initial load for tripType ${tripType}, isAdmin=${isAdmin}`);
     
     loadCabOptions(isAdmin);
     
     const handleFareCacheCleared = () => {
+      if (!mountedRef.current) return;
       if (shouldThrottleEvent('fare-cache-cleared', 60000)) return;
       
       if (refreshCountRef.current >= maxRefreshesRef.current) {
@@ -326,6 +351,7 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
     };
     
     const handleDataRefreshed = (event: Event) => {
+      if (!mountedRef.current) return;
       const customEvent = event as CustomEvent;
       const eventType = event.type;
       
@@ -351,17 +377,28 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
         }
         
         localStorage.setItem(lastRefreshKey, now.toString());
-        loadCabOptions(true);
+        
+        setTimeout(() => {
+          if (mountedRef.current) {
+            loadCabOptions(true);
+          }
+        }, 1000);
       }
     };
     
     const handleFareDataUpdated = (event: Event) => {
+      if (!mountedRef.current) return;
       const customEvent = event as CustomEvent;
       
       if (shouldThrottleEvent('fare-data-updated', 30000)) return;
       
       console.log('Fare data has been updated, refreshing cab options', customEvent.detail);
-      setTimeout(() => loadCabOptions(true), 500);
+      
+      setTimeout(() => {
+        if (mountedRef.current) {
+          loadCabOptions(true);
+        }
+      }, 2000);
     };
     
     window.addEventListener('fare-cache-cleared', handleFareCacheCleared, { passive: true });
@@ -370,6 +407,7 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
     window.addEventListener('vehicle-data-updated', handleFareDataUpdated, { passive: true });
     
     return () => {
+      mountedRef.current = false;
       window.removeEventListener('fare-cache-cleared', handleFareCacheCleared);
       window.removeEventListener('vehicle-data-refreshed', handleDataRefreshed);
       window.removeEventListener('fare-data-updated', handleFareDataUpdated);
@@ -401,18 +439,16 @@ export const useCabOptions = ({ tripType, tripMode, distance }: CabOptionsProps)
     handleTripChange();
   }, [tripType, tripMode]);
 
-  const refresh = () => {
-    console.log("Manual refresh triggered");
-    setIsLoading(true);
-    return loadCabOptions(true);
-  };
-
   return {
     cabOptions,
     isLoading,
     error,
     filterLoading,
     lastRefreshTime,
-    refresh
+    refresh: () => {
+      console.log("Manual refresh triggered");
+      setIsLoading(true);
+      return loadCabOptions(true);
+    }
   };
 };

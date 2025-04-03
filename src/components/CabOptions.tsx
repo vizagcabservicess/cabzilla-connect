@@ -87,19 +87,33 @@ export function CabOptions({
     console.log('Starting complete fare data refresh');
     setIsRefreshingCabs(true);
     try {
+      // Mark refresh in progress
       localStorage.setItem('forceCacheRefresh', 'true');
+      
+      // Clear both caches
       clearFareCache();
       fareService.clearCache();
+      
+      // Set timestamp for tracking
       const timestamp = Date.now();
       localStorage.setItem('fareDataLastRefreshed', timestamp.toString());
       localStorage.setItem('forceTripFaresRefresh', 'true');
+      
+      // Force reload all cab types first
       await reloadCabTypes();
+      
+      // Then refresh cab options
       await refreshCabOptions();
+      
+      // Update state
       setLastUpdate(timestamp);
       setRefreshCount(prev => prev + 1);
       setForceRecalculation(prev => prev + 1);
       setGlobalRefreshTrigger(prev => prev + 1);
+      
+      // Calculate fares with fresh data
       await calculateFares(cabOptions, true);
+      
       toast.success("All fare data refreshed successfully!");
       setRefreshSuccessful(true);
       console.log('Complete fare data refresh successful');

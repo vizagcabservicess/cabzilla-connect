@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,9 +13,11 @@ import { apiBaseUrl } from '@/config/api';
 export default function AdminDatabasePage() {
   const [isInitializing, setIsInitializing] = useState(false);
   const [isFixing, setIsFixing] = useState(false);
+  const [isDiagnosing, setIsDiagnosing] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<Error | null>(null);
   const [forceRecreate, setForceRecreate] = useState(false);
+  const [diagnostics, setDiagnostics] = useState<any>(null);
 
   const initializeDatabase = async () => {
     setIsInitializing(true);
@@ -54,23 +55,17 @@ export default function AdminDatabasePage() {
     setError(null);
     
     try {
-      // Call the new fix-database-tables.php endpoint
-      const response = await axios.get(`${apiBaseUrl}/admin/fix-database-tables.php`);
+      // Use improved fixDatabaseTables function from apiHelper
+      const success = await import('@/utils/apiHelper')
+        .then(({ fixDatabaseTables }) => fixDatabaseTables());
       
-      if (response.data.status === 'success') {
+      if (success) {
         toast.success('Database tables fixed successfully');
-        // Set result to show details of fixes
-        setResult({
-          status: 'success',
-          message: 'Database tables fixed successfully',
-          ...response.data
-        });
-        
-        // Clear any cached data
-        await fareService.clearCache();
+        // Trigger diagnostics to see the results
+        runDiagnostics();
       } else {
         toast.error('Database fix had issues');
-        setError(new Error('Database fix failed: ' + (response.data?.message || 'Unknown error')));
+        setError(new Error('Database fix failed'));
       }
     } catch (err) {
       console.error('Error fixing database tables:', err);
@@ -81,16 +76,191 @@ export default function AdminDatabasePage() {
     }
   };
 
+  const runDiagnostics = async () => {
+    setIsDiagnosing(true);
+    setError(null);
+    
+    try {
+      // Call our new diagnostic endpoint
+      const timestamp = Date.now();
+      const response = await axios.get(`${apiBaseUrl}/api/admin/diagnose-database.php?_t=${timestamp}`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
+      
+      if (response.data) {
+        setDiagnostics(response.data);
+        
+        if (response.data.status === 'success') {
+          toast.success('Database diagnostics completed successfully');
+        } else if (response.data.status === 'warning') {
+          toast.warning('Database diagnostics found some issues');
+        } else {
+          toast.error('Database diagnostics found critical issues');
+        }
+      } else {
+        toast.error('Failed to run database diagnostics');
+        setError(new Error('Failed to run database diagnostics'));
+      }
+    } catch (err) {
+      console.error('Error running database diagnostics:', err);
+      setError(err instanceof Error ? err : new Error('Unknown error occurred'));
+      toast.error('Failed to run database diagnostics');
+    } finally {
+      setIsDiagnosing(false);
+    }
+  };
+
   return (
     <div className="container mx-auto py-8">
       <h1 className="text-3xl font-bold mb-6">Database Management</h1>
       
-      <Tabs defaultValue="initialize">
+      <Tabs defaultValue="diagnostics">
         <TabsList className="mb-4">
-          <TabsTrigger value="initialize">Initialize Database</TabsTrigger>
+          <TabsTrigger value="diagnostics">Diagnostics</TabsTrigger>
           <TabsTrigger value="fix">Fix Database Issues</TabsTrigger>
+          <TabsTrigger value="initialize">Initialize Database</TabsTrigger>
           <TabsTrigger value="backup">Backup & Restore</TabsTrigger>
         </TabsList>
+        
+        <TabsContent value="diagnostics">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Database className="h-5 w-5" />
+                Database Diagnostics
+              </CardTitle>
+              <CardDescription>
+                Check your database connectivity and table status to identify and fix any issues.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                onClick={runDiagnostics}
+                disabled={isDiagnosing}
+                className="bg-blue-600 hover:bg-blue-700 mb-4"
+              >
+                {isDiagnosing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Running Diagnostics...
+                  </>
+                ) : (
+                  <>
+                    <Database className="mr-2 h-4 w-4" />
+                    Run Database Diagnostics
+                  </>
+                )}
+              </Button>
+              
+              {diagnostics && (
+                <div className="mt-4">
+                  <div className={`px-4 py-3 rounded-md mb-4 ${
+                    diagnostics.status === 'success' ? 'bg-green-50 text-green-800 border border-green-200' :
+                    diagnostics.status === 'warning' ? 'bg-yellow-50 text-yellow-800 border border-yellow-200' :
+                    'bg-red-50 text-red-800 border border-red-200'
+                  }`}>
+                    <p className="font-medium">{diagnostics.message}</p>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <h3 className="font-medium text-lg">Test Results:</h3>
+                    {diagnostics.tests.map((test: any, index: number) => (
+                      <div key={index} className="border rounded-md p-3">
+                        <div className="flex items-center">
+                          {test.status === 'success' && <Check className="h-4 w-4 text-green-600 mr-2" />}
+                          {test.status === 'warning' && <FileWarning className="h-4 w-4 text-yellow-600 mr-2" />}
+                          {test.status === 'error' && <FileWarning className="h-4 w-4 text-red-600 mr-2" />}
+                          <span className="font-medium">{test.name}</span>
+                        </div>
+                        {test.message && <p className="text-sm text-gray-600 mt-1">{test.message}</p>}
+                        {test.details && <p className="text-sm text-gray-500 mt-1">{test.details}</p>}
+                        {test.warnings && (
+                          <p className="text-sm text-yellow-600 mt-1">Warning: {test.warnings}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {diagnostics.recommendations && diagnostics.recommendations.length > 0 && (
+                    <div className="mt-4">
+                      <h3 className="font-medium text-lg">Recommendations:</h3>
+                      <ul className="list-disc pl-5 mt-2 space-y-1">
+                        {diagnostics.recommendations.map((rec: string, index: number) => (
+                          <li key={index} className="text-sm">{rec}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  
+                  {(diagnostics.status === 'warning' || diagnostics.status === 'error') && (
+                    <Button
+                      onClick={fixDatabaseTables}
+                      disabled={isFixing}
+                      className="mt-4 bg-yellow-600 hover:bg-yellow-700"
+                    >
+                      {isFixing ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Fixing Issues...
+                        </>
+                      ) : (
+                        <>
+                          <Wrench className="mr-2 h-4 w-4" />
+                          Fix Identified Issues
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="fix">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Wrench className="h-5 w-5" />
+                Fix Database Issues
+              </CardTitle>
+              <CardDescription>
+                Fix common database schema issues and ensure all tables have the required columns. Use this if you're experiencing problems with fare updates or missing data.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Alert className="mb-4">
+                <AlertTitle>Information</AlertTitle>
+                <AlertDescription>
+                  This will fix schema issues, add missing columns, and ensure all vehicles have proper pricing entries. It will not delete any data.
+                </AlertDescription>
+              </Alert>
+            </CardContent>
+            <CardFooter>
+              <Button
+                onClick={fixDatabaseTables}
+                disabled={isFixing}
+                className="bg-yellow-600 hover:bg-yellow-700"
+              >
+                {isFixing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Fixing...
+                  </>
+                ) : (
+                  <>
+                    <Wrench className="mr-2 h-4 w-4" />
+                    Fix Database Issues
+                  </>
+                )}
+              </Button>
+            </CardFooter>
+          </Card>
+        </TabsContent>
         
         <TabsContent value="initialize">
           <Card>
@@ -152,47 +322,6 @@ export default function AdminDatabasePage() {
                   Database initialized successfully
                 </div>
               )}
-            </CardFooter>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="fix">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Wrench className="h-5 w-5" />
-                Fix Database Issues
-              </CardTitle>
-              <CardDescription>
-                Fix common database schema issues and ensure all tables have the required columns. Use this if you're experiencing problems with fare updates or missing data.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Alert className="mb-4">
-                <AlertTitle>Information</AlertTitle>
-                <AlertDescription>
-                  This will fix schema issues, add missing columns, and ensure all vehicles have proper pricing entries. It will not delete any data.
-                </AlertDescription>
-              </Alert>
-            </CardContent>
-            <CardFooter>
-              <Button
-                onClick={fixDatabaseTables}
-                disabled={isFixing}
-                className="bg-yellow-600 hover:bg-yellow-700"
-              >
-                {isFixing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Fixing...
-                  </>
-                ) : (
-                  <>
-                    <Wrench className="mr-2 h-4 w-4" />
-                    Fix Database Issues
-                  </>
-                )}
-              </Button>
             </CardFooter>
           </Card>
         </TabsContent>

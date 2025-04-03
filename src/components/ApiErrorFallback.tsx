@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { fareService } from "@/services/fareService";
+import { safeFetch } from "@/config/requestConfig";
+import { getApiUrl } from "@/config/api";
 
 export interface ApiErrorFallbackProps {
   error: Error | string;
@@ -50,7 +52,7 @@ export function ApiErrorFallback({
   const is404Error = /404|not found/i.test(errorMessage);
   
   const isCorsError = 
-    /cors|blocked by|access-control-allow-origin|preflight|options request/i.test(errorMessage);
+    /cors|blocked by|access-control-allow-origin|preflight|options request|forbidden/i.test(errorMessage);
     
   const isDatabaseError = 
     /database|db|sql|query|table|column|record|not found/i.test(errorMessage);
@@ -107,7 +109,7 @@ export function ApiErrorFallback({
     }, 500);
   };
 
-  // Apply advanced automatic fixes
+  // Apply advanced automatic fixes - especially targeting CORS issues
   const applyAutomaticFixes = async () => {
     setIsExecutingFix(true);
     
@@ -136,9 +138,48 @@ export function ApiErrorFallback({
       sessionStorage.removeItem('authToken');
       sessionStorage.removeItem('user');
       
-      // 4. Set "useDirectApi" flag to prefer direct API endpoints
-      localStorage.setItem('useDirectApi', 'true');
-      sessionStorage.setItem('useDirectApi', 'true');
+      // 4. Set "useDirectApi" flag to FALSE
+      localStorage.setItem('useDirectApi', 'false');
+      sessionStorage.setItem('useDirectApi', 'false');
+      
+      // 5. Set "useCorsFix" to TRUE
+      localStorage.setItem('useCorsProxy', 'true');
+      sessionStorage.setItem('useCorsProxy', 'true');
+      
+      // 6. Try the CORS fix endpoint
+      if (isCorsError) {
+        console.log("Attempting to fix CORS issues with fix-cors endpoint");
+        
+        try {
+          const response = await fetch(getApiUrl('/api/fix-cors'), {
+            method: 'GET',
+            headers: {
+              'X-Force-Refresh': 'true',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'Expires': '0',
+              'Origin': window.location.origin
+            },
+            mode: 'cors'
+          });
+          
+          if (response.ok) {
+            console.log("CORS fix endpoint successful", await response.json());
+          } else {
+            console.warn("CORS fix endpoint returned non-OK status:", response.status);
+          }
+        } catch (corsError) {
+          console.error("CORS fix endpoint failed:", corsError);
+        }
+        
+        // Also try using safeFetch for more reliability
+        try {
+          await safeFetch('/api/fix-cors');
+          console.log("CORS fix via safeFetch was successful");
+        } catch (e) {
+          console.error("CORS fix via safeFetch failed:", e);
+        }
+      }
       
       // Show success toast on completion
       toast.success("Automatic fixes applied successfully", {
@@ -202,7 +243,7 @@ export function ApiErrorFallback({
           </AlertTitle>
           <AlertDescription>
             {description || (isCorsError 
-              ? "The browser blocked access to the server due to security policy (CORS). This usually requires changes on the server side."
+              ? "The browser blocked access to the server due to security policy (CORS). The application will use offline mode and local data."
               : (isNetworkError 
                 ? "Unable to connect to the server. Please check your internet connection or try again later."
                 : (isDatabaseError
@@ -219,7 +260,7 @@ export function ApiErrorFallback({
               <li>Log out and log back in to refresh your authentication tokens</li>
               <li>Try from a different browser or internet connection</li>
               <li>Use the "Apply Automatic Fixes" button below</li>
-              <li>Contact support if the problem persists</li>
+              <li>Operations will work in offline mode (changes will be applied locally)</li>
             </ul>
           </div>
         )}
@@ -290,7 +331,11 @@ export function ApiErrorFallback({
                       message: errorMessage,
                       type: error instanceof Error ? error.constructor.name : typeof error,
                       timestamp: new Date().toISOString(),
-                      apiVersion: import.meta.env.VITE_API_VERSION || 'unknown'
+                      apiVersion: import.meta.env.VITE_API_VERSION || 'unknown',
+                      isCorsError: isCorsError,
+                      isNetworkError: isNetworkError,
+                      isServerError: isServerError,
+                      is404Error: is404Error
                     }, 
                     null, 
                     2

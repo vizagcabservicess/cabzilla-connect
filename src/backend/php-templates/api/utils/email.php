@@ -1,4 +1,3 @@
-
 <?php
 // Include configuration file
 require_once __DIR__ . '/../../config.php';
@@ -29,7 +28,7 @@ function sendEmail($to, $subject, $htmlBody, $textBody = '', $headers = []) {
     }
     
     // Original implementation as fallback
-    $from = 'info@vizagtaxihub.com';
+    $from = 'info@vizagup.com'; // Updated domain email
     $fromName = 'Vizag Taxi Hub';
     
     // Log email sending attempt with more details
@@ -582,7 +581,7 @@ function sendBookingConfirmationEmail($booking) {
  */
 function sendAdminNotificationEmail($booking) {
     // Admin email - should be a valid, existing email
-    $to = 'info@vizagtaxihub.com';
+    $to = 'info@vizagup.com'; // Updated admin email
     
     $subject = "New Booking - #" . $booking['bookingNumber'];
     $htmlBody = generateAdminNotificationEmail($booking);

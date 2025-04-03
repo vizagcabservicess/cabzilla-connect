@@ -1,4 +1,3 @@
-
 <?php
 require_once __DIR__ . '/../../config.php';
 
@@ -83,10 +82,10 @@ function sendSmtpEmail($to, $subject, $htmlBody) {
         'server_info' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown'
     ]);
     
-    // SMTP credentials for Hostinger - explicitly set and verified
+    // SMTP credentials for Hostinger - updated with new domain credentials
     $smtpHost = 'smtp.hostinger.com';
     $smtpPort = 465; // SSL preferred for Hostinger
-    $smtpUsername = 'info@vizagtaxihub.com';
+    $smtpUsername = 'info@vizagup.com';
     $smtpPassword = 'Joel@5544';
     $smtpEncryption = 'ssl'; // Use SSL for port 465
     
@@ -98,12 +97,12 @@ function sendSmtpEmail($to, $subject, $htmlBody) {
         'to' => $to
     ]);
     
-    // From details - Using verified Hostinger domain email is crucial for deliverability
-    $from = 'info@vizagtaxihub.com';
+    // From details - Using the new verified Hostinger domain email
+    $from = 'info@vizagup.com';
     $fromName = 'Vizag Taxi Hub';
     
     // Generate a unique Message-ID with proper domain
-    $messageId = '<' . md5(uniqid(time())) . '@vizagtaxihub.com>';
+    $messageId = '<' . md5(uniqid(time())) . '@vizagup.com>';
     
     // Prepare full email headers for better deliverability with DKIM/SPF hints
     $headers = [
@@ -325,7 +324,7 @@ function sendHostingerMail($to, $subject, $htmlBody, $textBody = '', $headers = 
     ]);
     
     // Set email parameters - use proper domain email that matches SPF record
-    $from = 'noreply@vizagtaxihub.com'; // Try a different sender address
+    $from = 'info@vizagup.com'; // Updated domain email
     $fromName = 'Vizag Taxi Hub';
     
     // Create a temporary file for the email content
@@ -505,7 +504,7 @@ function sendMailReliable($to, $subject, $htmlBody, $textBody = '', $headers = [
     ]);
     
     // Set email parameters - use proper domain email that matches SPF record
-    $from = 'info@vizagtaxihub.com';
+    $from = 'info@vizagup.com'; // Updated from address
     $fromName = 'Vizag Taxi Hub';
     
     // Try using PHP's built-in error reporting to catch issues
@@ -606,7 +605,7 @@ function sendReliableBookingConfirmationEmail($booking) {
 
 // Function to send admin notification email
 function sendReliableAdminNotificationEmail($booking) {
-    $to = 'info@vizagtaxihub.com';
+    $to = 'info@vizagup.com'; // Updated admin email
     $subject = "New Booking - #" . $booking['bookingNumber'];
     $htmlBody = generateAdminNotificationEmail($booking);
     
@@ -678,7 +677,7 @@ function sendBookingStatusUpdateEmail($to, $subject, $message) {
             <p>'.$message.'</p>
             <p>If you have any questions, please contact our customer support:</p>
             <p>Phone: +91 9966363662</p>
-            <p>Email: info@vizagtaxihub.com</p>
+            <p>Email: info@vizagup.com</p>
         </div>
         <div class="footer">
             <p>Thank you for choosing Vizag Taxi Hub!</p>

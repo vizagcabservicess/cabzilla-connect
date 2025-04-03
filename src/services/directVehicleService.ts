@@ -1,488 +1,409 @@
+
 import { CabType } from '@/types/cab';
-import { apiBaseUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
-import { getBypassHeaders, getForcedRequestConfig, formatDataForMultipart } from '@/config/requestConfig';
-import { directVehicleOperation } from '@/utils/apiHelper';
+import { apiBaseUrl } from '@/config/api';
+import { directVehicleOperation, formatDataForMultipart } from '@/utils/apiHelper';
+import { toast } from 'sonner';
 
 /**
- * Creates a new vehicle
+ * Add a new vehicle
  */
-export const createVehicle = async (vehicleData: CabType): Promise<CabType> => {
+export const addVehicle = async (vehicle: CabType): Promise<CabType> => {
   try {
-    // Format data for multipart submission
-    const formData = formatDataForMultipart(vehicleData);
-    
-    // Add vehicle ID with both naming conventions
-    formData.append('vehicleId', vehicleData.id);
-    formData.append('vehicle_id', vehicleData.id);
-    
-    // Add amenities with proper format if it's an array
-    if (Array.isArray(vehicleData.amenities)) {
-      formData.append('amenities', JSON.stringify(vehicleData.amenities));
-    }
-    
-    // Add these fields explicitly to ensure we have default values
-    formData.append('night_halt_charge', String(vehicleData.nightHaltCharge || 700));
-    formData.append('nightHaltCharge', String(vehicleData.nightHaltCharge || 700));
-    formData.append('driver_allowance', String(vehicleData.driverAllowance || 300));
-    formData.append('driverAllowance', String(vehicleData.driverAllowance || 300));
-    
-    // Force creation flag
-    formData.append('forceCreate', 'true');
-    
-    // Call the API
-    const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-create.php`, {
-      method: 'POST',
-      body: formData,
-      headers: getBypassHeaders()
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to create vehicle: ${response.status} ${response.statusText}`);
-    }
-    
-    const result = await response.json();
-    
-    if (result.status === 'error') {
-      throw new Error(result.message || 'Failed to create vehicle');
-    }
-    
-    // Trigger event to notify components
-    window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
-      detail: { vehicleId: vehicleData.id, timestamp: Date.now() }
-    }));
-    
-    return vehicleData;
-  } catch (error) {
-    console.error('Error creating vehicle:', error);
-    throw error;
-  }
-};
-
-/**
- * Updates an existing vehicle
- */
-export const updateVehicle = async (vehicleId: string, vehicleData: CabType): Promise<CabType> => {
-  try {
-    console.log('Updating vehicle with data:', vehicleData);
-    
-    // Create FormData object for multipart submission 
-    const formData = new FormData();
-    
-    // Add all vehicle data fields with proper naming conventions
-    formData.append('id', vehicleId);
-    formData.append('vehicleId', vehicleId);
-    formData.append('vehicle_id', vehicleId);
-    formData.append('name', vehicleData.name || '');
-    formData.append('capacity', String(vehicleData.capacity || 4));
-    formData.append('luggageCapacity', String(vehicleData.luggageCapacity || 2));
-    formData.append('luggage_capacity', String(vehicleData.luggageCapacity || 2));
-    
-    // Handle boolean isActive correctly
-    const isActive = vehicleData.isActive === false ? '0' : '1';
-    formData.append('isActive', isActive);
-    formData.append('is_active', isActive);
-    
-    // Add image path
-    formData.append('image', vehicleData.image || '/cars/sedan.png');
-    
-    // Handle amenities
-    if (Array.isArray(vehicleData.amenities)) {
-      formData.append('amenities', JSON.stringify(vehicleData.amenities));
-    } else if (vehicleData.amenities) {
-      formData.append('amenities', JSON.stringify([vehicleData.amenities]));
-    } else {
-      formData.append('amenities', JSON.stringify(['AC', 'Bottle Water', 'Music System']));
-    }
-    
-    // Add ac flag
-    formData.append('ac', vehicleData.ac === false ? '0' : '1');
-    
-    // Explicitly add description - ensure it's not undefined
-    const description = vehicleData.description !== undefined ? vehicleData.description : '';
-    formData.append('description', description);
-    
-    // Fix naming convention for pricing fields to resolve "Unknown column 'base_price'" errors
-    // Add both camelCase and snake_case versions to ensure compatibility
-    const basePrice = String(vehicleData.price || vehicleData.basePrice || 0);
-    formData.append('base_price', basePrice);
-    formData.append('basePrice', basePrice);
-    formData.append('price', basePrice);
-    
-    const pricePerKm = String(vehicleData.pricePerKm || 0);
-    formData.append('price_per_km', pricePerKm);
-    formData.append('pricePerKm', pricePerKm);
-    
-    // Add these fields explicitly to ensure database doesn't error with missing columns
-    const nightHaltCharge = String(vehicleData.nightHaltCharge || 700);
-    formData.append('night_halt_charge', nightHaltCharge);
-    formData.append('nightHaltCharge', nightHaltCharge);
-    
-    const driverAllowance = String(vehicleData.driverAllowance || 300);
-    formData.append('driver_allowance', driverAllowance);
-    formData.append('driverAllowance', driverAllowance);
-    
-    // Add SQL create command to add missing columns if they don't exist
-    const sqlAlterQuery = `
-    ALTER TABLE vehicles 
-    ADD COLUMN IF NOT EXISTS night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 700,
-    ADD COLUMN IF NOT EXISTS driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 300;
-    
-    ALTER TABLE vehicle_types 
-    ADD COLUMN IF NOT EXISTS night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 700,
-    ADD COLUMN IF NOT EXISTS driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 300;
-    `;
-    
-    formData.append('sql_fix', sqlAlterQuery);
-    
-    // Force update flag
-    formData.append('forceUpdate', 'true');
-    formData.append('addColumnsIfMissing', 'true');
-    
-    console.log('Submitting vehicle update with data: ', Object.fromEntries(formData));
-    
-    // Try direct update with our PHP script with improved error handling
-    let response: Response | null = null;
-    let result: any = null;
-    let fallbackUsed = false;
-    
-    try {
-      console.log(`Vehicle update attempt using direct-vehicle-update.php`);
-      
-      response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-update.php`, {
-        method: 'POST',
-        body: formData,
-        headers: getBypassHeaders()
-      });
-      
-      if (response.ok) {
-        try {
-          const text = await response.text();
-          result = text ? JSON.parse(text) : { status: 'success' };
-          console.log('Vehicle update API response:', result);
-          
-          if (result.status === 'error') {
-            throw new Error(result.message || 'API returned error status');
-          }
-          console.log('Direct vehicle update succeeded');
-          
-        } catch (jsonError) {
-          console.warn('Error parsing JSON response:', jsonError);
-          // If we can't parse but the HTTP status was OK, assume success
-          if (response.ok) {
-            result = { status: 'success' };
-            console.log('Assuming success despite JSON parse error');
-          } else {
-            throw new Error('Failed to parse API response');
-          }
-        }
-      } else {
-        throw new Error(`Update failed with status ${response.status}`);
-      }
-    } catch (directUpdateError) {
-      console.error('Direct update failed:', directUpdateError);
-      fallbackUsed = true;
-      
-      console.warn('Direct update failed, trying alternate endpoint...');
-      
-      // Try alternate endpoint
-      try {
-        response = await fetch(`${apiBaseUrl}/api/fares/update-vehicle.php`, {
-          method: 'POST',
-          body: formData,
-          headers: getBypassHeaders()
-        });
-        
-        if (response.ok) {
-          try {
-            const text = await response.text();
-            result = text ? JSON.parse(text) : { status: 'success' };
-            
-            if (result.status === 'error') {
-              throw new Error(result.message || 'API returned error status');
-            }
-            
-            console.log('Alternate endpoint update succeeded');
-          } catch (jsonError) {
-            console.warn('Error parsing JSON from alternate endpoint:', jsonError);
-            if (response.ok) {
-              result = { status: 'success' };
-            } else {
-              throw new Error('Failed to parse API response from alternate endpoint');
-            }
-          }
-        } else {
-          throw new Error(`Alternate endpoint update failed with status ${response.status}`);
-        }
-      } catch (alternateError) {
-        console.error('Alternate endpoint failed:', alternateError);
-        
-        console.warn('Alternate endpoint failed, trying fallback method...');
-        
-        try {
-          // Use alternative update approach with more fields
-          const updateData = {
-            ...vehicleData,
-            id: vehicleId,
-            vehicleId: vehicleId,
-            basePrice: vehicleData.price || vehicleData.basePrice || 0,
-            pricePerKm: vehicleData.pricePerKm || 0,
-            nightHaltCharge: vehicleData.nightHaltCharge || 700,
-            driverAllowance: vehicleData.driverAllowance || 300,
-            description: description,
-            isActive: vehicleData.isActive === false ? false : true,
-            name: vehicleData.name || ''
-          };
-          
-          const fallbackResult = await directVehicleOperation<any>(
-            'update',
-            updateData,
-            {
-              notification: true,
-              localStorageFallback: true
-            }
-          );
-          
-          console.log('Vehicle update succeeded via fallback method:', fallbackResult);
-          result = { status: 'success' };
-        } catch (fallbackError) {
-          console.error('Fallback method also failed:', fallbackError);
-          
-          // Last resort: update the local storage cache directly
-          try {
-            const vehiclesCacheString = localStorage.getItem('cachedVehicles');
-            if (vehiclesCacheString) {
-              const cachedVehicles = JSON.parse(vehiclesCacheString);
-              const updatedVehicles = cachedVehicles.map((vehicle: any) => 
-                vehicle.id === vehicleId || vehicle.vehicleId === vehicleId ? 
-                  { ...vehicle, ...vehicleData, description } : 
-                  vehicle
-              );
-              
-              localStorage.setItem('cachedVehicles', JSON.stringify(updatedVehicles));
-              localStorage.setItem('cachedVehiclesTimestamp', Date.now().toString());
-              
-              console.log('Updated vehicle in local storage cache');
-              result = { 
-                status: 'success', 
-                message: 'Vehicle updated successfully (offline mode)',
-                vehicleId: vehicleId,
-                offline: true,
-                timestamp: new Date().toISOString()
-              };
-            } else {
-              throw new Error('No cached vehicles found in localStorage');
-            }
-          } catch (localStorageError) {
-            console.error('All vehicle update methods failed:', localStorageError);
-            throw new Error('All vehicle update methods failed');
-          }
-        }
-      }
-    }
-    
-    // Delay to ensure backend has time to process the update
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Trigger multiple events to ensure all UI components update
-    const events = [
-      new CustomEvent('vehicle-data-updated', {
-        detail: { vehicleId, timestamp: Date.now() }
-      }),
-      new CustomEvent('vehicle-data-cache-cleared', {
-        detail: { timestamp: Date.now() }
-      }),
-      new CustomEvent('vehicle-data-refreshed', {
-        detail: { vehicleId, timestamp: Date.now() }
-      })
+    // Try multiple endpoints in sequence to ensure higher success rate
+    const endpoints = [
+      'api/admin/direct-vehicle-create.php',
+      'api/admin/add-vehicle.php',
+      'api/admin/vehicle-create.php'
     ];
     
-    // Dispatch all events with slight delays between them
-    for (const event of events) {
-      window.dispatchEvent(event);
-      await new Promise(resolve => setTimeout(resolve, 100));
+    let lastError: Error | null = null;
+    
+    // Try each endpoint until one succeeds
+    for (const endpoint of endpoints) {
+      try {
+        // Add a timestamp to bypass cache
+        const timestampedEndpoint = `${endpoint}?_t=${Date.now()}`;
+        console.log(`Trying vehicle creation endpoint: ${apiBaseUrl}/${timestampedEndpoint}`);
+        
+        const response = await directVehicleOperation(timestampedEndpoint, 'POST', vehicle);
+        
+        if (response && response.status === 'success') {
+          return response.vehicle || vehicle;
+        }
+      } catch (error: any) {
+        lastError = error;
+        console.error(`Error with endpoint ${endpoint}:`, error);
+        // Continue to the next endpoint
+      }
     }
     
-    // Return the updated vehicle data with confirmed description
-    return {
-      ...vehicleData,
-      id: vehicleId,
-      vehicleId: vehicleId,
-      description: description, // Ensure description is properly set
-      // Make sure these fields have values
-      nightHaltCharge: vehicleData.nightHaltCharge || 700,
-      driverAllowance: vehicleData.driverAllowance || 300
+    // If all endpoints failed, try a direct fetch as a last resort
+    try {
+      console.log('Trying direct fetch as last resort for vehicle creation...');
+      const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-create.php`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          'X-Admin-Mode': 'true'
+        },
+        body: JSON.stringify(vehicle)
+      });
+      
+      const result = await response.json();
+      if (result && result.status === 'success') {
+        return result.vehicle || vehicle;
+      }
+    } catch (error) {
+      console.error('Last resort direct fetch failed:', error);
+    }
+    
+    // If we've reached here, all endpoints failed
+    throw lastError || new Error('Failed to add vehicle');
+  } catch (error) {
+    console.error('Failed to add vehicle:', error);
+    throw error;
+  }
+};
+
+// Add an alias for addVehicle as createVehicle for backward compatibility
+export const createVehicle = addVehicle;
+
+/**
+ * Update an existing vehicle
+ */
+export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
+  try {
+    // Ensure we have valid id fields
+    if (!vehicle.id && !vehicle.vehicleId) {
+      throw new Error('Vehicle ID is required for update');
+    }
+    
+    // Make sure numeric fields are actually numbers and set default values for problematic fields
+    const preparedVehicle = {
+      ...vehicle,
+      id: vehicle.id || vehicle.vehicleId,
+      vehicleId: vehicle.vehicleId || vehicle.id,
+      capacity: Number(vehicle.capacity || 4),
+      luggageCapacity: Number(vehicle.luggageCapacity || 2),
+      basePrice: Number(vehicle.basePrice || vehicle.price || 0),
+      price: Number(vehicle.price || vehicle.basePrice || 0),
+      pricePerKm: Number(vehicle.pricePerKm || 0),
+      // CRITICAL: Always provide default values for these fields to avoid NULL errors
+      nightHaltCharge: Number(vehicle.nightHaltCharge || 700), 
+      driverAllowance: Number(vehicle.driverAllowance || 250)  
     };
+    
+    console.log('Prepared vehicle data for update:', preparedVehicle);
+
+    // Try multiple endpoints using form submission, which is more reliable with PHP
+    const formData = formatDataForMultipart(preparedVehicle);
+    
+    // First try direct form submission to PHP endpoint
+    try {
+      const unique = Date.now();
+      const url = `${apiBaseUrl}/api/admin/direct-vehicle-update.php?_t=${unique}`;
+      console.log('Trying direct form submission to:', url);
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'X-Admin-Mode': 'true'
+        }
+      });
+      
+      let responseData;
+      const contentType = response.headers.get('content-type');
+      
+      try {
+        if (contentType && contentType.includes('application/json')) {
+          responseData = await response.json();
+        } else {
+          const text = await response.text();
+          try {
+            responseData = JSON.parse(text);
+          } catch (e) {
+            console.error('Failed to parse response text:', text);
+            responseData = { status: 'error', message: 'Invalid JSON response' };
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse response:', e);
+        throw new Error('Failed to parse server response');
+      }
+      
+      if (response.ok && responseData?.status === 'success') {
+        console.log('Vehicle updated successfully via form submission');
+        return responseData.vehicle || preparedVehicle;
+      }
+      
+      console.warn('Direct form submission failed:', responseData);
+      
+      // If the error is "MySQL server has gone away", try the fix-vehicle-tables.php endpoint
+      if (responseData?.message && responseData.message.includes('MySQL server has gone away')) {
+        console.log('Detected "MySQL server has gone away" error, trying to fix database...');
+        
+        try {
+          const fixResponse = await fetch(`${apiBaseUrl}/api/admin/fix-vehicle-tables.php?_t=${Date.now()}`, {
+            method: 'GET',
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest',
+              'X-Force-Refresh': 'true',
+              'Cache-Control': 'no-cache, no-store, must-revalidate'
+            }
+          });
+          
+          const fixData = await fixResponse.json();
+          console.log('Database fix response:', fixData);
+          
+          // Try the update again after fixing
+          if (fixData.status === 'success') {
+            console.log('Database fixed, retrying update...');
+            
+            // Wait a bit before retrying
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            const retryResponse = await fetch(url, {
+              method: 'POST',
+              body: formData,
+              headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Force-Refresh': 'true',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'X-Admin-Mode': 'true'
+              }
+            });
+            
+            if (retryResponse.ok) {
+              const retryData = await retryResponse.json();
+              if (retryData.status === 'success') {
+                console.log('Vehicle updated successfully after database fix');
+                return retryData.vehicle || preparedVehicle;
+              }
+            }
+          }
+        } catch (fixError) {
+          console.error('Failed to fix database:', fixError);
+        }
+      }
+    } catch (err) {
+      console.error('Direct form submission error:', err);
+    }
+    
+    // If form submission failed, try with different endpoints
+    const endpoints = [
+      'api/admin/direct-vehicle-modify.php',
+      'api/admin/direct-vehicle-update.php',
+      'api/admin/update-vehicle.php',
+      'api/admin/vehicle-update.php',
+      'api/admin/vehicles-update.php'
+    ];
+    
+    let lastError: Error | null = null;
+    
+    // Try each endpoint until one succeeds
+    for (const endpoint of endpoints) {
+      try {
+        // Add a timestamp to bypass cache
+        const timestampedEndpoint = `${endpoint}?_t=${Date.now()}`;
+        console.log(`Trying vehicle update endpoint: ${apiBaseUrl}/${timestampedEndpoint}`);
+        
+        const response = await directVehicleOperation(timestampedEndpoint, 'POST', preparedVehicle);
+        
+        if (response && response.status === 'success') {
+          return response.vehicle || preparedVehicle;
+        }
+      } catch (error: any) {
+        lastError = error;
+        console.error(`Error with endpoint ${endpoint}:`, error);
+        // Continue to the next endpoint
+      }
+    }
+    
+    // If all endpoints failed, try a direct fetch as a last resort
+    try {
+      console.log('Trying direct fetch as last resort for vehicle update...');
+      
+      // Use the direct-vehicle-modify.php endpoint which has better error handling
+      const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-modify.php?_t=${Date.now()}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          'X-Admin-Mode': 'true'
+        },
+        body: JSON.stringify(preparedVehicle)
+      });
+      
+      // Only try to parse JSON if the response is OK
+      if (response.ok) {
+        const responseText = await response.text();
+        try {
+          const result = JSON.parse(responseText);
+          if (result && result.status === 'success') {
+            return result.vehicle || preparedVehicle;
+          }
+        } catch (e) {
+          console.error('Failed to parse JSON:', e, responseText);
+        }
+      }
+    } catch (error) {
+      console.error('Last resort direct fetch failed:', error);
+    }
+    
+    // If direct API calls failed, try using the backup domain if available
+    if (typeof window !== 'undefined') {
+      try {
+        const backupDomain = 'https://vizagcabs.com';
+        console.log(`Trying backup domain: ${backupDomain}`);
+        const response = await fetch(`${backupDomain}/api/admin/direct-vehicle-update.php`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'X-Admin-Mode': 'true'
+          },
+          body: JSON.stringify(preparedVehicle)
+        });
+        
+        // Only try to parse JSON if the response is OK
+        if (response.ok) {
+          const responseText = await response.text();
+          try {
+            const result = JSON.parse(responseText);
+            if (result && result.status === 'success') {
+              return result.vehicle || preparedVehicle;
+            }
+          } catch (e) {
+            console.error('Failed to parse JSON from backup domain:', e, responseText);
+          }
+        }
+      } catch (error) {
+        console.error('Backup domain attempt failed:', error);
+      }
+    }
+    
+    // If we've reached here, all endpoints failed
+    throw lastError || new Error('Failed to update vehicle');
   } catch (error) {
-    console.error('Error updating vehicle:', error);
+    console.error('Failed to update vehicle:', error);
     throw error;
   }
 };
 
 /**
- * Deletes a vehicle
+ * Delete a vehicle
  */
-export const deleteVehicle = async (vehicleId: string): Promise<boolean> => {
+export const deleteVehicle = async (vehicleId: string): Promise<{ status: string, message?: string }> => {
   try {
-    // Create form data
-    const formData = new FormData();
-    formData.append('vehicleId', vehicleId);
-    formData.append('vehicle_id', vehicleId);
-    formData.append('forceDelete', 'true');
+    // Try multiple endpoints in sequence to ensure higher success rate
+    const endpoints = [
+      'api/admin/direct-vehicle-delete.php',
+      'api/admin/delete-vehicle.php',
+      'api/admin/vehicle-delete.php'
+    ];
     
-    // Call the API
-    const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-delete.php`, {
-      method: 'POST',
-      body: formData,
-      headers: getBypassHeaders()
-    });
+    let lastError: Error | null = null;
     
-    if (!response.ok) {
-      throw new Error(`Failed to delete vehicle: ${response.status} ${response.statusText}`);
+    // Try each endpoint until one succeeds
+    for (const endpoint of endpoints) {
+      try {
+        // Add a timestamp to bypass cache
+        const timestampedEndpoint = `${endpoint}?_t=${Date.now()}`;
+        console.log(`Trying vehicle deletion endpoint: ${apiBaseUrl}/${timestampedEndpoint}`);
+        
+        const response = await directVehicleOperation(timestampedEndpoint, 'POST', { vehicleId });
+        
+        if (response && response.status === 'success') {
+          return { status: 'success' };
+        }
+      } catch (error: any) {
+        lastError = error;
+        console.error(`Error with endpoint ${endpoint}:`, error);
+        // Continue to the next endpoint
+      }
     }
     
-    const result = await response.json();
-    
-    if (result.status === 'error') {
-      throw new Error(result.message || 'Failed to delete vehicle');
+    // If all API endpoints failed, try a direct fetch as a last resort
+    try {
+      console.log('Trying direct fetch as last resort for vehicle deletion...');
+      const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-delete.php?id=${vehicleId}&_t=${Date.now()}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'X-Admin-Mode': 'true'
+        },
+        body: JSON.stringify({ vehicleId })
+      });
+      
+      const result = await response.json();
+      if (result && result.status === 'success') {
+        return { status: 'success' };
+      }
+    } catch (error) {
+      console.error('Last resort direct fetch for deletion failed:', error);
     }
     
-    // Trigger event to notify components
-    window.dispatchEvent(new CustomEvent('vehicle-data-updated', {
-      detail: { vehicleId, action: 'delete', timestamp: Date.now() }
-    }));
+    // If we've reached here, all endpoints failed
+    throw lastError || new Error('Failed to delete vehicle');
+  } catch (error: any) {
+    console.error('Failed to delete vehicle:', error);
+    throw new Error(error.message || 'Failed to delete vehicle');
+  }
+};
+
+/**
+ * Get a specific vehicle
+ */
+export const getVehicle = async (vehicleId: string): Promise<CabType> => {
+  try {
+    const response = await directVehicleOperation(`api/admin/vehicles-data.php?id=${vehicleId}&_t=${Date.now()}`, 'GET');
     
-    return true;
+    if (response && response.vehicles && response.vehicles.length > 0) {
+      return response.vehicles[0];
+    }
+    
+    throw new Error('Vehicle not found');
   } catch (error) {
-    console.error('Error deleting vehicle:', error);
+    console.error('Failed to get vehicle:', error);
     throw error;
   }
 };
 
 /**
- * Updates vehicle fares
+ * Get all vehicles
  */
-export const updateVehicleFares = async (vehicleId: string, tripType: string, fareData: any): Promise<boolean> => {
+export const getVehicles = async (includeInactive = false): Promise<CabType[]> => {
   try {
-    // Create form data
-    const formData = formatDataForMultipart(fareData);
+    const response = await directVehicleOperation(
+      `api/admin/vehicles-data.php?includeInactive=${includeInactive ? 'true' : 'false'}&_t=${Date.now()}`, 
+      'GET'
+    );
     
-    // Add vehicle ID and trip type
-    formData.append('vehicleId', vehicleId);
-    formData.append('vehicle_id', vehicleId);
-    formData.append('tripType', tripType);
-    formData.append('trip_type', tripType);
-    
-    // Force update flag
-    formData.append('forceUpdate', 'true');
-    
-    // Select API endpoint based on trip type
-    let endpoint = `${apiBaseUrl}/api/admin/direct-fare-update.php`;
-    switch(tripType.toLowerCase()) {
-      case 'airport':
-        endpoint = `${apiBaseUrl}/api/admin/direct-airport-fares.php`;
-        break;
-      case 'outstation':
-        endpoint = `${apiBaseUrl}/api/admin/direct-outstation-fares.php`;
-        break;
-      case 'local':
-        endpoint = `${apiBaseUrl}/api/admin/direct-local-fares.php`;
-        break;
+    if (response && response.vehicles && Array.isArray(response.vehicles)) {
+      return response.vehicles;
     }
     
-    // Call the API
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      body: formData,
-      headers: getBypassHeaders()
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to update fares: ${response.status} ${response.statusText}`);
-    }
-    
-    const result = await response.json();
-    
-    if (result.status === 'error') {
-      throw new Error(result.message || 'Failed to update fares');
-    }
-    
-    // Trigger event to notify components
-    window.dispatchEvent(new CustomEvent('fare-data-updated', {
-      detail: { vehicleId, tripType, timestamp: Date.now() }
-    }));
-    
-    return true;
+    return [];
   } catch (error) {
-    console.error('Error updating vehicle fares:', error);
-    throw error;
-  }
-};
-
-/**
- * Syncs vehicle data across all tables
- */
-export const syncVehicleData = async (vehicleId?: string): Promise<boolean> => {
-  try {
-    // Build the URL
-    let url = `${apiBaseUrl}/api/admin/force-sync-outstation-fares.php?_t=${Date.now()}`;
-    
-    if (vehicleId) {
-      url += `&vehicle_id=${vehicleId}`;
-    }
-    
-    // Call the API
-    const response = await fetch(url, {
-      headers: forceRefreshHeaders
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to sync vehicle data: ${response.status} ${response.statusText}`);
-    }
-    
-    const result = await response.json();
-    
-    if (result.status === 'error') {
-      throw new Error(result.message || 'Failed to sync vehicle data');
-    }
-    
-    // Trigger event to notify components
-    window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
-      detail: { vehicleId, timestamp: Date.now() }
-    }));
-    
-    return true;
-  } catch (error) {
-    console.error('Error syncing vehicle data:', error);
-    throw error;
-  }
-};
-
-/**
- * Gets a vehicle by ID
- */
-export const getVehicleById = async (vehicleId: string): Promise<CabType | null> => {
-  try {
-    // Build the URL
-    const url = `${apiBaseUrl}/api/fares/vehicles-data.php?vehicle_id=${vehicleId}&_t=${Date.now()}`;
-    
-    // Call the API
-    const response = await fetch(url, {
-      headers: defaultHeaders
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to get vehicle: ${response.status} ${response.statusText}`);
-    }
-    
-    const result = await response.json();
-    
-    if (result.status === 'error' || !result.vehicles || !Array.isArray(result.vehicles) || result.vehicles.length === 0) {
-      return null;
-    }
-    
-    return result.vehicles[0];
-  } catch (error) {
-    console.error('Error getting vehicle by ID:', error);
-    return null;
+    console.error('Failed to get vehicles:', error);
+    return [];
   }
 };
