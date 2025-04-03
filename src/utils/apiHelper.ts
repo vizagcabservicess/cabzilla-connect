@@ -1,4 +1,3 @@
-
 import { apiBaseUrl } from '@/config/api';
 import { toast } from 'sonner';
 
@@ -532,7 +531,7 @@ export const directVehicleOperation = async (endpoint: string, method = 'GET', d
       'X-Requested-With': 'XMLHttpRequest'
     };
     
-    if (method !== 'GET' && !data instanceof FormData) {
+    if (method !== 'GET' && !(data instanceof FormData)) {
       headers['Content-Type'] = 'application/json';
     }
     
