@@ -1,33 +1,17 @@
 
 <?php
-// Mock PHP file for direct-airport-fares.php
-// Note: This file won't actually be executed in the Lovable preview environment,
-// but it helps document the expected API structure and responses.
-
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh');
+header('Access-Control-Allow-Methods: GET, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode');
 header('Content-Type: application/json');
 
-// Handle OPTIONS preflight request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
 
-// Get vehicle ID from query string
-$vehicleId = isset($_GET['vehicle_id']) ? $_GET['vehicle_id'] : null;
-
-// If vehicle ID is not in query string, check for it in JSON body for POST requests
-if (!$vehicleId && $_SERVER['REQUEST_METHOD'] === 'POST') {
-    $data = json_decode(file_get_contents('php://input'), true);
-    $vehicleId = isset($data['vehicleId']) ? $data['vehicleId'] : (isset($data['vehicle_id']) ? $data['vehicle_id'] : null);
-}
-
-// If vehicle ID is not in JSON body, check POST data
-if (!$vehicleId && $_SERVER['REQUEST_METHOD'] === 'POST') {
-    $vehicleId = isset($_POST['vehicleId']) ? $_POST['vehicleId'] : (isset($_POST['vehicle_id']) ? $_POST['vehicle_id'] : null);
-}
+// Get vehicle ID from query parameters
+$vehicleId = isset($_GET['vehicle_id']) ? $_GET['vehicle_id'] : (isset($_GET['vehicleId']) ? $_GET['vehicleId'] : null);
 
 if (!$vehicleId) {
     http_response_code(400);
@@ -38,61 +22,55 @@ if (!$vehicleId) {
     exit;
 }
 
-// Sample fare data based on vehicle type
-$airportFares = [];
+// Define default fares based on vehicle type
+$defaultFares = [
+    'sedan' => [
+        'priceOneWay' => 1500,
+        'priceRoundTrip' => 2800,
+        'nightCharges' => 300,
+        'extraWaitingCharges' => 150
+    ],
+    'ertiga' => [
+        'priceOneWay' => 1800,
+        'priceRoundTrip' => 3400,
+        'nightCharges' => 350,
+        'extraWaitingCharges' => 200
+    ],
+    'innova_crysta' => [
+        'priceOneWay' => 2200,
+        'priceRoundTrip' => 4000,
+        'nightCharges' => 400,
+        'extraWaitingCharges' => 250
+    ],
+    'luxury' => [
+        'priceOneWay' => 2600,
+        'priceRoundTrip' => 4800, 
+        'nightCharges' => 500,
+        'extraWaitingCharges' => 300
+    ],
+    'tempo_traveller' => [
+        'priceOneWay' => 3500,
+        'priceRoundTrip' => 6000,
+        'nightCharges' => 600,
+        'extraWaitingCharges' => 350
+    ]
+];
 
-switch ($vehicleId) {
-    case 'sedan':
-        $airportFares[] = [
-            'vehicleId' => 'sedan',
-            'priceOneWay' => 1500,
-            'priceRoundTrip' => 2800,
-            'nightCharges' => 300,
-            'extraWaitingCharges' => 100
-        ];
-        break;
-    case 'ertiga':
-        $airportFares[] = [
-            'vehicleId' => 'ertiga',
-            'priceOneWay' => 1800,
-            'priceRoundTrip' => 3400,
-            'nightCharges' => 400,
-            'extraWaitingCharges' => 120
-        ];
-        break;
-    case 'innova_crysta':
-        $airportFares[] = [
-            'vehicleId' => 'innova_crysta',
-            'priceOneWay' => 2200,
-            'priceRoundTrip' => 4000,
-            'nightCharges' => 500,
-            'extraWaitingCharges' => 150
-        ];
-        break;
-    case 'tempo_traveller':
-        $airportFares[] = [
-            'vehicleId' => 'tempo_traveller',
-            'priceOneWay' => 3500,
-            'priceRoundTrip' => 6500,
-            'nightCharges' => 700,
-            'extraWaitingCharges' => 200
-        ];
-        break;
-    default:
-        // For unknown vehicles, return empty fare structure
-        $airportFares[] = [
-            'vehicleId' => $vehicleId,
-            'priceOneWay' => 0,
-            'priceRoundTrip' => 0,
-            'nightCharges' => 0,
-            'extraWaitingCharges' => 0
-        ];
-        break;
-}
+// Get default fare for the vehicle, or create empty fare if vehicle type not found
+$fare = $defaultFares[$vehicleId] ?? [
+    'priceOneWay' => 0,
+    'priceRoundTrip' => 0,
+    'nightCharges' => 0,
+    'extraWaitingCharges' => 0
+];
 
-// Return JSON response
+// Add vehicle ID to fare data
+$fare['vehicleId'] = $vehicleId;
+$fare['vehicle_id'] = $vehicleId;
+
+// Return fare data
 echo json_encode([
     'status' => 'success',
     'message' => 'Airport fares retrieved successfully',
-    'fares' => $airportFares
+    'fares' => [$fare]
 ]);

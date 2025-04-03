@@ -1,3 +1,4 @@
+
 import { apiBaseUrl } from '@/config/api';
 import { toast } from 'sonner';
 
@@ -176,6 +177,16 @@ export const directVehicleOperation = async (endpoint: string, method = 'GET', d
         // Store updated vehicle data in localStorage for persistence
         storeVehicleLocally(data);
         
+        // Create a success event to ensure other components are aware of the update
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('vehicle-data-updated', {
+            detail: { 
+              vehicleId: vehicleId,
+              timestamp: Date.now()
+            }
+          }));
+        }, 500);
+        
         return {
           status: 'success',
           message: 'Vehicle updated successfully',
@@ -200,11 +211,12 @@ export const directVehicleOperation = async (endpoint: string, method = 'GET', d
           status: 'success',
           message: 'Airport fares synced successfully',
           synced: 5,
+          vehicles: ['sedan', 'ertiga', 'innova_crysta', 'tempo_traveller', 'luxury'],
           timestamp: Date.now()
         };
       }
       
-      // GET VEHICLES
+      // GET VEHICLES - This is one of the problem endpoints based on the logs
       if ((endpoint.includes('vehicles-data.php') || endpoint.includes('get-vehicles.php')) && 
           method === 'GET') {
         console.log('Getting vehicle data in preview mode');
@@ -306,10 +318,27 @@ export const directVehicleOperation = async (endpoint: string, method = 'GET', d
           }
         ];
         
-        // Merge default vehicles with stored vehicles
+        // Merge default vehicles with stored vehicles - IMPORTANT FIX HERE
         vehicles = defaultVehicles.map(defaultVehicle => {
           const storedVehicle = storedVehicles[defaultVehicle.id];
-          return storedVehicle ? { ...defaultVehicle, ...storedVehicle } : defaultVehicle;
+          
+          if (storedVehicle) {
+            // Ensure all necessary properties from the default vehicle are preserved
+            // This is crucial for preventing properties from being reset
+            return { 
+              ...defaultVehicle,  
+              ...storedVehicle,
+              // Force these critical properties to never be lost/reset
+              id: storedVehicle.id || defaultVehicle.id,
+              vehicleId: storedVehicle.id || defaultVehicle.id,
+              name: storedVehicle.name || defaultVehicle.name,
+              price: Number(storedVehicle.price || defaultVehicle.price),
+              basePrice: Number(storedVehicle.basePrice || defaultVehicle.price),
+              amenities: storedVehicle.amenities || defaultVehicle.amenities,
+              isActive: storedVehicle.isActive !== undefined ? storedVehicle.isActive : defaultVehicle.isActive
+            };
+          }
+          return defaultVehicle;
         });
         
         // Filter by vehicle ID if specified
@@ -322,6 +351,7 @@ export const directVehicleOperation = async (endpoint: string, method = 'GET', d
           vehicles = vehicles.filter(v => v.isActive !== false);
         }
         
+        console.log(`Returning ${vehicles.length} vehicles from mock endpoint`);
         return {
           status: 'success',
           message: 'Vehicles retrieved successfully',
@@ -503,6 +533,17 @@ export const directVehicleOperation = async (endpoint: string, method = 'GET', d
         try {
           const fareKey = `airport_fares_${vehicleId}`;
           localStorage.setItem(fareKey, JSON.stringify(data));
+          
+          // Dispatch an event to notify other components of the update
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('fare-data-updated', {
+              detail: {
+                fareType: 'airport',
+                vehicleId,
+                timestamp: Date.now()
+              }
+            }));
+          }, 500);
         } catch (e) {
           console.error('Error storing fares locally:', e);
         }
