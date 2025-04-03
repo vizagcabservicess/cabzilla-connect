@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { AlertCircle, RefreshCw, Globe, Server, Network, ExternalLink, FileCog, Hammer, RefreshCcw, ServerCrash, DatabaseBackup } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -32,24 +31,20 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
       duration: 2000
     });
     
-    // Clear all caches first
-    fareService.clearCache();
-    
-    // Log the forced request config for debugging
-    console.log('Using forced request config:', fareService.getForcedRequestConfig());
-    
-    // Wait a moment for caches to clear
-    setTimeout(() => {
-      // Then call the onRefresh handler if provided
-      if (onRefresh) {
-        onRefresh();
-      } else {
-        // If no handler provided, reload the page
-        window.location.reload();
-      }
-      
-      setIsRefreshing(false);
-    }, 800);
+    // Import and use the clearAllCaches function
+    import('@/lib/cacheManager').then(({ clearAllCaches }) => {
+      clearAllCaches(false).then(() => {
+        // Then call the onRefresh handler if provided
+        if (onRefresh) {
+          onRefresh();
+        } else {
+          // If no handler provided, reload the page
+          window.location.reload();
+        }
+        
+        setIsRefreshing(false);
+      });
+    });
   };
   
   const runDiagnostics = () => {

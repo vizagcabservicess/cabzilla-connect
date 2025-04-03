@@ -13,6 +13,13 @@ export {
   clearFareCache
 } from './fareCalculationService';
 
+// Export cache management functions
+export {
+  clearAllCaches,
+  resetApplication,
+  getApiUrlWithCacheBuster
+} from './cacheManager';
+
 // Export types with the 'export type' syntax to avoid TypeScript errors
 export type { TripType, TripMode } from './tripTypes';
 export { 
