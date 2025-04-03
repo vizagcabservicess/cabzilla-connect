@@ -1,6 +1,6 @@
 
 import { Button } from "@/components/ui/button";
-import { AlertCircle, RefreshCcw, Database, ExternalLink, FileJson } from "lucide-react";
+import { AlertCircle, RefreshCcw, Database, ExternalLink, FileJson, Table } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { fixDatabaseTables } from "@/utils/apiHelper";
 import { toast } from "sonner";
@@ -76,6 +76,11 @@ export function FareUpdateError({
   const hasConnectionError = errorMessage.includes('connect') || 
     errorMessage.includes('Access denied') ||
     errorMessage.includes('localhost');
+    
+  // Enhanced detection for column name issues - a major source of problems
+  const hasColumnNameIssue = errorMessage.includes('Unknown column') || 
+    errorMessage.includes('column not found') ||
+    (errorMessage.includes('column') && errorMessage.includes('does not exist'));
 
   return (
     <Alert variant="destructive" className="mb-4">
@@ -85,6 +90,11 @@ export function FareUpdateError({
         <p>{description}</p>
         <div className="bg-red-50 p-3 rounded text-red-900 text-sm overflow-x-auto">
           {errorMessage}
+          {hasColumnNameIssue && (
+            <div className="mt-2 text-amber-700 font-medium">
+              This appears to be a database column naming issue. The system will attempt to fix this automatically when you retry.
+            </div>
+          )}
         </div>
         <div className="flex flex-wrap gap-2 mt-2">
           {onRetry && (
@@ -103,6 +113,18 @@ export function FareUpdateError({
             >
               <Database className="mr-2 h-4 w-4" />
               Fix Database {hasConnectionError ? "(Connection Error)" : ""}
+            </Button>
+          )}
+          
+          {isAdmin && hasColumnNameIssue && (
+            <Button 
+              size="sm" 
+              variant="outline" 
+              onClick={fixDatabaseHandler || handleFixDatabase} 
+              className="flex items-center"
+            >
+              <Table className="mr-2 h-4 w-4" />
+              Fix Column Names
             </Button>
           )}
           

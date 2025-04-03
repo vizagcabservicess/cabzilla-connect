@@ -1,3 +1,4 @@
+
 import { toast } from 'sonner';
 import { apiBaseUrl } from '@/config/api';
 import { directVehicleOperation } from '@/utils/apiHelper';
@@ -235,12 +236,13 @@ export const updateOutstationFares = async (
 
 /**
  * Update local package fares for a specific vehicle
+ * Now handles column name variations automatically
  */
 export const updateLocalFares = async (
   vehicleId: string, 
   extraKmRate: number,
   extraHourRate: number = 0,
-  packages: any[] = []
+  packages: any = {}
 ): Promise<any> => {
   try {
     console.log(`Starting local fare update for vehicle ID ${vehicleId}`);
@@ -292,6 +294,12 @@ export const updateLocalFares = async (
     
     console.log(`Using final verified ID for local fares: ${verifiedVehicleId}`);
     
+    // Format package data for both hr and hrs column naming patterns
+    const packageData = typeof packages === 'object' ? packages : {};
+    const price4hr40km = packageData['4hrs-40km'] || 0;
+    const price8hr80km = packageData['8hrs-80km'] || 0;
+    const price10hr100km = packageData['10hrs-100km'] || 0;
+    
     // Try the new direct endpoint first
     try {
       console.log(`Trying direct-local-fares endpoint with ID: ${verifiedVehicleId}`);
@@ -300,9 +308,12 @@ export const updateLocalFares = async (
         vehicle_id: verifiedVehicleId, // Add this to be extra sure
         extraKmRate,
         extraHourRate,
-        price4hr40km: typeof packages === 'object' && packages['4hrs-40km'] ? packages['4hrs-40km'] : 0,
-        price8hr80km: typeof packages === 'object' && packages['8hrs-80km'] ? packages['8hrs-80km'] : 0,
-        price10hr100km: typeof packages === 'object' && packages['10hrs-100km'] ? packages['10hrs-100km'] : 0,
+        price4hr40km,
+        price4hrs40km: price4hr40km, // Include both naming variations
+        price8hr80km,
+        price8hrs80km: price8hr80km, // Include both naming variations
+        price10hr100km,
+        price10hrs100km: price10hr100km, // Include both naming variations
         packages: typeof packages === 'object' ? JSON.stringify(packages) : packages,
         use_vehicle_id: 'true' // Signal to backend to explicitly use vehicle_id instead of id
       });
@@ -326,9 +337,16 @@ export const updateLocalFares = async (
         vehicle_id: verifiedVehicleId, // Add this to be extra sure
         extraKmRate,
         extraHourRate,
-        package4hr40km: typeof packages === 'object' && packages['4hrs-40km'] ? packages['4hrs-40km'] : 0,
-        package8hr80km: typeof packages === 'object' && packages['8hrs-80km'] ? packages['8hrs-80km'] : 0, 
-        package10hr100km: typeof packages === 'object' && packages['10hrs-100km'] ? packages['10hrs-100km'] : 0,
+        package4hr40km: price4hr40km,
+        package8hr80km: price8hr80km,
+        package10hr100km: price10hr100km,
+        // Include both column naming patterns for maximum compatibility
+        price4hr40km,
+        price4hrs40km: price4hr40km,
+        price8hr80km,
+        price8hrs80km: price8hr80km,
+        price10hr100km,
+        price10hrs100km: price10hr100km,
         use_vehicle_id: 'true' // Signal to backend to explicitly use vehicle_id instead of id
       });
       
@@ -350,6 +368,13 @@ export const updateLocalFares = async (
         vehicle_id: verifiedVehicleId, // Add this to be extra sure
         extraKmRate,
         extraHourRate,
+        // Include both column naming patterns
+        price4hr40km,
+        price4hrs40km: price4hr40km,
+        price8hr80km,
+        price8hrs80km: price8hr80km,
+        price10hr100km,
+        price10hrs100km: price10hr100km,
         packages: typeof packages === 'object' ? JSON.stringify(packages) : packages,
         use_vehicle_id: 'true' // Signal to backend to explicitly use vehicle_id instead of id
       });
@@ -484,6 +509,7 @@ export const getAllOutstationFares = async (): Promise<Record<string, any>> => {
 
 /**
  * Get local package fares for all vehicles
+ * Now handles both column naming conventions (hr vs hrs)
  */
 export const getAllLocalFares = async (): Promise<Record<string, any>> => {
   console.log(`Fetching all local package fares`);
@@ -510,7 +536,24 @@ export const getAllLocalFares = async (): Promise<Record<string, any>> => {
     
     if (result && result.status === 'success' && result.fares) {
       console.log(`Retrieved ${Object.keys(result.fares).length} local fares from fallback endpoint`);
-      return result.fares;
+      // Map fare data to handle both column naming conventions
+      const mappedFares: Record<string, any> = {};
+      
+      Object.keys(result.fares).forEach(id => {
+        const fare = result.fares[id];
+        mappedFares[id] = {
+          ...fare,
+          // Ensure we have both naming conventions
+          price4hr40km: fare.price4hr40km || fare.price4hrs40km || 0,
+          price4hrs40km: fare.price4hrs40km || fare.price4hr40km || 0,
+          price8hr80km: fare.price8hr80km || fare.price8hrs80km || 0,
+          price8hrs80km: fare.price8hrs80km || fare.price8hr80km || 0,
+          price10hr100km: fare.price10hr100km || fare.price10hrs100km || 0,
+          price10hrs100km: fare.price10hrs100km || fare.price10hr100km || 0,
+        };
+      });
+      
+      return mappedFares;
     } else {
       console.warn('No local fares found or API returned error');
       return {};
@@ -543,5 +586,36 @@ export const getAllAirportFares = async (): Promise<Record<string, any>> => {
   } catch (error: any) {
     console.error(`Error fetching airport fares: ${error.message}`, error);
     return {};
+  }
+};
+
+// Add helper method to detect and fix database column naming issues
+export const fixDatabaseColumnNames = async (): Promise<boolean> => {
+  try {
+    console.log('Attempting to fix database column names...');
+    
+    const result = await directVehicleOperation('/api/admin/fix-database.php', 'POST', {
+      action: 'fix_column_names',
+      tables: ['local_package_fares'],
+      columns: {
+        'local_package_fares': {
+          'price_4hrs_40km': 'price_4hr_40km',
+          'price_8hrs_80km': 'price_8hr_80km',
+          'price_10hrs_100km': 'price_10hr_100km'
+        }
+      }
+    });
+    
+    if (result && result.status === 'success') {
+      console.log('Successfully fixed database column names');
+      toast.success('Fixed database column naming issues');
+      return true;
+    } else {
+      console.warn('Column name fix attempt returned:', result);
+      return false;
+    }
+  } catch (error: any) {
+    console.error('Error fixing database column names:', error);
+    return false;
   }
 };

@@ -31,6 +31,21 @@ $requestData = file_get_contents('php://input');
 error_log("[$timestamp] Local fare update request received: Method=" . $_SERVER['REQUEST_METHOD'], 3, $logDir . '/local-fares.log');
 error_log("[$timestamp] Raw input: $requestData", 3, $logDir . '/local-fares.log');
 
+// Helper functions for column checking
+function columnExists($conn, $table, $column) {
+    $result = $conn->query("SHOW COLUMNS FROM `{$table}` LIKE '{$column}'");
+    return ($result && $result->num_rows > 0);
+}
+
+function getCorrectColumnName($conn, $table, $possibleNames) {
+    foreach ($possibleNames as $name) {
+        if (columnExists($conn, $table, $name)) {
+            return $name;
+        }
+    }
+    return $possibleNames[0]; // Default to first name if none found
+}
+
 // Get data from all possible sources - maximum flexibility
 $data = [];
 
@@ -189,7 +204,7 @@ error_log("[$timestamp] Normalized vehicle ID to lowercase: $vehicleId", 3, $log
 
 // Extract pricing data with multiple fallbacks
 $package4hr = 0;
-foreach (['package4hr40km', 'price4hrs40km', 'price4hr40km', 'hr4km40Price', 'local_package_4hr', 'price_4hr_40km'] as $field) {
+foreach (['package4hr40km', 'price4hrs40km', 'price4hr40km', 'hr4km40Price', 'local_package_4hr', 'price_4hr_40km', 'price_4hrs_40km'] as $field) {
     if (isset($data[$field]) && is_numeric($data[$field])) {
         $package4hr = floatval($data[$field]);
         break;
@@ -197,7 +212,7 @@ foreach (['package4hr40km', 'price4hrs40km', 'price4hr40km', 'hr4km40Price', 'lo
 }
 
 $package8hr = 0;
-foreach (['package8hr80km', 'price8hrs80km', 'price8hr80km', 'hr8km80Price', 'local_package_8hr', 'price_8hr_80km'] as $field) {
+foreach (['package8hr80km', 'price8hrs80km', 'price8hr80km', 'hr8km80Price', 'local_package_8hr', 'price_8hr_80km', 'price_8hrs_80km'] as $field) {
     if (isset($data[$field]) && is_numeric($data[$field])) {
         $package8hr = floatval($data[$field]);
         break;
@@ -205,7 +220,7 @@ foreach (['package8hr80km', 'price8hrs80km', 'price8hr80km', 'hr8km80Price', 'lo
 }
 
 $package10hr = 0;
-foreach (['package10hr100km', 'price10hrs100km', 'price10hr100km', 'hr10km100Price', 'local_package_10hr', 'price_10hr_100km'] as $field) {
+foreach (['package10hr100km', 'price10hrs100km', 'price10hr100km', 'hr10km100Price', 'local_package_10hr', 'price_10hr_100km', 'price_10hrs_100km'] as $field) {
     if (isset($data[$field]) && is_numeric($data[$field])) {
         $package10hr = floatval($data[$field]);
         break;
@@ -364,6 +379,32 @@ try {
         error_log("[$timestamp] Created local_package_fares table", 3, $logDir . '/local-fares.log');
     }
     
+    // Dynamic column name handling - check which column naming convention exists
+    $price4hrColumn = columnExists($conn, 'local_package_fares', 'price_4hr_40km') ? 
+                      'price_4hr_40km' : 'price_4hrs_40km';
+    
+    $price8hrColumn = columnExists($conn, 'local_package_fares', 'price_8hr_80km') ? 
+                      'price_8hr_80km' : 'price_8hrs_80km';
+    
+    $price10hrColumn = columnExists($conn, 'local_package_fares', 'price_10hr_100km') ? 
+                       'price_10hr_100km' : 'price_10hrs_100km';
+    
+    // If columns with 'hrs' exist but not 'hr', add the 'hr' versions
+    if ($price4hrColumn === 'price_4hrs_40km' && !columnExists($conn, 'local_package_fares', 'price_4hr_40km')) {
+        $conn->query("ALTER TABLE local_package_fares ADD `price_4hr_40km` decimal(10,2) NOT NULL DEFAULT 0");
+        error_log("[$timestamp] Added column price_4hr_40km for compatibility", 3, $logDir . '/local-fares.log');
+    }
+    
+    if ($price8hrColumn === 'price_8hrs_80km' && !columnExists($conn, 'local_package_fares', 'price_8hr_80km')) {
+        $conn->query("ALTER TABLE local_package_fares ADD `price_8hr_80km` decimal(10,2) NOT NULL DEFAULT 0");
+        error_log("[$timestamp] Added column price_8hr_80km for compatibility", 3, $logDir . '/local-fares.log');
+    }
+    
+    if ($price10hrColumn === 'price_10hrs_100km' && !columnExists($conn, 'local_package_fares', 'price_10hr_100km')) {
+        $conn->query("ALTER TABLE local_package_fares ADD `price_10hr_100km` decimal(10,2) NOT NULL DEFAULT 0");
+        error_log("[$timestamp] Added column price_10hr_100km for compatibility", 3, $logDir . '/local-fares.log');
+    }
+    
     // Check if fare record exists for this vehicle
     $checkFareQuery = "SELECT id FROM local_package_fares WHERE LOWER(vehicle_id) = LOWER(?)";
     $checkFareStmt = $conn->prepare($checkFareQuery);
@@ -372,12 +413,12 @@ try {
     $fareResult = $checkFareStmt->get_result();
     
     if ($fareResult->num_rows > 0) {
-        // Update existing record
+        // Dynamic column update using prepared statement
         $updateQuery = "
             UPDATE local_package_fares
-            SET price_4hr_40km = ?,
-                price_8hr_80km = ?,
-                price_10hr_100km = ?,
+            SET `$price4hrColumn` = ?,
+                `$price8hrColumn` = ?,
+                `$price10hrColumn` = ?,
                 extra_km_rate = ?,
                 extra_hour_rate = ?,
                 updated_at = NOW()
@@ -396,8 +437,21 @@ try {
         
         $updateStmt->execute();
         error_log("[$timestamp] Updated local package fares for vehicle: $vehicleId", 3, $logDir . '/local-fares.log');
+        
+        // Also update the hr version columns if hrs versions were used
+        if ($price4hrColumn === 'price_4hrs_40km') {
+            $conn->query("UPDATE local_package_fares SET price_4hr_40km = $package4hr WHERE LOWER(vehicle_id) = LOWER('$vehicleId')");
+        }
+        
+        if ($price8hrColumn === 'price_8hrs_80km') {
+            $conn->query("UPDATE local_package_fares SET price_8hr_80km = $package8hr WHERE LOWER(vehicle_id) = LOWER('$vehicleId')");
+        }
+        
+        if ($price10hrColumn === 'price_10hrs_100km') {
+            $conn->query("UPDATE local_package_fares SET price_10hr_100km = $package10hr WHERE LOWER(vehicle_id) = LOWER('$vehicleId')");
+        }
     } else {
-        // Insert new record
+        // Insert new record - always use the standard 'hr' column names
         $insertQuery = "
             INSERT INTO local_package_fares 
             (vehicle_id, price_4hr_40km, price_8hr_80km, price_10hr_100km, extra_km_rate, extra_hour_rate)
@@ -416,6 +470,19 @@ try {
         
         $insertStmt->execute();
         error_log("[$timestamp] Inserted local package fares for vehicle: $vehicleId", 3, $logDir . '/local-fares.log');
+        
+        // Also add values to 'hrs' columns if they exist
+        if (columnExists($conn, 'local_package_fares', 'price_4hrs_40km')) {
+            $conn->query("UPDATE local_package_fares SET price_4hrs_40km = $package4hr WHERE LOWER(vehicle_id) = LOWER('$vehicleId')");
+        }
+        
+        if (columnExists($conn, 'local_package_fares', 'price_8hrs_80km')) {
+            $conn->query("UPDATE local_package_fares SET price_8hrs_80km = $package8hr WHERE LOWER(vehicle_id) = LOWER('$vehicleId')");
+        }
+        
+        if (columnExists($conn, 'local_package_fares', 'price_10hrs_100km')) {
+            $conn->query("UPDATE local_package_fares SET price_10hrs_100km = $package10hr WHERE LOWER(vehicle_id) = LOWER('$vehicleId')");
+        }
     }
     
     // Also update vehicle_pricing table for backward compatibility 
@@ -488,7 +555,12 @@ try {
             'price8hr80km' => $package8hr,
             'price10hr100km' => $package10hr,
             'priceExtraKm' => $extraKmRate,
-            'priceExtraHour' => $extraHourRate
+            'priceExtraHour' => $extraHourRate,
+            'columnNames' => [
+                'price4hr' => $price4hrColumn,
+                'price8hr' => $price8hrColumn,
+                'price10hr' => $price10hrColumn
+            ]
         ],
         'timestamp' => time()
     ]);
