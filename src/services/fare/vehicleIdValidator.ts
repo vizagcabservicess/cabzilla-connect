@@ -67,56 +67,56 @@ export const NUMERIC_ID_MAPPINGS: Record<string, string> = {
  * Normalize a vehicle ID string by trimming, converting to lowercase, 
  * and replacing spaces with underscores
  */
-export const normalizeVehicleId = (vehicleId: string): string => {
-  if (!vehicleId) return '';
+export function normalizeVehicleId(vehicleId: string): string | null {
+  if (!vehicleId || typeof vehicleId !== 'string') {
+    console.error('Invalid vehicle ID:', vehicleId);
+    return null;
+  }
+  
   return vehicleId.trim().toLowerCase().replace(/\s+/g, '_');
-};
+}
 
 /**
- * Check if a vehicle ID exists in the database
- * Returns true if the vehicle exists, false otherwise
+ * Check if a vehicle ID exists in the backend
+ * 
+ * @param vehicleId The normalized vehicle ID to check
  */
-export const checkVehicleId = async (vehicleId: string): Promise<boolean> => {
+export async function checkVehicleId(vehicleId: string): Promise<boolean> {
   try {
-    const normalizedId = normalizeVehicleId(vehicleId);
-    if (!normalizedId) return false;
+    console.log(`Checking if vehicle ID exists: ${vehicleId}`);
     
-    console.log(`Checking if vehicle ID exists: ${normalizedId}`);
-    
-    const response = await fetch(`${getApiUrl('/api/admin/check-vehicle')}?_t=${Date.now()}`, {
-      method: 'POST',
+    // Add cache buster to prevent caching
+    const response = await fetch(`${getApiUrl('/api/admin/check-vehicle.php')}?id=${encodeURIComponent(vehicleId)}&_t=${Date.now()}`, {
+      method: 'GET',
       headers: {
         ...getBypassHeaders(),
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ vehicleId: normalizedId })
+        'Accept': 'application/json'
+      }
     });
     
+    // If response is not ok, throw error
     if (!response.ok) {
-      console.error(`Failed to check vehicle ID: ${response.status}`);
-      return false;
+      throw new Error(`Failed to verify vehicle ID: ${response.status} ${response.statusText}`);
     }
     
+    // Parse response
     const data = await response.json();
     console.log('Vehicle check response:', data);
     
-    if (data.status === 'error') {
-      console.error(`Vehicle check error: ${data.message}`);
+    // Check if vehicle exists
+    if (data && data.vehicleExists === true) {
+      console.log(`✅ Vehicle ID verified: ${vehicleId}`);
+      return true;
+    } else {
+      console.error(`❌ Vehicle ID does not exist: ${vehicleId}`);
       return false;
     }
-    
-    return !!data.vehicleExists;
   } catch (error) {
     console.error('Error checking vehicle ID:', error);
-    return false;
+    
+    // Fallback: If backend validation fails, check against our standard vehicle types
+    const isStandardVehicle = STANDARD_VEHICLE_TYPES.includes(vehicleId.toLowerCase());
+    console.log(`Backend validation failed, falling back to local validation: ${isStandardVehicle ? 'Valid' : 'Invalid'}`);
+    return isStandardVehicle;
   }
-};
-
-/**
- * Validate vehicle ID format (no special characters except underscores)
- */
-export const isValidVehicleIdFormat = (vehicleId: string): boolean => {
-  // Allow letters, numbers, and underscores only
-  const validFormat = /^[a-zA-Z0-9_]+$/;
-  return validFormat.test(normalizeVehicleId(vehicleId));
-};
+}

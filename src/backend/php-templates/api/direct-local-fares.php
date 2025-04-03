@@ -52,60 +52,25 @@ $response = [
     'debug' => []
 ];
 
-// ENHANCED: More comprehensive ID mapping with all known numeric IDs
-$numericIdMapExtended = [
-    '1' => 'sedan',
-    '2' => 'ertiga',
-    '3' => 'innova',
-    '4' => 'crysta',
-    '5' => 'tempo',
-    '6' => 'bus',
-    '7' => 'van',
-    '8' => 'suv',
-    '9' => 'traveller',
-    '10' => 'luxury',
-    '180' => 'etios',
-    '592' => 'urbania',
-    '1266' => 'mpv',
-    '1270' => 'mpv',
-    '1271' => 'etios',
-    '1272' => 'etios',
-    '1273' => 'etios',
-    '1274' => 'etios',
-    '1275' => 'etios',
-    '1276' => 'etios',
-    '1277' => 'etios',
-    '1278' => 'etios',
-    '1279' => 'etios',
-    '1280' => 'etios',
-    '1281' => 'mpv',
-    '1282' => 'sedan',
-    '1283' => 'sedan',
-    '1284' => 'etios',
-    '1285' => 'etios',
-    '1286' => 'etios',
-    '1287' => 'etios',
-    '1288' => 'etios',
-    '1289' => 'etios',
-    '1290' => 'etios',
-    '100' => 'sedan',
-    '101' => 'sedan',
-    '102' => 'sedan',
-    '103' => 'sedan',
-    '200' => 'ertiga',
-    '201' => 'ertiga',
-    '202' => 'ertiga',
-    '300' => 'innova',
-    '301' => 'innova',
-    '302' => 'innova',
-    '400' => 'crysta',
-    '401' => 'crysta',
-    '402' => 'crysta',
-    '500' => 'tempo',
-    '501' => 'tempo',
-    '502' => 'tempo'
-];
-
-// CRITICAL: Forward request to the admin endpoint
-// This endpoint is just a forwarder to maintain backward compatibility
-header('Location: ' . 'admin/direct-local-fares.php?' . $_SERVER['QUERY_STRING']);
+// Forward request to the admin endpoint
+// CRITICAL FIX: Don't use header redirect, manually include the file
+// This prevents headers from being sent twice and response corruption
+try {
+    // Capture raw post data
+    $rawInput = file_get_contents('php://input');
+    logMessage("Forwarding to admin/direct-local-fares.php with data: " . $rawInput);
+    
+    // Include the admin endpoint directly
+    require_once __DIR__ . '/admin/direct-local-fares.php';
+    // The admin endpoint will handle sending the response
+    exit;
+} catch (Exception $e) {
+    logMessage("Error forwarding request: " . $e->getMessage());
+    $response = [
+        'status' => 'error',
+        'message' => 'Failed to process request: ' . $e->getMessage(),
+        'timestamp' => time()
+    ];
+    echo json_encode($response);
+    exit;
+}
