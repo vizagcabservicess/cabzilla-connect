@@ -203,32 +203,64 @@ function ensureLocalPackageFaresTable($conn) {
         }
         
         // Table exists, check if column names need standardization
-        $checkColumnsQuery = "SHOW COLUMNS FROM local_package_fares LIKE 'price_4hr_40km'";
+        $checkColumnsQuery = "DESCRIBE local_package_fares";
         $columnResult = $conn->query($checkColumnsQuery);
         
-        // If we find price_4hr_40km (without 's'), we need to rename columns to match our standard
-        if ($columnResult && $columnResult->num_rows > 0) {
-            logMessage("Detected non-standard column names in local_package_fares, updating...", 'db_helper.log');
+        if ($columnResult) {
+            $needsUpdate = false;
+            $columns = [];
             
-            // Rename columns to add 's' after hr
-            $alterTableQueries = [
-                "ALTER TABLE local_package_fares CHANGE `price_4hr_40km` `price_4hrs_40km` decimal(10,2) NOT NULL DEFAULT 0.00",
-                "ALTER TABLE local_package_fares CHANGE `price_8hr_80km` `price_8hrs_80km` decimal(10,2) NOT NULL DEFAULT 0.00", 
-                "ALTER TABLE local_package_fares CHANGE `price_10hr_100km` `price_10hrs_100km` decimal(10,2) NOT NULL DEFAULT 0.00",
-                "ALTER TABLE local_package_fares CHANGE `extra_km_rate` `price_extra_km` decimal(5,2) NOT NULL DEFAULT 0.00 IF EXISTS",
-                "ALTER TABLE local_package_fares CHANGE `extra_hour_rate` `price_extra_hour` decimal(5,2) NOT NULL DEFAULT 0.00 IF EXISTS"
-            ];
+            while ($column = $columnResult->fetch_assoc()) {
+                $columns[] = $column['Field'];
+            }
             
-            foreach ($alterTableQueries as $query) {
+            // Log all columns for debugging
+            logMessage("Current columns in local_package_fares: " . implode(", ", $columns), 'db_helper.log');
+            
+            // Check for old column naming patterns
+            if (in_array('price_4hr_40km', $columns)) {
+                $needsUpdate = true;
+                logMessage("Found old column name 'price_4hr_40km', needs update", 'db_helper.log');
+            }
+            
+            if ($needsUpdate) {
+                // Update column names to add 's' after hr
                 try {
-                    $conn->query($query);
+                    $conn->query("ALTER TABLE local_package_fares CHANGE `price_4hr_40km` `price_4hrs_40km` decimal(10,2) NOT NULL DEFAULT 0.00");
+                    $conn->query("ALTER TABLE local_package_fares CHANGE `price_8hr_80km` `price_8hrs_80km` decimal(10,2) NOT NULL DEFAULT 0.00");
+                    $conn->query("ALTER TABLE local_package_fares CHANGE `price_10hr_100km` `price_10hrs_100km` decimal(10,2) NOT NULL DEFAULT 0.00");
+                    
+                    logMessage("Updated column names in local_package_fares table", 'db_helper.log');
                 } catch (Exception $e) {
-                    logMessage("Error in column rename: " . $e->getMessage(), 'db_helper.log');
-                    // Continue with other queries even if this one fails
+                    logMessage("Error updating column names: " . $e->getMessage(), 'db_helper.log');
                 }
             }
             
-            logMessage("Column standardization complete", 'db_helper.log');
+            // Check for missing columns and add if necessary
+            if (!in_array('price_4hrs_40km', $columns) && !in_array('price_4hr_40km', $columns)) {
+                $conn->query("ALTER TABLE local_package_fares ADD `price_4hrs_40km` decimal(10,2) NOT NULL DEFAULT 0.00");
+                logMessage("Added missing column price_4hrs_40km", 'db_helper.log');
+            }
+            
+            if (!in_array('price_8hrs_80km', $columns) && !in_array('price_8hr_80km', $columns)) {
+                $conn->query("ALTER TABLE local_package_fares ADD `price_8hrs_80km` decimal(10,2) NOT NULL DEFAULT 0.00");
+                logMessage("Added missing column price_8hrs_80km", 'db_helper.log');
+            }
+            
+            if (!in_array('price_10hrs_100km', $columns) && !in_array('price_10hr_100km', $columns)) {
+                $conn->query("ALTER TABLE local_package_fares ADD `price_10hrs_100km` decimal(10,2) NOT NULL DEFAULT 0.00");
+                logMessage("Added missing column price_10hrs_100km", 'db_helper.log');
+            }
+            
+            if (!in_array('price_extra_km', $columns)) {
+                $conn->query("ALTER TABLE local_package_fares ADD `price_extra_km` decimal(5,2) NOT NULL DEFAULT 0.00");
+                logMessage("Added missing column price_extra_km", 'db_helper.log');
+            }
+            
+            if (!in_array('price_extra_hour', $columns)) {
+                $conn->query("ALTER TABLE local_package_fares ADD `price_extra_hour` decimal(5,2) NOT NULL DEFAULT 0.00");
+                logMessage("Added missing column price_extra_hour", 'db_helper.log');
+            }
         }
         
         return true;

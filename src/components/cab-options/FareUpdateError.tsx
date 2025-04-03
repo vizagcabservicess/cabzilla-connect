@@ -1,10 +1,10 @@
-
 import { Button } from "@/components/ui/button";
 import { AlertCircle, RefreshCcw, Database, ExternalLink, FileJson } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { fixDatabaseTables } from "@/utils/apiHelper";
 import { toast } from "sonner";
 import { clearVehicleDataCache } from "@/services/vehicleDataService";
+import { getApiUrl } from '@/config/api';
 
 interface FareUpdateErrorProps {
   error: Error;
@@ -29,15 +29,12 @@ export function FareUpdateError({
 }: FareUpdateErrorProps) {
   const errorMessage = message || error?.message || "Unknown error";
   
-  // Enhanced handler for database fixes with improved error handling
   const handleFixDatabase = async () => {
     try {
       toast.loading("Attempting to fix database tables...");
       
-      // First, clear any cached vehicle data
       clearVehicleDataCache();
       
-      // Attempt to sync local fares tables first
       const syncResponse = await fetch(`${getApiUrl('/api/admin/sync-local-fares')}?_t=${Date.now()}`, {
         method: 'GET',
         headers: {
@@ -50,17 +47,15 @@ export function FareUpdateError({
       
       console.log('Sync response:', syncResponse.ok);
       
-      // Then attempt general database fixes
       const success = await fixDatabaseTables();
       if (success) {
         toast.success("Database tables fixed successfully");
-        // Trigger event to refresh data everywhere
         window.dispatchEvent(new CustomEvent('database-fixed', { 
           detail: { timestamp: Date.now() }
         }));
         
         if (onRetry) {
-          setTimeout(onRetry, 800); // Give a bit more time for the event to be processed
+          setTimeout(onRetry, 800);
         }
       } else {
         toast.error("Failed to fix database tables");
@@ -68,7 +63,6 @@ export function FareUpdateError({
     } catch (err: any) {
       console.error("Error fixing database tables:", err);
       
-      // More descriptive error message based on error type
       if (err.message && (err.message.includes('Access denied') || err.message.includes('connect'))) {
         toast.error(`Database connection error: ${err.message || 'Check credentials'}`);
       } else if (err.message && err.message.includes('JSON')) {
@@ -79,7 +73,6 @@ export function FareUpdateError({
     }
   };
 
-  // Look for specific SQL errors in the message
   const hasSqlError = errorMessage.includes('MySQL') || 
     errorMessage.includes('SQL') || 
     errorMessage.includes('database') ||

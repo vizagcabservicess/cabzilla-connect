@@ -26,6 +26,7 @@ export const getAllLocalFares = async (): Promise<Record<string, any>> => {
     }
     
     const data = await response.json();
+    console.log('Local fares data:', data);
     return data.fares || {};
   } catch (error) {
     console.error('Error fetching local fares:', error);

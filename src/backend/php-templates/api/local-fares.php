@@ -13,7 +13,7 @@ header('Expires: 0');
 
 // Add debugging headers
 header('X-Debug-File: local-fares.php');
-header('X-API-Version: 1.0.3');
+header('X-API-Version: 1.0.4');
 header('X-Timestamp: ' . time());
 
 // Clear any existing output buffer to prevent corrupt JSON
@@ -99,40 +99,42 @@ try {
     $fares = [];
     $sourceTable = 'none';
     
-    // Try to fetch from local_package_fares first (preferred source)
-    if ($localFaresTableExists) {
-        $columnsResult = $conn->query("SHOW COLUMNS FROM local_package_fares");
-        $columns = [];
+    // Validate the column names in local_package_fares table
+    $columnsResult = $conn->query("DESCRIBE local_package_fares");
+    $columns = [];
+    if ($columnsResult) {
         while ($column = $columnsResult->fetch_assoc()) {
             $columns[] = $column['Field'];
         }
+    }
+    error_log("Available columns in local_package_fares: " . implode(", ", $columns));
+    
+    // Try to fetch from local_package_fares first (preferred source)
+    if ($localFaresTableExists) {
+        // Use the correct column names based on what's available in the database
+        $price4hrColumn = in_array('price_4hrs_40km', $columns) ? 'price_4hrs_40km' : 
+                         (in_array('price_4hr_40km', $columns) ? 'price_4hr_40km' : 'price_4hrs_40km');
         
-        error_log("Available columns in local_package_fares: " . implode(", ", $columns));
+        $price8hrColumn = in_array('price_8hrs_80km', $columns) ? 'price_8hrs_80km' : 
+                         (in_array('price_8hr_80km', $columns) ? 'price_8hr_80km' : 'price_8hrs_80km');
         
-        // Check if we need to fix old column names
-        $hasOldColumnNames = in_array('price_4hr_40km', $columns);
-        if ($hasOldColumnNames) {
-            error_log("Found old column names, fixing...");
-            try {
-                // Try to fix column names
-                $conn->query("ALTER TABLE local_package_fares CHANGE `price_4hr_40km` `price_4hrs_40km` DECIMAL(10,2) NOT NULL DEFAULT 0");
-                $conn->query("ALTER TABLE local_package_fares CHANGE `price_8hr_80km` `price_8hrs_80km` DECIMAL(10,2) NOT NULL DEFAULT 0");
-                $conn->query("ALTER TABLE local_package_fares CHANGE `price_10hr_100km` `price_10hrs_100km` DECIMAL(10,2) NOT NULL DEFAULT 0");
-                
-                error_log("Fixed local_package_fares column names");
-            } catch (Exception $e) {
-                error_log("Error fixing columns: " . $e->getMessage());
-            }
-        }
+        $price10hrColumn = in_array('price_10hrs_100km', $columns) ? 'price_10hrs_100km' : 
+                          (in_array('price_10hr_100km', $columns) ? 'price_10hr_100km' : 'price_10hrs_100km');
+        
+        $extraKmColumn = in_array('price_extra_km', $columns) ? 'price_extra_km' : 
+                        (in_array('extra_km_rate', $columns) ? 'extra_km_rate' : 'price_extra_km');
+        
+        $extraHourColumn = in_array('price_extra_hour', $columns) ? 'price_extra_hour' : 
+                          (in_array('extra_hour_rate', $columns) ? 'extra_hour_rate' : 'price_extra_hour');
         
         $query = "
             SELECT 
                 vehicle_id,
-                price_4hrs_40km,
-                price_8hrs_80km,
-                price_10hrs_100km,
-                price_extra_km,
-                price_extra_hour
+                $price4hrColumn,
+                $price8hrColumn,
+                $price10hrColumn,
+                $extraKmColumn,
+                $extraHourColumn
             FROM 
                 local_package_fares
         ";
@@ -156,36 +158,37 @@ try {
                 if (!$id) continue;
                 
                 error_log("Processing local_package_fares row for vehicle: $id");
+                error_log("Row data: " . json_encode($row));
                 
                 // Map to standardized properties with all naming variants
                 $fares[$id] = [
                     // Standard API property names
-                    'price4hrs40km' => floatval($row['price_4hrs_40km'] ?? 0),
-                    'price8hrs80km' => floatval($row['price_8hrs_80km'] ?? 0),
-                    'price10hrs100km' => floatval($row['price_10hrs_100km'] ?? 0),
-                    'priceExtraKm' => floatval($row['price_extra_km'] ?? 0),
-                    'priceExtraHour' => floatval($row['price_extra_hour'] ?? 0),
+                    'price4hrs40km' => floatval($row[$price4hrColumn] ?? 0),
+                    'price8hrs80km' => floatval($row[$price8hrColumn] ?? 0),
+                    'price10hrs100km' => floatval($row[$price10hrColumn] ?? 0),
+                    'priceExtraKm' => floatval($row[$extraKmColumn] ?? 0),
+                    'priceExtraHour' => floatval($row[$extraHourColumn] ?? 0),
                     
                     // Include original column names for direct mapping
-                    'price_4hrs_40km' => floatval($row['price_4hrs_40km'] ?? 0),
-                    'price_8hrs_80km' => floatval($row['price_8hrs_80km'] ?? 0),
-                    'price_10hrs_100km' => floatval($row['price_10hrs_100km'] ?? 0),
-                    'price_extra_km' => floatval($row['price_extra_km'] ?? 0),
-                    'price_extra_hour' => floatval($row['price_extra_hour'] ?? 0),
+                    'price_4hrs_40km' => floatval($row[$price4hrColumn] ?? 0),
+                    'price_8hrs_80km' => floatval($row[$price8hrColumn] ?? 0),
+                    'price_10hrs_100km' => floatval($row[$price10hrColumn] ?? 0),
+                    'price_extra_km' => floatval($row[$extraKmColumn] ?? 0),
+                    'price_extra_hour' => floatval($row[$extraHourColumn] ?? 0),
                     
                     // Include alias properties for compatibility
-                    'package4hr40km' => floatval($row['price_4hrs_40km'] ?? 0),
-                    'package8hr80km' => floatval($row['price_8hrs_80km'] ?? 0),
-                    'package10hr100km' => floatval($row['price_10hrs_100km'] ?? 0),
-                    'extraKmRate' => floatval($row['price_extra_km'] ?? 0),
-                    'extraHourRate' => floatval($row['price_extra_hour'] ?? 0),
+                    'package4hr40km' => floatval($row[$price4hrColumn] ?? 0),
+                    'package8hr80km' => floatval($row[$price8hrColumn] ?? 0),
+                    'package10hr100km' => floatval($row[$price10hrColumn] ?? 0),
+                    'extraKmRate' => floatval($row[$extraKmColumn] ?? 0),
+                    'extraHourRate' => floatval($row[$extraHourColumn] ?? 0),
                     
                     // Vehicle pricing table names for compatibility
-                    'local_package_4hr' => floatval($row['price_4hrs_40km'] ?? 0),
-                    'local_package_8hr' => floatval($row['price_8hrs_80km'] ?? 0),
-                    'local_package_10hr' => floatval($row['price_10hrs_100km'] ?? 0),
-                    'extra_km_charge' => floatval($row['price_extra_km'] ?? 0),
-                    'extra_hour_charge' => floatval($row['price_extra_hour'] ?? 0)
+                    'local_package_4hr' => floatval($row[$price4hrColumn] ?? 0),
+                    'local_package_8hr' => floatval($row[$price8hrColumn] ?? 0),
+                    'local_package_10hr' => floatval($row[$price10hrColumn] ?? 0),
+                    'extra_km_charge' => floatval($row[$extraKmColumn] ?? 0),
+                    'extra_hour_charge' => floatval($row[$extraHourColumn] ?? 0)
                 ];
             }
         }
@@ -273,7 +276,8 @@ try {
         'tablesChecked' => [
             'local_package_fares' => $localFaresTableExists,
             'vehicle_pricing' => $vehiclePricingTableExists
-        ]
+        ],
+        'columnsAvailable' => $columns
     ];
     
     // Send the JSON response and clear any buffer

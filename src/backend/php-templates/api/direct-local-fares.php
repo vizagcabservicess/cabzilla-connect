@@ -1,3 +1,4 @@
+
 <?php
 /**
  * Direct Local Fares Endpoint 
@@ -279,6 +280,23 @@ try {
             ];
             
             logMessage("Successfully updated local package fares for vehicle: $vehicleId");
+            
+            // Try to run sync endpoint to ensure consistency
+            try {
+                $syncEndpoint = getApiUrl('/api/admin/sync-local-fares') . '?t=' . time();
+                
+                $ch = curl_init();
+                curl_setopt($ch, CURLOPT_URL, $syncEndpoint);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+                curl_exec($ch);
+                curl_close($ch);
+                
+                logMessage("Triggered sync endpoint after successful update");
+            } catch (Exception $syncError) {
+                // Ignore sync errors, the main update was successful
+                logMessage("Failed to trigger sync endpoint: " . $syncError->getMessage());
+            }
         } catch (Exception $e) {
             // Rollback on error
             $conn->rollback();
