@@ -1,3 +1,4 @@
+
 <?php
 // init-database.php - Initialize all required database tables
 
@@ -62,8 +63,8 @@ try {
             'vehicle_id' => 'VARCHAR(50) NOT NULL',
             'base_price' => 'DECIMAL(10,2) NOT NULL DEFAULT 0',
             'price_per_km' => 'DECIMAL(5,2) NOT NULL DEFAULT 0',
-            'night_halt_charge' => 'DECIMAL(10,2) NOT NULL DEFAULT 700',
-            'driver_allowance' => 'DECIMAL(10,2) NOT NULL DEFAULT 250',
+            'night_halt_charge' => 'DECIMAL(10,2) NOT NULL DEFAULT 0',
+            'driver_allowance' => 'DECIMAL(10,2) NOT NULL DEFAULT 0',
             'roundtrip_base_price' => 'DECIMAL(10,2) DEFAULT 0',
             'roundtrip_price_per_km' => 'DECIMAL(5,2) DEFAULT 0'
         ],
@@ -75,45 +76,6 @@ try {
             'status' => 'ENUM("active", "inactive", "on_trip") DEFAULT "active"'
         ]
     ];
-    
-    // Check if we need to fix NULL values in outstation_fares table
-    $fixOutstationFaresQuery = false;
-    if (!$force) { // Only check if not forcing recreation
-        $columnCheck = $conn->query("SHOW COLUMNS FROM outstation_fares LIKE 'night_halt_charge'");
-        if ($columnCheck && $columnCheck->num_rows > 0) {
-            $column = $columnCheck->fetch_assoc();
-            // If the column allows NULL, we need to update it
-            if (strpos(strtoupper($column['Null']), 'YES') !== false) {
-                $messages[] = "Fixing night_halt_charge column to NOT NULL DEFAULT 700";
-                $fixOutstationFaresQuery = true;
-                
-                // Update any NULL values to the default
-                $updateResult = $conn->query("UPDATE outstation_fares SET night_halt_charge = 700 WHERE night_halt_charge IS NULL");
-                if ($updateResult) {
-                    $messages[] = "Updated NULL night_halt_charge values to 700";
-                }
-                
-                // Update any NULL values for driver_allowance
-                $updateResult = $conn->query("UPDATE outstation_fares SET driver_allowance = 250 WHERE driver_allowance IS NULL");
-                if ($updateResult) {
-                    $messages[] = "Updated NULL driver_allowance values to 250";
-                }
-                
-                // Alter column to NOT NULL with default
-                $alterResult = $conn->query("ALTER TABLE outstation_fares 
-                    MODIFY night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 700,
-                    MODIFY driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 250");
-                
-                if ($alterResult) {
-                    $messages[] = "Altered outstation_fares columns to NOT NULL with defaults";
-                    $tablesCreated[] = "outstation_fares (fixed columns)";
-                } else {
-                    $messages[] = "Failed to alter outstation_fares columns: " . $conn->error;
-                    $tablesFailed[] = "outstation_fares (column alter failed)";
-                }
-            }
-        }
-    }
     
     foreach ($requiredTables as $tableName => $columns) {
         // Check if table exists

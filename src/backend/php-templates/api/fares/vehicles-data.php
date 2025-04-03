@@ -1,3 +1,4 @@
+
 <?php
 /**
  * API endpoint to retrieve vehicle data
@@ -43,341 +44,242 @@ try {
         throw new Exception("Failed to connect to database");
     }
     
-    // Get all vehicle IDs from multiple tables to ensure comprehensive listing
-    $allVehicleIds = [];
     $allVehicles = [];
+    $vehicleIds = [];
     
-    // Check outstation_fares table
-    $outstationFaresExists = $conn->query("SHOW TABLES LIKE 'outstation_fares'")->num_rows > 0;
-    if ($outstationFaresExists) {
-        $ofQuery = "SELECT DISTINCT vehicle_id FROM outstation_fares";
-        $ofResult = $conn->query($ofQuery);
-        if ($ofResult && $ofResult->num_rows > 0) {
-            while ($row = $ofResult->fetch_assoc()) {
-                if (!empty($row['vehicle_id']) && !in_array($row['vehicle_id'], $allVehicleIds)) {
-                    $allVehicleIds[] = $row['vehicle_id'];
-                }
-            }
-        }
-    }
+    // 1. First try to get vehicles from vehicle_types table (main source)
+    $vehicleTypesExist = $conn->query("SHOW TABLES LIKE 'vehicle_types'")->num_rows > 0;
     
-    // Check local_package_fares table
-    $localFaresExists = $conn->query("SHOW TABLES LIKE 'local_package_fares'")->num_rows > 0;
-    if ($localFaresExists) {
-        $lfQuery = "SELECT DISTINCT vehicle_id FROM local_package_fares";
-        $lfResult = $conn->query($lfQuery);
-        if ($lfResult && $lfResult->num_rows > 0) {
-            while ($row = $lfResult->fetch_assoc()) {
-                if (!empty($row['vehicle_id']) && !in_array($row['vehicle_id'], $allVehicleIds)) {
-                    $allVehicleIds[] = $row['vehicle_id'];
-                }
-            }
-        }
-    }
-    
-    // Check airport_transfer_fares table
-    $airportFaresExists = $conn->query("SHOW TABLES LIKE 'airport_transfer_fares'")->num_rows > 0;
-    if ($airportFaresExists) {
-        $afQuery = "SELECT DISTINCT vehicle_id FROM airport_transfer_fares";
-        $afResult = $conn->query($afQuery);
-        if ($afResult && $afResult->num_rows > 0) {
-            while ($row = $afResult->fetch_assoc()) {
-                if (!empty($row['vehicle_id']) && !in_array($row['vehicle_id'], $allVehicleIds)) {
-                    $allVehicleIds[] = $row['vehicle_id'];
-                }
-            }
-        }
-    }
-    
-    // Check vehicles table
-    $vehiclesExists = $conn->query("SHOW TABLES LIKE 'vehicles'")->num_rows > 0;
-    if ($vehiclesExists) {
-        $vQuery = "SELECT id, vehicle_id FROM vehicles";
-        $vResult = $conn->query($vQuery);
-        if ($vResult && $vResult->num_rows > 0) {
-            while ($row = $vResult->fetch_assoc()) {
-                $vid = !empty($row['vehicle_id']) ? $row['vehicle_id'] : $row['id'];
-                if (!empty($vid) && !in_array($vid, $allVehicleIds)) {
-                    $allVehicleIds[] = $vid;
-                }
-            }
-        }
-    }
-    
-    // Check vehicle_types table
-    $vehicleTypesExists = $conn->query("SHOW TABLES LIKE 'vehicle_types'")->num_rows > 0;
-    if ($vehicleTypesExists) {
-        $vtQuery = "SELECT vehicle_id FROM vehicle_types";
-        $vtResult = $conn->query($vtQuery);
-        if ($vtResult && $vtResult->num_rows > 0) {
-            while ($row = $vtResult->fetch_assoc()) {
-                if (!empty($row['vehicle_id']) && !in_array($row['vehicle_id'], $allVehicleIds)) {
-                    $allVehicleIds[] = $row['vehicle_id'];
-                }
-            }
-        }
-    }
-    
-    error_log("Found " . count($allVehicleIds) . " unique vehicle IDs across all tables");
-    
-    // Process each vehicle ID to gather comprehensive data
-    foreach ($allVehicleIds as $vehicleId) {
-        $vehicle = [
-            'id' => $vehicleId,
-            'vehicleId' => $vehicleId,
-            'name' => ucwords(str_replace('_', ' ', $vehicleId)),
-            'capacity' => 4,
-            'luggageCapacity' => 2,
-            'ac' => true,
-            'image' => '/cars/sedan.png',
-            'amenities' => ['AC'],
-            'description' => '',
-            'isActive' => true,
-            'basePrice' => 0,
-            'price' => 0,
-            'pricePerKm' => 0,
-            'driverAllowance' => 300,
-            'nightHaltCharge' => 700
-        ];
+    if ($vehicleTypesExist) {
+        $vehicleQuery = "SELECT * FROM vehicle_types";
         
-        // Get vehicle details from vehicle_types table if it exists
-        if ($vehicleTypesExists) {
-            $vtDetailQuery = "SELECT * FROM vehicle_types WHERE vehicle_id = ?";
-            $stmt = $conn->prepare($vtDetailQuery);
-            $stmt->bind_param('s', $vehicleId);
-            $stmt->execute();
-            $vtDetailResult = $stmt->get_result();
+        if (!$includeInactive) {
+            $vehicleQuery .= " WHERE is_active = 1";
+        }
+        
+        $vehicleResult = $conn->query($vehicleQuery);
+        
+        if ($vehicleResult && $vehicleResult->num_rows > 0) {
+            error_log("Found " . $vehicleResult->num_rows . " vehicles in vehicle_types table");
             
-            if ($vtDetailResult && $vtDetailResult->num_rows > 0) {
-                $vtData = $vtDetailResult->fetch_assoc();
-                $vehicle['name'] = $vtData['name'] ?: $vehicle['name'];
-                $vehicle['capacity'] = (int) ($vtData['capacity'] ?: $vehicle['capacity']);
-                $vehicle['luggageCapacity'] = (int) ($vtData['luggage_capacity'] ?: $vehicle['luggageCapacity']);
-                $vehicle['ac'] = (bool) ($vtData['ac'] ?? $vehicle['ac']);
-                $vehicle['image'] = $vtData['image'] ?: $vehicle['image'];
-                $vehicle['isActive'] = isset($vtData['is_active']) ? (bool) $vtData['is_active'] : $vehicle['isActive'];
+            while ($row = $vehicleResult->fetch_assoc()) {
+                $vehicleId = $row['vehicle_id'];
                 
-                if (!empty($vtData['description'])) {
-                    $vehicle['description'] = $vtData['description'];
+                // Format the vehicle data
+                $vehicle = [
+                    'id' => $vehicleId,
+                    'vehicleId' => $vehicleId,
+                    'name' => $row['name'],
+                    'capacity' => (int) $row['capacity'],
+                    'luggageCapacity' => (int) ($row['luggage_capacity'] ?? 2),
+                    'ac' => (bool) ($row['ac'] ?? true),
+                    'image' => $row['image'] ?: '/cars/sedan.png',
+                    'amenities' => json_decode($row['amenities'] ?? '["AC"]', true),
+                    'description' => $row['description'] ?? '',
+                    'isActive' => (bool) $row['is_active']
+                ];
+                
+                $allVehicles[$vehicleId] = $vehicle;
+                $vehicleIds[] = "'" . $conn->real_escape_string($vehicleId) . "'";
+            }
+        }
+    }
+    
+    // 2. Also check for vehicles in the vehicles table (if exists)
+    $vehiclesExist = $conn->query("SHOW TABLES LIKE 'vehicles'")->num_rows > 0;
+    
+    if ($vehiclesExist) {
+        $vehicleQuery = "SELECT * FROM vehicles";
+        
+        if (!$includeInactive) {
+            $vehicleQuery .= " WHERE is_active = 1 OR is_active IS NULL";
+        }
+        
+        $vehicleResult = $conn->query($vehicleQuery);
+        
+        if ($vehicleResult && $vehicleResult->num_rows > 0) {
+            error_log("Found " . $vehicleResult->num_rows . " vehicles in vehicles table");
+            
+            while ($row = $vehicleResult->fetch_assoc()) {
+                $vehicleId = $row['vehicle_id'] ?? $row['id'];
+                
+                // Create or update vehicle data
+                if (!isset($allVehicles[$vehicleId])) {
+                    // New vehicle
+                    $allVehicles[$vehicleId] = [
+                        'id' => $vehicleId,
+                        'vehicleId' => $vehicleId,
+                        'name' => $row['name'] ?? ucwords(str_replace('_', ' ', $vehicleId)),
+                        'capacity' => (int) ($row['capacity'] ?? 4),
+                        'luggageCapacity' => (int) ($row['luggage_capacity'] ?? 2),
+                        'ac' => (bool) ($row['ac'] ?? true),
+                        'image' => $row['image'] ?? '/cars/sedan.png',
+                        'amenities' => isset($row['amenities']) ? json_decode($row['amenities'], true) : ['AC'],
+                        'description' => $row['description'] ?? '',
+                        'isActive' => isset($row['is_active']) ? (bool) $row['is_active'] : true
+                    ];
+                    $vehicleIds[] = "'" . $conn->real_escape_string($vehicleId) . "'";
+                } else {
+                    // Update existing vehicle
+                    $existingVehicle = $allVehicles[$vehicleId];
+                    
+                    if (isset($row['name']) && !empty($row['name'])) $existingVehicle['name'] = $row['name'];
+                    if (isset($row['capacity'])) $existingVehicle['capacity'] = (int) $row['capacity'];
+                    if (isset($row['luggage_capacity'])) $existingVehicle['luggageCapacity'] = (int) $row['luggage_capacity'];
+                    if (isset($row['ac'])) $existingVehicle['ac'] = (bool) $row['ac'];
+                    if (isset($row['image']) && !empty($row['image'])) $existingVehicle['image'] = $row['image'];
+                    if (isset($row['amenities'])) $existingVehicle['amenities'] = json_decode($row['amenities'], true);
+                    if (isset($row['description'])) $existingVehicle['description'] = $row['description'];
+                    if (isset($row['is_active'])) $existingVehicle['isActive'] = (bool) $row['is_active'];
+                    
+                    $allVehicles[$vehicleId] = $existingVehicle;
+                }
+            }
+        }
+    }
+    
+    // 3. Get pricing information if we have any vehicles
+    if (count($vehicleIds) > 0) {
+        $vehicleIdsStr = implode(',', $vehicleIds);
+        
+        // First try the vehicle_pricing table
+        $pricingExists = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'")->num_rows > 0;
+        
+        if ($pricingExists) {
+            $pricingQuery = "
+                SELECT vp.vehicle_id, vp.trip_type, vp.base_fare, vp.price_per_km,
+                       vp.driver_allowance, vp.night_halt_charge
+                FROM vehicle_pricing vp
+                WHERE vp.vehicle_id IN ($vehicleIdsStr) AND vp.trip_type LIKE 'outstation%'
+                ORDER BY CASE
+                    WHEN vp.trip_type = 'outstation' THEN 1
+                    WHEN vp.trip_type = 'outstation-one-way' THEN 2
+                    ELSE 3
+                END
+                LIMIT 1000
+            ";
+            
+            $pricingResult = $conn->query($pricingQuery);
+            
+            if ($pricingResult && $pricingResult->num_rows > 0) {
+                error_log("Found pricing data for " . $pricingResult->num_rows . " vehicles");
+                
+                // Group pricing by vehicle_id
+                $vehiclePricing = [];
+                while ($row = $pricingResult->fetch_assoc()) {
+                    $vehicleId = $row['vehicle_id'];
+                    
+                    if (!isset($vehiclePricing[$vehicleId])) {
+                        $vehiclePricing[$vehicleId] = [];
+                    }
+                    
+                    $vehiclePricing[$vehicleId][] = $row;
                 }
                 
-                if (!empty($vtData['amenities'])) {
-                    try {
-                        $amenities = json_decode($vtData['amenities'], true);
-                        if (is_array($amenities) && !empty($amenities)) {
-                            $vehicle['amenities'] = $amenities;
-                        } elseif (is_string($vtData['amenities'])) {
-                            $vehicle['amenities'] = explode(',', str_replace(['[',']','"',"'",' '], '', $vtData['amenities']));
-                        }
-                    } catch (Exception $e) {
-                        // Keep default amenities
+                // Apply pricing data to vehicles
+                foreach ($vehiclePricing as $vehicleId => $pricingData) {
+                    if (isset($allVehicles[$vehicleId])) {
+                        // Use first pricing entry for the vehicle
+                        $pricing = $pricingData[0];
+                        
+                        $allVehicles[$vehicleId]['basePrice'] = (float) $pricing['base_fare'];
+                        $allVehicles[$vehicleId]['price'] = (float) $pricing['base_fare'];
+                        $allVehicles[$vehicleId]['pricePerKm'] = (float) $pricing['price_per_km'];
+                        $allVehicles[$vehicleId]['driverAllowance'] = (float) $pricing['driver_allowance'];
+                        $allVehicles[$vehicleId]['nightHaltCharge'] = (float) $pricing['night_halt_charge'];
                     }
                 }
             }
         }
         
-        // Get vehicle details from vehicles table if it exists
-        if ($vehiclesExists) {
-            $vDetailQuery = "SELECT * FROM vehicles WHERE vehicle_id = ? OR id = ?";
-            $stmt = $conn->prepare($vDetailQuery);
-            $stmt->bind_param('ss', $vehicleId, $vehicleId);
-            $stmt->execute();
-            $vDetailResult = $stmt->get_result();
-            
-            if ($vDetailResult && $vDetailResult->num_rows > 0) {
-                $vData = $vDetailResult->fetch_assoc();
-                
-                // Only override if fields are empty in vehicle_types data
-                if (empty($vehicle['name']) && !empty($vData['name'])) {
-                    $vehicle['name'] = $vData['name'];
-                }
-                
-                if (empty($vehicle['capacity']) && !empty($vData['capacity'])) {
-                    $vehicle['capacity'] = (int) $vData['capacity'];
-                }
-                
-                if (empty($vehicle['luggageCapacity']) && !empty($vData['luggage_capacity'])) {
-                    $vehicle['luggageCapacity'] = (int) $vData['luggage_capacity'];
-                }
-                
-                if (empty($vehicle['image']) && !empty($vData['image'])) {
-                    $vehicle['image'] = $vData['image'];
-                }
-                
-                if (empty($vehicle['description']) && !empty($vData['description'])) {
-                    $vehicle['description'] = $vData['description'];
-                }
-                
-                if (isset($vData['is_active'])) {
-                    $vehicle['isActive'] = (bool) $vData['is_active'];
-                }
-                
-                // Process amenities if available
-                if (!empty($vData['amenities']) && (empty($vehicle['amenities']) || $vehicle['amenities'] === ['AC'])) {
-                    try {
-                        $amenities = json_decode($vData['amenities'], true);
-                        if (is_array($amenities) && !empty($amenities)) {
-                            $vehicle['amenities'] = $amenities;
-                        } elseif (is_string($vData['amenities'])) {
-                            $vehicle['amenities'] = explode(',', str_replace(['[',']','"',"'",' '], '', $vData['amenities']));
-                        }
-                    } catch (Exception $e) {
-                        // Keep default amenities
-                    }
-                }
-            }
-        }
+        // Then check outstation_fares table for any missing pricing info
+        $outstationFaresExists = $conn->query("SHOW TABLES LIKE 'outstation_fares'")->num_rows > 0;
         
-        // Skip inactive vehicles if not including them
-        if (!$includeInactive && $vehicle['isActive'] === false) {
-            continue;
-        }
-        
-        // Get outstation pricing
         if ($outstationFaresExists) {
-            $ofDetailQuery = "SELECT * FROM outstation_fares WHERE vehicle_id = ?";
-            $stmt = $conn->prepare($ofDetailQuery);
-            $stmt->bind_param('s', $vehicleId);
-            $stmt->execute();
-            $ofDetailResult = $stmt->get_result();
+            $outstationQuery = "
+                SELECT vehicle_id, base_price, price_per_km, driver_allowance, night_halt_charge
+                FROM outstation_fares
+                WHERE vehicle_id IN ($vehicleIdsStr)
+            ";
             
-            if ($ofDetailResult && $ofDetailResult->num_rows > 0) {
-                $ofData = $ofDetailResult->fetch_assoc();
-                $vehicle['basePrice'] = (float) $ofData['base_price'];
-                $vehicle['price'] = (float) $ofData['base_price']; // Alias for consistency
-                $vehicle['pricePerKm'] = (float) $ofData['price_per_km'];
-                $vehicle['nightHaltCharge'] = (float) $ofData['night_halt_charge'];
-                $vehicle['driverAllowance'] = (float) $ofData['driver_allowance'];
+            $outstationResult = $conn->query($outstationQuery);
+            
+            if ($outstationResult && $outstationResult->num_rows > 0) {
+                error_log("Found outstation fares for " . $outstationResult->num_rows . " vehicles");
                 
-                // Create the outstation object
-                $vehicle['outstation'] = [
-                    'base_price' => (float) $ofData['base_price'],
-                    'price_per_km' => (float) $ofData['price_per_km'],
-                    'night_halt_charge' => (float) $ofData['night_halt_charge'],
-                    'driver_allowance' => (float) $ofData['driver_allowance'],
-                    'roundtrip_base_price' => isset($ofData['roundtrip_base_price']) ? (float) $ofData['roundtrip_base_price'] : (float) $ofData['base_price'],
-                    'roundtrip_price_per_km' => isset($ofData['roundtrip_price_per_km']) ? (float) $ofData['roundtrip_price_per_km'] : (float) $ofData['price_per_km']
-                ];
+                while ($row = $outstationResult->fetch_assoc()) {
+                    $vehicleId = $row['vehicle_id'];
+                    
+                    if (isset($allVehicles[$vehicleId])) {
+                        // Only update if price is not already set
+                        if (!isset($allVehicles[$vehicleId]['basePrice']) || $allVehicles[$vehicleId]['basePrice'] == 0) {
+                            $allVehicles[$vehicleId]['basePrice'] = (float) $row['base_price'];
+                            $allVehicles[$vehicleId]['price'] = (float) $row['base_price'];
+                        }
+                        
+                        if (!isset($allVehicles[$vehicleId]['pricePerKm']) || $allVehicles[$vehicleId]['pricePerKm'] == 0) {
+                            $allVehicles[$vehicleId]['pricePerKm'] = (float) $row['price_per_km'];
+                        }
+                        
+                        if (!isset($allVehicles[$vehicleId]['driverAllowance']) || $allVehicles[$vehicleId]['driverAllowance'] == 0) {
+                            $allVehicles[$vehicleId]['driverAllowance'] = (float) $row['driver_allowance'];
+                        }
+                        
+                        if (!isset($allVehicles[$vehicleId]['nightHaltCharge']) || $allVehicles[$vehicleId]['nightHaltCharge'] == 0) {
+                            $allVehicles[$vehicleId]['nightHaltCharge'] = (float) $row['night_halt_charge'];
+                        }
+                    }
+                }
             }
         }
-        
-        // Get local package pricing
-        if ($localFaresExists) {
-            $lfDetailQuery = "SELECT * FROM local_package_fares WHERE vehicle_id = ?";
-            $stmt = $conn->prepare($lfDetailQuery);
-            $stmt->bind_param('s', $vehicleId);
-            $stmt->execute();
-            $lfDetailResult = $stmt->get_result();
-            
-            if ($lfDetailResult && $lfDetailResult->num_rows > 0) {
-                $lfData = $lfDetailResult->fetch_assoc();
-                
-                // Create the local object
-                $vehicle['local'] = [
-                    'price_4hrs_40km' => (float) ($lfData['price_4hrs_40km'] ?? 0),
-                    'price_8hrs_80km' => (float) ($lfData['price_8hrs_80km'] ?? 0),
-                    'price_10hrs_100km' => (float) ($lfData['price_10hrs_100km'] ?? 0),
-                    'price_extra_km' => (float) ($lfData['price_extra_km'] ?? 0),
-                    'price_extra_hour' => (float) ($lfData['price_extra_hour'] ?? 0)
-                ];
-            }
+    }
+    
+    // Convert to array and ensure all required fields
+    $vehiclesArray = [];
+    foreach ($allVehicles as $vehicle) {
+        // Make sure each vehicle has complete data
+        if (!isset($vehicle['basePrice']) || $vehicle['basePrice'] == 0) {
+            $vehicle['basePrice'] = 2500;
+            $vehicle['price'] = 2500;
         }
         
-        // Get airport transfer pricing
-        if ($airportFaresExists) {
-            $afDetailQuery = "SELECT * FROM airport_transfer_fares WHERE vehicle_id = ?";
-            $stmt = $conn->prepare($afDetailQuery);
-            $stmt->bind_param('s', $vehicleId);
-            $stmt->execute();
-            $afDetailResult = $stmt->get_result();
-            
-            if ($afDetailResult && $afDetailResult->num_rows > 0) {
-                $afData = $afDetailResult->fetch_assoc();
-                
-                // Create the airport object
-                $vehicle['airport'] = [
-                    'base_price' => (float) ($afData['base_price'] ?? 0),
-                    'price_per_km' => (float) ($afData['price_per_km'] ?? 0),
-                    'pickup_price' => (float) ($afData['pickup_price'] ?? 0),
-                    'drop_price' => (float) ($afData['drop_price'] ?? 0),
-                    'tier1_price' => (float) ($afData['tier1_price'] ?? 0),
-                    'tier2_price' => (float) ($afData['tier2_price'] ?? 0),
-                    'tier3_price' => (float) ($afData['tier3_price'] ?? 0),
-                    'tier4_price' => (float) ($afData['tier4_price'] ?? 0),
-                    'extra_km_charge' => (float) ($afData['extra_km_charge'] ?? 0)
-                ];
-            }
+        if (!isset($vehicle['pricePerKm']) || $vehicle['pricePerKm'] == 0) {
+            $vehicle['pricePerKm'] = 15;
         }
         
-        // Ensure all necessary objects are set with defaults
-        if (!isset($vehicle['outstation'])) {
-            $vehicle['outstation'] = [
-                'base_price' => $vehicle['basePrice'],
-                'price_per_km' => $vehicle['pricePerKm'],
-                'night_halt_charge' => $vehicle['nightHaltCharge'],
-                'driver_allowance' => $vehicle['driverAllowance'],
-                'roundtrip_base_price' => $vehicle['basePrice'],
-                'roundtrip_price_per_km' => $vehicle['pricePerKm']
-            ];
+        if (!isset($vehicle['driverAllowance']) || $vehicle['driverAllowance'] == 0) {
+            $vehicle['driverAllowance'] = 300;
         }
         
-        if (!isset($vehicle['local'])) {
-            $vehicle['local'] = [
-                'price_4hrs_40km' => 0,
-                'price_8hrs_80km' => 0,
-                'price_10hrs_100km' => 0,
-                'price_extra_km' => 0,
-                'price_extra_hour' => 0
-            ];
+        if (!isset($vehicle['nightHaltCharge']) || $vehicle['nightHaltCharge'] == 0) {
+            $vehicle['nightHaltCharge'] = 800;
         }
         
-        if (!isset($vehicle['airport'])) {
-            $vehicle['airport'] = [
-                'base_price' => 0,
-                'price_per_km' => 0,
-                'pickup_price' => 0,
-                'drop_price' => 0,
-                'tier1_price' => 0,
-                'tier2_price' => 0,
-                'tier3_price' => 0,
-                'tier4_price' => 0,
-                'extra_km_charge' => 0
-            ];
-        }
-        
-        // Generate description if empty
-        if (empty($vehicle['description'])) {
-            $vehicle['description'] = "Vehicle suitable for {$vehicle['capacity']} passengers.";
-        }
-        
-        // Set default image if empty
-        if (empty($vehicle['image'])) {
+        if (!isset($vehicle['image']) || empty($vehicle['image'])) {
             $vehicle['image'] = '/cars/sedan.png';
         }
         
-        // Set these fields if they're still 0
-        if ($vehicle['basePrice'] == 0 && $vehicle['outstation']['base_price'] > 0) {
-            $vehicle['basePrice'] = $vehicle['outstation']['base_price'];
-            $vehicle['price'] = $vehicle['outstation']['base_price'];
+        if (!isset($vehicle['amenities']) || !is_array($vehicle['amenities'])) {
+            $vehicle['amenities'] = ['AC'];
         }
         
-        if ($vehicle['pricePerKm'] == 0 && $vehicle['outstation']['price_per_km'] > 0) {
-            $vehicle['pricePerKm'] = $vehicle['outstation']['price_per_km'];
+        if (!isset($vehicle['description']) || empty($vehicle['description'])) {
+            $vehicle['description'] = 'Vehicle suitable for ' . $vehicle['capacity'] . ' passengers.';
         }
         
-        $allVehicles[] = $vehicle;
+        $vehiclesArray[] = $vehicle;
     }
     
     // Sort vehicles by name
-    usort($allVehicles, function($a, $b) {
+    usort($vehiclesArray, function ($a, $b) {
         return strcmp($a['name'], $b['name']);
     });
     
-    error_log("Returning " . count($allVehicles) . " vehicles");
-    
-    // If no vehicles found, return default set
-    if (empty($allVehicles)) {
-        $allVehicles = [
+    // If no vehicles found at all, return default vehicles
+    if (empty($vehiclesArray)) {
+        error_log("No vehicles found, returning default vehicles");
+        
+        $vehiclesArray = [
             [
                 'id' => 'sedan',
                 'vehicleId' => 'sedan',
@@ -432,10 +334,12 @@ try {
         ];
     }
     
+    error_log("Returning " . count($vehiclesArray) . " vehicles");
+    
     // Return the vehicle data
     echo json_encode([
-        'vehicles' => $allVehicles,
-        'count' => count($allVehicles),
+        'vehicles' => $vehiclesArray,
+        'count' => count($vehiclesArray),
         'includeInactive' => $includeInactive,
         'isAdminMode' => $isAdminMode,
         'timestamp' => time()

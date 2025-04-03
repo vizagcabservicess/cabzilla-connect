@@ -49,25 +49,15 @@ export {
   fareService
 } from '@/services/fareService';
 
-// Export vehicle service functions (use only what's available)
+// Export vehicle service functions
 export { 
-  addVehicle as createVehicle,
+  createVehicle,
   updateVehicle,
   deleteVehicle,
-  updateVehicle as updateVehicleFares,
-  getVehicles as syncVehicleData,
-  getVehicle as getVehicleById
+  updateVehicleFares,
+  syncVehicleData,
+  getVehicleById
 } from '@/services/directVehicleService';
-
-// Export fare update service functions
-export {
-  updateOutstationFares,
-  updateLocalFares,
-  updateAirportFares,
-  getAllOutstationFares,
-  getAllLocalFares,
-  getAllAirportFares
-} from '@/services/fareUpdateService';
 
 // Export getData function from vehicleDataService
 export { 
@@ -100,4 +90,3 @@ export { CabLoading, CabRefreshing } from '@/components/cab-options/CabLoading';
 
 // Export the Skeleton component
 export { Skeleton } from '@/components/ui/skeleton';
-

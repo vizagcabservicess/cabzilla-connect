@@ -1,16 +1,15 @@
+
 import { useState } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { addVehicle } from '@/services/directVehicleService';
-import { CabType } from '@/types/cab';
-import { AlertCircle, Loader2 } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { fixDatabaseTables } from '@/utils/apiHelper';
-import { toast } from 'sonner';
+import { Switch } from "@/components/ui/switch";
+import { Loader2 } from "lucide-react";
+import { CabType } from "@/types/cab";
+import { createVehicle } from "@/services/directVehicleService";
+import { toast } from "sonner";
 
 interface AddVehicleDialogProps {
   open: boolean;
@@ -20,188 +19,134 @@ interface AddVehicleDialogProps {
 
 export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isFixingDatabase, setIsFixingDatabase] = useState(false);
-  
-  const [formData, setFormData] = useState<Partial<CabType>>({
-    vehicleId: '',
+  const [formData, setFormData] = useState({
+    id: '',
     name: '',
     capacity: 4,
     luggageCapacity: 2,
-    ac: true,
-    image: '/cars/sedan.png',
-    amenities: ['AC'],
+    pricePerKm: 15,
+    price: 2500,
     description: '',
-    basePrice: 0,
-    pricePerKm: 0,
-    nightHaltCharge: 700,
-    driverAllowance: 250,
-    isActive: true
+    amenities: 'AC, Bottle Water, Music System',
+    nightHaltCharge: 800,
+    driverAllowance: 300,
+    isActive: true,
+    image: '/cars/sedan.png'
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: name === 'capacity' || name === 'luggageCapacity' || 
-              name === 'basePrice' || name === 'pricePerKm' ||
-              name === 'nightHaltCharge' || name === 'driverAllowance' 
-        ? Number(value) 
+      [name]: name === 'capacity' || name === 'luggageCapacity' || name === 'pricePerKm' || name === 'price' || name === 'nightHaltCharge' || name === 'driverAllowance'
+        ? Number(value)
         : value
     }));
-    
-    if (name === 'name' && !formData.vehicleId) {
-      const generatedId = value.toLowerCase().replace(/\s+/g, '_');
-      setFormData((prev) => ({
-        ...prev,
-        vehicleId: generatedId
-      }));
-    }
   };
 
-  const handleSwitchChange = (name: string, checked: boolean) => {
+  const handleSwitchChange = (checked: boolean) => {
     setFormData((prev) => ({
       ...prev,
-      [name]: checked
-    }));
-  };
-
-  const handleAmenitiesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    const amenitiesList = value.split(',').map(item => item.trim());
-    setFormData((prev) => ({
-      ...prev,
-      amenities: amenitiesList
+      isActive: checked
     }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
-    setError(null);
+    
+    if (!formData.id || !formData.name) {
+      toast.error("Vehicle ID and name are required");
+      return;
+    }
     
     try {
-      if (!formData.vehicleId || !formData.name) {
-        throw new Error('Vehicle ID and Name are required fields');
-      }
-
-      const newVehicle = await addVehicle(formData as CabType);
+      setIsSubmitting(true);
       
-      onAddVehicle(newVehicle);
+      // Format the data
+      const vehicleData: CabType = {
+        ...formData,
+        amenities: formData.amenities.split(',').map(item => item.trim()),
+        ac: true
+      };
       
+      // Create the vehicle
+      await createVehicle(vehicleData);
+      
+      // Notify parent component
+      onAddVehicle(vehicleData);
+      
+      // Reset form and close dialog
       setFormData({
-        vehicleId: '',
+        id: '',
         name: '',
         capacity: 4,
         luggageCapacity: 2,
-        ac: true,
-        image: '/cars/sedan.png',
-        amenities: ['AC'],
+        pricePerKm: 15,
+        price: 2500,
         description: '',
-        basePrice: 0,
-        pricePerKm: 0,
-        nightHaltCharge: 700,
-        driverAllowance: 250,
-        isActive: true
+        amenities: 'AC, Bottle Water, Music System',
+        nightHaltCharge: 800,
+        driverAllowance: 300,
+        isActive: true,
+        image: '/cars/sedan.png'
       });
       onClose();
-    } catch (err) {
-      console.error('Error adding vehicle:', err);
-      setError(err instanceof Error ? err.message : 'An unknown error occurred');
+      
+    } catch (error) {
+      console.error("Error creating vehicle:", error);
+      toast.error("Failed to create vehicle. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
   };
-  
-  const handleFixDatabase = async () => {
-    setIsFixingDatabase(true);
-    try {
-      const success = await fixDatabaseTables();
-      if (success) {
-        toast.success('Database tables fixed successfully');
-        setError(null);
-      } else {
-        toast.error('Failed to fix database tables');
-      }
-    } catch (err) {
-      console.error('Error fixing database:', err);
-    } finally {
-      setIsFixingDatabase(false);
-    }
-  };
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-xl">
+    <Dialog open={open} onOpenChange={(isOpen) => !isSubmitting && !isOpen && onClose()}>
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Add New Vehicle</DialogTitle>
           <DialogDescription>
-            Create a new vehicle to add to your fleet.
+            Add a new vehicle type to your fleet. Fill in all the required details.
           </DialogDescription>
         </DialogHeader>
-
-        {error && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Error</AlertTitle>
-            <AlertDescription className="flex flex-col gap-2">
-              <span>{error}</span>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleFixDatabase}
-                disabled={isFixingDatabase}
-              >
-                {isFixingDatabase ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Fixing database...
-                  </>
-                ) : (
-                  'Fix Database Tables'
-                )}
-              </Button>
-            </AlertDescription>
-          </Alert>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
+        
+        <form onSubmit={handleSubmit} className="space-y-4 pt-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="vehicleId">Vehicle ID</Label>
+              <Label htmlFor="id">Vehicle ID</Label>
               <Input
-                id="vehicleId"
-                name="vehicleId"
-                placeholder="sedan, suv, etc."
-                value={formData.vehicleId}
+                id="id"
+                name="id"
+                value={formData.id}
                 onChange={handleChange}
+                placeholder="sedan"
+                required
               />
-              <p className="text-xs text-gray-500">
-                Unique identifier (lowercase, no spaces)
-              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="name">Vehicle Name</Label>
               <Input
                 id="name"
                 name="name"
-                placeholder="Sedan, SUV, etc."
                 value={formData.name}
                 onChange={handleChange}
+                placeholder="Sedan"
+                required
               />
             </div>
           </div>
-
+          
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="capacity">Passenger Capacity</Label>
+              <Label htmlFor="capacity">Seating Capacity</Label>
               <Input
                 id="capacity"
                 name="capacity"
                 type="number"
-                min="1"
                 value={formData.capacity}
                 onChange={handleChange}
+                min={1}
+                max={20}
               />
             </div>
             <div className="space-y-2">
@@ -210,24 +155,24 @@ export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDial
                 id="luggageCapacity"
                 name="luggageCapacity"
                 type="number"
-                min="0"
                 value={formData.luggageCapacity}
                 onChange={handleChange}
+                min={0}
+                max={10}
               />
             </div>
           </div>
-
+          
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="basePrice">Base Price (₹)</Label>
+              <Label htmlFor="price">Base Price (₹)</Label>
               <Input
-                id="basePrice"
-                name="basePrice"
+                id="price"
+                name="price"
                 type="number"
-                min="0"
-                step="10"
-                value={formData.basePrice}
+                value={formData.price}
                 onChange={handleChange}
+                min={0}
               />
             </div>
             <div className="space-y-2">
@@ -236,14 +181,13 @@ export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDial
                 id="pricePerKm"
                 name="pricePerKm"
                 type="number"
-                min="0"
-                step="0.5"
                 value={formData.pricePerKm}
                 onChange={handleChange}
+                min={0}
               />
             </div>
           </div>
-
+          
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="nightHaltCharge">Night Halt Charge (₹)</Label>
@@ -251,10 +195,9 @@ export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDial
                 id="nightHaltCharge"
                 name="nightHaltCharge"
                 type="number"
-                min="0"
-                step="50"
                 value={formData.nightHaltCharge}
                 onChange={handleChange}
+                min={0}
               />
             </div>
             <div className="space-y-2">
@@ -263,83 +206,68 @@ export function AddVehicleDialog({ open, onClose, onAddVehicle }: AddVehicleDial
                 id="driverAllowance"
                 name="driverAllowance"
                 type="number"
-                min="0"
-                step="10"
                 value={formData.driverAllowance}
                 onChange={handleChange}
+                min={0}
               />
             </div>
           </div>
-
+          
           <div className="space-y-2">
-            <Label htmlFor="image">Image URL</Label>
-            <Input
-              id="image"
-              name="image"
-              placeholder="/cars/sedan.png"
-              value={formData.image}
-              onChange={handleChange}
-            />
-            <p className="text-xs text-gray-500">
-              Path to vehicle image (e.g., /cars/sedan.png)
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="amenities">Amenities</Label>
+            <Label htmlFor="amenities">Amenities (comma separated)</Label>
             <Input
               id="amenities"
               name="amenities"
+              value={formData.amenities}
+              onChange={handleChange}
               placeholder="AC, Bottle Water, Music System"
-              value={formData.amenities?.join(', ')}
-              onChange={handleAmenitiesChange}
             />
-            <p className="text-xs text-gray-500">
-              Comma-separated list of amenities
-            </p>
           </div>
-
+          
           <div className="space-y-2">
             <Label htmlFor="description">Description</Label>
             <Textarea
               id="description"
               name="description"
-              placeholder="Describe the vehicle..."
               value={formData.description}
               onChange={handleChange}
+              placeholder="Comfortable sedan suitable for 4 passengers."
+              rows={3}
             />
           </div>
-
-          <div className="flex items-center space-x-2">
-            <Switch
-              id="ac"
-              checked={formData.ac}
-              onCheckedChange={(checked) => handleSwitchChange('ac', checked)}
+          
+          <div className="space-y-2">
+            <Label htmlFor="image">Image URL</Label>
+            <Input
+              id="image"
+              name="image"
+              value={formData.image}
+              onChange={handleChange}
+              placeholder="/cars/sedan.png"
             />
-            <Label htmlFor="ac">Air Conditioned</Label>
           </div>
-
+          
           <div className="flex items-center space-x-2">
             <Switch
               id="isActive"
               checked={formData.isActive}
-              onCheckedChange={(checked) => handleSwitchChange('isActive', checked)}
+              onCheckedChange={handleSwitchChange}
             />
-            <Label htmlFor="isActive">Active</Label>
+            <Label htmlFor="isActive">Active Status</Label>
           </div>
-
+          
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </Button>
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Adding...
+                  Creating...
                 </>
               ) : (
-                'Add Vehicle'
+                "Create Vehicle"
               )}
             </Button>
           </DialogFooter>

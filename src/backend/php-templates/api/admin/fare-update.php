@@ -19,12 +19,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // Include necessary files
 require_once '../../config.php';
 
-// Create log directory if it doesn't exist
-$logDir = __DIR__ . '/../../logs';
-if (!file_exists($logDir)) {
-    mkdir($logDir, 0755, true);
-}
-
 // Initialize response
 $response = [
     'status' => 'error',
@@ -36,10 +30,6 @@ $response = [
 $tripType = isset($_REQUEST['tripType']) ? $_REQUEST['tripType'] : 'outstation';
 $vehicleId = isset($_REQUEST['vehicleId']) ? $_REQUEST['vehicleId'] : null;
 
-// Log the request
-$timestamp = date('Y-m-d H:i:s');
-error_log("[$timestamp] Fare update request: " . json_encode($_REQUEST), 3, $logDir . '/fare-update.log');
-
 // Debug information
 $response['debug'] = [
     'request_method' => $_SERVER['REQUEST_METHOD'],
@@ -50,57 +40,6 @@ $response['debug'] = [
     'post_data' => $_POST,
     'timestamp' => date('Y-m-d H:i:s')
 ];
-
-// Known numeric ID to vehicle_id mappings - CRITICALLY IMPORTANT FOR PREVENTING DUPLICATE VEHICLES
-$knownMappings = [
-    '1' => 'sedan',
-    '2' => 'ertiga',
-    '180' => 'etios',
-    '1266' => 'MPV',
-    '592' => 'Urbania',
-    '1270' => 'MPV',   // Map these duplicates back to proper vehicle_id
-    '1271' => 'etios', // Map these duplicates back to proper vehicle_id
-    '1272' => 'etios'  // Map these duplicates back to proper vehicle_id
-];
-
-// Normalize vehicle ID - critically important
-if (!empty($vehicleId)) {
-    // Remove "item-" prefix if it exists
-    if (strpos($vehicleId, 'item-') === 0) {
-        $vehicleId = substr($vehicleId, 5);
-    }
-    
-    // If this is a known numeric ID, convert it to the proper vehicle_id
-    if (isset($knownMappings[$vehicleId])) {
-        $originalId = $vehicleId;
-        $vehicleId = $knownMappings[$vehicleId];
-        error_log("[$timestamp] Converted numeric ID $originalId to vehicle_id: $vehicleId", 3, $logDir . '/fare-update.log');
-        $response['details']['id_conversion'] = "Converted $originalId to $vehicleId";
-    }
-    
-    // If this is still a numeric ID, try to look up the actual vehicle_id
-    if (is_numeric($vehicleId)) {
-        try {
-            $conn = getDbConnection();
-            $query = "SELECT vehicle_id FROM vehicles WHERE id = ? LIMIT 1";
-            $stmt = $conn->prepare($query);
-            $stmt->bind_param('s', $vehicleId);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            
-            if ($row = $result->fetch_assoc()) {
-                if (!empty($row['vehicle_id'])) {
-                    $originalId = $vehicleId;
-                    $vehicleId = $row['vehicle_id'];
-                    error_log("[$timestamp] Found actual vehicle_id '$vehicleId' for numeric ID $originalId", 3, $logDir . '/fare-update.log');
-                    $response['details']['id_lookup'] = "Found proper ID $vehicleId for $originalId";
-                }
-            }
-        } catch (Exception $e) {
-            error_log("[$timestamp] Error looking up vehicle_id: " . $e->getMessage(), 3, $logDir . '/fare-update.log');
-        }
-    }
-}
 
 // Validate required parameters
 if (!$vehicleId) {
@@ -128,29 +67,8 @@ try {
     $stmt->execute();
     $result = $stmt->get_result();
     
-    // Also check if vehicle exists in vehicles table
-    $checkVehiclesQuery = "SELECT id FROM vehicles WHERE vehicle_id = ?";
-    $stmt2 = $conn->prepare($checkVehiclesQuery);
-    
-    if (!$stmt2) {
-        throw new Exception("Failed to prepare vehicles check statement: " . $conn->error);
-    }
-    
-    $stmt2->bind_param("s", $vehicleId);
-    $stmt2->execute();
-    $result2 = $stmt2->get_result();
-    
-    $vehicleInTypes = ($result->num_rows > 0);
-    $vehicleInVehicles = ($result2->num_rows > 0);
-    
-    if (!$vehicleInTypes && !$vehicleInVehicles) {
-        // Vehicle doesn't exist in either table, this is potentially dangerous
-        // If it's a numeric ID, we definitely should not create a new vehicle
-        if (is_numeric($vehicleId) && intval($vehicleId) > 10) {
-            throw new Exception("Cannot update fares for numeric ID $vehicleId as it may create a duplicate vehicle");
-        }
-        
-        // For non-numeric IDs or small numbers (like vehicle types 1, 2), we can create the vehicle
+    if ($result->num_rows === 0) {
+        // Vehicle doesn't exist, let's insert it
         $insertVehicleQuery = "INSERT INTO vehicle_types (vehicle_id, name, capacity, luggage_capacity, ac, is_active) 
                               VALUES (?, ?, ?, ?, 1, 1)";
         $stmt = $conn->prepare($insertVehicleQuery);
@@ -167,7 +85,6 @@ try {
         $stmt->execute();
         
         $response['details']['vehicle_created'] = true;
-        error_log("[$timestamp] Created new vehicle: $vehicleId", 3, $logDir . '/fare-update.log');
     }
     
     // Update fares based on trip type
@@ -187,13 +104,11 @@ try {
     
     $response['status'] = 'success';
     $response['message'] = "Successfully updated $tripType fares for $vehicleId";
-    $response['vehicleId'] = $vehicleId; // Include the normalized vehicle ID in the response
     
 } catch (Exception $e) {
     $response['status'] = 'error';
     $response['message'] = $e->getMessage();
     $response['details']['error_trace'] = $e->getTraceAsString();
-    error_log("[$timestamp] Error in fare-update.php: " . $e->getMessage(), 3, $logDir . '/fare-update.log');
 }
 
 // Output the response

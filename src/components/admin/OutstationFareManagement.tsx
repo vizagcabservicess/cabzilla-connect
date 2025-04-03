@@ -16,7 +16,6 @@ import { CabType } from '@/types/cab';
 import { fareService, syncVehicleData } from '@/lib';
 import { FareUpdateError } from '../cab-options/FareUpdateError';
 import axios from 'axios';
-import { directVehicleOperation } from '@/utils/apiHelper';
 
 const formSchema = z.object({
   cabType: z.string().min(1, { message: "Cab type is required" }),
@@ -86,29 +85,7 @@ export function OutstationFareManagement() {
         console.warn("Failed to sync vehicle data:", syncErr);
       }
       
-      // Try multiple approaches to load vehicle data
-      let vehicles: CabType[] = [];
-      
-      // Approach 1: Try direct vehicle API endpoint
-      try {
-        const directResponse = await directVehicleOperation(
-          '/api/admin/get-vehicles.php?includeInactive=false',
-          'GET',
-          {}  // Add empty object as third argument
-        );
-        
-        if (directResponse && Array.isArray(directResponse)) {
-          console.log('Loaded vehicles from direct API:', directResponse);
-          vehicles = directResponse;
-          setCabTypes(vehicles);
-          setIsLoading(false);
-          return;
-        }
-      } catch (directErr) {
-        console.warn('Could not load from direct API:', directErr);
-      }
-      
-      // Approach 2: Try to load from local JSON
+      // Then try to load from local JSON
       try {
         const response = await axios.get('/data/vehicles.json', {
           params: { _t: Date.now() }, // Cache busting
@@ -121,58 +98,20 @@ export function OutstationFareManagement() {
         
         if (response.data && Array.isArray(response.data)) {
           console.log('Loaded vehicles from local JSON:', response.data);
-          vehicles = response.data;
-          setCabTypes(vehicles);
+          setCabTypes(response.data);
           setIsLoading(false);
           return;
         }
-      } catch (jsonErr) {
-        console.warn('Could not load from local JSON:', jsonErr);
+      } catch (err) {
+        console.log('Could not load from local JSON, trying API instead');
       }
       
-      // Approach 3: Try loadCabTypes method
-      try {
-        const types = await loadCabTypes(true);
-        console.log('Loaded cab types:', types);
-        if (types && types.length > 0) {
-          vehicles = types;
-          setCabTypes(vehicles);
-          setIsLoading(false);
-          return;
-        }
-      } catch (cabTypesErr) {
-        console.warn('Could not load from loadCabTypes:', cabTypesErr);
-      }
+      // Then try loadCabTypes method
+      const types = await loadCabTypes(true);
+      console.log('Loaded cab types:', types);
+      setCabTypes(types);
       
-      // Approach 4: Try vehicles data endpoint (backup)
-      try {
-        const vehiclesDataResponse = await fetch(`${apiBaseUrl}/api/vehicles-data.php?_t=${Date.now()}`, {
-          method: 'GET',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'X-Requested-With': 'XMLHttpRequest'
-          }
-        });
-        
-        if (vehiclesDataResponse.ok) {
-          const data = await vehiclesDataResponse.json();
-          if (data && Array.isArray(data)) {
-            console.log('Loaded vehicles from vehicles-data.php:', data);
-            vehicles = data;
-            setCabTypes(vehicles);
-            setIsLoading(false);
-            return;
-          }
-        }
-      } catch (backupErr) {
-        console.warn('Could not load from vehicles-data.php:', backupErr);
-      }
-      
-      // If we reached here and still have no vehicles, check if we loaded any vehicles at all
-      if (vehicles.length === 0) {
-        throw new Error('Could not load vehicle data from any source');
-      }
+      setIsLoading(false);
     } catch (err) {
       console.error("Error loading cab types:", err);
       setError(err instanceof Error ? err : new Error('Failed to load cab types'));
@@ -190,8 +129,6 @@ export function OutstationFareManagement() {
       } catch (cacheErr) {
         console.error('Error loading from cache:', cacheErr);
       }
-    } finally {
-      setIsLoading(false);
     }
   };
   
@@ -635,7 +572,6 @@ export function OutstationFareManagement() {
                     <FormLabel>Vehicle Type</FormLabel>
                     <Select 
                       onValueChange={(value) => {
-                        console.log('Selected vehicle ID:', value);
                         field.onChange(value);
                         loadFaresForVehicle(value);
                       }}
@@ -653,10 +589,7 @@ export function OutstationFareManagement() {
                           </div>
                         )}
                         {cabTypes.map((cab) => (
-                          <SelectItem 
-                            key={cab.id || cab.vehicleId} 
-                            value={cab.id || cab.vehicleId || ''}
-                          >
+                          <SelectItem key={cab.id} value={cab.id}>
                             {cab.name}
                           </SelectItem>
                         ))}

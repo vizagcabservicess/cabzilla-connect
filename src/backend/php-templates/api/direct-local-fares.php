@@ -140,7 +140,7 @@ try {
         $createVehiclePricingTableSql = "
             CREATE TABLE IF NOT EXISTS `vehicle_pricing` (
                 `id` INT AUTO_INCREMENT PRIMARY KEY,
-                `vehicle_id` VARCHAR(50) NOT NULL,
+                `vehicle_type` VARCHAR(50) NOT NULL,
                 `trip_type` VARCHAR(20) NOT NULL DEFAULT 'local',
                 `local_package_4hr` DECIMAL(10,2) DEFAULT 0,
                 `local_package_8hr` DECIMAL(10,2) DEFAULT 0,
@@ -153,7 +153,7 @@ try {
                 `driver_allowance` DECIMAL(10,2) DEFAULT 0,
                 `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                UNIQUE KEY `vehicle_trip_type` (`vehicle_id`, `trip_type`)
+                UNIQUE KEY `vehicle_trip_type` (`vehicle_type`, `trip_type`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         ";
         
@@ -187,7 +187,6 @@ try {
 // If it's a GET request but not initialize, return list of fares
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$initialize) {
     try {
-        // Query against local_package_fares, not vehicle_pricing to avoid the column issue
         $query = "SELECT * FROM local_package_fares";
         $result = $conn->query($query);
         
@@ -551,11 +550,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
         
-        // Update vehicle_pricing table for backward compatibility - using vehicle_id instead of vehicle_type
+        // Update vehicle_pricing table for backward compatibility
         $updatedVehiclePricing = false;
         if ($vehiclePricingTableExists) {
             // Check if vehicle exists with trip_type 'local'
-            $checkVpQuery = "SELECT id FROM vehicle_pricing WHERE vehicle_id = ? AND trip_type = 'local'";
+            $checkVpQuery = "SELECT id FROM vehicle_pricing WHERE vehicle_type = ? AND trip_type = 'local'";
             $checkVpStmt = $conn->prepare($checkVpQuery);
             $checkVpStmt->bind_param('s', $vehicleId);
             $checkVpStmt->execute();
@@ -571,7 +570,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         extra_km_charge = ?,
                         extra_hour_charge = ?,
                         updated_at = CURRENT_TIMESTAMP
-                    WHERE vehicle_id = ? AND trip_type = 'local'
+                    WHERE vehicle_type = ? AND trip_type = 'local'
                 ";
                 
                 $updateVpStmt = $conn->prepare($updateVpQuery);
@@ -594,7 +593,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Insert new record
                 $insertVpQuery = "
                     INSERT INTO vehicle_pricing 
-                    (vehicle_id, trip_type, local_package_4hr, local_package_8hr, local_package_10hr, 
+                    (vehicle_type, trip_type, local_package_4hr, local_package_8hr, local_package_10hr, 
                      extra_km_charge, extra_hour_charge, base_fare, price_per_km)
                     VALUES (?, 'local', ?, ?, ?, ?, ?, 0, 0)
                 ";
