@@ -53,7 +53,7 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
   return (
     <div className="w-full max-w-4xl mx-auto p-4">
       {error && (
-        <Alert variant="warning" className="mb-4">
+        <Alert variant="destructive" className="mb-4">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Warning</AlertTitle>
           <AlertDescription className="flex items-center justify-between">
