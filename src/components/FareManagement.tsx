@@ -4,10 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { getApiUrl } from '@/config/api';
 import { formatDataForMultipart, directVehicleOperation, isPreviewMode } from '@/utils/apiHelper';
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface FareManagementProps {
   vehicleId: string;
@@ -36,6 +37,7 @@ type Fare = LocalFare | AirportFare;
 export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareType }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [fare, setFare] = useState<Fare | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
@@ -57,6 +59,14 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
           if (data.status === 'success' && data.fares && data.fares.length > 0) {
             setFare(data.fares[0]);
             console.log(`Loaded ${fareType} fare data:`, data.fares[0]);
+            
+            // Also save to localStorage for persistence
+            try {
+              const storageKey = `${fareType}_fares_${vehicleId}`;
+              localStorage.setItem(storageKey, JSON.stringify(data.fares[0]));
+            } catch (storageError) {
+              console.error('Error saving fare data to localStorage:', storageError);
+            }
           } else if (data.status === 'success' && (!data.fares || data.fares.length === 0)) {
             // Create default fare structure if none exists
             const defaultFare = createDefaultFare(vehicleId, fareType);
@@ -68,13 +78,28 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
         } catch (err) {
           console.error(`Error loading ${fareType} fares with directVehicleOperation:`, err);
           
-          // If in preview mode, use default fare structure
-          if (isPreviewMode()) {
-            console.log(`Using default ${fareType} fares in preview mode`);
-            const defaultFare = createDefaultFare(vehicleId, fareType);
-            setFare(defaultFare);
+          // Try to load from localStorage
+          const storageKey = `${fareType}_fares_${vehicleId}`;
+          const storedFares = localStorage.getItem(storageKey);
+          
+          if (storedFares) {
+            try {
+              const parsedFares = JSON.parse(storedFares);
+              console.log(`Using stored ${fareType} fares from localStorage:`, parsedFares);
+              setFare(parsedFares);
+            } catch (parseError) {
+              console.error('Error parsing stored fares:', parseError);
+              throw err; // Re-throw if parse fails
+            }
           } else {
-            throw err; // Re-throw for non-preview environments
+            // If in preview mode, use default fare structure
+            if (isPreviewMode()) {
+              console.log(`Using default ${fareType} fares in preview mode`);
+              const defaultFare = createDefaultFare(vehicleId, fareType);
+              setFare(defaultFare);
+            } else {
+              throw err; // Re-throw for non-preview environments
+            }
           }
         }
         
@@ -95,22 +120,60 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
   }, [vehicleId, fareType, retryCount]);
 
   const createDefaultFare = (vehicleId: string, type: 'local' | 'airport'): Fare => {
+    // First check if we have values in localStorage
+    const storageKey = `${type}_fares_${vehicleId}`;
+    try {
+      const storedFare = localStorage.getItem(storageKey);
+      if (storedFare) {
+        const parsedFare = JSON.parse(storedFare);
+        if (parsedFare && typeof parsedFare === 'object') {
+          return parsedFare;
+        }
+      }
+    } catch (e) {
+      console.error('Error reading from localStorage:', e);
+    }
+    
+    // Default values based on vehicle type
+    let baseValue = 0;
+    
+    switch (vehicleId) {
+      case 'sedan':
+        baseValue = 1500;
+        break;
+      case 'ertiga':
+        baseValue = 1800;
+        break;
+      case 'innova_crysta':
+        baseValue = 2200;
+        break;
+      case 'luxury':
+        baseValue = 2600;
+        break;
+      case 'tempo_traveller':
+      case 'tempo':
+        baseValue = 3500;
+        break;
+      default:
+        baseValue = 1500;
+    }
+    
     if (type === 'local') {
       return {
         vehicleId,
-        price4hrs40km: 0,
-        price8hrs80km: 0,
-        price10hrs100km: 0,
-        priceExtraKm: 0,
-        priceExtraHour: 0
+        price4hrs40km: Math.round(baseValue * 0.6),
+        price8hrs80km: Math.round(baseValue),
+        price10hrs100km: Math.round(baseValue * 1.2),
+        priceExtraKm: Math.round(baseValue * 0.008),
+        priceExtraHour: Math.round(baseValue * 0.1)
       } as LocalFare;
     } else {
       return {
         vehicleId,
-        priceOneWay: 0,
-        priceRoundTrip: 0,
-        nightCharges: 0,
-        extraWaitingCharges: 0
+        priceOneWay: baseValue,
+        priceRoundTrip: Math.round(baseValue * 1.8),
+        nightCharges: Math.round(baseValue * 0.2),
+        extraWaitingCharges: Math.round(baseValue * 0.1)
       } as AirportFare;
     }
   };
@@ -159,7 +222,11 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       };
 
       try {
-        // Try first with directVehicleOperation for consistent error handling
+        // Save in localStorage first for persistence
+        const storageKey = `${fareType}_fares_${vehicleId}`;
+        localStorage.setItem(storageKey, JSON.stringify(fare));
+        
+        // Try with directVehicleOperation for consistent error handling
         const result = await directVehicleOperation(endpoint, 'POST', updateData);
         
         if (result.status === 'success') {
@@ -213,6 +280,33 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     setRetryCount(prev => prev + 1);
   };
 
+  const handleSync = async () => {
+    try {
+      setIsSyncing(true);
+      setError(null);
+      
+      const endpoint = fareType === 'local' 
+        ? 'api/admin/sync-local-fares.php' 
+        : 'api/admin/sync-airport-fares.php';
+      
+      const result = await directVehicleOperation(endpoint, 'GET');
+      
+      if (result.status === 'success') {
+        toast.success(`${fareType.charAt(0).toUpperCase() + fareType.slice(1)} fares synced successfully`);
+        // Refresh the fare data after syncing
+        setRetryCount(prev => prev + 1);
+      } else {
+        throw new Error(result.message || `Failed to sync ${fareType} fares`);
+      }
+    } catch (err: any) {
+      console.error(`Error syncing ${fareType} fares:`, err);
+      setError(`Error syncing ${fareType} fares: ${err.message}`);
+      toast.error(`Failed to sync ${fareType} fares`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <Card className="w-full">
@@ -226,19 +320,46 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
 
   return (
     <Card className="w-full">
-      <CardHeader>
+      <CardHeader className="flex flex-row justify-between items-center pb-2">
         <CardTitle>
           {fareType === 'local' ? 'Local Package Fares' : 'Airport Transfer Fares'}
         </CardTitle>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={handleSync}
+          disabled={isSyncing}
+        >
+          {isSyncing ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              Syncing...
+            </>
+          ) : (
+            'Sync Fares'
+          )}
+        </Button>
       </CardHeader>
       <CardContent className="p-6">
         {error && (
-          <div className="bg-destructive/15 text-destructive p-3 rounded-md mb-4 flex justify-between items-center">
-            <div>{error}</div>
-            <Button variant="outline" size="sm" onClick={handleRetry}>
-              Retry
-            </Button>
-          </div>
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="flex justify-between items-center">
+              <div>{error}</div>
+              <Button variant="outline" size="sm" onClick={handleRetry}>
+                Retry
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {!vehicleId && (
+          <Alert variant="warning" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Please select a vehicle to manage its fares.
+            </AlertDescription>
+          </Alert>
         )}
 
         <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} className="space-y-4">
