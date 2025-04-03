@@ -91,46 +91,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Log the received vehicle ID
 logMessage("Received vehicle ID: " . $vehicleId);
 
-// Validate vehicle ID - CRITICAL FIX for random numeric vehicle IDs
+// CRITICAL FIX: Block all numeric IDs that are not explicitly mapped
+// Hard-coded mappings for known numeric IDs
+$numericMappings = [
+    '1' => 'sedan',
+    '2' => 'ertiga', 
+    '180' => 'etios',
+    '1266' => 'innova',
+    '592' => 'urbania',
+    '1290' => 'sedan',
+    '1291' => 'etios',
+    '1292' => 'sedan',
+    '1293' => 'urbania'
+];
+
+// Check if vehicle ID is a numeric value
+if (is_numeric($vehicleId)) {
+    logMessage("WARNING: Received numeric vehicle ID: $vehicleId");
+    
+    // Only allow specific mapped numeric IDs
+    if (isset($numericMappings[$vehicleId])) {
+        $originalId = $vehicleId;
+        $vehicleId = $numericMappings[$vehicleId];
+        logMessage("Mapped numeric ID $originalId to standard vehicle ID: $vehicleId");
+        $response['mapped_id'] = $vehicleId;
+        $response['original_id'] = $originalId;
+    } else {
+        // BLOCK ALL other numeric IDs
+        $response['status'] = 'error';
+        $response['message'] = 'Invalid numeric vehicle ID. Please use standard vehicle names.';
+        $response['validOptions'] = $standardVehicles;
+        $response['mapped_ids'] = array_keys($numericMappings);
+        
+        logMessage("BLOCKED unmapped numeric ID: $vehicleId");
+        echo json_encode($response);
+        exit;
+    }
+}
+
+// Validate vehicle ID
 if (empty($vehicleId)) {
     $response['message'] = 'Vehicle ID is required';
     echo json_encode($response);
     exit;
-}
-
-// CRITICAL FIX: Convert all numeric IDs to standard vehicle IDs
-// This prevents creation of random numeric vehicle entries
-$originalId = $vehicleId;
-$isNumeric = is_numeric($vehicleId);
-
-// Always map numeric IDs to standard vehicle IDs
-if ($isNumeric) {
-    logMessage("WARNING: Received numeric vehicle ID: $vehicleId - rejecting or mapping to standard");
-    
-    // Hard-coded mappings for known numeric IDs
-    $numericMappings = [
-        '1' => 'sedan',
-        '2' => 'ertiga', 
-        '180' => 'etios',
-        '1266' => 'innova',
-        '592' => 'urbania',
-        '1290' => 'sedan'
-    ];
-    
-    if (isset($numericMappings[$vehicleId])) {
-        $vehicleId = $numericMappings[$vehicleId];
-        logMessage("Mapped numeric ID $originalId to standard vehicle ID: $vehicleId");
-    } else {
-        // BLOCK creation of new random numeric IDs
-        $response['status'] = 'error';
-        $response['message'] = 'Invalid numeric vehicle ID';
-        $response['vehicleExists'] = false;
-        $response['validOptions'] = $standardVehicles;
-        
-        logMessage("BLOCKED random numeric ID: $originalId");
-        echo json_encode($response);
-        exit;
-    }
 }
 
 // Normalize vehicle ID (lowercase, replace spaces with underscores)
@@ -138,15 +141,26 @@ $normalizedId = strtolower(str_replace(' ', '_', trim($vehicleId)));
 
 // Check if the normalized ID is a standard vehicle type
 $isStandardVehicle = in_array($normalizedId, $standardVehicles);
-$mappedVehicleId = $normalizedId;
 
-// Map vehicle IDs to standard IDs if they're close matches
 if (!$isStandardVehicle) {
     // Map common variations
     if ($normalizedId == 'mpv' || $normalizedId == 'innova_hycross' || $normalizedId == 'hycross') {
-        $mappedVehicleId = 'innova_crysta';
+        $normalizedId = 'innova_crysta';
+        $isStandardVehicle = true;
     } elseif ($normalizedId == 'dzire' || $normalizedId == 'swift') {
-        $mappedVehicleId = 'sedan';
+        $normalizedId = 'sedan';
+        $isStandardVehicle = true;
+    }
+    
+    // If it's still not a standard vehicle, reject it
+    if (!$isStandardVehicle) {
+        $response['status'] = 'error';
+        $response['message'] = 'Invalid vehicle type. Please use standard vehicle names.';
+        $response['validOptions'] = $standardVehicles;
+        
+        logMessage("REJECTED non-standard vehicle type: $vehicleId -> $normalizedId");
+        echo json_encode($response);
+        exit;
     }
 }
 
@@ -159,7 +173,7 @@ try {
     
     // Check if vehicle exists in vehicles table
     $stmt = $conn->prepare("SELECT id, vehicle_id, name FROM vehicles WHERE vehicle_id = ? OR id = ? OR name = ?");
-    $stmt->bind_param('sss', $mappedVehicleId, $mappedVehicleId, $vehicleId);
+    $stmt->bind_param('sss', $normalizedId, $normalizedId, $vehicleId);
     $stmt->execute();
     $result = $stmt->get_result();
     
@@ -171,14 +185,14 @@ try {
         $response['message'] = 'Vehicle exists';
         $response['vehicleExists'] = true;
         $response['vehicle'] = $vehicle;
-        $response['originalId'] = $originalId;
-        $response['mappedId'] = $mappedVehicleId;
+        $response['originalId'] = $vehicleId;
+        $response['mappedId'] = $normalizedId;
         
         logMessage("Vehicle exists: " . json_encode($vehicle));
     } else {
         // Check vehicle_types table as fallback
         $stmt = $conn->prepare("SELECT vehicle_id, name FROM vehicle_types WHERE vehicle_id = ?");
-        $stmt->bind_param('s', $mappedVehicleId);
+        $stmt->bind_param('s', $normalizedId);
         $stmt->execute();
         $result = $stmt->get_result();
         
@@ -190,31 +204,20 @@ try {
             $response['message'] = 'Vehicle exists in vehicle_types';
             $response['vehicleExists'] = true;
             $response['vehicle'] = $vehicle;
-            $response['originalId'] = $originalId;
-            $response['mappedId'] = $mappedVehicleId;
+            $response['originalId'] = $vehicleId;
+            $response['mappedId'] = $normalizedId;
             
             logMessage("Vehicle exists in vehicle_types: " . json_encode($vehicle));
         } else {
-            // Vehicle does not exist
-            // CRITICAL FIX: Don't allow non-standard vehicles to be created
-            if ($isStandardVehicle) {
-                $response['status'] = 'warning';
-                $response['message'] = 'Vehicle does not exist but is a standard type';
-                $response['vehicleExists'] = false;
-                $response['originalId'] = $originalId;
-                $response['mappedId'] = $mappedVehicleId;
-                
-                logMessage("Vehicle does not exist but is standard type: $mappedVehicleId");
-            } else {
-                $response['status'] = 'error';
-                $response['message'] = 'Invalid vehicle type';
-                $response['vehicleExists'] = false;
-                $response['validOptions'] = $standardVehicles;
-                
-                logMessage("REJECTED non-standard vehicle type: $vehicleId");
-                echo json_encode($response);
-                exit;
-            }
+            // Vehicle does not exist but is a standard type
+            $response['status'] = 'warning';
+            $response['message'] = 'Vehicle does not exist but is a standard type';
+            $response['vehicleExists'] = false;
+            $response['originalId'] = $vehicleId;
+            $response['mappedId'] = $normalizedId;
+            $response['canCreate'] = $isStandardVehicle;
+            
+            logMessage("Vehicle does not exist but is standard type: $normalizedId");
         }
     }
     

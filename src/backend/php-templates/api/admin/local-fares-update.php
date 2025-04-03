@@ -79,7 +79,10 @@ $numericMappings = [
     '180' => 'etios',
     '1266' => 'innova',
     '592' => 'urbania',
-    '1290' => 'sedan'
+    '1290' => 'sedan',
+    '1291' => 'etios',
+    '1292' => 'sedan',
+    '1293' => 'urbania'
 ];
 
 // Log received data
@@ -118,8 +121,9 @@ if (is_numeric($vehicleId)) {
     } else {
         // BLOCK creation with random numeric IDs
         $response['status'] = 'error';
-        $response['message'] = 'Invalid numeric vehicle ID';
+        $response['message'] = 'Invalid numeric vehicle ID. Use standard vehicle names only.';
         $response['validOptions'] = $standardVehicles;
+        $response['validNumericIds'] = array_keys($numericMappings);
         
         logMessage("BLOCKED random numeric ID: $originalId");
         echo json_encode($response);
@@ -136,12 +140,14 @@ if (!$isStandardVehicle) {
     // Map common variations
     if ($vehicleId == 'mpv' || $vehicleId == 'innova_hycross' || $vehicleId == 'hycross') {
         $vehicleId = 'innova_crysta';
+        $isStandardVehicle = true;
     } elseif ($vehicleId == 'dzire' || $vehicleId == 'swift') {
         $vehicleId = 'sedan';
+        $isStandardVehicle = true;
     } else {
         // Reject non-standard vehicle that can't be mapped
         $response['status'] = 'error';
-        $response['message'] = 'Invalid vehicle type';
+        $response['message'] = 'Invalid vehicle type. Use standard vehicle names only.';
         $response['validOptions'] = $standardVehicles;
         
         logMessage("REJECTED non-standard vehicle type: $originalId -> $vehicleId");
@@ -226,14 +232,15 @@ try {
         $typeResult = $stmt->get_result();
         
         if ($typeResult->num_rows === 0) {
-            // If not in vehicle_types either and not a standard type, reject
-            if (!$isStandardVehicle) {
-                $response['status'] = 'error';
-                $response['message'] = "Vehicle '$vehicleId' does not exist and is not a standard type";
-                logMessage("REJECTED: Vehicle does not exist: $vehicleId");
-                echo json_encode($response);
-                exit;
-            }
+            // CRITICAL: If vehicle doesn't exist, DON'T create it here
+            // Instead return error and require explicit vehicle creation
+            $response['status'] = 'error';
+            $response['message'] = "Vehicle '$vehicleId' does not exist. Please create the vehicle first.";
+            $response['action'] = "createVehicle";
+            $response['vehicleId'] = $vehicleId;
+            logMessage("REJECTED: Vehicle does not exist and won't be auto-created: $vehicleId");
+            echo json_encode($response);
+            exit;
         } else {
             // Use the properly cased vehicle ID from the database
             $vehicleType = $typeResult->fetch_assoc();
