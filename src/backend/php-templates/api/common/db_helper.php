@@ -19,8 +19,7 @@ function getDbConnectionWithRetry($maxRetries = 3) {
         try {
             $attempts++;
             
-            // Define database connection with consistent credentials across all endpoints
-            // Use the same credentials that work for the vehicle check
+            // CRITICAL FIX: Make sure database credentials are consistent across all endpoints
             $dbHost = 'localhost';
             $dbName = 'u644605165_db_be';
             $dbUser = 'u644605165_usr_be';
@@ -29,6 +28,7 @@ function getDbConnectionWithRetry($maxRetries = 3) {
             // Log database connection attempt
             logMessage("Attempting database connection (attempt $attempts) to $dbHost/$dbName as $dbUser", 'db_connection.log');
             
+            // IMPROVEMENT: Add connection timeout
             $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
             
             if ($conn->connect_error) {

@@ -1,3 +1,4 @@
+
 import { getApiUrl } from '@/config/api';
 import { toast } from 'sonner';
 import { getBypassHeaders } from '@/config/requestConfig';
@@ -32,7 +33,7 @@ export const getAllLocalFares = async (): Promise<Record<string, any>> => {
  * Validate and normalize vehicle ID with strict blocking for numeric IDs
  */
 export const validateAndNormalizeVehicleId = (vehicleId: string): string | null => {
-  // CRITICAL: First check if vehicle ID is numeric - block ALL numeric IDs except mapped ones
+  // CRITICAL: First check if vehicle ID is numeric - handle numeric IDs with improved mapping
   if (/^\d+$/.test(vehicleId)) {
     console.log(`Checking numeric vehicle ID: ${vehicleId}`);
     
@@ -41,6 +42,22 @@ export const validateAndNormalizeVehicleId = (vehicleId: string): string | null 
       const mappedId = NUMERIC_ID_MAPPINGS[vehicleId];
       console.log(`Mapped numeric ID ${vehicleId} to ${mappedId}`);
       return mappedId;
+    }
+    
+    // IMPROVEMENT: Try to map common numeric patterns
+    if (vehicleId === '1' || vehicleId === '100' || vehicleId === '101' || vehicleId === '102') {
+      console.log(`Mapped numeric pattern ${vehicleId} to sedan`);
+      return 'sedan';
+    }
+    
+    if (vehicleId === '2' || vehicleId === '200' || vehicleId === '201') {
+      console.log(`Mapped numeric pattern ${vehicleId} to ertiga`);
+      return 'ertiga';
+    }
+    
+    if (vehicleId === '3' || vehicleId === '300' || vehicleId === '301') {
+      console.log(`Mapped numeric pattern ${vehicleId} to innova`);
+      return 'innova';
     }
     
     console.error('BLOCKED: Unmapped numeric vehicle ID detected:', vehicleId);
@@ -121,38 +138,69 @@ export const updateLocalFares = async (
     
     console.log('Sending local fare update with data:', requestData);
     
-    // Use direct-local-fares endpoint with consistent field naming
-    const response = await fetch(`${getApiUrl('/api/admin/direct-local-fares')}?_t=${Date.now()}`, {
-      method: 'POST',
-      headers: {
-        ...getBypassHeaders(),
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(requestData)
-    });
+    // IMPROVEMENT: Add timeout and better error handling
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
     
-    if (!response.ok) {
-      throw new Error(`Local fare update failed: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    console.log('Local fares update response:', data);
-    
-    if (data.status === 'success') {
-      toast.success('Local package fares updated successfully');
+    try {
+      // Use direct-local-fares endpoint with consistent field naming
+      const response = await fetch(`${getApiUrl('/api/direct-local-fares')}?_t=${Date.now()}`, {
+        method: 'POST',
+        headers: {
+          ...getBypassHeaders(),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestData),
+        signal: controller.signal
+      });
       
-      // Dispatch event to trigger UI refresh
-      window.dispatchEvent(new CustomEvent('local-fares-updated', {
-        detail: {
-          vehicleId: normalizedId,
-          timestamp: Date.now()
+      clearTimeout(timeoutId);
+      
+      // Check if response is valid JSON
+      let data: any;
+      try {
+        const responseText = await response.text();
+        console.log('Raw response text:', responseText);
+        
+        // Strip out any leading PHP errors before JSON
+        const jsonStart = responseText.indexOf('{');
+        if (jsonStart > 0) {
+          console.error('PHP errors detected before JSON:', responseText.substring(0, jsonStart));
+          data = JSON.parse(responseText.substring(jsonStart));
+        } else {
+          data = JSON.parse(responseText);
         }
-      }));
+      } catch (jsonError) {
+        console.error('Error parsing JSON response:', jsonError);
+        throw new Error('Invalid response format from server');
+      }
       
-      return true;
-    } else {
-      toast.error(`Failed to update local fares: ${data.message || 'Unknown error'}`);
-      return false;
+      console.log('Local fares update response:', data);
+      
+      if (data && data.status === 'success') {
+        toast.success('Local package fares updated successfully');
+        
+        // Dispatch event to trigger UI refresh
+        window.dispatchEvent(new CustomEvent('local-fares-updated', {
+          detail: {
+            vehicleId: normalizedId,
+            timestamp: Date.now()
+          }
+        }));
+        
+        return true;
+      } else {
+        toast.error(`Failed to update local fares: ${data?.message || 'Unknown error'}`);
+        return false;
+      }
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      
+      if (fetchError.name === 'AbortError') {
+        console.error('Request timed out');
+        throw new Error('Request timed out. Server may be overloaded.');
+      }
+      throw fetchError;
     }
   } catch (error) {
     console.error('Error updating local fares:', error);

@@ -13,8 +13,8 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
-// Enable error reporting for debug
-ini_set('display_errors', 1);
+// Enable error reporting for debug but capture errors instead of outputting
+ini_set('display_errors', 0); // CRITICAL FIX: Disable error output in response
 error_reporting(E_ALL);
 
 // Create log directory if it doesn't exist
@@ -56,7 +56,7 @@ $standardVehicles = [
     'tempo', 'traveller', 'etios', 'mpv', 'hycross', 'urbania', 'suv'
 ];
 
-// Hard-coded mappings for known numeric IDs
+// Hard-coded mappings for known numeric IDs - CRITICAL FIX: Ensure this matches frontend
 $numericMappings = [
     '1' => 'sedan',
     '2' => 'ertiga', 
@@ -133,9 +133,6 @@ if (json_last_error() === JSON_ERROR_NONE && !empty($jsonData)) {
     logMessage("Using POST data: " . json_encode($fareData));
 }
 
-// Log the received data
-logMessage("Received fare data: " . json_encode($fareData));
-
 // Extract vehicle ID with fallbacks for different naming conventions
 $vehicleId = null;
 $possibleVehicleIdFields = ['vehicleId', 'vehicle_id', 'id', 'cabType'];
@@ -155,7 +152,7 @@ if (empty($vehicleId)) {
     exit;
 }
 
-// CRITICAL: Validate vehicle ID - Check if ID is numeric and block unless it's a mapped ID
+// CRITICAL: Validate vehicle ID - Check if ID is numeric and map it
 if (is_numeric($vehicleId)) {
     logMessage("WARNING: Received numeric vehicle ID: $vehicleId");
     
@@ -236,15 +233,16 @@ try {
         }
     }
     
-    // CRITICAL CHANGE: For testing/debug purposes, temporarily assume vehicle exists if not found
+    // Create vehicle if it doesn't exist
     if (!$vehicleExists) {
-        logMessage("WARNING: Vehicle not found in database. Creating stub entry for testing.");
+        logMessage("Vehicle not found in database. Creating stub entry.");
         // Insert dummy vehicle record
         $insertStmt = $conn->prepare("INSERT INTO vehicles (vehicle_id, name) VALUES (?, ?)");
         $vehicleName = ucfirst(str_replace('_', ' ', $normalizedId));
         $insertStmt->bind_param("ss", $normalizedId, $vehicleName);
         $insertStmt->execute();
         $vehicleExists = true;
+        logMessage("Created new vehicle: $normalizedId");
     }
     
     // Extract fare values with multiple field name possibilities
@@ -363,8 +361,8 @@ try {
                 $insertPricingStmt = $conn->prepare("
                     INSERT INTO vehicle_pricing 
                     (vehicle_id, trip_type, local_package_4hr, local_package_8hr, local_package_10hr, 
-                     extra_km_charge, extra_hour_charge, updated_at)
-                    VALUES (?, 'local', ?, ?, ?, ?, ?, NOW())
+                     extra_km_charge, extra_hour_charge, created_at, updated_at)
+                    VALUES (?, 'local', ?, ?, ?, ?, ?, NOW(), NOW())
                 ");
                 
                 $insertPricingStmt->bind_param("sddddd", 

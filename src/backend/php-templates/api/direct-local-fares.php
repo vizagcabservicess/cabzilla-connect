@@ -6,7 +6,7 @@
  * with extensive error handling and fallback mechanisms
  */
 
-// Set headers for CORS
+// Set headers for CORS - FIX: Set these headers consistently
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, X-Force-Refresh, X-Admin-Mode');
@@ -16,7 +16,7 @@ header('Pragma: no-cache');
 header('Expires: 0');
 
 // Enable verbose error reporting for debug
-ini_set('display_errors', 1);
+ini_set('display_errors', 0); // CRITICAL FIX: Disable PHP error output in response
 error_reporting(E_ALL);
 
 // Create log directory if it doesn't exist
@@ -53,15 +53,42 @@ $response = [
 ];
 
 // Forward request to the admin endpoint
-// CRITICAL FIX: Don't use header redirect, manually include the file
-// This prevents headers from being sent twice and response corruption
+// CRITICAL FIX: Make sure we capture and handle any output or errors
 try {
     // Capture raw post data
     $rawInput = file_get_contents('php://input');
     logMessage("Forwarding to admin/direct-local-fares.php with data: " . $rawInput);
     
+    // Start output buffering to capture any PHP errors or warnings
+    ob_start();
+    
     // Include the admin endpoint directly
     require_once __DIR__ . '/admin/direct-local-fares.php';
+    
+    // Get any output and clear the buffer
+    $output = ob_get_clean();
+    
+    // If there was unexpected output before JSON, log it and filter it out
+    if ($output && strpos($output, '{') !== 0) {
+        $jsonStart = strpos($output, '{');
+        if ($jsonStart !== false) {
+            $errorContent = substr($output, 0, $jsonStart);
+            logMessage("WARNING: Unexpected output before JSON: " . $errorContent);
+            $output = substr($output, $jsonStart);
+        }
+    }
+    
+    // Check if output is valid JSON
+    $decodedOutput = json_decode($output, true);
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        logMessage("ERROR: Invalid JSON response: " . $output);
+        logMessage("JSON error: " . json_last_error_msg());
+        throw new Exception("Invalid JSON response from admin endpoint");
+    }
+    
+    // If we got a valid JSON response, send it directly
+    echo $output;
+    
     // The admin endpoint will handle sending the response
     exit;
 } catch (Exception $e) {
