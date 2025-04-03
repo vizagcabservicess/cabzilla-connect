@@ -41,9 +41,9 @@ export const updateLocalFares = async (
   try {
     console.log(`Starting local fares update for vehicle ID: ${vehicleId}`);
     
-    // CRITICAL: First check if vehicle ID is numeric
+    // CRITICAL: First check if vehicle ID is numeric - block ALL numeric IDs
     if (/^\d+$/.test(vehicleId)) {
-      console.error('Rejecting numeric vehicle ID:', vehicleId);
+      console.error('BLOCKED: Numeric vehicle ID detected:', vehicleId);
       toast.error(`Invalid numeric vehicle ID: ${vehicleId}. Please use standard vehicle names.`);
       return false;
     }
@@ -58,12 +58,13 @@ export const updateLocalFares = async (
     
     // Double-check the ID doesn't become numeric after normalization (shouldn't happen, but safety check)
     if (/^\d+$/.test(normalizedId)) {
-      console.error('Normalized ID became numeric, rejecting:', normalizedId);
+      console.error('BLOCKED: Normalized ID became numeric, rejecting:', normalizedId);
       toast.error(`Invalid vehicle ID format: ${vehicleId}`);
       return false;
     }
     
-    // Check if vehicle exists via backend - CRITICAL STEP
+    // CRITICAL: Check if vehicle exists via backend - NEVER proceed without this verification
+    console.log(`Verifying vehicle ID exists: ${normalizedId}`);
     const isValid = await checkVehicleId(normalizedId);
     if (!isValid) {
       console.error(`Vehicle ID validation failed: ${normalizedId} (original: ${vehicleId})`);
@@ -72,7 +73,7 @@ export const updateLocalFares = async (
     }
     
     // Log the validated vehicle ID
-    console.log(`Updating local fares for validated vehicle: ${normalizedId} (original: ${vehicleId})`);
+    console.log(`✅ Updating local fares for validated vehicle: ${normalizedId} (original: ${vehicleId})`);
     
     // Find the packages by hours
     const pkg4hr = packages.find(p => p.hours === 4) || { price: 0 };
@@ -89,7 +90,9 @@ export const updateLocalFares = async (
       price_10hrs_100km: pkg12hr.price
     };
     
-    // CHANGE: Use direct-local-fares endpoint instead of local-fares-update for consistency with airport
+    console.log('Sending local fare update with data:', requestData);
+    
+    // Use direct-local-fares endpoint with consistent field naming
     const response = await fetch(`${getApiUrl('/api/direct-local-fares')}?_t=${Date.now()}`, {
       method: 'POST',
       headers: {
@@ -119,12 +122,12 @@ export const updateLocalFares = async (
       
       return true;
     } else {
-      toast.error(`Failed to update local fares: ${data.message}`);
+      toast.error(`Failed to update local fares: ${data.message || 'Unknown error'}`);
       return false;
     }
   } catch (error) {
     console.error('Error updating local fares:', error);
-    toast.error('Failed to update local fares');
+    toast.error(`Failed to update local fares: ${error instanceof Error ? error.message : 'Unknown error'}`);
     return false;
   }
 };
