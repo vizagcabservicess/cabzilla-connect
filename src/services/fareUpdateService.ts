@@ -1,4 +1,3 @@
-
 import { toast } from 'sonner';
 import { apiBaseUrl } from '@/config/api';
 import { directVehicleOperation } from '@/utils/apiHelper';
@@ -45,6 +44,12 @@ const numericIdMapExtended: Record<string, string> = {
   '501': 'tempo'
 };
 
+// Standard vehicle types to prevent creation of random vehicle IDs
+const standardVehicleTypes: string[] = [
+  'sedan', 'ertiga', 'innova', 'crysta', 'tempo', 'bus', 'van', 
+  'suv', 'traveller', 'luxury', 'etios', 'urbania', 'mpv'
+];
+
 // CRITICAL FIX: Normalize and validate vehicle ID to prevent numeric ID usage
 const normalizeVehicleId = (vehicleId: string | number): string => {
   if (!vehicleId) {
@@ -69,13 +74,12 @@ const normalizeVehicleId = (vehicleId: string | number): string => {
     console.log(`Found comma-separated list, using first ID: ${normalizedId}`);
   }
   
-  // Check if this is already a known vehicle ID string (case-insensitive)
-  const knownVehicleIds = ['sedan', 'ertiga', 'etios', 'mpv', 'urbania', 'innova', 'crysta', 'tempo', 'bus', 'van', 'suv'];
+  // Check if this is already a known standard vehicle ID string (case-insensitive)
   const normalizedIdLower = normalizedId.toLowerCase();
   
-  for (const known of knownVehicleIds) {
+  for (const known of standardVehicleTypes) {
     if (normalizedIdLower === known.toLowerCase()) {
-      console.log(`Using known vehicle ID: ${known}`);
+      console.log(`Using known vehicle ID: ${known.toLowerCase()}`);
       return known.toLowerCase(); // Use lowercase for consistent ID handling
     }
   }
@@ -93,6 +97,12 @@ const normalizeVehicleId = (vehicleId: string | number): string => {
     throw new Error(`Cannot use numeric ID ${normalizedId} as a vehicle identifier. Please use the proper vehicle ID like 'sedan', 'ertiga', 'etios', etc.`);
   }
   
+  // Final check - only allow standard vehicle types
+  if (!standardVehicleTypes.includes(normalizedId.toLowerCase())) {
+    console.error(`REJECTED: Non-standard vehicle ID ${normalizedId} is not in allowed list`);
+    throw new Error(`Cannot use non-standard vehicle ID ${normalizedId}. Please use one of the standard types: ${standardVehicleTypes.join(', ')}`);
+  }
+  
   // Return normalized ID in lowercase for consistency
   return normalizedId.toLowerCase();
 };
@@ -107,15 +117,23 @@ const verifyVehicleId = async (vehicleId: string): Promise<string> => {
     try {
       normalizedId = normalizeVehicleId(vehicleId);
       console.log(`After normalization: ${normalizedId}`);
+      
+      // Triple check - one final verification after all processing
+      if (/^\d+$/.test(normalizedId)) {
+        console.error(`CRITICAL ERROR: Normalized ID ${normalizedId} is still numeric! Rejecting.`);
+        throw new Error(`Cannot use numeric ID ${normalizedId}. Please use the proper vehicle ID.`);
+      }
+      
+      // Only allow standard vehicle types
+      if (!standardVehicleTypes.includes(normalizedId.toLowerCase())) {
+        console.error(`CRITICAL ERROR: Verified ID ${normalizedId} is not a standard type! Rejecting.`);
+        throw new Error(`Cannot use non-standard vehicle ID ${normalizedId}. Please use one of the standard types.`);
+      }
+      
+      return normalizedId;
     } catch (error) {
       console.error(`Error normalizing vehicle ID: ${error}`);
       throw error; // Re-throw to prevent processing with invalid IDs
-    }
-    
-    // DOUBLE CHECK: After normalization, check again that it's not numeric
-    if (/^\d+$/.test(normalizedId)) {
-      console.error(`EMERGENCY: Normalized vehicle ID '${normalizedId}' is still numeric. Rejecting.`);
-      throw new Error(`Cannot use numeric ID ${normalizedId}. Please use a proper vehicle ID like 'sedan'.`);
     }
     
     // Use check-vehicle endpoint to verify this ID exists
@@ -149,10 +167,20 @@ const verifyVehicleId = async (vehicleId: string): Promise<string> => {
         return actualVehicleId.toLowerCase(); // Use lowercase for consistency
       }
       
-      // If we couldn't verify, log an error
-      console.error(`Could not verify vehicle ID: ${normalizedId}`, checkResult);
-      throw new Error(`Vehicle with ID ${normalizedId} not found in database. Cannot update fares.`);
+      // If we couldn't verify, use the normalized ID if it's a standard type
+      if (standardVehicleTypes.includes(normalizedId.toLowerCase())) {
+        console.log(`Could not verify vehicle ID but it's a standard type: ${normalizedId}`);
+        return normalizedId.toLowerCase();
+      }
+      
+      // Otherwise reject
+      console.error(`Could not verify non-standard vehicle ID: ${normalizedId}`);
+      throw new Error(`Vehicle with ID ${normalizedId} not found and is not a standard type. Cannot update fares.`);
     } catch (checkError) {
+      if (standardVehicleTypes.includes(normalizedId.toLowerCase())) {
+        console.log(`Error checking vehicle but using standard type: ${normalizedId}`);
+        return normalizedId.toLowerCase();
+      }
       console.error(`Error checking vehicle ID: ${checkError}`);
       throw checkError;
     }
@@ -232,11 +260,17 @@ export const updateLocalFares = async (
       vehicleId = parts[0].trim();
     }
     
-    // Verify and normalize the vehicle ID - get the proper vehicle_id from database
+    // Verify and normalize the vehicle ID - get the proper vehicle_id from database or fail
     let verifiedVehicleId;
     try {
       verifiedVehicleId = await verifyVehicleId(vehicleId);
       console.log(`Verified vehicle ID: ${verifiedVehicleId} (original: ${vehicleId})`);
+      
+      // Make sure it's a standard vehicle type
+      if (!standardVehicleTypes.includes(verifiedVehicleId.toLowerCase())) {
+        console.error(`CRITICAL ERROR: Verified ID ${verifiedVehicleId} is not a standard type! Rejecting.`);
+        throw new Error(`Cannot use non-standard vehicle ID ${verifiedVehicleId}. Please use one of the standard types.`);
+      }
       
       // Triple check - one final verification after all processing
       if (/^\d+$/.test(verifiedVehicleId)) {

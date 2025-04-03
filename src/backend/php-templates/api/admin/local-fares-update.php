@@ -287,29 +287,36 @@ try {
     // Connect to database
     $conn = getDbConnection();
     
-    // CRITICAL: First verify the vehicle exists, using vehicle_id only
-    // This is to prevent duplicate vehicles with numeric IDs
-    $checkVehicleQuery = "SELECT id, vehicle_id, name FROM vehicles WHERE vehicle_id = ?";
+    // CRITICAL FIX: First verify the vehicle exists
+    // Check if vehicle exists in the database, case insensitive lookup
+    $checkVehicleQuery = "SELECT id, vehicle_id, name FROM vehicles WHERE LOWER(vehicle_id) = LOWER(?) LIMIT 1";
     $checkStmt = $conn->prepare($checkVehicleQuery);
     $checkStmt->bind_param("s", $vehicleId);
     $checkStmt->execute();
     $result = $checkStmt->get_result();
     
-    if ($result->num_rows == 0) {
-        // Try a case-insensitive search before creating a new vehicle
-        $checkCaseInsensitiveQuery = "SELECT id, vehicle_id, name FROM vehicles WHERE LOWER(vehicle_id) = LOWER(?)";
-        $checkCaseStmt = $conn->prepare($checkCaseInsensitiveQuery);
-        $checkCaseStmt->bind_param("s", $vehicleId);
-        $checkCaseStmt->execute();
-        $caseResult = $checkCaseStmt->get_result();
+    if ($result->num_rows > 0) {
+        // Vehicle exists - get the exact vehicle_id from database to maintain case consistency
+        $existingVehicle = $result->fetch_assoc();
+        $vehicleId = $existingVehicle['vehicle_id']; // Use the exact existing ID from database
+        error_log("[$timestamp] Using existing vehicle: " . json_encode($existingVehicle), 3, $logDir . '/local-fares.log');
+    } else {
+        // Vehicle doesn't exist - only create it if it's a known standard vehicle type
+        $standardTypes = ['sedan', 'ertiga', 'innova', 'crysta', 'tempo', 'traveller', 'bus', 'luxury', 'etios', 'suv', 'van', 'urbania', 'mpv'];
+        $vehicleIdLower = strtolower($vehicleId);
         
-        if ($caseResult->num_rows > 0) {
-            // Found a vehicle with case-insensitive match - use that one
-            $existingVehicle = $caseResult->fetch_assoc();
-            $vehicleId = $existingVehicle['vehicle_id']; // Use the existing case-sensitive ID
-            error_log("[$timestamp] Found vehicle with case-insensitive search: $vehicleId", 3, $logDir . '/local-fares.log');
-        } else {
-            // Vehicle doesn't exist, create it with the vehicle_id as both id and vehicle_id
+        $isStandardType = false;
+        foreach ($standardTypes as $type) {
+            if ($vehicleIdLower === strtolower($type)) {
+                $isStandardType = true;
+                // Use the standard casing
+                $vehicleId = $type;
+                break;
+            }
+        }
+        
+        if ($isStandardType) {
+            // Create the vehicle with proper naming
             $vehicleName = ucfirst(str_replace(['_', '-'], ' ', $vehicleId));
             
             $insertVehicleQuery = "
@@ -321,11 +328,16 @@ try {
             $insertStmt->bind_param("ss", $vehicleId, $vehicleName);
             $insertStmt->execute();
             
-            error_log("[$timestamp] Created new vehicle: $vehicleId", 3, $logDir . '/local-fares.log');
+            error_log("[$timestamp] Created new standard vehicle: $vehicleId", 3, $logDir . '/local-fares.log');
+        } else {
+            // Not a standard vehicle type - reject it
+            error_log("[$timestamp] REJECTED: Non-standard vehicle type: $vehicleId", 3, $logDir . '/local-fares.log');
+            echo json_encode([
+                'status' => 'error',
+                'message' => "Cannot use non-standard vehicle ID '$vehicleId'. Please use a standard type like 'sedan', 'ertiga', etc."
+            ]);
+            exit;
         }
-    } else {
-        $vehicle = $result->fetch_assoc();
-        error_log("[$timestamp] Using existing vehicle: " . json_encode($vehicle), 3, $logDir . '/local-fares.log');
     }
     
     // Check if local_package_fares table exists
@@ -353,7 +365,7 @@ try {
     }
     
     // Check if fare record exists for this vehicle
-    $checkFareQuery = "SELECT id FROM local_package_fares WHERE vehicle_id = ?";
+    $checkFareQuery = "SELECT id FROM local_package_fares WHERE LOWER(vehicle_id) = LOWER(?)";
     $checkFareStmt = $conn->prepare($checkFareQuery);
     $checkFareStmt->bind_param("s", $vehicleId);
     $checkFareStmt->execute();
@@ -369,7 +381,7 @@ try {
                 extra_km_rate = ?,
                 extra_hour_rate = ?,
                 updated_at = NOW()
-            WHERE vehicle_id = ?
+            WHERE LOWER(vehicle_id) = LOWER(?)
         ";
         
         $updateStmt = $conn->prepare($updateQuery);
@@ -410,7 +422,7 @@ try {
     $checkPricingTableResult = $conn->query("SHOW TABLES LIKE 'vehicle_pricing'");
     if ($checkPricingTableResult->num_rows > 0) {
         // Check if pricing exists for this vehicle
-        $checkPricingQuery = "SELECT id FROM vehicle_pricing WHERE vehicle_id = ? AND trip_type = 'local'";
+        $checkPricingQuery = "SELECT id FROM vehicle_pricing WHERE LOWER(vehicle_id) = LOWER(?) AND trip_type = 'local'";
         $checkPricingStmt = $conn->prepare($checkPricingQuery);
         $checkPricingStmt->bind_param("s", $vehicleId);
         $checkPricingStmt->execute();
@@ -426,7 +438,7 @@ try {
                     extra_km_charge = ?,
                     extra_hour_charge = ?,
                     updated_at = NOW()
-                WHERE vehicle_id = ? AND trip_type = 'local'
+                WHERE LOWER(vehicle_id) = LOWER(?) AND trip_type = 'local'
             ";
             
             $updatePricingStmt = $conn->prepare($updatePricingQuery);
