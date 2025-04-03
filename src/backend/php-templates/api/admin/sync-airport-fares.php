@@ -109,7 +109,7 @@ if (empty($vehicleIds)) {
 logMessage('Starting airport fares synchronization for vehicles: ' . implode(', ', $vehicleIds));
 logMessage("Synced fares for " . count($vehicleIds) . " vehicles");
 
-// Return success response
+// Return success response with proper JSON encoding
 echo json_encode([
     'status' => 'success',
     'message' => 'Airport fares synced successfully',

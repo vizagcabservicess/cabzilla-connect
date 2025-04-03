@@ -98,7 +98,9 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
         'X-Debug': 'true'
       };
       
-      const result = await directVehicleOperation(endpoint, 'GET', headers);
+      const result = await directVehicleOperation(endpoint, 'GET', {
+        headers: headers
+      });
       
       if (result && result.status === 'success' && result.fares && result.fares.length > 0) {
         const loadedFare = result.fares[0];
@@ -177,14 +179,12 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       
       console.log('Final fare data being sent:', dataToSave);
       
-      const headers = {
-        'X-Admin-Mode': 'true',
-        'X-Debug': 'true'
-      };
-      
       const result = await directVehicleOperation(endpoint, 'POST', {
-        ...headers,
-        __data: dataToSave
+        headers: {
+          'X-Admin-Mode': 'true',
+          'X-Debug': 'true'
+        },
+        data: dataToSave
       });
       
       if (result && result.status === 'success') {
@@ -234,8 +234,10 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       console.log(`Syncing ${fareType} fares from database tables`);
       
       const result = await directVehicleOperation(endpoint, 'GET', {
-        'X-Admin-Mode': 'true',
-        'X-Debug': 'true'
+        headers: {
+          'X-Admin-Mode': 'true',
+          'X-Debug': 'true'
+        }
       });
       
       if (result && (result.status === 'success' || result.status === 'throttled')) {

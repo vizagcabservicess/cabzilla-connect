@@ -39,8 +39,27 @@ try {
         
         $postData = json_decode($json, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
-            throw new Exception('Invalid JSON: ' . json_last_error_msg());
+            // Try to handle non-JSON data (might be URL encoded or form data)
+            parse_str($json, $parsedData);
+            if (!empty($parsedData)) {
+                $postData = $parsedData;
+                file_put_contents($logFile, "[$timestamp] Parsed as URL encoded data\n", FILE_APPEND);
+            } else {
+                throw new Exception('Invalid input format: ' . json_last_error_msg());
+            }
         }
+    }
+    
+    // Check if data is in a nested 'data' property (common when sent from frontend)
+    if (isset($postData['data']) && is_array($postData['data'])) {
+        $postData = $postData['data'];
+        file_put_contents($logFile, "[$timestamp] Using nested data property\n", FILE_APPEND);
+    }
+    
+    // Check if __data field exists (used by directVehicleOperation)
+    if (isset($postData['__data']) && is_array($postData['__data'])) {
+        $postData = $postData['__data'];
+        file_put_contents($logFile, "[$timestamp] Using __data field\n", FILE_APPEND);
     }
     
     file_put_contents($logFile, "[$timestamp] Parsed data: " . json_encode($postData) . "\n", FILE_APPEND);
@@ -56,6 +75,9 @@ try {
     }
 
     if (!$vehicleId) {
+        // Detailed logging of all available keys to debug the issue
+        file_put_contents($logFile, "[$timestamp] ERROR: Vehicle ID not found in request data. Available keys: " . 
+            implode(", ", array_keys($postData)) . "\n", FILE_APPEND);
         throw new Exception('Vehicle ID is required');
     }
 
