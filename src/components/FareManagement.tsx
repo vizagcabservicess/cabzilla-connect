@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -43,7 +42,6 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     vehicle_id: vehicleId
   });
   
-  // Use refs to prevent unnecessary re-renders and infinite loops
   const lastFetchTime = useRef<number>(0);
   const requestInProgress = useRef<boolean>(false);
   const mountedRef = useRef<boolean>(true);
@@ -54,28 +52,23 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
   const refreshCooldownMs = 5000; // 5 seconds between refreshes
   const saveCooldownMs = 2000; // 2 seconds between saves
   
-  // Load fare data based on fare type
   const loadFareData = async () => {
-    // Strict throttling for API requests
     const now = Date.now();
     if (now - lastRefreshTimeRef.current < refreshCooldownMs) {
       console.log(`Refresh throttled, last refresh was ${(now - lastRefreshTimeRef.current)/1000}s ago`);
       return;
     }
     
-    // Prevent concurrent requests
     if (requestInProgress.current) {
       console.log('Request already in progress, skipping...');
       return;
     }
     
-    // Prevent excessive attempts
     if (fetchAttempts.current >= maxFetchAttempts) {
       console.log('Max fetch attempts reached, not trying again');
       return;
     }
     
-    // ENSURE VEHICLE ID IS VALID BEFORE PROCEEDING
     if (!vehicleId || vehicleId.trim() === '') {
       setError('No vehicle selected');
       return;
@@ -100,17 +93,16 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       
       console.log(`Loading ${fareType} fare data from ${endpoint}`);
       
-      // Fix: Using the correct number of arguments (endpoint, method, headers)
-      const result = await directVehicleOperation(endpoint, 'GET', {
+      const headers = {
         'X-Admin-Mode': 'true',
         'X-Debug': 'true'
-      });
+      };
+      const result = await directVehicleOperation(endpoint, 'GET', headers);
       
       if (result && result.status === 'success' && result.fares && result.fares.length > 0) {
         const loadedFare = result.fares[0];
         console.log(`Loaded ${fareType} fare data:`, loadedFare);
         
-        // Ensure we always have the vehicle ID set correctly in both formats
         const updatedFare = {
           ...loadedFare,
           vehicleId: vehicleId,
@@ -122,7 +114,6 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       } else {
         console.warn('No fare data returned:', result);
         
-        // Initialize with default structure but keep vehicleId
         setFareData({ 
           vehicleId,
           vehicle_id: vehicleId 
@@ -136,7 +127,6 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       console.error(`Error loading ${fareType} fare data:`, err);
       setError(`Failed to load fare data. ${err instanceof Error ? err.message : ''}`);
       
-      // Set default empty fare data
       setFareData({ 
         vehicleId,
         vehicle_id: vehicleId 
@@ -149,7 +139,6 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     }
   };
   
-  // Save fare data with throttling
   const saveFareData = async () => {
     const now = Date.now();
     if (now - lastSaveTimeRef.current < saveCooldownMs) {
@@ -179,7 +168,6 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       
       console.log(`Saving ${fareType} fare data to ${endpoint}:`, fareData);
       
-      // ENSURE BOTH VEHICLE ID FORMATS ARE INCLUDED
       const dataToSave = {
         ...fareData,
         vehicleId: vehicleId,
@@ -188,19 +176,21 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       
       console.log('Final fare data being sent:', dataToSave);
       
-      // Fix: Using the correct number of arguments (endpoint, method, headers, body)
-      const result = await directVehicleOperation(endpoint, 'POST', {
+      const headers = {
         'X-Admin-Mode': 'true',
         'X-Debug': 'true'
-      }, dataToSave);
+      };
+      
+      const result = await directVehicleOperation(endpoint, 'POST', {
+        ...headers,
+        __data: dataToSave
+      });
       
       if (result && result.status === 'success') {
         toast.success(`${fareType.charAt(0).toUpperCase() + fareType.slice(1)} fares updated successfully`);
         
-        // Update lastFetchTime to prevent immediate reload after save
         lastFetchTime.current = Date.now();
         
-        // Reset fetch attempts counter after successful save
         fetchAttempts.current = 0;
       } else {
         console.error('Error saving fare data:', result);
@@ -218,7 +208,6 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     }
   };
   
-  // Sync fares from pricing tables with strict throttling
   const syncFares = async () => {
     const now = Date.now();
     if (now - lastRefreshTimeRef.current < refreshCooldownMs) {
@@ -254,10 +243,8 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
         } else {
           toast.success(`${fareType.charAt(0).toUpperCase() + fareType.slice(1)} fares synced successfully`);
           
-          // Reset the fetch attempts counter after successful sync
           fetchAttempts.current = 0;
           
-          // Wait a moment before reloading data to allow database to update
           setTimeout(() => {
             if (mountedRef.current) {
               loadFareData();
@@ -280,28 +267,23 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     }
   };
   
-  // Handle input change
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
     
-    // Convert to number if it's a numeric field
     const numericValue = !isNaN(Number(value)) ? Number(value) : value;
     
     setFareData(prev => ({
       ...prev,
       [name]: numericValue,
-      // ALWAYS maintain both vehicle ID formats
       vehicleId: vehicleId,
       vehicle_id: vehicleId
     }));
   };
   
-  // Load data on mount and vehicle/type change
   useEffect(() => {
     mountedRef.current = true;
     fetchAttempts.current = 0;
     
-    // ALWAYS set both vehicle ID formats in the fare data when vehicleId changes
     setFareData(prev => ({
       ...prev,
       vehicleId: vehicleId,
@@ -312,7 +294,6 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       loadFareData();
     }
     
-    // Setup event listeners for fare updates
     const handleFareDataUpdated = (event: Event) => {
       if (!mountedRef.current) return;
       
@@ -321,7 +302,6 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       
       if (detail && detail.fareType === fareType && detail.vehicleId === vehicleId) {
         console.log('Fare data updated externally, reloading...');
-        // Reset the fetch attempts counter to allow immediate reload
         fetchAttempts.current = 0;
         loadFareData();
       }
@@ -334,8 +314,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       window.removeEventListener('fare-data-updated', handleFareDataUpdated);
     };
   }, [vehicleId, fareType]);
-
-  // Render different forms based on fare type
+  
   const renderFareFields = () => {
     if (fareType === 'local') {
       return (

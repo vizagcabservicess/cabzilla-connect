@@ -568,11 +568,36 @@ export const directVehicleOperation = async (endpoint: string, method = 'GET', d
     const url = `${apiBaseUrl}/${endpoint.startsWith('/') ? endpoint.slice(1) : endpoint}`;
     console.log(`Making ${method} request to ${url}`);
     
-    const headers: HeadersInit = {
+    // Extract headers and body data
+    let headers: HeadersInit = {
       'X-Requested-With': 'XMLHttpRequest'
     };
+    let bodyData = data;
     
-    if (method !== 'GET' && !(data instanceof FormData)) {
+    // If data contains headers (like X-Admin-Mode), extract them
+    if (data) {
+      // Check for header-like properties and extract them
+      const headerProps = Object.entries(data).filter(([key]) => 
+        key.startsWith('X-') || 
+        key === 'Content-Type' || 
+        key === 'Accept' || 
+        key === 'Authorization'
+      );
+      
+      // Add extracted headers
+      if (headerProps.length > 0) {
+        headerProps.forEach(([key, value]) => {
+          headers[key] = value as string;
+        });
+      }
+      
+      // If data has a __data field, use that as the actual body data
+      if (data.__data) {
+        bodyData = data.__data;
+      }
+    }
+    
+    if (method !== 'GET' && !(bodyData instanceof FormData)) {
       headers['Content-Type'] = 'application/json';
     }
     
@@ -583,11 +608,11 @@ export const directVehicleOperation = async (endpoint: string, method = 'GET', d
       cache: 'no-store'
     };
     
-    if (data && method !== 'GET') {
-      if (data instanceof FormData) {
-        requestOptions.body = data;
+    if (bodyData && method !== 'GET') {
+      if (bodyData instanceof FormData) {
+        requestOptions.body = bodyData;
       } else {
-        requestOptions.body = JSON.stringify(data);
+        requestOptions.body = JSON.stringify(bodyData);
       }
     }
     
