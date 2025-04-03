@@ -6,7 +6,7 @@ import { getBypassHeaders } from '@/config/requestConfig';
 // Standard vehicle types allowed in the system
 const STANDARD_VEHICLE_TYPES = [
   'sedan', 'ertiga', 'innova', 'innova_crysta', 'luxury', 'tempo', 
-  'traveller', 'etios', 'mpv', 'urbania'
+  'traveller', 'etios', 'mpv', 'urbania', 'hycross'
 ];
 
 // Known numeric ID mappings
@@ -14,7 +14,7 @@ const NUMERIC_ID_MAPPINGS: Record<string, string> = {
   '1': 'sedan',
   '2': 'ertiga', 
   '180': 'etios',
-  '1266': 'innova',
+  '1266': 'innova_crysta',
   '592': 'urbania',
   '1290': 'sedan'
 };
@@ -112,6 +112,8 @@ export const updateOutstationFares = async (params: {
       vehicleId: normalizedId
     };
     
+    console.log('Updating outstation fares with data:', requestData);
+    
     // Send request to update fares
     const response = await fetch(`${getApiUrl('/api/direct-outstation-fares')}?_t=${Date.now()}`, {
       method: 'POST',
@@ -127,6 +129,7 @@ export const updateOutstationFares = async (params: {
     }
     
     const data = await response.json();
+    console.log('Outstation fares update response:', data);
     
     if (data.status === 'success') {
       toast.success('Outstation fares updated successfully');
@@ -164,7 +167,7 @@ export const updateLocalFares = async (params: {
   price_extra_hour: number;
 }): Promise<boolean> => {
   try {
-    // CRITICAL FIX: Validate the vehicle ID first
+    // Validate vehicle ID first
     const normalizedId = normalizeVehicleId(params.vehicleId);
     if (!normalizedId) {
       toast.error('Invalid vehicle ID');
@@ -187,7 +190,45 @@ export const updateLocalFares = async (params: {
       vehicleId: normalizedId
     };
     
-    // Send request to update local fares
+    // First try the direct endpoint
+    console.log('Trying direct endpoint for local fares update:', requestData);
+    try {
+      const directResponse = await fetch(`${getApiUrl('/api/direct-local-fares')}?_t=${Date.now()}`, {
+        method: 'POST',
+        headers: {
+          ...getBypassHeaders(),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestData)
+      });
+      
+      if (directResponse.ok) {
+        const directData = await directResponse.json();
+        console.log('Direct local fares update response:', directData);
+        
+        if (directData.status === 'success') {
+          toast.success('Local package fares updated successfully');
+          
+          // Dispatch event to trigger UI refresh
+          window.dispatchEvent(new CustomEvent('local-fares-updated', {
+            detail: {
+              vehicleId: normalizedId,
+              timestamp: Date.now()
+            }
+          }));
+          
+          return true;
+        }
+      }
+      
+      // If direct endpoint failed, try the legacy endpoint
+      console.log('Direct endpoint failed, trying legacy endpoint');
+    } catch (directError) {
+      console.error('Error with direct local fares endpoint:', directError);
+      console.log('Falling back to legacy endpoint');
+    }
+    
+    // Legacy endpoint fallback
     const response = await fetch(`${getApiUrl('/api/local-fares-update')}?_t=${Date.now()}`, {
       method: 'POST',
       headers: {
@@ -262,6 +303,8 @@ export const updateAirportFares = async (params: {
       vehicleId: normalizedId
     };
     
+    console.log('Updating airport fares with data:', requestData);
+    
     // Send request to update airport fares
     const response = await fetch(`${getApiUrl('/api/direct-airport-fares')}?_t=${Date.now()}`, {
       method: 'POST',
@@ -277,6 +320,7 @@ export const updateAirportFares = async (params: {
     }
     
     const data = await response.json();
+    console.log('Airport fares update response:', data);
     
     if (data.status === 'success') {
       toast.success('Airport fares updated successfully');
@@ -299,4 +343,16 @@ export const updateAirportFares = async (params: {
     toast.error('Failed to update airport fares');
     return false;
   }
+};
+
+/**
+ * Clear any cached vehicle data 
+ */
+export const clearCache = (): void => {
+  console.log('Clearing API cache');
+  // Create a timestamp for cache busting
+  const timestamp = Date.now();
+  // Dispatch events to trigger data refresh
+  window.dispatchEvent(new CustomEvent('vehicle-data-refresh', { detail: { timestamp } }));
+  window.dispatchEvent(new CustomEvent('fare-data-refresh', { detail: { timestamp } }));
 };
