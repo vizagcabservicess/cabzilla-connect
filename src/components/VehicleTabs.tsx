@@ -7,6 +7,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { VehicleManagement } from './VehicleManagement';
 import { directVehicleOperation, fixDatabaseTables, isPreviewMode } from '@/utils/apiHelper';
 import { toast } from 'sonner';
+import { clearVehicleDataCache } from '@/services/vehicleDataService';
 
 interface VehicleTabsProps {
   vehicleId: string;
@@ -36,7 +37,9 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
           'GET',
           { 
             headers: {
-              'X-Admin-Mode': 'true'
+              'X-Admin-Mode': 'true',
+              'X-Force-Refresh': 'true',
+              'Cache-Control': 'no-cache, no-store, must-revalidate'
             }
           }
         );
@@ -86,6 +89,9 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
         setIsFixing(true);
         toast.info('Attempting to fix database tables...');
         
+        // Clear the vehicle data cache before fixing
+        clearVehicleDataCache();
+        
         const fixed = await fixDatabaseTables();
         
         if (fixed) {
@@ -97,7 +103,9 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
               'GET',
               {
                 headers: {
-                  'X-Admin-Mode': 'true'
+                  'X-Admin-Mode': 'true',
+                  'X-Force-Refresh': 'true',
+                  'Cache-Control': 'no-cache, no-store, must-revalidate'
                 }
               }
             );

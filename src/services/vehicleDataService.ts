@@ -150,6 +150,7 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
       const endpoints = [
         `/api/vehicles-data.php?${cacheBuster}&includeInactive=${includeInactive ? 'true' : 'false'}&force=${forceRefresh ? 'true' : 'false'}`,
         `/api/admin/get-vehicles.php?${cacheBuster}&includeInactive=${includeInactive ? 'true' : 'false'}`,
+        `/api/admin/vehicles-data.php?${cacheBuster}&includeInactive=${includeInactive ? 'true' : 'false'}&force=${forceRefresh ? 'true' : 'false'}`,
         null // Marker for JSON file
       ];
       

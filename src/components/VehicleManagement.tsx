@@ -6,8 +6,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { directVehicleOperation, fixDatabaseTables } from '@/utils/apiHelper';
+import { directVehicleOperation, fixDatabaseTables, isPreviewMode } from '@/utils/apiHelper';
 import { toast } from 'sonner';
+import { clearVehicleDataCache } from '@/services/vehicleDataService';
 
 interface VehicleManagementProps {
   vehicleId: string;
@@ -69,6 +70,9 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
     try {
       toast.info('Attempting to fix database...');
       console.log('Fixing database...');
+      
+      // Clear the vehicle data cache before fixing the database
+      clearVehicleDataCache();
       
       const fixed = await fixDatabaseTables();
       
