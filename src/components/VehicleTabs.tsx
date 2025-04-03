@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { VehicleManagement } from './VehicleManagement';
-import { directVehicleOperation, fixDatabaseTables } from '@/utils/apiHelper';
+import { directVehicleOperation, fixDatabaseTables, isPreviewMode } from '@/utils/apiHelper';
 import { toast } from 'sonner';
 
 interface VehicleTabsProps {
@@ -15,6 +15,7 @@ interface VehicleTabsProps {
 export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [isFixing, setIsFixing] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -26,20 +27,47 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
         setLoaded(true);
       } catch (err) {
         console.error('Error loading vehicle data:', err);
+        
+        if (isPreviewMode()) {
+          console.log('In preview mode, proceeding with mock data for vehicle:', vehicleId);
+          setLoaded(true);
+          return;
+        }
+        
         setError('Failed to load vehicle data. The vehicle may not exist.');
         
         // Try to fix database tables
-        try {
-          toast.info('Attempting to fix database tables...');
-          const fixed = await fixDatabaseTables();
-          if (fixed) {
-            toast.success('Database tables fixed successfully. Try again.');
-          } else {
-            toast.error('Could not fix database tables.');
+        tryFixDatabase();
+      }
+    };
+
+    const tryFixDatabase = async () => {
+      try {
+        if (isFixing) return;
+        
+        setIsFixing(true);
+        toast.info('Attempting to fix database tables...');
+        
+        const fixed = await fixDatabaseTables();
+        
+        if (fixed) {
+          toast.success('Database tables fixed successfully. Try again.');
+          // Try loading data again
+          try {
+            const vehicleData = await directVehicleOperation(`api/admin/check-vehicle.php?id=${vehicleId}`, 'GET');
+            console.log('Vehicle check result after database fix:', vehicleData);
+            setLoaded(true);
+            setError(null);
+          } catch (loadErr) {
+            console.error('Error loading vehicle data after fix:', loadErr);
           }
-        } catch (fixErr) {
-          console.error('Error fixing database tables:', fixErr);
+        } else {
+          toast.error('Could not fix database tables.');
         }
+      } catch (fixErr) {
+        console.error('Error fixing database tables:', fixErr);
+      } finally {
+        setIsFixing(false);
       }
     };
 

@@ -23,6 +23,7 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
     const checkVehicle = async () => {
       try {
         await directVehicleOperation(`api/admin/check-vehicle.php?id=${vehicleId}`, 'GET');
+        setError(null);
       } catch (err) {
         console.error('Error checking vehicle:', err);
         setError(`Could not verify vehicle with ID: ${vehicleId}. Some features might not work correctly.`);

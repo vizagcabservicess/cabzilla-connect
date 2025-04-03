@@ -6,7 +6,7 @@
 
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh');
 header('Content-Type: application/json');
 
 // Handle OPTIONS preflight request
@@ -28,7 +28,7 @@ if (!isset($_GET['id']) || empty($_GET['id'])) {
 $vehicleId = $_GET['id'];
 
 // List of valid vehicle IDs for demonstration
-$validVehicleIds = ['sedan', 'ertiga', 'innova_crysta', 'tempo_traveller'];
+$validVehicleIds = ['sedan', 'ertiga', 'innova_crysta', 'tempo_traveller', 'luxury'];
 
 // Check if the vehicle exists
 $exists = in_array($vehicleId, $validVehicleIds);
