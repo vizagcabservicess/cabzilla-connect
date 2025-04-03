@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -99,6 +100,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       
       console.log(`Loading ${fareType} fare data from ${endpoint}`);
       
+      // Fix: Using the correct number of arguments (endpoint, method, headers)
       const result = await directVehicleOperation(endpoint, 'GET', {
         'X-Admin-Mode': 'true',
         'X-Debug': 'true'
@@ -186,6 +188,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       
       console.log('Final fare data being sent:', dataToSave);
       
+      // Fix: Using the correct number of arguments (endpoint, method, headers, body)
       const result = await directVehicleOperation(endpoint, 'POST', {
         'X-Admin-Mode': 'true',
         'X-Debug': 'true'
