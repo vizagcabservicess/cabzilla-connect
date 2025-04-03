@@ -141,7 +141,7 @@ export const updateLocalFares = async (
     console.log('Sending local fare update with data:', requestData);
     
     // Use direct-local-fares endpoint with consistent field naming
-    const response = await fetch(`${getApiUrl('/api/direct-local-fares')}?_t=${Date.now()}`, {
+    const response = await fetch(`${getApiUrl('/api/admin/direct-local-fares')}?_t=${Date.now()}`, {
       method: 'POST',
       headers: {
         ...getBypassHeaders(),

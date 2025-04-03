@@ -162,7 +162,7 @@ try {
         throw new Exception("Database connection failed");
     }
     
-    // CRITICAL: Check if vehicle exists in vehicles table
+    // CRITICAL: Check if vehicle exists in vehicles table - MUST use vehicle_id column (not id)
     $checkVehicleStmt = $conn->prepare("SELECT id, vehicle_id, name FROM vehicles WHERE vehicle_id = ?");
     $checkVehicleStmt->bind_param("s", $normalizedId);
     $checkVehicleStmt->execute();
@@ -268,7 +268,7 @@ try {
         
         if ($pricingTableExists) {
             // Also update vehicle_pricing table for backward compatibility
-            // First check if record exists
+            // First check if record exists using vehicle_id (not id)
             $checkPricingStmt = $conn->prepare("
                 SELECT id FROM vehicle_pricing 
                 WHERE vehicle_id = ? AND trip_type = 'local'
