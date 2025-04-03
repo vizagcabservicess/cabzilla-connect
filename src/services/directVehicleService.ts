@@ -9,22 +9,28 @@ import { toast } from 'sonner';
  */
 export const addVehicle = async (vehicle: CabType): Promise<CabType> => {
   try {
+    console.log('Attempting to add vehicle:', vehicle);
+    
     // Try multiple endpoints in sequence with better error handling
     const endpoints = [
-      'api/admin/add-vehicle-simple.php',  // Try simplified endpoint first
-      'api/admin/vehicles/create',
+      'api/admin/add-vehicle-simple',  // Try simplified endpoint first (no .php extension)
+      'api/admin/add-vehicle-simple.php',
       'api/admin/direct-vehicle-create',
+      'api/admin/direct-vehicle-create.php',
+      'api/admin/vehicles/create',
       'api/admin/add-vehicle',
       'api/admin/vehicle-create'
     ];
     
     let lastError: Error | null = null;
+    let lastResponse: Response | null = null;
     
     // Try each endpoint until one succeeds
     for (const endpoint of endpoints) {
       try {
         // Add a timestamp and force flag to bypass cache
-        const timestampedEndpoint = `${endpoint}?_t=${Date.now()}&force=true`;
+        const uniqueId = Date.now();
+        const timestampedEndpoint = `${endpoint}?_t=${uniqueId}&force=true`;
         console.log(`Trying vehicle creation endpoint: ${apiBaseUrl}/${timestampedEndpoint}`);
         
         const response = await fetch(`${apiBaseUrl}/${timestampedEndpoint}`, {
@@ -41,16 +47,26 @@ export const addVehicle = async (vehicle: CabType): Promise<CabType> => {
           body: JSON.stringify(vehicle)
         });
 
+        lastResponse = response;
+        
         // Log response details for debugging
         console.log(`Response status for ${endpoint}:`, response.status);
         const responseText = await response.text();
         console.log(`Response body for ${endpoint}:`, responseText);
+        
+        // If the response is HTML (contains DOCTYPE or <html>), it means PHP isn't executing correctly
+        if (responseText.includes('<!DOCTYPE') || responseText.includes('<html')) {
+          console.error('PHP execution error: Server returned HTML instead of JSON');
+          throw new Error('Server configuration issue: PHP not executing properly');
+        }
 
         try {
           const result = JSON.parse(responseText);
           if (result && result.status === 'success') {
             console.log('Vehicle creation successful:', result);
             return result.vehicle || vehicle;
+          } else {
+            throw new Error(result.message || 'Vehicle creation failed');
           }
         } catch (e) {
           console.error('Failed to parse response:', e);
@@ -63,8 +79,45 @@ export const addVehicle = async (vehicle: CabType): Promise<CabType> => {
       }
     }
     
-    // If all endpoints failed, throw the last error
-    throw lastError || new Error('All vehicle creation attempts failed');
+    // If all endpoints failed, try direct form submission as a last resort
+    try {
+      console.log('Trying direct form submission as last resort...');
+      
+      const formData = new FormData();
+      Object.entries(vehicle).forEach(([key, value]) => {
+        if (typeof value !== 'undefined') {
+          formData.append(key, Array.isArray(value) ? JSON.stringify(value) : String(value));
+        }
+      });
+      
+      const response = await fetch(`${apiBaseUrl}/api/admin/add-vehicle-simple.php?_t=${Date.now()}`, {
+        method: 'POST',
+        body: formData
+      });
+      
+      const responseText = await response.text();
+      console.log('Direct form submission response:', responseText);
+      
+      try {
+        const result = JSON.parse(responseText);
+        if (result && result.status === 'success') {
+          console.log('Vehicle creation successful via form submission:', result);
+          return result.vehicle || vehicle;
+        }
+      } catch (e) {
+        console.error('Failed to parse form submission response:', e);
+      }
+    } catch (error) {
+      console.error('Form submission error:', error);
+    }
+    
+    // If we've exhausted all options, provide a detailed error message
+    if (lastResponse) {
+      const errorDetails = `Status: ${lastResponse.status} ${lastResponse.statusText}`;
+      throw new Error(`All vehicle creation attempts failed. Last response: ${errorDetails}`);
+    } else {
+      throw lastError || new Error('All vehicle creation attempts failed');
+    }
   } catch (error) {
     console.error('Failed to add vehicle:', error);
     throw error;
