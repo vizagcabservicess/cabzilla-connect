@@ -4,6 +4,24 @@ import { toast } from 'sonner';
 import { getBypassHeaders } from '@/config/requestConfig';
 import { normalizeVehicleId, checkVehicleId } from './vehicleIdValidator';
 
+// Standard vehicle IDs (lowercase for case-insensitive matching)
+const standardVehicleIds = [
+  'sedan', 'ertiga', 'innova', 'innova_crysta', 'luxury', 'tempo', 'traveller', 'etios', 'mpv', 'hycross', 'urbania'
+];
+
+// Hard-coded mappings for known numeric IDs - MUST match with backend
+const numericIdMappings: Record<string, string> = {
+  '1': 'sedan',
+  '2': 'ertiga',
+  '180': 'etios',
+  '1266': 'innova',
+  '592': 'urbania',
+  '1290': 'sedan',
+  '1291': 'etios',
+  '1292': 'sedan',
+  '1293': 'urbania'
+};
+
 /**
  * Get all local fares from the backend
  */
@@ -30,6 +48,52 @@ export const getAllLocalFares = async (): Promise<Record<string, any>> => {
 };
 
 /**
+ * Validate and normalize vehicle ID with strict blocking for numeric IDs
+ */
+export const validateAndNormalizeVehicleId = (vehicleId: string): string | null => {
+  // CRITICAL: First check if vehicle ID is numeric - block ALL numeric IDs except mapped ones
+  if (/^\d+$/.test(vehicleId)) {
+    console.log(`Checking numeric vehicle ID: ${vehicleId}`);
+    
+    // Check if we have a mapping for this numeric ID
+    if (numericIdMappings[vehicleId]) {
+      const mappedId = numericIdMappings[vehicleId];
+      console.log(`Mapped numeric ID ${vehicleId} to ${mappedId}`);
+      return mappedId;
+    }
+    
+    console.error('BLOCKED: Unmapped numeric vehicle ID detected:', vehicleId);
+    toast.error(`Invalid numeric vehicle ID: ${vehicleId}. Please use standard vehicle names.`);
+    return null;
+  }
+  
+  // Normalize vehicle ID 
+  const normalizedId = normalizeVehicleId(vehicleId);
+  if (!normalizedId) {
+    console.error(`Failed to normalize invalid vehicle ID: ${vehicleId}`);
+    toast.error(`Invalid vehicle ID: ${vehicleId}. Please use standard vehicle names.`);
+    return null;
+  }
+  
+  // Check if normalized ID is in our standard list
+  const isStandard = standardVehicleIds.includes(normalizedId.toLowerCase());
+  if (!isStandard) {
+    // Check for common aliases
+    if (['mpv', 'innova_hycross', 'hycross'].includes(normalizedId.toLowerCase())) {
+      return 'innova_crysta';
+    } else if (['dzire', 'swift'].includes(normalizedId.toLowerCase())) {
+      return 'sedan';
+    }
+    
+    console.error(`Non-standard vehicle ID: ${vehicleId} (normalized: ${normalizedId})`);
+    toast.error(`Invalid vehicle ID: ${vehicleId}. Please use standard vehicle names.`);
+    return null;
+  }
+  
+  return normalizedId;
+};
+
+/**
  * Update local fares for a vehicle
  */
 export const updateLocalFares = async (
@@ -41,26 +105,10 @@ export const updateLocalFares = async (
   try {
     console.log(`Starting local fares update for vehicle ID: ${vehicleId}`);
     
-    // CRITICAL: First check if vehicle ID is numeric - block ALL numeric IDs
-    if (/^\d+$/.test(vehicleId)) {
-      console.error('BLOCKED: Numeric vehicle ID detected:', vehicleId);
-      toast.error(`Invalid numeric vehicle ID: ${vehicleId}. Please use standard vehicle names.`);
-      return false;
-    }
-    
-    // Validate vehicle ID through normalizer
-    const normalizedId = normalizeVehicleId(vehicleId);
+    // Validate and normalize vehicle ID with strict blocking for numeric IDs
+    const normalizedId = validateAndNormalizeVehicleId(vehicleId);
     if (!normalizedId) {
-      console.error(`Failed to normalize invalid vehicle ID: ${vehicleId}`);
-      toast.error(`Invalid vehicle ID: ${vehicleId}. Please use standard vehicle names.`);
-      return false;
-    }
-    
-    // Double-check the ID doesn't become numeric after normalization (shouldn't happen, but safety check)
-    if (/^\d+$/.test(normalizedId)) {
-      console.error('BLOCKED: Normalized ID became numeric, rejecting:', normalizedId);
-      toast.error(`Invalid vehicle ID format: ${vehicleId}`);
-      return false;
+      return false; // Validation failed
     }
     
     // CRITICAL: Check if vehicle exists via backend - NEVER proceed without this verification

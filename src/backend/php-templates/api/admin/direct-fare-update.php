@@ -1,4 +1,3 @@
-
 <?php
 // direct-fare-update.php - Universal endpoint for all fare updates with database creation fallbacks
 
@@ -24,6 +23,24 @@ if (!function_exists('getDbConnection')) {
 // Get raw input
 $raw_input = file_get_contents('php://input');
 error_log("Raw input for direct fare update: $raw_input", 3, __DIR__ . '/../../error.log');
+
+// Define standard vehicle IDs - ALL LOWERCASE for case-insensitive comparison
+$standardVehicles = [
+    'sedan', 'ertiga', 'innova', 'innova_crysta', 'luxury', 'tempo', 'traveller', 'etios', 'mpv', 'hycross', 'urbania'
+];
+
+// Hard-coded mappings for known numeric IDs - MUST MATCH check-vehicle.php
+$numericMappings = [
+    '1' => 'sedan',
+    '2' => 'ertiga', 
+    '180' => 'etios',
+    '1266' => 'innova',
+    '592' => 'urbania',
+    '1290' => 'sedan',
+    '1291' => 'etios',
+    '1292' => 'sedan',
+    '1293' => 'urbania'
+];
 
 // Function to ensure tables exist
 function ensureTablesExist($conn) {
@@ -275,62 +292,102 @@ try {
         throw new Exception("Vehicle ID is required");
     }
     
-    // Create vehicle if it doesn't exist in vehicle_types
-    $checkVehicleStmt = $conn->prepare("SELECT vehicle_id FROM vehicle_types WHERE vehicle_id = ?");
-    $checkVehicleStmt->bind_param("s", $vehicleId);
+    // CRITICAL: Validate vehicle ID - Check if ID is numeric and block unless it's a mapped ID
+    if (is_numeric($vehicleId)) {
+        error_log("WARNING: Received numeric vehicle ID: $vehicleId", 3, __DIR__ . '/../../error.log');
+        
+        // Only allow specific mapped numeric IDs
+        if (isset($numericMappings[$vehicleId])) {
+            $originalId = $vehicleId;
+            $vehicleId = $numericMappings[$vehicleId];
+            error_log("Mapped numeric ID $originalId to standard vehicle ID: $vehicleId", 3, __DIR__ . '/../../error.log');
+        } else {
+            // BLOCK ALL other numeric IDs
+            echo json_encode([
+                "status" => "error",
+                "message" => "Invalid numeric vehicle ID. Please use standard vehicle names.",
+                "validOptions" => $standardVehicles,
+                "timestamp" => time()
+            ]);
+            error_log("BLOCKED unmapped numeric ID: $vehicleId", 3, __DIR__ . '/../../error.log');
+            exit;
+        }
+    }
+    
+    // Normalize vehicle ID (lowercase, replace spaces with underscores)
+    $normalizedVehicleId = strtolower(str_replace(' ', '_', trim($vehicleId)));
+    
+    // Check if the normalized ID is a standard vehicle type
+    $isStandardVehicle = in_array($normalizedVehicleId, $standardVehicles);
+    
+    if (!$isStandardVehicle) {
+        // Map common variations
+        if ($normalizedVehicleId == 'mpv' || $normalizedVehicleId == 'innova_hycross' || $normalizedVehicleId == 'hycross') {
+            $normalizedVehicleId = 'innova_crysta';
+            $isStandardVehicle = true;
+        } elseif ($normalizedVehicleId == 'dzire' || $normalizedVehicleId == 'swift') {
+            $normalizedVehicleId = 'sedan';
+            $isStandardVehicle = true;
+        }
+        
+        // If it's still not a standard vehicle, reject it
+        if (!$isStandardVehicle) {
+            echo json_encode([
+                "status" => "error",
+                "message" => "Invalid vehicle type. Please use standard vehicle names.",
+                "validOptions" => $standardVehicles,
+                "timestamp" => time()
+            ]);
+            error_log("REJECTED non-standard vehicle type: $vehicleId -> $normalizedVehicleId", 3, __DIR__ . '/../../error.log');
+            exit;
+        }
+    }
+    
+    // CRITICAL: Check if vehicle exists before updating
+    $checkVehicleStmt = $conn->prepare("SELECT vehicle_id FROM vehicles WHERE vehicle_id = ?");
+    $checkVehicleStmt->bind_param("s", $normalizedVehicleId);
     $checkVehicleStmt->execute();
     $checkResult = $checkVehicleStmt->get_result();
     
     if ($checkResult->num_rows === 0) {
-        // Format vehicle name from ID
-        $vehicleName = ucwords(str_replace('_', ' ', $vehicleId));
-        $insertVehicleStmt = $conn->prepare("
-            INSERT INTO vehicle_types (vehicle_id, name, is_active) 
-            VALUES (?, ?, 1)
-        ");
-        $insertVehicleStmt->bind_param("ss", $vehicleId, $vehicleName);
-        $insertVehicleStmt->execute();
-        error_log("Created new vehicle in vehicle_types: $vehicleId");
-    }
-    
-    // Also check and create in the vehicles table for compatibility
-    $checkVehiclesStmt = $conn->prepare("SELECT vehicle_id FROM vehicles WHERE vehicle_id = ?");
-    $checkVehiclesStmt->bind_param("s", $vehicleId);
-    $checkVehiclesStmt->execute();
-    $checkVehiclesResult = $checkVehiclesStmt->get_result();
-    
-    if ($checkVehiclesResult->num_rows === 0) {
-        // Format vehicle name from ID
-        $vehicleName = ucwords(str_replace('_', ' ', $vehicleId));
-        $insertVehiclesStmt = $conn->prepare("
-            INSERT INTO vehicles (vehicle_id, name, is_active) 
-            VALUES (?, ?, 1)
-        ");
-        $insertVehiclesStmt->bind_param("ss", $vehicleId, $vehicleName);
-        $insertVehiclesStmt->execute();
-        error_log("Created new vehicle in vehicles table: $vehicleId");
+        // If not in vehicles table, check vehicle_types table
+        $checkTypesStmt = $conn->prepare("SELECT vehicle_id FROM vehicle_types WHERE vehicle_id = ?");
+        $checkTypesStmt->bind_param("s", $normalizedVehicleId);
+        $checkTypesStmt->execute();
+        $checkTypesResult = $checkTypesStmt->get_result();
+        
+        if ($checkTypesResult->num_rows === 0) {
+            // Vehicle doesn't exist in either table, reject the update
+            echo json_encode([
+                "status" => "error",
+                "message" => "Vehicle '$normalizedVehicleId' does not exist. Please create it first.",
+                "timestamp" => time()
+            ]);
+            error_log("Vehicle does not exist: $normalizedVehicleId - Rejecting fare update", 3, __DIR__ . '/../../error.log');
+            exit;
+        }
     }
     
     // Process based on trip type
     switch ($tripType) {
         case 'outstation':
-            handleOutstationFares($conn, $data, $vehicleId);
+            handleOutstationFares($conn, $data, $normalizedVehicleId);
             break;
         case 'local':
-            handleLocalFares($conn, $data, $vehicleId);
+            handleLocalFares($conn, $data, $normalizedVehicleId);
             break;
         case 'airport':
-            handleAirportFares($conn, $data, $vehicleId);
+            handleAirportFares($conn, $data, $normalizedVehicleId);
             break;
         default:
             // If type is unknown, try to determine from data
             if (isset($data['package4hr40km']) || isset($data['price_4hrs_40km']) || isset($data['package4hr']) || isset($data['price4hrs40km'])) {
-                handleLocalFares($conn, $data, $vehicleId);
+                handleLocalFares($conn, $data, $normalizedVehicleId);
             } elseif (isset($data['pickupPrice']) || isset($data['dropPrice']) || isset($data['pickup_price']) || isset($data['tier1Price'])) {
-                handleAirportFares($conn, $data, $vehicleId);
+                handleAirportFares($conn, $data, $normalizedVehicleId);
             } else {
                 // Default to outstation
-                handleOutstationFares($conn, $data, $vehicleId);
+                handleOutstationFares($conn, $data, $normalizedVehicleId);
             }
             break;
     }
@@ -342,7 +399,7 @@ try {
     echo json_encode([
         "status" => "success",
         "message" => "Fare updated successfully",
-        "vehicleId" => $vehicleId,
+        "vehicleId" => $normalizedVehicleId,
         "tripType" => $tripType
     ]);
     
