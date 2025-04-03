@@ -23,4 +23,7 @@
     RewriteRule ^direct-vehicle-create$ direct-vehicle-create.php [L]
     RewriteRule ^add-vehicle$ direct-vehicle-create.php [L]
     RewriteRule ^vehicle-create$ direct-vehicle-create.php [L]
+    
+    # Fallback for add-vehicle-simple.php
+    RewriteRule ^add-vehicle-simple$ add-vehicle-simple.php [L]
 </IfModule>

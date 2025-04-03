@@ -13,7 +13,8 @@ export const addVehicle = async (vehicle: CabType): Promise<CabType> => {
     const endpoints = [
       'api/admin/direct-vehicle-create.php',
       'api/admin/add-vehicle.php',
-      'api/admin/vehicle-create.php'
+      'api/admin/vehicle-create.php',
+      'api/admin/add-vehicle-simple.php' // Added our new simplified endpoint
     ];
     
     let lastError: Error | null = null;
@@ -37,10 +38,10 @@ export const addVehicle = async (vehicle: CabType): Promise<CabType> => {
       }
     }
     
-    // If all endpoints failed, try a direct fetch as a last resort
+    // If all endpoints failed, try a direct fetch as a last resort to our simplified endpoint
     try {
-      console.log('Trying direct fetch as last resort for vehicle creation...');
-      const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-create.php`, {
+      console.log('Trying direct fetch to simplified endpoint as last resort...');
+      const response = await fetch(`${apiBaseUrl}/api/admin/add-vehicle-simple.php`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

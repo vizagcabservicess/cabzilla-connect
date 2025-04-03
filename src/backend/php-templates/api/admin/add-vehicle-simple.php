@@ -46,9 +46,15 @@ try {
     $name = $input['name'] ?? 'Unnamed Vehicle';
     $capacity = (int)($input['capacity'] ?? 4);
     
-    // Create database connection
-    require_once '../../config.php';
-    $conn = getDbConnection();
+    // Attempt to use db_helper if available
+    if (file_exists(dirname(__FILE__) . '/../common/db_helper.php')) {
+        require_once dirname(__FILE__) . '/../common/db_helper.php';
+        $conn = getDbConnectionWithRetry();
+    } else {
+        // Create database connection
+        require_once '../../config.php';
+        $conn = getDbConnection();
+    }
     
     // Insert or update vehicle
     $stmt = $conn->prepare("INSERT INTO vehicles 
