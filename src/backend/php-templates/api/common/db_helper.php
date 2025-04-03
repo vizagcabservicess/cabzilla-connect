@@ -65,42 +65,6 @@ function getDbConnectionWithRetry($maxRetries = 3) {
 }
 
 /**
- * Check if a column exists in a table
- *
- * @param mysqli $conn Database connection
- * @param string $table Table name
- * @param string $column Column name
- * @return bool True if column exists, false otherwise
- */
-function columnExists($conn, $table, $column) {
-    try {
-        $result = $conn->query("SHOW COLUMNS FROM `{$table}` LIKE '{$column}'");
-        return ($result && $result->num_rows > 0);
-    } catch (Exception $e) {
-        logMessage("Error checking if column exists: " . $e->getMessage(), 'db_error.log');
-        return false;
-    }
-}
-
-/**
- * Get the correct column name based on possible variations
- * This helps handle differences in column naming across environments
- *
- * @param mysqli $conn Database connection
- * @param string $table Table name
- * @param array $possibleNames Array of possible column names
- * @return string|null The correct column name that exists or null if none found
- */
-function getCorrectColumnName($conn, $table, $possibleNames) {
-    foreach ($possibleNames as $name) {
-        if (columnExists($conn, $table, $name)) {
-            return $name;
-        }
-    }
-    return null;
-}
-
-/**
  * Write to application log
  * 
  * @param string $message Message to log
@@ -153,18 +117,6 @@ function checkDatabaseConnection() {
             }
         }
         
-        // Check if local_package_fares table exists
-        $localFaresTableExists = $conn->query("SHOW TABLES LIKE 'local_package_fares'")->num_rows > 0;
-        
-        // Report on column naming in local_package_fares table
-        $columnInfo = [];
-        if ($localFaresTableExists) {
-            $columns = $conn->query("SHOW COLUMNS FROM local_package_fares");
-            while ($col = $columns->fetch_assoc()) {
-                $columnInfo[] = $col['Field'];
-            }
-        }
-        
         // Close connection
         $conn->close();
         
@@ -175,10 +127,6 @@ function checkDatabaseConnection() {
                 'vehicles' => [
                     'exists' => $vehiclesTableExists,
                     'count' => $vehicleCount
-                ],
-                'local_package_fares' => [
-                    'exists' => $localFaresTableExists,
-                    'columns' => $columnInfo
                 ]
             ],
             'timestamp' => time()
@@ -192,102 +140,3 @@ function checkDatabaseConnection() {
         ];
     }
 }
-
-/**
- * Ensure the local_package_fares table exists with proper columns
- *
- * @param mysqli $conn Database connection
- * @return bool True if table exists or was created successfully
- */
-function ensureLocalPackageFaresTable($conn) {
-    try {
-        // Check if table exists
-        $tableExists = $conn->query("SHOW TABLES LIKE 'local_package_fares'")->num_rows > 0;
-        
-        if (!$tableExists) {
-            // Create table with consistent column naming
-            $createTableSQL = "
-                CREATE TABLE IF NOT EXISTS `local_package_fares` (
-                    `id` int(11) NOT NULL AUTO_INCREMENT,
-                    `vehicle_id` varchar(50) NOT NULL,
-                    `price_4hr_40km` decimal(10,2) NOT NULL DEFAULT 0,
-                    `price_8hr_80km` decimal(10,2) NOT NULL DEFAULT 0,
-                    `price_10hr_100km` decimal(10,2) NOT NULL DEFAULT 0,
-                    `extra_km_rate` decimal(5,2) NOT NULL DEFAULT 0,
-                    `extra_hour_rate` decimal(5,2) NOT NULL DEFAULT 0,
-                    `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-                    `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    PRIMARY KEY (`id`),
-                    UNIQUE KEY `vehicle_id` (`vehicle_id`)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-            ";
-            
-            $conn->query($createTableSQL);
-            logMessage("Created local_package_fares table", 'db_tables.log');
-            
-            // Check if table was created successfully
-            $tableExists = $conn->query("SHOW TABLES LIKE 'local_package_fares'")->num_rows > 0;
-        }
-        
-        return $tableExists;
-    } catch (Exception $e) {
-        logMessage("Error ensuring local_package_fares table: " . $e->getMessage(), 'db_error.log');
-        return false;
-    }
-}
-
-/**
- * Fix column names in local_package_fares table if needed
- * This handles the case where columns might have plural names (e.g. hrs instead of hr)
- *
- * @param mysqli $conn Database connection
- * @return bool True if fixed or no fix needed, false on error
- */
-function fixLocalPackageFaresColumns($conn) {
-    try {
-        // Make sure the table exists
-        if (!ensureLocalPackageFaresTable($conn)) {
-            return false;
-        }
-        
-        // Column mappings to check (incorrect => correct)
-        $columnMappings = [
-            'price_4hrs_40km' => 'price_4hr_40km',
-            'price_8hrs_80km' => 'price_8hr_80km', 
-            'price_10hrs_100km' => 'price_10hr_100km'
-        ];
-        
-        // Check each column and rename if needed
-        foreach ($columnMappings as $oldColumn => $newColumn) {
-            // Check if old column exists but new one doesn't
-            $oldExists = columnExists($conn, 'local_package_fares', $oldColumn);
-            $newExists = columnExists($conn, 'local_package_fares', $newColumn);
-            
-            if ($oldExists && !$newExists) {
-                // Rename column
-                $conn->query("ALTER TABLE local_package_fares CHANGE `$oldColumn` `$newColumn` decimal(10,2) NOT NULL DEFAULT 0");
-                logMessage("Renamed column $oldColumn to $newColumn in local_package_fares", 'db_fixes.log');
-            } else if (!$oldExists && !$newExists) {
-                // Neither column exists, add the new one
-                $conn->query("ALTER TABLE local_package_fares ADD `$newColumn` decimal(10,2) NOT NULL DEFAULT 0");
-                logMessage("Added missing column $newColumn to local_package_fares", 'db_fixes.log');
-            }
-            // If both exist or only new exists, do nothing
-        }
-        
-        // Make sure other required columns exist
-        if (!columnExists($conn, 'local_package_fares', 'extra_km_rate')) {
-            $conn->query("ALTER TABLE local_package_fares ADD `extra_km_rate` decimal(5,2) NOT NULL DEFAULT 0");
-        }
-        
-        if (!columnExists($conn, 'local_package_fares', 'extra_hour_rate')) {
-            $conn->query("ALTER TABLE local_package_fares ADD `extra_hour_rate` decimal(5,2) NOT NULL DEFAULT 0");
-        }
-        
-        return true;
-    } catch (Exception $e) {
-        logMessage("Error fixing local_package_fares columns: " . $e->getMessage(), 'db_error.log');
-        return false;
-    }
-}
-
