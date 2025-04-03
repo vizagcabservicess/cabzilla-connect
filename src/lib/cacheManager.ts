@@ -104,7 +104,7 @@ export const clearAllCaches = async (showToast: boolean = true): Promise<void> =
  * @returns The API base URL with timestamp
  */
 export const getApiUrlWithCacheBuster = (): string => {
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
   const timestamp = Date.now();
   return `${baseUrl}/api/?_t=${timestamp}`;
 };
@@ -125,4 +125,3 @@ export const resetApplication = (): void => {
     window.location.reload();
   }, 500);
 };
-
