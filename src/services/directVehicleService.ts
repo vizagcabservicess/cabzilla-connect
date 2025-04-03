@@ -9,12 +9,13 @@ import { toast } from 'sonner';
  */
 export const addVehicle = async (vehicle: CabType): Promise<CabType> => {
   try {
-    // Try multiple endpoints in sequence to ensure higher success rate
+    // Try multiple endpoints in sequence with better error handling
     const endpoints = [
-      'api/admin/direct-vehicle-create.php',
-      'api/admin/add-vehicle.php',
-      'api/admin/vehicle-create.php',
-      'api/admin/add-vehicle-simple.php' // Added our new simplified endpoint
+      'api/admin/add-vehicle-simple.php',  // Try simplified endpoint first
+      'api/admin/vehicles/create',
+      'api/admin/direct-vehicle-create',
+      'api/admin/add-vehicle',
+      'api/admin/vehicle-create'
     ];
     
     let lastError: Error | null = null;
@@ -22,49 +23,48 @@ export const addVehicle = async (vehicle: CabType): Promise<CabType> => {
     // Try each endpoint until one succeeds
     for (const endpoint of endpoints) {
       try {
-        // Add a timestamp to bypass cache
-        const timestampedEndpoint = `${endpoint}?_t=${Date.now()}`;
+        // Add a timestamp and force flag to bypass cache
+        const timestampedEndpoint = `${endpoint}?_t=${Date.now()}&force=true`;
         console.log(`Trying vehicle creation endpoint: ${apiBaseUrl}/${timestampedEndpoint}`);
         
-        const response = await directVehicleOperation(timestampedEndpoint, 'POST', vehicle);
-        
-        if (response && response.status === 'success') {
-          return response.vehicle || vehicle;
+        const response = await fetch(`${apiBaseUrl}/${timestampedEndpoint}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+            'X-Admin-Mode': 'true'
+          },
+          body: JSON.stringify(vehicle)
+        });
+
+        // Log response details for debugging
+        console.log(`Response status for ${endpoint}:`, response.status);
+        const responseText = await response.text();
+        console.log(`Response body for ${endpoint}:`, responseText);
+
+        try {
+          const result = JSON.parse(responseText);
+          if (result && result.status === 'success') {
+            console.log('Vehicle creation successful:', result);
+            return result.vehicle || vehicle;
+          }
+        } catch (e) {
+          console.error('Failed to parse response:', e);
+          throw new Error('Invalid server response');
         }
       } catch (error: any) {
         lastError = error;
         console.error(`Error with endpoint ${endpoint}:`, error);
-        // Continue to the next endpoint
+        // Continue to next endpoint
       }
     }
     
-    // If all endpoints failed, try a direct fetch as a last resort to our simplified endpoint
-    try {
-      console.log('Trying direct fetch to simplified endpoint as last resort...');
-      const response = await fetch(`${apiBaseUrl}/api/admin/add-vehicle-simple.php`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest',
-          'X-Force-Refresh': 'true',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-          'X-Admin-Mode': 'true'
-        },
-        body: JSON.stringify(vehicle)
-      });
-      
-      const result = await response.json();
-      if (result && result.status === 'success') {
-        return result.vehicle || vehicle;
-      }
-    } catch (error) {
-      console.error('Last resort direct fetch failed:', error);
-    }
-    
-    // If we've reached here, all endpoints failed
-    throw lastError || new Error('Failed to add vehicle');
+    // If all endpoints failed, throw the last error
+    throw lastError || new Error('All vehicle creation attempts failed');
   } catch (error) {
     console.error('Failed to add vehicle:', error);
     throw error;

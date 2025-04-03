@@ -17,11 +17,6 @@ export const forceRefreshHeaders = {
   'X-Force-Refresh': 'true'
 };
 
-/**
- * Get a complete API URL
- * @param endpoint - The API endpoint path
- * @returns The complete API URL
- */
 export const getApiUrl = (endpoint: string): string => {
   // Remove leading slash if present to avoid double slashes
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
