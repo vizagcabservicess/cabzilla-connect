@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -301,17 +302,19 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
           return;
         }
         
-        await updateOutstationFares(
-          selectedVehicle,
-          basePrice,
-          pricePerKm,
-          roundTripBasePrice || basePrice * 0.9,
-          roundTripPricePerKm || pricePerKm * 0.85,
-          driverAllowance,
-          nightHaltCharge
-        );
+        const result = await updateOutstationFares({
+          vehicleId: selectedVehicle,
+          basePrice: basePrice,
+          pricePerKm: pricePerKm,
+          roundtripBasePrice: roundTripBasePrice || basePrice * 0.9,
+          roundtripPricePerKm: roundTripPricePerKm || pricePerKm * 0.85,
+          driverAllowance: driverAllowance,
+          nightHaltCharge: nightHaltCharge
+        });
         
-        toast.success(`Updated outstation fares for ${selectedVehicle}`);
+        if (result) {
+          toast.success(`Updated outstation fares for ${selectedVehicle}`);
+        }
       } else if (tripType === 'local') {
         if (extraKmRate <= 0 || package4hr40km <= 0 || package8hr80km <= 0) {
           toast.error('Package prices and extra km rate must be greater than zero');
@@ -325,14 +328,16 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
           { hours: 12, km: 120, price: package12hr120km }
         ];
         
-        await updateLocalFares(
-          selectedVehicle,
-          extraKmRate,
-          extraHourRate,
-          packages
-        );
+        const result = await updateLocalFares({
+          vehicleId: selectedVehicle,
+          extraKmRate: extraKmRate,
+          extraHourRate: extraHourRate,
+          packages: packages
+        });
         
-        toast.success(`Updated local fares for ${selectedVehicle}`);
+        if (result) {
+          toast.success(`Updated local fares for ${selectedVehicle}`);
+        }
       } else if (tripType === 'airport') {
         if (pickupPrice <= 0 || dropPrice <= 0) {
           toast.error('Pickup and drop prices must be greater than zero');
@@ -349,12 +354,14 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
           tier4: tier4Price
         };
         
-        await updateAirportFares(
-          selectedVehicle,
-          locationFares
-        );
+        const result = await updateAirportFares({
+          vehicleId: selectedVehicle,
+          locationFares: locationFares
+        });
         
-        toast.success(`Updated airport fares for ${selectedVehicle}`);
+        if (result) {
+          toast.success(`Updated airport fares for ${selectedVehicle}`);
+        }
       }
       
       setSelectedVehicle('');

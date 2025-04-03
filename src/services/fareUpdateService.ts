@@ -81,6 +81,87 @@ const checkVehicleId = async (vehicleId: string): Promise<boolean> => {
 };
 
 /**
+ * Fetch all outstation fares from the API
+ */
+export const getAllOutstationFares = async (): Promise<Record<string, any>> => {
+  try {
+    const response = await fetch(`${getApiUrl('/api/outstation-fares')}?_t=${Date.now()}`, {
+      method: 'GET',
+      headers: {
+        ...getBypassHeaders(),
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Outstation fares fetch failed: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('Fetched outstation fares:', data);
+    
+    return data.vehicles || {};
+  } catch (error) {
+    console.error('Error fetching outstation fares:', error);
+    return {};
+  }
+};
+
+/**
+ * Fetch all local fares from the API
+ */
+export const getAllLocalFares = async (): Promise<Record<string, any>> => {
+  try {
+    const response = await fetch(`${getApiUrl('/api/local-package-fares')}?_t=${Date.now()}`, {
+      method: 'GET',
+      headers: {
+        ...getBypassHeaders(),
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Local fares fetch failed: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('Fetched local fares:', data);
+    
+    return data.vehicles || {};
+  } catch (error) {
+    console.error('Error fetching local fares:', error);
+    return {};
+  }
+};
+
+/**
+ * Fetch all airport fares from the API
+ */
+export const getAllAirportFares = async (): Promise<Record<string, any>> => {
+  try {
+    const response = await fetch(`${getApiUrl('/api/airport-fares')}?_t=${Date.now()}`, {
+      method: 'GET',
+      headers: {
+        ...getBypassHeaders(),
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Airport fares fetch failed: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('Fetched airport fares:', data);
+    
+    return data.vehicles || {};
+  } catch (error) {
+    console.error('Error fetching airport fares:', error);
+    return {};
+  }
+};
+
+/**
  * Update outstation fares for a vehicle
  */
 export const updateOutstationFares = async (params: {
@@ -160,11 +241,9 @@ export const updateOutstationFares = async (params: {
  */
 export const updateLocalFares = async (params: {
   vehicleId: string;
-  price_4hrs_40km: number;
-  price_8hrs_80km: number;
-  price_10hrs_100km: number;
-  price_extra_km: number;
-  price_extra_hour: number;
+  extraKmRate: number;
+  extraHourRate: number;
+  packages: Array<{ hours: number; km: number; price: number }>;
 }): Promise<boolean> => {
   try {
     // Validate vehicle ID first
@@ -181,14 +260,24 @@ export const updateLocalFares = async (params: {
       return false;
     }
     
+    // Extract values for the legacy endpoint format
+    const pkg4hr = params.packages.find(p => p.hours === 4 && p.km === 40);
+    const pkg8hr = params.packages.find(p => p.hours === 8 && p.km === 80);
+    const pkg10hr = params.packages.find(p => p.hours === 12 && p.km === 120);
+    
+    // Prepare request with normalized ID and legacy format
+    const requestData = {
+      vehicleId: normalizedId,
+      price_4hrs_40km: pkg4hr?.price || 0,
+      price_8hrs_80km: pkg8hr?.price || 0,
+      price_10hrs_100km: pkg10hr?.price || 0,
+      price_extra_km: params.extraKmRate,
+      price_extra_hour: params.extraHourRate
+    };
+    
     // Log the validated vehicle ID
     console.log(`Updating local fares for validated vehicle: ${normalizedId} (original: ${params.vehicleId})`);
-    
-    // Prepare request with normalized ID
-    const requestData = {
-      ...params,
-      vehicleId: normalizedId
-    };
+    console.log('Local fare update data:', requestData);
     
     // First try the direct endpoint
     console.log('Trying direct endpoint for local fares update:', requestData);
@@ -273,15 +362,14 @@ export const updateLocalFares = async (params: {
  */
 export const updateAirportFares = async (params: {
   vehicleId: string;
-  basePrice?: number;
-  dropPrice?: number;
-  pickupPrice?: number;
-  pricePerKm?: number;
-  extraKmCharge?: number;
-  tier1Price?: number;
-  tier2Price?: number;
-  tier3Price?: number;
-  tier4Price?: number;
+  locationFares: {
+    pickup: number;
+    drop: number;
+    tier1: number;
+    tier2: number;
+    tier3: number;
+    tier4: number;
+  };
 }): Promise<boolean> => {
   try {
     // Validate vehicle ID first
@@ -299,8 +387,13 @@ export const updateAirportFares = async (params: {
     
     // Prepare request with normalized ID
     const requestData = {
-      ...params,
-      vehicleId: normalizedId
+      vehicleId: normalizedId,
+      pickupPrice: params.locationFares.pickup,
+      dropPrice: params.locationFares.drop,
+      tier1Price: params.locationFares.tier1,
+      tier2Price: params.locationFares.tier2,
+      tier3Price: params.locationFares.tier3,
+      tier4Price: params.locationFares.tier4
     };
     
     console.log('Updating airport fares with data:', requestData);
@@ -356,3 +449,4 @@ export const clearCache = (): void => {
   window.dispatchEvent(new CustomEvent('vehicle-data-refresh', { detail: { timestamp } }));
   window.dispatchEvent(new CustomEvent('fare-data-refresh', { detail: { timestamp } }));
 };
+

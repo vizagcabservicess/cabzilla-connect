@@ -63,7 +63,10 @@ export {
 export {
   updateOutstationFares,
   updateLocalFares,
-  updateAirportFares
+  updateAirportFares,
+  getAllOutstationFares,
+  getAllLocalFares,
+  getAllAirportFares
 } from '@/services/fareUpdateService';
 
 // Export getData function from vehicleDataService
@@ -97,3 +100,4 @@ export { CabLoading, CabRefreshing } from '@/components/cab-options/CabLoading';
 
 // Export the Skeleton component
 export { Skeleton } from '@/components/ui/skeleton';
+
