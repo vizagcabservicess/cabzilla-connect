@@ -16,6 +16,7 @@ interface VehicleManagementProps {
 export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId }) => {
   const [error, setError] = React.useState<string | null>(null);
   const [isFixing, setIsFixing] = React.useState(false);
+  const [activeTab, setActiveTab] = React.useState<string>("local");
   
   // Check if vehicle exists
   React.useEffect(() => {
@@ -23,6 +24,7 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
       try {
         await directVehicleOperation(`api/admin/check-vehicle.php?id=${vehicleId}`, 'GET');
       } catch (err) {
+        console.error('Error checking vehicle:', err);
         setError(`Could not verify vehicle with ID: ${vehicleId}. Some features might not work correctly.`);
       }
     };
@@ -87,7 +89,11 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
       )}
       
       {vehicleId && (
-        <Tabs defaultValue="local" className="w-full">
+        <Tabs 
+          value={activeTab} 
+          onValueChange={setActiveTab} 
+          className="w-full"
+        >
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="local">Local Fares</TabsTrigger>
             <TabsTrigger value="airport">Airport Fares</TabsTrigger>

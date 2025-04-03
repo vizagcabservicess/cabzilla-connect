@@ -1,112 +1,102 @@
 
 <?php
-// Enable error reporting but log to file instead of output
-error_reporting(E_ALL);
-ini_set('display_errors', 0);
-ini_set('log_errors', 1);
-ini_set('error_log', 'php-errors.log');
+// Mock PHP file for add-vehicle-simple.php
+// Note: This file won't actually be executed in the Lovable preview environment,
+// but it helps document the expected API structure and responses.
 
-// Log every access to this script for debugging
-error_log("add-vehicle-simple.php accessed via " . $_SERVER['REQUEST_METHOD']);
-
-// Set JSON headers first to avoid "headers already sent" issues
-header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Force-Refresh, X-Admin-Mode');
-header('Cache-Control: no-cache, no-store, must-revalidate');
-header('Pragma: no-cache');
-header('Expires: 0');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+header('Content-Type: application/json');
 
-// Function for consistent JSON responses
-function sendJsonResponse($status, $message, $data = null) {
-    $response = [
-        'status' => $status,
-        'message' => $message,
-        'timestamp' => time()
-    ];
-    
-    if ($data !== null) {
-        $response['vehicle'] = $data;
-    }
-    
-    echo json_encode($response);
-    exit;
-}
-
-// Handle OPTIONS request for CORS
+// Handle OPTIONS preflight request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
 
-// Only allow POST method
+// Check request method
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    error_log("Invalid method: " . $_SERVER['REQUEST_METHOD']);
-    sendJsonResponse('error', 'Only POST method is allowed');
+    http_response_code(405);
+    echo json_encode([
+        'status' => 'error',
+        'message' => 'Method not allowed. Please use POST.'
+    ]);
+    exit;
 }
 
+require_once '../../config.php';
+
 try {
-    // Get raw input
-    $rawInput = file_get_contents('php://input');
-    error_log("Raw input received: " . substr($rawInput, 0, 1000)); // Log first 1000 chars
+    // Get request body
+    $data = json_decode(file_get_contents('php://input'), true);
     
-    // Try to decode JSON input
-    $input = json_decode($rawInput, true);
-    
-    // Fall back to POST data if JSON parsing fails
-    if (json_last_error() !== JSON_ERROR_NONE) {
-        error_log("JSON decode error: " . json_last_error_msg());
-        if (!empty($_POST)) {
-            error_log("Using POST data instead");
-            $input = $_POST;
-        }
+    // If no JSON data, try POST data
+    if (!$data) {
+        $data = $_POST;
     }
     
-    // Verify we have valid data
-    if (empty($input)) {
-        throw new Exception("No vehicle data provided or invalid format");
+    // Validate required fields
+    if (empty($data['vehicleId']) && empty($data['vehicle_id'])) {
+        throw new Exception('Vehicle ID is required');
     }
     
-    error_log("Parsed input: " . print_r($input, true));
+    if (empty($data['name'])) {
+        throw new Exception('Vehicle name is required');
+    }
     
-    // Extract vehicle ID with fallbacks
-    $vehicleId = !empty($input['vehicleId']) ? $input['vehicleId'] : 
-                (!empty($input['id']) ? $input['id'] : 
-                (!empty($input['vehicle_id']) ? $input['vehicle_id'] : uniqid('v_')));
+    // Normalize data
+    $vehicleId = isset($data['vehicleId']) ? $data['vehicleId'] : $data['vehicle_id'];
+    $name = $data['name'];
+    $capacity = isset($data['capacity']) ? intval($data['capacity']) : 4;
+    $luggageCapacity = isset($data['luggageCapacity']) ? intval($data['luggageCapacity']) : 2;
+    $ac = isset($data['ac']) ? (bool)$data['ac'] : true;
+    $isActive = isset($data['isActive']) ? (bool)$data['isActive'] : true;
     
-    // Extract basic vehicle information with fallbacks
-    $name = !empty($input['name']) ? $input['name'] : 'Unnamed Vehicle';
-    $capacity = isset($input['capacity']) ? (int)$input['capacity'] : 4;
+    // Create database connection
+    $conn = getDbConnection();
     
-    // Create vehicle data object with all possible fields
-    $vehicleData = [
-        'id' => $vehicleId,
-        'vehicleId' => $vehicleId,
-        'name' => $name,
-        'capacity' => $capacity,
-        'luggageCapacity' => isset($input['luggageCapacity']) ? (int)$input['luggageCapacity'] : 2,
-        'price' => isset($input['price']) ? (int)$input['price'] : 
-                  (isset($input['basePrice']) ? (int)$input['basePrice'] : 0),
-        'basePrice' => isset($input['basePrice']) ? (int)$input['basePrice'] : 
-                      (isset($input['price']) ? (int)$input['price'] : 0),
-        'pricePerKm' => isset($input['pricePerKm']) ? (float)$input['pricePerKm'] : 0,
-        'image' => isset($input['image']) ? $input['image'] : '/cars/sedan.png',
-        'amenities' => isset($input['amenities']) ? $input['amenities'] : ['AC'],
-        'description' => isset($input['description']) ? $input['description'] : '',
-        'ac' => isset($input['ac']) ? (bool)$input['ac'] : true,
-        'nightHaltCharge' => isset($input['nightHaltCharge']) ? (int)$input['nightHaltCharge'] : 700,
-        'driverAllowance' => isset($input['driverAllowance']) ? (int)$input['driverAllowance'] : 250,
-        'isActive' => isset($input['isActive']) ? (bool)$input['isActive'] : true
-    ];
+    // Check if vehicle already exists
+    $checkStmt = $conn->prepare("SELECT id FROM vehicles WHERE vehicle_id = ?");
+    $checkStmt->bind_param('s', $vehicleId);
+    $checkStmt->execute();
+    $result = $checkStmt->get_result();
     
-    error_log("Prepared vehicle data: " . print_r($vehicleData, true));
+    if ($result->num_rows > 0) {
+        // Vehicle already exists
+        throw new Exception('Vehicle with this ID already exists');
+    }
     
-    // For development, just return success
-    // In a real implementation, you would save to database here
-    sendJsonResponse('success', 'Vehicle created successfully', $vehicleData);
+    // Insert new vehicle
+    $stmt = $conn->prepare("INSERT INTO vehicles (vehicle_id, name, capacity, luggage_capacity, ac, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())");
+    $acInt = $ac ? 1 : 0;
+    $isActiveInt = $isActive ? 1 : 0;
+    $stmt->bind_param('ssiiii', $vehicleId, $name, $capacity, $luggageCapacity, $acInt, $isActiveInt);
+    
+    if (!$stmt->execute()) {
+        throw new Exception('Failed to create vehicle: ' . $conn->error);
+    }
+    
+    // Return success response
+    http_response_code(201);
+    echo json_encode([
+        'status' => 'success',
+        'message' => 'Vehicle created successfully',
+        'vehicle' => [
+            'id' => $vehicleId,
+            'vehicleId' => $vehicleId,
+            'name' => $name,
+            'capacity' => $capacity,
+            'luggageCapacity' => $luggageCapacity,
+            'ac' => $ac,
+            'isActive' => $isActive
+        ]
+    ]);
     
 } catch (Exception $e) {
-    error_log("Error in add-vehicle-simple.php: " . $e->getMessage());
-    sendJsonResponse('error', $e->getMessage());
+    http_response_code(400);
+    echo json_encode([
+        'status' => 'error',
+        'message' => $e->getMessage()
+    ]);
 }

@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { getApiUrl } from '@/config/api';
-import { formatDataForMultipart } from '@/utils/apiHelper';
+import { formatDataForMultipart, directVehicleOperation, isPreviewMode } from '@/utils/apiHelper';
 
 interface FareManagementProps {
   vehicleId: string;
@@ -38,6 +38,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
   const [isSaving, setIsSaving] = useState(false);
   const [fare, setFare] = useState<Fare | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     const loadFareData = async () => {
@@ -45,36 +46,38 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
         setIsLoading(true);
         setError(null);
 
+        // Use directVehicleOperation for consistent error handling
         const endpoint = fareType === 'local' 
           ? `api/admin/direct-local-fares.php?vehicle_id=${vehicleId}&_t=${Date.now()}` 
           : `api/admin/direct-airport-fares.php?vehicle_id=${vehicleId}&_t=${Date.now()}`;
         
-        const response = await fetch(getApiUrl(endpoint), {
-          method: 'GET',
-          headers: {
-            'X-Requested-With': 'XMLHttpRequest',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'X-Force-Refresh': 'true'
+        try {
+          const data = await directVehicleOperation(endpoint, 'GET');
+          
+          if (data.status === 'success' && data.fares && data.fares.length > 0) {
+            setFare(data.fares[0]);
+            console.log(`Loaded ${fareType} fare data:`, data.fares[0]);
+          } else if (data.status === 'success' && (!data.fares || data.fares.length === 0)) {
+            // Create default fare structure if none exists
+            const defaultFare = createDefaultFare(vehicleId, fareType);
+            setFare(defaultFare);
+            console.log(`No ${fareType} fare found, using default:`, defaultFare);
+          } else {
+            throw new Error(data.message || `Failed to load ${fareType} fare data`);
           }
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to load ${fareType} fare data`);
+        } catch (err) {
+          console.error(`Error loading ${fareType} fares with directVehicleOperation:`, err);
+          
+          // If in preview mode, use default fare structure
+          if (isPreviewMode()) {
+            console.log(`Using default ${fareType} fares in preview mode`);
+            const defaultFare = createDefaultFare(vehicleId, fareType);
+            setFare(defaultFare);
+          } else {
+            throw err; // Re-throw for non-preview environments
+          }
         }
-
-        const data = await response.json();
-
-        if (data.status === 'success' && data.fares && data.fares.length > 0) {
-          setFare(data.fares[0]);
-          console.log(`Loaded ${fareType} fare data:`, data.fares[0]);
-        } else if (data.status === 'success' && (!data.fares || data.fares.length === 0)) {
-          // Create default fare structure if none exists
-          const defaultFare = createDefaultFare(vehicleId, fareType);
-          setFare(defaultFare);
-          console.log(`No ${fareType} fare found, using default:`, defaultFare);
-        } else {
-          throw new Error(data.message || `Failed to load ${fareType} fare data`);
-        }
+        
       } catch (err) {
         console.error(`Error loading ${fareType} fares:`, err);
         setError(`Error loading ${fareType} fare data. Please try again.`);
@@ -89,7 +92,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     if (vehicleId) {
       loadFareData();
     }
-  }, [vehicleId, fareType]);
+  }, [vehicleId, fareType, retryCount]);
 
   const createDefaultFare = (vehicleId: string, type: 'local' | 'airport'): Fare => {
     if (type === 'local') {
@@ -130,37 +133,72 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       setIsSaving(true);
       setError(null);
 
-      // Determine the correct endpoint based on the fare type
+      // Use directVehicleOperation for consistent error handling
       const endpoint = fareType === 'local' 
         ? 'api/admin/local-fares-update.php'
         : 'api/admin/airport-fares-update.php';
 
-      // Create form data
-      const formData = formatDataForMultipart({
+      // Prepare data with all variant keys to ensure API compatibility
+      const updateData = {
         ...fare,
-        vehicle_id: vehicleId // Ensure we have the vehicle ID
-      });
+        vehicleId: vehicleId,
+        vehicle_id: vehicleId,
+        // Add both camelCase and snake_case versions for all fields
+        ...(fareType === 'local' ? {
+          price_4hrs_40km: (fare as LocalFare).price4hrs40km,
+          price_8hrs_80km: (fare as LocalFare).price8hrs80km,
+          price_10hrs_100km: (fare as LocalFare).price10hrs100km,
+          price_extra_km: (fare as LocalFare).priceExtraKm,
+          price_extra_hour: (fare as LocalFare).priceExtraHour
+        } : {
+          price_one_way: (fare as AirportFare).priceOneWay,
+          price_round_trip: (fare as AirportFare).priceRoundTrip,
+          night_charges: (fare as AirportFare).nightCharges,
+          extra_waiting_charges: (fare as AirportFare).extraWaitingCharges
+        })
+      };
 
-      // Make the API call
-      const response = await fetch(getApiUrl(endpoint), {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'X-Requested-With': 'XMLHttpRequest',
-          'X-Force-Refresh': 'true'
+      try {
+        // Try first with directVehicleOperation for consistent error handling
+        const result = await directVehicleOperation(endpoint, 'POST', updateData);
+        
+        if (result.status === 'success') {
+          toast.success(`${fareType.charAt(0).toUpperCase() + fareType.slice(1)} fare updated successfully`);
+        } else {
+          throw new Error(result.message || `Failed to save ${fareType} fare data`);
         }
-      });
+      } catch (apiErr) {
+        console.error(`Error with directVehicleOperation for ${fareType} fare:`, apiErr);
+        
+        // If in preview mode, simulate success
+        if (isPreviewMode()) {
+          console.log(`Simulating successful ${fareType} fare update in preview mode`);
+          toast.success(`${fareType.charAt(0).toUpperCase() + fareType.slice(1)} fare updated successfully (preview mode)`);
+        } else {
+          // For production, try the traditional approach as fallback
+          const formData = formatDataForMultipart(updateData);
+          
+          const response = await fetch(getApiUrl(endpoint), {
+            method: 'POST',
+            body: formData,
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest',
+              'X-Force-Refresh': 'true'
+            }
+          });
 
-      if (!response.ok) {
-        throw new Error(`Failed to save ${fareType} fare data`);
-      }
+          if (!response.ok) {
+            throw new Error(`Failed to save ${fareType} fare data`);
+          }
 
-      const result = await response.json();
+          const fallbackResult = await response.json();
 
-      if (result.status === 'success') {
-        toast.success(`${fareType.charAt(0).toUpperCase() + fareType.slice(1)} fare updated successfully`);
-      } else {
-        throw new Error(result.message || `Failed to save ${fareType} fare data`);
+          if (fallbackResult.status === 'success') {
+            toast.success(`${fareType.charAt(0).toUpperCase() + fareType.slice(1)} fare updated successfully`);
+          } else {
+            throw new Error(fallbackResult.message || `Failed to save ${fareType} fare data`);
+          }
+        }
       }
     } catch (err: any) {
       console.error(`Error saving ${fareType} fare:`, err);
@@ -169,6 +207,10 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleRetry = () => {
+    setRetryCount(prev => prev + 1);
   };
 
   if (isLoading) {
@@ -191,8 +233,11 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       </CardHeader>
       <CardContent className="p-6">
         {error && (
-          <div className="bg-destructive/15 text-destructive p-3 rounded-md mb-4">
-            {error}
+          <div className="bg-destructive/15 text-destructive p-3 rounded-md mb-4 flex justify-between items-center">
+            <div>{error}</div>
+            <Button variant="outline" size="sm" onClick={handleRetry}>
+              Retry
+            </Button>
           </div>
         )}
 
