@@ -1,4 +1,3 @@
-
 import { apiBaseUrl } from '@/config/api';
 import { toast } from 'sonner';
 
@@ -70,8 +69,15 @@ export const formatDataForMultipart = (data: any): FormData => {
 /**
  * Performs direct vehicle operation with enhanced error handling
  * and support for preview environment
+ * @param endpoint API endpoint to call
+ * @param method HTTP method to use
+ * @param data Headers and/or data to include in request
  */
-export const directVehicleOperation = async (endpoint: string, method = 'GET', data?: any): Promise<any> => {
+export const directVehicleOperation = async (
+  endpoint: string, 
+  method: string = 'GET', 
+  data?: any
+): Promise<any> => {
   try {
     // Store locally for preview mode
     const storeVehicleLocally = (vehicleData: any) => {
@@ -565,88 +571,100 @@ export const directVehicleOperation = async (endpoint: string, method = 'GET', d
     }
     
     // For non-preview mode, proceed with real API request
-    const url = `${apiBaseUrl}/${endpoint.startsWith('/') ? endpoint.slice(1) : endpoint}`;
-    console.log(`Making ${method} request to ${url}`);
+    const url = endpoint.startsWith('http') ? endpoint : `${apiBaseUrl}/${endpoint.replace(/^\//, '')}`;
     
     // Extract headers and body data
-    let headers: HeadersInit = {
+    let headers: Record<string, string> = {
+      'Content-Type': 'application/json',
       'X-Requested-With': 'XMLHttpRequest'
     };
-    let bodyData = data;
     
-    // If data contains headers (like X-Admin-Mode), extract them
+    let bodyData: any = null;
+    
     if (data) {
-      // Check for header-like properties and extract them
-      const headerProps = Object.entries(data).filter(([key]) => 
-        key.startsWith('X-') || 
-        key === 'Content-Type' || 
-        key === 'Accept' || 
-        key === 'Authorization'
-      );
-      
-      // Add extracted headers
-      if (headerProps.length > 0) {
-        headerProps.forEach(([key, value]) => {
-          headers[key] = value as string;
-        });
-      }
-      
-      // If data has a __data field, use that as the actual body data
+      // If data contains __data, it's the payload for the request body
       if (data.__data) {
         bodyData = data.__data;
+        // Remove __data to avoid sending it in headers
+        const { __data, ...headerData } = data;
+        // Add remaining properties as headers
+        headers = { ...headers, ...headerData };
+      } else {
+        // Otherwise, treat entire data object as headers
+        headers = { ...headers, ...data };
       }
-    }
-    
-    if (method !== 'GET' && !(bodyData instanceof FormData)) {
-      headers['Content-Type'] = 'application/json';
     }
     
     const requestOptions: RequestInit = {
       method,
       headers,
-      mode: 'cors',
-      cache: 'no-store'
+      credentials: 'omit',
+      mode: 'cors'
     };
     
-    if (bodyData && method !== 'GET') {
-      if (bodyData instanceof FormData) {
-        requestOptions.body = bodyData;
-      } else {
+    // Add body if method is not GET and we have body data
+    if (method !== 'GET' && bodyData) {
+      if (headers['Content-Type'] === 'application/json') {
         requestOptions.body = JSON.stringify(bodyData);
+      } else if (bodyData instanceof FormData) {
+        requestOptions.body = bodyData;
+        // When using FormData, don't set Content-Type header - browser will set it with boundary
+        delete headers['Content-Type'];
+      } else {
+        // Convert to FormData for better PHP compatibility
+        const formData = new FormData();
+        Object.entries(bodyData).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            if (typeof value === 'object') {
+              formData.append(key, JSON.stringify(value));
+            } else {
+              formData.append(key, String(value));
+            }
+          }
+        });
+        requestOptions.body = formData;
+        delete headers['Content-Type'];
       }
     }
+    
+    console.log(`Request options:`, {
+      url,
+      method,
+      headers,
+      bodyData: bodyData ? '(data payload)' : null
+    });
     
     const response = await fetch(url, requestOptions);
     
     if (!response.ok) {
-      throw new Error(`Request failed with status code ${response.status}`);
+      throw new Error(`HTTP error ${response.status}`);
     }
     
-    const responseText = await response.text();
+    const contentType = response.headers.get('content-type') || '';
     
-    try {
-      const result = JSON.parse(responseText);
-      return result;
-    } catch (e) {
-      console.error('Failed to parse JSON response:', e, responseText);
-      throw new Error('Invalid JSON response from server');
+    if (contentType.includes('application/json')) {
+      return await response.json();
+    } else {
+      const text = await response.text();
+      try {
+        // Try to parse as JSON anyway
+        return JSON.parse(text);
+      } catch (e) {
+        // Return as text if not JSON
+        console.warn('Response is not JSON:', text.substring(0, 100) + '...');
+        return { 
+          status: 'error', 
+          message: 'Invalid response format',
+          rawResponse: text.substring(0, 500)
+        };
+      }
     }
-  } catch (error: any) {
-    console.error(`API operation error for ${endpoint}:`, error);
-    
-    // In preview mode, don't show errors for certain endpoints
-    if (isPreviewMode()) {
-      console.log(`Preview mode: Suppressing error for ${endpoint}`);
-      return {
-        status: 'error',
-        message: `Operation failed in preview mode: ${error.message}`,
-        preview: true,
-        error: error.message,
-        timestamp: Date.now()
-      };
-    }
-    
-    toast.error(`API error: ${error.message}`);
-    throw error;
+  } catch (error) {
+    console.error(`Error in directVehicleOperation (${endpoint}):`, error);
+    return {
+      status: 'error',
+      message: error instanceof Error ? error.message : 'Unknown error',
+      error
+    };
   }
 };

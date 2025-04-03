@@ -97,6 +97,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
         'X-Admin-Mode': 'true',
         'X-Debug': 'true'
       };
+      
       const result = await directVehicleOperation(endpoint, 'GET', headers);
       
       if (result && result.status === 'success' && result.fares && result.fares.length > 0) {
