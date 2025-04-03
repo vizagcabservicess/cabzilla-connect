@@ -1,26 +1,7 @@
-
 import { getApiUrl } from '@/config/api';
 import { toast } from 'sonner';
 import { getBypassHeaders } from '@/config/requestConfig';
-import { normalizeVehicleId, checkVehicleId } from './vehicleIdValidator';
-
-// Standard vehicle IDs (lowercase for case-insensitive matching)
-const standardVehicleIds = [
-  'sedan', 'ertiga', 'innova', 'innova_crysta', 'luxury', 'tempo', 'traveller', 'etios', 'mpv', 'hycross', 'urbania'
-];
-
-// Hard-coded mappings for known numeric IDs - MUST match with backend
-const numericIdMappings: Record<string, string> = {
-  '1': 'sedan',
-  '2': 'ertiga',
-  '180': 'etios',
-  '1266': 'innova',
-  '592': 'urbania',
-  '1290': 'sedan',
-  '1291': 'etios',
-  '1292': 'sedan',
-  '1293': 'urbania'
-};
+import { normalizeVehicleId, checkVehicleId, STANDARD_VEHICLE_TYPES, NUMERIC_ID_MAPPINGS } from './vehicleIdValidator';
 
 /**
  * Get all local fares from the backend
@@ -56,8 +37,8 @@ export const validateAndNormalizeVehicleId = (vehicleId: string): string | null 
     console.log(`Checking numeric vehicle ID: ${vehicleId}`);
     
     // Check if we have a mapping for this numeric ID
-    if (numericIdMappings[vehicleId]) {
-      const mappedId = numericIdMappings[vehicleId];
+    if (NUMERIC_ID_MAPPINGS[vehicleId]) {
+      const mappedId = NUMERIC_ID_MAPPINGS[vehicleId];
       console.log(`Mapped numeric ID ${vehicleId} to ${mappedId}`);
       return mappedId;
     }
@@ -76,7 +57,7 @@ export const validateAndNormalizeVehicleId = (vehicleId: string): string | null 
   }
   
   // Check if normalized ID is in our standard list
-  const isStandard = standardVehicleIds.includes(normalizedId.toLowerCase());
+  const isStandard = STANDARD_VEHICLE_TYPES.includes(normalizedId.toLowerCase());
   if (!isStandard) {
     // Check for common aliases
     if (['mpv', 'innova_hycross', 'hycross'].includes(normalizedId.toLowerCase())) {
