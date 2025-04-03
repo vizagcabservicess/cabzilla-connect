@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { AlertCircle, RefreshCw, Globe, Server, Network, ExternalLink, FileCog, Hammer, RefreshCcw, ServerCrash, DatabaseBackup } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -25,26 +26,21 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
   const handleRefresh = () => {
     setIsRefreshing(true);
     
-    // Show toast that we're clearing cache
-    toast.info('Clearing all caches and refreshing...', {
-      id: 'clearing-cache',
+    // Show toast that we're refreshing
+    toast.info('Refreshing data...', {
+      id: 'refreshing-data',
       duration: 2000
     });
     
-    // Import and use the clearAllCaches function
-    import('@/lib/cacheManager').then(({ clearAllCaches }) => {
-      clearAllCaches(false).then(() => {
-        // Then call the onRefresh handler if provided
-        if (onRefresh) {
-          onRefresh();
-        } else {
-          // If no handler provided, reload the page
-          window.location.reload();
-        }
-        
-        setIsRefreshing(false);
-      });
-    });
+    // Then call the onRefresh handler if provided
+    if (onRefresh) {
+      onRefresh();
+    } else {
+      // If no handler provided, reload the page
+      window.location.reload();
+    }
+    
+    setIsRefreshing(false);
   };
   
   const runDiagnostics = () => {
@@ -52,7 +48,7 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
     toast.info('Running connection diagnostics...');
     
     // Try ping to API
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
     const timestamp = Date.now();
     
     // Test with basic fetch to avoid CORS issues
@@ -98,7 +94,7 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
   };
   
   const openDirectApi = (endpoint: string) => {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
     const timestamp = Date.now();
     const url = `${baseUrl}/api/admin/${endpoint}?_t=${timestamp}`;
     
@@ -108,11 +104,11 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
   
   const runEmergencyFix = () => {
     // This is a last-resort function to try to reestablish database connection
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
     
     toast.info('Attempting emergency reconnection to API endpoint...');
     
-    // Clear all caches first
+    // Clear fare service cache
     fareService.clearCache();
     
     // Try the unified direct-fare-update endpoint
@@ -141,7 +137,7 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
   };
   
   const runServerchecks = () => {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
     toast.info('Testing direct server connection...');
     
     // Test our unified direct endpoint
@@ -167,7 +163,7 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
   };
   
   const runTableSync = () => {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
     setSyncingTables(true);
     toast.info('Syncing database tables...');
     
@@ -198,7 +194,7 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
   // New function to test direct database connection
   const testDirectDatabaseConnection = () => {
     setTestingDirectDb(true);
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://vizagup.com';
     toast.info('Testing direct database connection...');
     
     // Create a test connection URL with debug parameters
@@ -250,7 +246,7 @@ export function CabRefreshWarning({ message, onRefresh, isAdmin = false }: CabRe
             disabled={isRefreshing}
           >
             <RefreshCw className={`h-3.5 w-3.5 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
-            {isRefreshing ? 'Refreshing...' : 'Clear Cache & Refresh'}
+            {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
           </Button>
           
           <Button 
