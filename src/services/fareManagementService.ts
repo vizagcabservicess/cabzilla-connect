@@ -127,13 +127,17 @@ export async function updateAirportFares(fareData: Record<string, any>): Promise
     
     // Ensure all vehicle ID formats are present
     cleanData.vehicle_id = cleanData.vehicleId;
-    cleanData.id = cleanData.vehicleId;
+    
+    // Avoid infinite recursion by removing any self-references
+    delete cleanData.id; // We don't need this as we have vehicleId and vehicle_id
     
     // Try the direct API first
     let success = false;
     let errorMessage = '';
     
     try {
+      console.log('Sending airport fare data to direct API:', JSON.stringify(cleanData));
+      
       const directResult = await directVehicleOperation('/api/admin/direct-airport-fares-update.php', 'POST', {
         headers: {
           'X-Admin-Mode': 'true',
@@ -155,6 +159,8 @@ export async function updateAirportFares(fareData: Record<string, any>): Promise
     // Try backup API if direct one failed
     if (!success) {
       try {
+        console.log('Direct API failed, trying backup API with data:', JSON.stringify(cleanData));
+        
         const updateResult = await directVehicleOperation('/api/admin/airport-fares-update.php', 'POST', {
           headers: {
             'X-Admin-Mode': 'true',

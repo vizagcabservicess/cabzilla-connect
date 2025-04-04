@@ -90,6 +90,20 @@ if ($vehicleId && strpos($vehicleId, 'item-') === 0) {
     file_put_contents($logFile, "[$timestamp] Cleaned vehicle ID from prefix: $vehicleId\n", FILE_APPEND);
 }
 
+// For Lovable preview mode, just use a default vehicle ID if not provided
+$isPreviewMode = false;
+if (isset($_SERVER['HTTP_HOST']) && (
+    strpos($_SERVER['HTTP_HOST'], 'lovableproject.com') !== false ||
+    strpos($_SERVER['HTTP_HOST'], 'localhost') !== false ||
+    strpos($_SERVER['HTTP_HOST'], '127.0.0.1') !== false
+)) {
+    $isPreviewMode = true;
+    if (!$vehicleId) {
+        $vehicleId = 'sedan';
+        file_put_contents($logFile, "[$timestamp] Using default vehicleId 'sedan' in preview mode\n", FILE_APPEND);
+    }
+}
+
 if (!$vehicleId) {
     file_put_contents($logFile, "[$timestamp] ERROR: No vehicle ID found in request\n", FILE_APPEND);
     http_response_code(400);
@@ -182,6 +196,15 @@ $defaultFares = [
         'extraKmCharge' => 22
     ],
     'tempo_traveller' => [
+        'pickupPrice' => 2000,
+        'dropPrice' => 2000,
+        'tier1Price' => 1600,
+        'tier2Price' => 1800,
+        'tier3Price' => 2000,
+        'tier4Price' => 2500,
+        'extraKmCharge' => 19
+    ],
+    'tempo' => [
         'pickupPrice' => 2000,
         'dropPrice' => 2000,
         'tier1Price' => 1600,
