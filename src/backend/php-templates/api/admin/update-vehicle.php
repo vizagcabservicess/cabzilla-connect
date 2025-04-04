@@ -1,3 +1,4 @@
+
 <?php
 // Alias for vehicle-update.php
 // This file simply includes the main vehicle-update.php file for compatibility
@@ -30,6 +31,12 @@ $rawInput = file_get_contents('php://input');
 file_put_contents($logFile, "[$timestamp] $requestMethod request received\n", FILE_APPEND);
 file_put_contents($logFile, "[$timestamp] Input data: $rawInput\n", FILE_APPEND);
 
+// Create cache directory if it doesn't exist
+$cacheDir = __DIR__ . '/../../cache';
+if (!file_exists($cacheDir)) {
+    mkdir($cacheDir, 0755, true);
+}
+
 // Before passing to vehicle-update.php, make sure the data is parsed and set correctly
 $vehicleData = json_decode($rawInput, true);
 if (!$vehicleData && $_POST) {
@@ -38,7 +45,6 @@ if (!$vehicleData && $_POST) {
 }
 
 // Load the existing vehicle data from persistent storage to avoid data loss
-$cacheDir = __DIR__ . '/../../cache';
 $persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
 $savedVehicleData = null;
 
@@ -99,6 +105,15 @@ if ($vehicleData) {
     $_POST = array_merge($_POST, $vehicleData);
     $_SERVER['VEHICLE_DATA'] = $vehicleData;
     file_put_contents($logFile, "[$timestamp] Enhanced data: " . json_encode($vehicleData) . "\n", FILE_APPEND);
+}
+
+// Try updating directly here if vehicle-update.php doesn't exist
+if (!file_exists(__DIR__ . '/vehicle-update.php')) {
+    file_put_contents($logFile, "[$timestamp] vehicle-update.php doesn't exist, updating directly\n", FILE_APPEND);
+    
+    // Include the direct-vehicle-modify.php script instead
+    require_once __DIR__ . '/direct-vehicle-modify.php';
+    exit;
 }
 
 // Include the main vehicle update file

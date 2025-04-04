@@ -1,4 +1,3 @@
-
 <?php
 /**
  * reload-vehicles.php - Reloads vehicle data from persistent storage
@@ -44,6 +43,15 @@ function logDebug($message, $data = null) {
 }
 
 logDebug("Vehicle reload requested");
+
+// Ensure we have a persistent backup before each reload operation
+$persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
+$backupFile = $cacheDir . '/vehicles_persistent_backup_' . date('Y-m-d_H-i-s') . '.json';
+
+if (file_exists($persistentCacheFile)) {
+    copy($persistentCacheFile, $backupFile);
+    logDebug("Created backup of persistent cache at: " . basename($backupFile));
+}
 
 // First, try to fetch data from the actual database
 $dbVehicles = [];
@@ -118,7 +126,6 @@ if (file_exists(__DIR__ . '/../../config.php')) {
 }
 
 // Load data from persistent storage (as fallback or to merge with DB data)
-$persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
 $persistentVehicles = [];
 
 if (file_exists($persistentCacheFile)) {
@@ -143,14 +150,14 @@ if (file_exists($persistentCacheFile)) {
     logDebug("Persistent cache file does not exist");
 }
 
-// Merge data from database and persistent storage (database takes precedence)
+// Merge data from database and persistent storage
 $vehicles = [];
 
 if (count($dbVehicles) > 0) {
     // Create an associative array by ID for easier merging
     $vehiclesById = [];
     
-    // First add persistent vehicles
+    // Add persistent vehicles first
     foreach ($persistentVehicles as $vehicle) {
         $id = $vehicle['id'] ?? $vehicle['vehicleId'] ?? '';
         if (!empty($id)) {
@@ -158,11 +165,19 @@ if (count($dbVehicles) > 0) {
         }
     }
     
-    // Then overwrite with database vehicles (they take precedence)
+    // Database vehicles take precedence - they are the source of truth
     foreach ($dbVehicles as $vehicle) {
         $id = $vehicle['id'] ?? $vehicle['vehicleId'] ?? '';
         if (!empty($id)) {
-            $vehiclesById[$id] = $vehicle;
+            // If the vehicle exists in persistent storage, merge the data
+            // giving precedence to database values
+            if (isset($vehiclesById[$id])) {
+                // Keep non-database fields from persistent storage
+                $mergedVehicle = array_merge($vehiclesById[$id], $vehicle);
+                $vehiclesById[$id] = $mergedVehicle;
+            } else {
+                $vehiclesById[$id] = $vehicle;
+            }
         }
     }
     

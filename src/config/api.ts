@@ -26,13 +26,22 @@ export const forceRefreshHeaders = {
  * @returns Full API URL
  */
 export const getApiUrl = (endpoint: string): string => {
-  // If the window object is available, prefer using current origin
-  const base = typeof window !== 'undefined' ? window.location.origin : apiBaseUrl;
-  
   // If endpoint already includes http/https, return it as is
   if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
     return endpoint;
   }
+  
+  // For preview/development mode, use relative URLs to avoid CORS issues
+  if (window.location.hostname.includes('lovableproject.com') || 
+      window.location.hostname.includes('localhost') ||
+      window.location.hostname.includes('lovable.app')) {
+    // Remove leading slash if present for relative URLs
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
+    return cleanEndpoint;
+  }
+  
+  // For production, use origin or apiBaseUrl
+  const base = typeof window !== 'undefined' ? window.location.origin : apiBaseUrl;
   
   // Remove trailing slash from base URL if present
   const cleanBase = (base || '').endsWith('/') ? base.slice(0, -1) : base;

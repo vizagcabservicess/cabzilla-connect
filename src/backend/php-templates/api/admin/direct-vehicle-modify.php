@@ -111,6 +111,157 @@ if (file_exists($persistentCacheFile)) {
     }
 }
 
+// Try to update the database if possible
+$databaseUpdated = false;
+if (file_exists(__DIR__ . '/../../config.php')) {
+    try {
+        require_once __DIR__ . '/../../config.php';
+        if (function_exists('getDbConnection')) {
+            $conn = getDbConnection();
+            if ($conn) {
+                logDebug("Connected to database successfully");
+                
+                // Create amenities string
+                $amenitiesValue = '';
+                if (isset($vehicleData['amenities'])) {
+                    if (is_array($vehicleData['amenities'])) {
+                        $amenitiesValue = json_encode($vehicleData['amenities']);
+                    } else if (is_string($vehicleData['amenities'])) {
+                        $amenitiesValue = $vehicleData['amenities'];
+                    }
+                }
+                
+                // Check if vehicle exists
+                $stmt = $conn->prepare("SELECT * FROM vehicles WHERE vehicle_id = ? OR id = ?");
+                $stmt->bind_param("ss", $vehicleId, $vehicleId);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                
+                if ($result->num_rows > 0) {
+                    // Update existing vehicle
+                    logDebug("Updating existing vehicle in database");
+                    
+                    $sql = "UPDATE vehicles SET 
+                        name = ?, 
+                        capacity = ?, 
+                        luggage_capacity = ?, 
+                        base_price = ?, 
+                        price_per_km = ?, 
+                        image = ?, 
+                        amenities = ?, 
+                        description = ?, 
+                        ac = ?, 
+                        night_halt_charge = ?, 
+                        driver_allowance = ?, 
+                        is_active = ?
+                    WHERE vehicle_id = ? OR id = ?";
+                    
+                    $stmt = $conn->prepare($sql);
+                    
+                    $name = $vehicleData['name'] ?? '';
+                    $capacity = isset($vehicleData['capacity']) ? (int)$vehicleData['capacity'] : 4;
+                    $luggageCapacity = isset($vehicleData['luggageCapacity']) ? (int)$vehicleData['luggageCapacity'] : 
+                                      (isset($vehicleData['luggage_capacity']) ? (int)$vehicleData['luggage_capacity'] : 2);
+                    $basePrice = isset($vehicleData['basePrice']) ? (float)$vehicleData['basePrice'] : 
+                                (isset($vehicleData['base_price']) ? (float)$vehicleData['base_price'] : 
+                                (isset($vehicleData['price']) ? (float)$vehicleData['price'] : 0));
+                    $pricePerKm = isset($vehicleData['pricePerKm']) ? (float)$vehicleData['pricePerKm'] : 
+                                 (isset($vehicleData['price_per_km']) ? (float)$vehicleData['price_per_km'] : 0);
+                    $image = $vehicleData['image'] ?? '';
+                    $description = $vehicleData['description'] ?? '';
+                    $ac = isset($vehicleData['ac']) ? (int)(bool)$vehicleData['ac'] : 1;
+                    $nightHaltCharge = isset($vehicleData['nightHaltCharge']) ? (float)$vehicleData['nightHaltCharge'] : 
+                                      (isset($vehicleData['night_halt_charge']) ? (float)$vehicleData['night_halt_charge'] : 700);
+                    $driverAllowance = isset($vehicleData['driverAllowance']) ? (float)$vehicleData['driverAllowance'] : 
+                                      (isset($vehicleData['driver_allowance']) ? (float)$vehicleData['driver_allowance'] : 250);
+                    $isActive = isset($vehicleData['isActive']) ? (int)(bool)$vehicleData['isActive'] : 
+                               (isset($vehicleData['is_active']) ? (int)(bool)$vehicleData['is_active'] : 1);
+                    
+                    $stmt->bind_param("siiddsssiddiss", 
+                        $name, 
+                        $capacity, 
+                        $luggageCapacity, 
+                        $basePrice, 
+                        $pricePerKm, 
+                        $image, 
+                        $amenitiesValue, 
+                        $description, 
+                        $ac, 
+                        $nightHaltCharge, 
+                        $driverAllowance, 
+                        $isActive,
+                        $vehicleId,
+                        $vehicleId
+                    );
+                    
+                    if ($stmt->execute()) {
+                        logDebug("Vehicle updated in database successfully");
+                        $databaseUpdated = true;
+                    } else {
+                        logDebug("Failed to update vehicle in database: " . $stmt->error);
+                    }
+                } else {
+                    // Insert new vehicle
+                    logDebug("Inserting new vehicle into database");
+                    
+                    $sql = "INSERT INTO vehicles 
+                        (vehicle_id, name, capacity, luggage_capacity, base_price, price_per_km, image, amenities, description, ac, night_halt_charge, driver_allowance, is_active) 
+                    VALUES 
+                        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                    
+                    $stmt = $conn->prepare($sql);
+                    
+                    $name = $vehicleData['name'] ?? '';
+                    $capacity = isset($vehicleData['capacity']) ? (int)$vehicleData['capacity'] : 4;
+                    $luggageCapacity = isset($vehicleData['luggageCapacity']) ? (int)$vehicleData['luggageCapacity'] : 
+                                      (isset($vehicleData['luggage_capacity']) ? (int)$vehicleData['luggage_capacity'] : 2);
+                    $basePrice = isset($vehicleData['basePrice']) ? (float)$vehicleData['basePrice'] : 
+                                (isset($vehicleData['base_price']) ? (float)$vehicleData['base_price'] : 
+                                (isset($vehicleData['price']) ? (float)$vehicleData['price'] : 0));
+                    $pricePerKm = isset($vehicleData['pricePerKm']) ? (float)$vehicleData['pricePerKm'] : 
+                                 (isset($vehicleData['price_per_km']) ? (float)$vehicleData['price_per_km'] : 0);
+                    $image = $vehicleData['image'] ?? '';
+                    $description = $vehicleData['description'] ?? '';
+                    $ac = isset($vehicleData['ac']) ? (int)(bool)$vehicleData['ac'] : 1;
+                    $nightHaltCharge = isset($vehicleData['nightHaltCharge']) ? (float)$vehicleData['nightHaltCharge'] : 
+                                      (isset($vehicleData['night_halt_charge']) ? (float)$vehicleData['night_halt_charge'] : 700);
+                    $driverAllowance = isset($vehicleData['driverAllowance']) ? (float)$vehicleData['driverAllowance'] : 
+                                      (isset($vehicleData['driver_allowance']) ? (float)$vehicleData['driver_allowance'] : 250);
+                    $isActive = isset($vehicleData['isActive']) ? (int)(bool)$vehicleData['isActive'] : 
+                               (isset($vehicleData['is_active']) ? (int)(bool)$vehicleData['is_active'] : 1);
+                    
+                    $stmt->bind_param("ssiiddsssiddi", 
+                        $vehicleId, 
+                        $name, 
+                        $capacity, 
+                        $luggageCapacity, 
+                        $basePrice, 
+                        $pricePerKm, 
+                        $image, 
+                        $amenitiesValue, 
+                        $description, 
+                        $ac, 
+                        $nightHaltCharge, 
+                        $driverAllowance, 
+                        $isActive
+                    );
+                    
+                    if ($stmt->execute()) {
+                        logDebug("Vehicle inserted into database successfully");
+                        $databaseUpdated = true;
+                    } else {
+                        logDebug("Failed to insert vehicle into database: " . $stmt->error);
+                    }
+                }
+                
+                $conn->close();
+            }
+        }
+    } catch (Exception $e) {
+        logDebug("Database error: " . $e->getMessage());
+    }
+}
+
 // Find the vehicle in persistent data
 $vehicleIndex = -1;
 foreach ($persistentData as $index => $vehicle) {
@@ -261,6 +412,6 @@ foreach ($cacheFiles as $file) {
 // Return success response with updated vehicle data
 echo json_encode([
     'status' => 'success',
-    'message' => 'Vehicle updated successfully via direct-vehicle-modify',
+    'message' => 'Vehicle updated successfully via direct-vehicle-modify' . ($databaseUpdated ? ' and database' : ''),
     'vehicle' => $normalizedVehicle
 ]);
