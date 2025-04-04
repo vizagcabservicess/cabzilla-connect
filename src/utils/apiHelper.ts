@@ -1,4 +1,3 @@
-
 // Configuration and helpers for API requests
 import { toast } from 'sonner';
 import { apiBaseUrl } from '@/config/api';
@@ -9,9 +8,10 @@ import { apiBaseUrl } from '@/config/api';
 export const isPreviewMode = (): boolean => {
   return (
     typeof window !== 'undefined' &&
-    (window.location.hostname.includes('lovable.app') ||
-     window.location.hostname.includes('lovableproject.com') ||
-     window.location.hostname.includes('localhost'))
+    (window.location.hostname.includes('localhost') ||
+     window.location.hostname.includes('127.0.0.1') ||
+     window.location.hostname.includes('vizagtaxihub.com') ||
+     window.location.hostname.includes('demo'))
   );
 };
 
@@ -226,5 +226,59 @@ export const forceRefreshVehicles = async (): Promise<boolean> => {
   } catch (error) {
     console.error('Error refreshing vehicles:', error);
     return false;
+  }
+};
+
+/**
+ * Create a new vehicle
+ */
+export const createVehicle = async (vehicleData: any): Promise<any> => {
+  try {
+    return await directVehicleOperation('api/admin/direct-vehicle-create.php', 'POST', {
+      data: vehicleData,
+      headers: {
+        'X-Admin-Mode': 'true',
+        'X-Force-Refresh': 'true'
+      }
+    });
+  } catch (error) {
+    console.error('Error creating vehicle:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update an existing vehicle
+ */
+export const updateVehicle = async (vehicleData: any): Promise<any> => {
+  try {
+    return await directVehicleOperation('api/admin/direct-vehicle-update.php', 'POST', {
+      data: vehicleData,
+      headers: {
+        'X-Admin-Mode': 'true',
+        'X-Force-Refresh': 'true'
+      }
+    });
+  } catch (error) {
+    console.error('Error updating vehicle:', error);
+    throw error;
+  }
+};
+
+/**
+ * Delete a vehicle
+ */
+export const deleteVehicle = async (vehicleId: string): Promise<any> => {
+  try {
+    return await directVehicleOperation('api/admin/vehicle-delete.php', 'POST', {
+      data: { id: vehicleId },
+      headers: {
+        'X-Admin-Mode': 'true',
+        'X-Force-Refresh': 'true'
+      }
+    });
+  } catch (error) {
+    console.error('Error deleting vehicle:', error);
+    throw error;
   }
 };

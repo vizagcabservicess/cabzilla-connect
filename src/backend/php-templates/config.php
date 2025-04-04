@@ -6,9 +6,9 @@
 
 // Database connection configuration
 $db_host = 'localhost';
-$db_user = 'root';
-$db_pass = '';
-$db_name = 'vizag_cabs';
+$db_user = 'u64460565_usr_be';
+$db_pass = 'Vizag@1213';
+$db_name = 'u64460565_db_be';
 
 // Function to get database connection
 function getDbConnection() {
@@ -22,7 +22,7 @@ function getDbConnection() {
     // Check for in-memory DB mode (for preview environments)
     $isPreview = false;
     $host = $_SERVER['HTTP_HOST'] ?? '';
-    if (strpos($host, 'lovable.app') !== false || strpos($host, 'lovableproject.com') !== false || strpos($host, 'localhost') !== false) {
+    if (strpos($host, 'localhost') !== false || strpos($host, '127.0.0.1') !== false || strpos($host, 'demo') !== false) {
         $isPreview = true;
     }
     
@@ -590,9 +590,9 @@ function createMockDbConnection() {
 }
 
 // App configuration
-define('APP_URL', 'https://vizagcabs.com');
-define('APP_NAME', 'Vizag Cabs');
-define('APP_EMAIL', 'info@vizagcabs.com');
+define('APP_URL', 'https://vizagtaxihub.com');
+define('APP_NAME', 'Vizag Taxi Hub');
+define('APP_EMAIL', 'info@vizagtaxihub.com');
 define('APP_PHONE', '+91-9876543210');
 
 // Cache settings
