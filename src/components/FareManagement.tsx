@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -160,7 +159,6 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     setError(null);
     
     try {
-      // Make sure vehicleId is properly set
       const dataToSave = {
         ...fareData,
         vehicleId: vehicleId,
@@ -180,7 +178,6 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       lastFetchTime.current = Date.now();
       fetchAttempts.current = 0;
       
-      // Refresh data after saving
       setTimeout(() => {
         if (mountedRef.current) {
           loadFareData();
@@ -423,7 +420,6 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
             </div>
           </div>
           
-          {/* Adding tier pricing fields for airport fares */}
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="tier1Price">Tier 1 Price (≤ 10km) (₹)</Label>
