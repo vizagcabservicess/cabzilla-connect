@@ -1,17 +1,15 @@
-
 // Configuration and helpers for API requests
 import { toast } from 'sonner';
 import { apiBaseUrl } from '@/config/api';
 
 /**
- * Function to determine if running in preview mode
+ * Function to determine if running in development/preview mode
  */
 export const isPreviewMode = (): boolean => {
   return (
     typeof window !== 'undefined' &&
     (window.location.hostname.includes('localhost') ||
      window.location.hostname.includes('127.0.0.1') ||
-     window.location.hostname.includes('vizagup.com') ||
      window.location.hostname.includes('demo'))
   );
 };
@@ -31,9 +29,7 @@ export const directVehicleOperation = async (
 ): Promise<any> => {
   // Use mock data in preview mode if provided
   if (isPreviewMode() && options.mock) {
-    console.log(`[Preview Mode] Using mock data for ${endpoint}`);
-    
-    // Simulate network delay
+    console.log(`[Development Mode] Using mock data for ${endpoint}`);
     await new Promise(resolve => setTimeout(resolve, 300));
     return options.mock;
   }

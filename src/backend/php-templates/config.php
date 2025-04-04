@@ -1,7 +1,7 @@
-
 <?php
 /**
  * Configuration file for database and application settings
+ * Production configuration for vizagup.com
  */
 
 // Database connection configuration
@@ -14,24 +14,17 @@ $db_name = 'u64460565_db_be';
 function getDbConnection() {
     global $db_host, $db_user, $db_pass, $db_name;
     
-    // For development/mock purposes, we'll simulate the DB connection and return a mock object if needed
-    if (defined('MOCK_DB') && MOCK_DB === true) {
-        return createMockDbConnection();
-    }
-    
-    // Check for in-memory DB mode (for preview environments)
-    $isPreview = false;
+    // Check if we're in a development environment
+    $isDevEnvironment = false;
     $host = $_SERVER['HTTP_HOST'] ?? '';
-    if (strpos($host, 'localhost') !== false || strpos($host, '127.0.0.1') !== false || strpos($host, 'demo') !== false) {
-        $isPreview = true;
+    if (strpos($host, 'localhost') !== false || 
+        strpos($host, '127.0.0.1') !== false || 
+        strpos($host, 'demo') !== false) {
+        $isDevEnvironment = true;
     }
     
-    if ($isPreview) {
-        return createPreviewDbConnection();
-    }
-    
-    // Create a real connection
     try {
+        // Create a real database connection
         $conn = new mysqli($db_host, $db_user, $db_pass, $db_name);
         
         // Check connection
@@ -44,15 +37,25 @@ function getDbConnection() {
         
         return $conn;
     } catch (Exception $e) {
-        // If real connection fails, fall back to in-memory for development
-        error_log("Real DB connection failed, falling back to preview mode: " . $e->getMessage());
-        return createPreviewDbConnection();
+        // Log the error
+        error_log("Database connection error: " . $e->getMessage());
+        
+        // If in development environment, fall back to in-memory database
+        if ($isDevEnvironment) {
+            return createDevEnvironmentConnection();
+        }
+        
+        // In production, rethrow the exception
+        throw $e;
     }
 }
 
-// Create a mock/in-memory database for preview environments
-function createPreviewDbConnection() {
-    // Create an object that simulates MySQLi
+/**
+ * Create a development/test environment database connection
+ * This uses in-memory or file-based storage for development purposes
+ */
+function createDevEnvironmentConnection() {
+    // Create an object that simulates MySQLi for development
     $conn = new class {
         public $cache_dir;
         public $tables = [];
@@ -68,79 +71,81 @@ function createPreviewDbConnection() {
                 mkdir($this->cache_dir, 0755, true);
             }
             
-            // Initialize tables if needed
-            $this->createTablesIfNotExist();
+            // Initialize tables from cache files
+            $this->loadTablesFromCache();
         }
         
-        function createTablesIfNotExist() {
-            // Check and create tables if they don't exist
-            $vehiclesFile = $this->cache_dir . '/vehicles.json';
-            $localFaresFile = $this->cache_dir . '/local_package_fares.json';
-            $airportFaresFile = $this->cache_dir . '/airport_transfer_fares.json';
-            $outstationFaresFile = $this->cache_dir . '/outstation_fares.json';
+        function loadTablesFromCache() {
+            $tableFiles = [
+                'vehicles' => 'vehicles.json',
+                'local_package_fares' => 'local_package_fares.json',
+                'airport_transfer_fares' => 'airport_transfer_fares.json',
+                'outstation_fares' => 'outstation_fares.json'
+            ];
             
-            if (!file_exists($vehiclesFile)) {
-                file_put_contents($vehiclesFile, json_encode([]));
+            foreach ($tableFiles as $table => $file) {
+                $filePath = $this->cache_dir . '/' . $file;
+                
+                if (!file_exists($filePath)) {
+                    file_put_contents($filePath, json_encode([]));
+                }
+                
+                $this->tables[$table] = json_decode(file_get_contents($filePath), true) ?: [];
             }
             
-            if (!file_exists($localFaresFile)) {
-                file_put_contents($localFaresFile, json_encode([]));
-            }
-            
-            if (!file_exists($airportFaresFile)) {
-                file_put_contents($airportFaresFile, json_encode([]));
-            }
-            
-            if (!file_exists($outstationFaresFile)) {
-                file_put_contents($outstationFaresFile, json_encode([]));
-            }
-            
-            // Load tables into memory
-            $this->tables['vehicles'] = json_decode(file_get_contents($vehiclesFile), true) ?: [];
-            $this->tables['local_package_fares'] = json_decode(file_get_contents($localFaresFile), true) ?: [];
-            $this->tables['airport_transfer_fares'] = json_decode(file_get_contents($airportFaresFile), true) ?: [];
-            $this->tables['outstation_fares'] = json_decode(file_get_contents($outstationFaresFile), true) ?: [];
-            
-            // Also load from vehicles_persistent.json if it exists
+            // Also load persistent vehicle data if available
+            $this->loadPersistentVehicleData();
+        }
+        
+        function loadPersistentVehicleData() {
             $persistentFile = $this->cache_dir . '/vehicles_persistent.json';
+            
             if (file_exists($persistentFile)) {
                 $persistentData = json_decode(file_get_contents($persistentFile), true) ?: [];
                 
-                // Convert to DB schema and update tables
                 foreach ($persistentData as $vehicle) {
                     $dbVehicle = $this->convertToDbSchema($vehicle);
                     
-                    // Check if vehicle already exists in our table
+                    // Update existing or add new
                     $found = false;
                     foreach ($this->tables['vehicles'] as &$v) {
                         if ($v['vehicle_id'] === $dbVehicle['vehicle_id']) {
-                            $v = $dbVehicle; // Update
+                            $v = $dbVehicle;
                             $found = true;
                             break;
                         }
                     }
                     
                     if (!$found) {
-                        $this->tables['vehicles'][] = $dbVehicle; // Add new
+                        $this->tables['vehicles'][] = $dbVehicle;
                     }
                 }
                 
                 // Save updated vehicles table
-                file_put_contents($vehiclesFile, json_encode($this->tables['vehicles'], JSON_PRETTY_PRINT));
+                $this->saveTable('vehicles');
+            }
+        }
+        
+        function saveTable($tableName) {
+            if (isset($this->tables[$tableName])) {
+                $filePath = $this->cache_dir . '/' . $tableName . '.json';
+                file_put_contents($filePath, json_encode($this->tables[$tableName], JSON_PRETTY_PRINT));
             }
         }
         
         function convertToDbSchema($vehicle) {
             // Convert from frontend schema to DB schema
             return [
-                'id' => count($this->tables['vehicles']) + 1,
+                'id' => isset($vehicle['id']) ? (int)$vehicle['id'] : count($this->tables['vehicles']) + 1,
                 'vehicle_id' => $vehicle['id'] ?? $vehicle['vehicleId'] ?? '',
                 'name' => $vehicle['name'] ?? '',
                 'capacity' => $vehicle['capacity'] ?? 4,
                 'luggage_capacity' => $vehicle['luggageCapacity'] ?? 2,
                 'ac' => isset($vehicle['ac']) ? ($vehicle['ac'] ? 1 : 0) : 1,
                 'image' => $vehicle['image'] ?? '',
-                'amenities' => json_encode($vehicle['amenities'] ?? ['AC']),
+                'amenities' => is_array($vehicle['amenities'] ?? null) ? 
+                    json_encode($vehicle['amenities']) : 
+                    json_encode(['AC']),
                 'description' => $vehicle['description'] ?? '',
                 'is_active' => isset($vehicle['isActive']) ? ($vehicle['isActive'] ? 1 : 0) : 1,
                 'base_price' => $vehicle['basePrice'] ?? $vehicle['price'] ?? 0,
@@ -582,13 +587,6 @@ function createPreviewDbConnection() {
     return $conn;
 }
 
-// Create a mock database connection for unit tests
-function createMockDbConnection() {
-    // Similar to preview connection but with in-memory tables only
-    // ... implementation omitted for brevity ...
-    return createPreviewDbConnection(); // Just use preview for now
-}
-
 // App configuration
 define('APP_URL', 'https://vizagup.com');
 define('APP_NAME', 'Vizag Taxi Hub');
@@ -601,4 +599,3 @@ define('CACHE_DURATION', 3600); // 1 hour
 
 // API settings
 define('API_RATE_LIMIT', 100); // Per minute
-

@@ -2,12 +2,18 @@
 <?php
 /**
  * Common database helper functions
+ * Production-ready database helpers for vizagup.com
  */
 
-// Function to get a database connection with retry
+/**
+ * Get a database connection with retry mechanism
+ * 
+ * @param int $maxRetries Maximum number of connection attempts
+ * @return mysqli Database connection
+ * @throws Exception If all connection attempts fail
+ */
 function getDbConnectionWithRetry($maxRetries = 3) {
     $retries = 0;
-    $conn = null;
     $lastError = null;
     
     while ($retries < $maxRetries) {
@@ -21,8 +27,8 @@ function getDbConnectionWithRetry($maxRetries = 3) {
             
             // If config not available or connection failed, use hardcoded credentials
             $dbHost = 'localhost';
-            $dbName = 'u644605165_new_bookingdb';
-            $dbUser = 'u644605165_new_bookingusr';
+            $dbName = 'u64460565_db_be';
+            $dbUser = 'u64460565_usr_be';
             $dbPass = 'Vizag@1213';
             
             $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
@@ -31,13 +37,16 @@ function getDbConnectionWithRetry($maxRetries = 3) {
                 throw new Exception("Database connection failed: " . $conn->connect_error);
             }
             
+            // Set proper charset
+            $conn->set_charset("utf8mb4");
+            
             return $conn;
         } catch (Exception $e) {
             $lastError = $e;
             $retries++;
-            // Add a small delay before retry
+            
             if ($retries < $maxRetries) {
-                sleep(1);
+                sleep(1); // Delay before retry
             }
         }
     }
@@ -50,7 +59,13 @@ function getDbConnectionWithRetry($maxRetries = 3) {
     }
 }
 
-// Log message to a file
+/**
+ * Log message to a file with timestamp
+ * 
+ * @param string $message Message to log
+ * @param string $logFile Log file name
+ * @return void
+ */
 function logMessage($message, $logFile = 'api.log') {
     $logDir = dirname(__FILE__) . '/../../logs';
     if (!file_exists($logDir)) {
