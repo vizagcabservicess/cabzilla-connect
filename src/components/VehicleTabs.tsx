@@ -2,8 +2,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertCircle, Info } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle, Info, RefreshCw } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { VehicleManagement } from './VehicleManagement';
 import { directVehicleOperation, fixDatabaseTables, isPreviewMode } from '@/utils/apiHelper';
 import { toast } from 'sonner';
@@ -35,7 +35,7 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
       
       // Call the reload-vehicles.php endpoint to force a reload from database
       const response = await directVehicleOperation(
-        `api/admin/reload-vehicles.php?_t=${Date.now()}`, 
+        `api/admin/reload-vehicles.php?_t=${Date.now()}&source=database`, 
         'GET',
         {
           headers: {
@@ -49,7 +49,7 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
       console.log('Vehicle resync result:', response);
       
       if (response && response.status === 'success') {
-        toast.success(`Successfully resynced ${response.count || 0} vehicles${response.source === 'database' ? ' from database' : ''}`);
+        toast.success(`Successfully resynced ${response.count || 0} vehicles from ${response.source || 'database'}`);
         setRefreshAttempts(0); // Reset attempts counter
         setError(null); // Clear any errors
         
@@ -87,7 +87,7 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
         // Try loading data again
         try {
           const vehicleData = await directVehicleOperation(
-            `api/admin/vehicles-data.php?id=${vehicleId}&_t=${Date.now()}`,
+            `api/admin/vehicles-data.php?id=${vehicleId}&_t=${Date.now()}&source=database`,
             'GET',
             {
               headers: {
@@ -152,7 +152,7 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
         
         // Check if the vehicle exists first
         const response = await directVehicleOperation(
-          `api/admin/vehicles-data.php?id=${vehicleId}&_t=${Date.now()}`, 
+          `api/admin/vehicles-data.php?id=${vehicleId}&_t=${Date.now()}&source=database`, 
           'GET',
           { 
             headers: {
@@ -179,7 +179,7 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
           
           // Check again after resync
           const retryResponse = await directVehicleOperation(
-            `api/admin/vehicles-data.php?id=${vehicleId}&_t=${Date.now()}`, 
+            `api/admin/vehicles-data.php?id=${vehicleId}&_t=${Date.now()}&source=database`, 
             'GET',
             { 
               headers: {
@@ -195,7 +195,7 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
             return;
           }
           
-          setError('Failed to load vehicle data. The vehicle may not exist.');
+          setError('Failed to load vehicle data. The vehicle may not exist in the database.');
           
           // Try to fix database tables if we haven't exceeded max attempts
           if (refreshAttempts < maxAttempts) {
@@ -215,7 +215,7 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
         // Try to resync from database before showing error
         await resyncVehicles();
         
-        setError('Failed to load vehicle data. The vehicle may not exist.');
+        setError('Failed to load vehicle data. Database connection might be unavailable.');
         
         // Try to fix database tables if we haven't exceeded max attempts
         if (refreshAttempts < maxAttempts) {
@@ -234,12 +234,13 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
         <AlertCircle className="h-4 w-4" />
         <AlertDescription className="flex flex-col gap-2">
           <div>{error}</div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 mt-2">
             <Button 
               variant="outline" 
               size="sm" 
               onClick={() => tryFixDatabase()}
               disabled={isFixing}
+              className="flex items-center gap-1"
             >
               {isFixing ? 'Fixing...' : 'Fix Database'}
             </Button>
@@ -248,7 +249,9 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
               size="sm" 
               onClick={resyncVehicles}
               disabled={isResyncing}
+              className="flex items-center gap-1"
             >
+              <RefreshCw className={`h-3 w-3 ${isResyncing ? 'animate-spin' : ''}`} />
               {isResyncing ? 'Syncing...' : 'Sync from Database'}
             </Button>
           </div>
@@ -276,7 +279,9 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
             size="sm"
             onClick={resyncVehicles}
             disabled={isResyncing}
+            className="flex items-center gap-1"
           >
+            <RefreshCw className={`h-3 w-3 ${isResyncing ? 'animate-spin' : ''}`} />
             {isResyncing ? 'Syncing...' : 'Sync from Database'}
           </Button>
           <Info 
@@ -289,7 +294,10 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
         {loaded ? (
           <VehicleManagement vehicleId={vehicleId} />
         ) : (
-          <p>Loading vehicle data...</p>
+          <div className="flex items-center justify-center p-8">
+            <RefreshCw className="h-6 w-6 animate-spin text-gray-400 mr-2" />
+            <p>Loading vehicle data from database...</p>
+          </div>
         )}
       </CardContent>
     </Card>

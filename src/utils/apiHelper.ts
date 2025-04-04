@@ -1,268 +1,124 @@
 
+import { CabType } from '@/types/cab';
 import { apiBaseUrl } from '@/config/api';
-import { formatDataForMultipart } from '@/config/requestConfig';
 
 /**
- * Check if we're running in the Lovable preview environment
- */
-export const isPreviewMode = (): boolean => {
-  return typeof window !== 'undefined' && 
-    (window.location.hostname.includes('lovableproject.com') || 
-     window.location.hostname.includes('lovable.dev') ||
-     window.location.hostname.includes('localhost'));
-};
-
-// Re-export formatDataForMultipart from config/requestConfig
-export { formatDataForMultipart };
-
-/**
- * Unified API operation function for direct vehicle operations
- * @param endpoint - API endpoint to call
- * @param method - HTTP method (GET, POST, PUT, DELETE)
- * @param options - Additional options including headers and data
- * @returns Promise with the response data
+ * Helper function for making direct vehicle operations
+ * 
+ * @param endpoint API endpoint path
+ * @param method HTTP method
+ * @param options Additional options
+ * @returns 
  */
 export const directVehicleOperation = async (
   endpoint: string,
   method: string = 'GET',
-  options: any = {}
-): Promise<any> => {
+  options: {
+    headers?: Record<string, string>;
+    data?: any;
+  } = {}
+) => {
   try {
-    const url = endpoint.startsWith('http') ? endpoint : `${apiBaseUrl}/${endpoint.startsWith('/') ? endpoint.substring(1) : endpoint}`;
+    // Add timestamp to URL to prevent caching
+    const url = `${apiBaseUrl}/${endpoint.startsWith('/') ? endpoint.slice(1) : endpoint}`;
     
-    // Extract headers and data from options
-    let headers: Record<string, string> = {};
-    let data: any = null;
-    
-    // Handle different ways headers and data might be provided
-    if (options) {
-      if (options.headers) {
-        headers = { ...options.headers };
-      }
-      
-      if (options.data) {
-        data = options.data;
-      }
-      
-      // Support for directly passed headers (for backward compatibility)
-      const knownHeaderKeys = [
-        'X-Admin-Mode', 'X-Debug', 'X-Force-Refresh',
-        'Content-Type', 'Authorization', 'Cache-Control',
-        'Pragma', 'Expires'
-      ];
-      
-      // Check for known header keys in the root options object
-      knownHeaderKeys.forEach(key => {
-        const lowercaseKey = key.toLowerCase();
-        if (options[key]) headers[key] = options[key];
-        if (options[lowercaseKey]) headers[lowercaseKey] = options[lowercaseKey];
-      });
-      
-      // If no data was explicitly provided, treat the rest of options as data
-      if (!data) {
-        // Filter out known header keys from options to create data
-        data = { ...options };
-        knownHeaderKeys.forEach(key => {
-          delete data[key];
-          delete data[key.toLowerCase()];
-        });
-        
-        // Also remove headers and data properties if they exist
-        delete data.headers;
-        delete data.data;
-        
-        // Only set data if there are properties left
-        if (Object.keys(data).length === 0) {
-          data = null;
-        }
-      }
-    }
-    
-    // Default headers for all requests
-    const defaultHeaders = {
+    const headers = {
       'Content-Type': 'application/json',
       'X-Requested-With': 'XMLHttpRequest',
       'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'X-Force-Refresh': 'true'
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      ...(options.headers || {})
     };
-    
-    // Merge default headers with provided headers
-    const finalHeaders = { ...defaultHeaders, ...headers };
-    
-    // Prepare request options
-    const requestOptions: RequestInit = {
+
+    const fetchOptions: RequestInit = {
       method,
-      headers: finalHeaders,
-      cache: 'no-store' as RequestCache
+      headers,
+      cache: 'no-store',
     };
-    
-    // Add body for non-GET requests if data is provided
-    if (method !== 'GET' && data) {
-      if (finalHeaders['Content-Type'] === 'application/x-www-form-urlencoded') {
-        // Handle form URL encoded data
-        requestOptions.body = new URLSearchParams(data).toString();
-      } else if (finalHeaders['Content-Type']?.includes('multipart/form-data')) {
-        // Handle multipart form data
-        delete finalHeaders['Content-Type']; // Let browser set this with boundary
-        requestOptions.body = formatDataForMultipart(data);
-      } else {
-        // Default to JSON
-        requestOptions.body = JSON.stringify(data);
-      }
-    }
-    
-    // Handle GET requests with query parameters
-    let finalUrl = url;
-    if (method === 'GET' && data && Object.keys(data).length > 0) {
-      const queryParams = new URLSearchParams();
-      Object.entries(data).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          queryParams.append(key, String(value));
-        }
+
+    // For GET requests, remove Content-Type header and encode params in the URL
+    if (method === 'GET' && options.data) {
+      const params = new URLSearchParams();
+      Object.entries(options.data).forEach(([key, value]) => {
+        params.append(key, String(value));
       });
-      
-      // Append query parameters to URL if not empty
-      const queryString = queryParams.toString();
-      if (queryString) {
-        finalUrl += (finalUrl.includes('?') ? '&' : '?') + queryString;
-      }
+      const separator = url.includes('?') ? '&' : '?';
+      fetchOptions.url = `${url}${separator}${params.toString()}`;
+    } else if (method !== 'GET' && options.data) {
+      fetchOptions.body = JSON.stringify(options.data);
     }
+
+    const response = await fetch(fetchOptions.url || url, fetchOptions);
     
-    // Execute the fetch request
-    const response = await fetch(finalUrl, requestOptions);
-    
-    // For preview mode, return mock response to avoid server errors
-    if (!response.ok && isPreviewMode()) {
-      console.warn(`API error ${response.status} in preview mode, returning mock data`);
-      return { 
-        status: 'success', 
-        message: 'Preview mode: mock response',
-        timestamp: new Date().toISOString()
-      };
+    if (!response.ok) {
+      throw new Error(`API response not OK: ${response.status}`);
     }
-    
-    // Handle JSON response
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      const jsonData = await response.json();
-      return jsonData;
-    }
-    
-    // Handle text response
-    const textData = await response.text();
-    
-    // Try to parse as JSON if possible
-    try {
-      return JSON.parse(textData);
-    } catch (e) {
-      // If not JSON, return text as is
-      return { text: textData, status: response.ok ? 'success' : 'error' };
-    }
+
+    return await response.json();
   } catch (error) {
-    console.error(`API Error (${method} ${endpoint}):`, error);
-    
-    // If in preview mode, return mock data
-    if (isPreviewMode()) {
-      console.warn('API error in preview mode, returning mock data');
-      return { 
-        status: 'success', 
-        message: 'Preview mode: mock response for failed request',
-        timestamp: new Date().toISOString()
-      };
-    }
-    
+    console.error('Error in directVehicleOperation:', error);
     throw error;
   }
 };
 
 /**
- * Fix database tables - useful for recovery after errors
+ * Check if the application is running in preview mode
+ */
+export const isPreviewMode = (): boolean => {
+  // Check if we're in a Lovable development environment
+  if (typeof window !== 'undefined') {
+    return window.location.hostname.includes('lovableproject.com') || 
+           window.location.hostname.includes('localhost') ||
+           window.location.hostname.includes('127.0.0.1');
+  }
+  return false;
+};
+
+/**
+ * Format data for multipart form submission
+ */
+export const formatDataForMultipart = (data: any): FormData => {
+  const formData = new FormData();
+  
+  Object.entries(data).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      formData.append(key, JSON.stringify(value));
+    } else if (typeof value === 'object' && value !== null) {
+      formData.append(key, JSON.stringify(value));
+    } else if (value !== undefined && value !== null) {
+      formData.append(key, String(value));
+    }
+  });
+  
+  return formData;
+};
+
+/**
+ * Fix database tables
  */
 export const fixDatabaseTables = async (): Promise<boolean> => {
   try {
-    // First, attempt to clear any cached data to ensure fresh state
-    if (typeof window !== 'undefined') {
-      // Clear all localStorage cache related to vehicles
-      try {
-        const keysToRemove = [];
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (key && (key.startsWith('cachedVehicles') || 
-                      key.startsWith('localVehicles') || 
-                      key.startsWith('cabOptions_') ||
-                      key.startsWith('vehicle_') ||
-                      key.includes('vehicles'))) {
-            keysToRemove.push(key);
-          }
-        }
-        
-        keysToRemove.forEach(key => localStorage.removeItem(key));
-      } catch (e) {
-        console.error('Error clearing localStorage cache:', e);
+    console.log('Attempting to fix database tables...');
+    
+    // Try the primary fix-database endpoint
+    const response = await fetch(`${apiBaseUrl}/api/admin/fix-database.php?_t=${Date.now()}`, {
+      method: 'GET',
+      headers: {
+        'X-Admin-Mode': 'true',
+        'X-Force-Refresh': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
       }
-    }
+    });
     
-    // Try multiple database fix endpoints for redundancy
-    const fixEndpoints = [
-      'api/admin/fix-database.php',
-      'api/admin/fix-vehicle-tables.php',
-      'api/admin/sync-airport-fares.php',
-      'api/admin/repair-database.php'
-    ];
-    
-    // Try each endpoint in sequence
-    for (const endpoint of fixEndpoints) {
-      try {
-        console.log(`Trying to fix database using endpoint: ${endpoint}`);
-        const response = await directVehicleOperation(endpoint, 'GET', {
-          headers: {
-            'X-Admin-Mode': 'true',
-            'X-Debug': 'true',
-            'X-Force-Refresh': 'true',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
-          },
-          data: {
-            _t: Date.now(), // Add timestamp to prevent caching
-            force: true
-          }
-        });
-        
-        if (response && response.status === 'success') {
-          console.log(`Database fixed successfully using ${endpoint}`);
-          
-          // Attempt to reload the persistent vehicle data
-          try {
-            const reloadResponse = await directVehicleOperation('api/admin/reload-vehicles.php', 'GET', {
-              headers: {
-                'X-Admin-Mode': 'true',
-                'X-Force-Refresh': 'true'
-              },
-              data: {
-                _t: Date.now()
-              }
-            });
-            
-            if (reloadResponse && reloadResponse.status === 'success') {
-              console.log('Successfully reloaded vehicle data after fix');
-            }
-          } catch (reloadErr) {
-            console.error('Error reloading vehicles after database fix:', reloadErr);
-          }
-          
-          return true;
-        }
-      } catch (endpointError) {
-        console.error(`Error with fix endpoint ${endpoint}:`, endpointError);
-        // Continue to the next endpoint
-      }
-    }
-    
-    // If direct attempts failed, try a direct fetch as last resort
-    try {
-      console.log('Trying direct fetch as last resort for database fix...');
-      const response = await fetch(`${apiBaseUrl}/api/admin/fix-database.php?_t=${Date.now()}`, {
+    if (!response.ok) {
+      console.error('Primary database fix failed with status:', response.status);
+      
+      // Try alternate endpoint
+      const altResponse = await fetch(`${apiBaseUrl}/api/admin/repair-tables.php?_t=${Date.now()}`, {
+        method: 'GET',
         headers: {
           'X-Admin-Mode': 'true',
           'X-Force-Refresh': 'true',
@@ -270,34 +126,19 @@ export const fixDatabaseTables = async (): Promise<boolean> => {
         }
       });
       
-      if (response.ok) {
-        const data = await response.json();
-        if (data && data.status === 'success') {
-          console.log('Database fixed successfully using direct fetch');
-          return true;
-        }
+      if (!altResponse.ok) {
+        console.error('Alternate database fix failed with status:', altResponse.status);
+        return false;
       }
-    } catch (directFetchError) {
-      console.error('Error with direct fetch:', directFetchError);
+      
+      const altResult = await altResponse.json();
+      return altResult && altResult.status === 'success';
     }
     
-    // Fall back to preview mode if available
-    if (isPreviewMode()) {
-      console.log('In preview mode, simulating successful database fix');
-      return true;
-    }
-    
-    // If all direct attempts failed, return false
-    return false;
+    const result = await response.json();
+    return result && result.status === 'success';
   } catch (error) {
     console.error('Error fixing database tables:', error);
-    
-    // Fall back to preview mode if available
-    if (isPreviewMode()) {
-      console.log('In preview mode, simulating successful database fix despite error');
-      return true;
-    }
-    
     return false;
   }
 };

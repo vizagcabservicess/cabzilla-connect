@@ -1,370 +1,377 @@
 
 <?php
 /**
- * Enhanced Admin-specific vehicle data endpoint
- * This endpoint provides extended vehicle information from the database for admin interfaces
+ * Enhanced API endpoint for retrieving vehicle data
+ * Provides vehicle data from MySQL database with JSON file fallback
  */
 
-// Set headers for CORS
+// Set CORS headers for API access
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode, X-Debug, Cache-Control');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode');
 header('Content-Type: application/json');
-header('Cache-Control: no-store, no-cache, must-revalidate');
-header('Pragma: no-cache');
-header('Expires: 0');
 
-// Handle OPTIONS preflight request
+// Handle preflight request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
 
-// Process GET parameters
-$includeInactive = isset($_GET['includeInactive']) && $_GET['includeInactive'] === 'true';
-$forceRefresh = isset($_GET['force']) && $_GET['force'] === 'true';
-$vehicleId = isset($_GET['id']) ? $_GET['id'] : null;
-
-// Log request for debugging
+// Create log directory if needed
 $logDir = __DIR__ . '/../../logs';
 if (!file_exists($logDir)) {
-    mkdir($logDir, 0777, true);
+    mkdir($logDir, 0755, true);
 }
 
-$logFile = $logDir . '/admin_vehicles_data_' . date('Y-m-d') . '.log';
-$timestamp = date('Y-m-d H:i:s');
-file_put_contents($logFile, "[$timestamp] Admin vehicles data request: includeInactive=$includeInactive, forceRefresh=$forceRefresh" . ($vehicleId ? ", vehicleId=$vehicleId" : "") . "\n", FILE_APPEND);
-
-// This endpoint should always use admin mode
-$_SERVER['HTTP_X_ADMIN_MODE'] = 'true';
-
-// Before including the main file, let's make sure the cache directories exist
+// Create cache directory if needed
 $cacheDir = __DIR__ . '/../../cache';
 if (!file_exists($cacheDir)) {
-    mkdir($cacheDir, 0777, true);
+    mkdir($cacheDir, 0755, true);
 }
 
-// Include database utilities
-require_once __DIR__ . '/../utils/database.php';
-require_once __DIR__ . '/../common/db_helper.php';
+$logFile = $logDir . '/vehicles_data_' . date('Y-m-d') . '.log';
+$timestamp = date('Y-m-d H:i:s');
 
-// Check if persistent cache file exists, if not, create it
-$persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
-if (!file_exists($persistentCacheFile)) {
-    // Create default vehicle data
-    $defaultVehicles = [
-        [
-            'id' => 'sedan',
-            'vehicleId' => 'sedan',
-            'name' => 'Sedan',
-            'capacity' => 4,
-            'luggageCapacity' => 2,
-            'price' => 2500,
-            'basePrice' => 2500,
-            'pricePerKm' => 14,
-            'image' => '/cars/sedan.png',
-            'amenities' => ['AC', 'Bottle Water', 'Music System'],
-            'description' => 'Comfortable sedan suitable for 4 passengers.',
-            'ac' => true,
-            'nightHaltCharge' => 700,
-            'driverAllowance' => 250,
-            'isActive' => true
-        ],
-        [
-            'id' => 'ertiga',
-            'vehicleId' => 'ertiga',
-            'name' => 'Ertiga',
-            'capacity' => 6,
-            'luggageCapacity' => 3,
-            'price' => 3200,
-            'basePrice' => 3200,
-            'pricePerKm' => 18,
-            'image' => '/cars/ertiga.png',
-            'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
-            'description' => 'Spacious SUV suitable for 6 passengers.',
-            'ac' => true,
-            'nightHaltCharge' => 1000,
-            'driverAllowance' => 250,
-            'isActive' => true
-        ],
-        [
-            'id' => 'innova_crysta',
-            'vehicleId' => 'innova_crysta',
-            'name' => 'Innova Crysta',
-            'capacity' => 7,
-            'luggageCapacity' => 4,
-            'price' => 3800,
-            'basePrice' => 3800,
-            'pricePerKm' => 20,
-            'image' => '/cars/innova.png',
-            'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
-            'description' => 'Premium SUV with ample space for 7 passengers.',
-            'ac' => true,
-            'nightHaltCharge' => 1000,
-            'driverAllowance' => 250,
-            'isActive' => true
-        ],
-        [
-            'id' => 'luxury',
-            'vehicleId' => 'luxury',
-            'name' => 'Luxury Sedan',
-            'capacity' => 4,
-            'luggageCapacity' => 3,
-            'price' => 4500,
-            'basePrice' => 4500,
-            'pricePerKm' => 25,
-            'image' => '/cars/luxury.png',
-            'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point', 'Premium Amenities'],
-            'description' => 'Premium luxury sedan with high-end amenities for a comfortable journey.',
-            'ac' => true,
-            'nightHaltCharge' => 1200,
-            'driverAllowance' => 300,
-            'isActive' => true
-        ],
-        [
-            'id' => 'tempo_traveller',
-            'vehicleId' => 'tempo_traveller',
-            'name' => 'Tempo Traveller',
-            'capacity' => 12,
-            'luggageCapacity' => 8,
-            'price' => 5500,
-            'basePrice' => 5500,
-            'pricePerKm' => 25,
-            'image' => '/cars/tempo.png',
-            'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point', 'Pushback Seats'],
-            'description' => 'Large vehicle suitable for groups of up to 12 passengers.',
-            'ac' => true,
-            'nightHaltCharge' => 1200,
-            'driverAllowance' => 300,
-            'isActive' => true
-        ]
-    ];
-    
-    $jsonOptions = defined('JSON_PRETTY_PRINT') ? JSON_PRETTY_PRINT : 0;
-    $writeResult = file_put_contents($persistentCacheFile, json_encode($defaultVehicles, $jsonOptions));
-    
-    if ($writeResult === false) {
-        file_put_contents($logFile, "[$timestamp] Failed to write default vehicles to persistent cache\n", FILE_APPEND);
-    } else {
-        file_put_contents($logFile, "[$timestamp] Created new persistent cache file with default vehicles\n", FILE_APPEND);
-    }
+// Log request
+file_put_contents($logFile, "[$timestamp] Vehicle data request received\n", FILE_APPEND);
+
+// Try to include database utilities
+$dbConnected = false;
+try {
+    // Include database utility functions
+    require_once __DIR__ . '/../utils/database.php';
+    require_once __DIR__ . '/../common/db_helper.php';
+    $dbConnected = true;
+} catch (Exception $e) {
+    file_put_contents($logFile, "[$timestamp] Database include error: " . $e->getMessage() . "\n", FILE_APPEND);
 }
 
-// For admin access, handle force refresh specifically
-if ($forceRefresh) {
-    file_put_contents($logFile, "[$timestamp] Force refresh requested. Attempting to synchronize data\n", FILE_APPEND);
+// Process query parameters
+$vehicleId = isset($_GET['id']) ? $_GET['id'] : null;
+$includeInactive = isset($_GET['includeInactive']) && ($_GET['includeInactive'] === 'true' || $_GET['includeInactive'] === '1');
+$forceRefresh = isset($_GET['force']) && ($_GET['force'] === 'true' || $_GET['force'] === '1');
+
+// Check for persistent storage option
+$fromPersistent = isset($_GET['persistent']) && ($_GET['persistent'] === 'true' || $_GET['persistent'] === '1');
+
+file_put_contents($logFile, "[$timestamp] Parameters: id=$vehicleId, includeInactive=" . ($includeInactive ? 'true' : 'false') . 
+                           ", force=" . ($forceRefresh ? 'true' : 'false') . "\n", FILE_APPEND);
+
+// Default vehicles in case everything fails
+$defaultVehicles = [
+    [
+        'id' => 'sedan',
+        'vehicleId' => 'sedan',
+        'name' => 'Sedan',
+        'capacity' => 4,
+        'luggageCapacity' => 2,
+        'price' => 2500,
+        'basePrice' => 2500,
+        'pricePerKm' => 14,
+        'image' => '/cars/sedan.png',
+        'amenities' => ['AC', 'Bottle Water', 'Music System'],
+        'description' => 'Comfortable sedan suitable for 4 passengers.',
+        'ac' => true,
+        'nightHaltCharge' => 700,
+        'driverAllowance' => 250,
+        'isActive' => true
+    ],
+    [
+        'id' => 'ertiga',
+        'vehicleId' => 'ertiga',
+        'name' => 'Ertiga',
+        'capacity' => 6,
+        'luggageCapacity' => 3,
+        'price' => 3200,
+        'basePrice' => 3200,
+        'pricePerKm' => 18,
+        'image' => '/cars/ertiga.png',
+        'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
+        'description' => 'Spacious SUV suitable for 6 passengers.',
+        'ac' => true,
+        'nightHaltCharge' => 1000,
+        'driverAllowance' => 250,
+        'isActive' => true
+    ],
+    [
+        'id' => 'innova_crysta',
+        'vehicleId' => 'innova_crysta',
+        'name' => 'Innova Crysta',
+        'capacity' => 7,
+        'luggageCapacity' => 4,
+        'price' => 3800,
+        'basePrice' => 3800,
+        'pricePerKm' => 20,
+        'image' => '/cars/innova.png',
+        'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
+        'description' => 'Premium SUV with ample space for 7 passengers.',
+        'ac' => true,
+        'nightHaltCharge' => 1000,
+        'driverAllowance' => 250,
+        'isActive' => true
+    ],
+    [
+        'id' => 'tempo_traveller',
+        'vehicleId' => 'tempo_traveller',
+        'name' => 'Tempo Traveller',
+        'capacity' => 12,
+        'luggageCapacity' => 8,
+        'price' => 5500,
+        'basePrice' => 5500,
+        'pricePerKm' => 25,
+        'image' => '/cars/tempo.png',
+        'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point', 'Pushback Seats'],
+        'description' => 'Large vehicle suitable for groups of up to 12 passengers.',
+        'ac' => true,
+        'nightHaltCharge' => 1200,
+        'driverAllowance' => 300,
+        'isActive' => true
+    ]
+];
+
+// Function to get vehicles from database
+function getVehiclesFromDatabase($includeInactive = false, $vehicleId = null, $logFile = null) {
+    $timestamp = date('Y-m-d H:i:s');
+    $vehicles = [];
     
-    // Try to synchronize database with cache
     try {
-        // Try to load data from database first
+        // Get database connection
         $conn = getDbConnectionWithRetry(3);
-        $loadedFromDatabase = false;
         
-        if ($conn) {
-            // Check if tables exist
-            $tableExists = tableExists($conn, 'vehicles') || tableExists($conn, 'vehicle_types');
-            
-            if (!$tableExists) {
-                file_put_contents($logFile, "[$timestamp] Vehicle tables don't exist, creating...\n", FILE_APPEND);
-                $result = ensureDatabaseTables($conn);
-                if ($result) {
-                    file_put_contents($logFile, "[$timestamp] Successfully created database tables\n", FILE_APPEND);
-                }
-            }
-            
-            // Determine which table to use
-            $tableName = tableExists($conn, 'vehicles') ? 'vehicles' : 'vehicle_types';
-            
-            // Try to load vehicles from database
-            $sql = "SELECT * FROM `$tableName`";
-            $result = executeQuery($conn, $sql);
-            
-            if (is_array($result) && !empty($result)) {
-                // We have data from the database - use it to refresh the cache
-                $vehicles = [];
-                
-                foreach ($result as $row) {
-                    $amenitiesArray = [];
+        if (!$conn) {
+            throw new Exception("Failed to connect to database");
+        }
+        
+        if ($logFile) {
+            file_put_contents($logFile, "[$timestamp] Connected to database successfully\n", FILE_APPEND);
+        }
+        
+        // Determine which table to use (vehicles is newer, vehicle_types is legacy)
+        $tableName = tableExists($conn, 'vehicles') ? 'vehicles' : 'vehicle_types';
+        
+        if ($logFile) {
+            file_put_contents($logFile, "[$timestamp] Using table: $tableName\n", FILE_APPEND);
+        }
+        
+        // Build query based on parameters
+        $query = "SELECT * FROM `$tableName`";
+        $params = [];
+        $types = "";
+        
+        if ($vehicleId) {
+            $query .= " WHERE vehicle_id = ?";
+            $params[] = $vehicleId;
+            $types .= "s";
+        } elseif (!$includeInactive) {
+            $query .= " WHERE is_active = 1";
+        }
+        
+        // Execute the query
+        $result = $conn->prepare($query);
+        
+        if (!$result) {
+            throw new Exception("Failed to prepare statement: " . $conn->error);
+        }
+        
+        if (!empty($params)) {
+            $result->bind_param($types, ...$params);
+        }
+        
+        if (!$result->execute()) {
+            throw new Exception("Failed to execute query: " . $result->error);
+        }
+        
+        $dbResult = $result->get_result();
+        
+        if ($logFile) {
+            file_put_contents($logFile, "[$timestamp] Query executed, processing results\n", FILE_APPEND);
+        }
+        
+        // Process results
+        while ($row = $dbResult->fetch_assoc()) {
+            // Convert database row to vehicle object
+            $amenitiesData = [];
+            if (!empty($row['amenities'])) {
+                try {
+                    $amenitiesData = json_decode($row['amenities'], true);
                     
-                    // Handle amenities field which may be stored as JSON string or comma-separated string
-                    if (!empty($row['amenities'])) {
-                        if (is_string($row['amenities'])) {
-                            // Try to decode as JSON first
-                            $decodedAmenities = json_decode($row['amenities'], true);
-                            if (is_array($decodedAmenities)) {
-                                $amenitiesArray = $decodedAmenities;
-                            } else {
-                                // Fall back to comma-separated string
-                                $amenitiesArray = array_map('trim', explode(',', $row['amenities']));
-                            }
-                        } else if (is_array($row['amenities'])) {
-                            $amenitiesArray = $row['amenities'];
-                        }
+                    // If parsing fails, try to split by comma
+                    if (!is_array($amenitiesData)) {
+                        $amenitiesData = array_map('trim', explode(',', $row['amenities']));
                     }
-                    
-                    // Format the vehicle data
-                    $vehicle = [
-                        'id' => $row['vehicle_id'] ?? $row['id'] ?? '',
-                        'vehicleId' => $row['vehicle_id'] ?? $row['id'] ?? '',
-                        'name' => $row['name'] ?? '',
-                        'capacity' => (int)($row['capacity'] ?? 4),
-                        'luggageCapacity' => (int)($row['luggage_capacity'] ?? $row['luggageCapacity'] ?? 2),
-                        'price' => (float)($row['price'] ?? $row['base_price'] ?? 2500),
-                        'basePrice' => (float)($row['base_price'] ?? $row['price'] ?? 2500),
-                        'pricePerKm' => (float)($row['price_per_km'] ?? $row['pricePerKm'] ?? 14),
-                        'image' => $row['image'] ?? '/cars/sedan.png',
-                        'amenities' => $amenitiesArray,
-                        'description' => $row['description'] ?? '',
-                        'ac' => (bool)($row['ac'] ?? true),
-                        'nightHaltCharge' => (float)($row['night_halt_charge'] ?? $row['nightHaltCharge'] ?? 700),
-                        'driverAllowance' => (float)($row['driver_allowance'] ?? $row['driverAllowance'] ?? 250),
-                        'isActive' => (bool)($row['is_active'] ?? $row['isActive'] ?? true)
-                    ];
-                    
-                    $vehicles[] = $vehicle;
-                }
-                
-                if (!empty($vehicles)) {
-                    $loadedFromDatabase = true;
-                    $count = count($vehicles);
-                    
-                    file_put_contents($logFile, "[$timestamp] Loaded $count vehicles from database\n", FILE_APPEND);
-                    
-                    // Create a backup of the existing persistent cache first
-                    $backupFile = $cacheDir . '/vehicles_persistent_backup_' . time() . '.json';
-                    copy($persistentCacheFile, $backupFile);
-                    
-                    // Update the persistent cache with database data
-                    file_put_contents($persistentCacheFile, json_encode($vehicles, JSON_PRETTY_PRINT));
-                    file_put_contents($logFile, "[$timestamp] Updated persistent cache with $count vehicles from database\n", FILE_APPEND);
-                    
-                    // Clear other cache files
-                    $cacheFiles = glob($cacheDir . '/vehicles_*.json');
-                    foreach ($cacheFiles as $file) {
-                        if ($file !== $persistentCacheFile && $file !== $backupFile) {
-                            @unlink($file);
-                        }
-                    }
+                } catch (Exception $e) {
+                    $amenitiesData = ['AC', 'Bottle Water', 'Music System'];
                 }
             } else {
-                file_put_contents($logFile, "[$timestamp] No vehicles found in database, will check persistent cache\n", FILE_APPEND);
+                $amenitiesData = ['AC', 'Bottle Water', 'Music System'];
             }
             
-            $conn->close();
+            $vehicle = [
+                'id' => $row['vehicle_id'],
+                'vehicleId' => $row['vehicle_id'],
+                'name' => $row['name'],
+                'capacity' => (int)$row['capacity'],
+                'luggageCapacity' => (int)$row['luggage_capacity'],
+                'price' => (float)($row['price'] ?? $row['base_price']),
+                'basePrice' => (float)$row['base_price'],
+                'pricePerKm' => (float)$row['price_per_km'],
+                'image' => $row['image'] ?? "/cars/{$row['vehicle_id']}.png",
+                'amenities' => $amenitiesData,
+                'description' => $row['description'] ?? '',
+                'ac' => (bool)$row['ac'],
+                'nightHaltCharge' => (float)($row['night_halt_charge'] ?? 700),
+                'driverAllowance' => (float)($row['driver_allowance'] ?? 250),
+                'isActive' => (bool)$row['is_active']
+            ];
+            
+            $vehicles[] = $vehicle;
         }
         
-        // If we couldn't load from database, try to load from persistent cache and sync to database
-        if (!$loadedFromDatabase) {
-            file_put_contents($logFile, "[$timestamp] Loading from persistent cache and attempting to sync to database\n", FILE_APPEND);
-            
-            // Load from persistent cache
-            if (file_exists($persistentCacheFile)) {
-                $persistentJson = file_get_contents($persistentCacheFile);
-                if ($persistentJson) {
-                    $persistentData = json_decode($persistentJson, true);
-                    if (is_array($persistentData) && !empty($persistentData)) {
-                        // Try to sync this data to the database
-                        try {
-                            $conn = getDbConnectionWithRetry(2);
-                            
-                            if ($conn) {
-                                // Check if tables exist, create if not
-                                $tablesExist = tableExists($conn, 'vehicles') || tableExists($conn, 'vehicle_types');
-                                
-                                if (!$tablesExist) {
-                                    $result = ensureDatabaseTables($conn);
-                                }
-                                
-                                // Determine which table to use
-                                $tableName = tableExists($conn, 'vehicles') ? 'vehicles' : 'vehicle_types';
-                                
-                                // Sync the data
-                                foreach ($persistentData as $vehicle) {
-                                    $vehicleId = $vehicle['id'] ?? $vehicle['vehicleId'] ?? '';
-                                    
-                                    if (empty($vehicleId)) continue;
-                                    
-                                    // Convert amenities to string for database storage
-                                    $amenitiesStr = isset($vehicle['amenities']) ? 
-                                        (is_array($vehicle['amenities']) ? json_encode($vehicle['amenities']) : $vehicle['amenities']) : 
-                                        '["AC", "Bottle Water", "Music System"]';
-                                    
-                                    // Check if vehicle already exists
-                                    $checkSql = "SELECT COUNT(*) as count FROM `$tableName` WHERE vehicle_id = ?";
-                                    $checkResult = executeQuery($conn, $checkSql, [$vehicleId], 's');
-                                    
-                                    if (is_array($checkResult) && isset($checkResult[0]['count']) && $checkResult[0]['count'] > 0) {
-                                        // Update existing record
-                                        $updateSql = "UPDATE `$tableName` SET 
-                                            name = ?, 
-                                            capacity = ?, 
-                                            luggage_capacity = ?, 
-                                            ac = ?, 
-                                            image = ?, 
-                                            amenities = ?, 
-                                            description = ?, 
-                                            is_active = ?, 
-                                            base_price = ?, 
-                                            price_per_km = ?, 
-                                            night_halt_charge = ?, 
-                                            driver_allowance = ? 
-                                            WHERE vehicle_id = ?";
-                                            
-                                        executeQuery($conn, $updateSql, [
-                                            $vehicle['name'] ?? '',
-                                            $vehicle['capacity'] ?? 4,
-                                            $vehicle['luggageCapacity'] ?? 2,
-                                            isset($vehicle['ac']) ? ($vehicle['ac'] ? 1 : 0) : 1,
-                                            $vehicle['image'] ?? '/cars/sedan.png',
-                                            $amenitiesStr,
-                                            $vehicle['description'] ?? '',
-                                            isset($vehicle['isActive']) ? ($vehicle['isActive'] ? 1 : 0) : 1,
-                                            $vehicle['basePrice'] ?? $vehicle['price'] ?? 2500,
-                                            $vehicle['pricePerKm'] ?? 14,
-                                            $vehicle['nightHaltCharge'] ?? 700,
-                                            $vehicle['driverAllowance'] ?? 250,
-                                            $vehicleId
-                                        ], 'siiisissiddds');
-                                    } else {
-                                        // Insert new record
-                                        $insertSql = "INSERT INTO `$tableName` (
-                                            vehicle_id, name, capacity, luggage_capacity, ac, image, 
-                                            amenities, description, is_active, base_price, price_per_km, 
-                                            night_halt_charge, driver_allowance
-                                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-                                        
-                                        executeQuery($conn, $insertSql, [
-                                            $vehicleId,
-                                            $vehicle['name'] ?? '',
-                                            $vehicle['capacity'] ?? 4,
-                                            $vehicle['luggageCapacity'] ?? 2,
-                                            isset($vehicle['ac']) ? ($vehicle['ac'] ? 1 : 0) : 1,
-                                            $vehicle['image'] ?? '/cars/sedan.png',
-                                            $amenitiesStr,
-                                            $vehicle['description'] ?? '',
-                                            isset($vehicle['isActive']) ? ($vehicle['isActive'] ? 1 : 0) : 1,
-                                            $vehicle['basePrice'] ?? $vehicle['price'] ?? 2500,
-                                            $vehicle['pricePerKm'] ?? 14,
-                                            $vehicle['nightHaltCharge'] ?? 700,
-                                            $vehicle['driverAllowance'] ?? 250
-                                        ], 'ssiiisissiddd');
-                                    }
-                                }
-                                
-                                file_put_contents($logFile, "[$timestamp] Successfully synced " . count($persistentData) . " vehicles from persistent cache to database\n", FILE_APPEND);
-                                $conn->close();
-                            }
-                        } catch (Exception $e) {
-                            file_put_contents($logFile, "[$timestamp] Error syncing to database: " . $e->getMessage() . "\n", FILE_APPEND);
-                        }
-                    }
-                }
-            }
+        if ($logFile) {
+            file_put_contents($logFile, "[$timestamp] Retrieved " . count($vehicles) . " vehicles from database\n", FILE_APPEND);
         }
+        
+        $conn->close();
+        return $vehicles;
     } catch (Exception $e) {
-        file_put_contents($logFile, "[$timestamp] Error during force refresh: " . $e->getMessage() . "\n", FILE_APPEND);
+        if ($logFile) {
+            file_put_contents($logFile, "[$timestamp] Database error: " . $e->getMessage() . "\n", FILE_APPEND);
+        }
+        return [];
     }
 }
 
-// Just include the main vehicles-data.php which now has proper database loading logic
-require_once __DIR__ . '/../vehicles-data.php';
+// Function to get vehicles from persistent JSON cache
+function getVehiclesFromPersistentCache($cacheDir, $includeInactive = false, $vehicleId = null) {
+    $persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
+    $vehicles = [];
+    
+    if (file_exists($persistentCacheFile)) {
+        $persistentJson = file_get_contents($persistentCacheFile);
+        if ($persistentJson) {
+            $persistentData = json_decode($persistentJson, true);
+            if (is_array($persistentData)) {
+                if ($vehicleId) {
+                    // Return specific vehicle
+                    foreach ($persistentData as $vehicle) {
+                        if ($vehicle['id'] === $vehicleId || $vehicle['vehicleId'] === $vehicleId) {
+                            return [$vehicle];
+                        }
+                    }
+                } else {
+                    // Filter inactive if needed
+                    if (!$includeInactive) {
+                        $filteredData = array_filter($persistentData, function($vehicle) {
+                            return $vehicle['isActive'] !== false;
+                        });
+                        return array_values($filteredData);
+                    }
+                    return $persistentData;
+                }
+            }
+        }
+    }
+    
+    return $vehicles;
+}
+
+// Main execution logic
+$vehicles = [];
+$source = 'unknown';
+
+// Try getting vehicles from the database first
+if ($dbConnected) {
+    $vehicles = getVehiclesFromDatabase($includeInactive, $vehicleId, $logFile);
+    if (!empty($vehicles)) {
+        $source = 'database';
+        file_put_contents($logFile, "[$timestamp] Successfully retrieved vehicles from database\n", FILE_APPEND);
+    }
+}
+
+// If database fetch failed, try the persistent cache
+if (empty($vehicles)) {
+    $vehicles = getVehiclesFromPersistentCache($cacheDir, $includeInactive, $vehicleId);
+    if (!empty($vehicles)) {
+        $source = 'persistent_cache';
+        file_put_contents($logFile, "[$timestamp] Using persistent cache as fallback\n", FILE_APPEND);
+    }
+}
+
+// If both database and persistent cache failed, try static JSON file
+if (empty($vehicles)) {
+    $jsonFilePath = __DIR__ . '/../../../public/data/vehicles.json';
+    
+    if (file_exists($jsonFilePath)) {
+        $jsonData = file_get_contents($jsonFilePath);
+        if ($jsonData) {
+            $staticVehicles = json_decode($jsonData, true);
+            if (is_array($staticVehicles) && !empty($staticVehicles)) {
+                if ($vehicleId) {
+                    // Filter for specific vehicle
+                    foreach ($staticVehicles as $vehicle) {
+                        if ($vehicle['id'] === $vehicleId || $vehicle['vehicleId'] === $vehicleId) {
+                            $vehicles = [$vehicle];
+                            break;
+                        }
+                    }
+                } else {
+                    // Filter inactive if needed
+                    if (!$includeInactive) {
+                        $vehicles = array_filter($staticVehicles, function($vehicle) {
+                            return $vehicle['isActive'] !== false;
+                        });
+                        $vehicles = array_values($vehicles);
+                    } else {
+                        $vehicles = $staticVehicles;
+                    }
+                }
+                
+                $source = 'static_json';
+                file_put_contents($logFile, "[$timestamp] Using static JSON file as fallback\n", FILE_APPEND);
+            }
+        }
+    }
+}
+
+// Last resort: use hardcoded default vehicles
+if (empty($vehicles)) {
+    if ($vehicleId) {
+        // Filter for specific vehicle
+        foreach ($defaultVehicles as $vehicle) {
+            if ($vehicle['id'] === $vehicleId || $vehicle['vehicleId'] === $vehicleId) {
+                $vehicles = [$vehicle];
+                break;
+            }
+        }
+    } else {
+        // Filter inactive vehicles if needed
+        if (!$includeInactive) {
+            $vehicles = array_filter($defaultVehicles, function($vehicle) {
+                return $vehicle['isActive'] !== false;
+            });
+        } else {
+            $vehicles = $defaultVehicles;
+        }
+    }
+    
+    $source = 'default';
+    file_put_contents($logFile, "[$timestamp] Using default hardcoded vehicles\n", FILE_APPEND);
+}
+
+// Log the status to the log file
+file_put_contents($logFile, "[$timestamp] Returning " . count($vehicles) . " vehicles from source: $source\n", FILE_APPEND);
+file_put_contents($logFile, "[$timestamp] Request completed successfully\n", FILE_APPEND);
+
+// Return the final response
+echo json_encode([
+    'status' => 'success',
+    'message' => 'Vehicles retrieved successfully',
+    'source' => $source,
+    'vehicles' => array_values($vehicles),
+    'timestamp' => time(),
+    'query' => [
+        'vehicleId' => $vehicleId,
+        'includeInactive' => $includeInactive,
+        'forceRefresh' => $forceRefresh
+    ]
+]);

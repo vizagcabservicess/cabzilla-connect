@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FareManagement } from './FareManagement';
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Info } from "lucide-react";
+import { AlertCircle, Info, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { directVehicleOperation, fixDatabaseTables, isPreviewMode } from '@/utils/apiHelper';
 import { toast } from 'sonner';
@@ -35,7 +35,7 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
       
       // Call the reload-vehicles.php endpoint to force a reload from database
       const response = await directVehicleOperation(
-        `api/admin/reload-vehicles.php?_t=${Date.now()}`, 
+        `api/admin/reload-vehicles.php?_t=${Date.now()}&source=database`, 
         'GET',
         {
           headers: {
@@ -74,7 +74,7 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
 
       try {
         // Add timestamp to URL to prevent caching
-        const endpoint = `api/admin/check-vehicle.php?id=${encodeURIComponent(vehicleId)}&_t=${Date.now()}`;
+        const endpoint = `api/admin/vehicles-data.php?id=${encodeURIComponent(vehicleId)}&_t=${Date.now()}&source=database`;
         console.log(`Checking vehicle with endpoint: ${endpoint}`);
         
         const result = await directVehicleOperation(endpoint, 'GET', {
@@ -88,16 +88,16 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
         
         console.log('Vehicle check result:', result);
         
-        if (result && result.status === 'success') {
+        if (result && result.status === 'success' && result.vehicles && result.vehicles.length > 0) {
           setError(null);
         } else {
-          setError(`Could not verify vehicle with ID: ${vehicleId}. Some features might not work correctly.`);
+          setError(`Could not verify vehicle with ID: ${vehicleId} in the database. Some features might not work correctly.`);
           
           // Try resyncing from database
           await resyncVehicles();
           
           // Check again after resync
-          const retryEndpoint = `api/admin/check-vehicle.php?id=${encodeURIComponent(vehicleId)}&_t=${Date.now()}`;
+          const retryEndpoint = `api/admin/vehicles-data.php?id=${encodeURIComponent(vehicleId)}&_t=${Date.now()}&source=database`;
           const retryResult = await directVehicleOperation(retryEndpoint, 'GET', {
             headers: {
               'X-Admin-Mode': 'true',
@@ -107,13 +107,13 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
             }
           });
           
-          if (retryResult && retryResult.status === 'success') {
+          if (retryResult && retryResult.status === 'success' && retryResult.vehicles && retryResult.vehicles.length > 0) {
             setError(null);
           }
         }
       } catch (err) {
         console.error('Error checking vehicle:', err);
-        setError(`Could not verify vehicle with ID: ${vehicleId}. Some features might not work correctly.`);
+        setError(`Could not verify vehicle with ID: ${vehicleId} in the database. Some features might not work correctly.`);
       } finally {
         // Increment refresh count regardless of outcome
         setRefreshCount(prev => prev + 1);
@@ -196,6 +196,7 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
                 size="sm" 
                 onClick={handleFixDatabase}
                 disabled={isFixing}
+                className="flex items-center gap-1"
               >
                 {isFixing ? 'Fixing...' : 'Fix Database'}
               </Button>
@@ -204,7 +205,9 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
                 size="sm" 
                 onClick={resyncVehicles}
                 disabled={isResyncing}
+                className="flex items-center gap-1"
               >
+                <RefreshCw className={`h-3 w-3 ${isResyncing ? 'animate-spin' : ''}`} />
                 {isResyncing ? 'Syncing...' : 'Sync Database'}
               </Button>
             </div>
