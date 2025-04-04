@@ -590,9 +590,9 @@ function createMockDbConnection() {
 }
 
 // App configuration
-define('APP_URL', 'https://vizagtaxihub.com');
+define('APP_URL', 'https://vizagup.com');
 define('APP_NAME', 'Vizag Taxi Hub');
-define('APP_EMAIL', 'info@vizagtaxihub.com');
+define('APP_EMAIL', 'info@vizagup.com');
 define('APP_PHONE', '+91-9876543210');
 
 // Cache settings
@@ -601,3 +601,4 @@ define('CACHE_DURATION', 3600); // 1 hour
 
 // API settings
 define('API_RATE_LIMIT', 100); // Per minute
+

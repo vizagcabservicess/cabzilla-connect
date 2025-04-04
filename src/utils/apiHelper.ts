@@ -1,3 +1,4 @@
+
 // Configuration and helpers for API requests
 import { toast } from 'sonner';
 import { apiBaseUrl } from '@/config/api';
@@ -10,7 +11,7 @@ export const isPreviewMode = (): boolean => {
     typeof window !== 'undefined' &&
     (window.location.hostname.includes('localhost') ||
      window.location.hostname.includes('127.0.0.1') ||
-     window.location.hostname.includes('vizagtaxihub.com') ||
+     window.location.hostname.includes('vizagup.com') ||
      window.location.hostname.includes('demo'))
   );
 };
