@@ -15,8 +15,8 @@ header('Pragma: no-cache');
 header('Expires: 0');
 
 // Error reporting
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
+ini_set('display_errors', 0);
+error_reporting(0);
 
 // Initialize response
 $response = [
@@ -174,123 +174,132 @@ try {
         $response['messages'][] = "Error creating vehicles table: " . $conn->error;
     }
     
-    // Fix any existing tables with NULL values in critical fields
-    $fix_outstation_fares = "
-    ALTER TABLE outstation_fares 
-    MODIFY night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 700,
-    MODIFY driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 250;
-    ";
-    
-    try {
-        $conn->query($fix_outstation_fares);
-        $response['messages'][] = "Fixed outstation_fares table constraints";
-    } catch (Exception $e) {
-        $response['messages'][] = "Error fixing outstation_fares table: " . $e->getMessage();
-    }
-    
-    // Update any NULL values in existing tables
-    $conn->query("UPDATE outstation_fares SET night_halt_charge = 700 WHERE night_halt_charge IS NULL");
-    $conn->query("UPDATE outstation_fares SET driver_allowance = 250 WHERE driver_allowance IS NULL");
-    $response['messages'][] = "Updated NULL values in outstation_fares";
-    
-    // Check for vehicles table and fix it if exists
-    $check_vehicles = $conn->query("SHOW TABLES LIKE 'vehicles'");
-    if ($check_vehicles->num_rows > 0) {
-        try {
-            // Fix night_halt_charge and driver_allowance to be NOT NULL with default values
-            $conn->query("
-                ALTER TABLE vehicles 
-                MODIFY night_halt_charge DECIMAL(10,2) NOT NULL DEFAULT 700,
-                MODIFY driver_allowance DECIMAL(10,2) NOT NULL DEFAULT 250
-            ");
-            
-            // Update any NULL values
-            $conn->query("UPDATE vehicles SET night_halt_charge = 700 WHERE night_halt_charge IS NULL");
-            $conn->query("UPDATE vehicles SET driver_allowance = 250 WHERE driver_allowance IS NULL");
-            $response['messages'][] = "Fixed vehicles table constraints and updated NULL values";
-        } catch (Exception $e) {
-            $response['messages'][] = "Error fixing vehicles table: " . $e->getMessage();
+    // Create cache directories for data storage
+    $cacheDir = __DIR__ . '/../../cache';
+    if (!file_exists($cacheDir)) {
+        if (mkdir($cacheDir, 0755, true)) {
+            $response['messages'][] = "Created cache directory";
+        } else {
+            $response['messages'][] = "Failed to create cache directory";
         }
     }
     
-    // Insert sample data if the drivers table is empty
-    $result = $conn->query("SELECT COUNT(*) as count FROM drivers");
-    $row = $result->fetch_assoc();
-    
-    if ($row['count'] == 0) {
-        // Insert sample drivers
-        $conn->query("
-            INSERT INTO drivers (name, phone, email, vehicle_type, vehicle_number, status, location, rating, rides, earnings) VALUES
-            ('Rajesh Kumar', '9876543210', 'rajesh@example.com', 'Sedan', 'AP 31 XX 1234', 'Available', 'Hyderabad Central', 4.8, 352, 120000),
-            ('Pavan Reddy', '8765432109', 'pavan@example.com', 'SUV', 'AP 32 XX 5678', 'Busy', 'Gachibowli', 4.6, 215, 85500),
-            ('Suresh Verma', '7654321098', 'suresh@example.com', 'Sedan', 'AP 33 XX 9012', 'Offline', 'Offline', 4.5, 180, 72000),
-            ('Venkatesh S', '9876543211', 'venkat@example.com', 'Hatchback', 'AP 34 XX 3456', 'Available', 'Kukatpally', 4.7, 298, 110000),
-            ('Ramesh Babu', '8765432108', 'ramesh@example.com', 'Tempo', 'AP 35 XX 7890', 'Busy', 'Ameerpet', 4.4, 175, 65000)
-        ");
+    // Prepare persistent vehicle data if it doesn't exist
+    $persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
+    if (!file_exists($persistentCacheFile)) {
+        $defaultVehicles = [
+            [
+                'id' => 'sedan',
+                'vehicleId' => 'sedan',
+                'vehicle_id' => 'sedan',
+                'name' => 'Sedan',
+                'capacity' => 4,
+                'luggageCapacity' => 2,
+                'ac' => true,
+                'isActive' => true,
+                'basePrice' => 4200,
+                'pricePerKm' => 14,
+                'nightHaltCharge' => 700,
+                'driverAllowance' => 250,
+                'airportFares' => [
+                    'vehicleId' => 'sedan',
+                    'vehicle_id' => 'sedan',
+                    'basePrice' => 3000,
+                    'pricePerKm' => 12,
+                    'pickupPrice' => 800,
+                    'dropPrice' => 800, 
+                    'tier1Price' => 600,
+                    'tier2Price' => 800,
+                    'tier3Price' => 1000,
+                    'tier4Price' => 1200,
+                    'extraKmCharge' => 12
+                ]
+            ],
+            [
+                'id' => 'ertiga',
+                'vehicleId' => 'ertiga',
+                'vehicle_id' => 'ertiga',
+                'name' => 'Ertiga',
+                'capacity' => 6,
+                'luggageCapacity' => 3,
+                'ac' => true,
+                'isActive' => true,
+                'basePrice' => 5400,
+                'pricePerKm' => 18,
+                'nightHaltCharge' => 1000,
+                'driverAllowance' => 250,
+                'airportFares' => [
+                    'vehicleId' => 'ertiga',
+                    'vehicle_id' => 'ertiga',
+                    'basePrice' => 3500,
+                    'pricePerKm' => 15,
+                    'pickupPrice' => 1000,
+                    'dropPrice' => 1000,
+                    'tier1Price' => 800,
+                    'tier2Price' => 1000,
+                    'tier3Price' => 1200,
+                    'tier4Price' => 1400,
+                    'extraKmCharge' => 15
+                ]
+            ],
+            [
+                'id' => 'innova_crysta',
+                'vehicleId' => 'innova_crysta',
+                'vehicle_id' => 'innova_crysta',
+                'name' => 'Innova Crysta',
+                'capacity' => 7,
+                'luggageCapacity' => 4,
+                'ac' => true,
+                'isActive' => true,
+                'basePrice' => 6000,
+                'pricePerKm' => 20,
+                'nightHaltCharge' => 1000,
+                'driverAllowance' => 250,
+                'airportFares' => [
+                    'vehicleId' => 'innova_crysta',
+                    'vehicle_id' => 'innova_crysta',
+                    'basePrice' => 4000,
+                    'pricePerKm' => 17,
+                    'pickupPrice' => 1200,
+                    'dropPrice' => 1200,
+                    'tier1Price' => 1000,
+                    'tier2Price' => 1200,
+                    'tier3Price' => 1400,
+                    'tier4Price' => 1600,
+                    'extraKmCharge' => 17
+                ]
+            ]
+        ];
         
-        $response['messages'][] = "Sample drivers added";
-    }
-    
-    // Add sample data to local_package_fares if it's empty
-    $local_result = $conn->query("SELECT COUNT(*) as count FROM local_package_fares");
-    $local_row = $local_result->fetch_assoc();
-    
-    if ($local_row['count'] == 0) {
-        // Insert default local package fares
-        $conn->query("
-            INSERT INTO local_package_fares (vehicle_id, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour) VALUES
-            ('sedan', 1200, 2200, 2500, 14, 250),
-            ('ertiga', 1500, 2700, 3000, 18, 250),
-            ('innova_crysta', 1800, 3000, 3500, 20, 250),
-            ('tempo', 3000, 4500, 5500, 22, 300),
-            ('luxury', 3500, 5500, 6500, 25, 300)
-        ");
-        
-        $response['messages'][] = "Sample local package fares added";
+        if (file_put_contents($persistentCacheFile, json_encode($defaultVehicles, JSON_PRETTY_PRINT))) {
+            $response['messages'][] = "Created default persistent vehicles data";
+        } else {
+            $response['messages'][] = "Failed to create persistent vehicles data";
+        }
+    } else {
+        $response['messages'][] = "Persistent vehicles data already exists";
     }
     
     // Add sample data to airport_transfer_fares if it's empty
     $airport_result = $conn->query("SELECT COUNT(*) as count FROM airport_transfer_fares");
-    $airport_row = $airport_result->fetch_assoc();
-    
-    if ($airport_row['count'] == 0) {
-        // Insert default airport transfer fares
-        $conn->query("
-            INSERT INTO airport_transfer_fares (vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
-                                              tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge) VALUES
-            ('sedan', 3000, 12, 800, 800, 600, 800, 1000, 1200, 12),
-            ('ertiga', 3500, 15, 1000, 1000, 800, 1000, 1200, 1400, 15),
-            ('innova_crysta', 4000, 17, 1200, 1200, 1000, 1200, 1400, 1600, 17),
-            ('tempo', 6000, 19, 2000, 2000, 1600, 1800, 2000, 2500, 19),
-            ('luxury', 7000, 22, 2500, 2500, 2000, 2200, 2500, 3000, 22)
-        ");
+    if ($airport_result) {
+        $airport_row = $airport_result->fetch_assoc();
         
-        $response['messages'][] = "Sample airport transfer fares added";
+        if ($airport_row['count'] == 0) {
+            // Insert default airport transfer fares
+            $conn->query("
+                INSERT INTO airport_transfer_fares (vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
+                                                  tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge) VALUES
+                ('sedan', 3000, 12, 800, 800, 600, 800, 1000, 1200, 12),
+                ('ertiga', 3500, 15, 1000, 1000, 800, 1000, 1200, 1400, 15),
+                ('innova_crysta', 4000, 17, 1200, 1200, 1000, 1200, 1400, 1600, 17),
+                ('tempo', 6000, 19, 2000, 2000, 1600, 1800, 2000, 2500, 19),
+                ('luxury', 7000, 22, 2500, 2500, 2000, 2200, 2500, 3000, 22)
+            ");
+            
+            $response['messages'][] = "Sample airport transfer fares added";
+        }
     }
-    
-    // Add sample data to outstation_fares if it's empty
-    $outstation_result = $conn->query("SELECT COUNT(*) as count FROM outstation_fares");
-    $outstation_row = $outstation_result->fetch_assoc();
-    
-    if ($outstation_row['count'] == 0) {
-        // Insert default outstation fares with non-NULL values for night_halt_charge and driver_allowance
-        $conn->query("
-            INSERT INTO outstation_fares (vehicle_id, base_price, price_per_km, night_halt_charge, driver_allowance, 
-                                        roundtrip_base_price, roundtrip_price_per_km) VALUES
-            ('sedan', 4200, 14, 700, 250, 4000, 12),
-            ('ertiga', 5400, 18, 1000, 250, 5000, 15),
-            ('innova_crysta', 6000, 20, 1000, 250, 5600, 17),
-            ('tempo', 9000, 22, 1500, 300, 8500, 19),
-            ('luxury', 10500, 25, 1500, 300, 10000, 22)
-        ");
-        
-        $response['messages'][] = "Sample outstation fares added";
-    }
-    
-    // Verify and fix any NULL values in these important fields
-    $conn->query("UPDATE outstation_fares SET night_halt_charge = 700 WHERE night_halt_charge IS NULL");
-    $conn->query("UPDATE outstation_fares SET driver_allowance = 250 WHERE driver_allowance IS NULL");
-    $response['messages'][] = "Verified and fixed any remaining NULL values";
     
     // Success response
     $response['status'] = 'success';

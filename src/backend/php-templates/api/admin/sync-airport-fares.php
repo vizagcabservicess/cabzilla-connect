@@ -105,15 +105,83 @@ if (empty($vehicleIds)) {
 }
 
 // In a real environment, we would now sync the airport fares table with these vehicle IDs
-// For this mock implementation, we'll just log that the sync would occur
+// For this mock implementation, we'll just update the persistent data
 logMessage('Starting airport fares synchronization for vehicles: ' . implode(', ', $vehicleIds));
-logMessage("Synced fares for " . count($vehicleIds) . " vehicles");
+
+// Ensure all vehicles have airport fares entries
+$updatedVehicles = 0;
+foreach ($vehicleIds as $vehicleId) {
+    $hasFares = false;
+    
+    // Check if vehicle already has airport fares in persistent data
+    foreach ($persistentData as &$vehicle) {
+        if (isset($vehicle['id']) && $vehicle['id'] === $vehicleId) {
+            if (!isset($vehicle['airportFares']) || !is_array($vehicle['airportFares'])) {
+                // If no airport fares for this vehicle, add default ones
+                $vehicle['airportFares'] = [
+                    'vehicleId' => $vehicleId,
+                    'vehicle_id' => $vehicleId,
+                    'basePrice' => 3000,
+                    'pricePerKm' => 12,
+                    'pickupPrice' => 800,
+                    'dropPrice' => 800,
+                    'tier1Price' => 600,
+                    'tier2Price' => 800, 
+                    'tier3Price' => 1000,
+                    'tier4Price' => 1200,
+                    'extraKmCharge' => 12
+                ];
+                $updatedVehicles++;
+                logMessage("Added default airport fares for vehicle: $vehicleId");
+            } else {
+                logMessage("Vehicle $vehicleId already has airport fares");
+            }
+            $hasFares = true;
+            break;
+        }
+    }
+    
+    // If vehicle not found in persistent data, add it
+    if (!$hasFares) {
+        $newVehicle = [
+            'id' => $vehicleId,
+            'vehicleId' => $vehicleId,
+            'vehicle_id' => $vehicleId,
+            'name' => ucfirst($vehicleId),
+            'airportFares' => [
+                'vehicleId' => $vehicleId,
+                'vehicle_id' => $vehicleId,
+                'basePrice' => 3000,
+                'pricePerKm' => 12,
+                'pickupPrice' => 800,
+                'dropPrice' => 800,
+                'tier1Price' => 600,
+                'tier2Price' => 800,
+                'tier3Price' => 1000,
+                'tier4Price' => 1200,
+                'extraKmCharge' => 12
+            ]
+        ];
+        $persistentData[] = $newVehicle;
+        $updatedVehicles++;
+        logMessage("Added new vehicle $vehicleId with default airport fares");
+    }
+}
+
+// Save updated persistent data
+if (file_put_contents($persistentCacheFile, json_encode($persistentData, JSON_PRETTY_PRINT))) {
+    logMessage("Saved updated persistent data with airport fares");
+} else {
+    logMessage("ERROR: Failed to save persistent data");
+}
+
+logMessage("Synced fares for " . $updatedVehicles . " vehicles");
 
 // Return success response with proper JSON encoding
 echo json_encode([
     'status' => 'success',
     'message' => 'Airport fares synced successfully',
-    'synced' => count($vehicleIds),
+    'synced' => $updatedVehicles,
     'vehicles' => $vehicleIds,
     'timestamp' => $now
 ], JSON_PARTIAL_OUTPUT_ON_ERROR);

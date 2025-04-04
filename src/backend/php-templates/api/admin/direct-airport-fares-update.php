@@ -24,14 +24,10 @@ $timestamp = date('Y-m-d H:i:s');
 
 // Log this request
 file_put_contents($logFile, "[$timestamp] Direct airport fares update request received\n", FILE_APPEND);
-file_put_contents($logFile, "[$timestamp] GET params: " . json_encode($_GET) . "\n", FILE_APPEND);
-file_put_contents($logFile, "[$timestamp] POST params: " . json_encode($_POST) . "\n", FILE_APPEND);
 
 // Try to get raw input for more detailed logging
 $rawInput = file_get_contents('php://input');
-if (!empty($rawInput)) {
-    file_put_contents($logFile, "[$timestamp] Raw input: " . $rawInput . "\n", FILE_APPEND);
-}
+file_put_contents($logFile, "[$timestamp] Raw input: " . $rawInput . "\n", FILE_APPEND);
 
 // Decode the JSON input
 $data = null;
@@ -85,7 +81,7 @@ if (!$vehicleId) {
     }
 }
 
-// For Lovable preview mode, just use a default vehicle ID if not provided
+// For testing/preview mode, use a default vehicle ID if not provided
 $isPreviewMode = false;
 if (isset($_SERVER['HTTP_HOST']) && (
     strpos($_SERVER['HTTP_HOST'], 'lovableproject.com') !== false ||
@@ -106,8 +102,6 @@ if (!$vehicleId) {
         'status' => 'error',
         'message' => 'Vehicle ID is required',
         'debug' => [
-            'get_params' => $_GET,
-            'post_params' => $_POST,
             'parsed_data' => $data,
             'timestamp' => $timestamp
         ]
@@ -127,7 +121,7 @@ if (!file_exists($cacheDir)) {
     mkdir($cacheDir, 0755, true);
 }
 
-// Extract fare data from the request
+// Extract fare data from the request with multiple field name support
 $pickupPrice = isset($data['pickupPrice']) ? floatval($data['pickupPrice']) : 
              (isset($data['pickup']) ? floatval($data['pickup']) : 0);
 
@@ -147,8 +141,10 @@ $tier4Price = isset($data['tier4Price']) ? floatval($data['tier4Price']) :
             (isset($data['tier4']) ? floatval($data['tier4']) : 0);
 
 $extraKmCharge = isset($data['extraKmCharge']) ? floatval($data['extraKmCharge']) : 0;
+$basePrice = isset($data['basePrice']) ? floatval($data['basePrice']) : 0;
+$pricePerKm = isset($data['pricePerKm']) ? floatval($data['pricePerKm']) : 0;
 
-// Create fare data object
+// Create fare data object with all possible field names
 $fareData = [
     'vehicleId' => $vehicleId,
     'vehicle_id' => $vehicleId,
@@ -164,7 +160,9 @@ $fareData = [
     'tier2' => $tier2Price,
     'tier3' => $tier3Price,
     'tier4' => $tier4Price,
-    'extraKmCharge' => $extraKmCharge
+    'extraKmCharge' => $extraKmCharge,
+    'basePrice' => $basePrice,
+    'pricePerKm' => $pricePerKm
 ];
 
 // Log the fare data
@@ -217,16 +215,10 @@ if (file_put_contents($persistentCacheFile, json_encode($persistentData, JSON_PR
     file_put_contents($logFile, "[$timestamp] ERROR: Failed to save persistent data\n", FILE_APPEND);
 }
 
-// For a real implementation, this would also update the database
-// Here we'll just simulate success for the Lovable app
-
 // Return success response
 echo json_encode([
     'status' => 'success',
     'message' => 'Airport fares updated successfully',
     'vehicleId' => $vehicleId,
-    'debug' => [
-        'fare_data' => $fareData,
-        'timestamp' => time()
-    ]
+    'data' => $fareData
 ]);
