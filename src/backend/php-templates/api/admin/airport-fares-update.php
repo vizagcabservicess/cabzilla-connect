@@ -37,16 +37,20 @@ try {
         $json = file_get_contents('php://input');
         file_put_contents($logFile, "[$timestamp] Raw input: $json\n", FILE_APPEND);
         
-        $postData = json_decode($json, true);
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            // Try to handle non-JSON data (might be URL encoded or form data)
-            parse_str($json, $parsedData);
-            if (!empty($parsedData)) {
-                $postData = $parsedData;
-                file_put_contents($logFile, "[$timestamp] Parsed as URL encoded data\n", FILE_APPEND);
-            } else {
-                throw new Exception('Invalid input format: ' . json_last_error_msg());
+        if (!empty($json)) {
+            $postData = json_decode($json, true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                // Try to handle non-JSON data (might be URL encoded or form data)
+                parse_str($json, $parsedData);
+                if (!empty($parsedData)) {
+                    $postData = $parsedData;
+                    file_put_contents($logFile, "[$timestamp] Parsed as URL encoded data\n", FILE_APPEND);
+                } else {
+                    throw new Exception('Invalid input format: ' . json_last_error_msg());
+                }
             }
+        } else {
+            throw new Exception('No data received in request body');
         }
     }
     
@@ -83,28 +87,63 @@ try {
 
     file_put_contents($logFile, "[$timestamp] Found vehicle ID: $vehicleId\n", FILE_APPEND);
 
-    $priceOneWay = isset($postData['priceOneWay']) ? floatval($postData['priceOneWay']) : 0;
-    $priceRoundTrip = isset($postData['priceRoundTrip']) ? floatval($postData['priceRoundTrip']) : 0;
+    // Extract fare data - support various naming conventions
+    $priceOneWay = isset($postData['priceOneWay']) ? floatval($postData['priceOneWay']) : 
+                  (isset($postData['oneWayPrice']) ? floatval($postData['oneWayPrice']) : 0);
+    
+    $priceRoundTrip = isset($postData['priceRoundTrip']) ? floatval($postData['priceRoundTrip']) : 
+                     (isset($postData['roundTripPrice']) ? floatval($postData['roundTripPrice']) : 0);
+    
     $nightCharges = isset($postData['nightCharges']) ? floatval($postData['nightCharges']) : 0;
     $extraWaitingCharges = isset($postData['extraWaitingCharges']) ? floatval($postData['extraWaitingCharges']) : 0;
+    
+    // Support for standard field naming from airport_transfer_fares table
+    $basePrice = isset($postData['basePrice']) ? floatval($postData['basePrice']) : 0;
+    $pricePerKm = isset($postData['pricePerKm']) ? floatval($postData['pricePerKm']) : 0;
+    $pickupPrice = isset($postData['pickupPrice']) ? floatval($postData['pickupPrice']) : 0;
+    $dropPrice = isset($postData['dropPrice']) ? floatval($postData['dropPrice']) : 0;
+    $tier1Price = isset($postData['tier1Price']) ? floatval($postData['tier1Price']) : 0;
+    $tier2Price = isset($postData['tier2Price']) ? floatval($postData['tier2Price']) : 0;
+    $tier3Price = isset($postData['tier3Price']) ? floatval($postData['tier3Price']) : 0;
+    $tier4Price = isset($postData['tier4Price']) ? floatval($postData['tier4Price']) : 0;
+    $extraKmCharge = isset($postData['extraKmCharge']) ? floatval($postData['extraKmCharge']) : 0;
 
     // This is a mock implementation for the Lovable preview
     // In a real environment, this would connect to a database
     
     file_put_contents($logFile, "[$timestamp] Successfully processed fare update for vehicle: $vehicleId\n", FILE_APPEND);
     file_put_contents($logFile, "[$timestamp] OneWay: $priceOneWay, RoundTrip: $priceRoundTrip, Night: $nightCharges, Waiting: $extraWaitingCharges\n", FILE_APPEND);
+    file_put_contents($logFile, "[$timestamp] BasePrice: $basePrice, PricePerKm: $pricePerKm, Tier1: $tier1Price, Tier2: $tier2Price, Tier3: $tier3Price, Tier4: $tier4Price\n", FILE_APPEND);
 
     // Create a lock file to prevent immediate syncing after an update
     // (helps prevent infinite loops)
     file_put_contents($logDir . '/airport_fares_updated.lock', time());
     
-    // In a mock implementation, we'll just return success
-    echo json_encode([
+    // Create a response with all relevant data
+    $response = [
         'status' => 'success',
         'message' => 'Airport fare updated successfully',
         'vehicle_id' => $vehicleId,
+        'data' => [
+            'priceOneWay' => $priceOneWay,
+            'priceRoundTrip' => $priceRoundTrip,
+            'nightCharges' => $nightCharges,
+            'extraWaitingCharges' => $extraWaitingCharges,
+            'basePrice' => $basePrice,
+            'pricePerKm' => $pricePerKm,
+            'pickupPrice' => $pickupPrice,
+            'dropPrice' => $dropPrice,
+            'tier1Price' => $tier1Price,
+            'tier2Price' => $tier2Price,
+            'tier3Price' => $tier3Price,
+            'tier4Price' => $tier4Price,
+            'extraKmCharge' => $extraKmCharge
+        ],
         'timestamp' => time()
-    ]);
+    ];
+    
+    // Output valid JSON
+    echo json_encode($response);
     
 } catch (Exception $e) {
     file_put_contents($logFile, "[$timestamp] ERROR: " . $e->getMessage() . "\n", FILE_APPEND);

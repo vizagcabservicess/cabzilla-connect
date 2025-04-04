@@ -1,10 +1,11 @@
 
-import { apiBaseUrl } from '@/config/api';
+import { directVehicleOperation } from '@/utils/apiHelper';
+import { getApiUrl } from '@/config/api';
 
 export interface FareData {
   vehicleId: string;
-  basePrice: number;
-  pricePerKm: number;
+  basePrice?: number;
+  pricePerKm?: number;
   pickupPrice?: number;
   dropPrice?: number;
   tier1Price?: number;
@@ -16,27 +17,27 @@ export interface FareData {
   price8hrs80km?: number;
   price10hrs100km?: number;
   priceExtraHour?: number;
+  // Airport specific fields
+  priceOneWay?: number;
+  priceRoundTrip?: number;
+  nightCharges?: number;
+  extraWaitingCharges?: number;
 }
 
 export const fetchLocalFares = async (vehicleId?: string): Promise<FareData[]> => {
   try {
-    const url = `${apiBaseUrl}/api/admin/direct-local-fares.php${vehicleId ? `?vehicle_id=${vehicleId}` : ''}`;
-    const response = await fetch(url, {
+    const endpoint = `api/admin/direct-local-fares.php${vehicleId ? `?vehicle_id=${vehicleId}` : ''}`;
+    const result = await directVehicleOperation(endpoint, 'GET', {
       headers: {
-        'X-Requested-With': 'XMLHttpRequest',
-        'Cache-Control': 'no-cache',
-        'X-Force-Refresh': 'true'
+        'X-Admin-Mode': 'true',
+        'X-Force-Refresh': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
       }
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    console.log('Local fares response:', data);
+    console.log('Local fares response:', result);
     
-    return data.fares || [];
+    return result.fares || [];
   } catch (error) {
     console.error('Error fetching local fares:', error);
     throw error;
@@ -45,23 +46,18 @@ export const fetchLocalFares = async (vehicleId?: string): Promise<FareData[]> =
 
 export const fetchAirportFares = async (vehicleId?: string): Promise<FareData[]> => {
   try {
-    const url = `${apiBaseUrl}/api/admin/direct-airport-fares.php${vehicleId ? `?vehicle_id=${vehicleId}` : ''}`;
-    const response = await fetch(url, {
+    const endpoint = `api/admin/direct-airport-fares.php${vehicleId ? `?vehicle_id=${vehicleId}` : ''}`;
+    const result = await directVehicleOperation(endpoint, 'GET', {
       headers: {
-        'X-Requested-With': 'XMLHttpRequest',
-        'Cache-Control': 'no-cache',
-        'X-Force-Refresh': 'true'
+        'X-Admin-Mode': 'true',
+        'X-Force-Refresh': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
       }
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    console.log('Airport fares response:', data);
+    console.log('Airport fares response:', result);
     
-    return data.fares || [];
+    return result.fares || [];
   } catch (error) {
     console.error('Error fetching airport fares:', error);
     throw error;
@@ -70,21 +66,16 @@ export const fetchAirportFares = async (vehicleId?: string): Promise<FareData[]>
 
 export const updateLocalFares = async (fareData: FareData): Promise<void> => {
   try {
-    const response = await fetch(`${apiBaseUrl}/api/admin/local-fares-update.php`, {
-      method: 'POST',
+    console.log('Updating local fares with data:', fareData);
+    
+    const result = await directVehicleOperation('api/admin/local-fares-update.php', 'POST', {
       headers: {
-        'Content-Type': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
+        'X-Admin-Mode': 'true',
         'X-Force-Refresh': 'true'
       },
-      body: JSON.stringify(fareData)
+      data: fareData
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
     console.log('Local fares update response:', result);
 
     if (result.status === 'error') {
@@ -98,21 +89,23 @@ export const updateLocalFares = async (fareData: FareData): Promise<void> => {
 
 export const updateAirportFares = async (fareData: FareData): Promise<void> => {
   try {
-    const response = await fetch(`${apiBaseUrl}/api/admin/airport-fares-update.php`, {
-      method: 'POST',
+    console.log('Updating airport fares with data:', fareData);
+    
+    // Ensure we have both field formats (for compatibility with different backends)
+    const dataToSend = {
+      ...fareData,
+      vehicleId: fareData.vehicleId,
+      vehicle_id: fareData.vehicleId
+    };
+    
+    const result = await directVehicleOperation('api/admin/airport-fares-update.php', 'POST', {
       headers: {
-        'Content-Type': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
+        'X-Admin-Mode': 'true', 
         'X-Force-Refresh': 'true'
       },
-      body: JSON.stringify(fareData)
+      data: dataToSend
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
     console.log('Airport fares update response:', result);
 
     if (result.status === 'error') {

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { directVehicleOperation } from '@/utils/apiHelper';
 import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, RefreshCw, Save } from "lucide-react";
+import { fetchLocalFares, fetchAirportFares, updateLocalFares, updateAirportFares } from '@/services/fareManagementService';
 
 interface FareManagementProps {
   vehicleId: string;
@@ -28,7 +30,17 @@ interface FareData {
   priceRoundTrip?: number;
   nightCharges?: number;
   extraWaitingCharges?: number;
-  // Additional fields
+  // Additional fields for multi-tier pricing
+  basePrice?: number;
+  pricePerKm?: number;
+  pickupPrice?: number;
+  dropPrice?: number;
+  tier1Price?: number;
+  tier2Price?: number;
+  tier3Price?: number;
+  tier4Price?: number;
+  extraKmCharge?: number;
+  // For flexible property access
   [key: string]: any;
 }
 
@@ -83,27 +95,16 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     setError(null);
     
     try {
-      let endpoint = '';
+      let result: FareData[] = [];
       
       if (fareType === 'local') {
-        endpoint = `api/admin/direct-local-fares.php?vehicle_id=${encodeURIComponent(vehicleId)}&_t=${Date.now()}`;
+        result = await fetchLocalFares(vehicleId);
       } else if (fareType === 'airport') {
-        endpoint = `api/admin/direct-airport-fares.php?vehicle_id=${encodeURIComponent(vehicleId)}&_t=${Date.now()}`;
+        result = await fetchAirportFares(vehicleId);
       }
       
-      console.log(`Loading ${fareType} fare data from ${endpoint}`);
-      
-      const headers = {
-        'X-Admin-Mode': 'true',
-        'X-Debug': 'true'
-      };
-      
-      const result = await directVehicleOperation(endpoint, 'GET', {
-        headers: headers
-      });
-      
-      if (result && result.status === 'success' && result.fares && result.fares.length > 0) {
-        const loadedFare = result.fares[0];
+      if (result && result.length > 0) {
+        const loadedFare = result[0];
         console.log(`Loaded ${fareType} fare data:`, loadedFare);
         
         const updatedFare = {
@@ -122,9 +123,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
           vehicle_id: vehicleId 
         });
         
-        if (result && result.status === 'error') {
-          setError(result.message || 'Failed to load fare data');
-        }
+        setError(`No ${fareType} fare data found for this vehicle.`);
       }
     } catch (err) {
       console.error(`Error loading ${fareType} fare data:`, err);
@@ -161,46 +160,35 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     setError(null);
     
     try {
-      let endpoint = '';
-      
-      if (fareType === 'local') {
-        endpoint = 'api/admin/local-fares-update.php';
-      } else if (fareType === 'airport') {
-        endpoint = 'api/admin/airport-fares-update.php';
-      }
-      
-      console.log(`Saving ${fareType} fare data to ${endpoint}:`, fareData);
-      
+      // Make sure vehicleId is properly set
       const dataToSave = {
         ...fareData,
         vehicleId: vehicleId,
         vehicle_id: vehicleId
       };
       
-      console.log('Final fare data being sent:', dataToSave);
+      console.log(`Saving ${fareType} fare data:`, dataToSave);
       
-      const result = await directVehicleOperation(endpoint, 'POST', {
-        headers: {
-          'X-Admin-Mode': 'true',
-          'X-Debug': 'true'
-        },
-        data: dataToSave
-      });
-      
-      if (result && result.status === 'success') {
-        toast.success(`${fareType.charAt(0).toUpperCase() + fareType.slice(1)} fares updated successfully`);
-        
-        lastFetchTime.current = Date.now();
-        
-        fetchAttempts.current = 0;
-      } else {
-        console.error('Error saving fare data:', result);
-        toast.error(result?.message || 'Failed to update fares');
-        setError(result?.message || 'Failed to update fares');
+      if (fareType === 'local') {
+        await updateLocalFares(dataToSave);
+      } else if (fareType === 'airport') {
+        await updateAirportFares(dataToSave);
       }
+      
+      toast.success(`${fareType.charAt(0).toUpperCase() + fareType.slice(1)} fares updated successfully`);
+      
+      lastFetchTime.current = Date.now();
+      fetchAttempts.current = 0;
+      
+      // Refresh data after saving
+      setTimeout(() => {
+        if (mountedRef.current) {
+          loadFareData();
+        }
+      }, 1500);
     } catch (err) {
       console.error(`Error saving ${fareType} fare data:`, err);
-      toast.error('Failed to update fares');
+      toast.error(`Failed to update ${fareType} fares: ${err instanceof Error ? err.message : 'Unknown error'}`);
       setError(`Failed to update fares. ${err instanceof Error ? err.message : ''}`);
     } finally {
       if (mountedRef.current) {
@@ -430,6 +418,68 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
                 name="extraWaitingCharges"
                 type="number"
                 value={fareData.extraWaitingCharges || 0}
+                onChange={handleInputChange}
+              />
+            </div>
+          </div>
+          
+          {/* Adding tier pricing fields for airport fares */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="tier1Price">Tier 1 Price (≤ 10km) (₹)</Label>
+              <Input
+                id="tier1Price"
+                name="tier1Price"
+                type="number"
+                value={fareData.tier1Price || 0}
+                onChange={handleInputChange}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="tier2Price">Tier 2 Price (≤ 20km) (₹)</Label>
+              <Input
+                id="tier2Price"
+                name="tier2Price"
+                type="number"
+                value={fareData.tier2Price || 0}
+                onChange={handleInputChange}
+              />
+            </div>
+          </div>
+          
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="tier3Price">Tier 3 Price (≤ 30km) (₹)</Label>
+              <Input
+                id="tier3Price"
+                name="tier3Price"
+                type="number"
+                value={fareData.tier3Price || 0}
+                onChange={handleInputChange}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="tier4Price">Tier 4 Price (> 30km) (₹)</Label>
+              <Input
+                id="tier4Price"
+                name="tier4Price"
+                type="number"
+                value={fareData.tier4Price || 0}
+                onChange={handleInputChange}
+              />
+            </div>
+          </div>
+          
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="extraKmCharge">Extra KM Charge (₹)</Label>
+              <Input
+                id="extraKmCharge"
+                name="extraKmCharge"
+                type="number"
+                value={fareData.extraKmCharge || 0}
                 onChange={handleInputChange}
               />
             </div>

@@ -268,11 +268,17 @@ export const directVehicleOperation = async (
       method,
       headers,
       credentials: 'include',
-      cache: 'no-store' // Ensure we don't use cached responses
+      cache: 'no-store', // Ensure we don't use cached responses
+      mode: 'cors' // Explicitly enable CORS
     };
     
     // Add body for non-GET requests
     if (method !== 'GET' && options.data) {
+      // Set appropriate content type if not specified
+      if (!headers['Content-Type']) {
+        headers['Content-Type'] = 'application/json';
+      }
+      
       if (headers['Content-Type'] === 'application/json') {
         // Stringify the data properly
         requestOptions.body = JSON.stringify(options.data);
@@ -290,16 +296,13 @@ export const directVehicleOperation = async (
     // Make the request
     const response = await fetch(url, requestOptions);
     
-    // Check if response is OK
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`Error in directVehicleOperation (${response.status}):`, errorText);
-      throw new Error(`API request failed: ${response.status}. ${errorText}`);
-    }
+    // Check content type to handle different response formats
+    const contentType = response.headers.get('content-type') || '';
     
     // First try to get the response as text
     const text = await response.text();
     console.log('Raw response text:', text);
+    console.log('Response status:', response.status, 'Content-Type:', contentType);
     
     // Check if the text is empty
     if (!text || text.trim() === '') {
@@ -315,9 +318,23 @@ export const directVehicleOperation = async (
     
     // Then try to parse it as JSON
     try {
-      return JSON.parse(text);
+      const jsonData = JSON.parse(text);
+      
+      // Check if response is OK
+      if (!response.ok) {
+        console.error(`Error in directVehicleOperation (${response.status}):`, jsonData);
+        throw new Error(`API request failed: ${response.status}. ${jsonData.message || ''}`);
+      }
+      
+      return jsonData;
     } catch (jsonError) {
       console.error('Error parsing JSON response:', jsonError, 'Raw text:', text);
+      
+      // If we received HTML but failed to detect it earlier, throw a more specific error
+      if (text.includes('<') && text.includes('>')) {
+        throw new Error('Received invalid response format (possibly HTML). Check server configuration.');
+      }
+      
       throw new Error(`Failed to parse JSON response: ${text.substring(0, 100)}...`);
     }
   } catch (error) {
