@@ -124,8 +124,10 @@ try {
         throw new Exception("Vehicle ID is required");
     }
     
-    // The persistent cache file path
+    // Define the persistent cache file path - ABSOLUTE PATH for reliability
     $persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
+    
+    logMessage("Using persistent cache file at: $persistentCacheFile");
     
     // Try to load existing persistent data - CRITICAL FOR CONSISTENCY
     $persistentData = [];
@@ -340,44 +342,92 @@ try {
         logMessage("Added new vehicle to persistent data");
     }
     
-    // Save the updated data back to the persistent cache file
-    $jsonOptions = defined('JSON_PRETTY_PRINT') ? JSON_PRETTY_PRINT | JSON_PARTIAL_OUTPUT_ON_ERROR : 0;
-    $jsonData = json_encode($persistentData, $jsonOptions);
-    
-    if ($jsonData && file_put_contents($persistentCacheFile, $jsonData)) {
-        logMessage("Successfully saved persistent vehicle data with " . count($persistentData) . " vehicles");
+    // CRITICAL FIX: Save the updated data to the persistent cache file with specific error handling
+    try {
+        $jsonOptions = defined('JSON_PRETTY_PRINT') ? JSON_PRETTY_PRINT | JSON_PARTIAL_OUTPUT_ON_ERROR : 0;
+        $jsonData = json_encode($persistentData, $jsonOptions);
         
-        // Clear any regular cache files to ensure fresh data is loaded
-        $cacheFiles = glob($cacheDir . '/vehicles_*.json');
-        foreach ($cacheFiles as $file) {
-            if ($file !== $persistentCacheFile) {
-                @unlink($file);
-                logMessage("Cleared cache file: " . basename($file));
+        // Check if JSON encoding was successful
+        if ($jsonData === false) {
+            throw new Exception("JSON encoding error: " . json_last_error_msg());
+        }
+        
+        // Make sure cache directory exists
+        if (!is_dir($cacheDir)) {
+            if (!mkdir($cacheDir, 0755, true)) {
+                throw new Exception("Failed to create cache directory: $cacheDir");
             }
+            logMessage("Created cache directory: $cacheDir");
         }
         
-        // Format response with the updated vehicle data
-        $response = [
-            'status' => 'success',
-            'message' => 'Vehicle updated successfully',
-            'id' => $vehicleId,
-            'timestamp' => time(),
-            'vehicle' => $formattedVehicle
-        ];
-    } else {
-        logMessage("Failed to save persistent vehicle data");
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            logMessage("JSON encoding error: " . json_last_error_msg());
+        // Check if cache directory is writable
+        if (!is_writable($cacheDir)) {
+            throw new Exception("Cache directory is not writable: $cacheDir");
         }
-        throw new Exception("Failed to save vehicle data to persistent storage");
+        
+        // Write the data to a temporary file first
+        $tempFile = $cacheDir . '/vehicles_temp_' . uniqid() . '.json';
+        $bytesWritten = file_put_contents($tempFile, $jsonData);
+        
+        if ($bytesWritten === false) {
+            throw new Exception("Failed to write to temporary file: $tempFile");
+        }
+        
+        logMessage("Successfully wrote " . $bytesWritten . " bytes to temporary file");
+        
+        // Only replace the original file if the temp file was written successfully
+        if (rename($tempFile, $persistentCacheFile)) {
+            logMessage("Successfully saved persistent vehicle data with " . count($persistentData) . " vehicles");
+            
+            // Also backup the data to an additional location for safety
+            $backupFile = $cacheDir . '/vehicles_backup_' . date('Ymd_His') . '.json';
+            if (copy($persistentCacheFile, $backupFile)) {
+                logMessage("Created backup at: $backupFile");
+            }
+            
+            // Clear any regular cache files to ensure fresh data is loaded
+            $cacheFiles = glob($cacheDir . '/vehicles_*.json');
+            foreach ($cacheFiles as $file) {
+                if ($file !== $persistentCacheFile && $file !== $backupFile && !strpos($file, 'backup')) {
+                    if (@unlink($file)) {
+                        logMessage("Cleared cache file: " . basename($file));
+                    }
+                }
+            }
+            
+            // Format response with the updated vehicle data
+            $response = [
+                'status' => 'success',
+                'message' => 'Vehicle updated successfully',
+                'id' => $vehicleId,
+                'timestamp' => time(),
+                'vehicle' => $formattedVehicle
+            ];
+        } else {
+            throw new Exception("Failed to rename temporary file to persistent cache file");
+        }
+    } catch (Exception $saveError) {
+        logMessage("ERROR saving data: " . $saveError->getMessage());
+        throw $saveError; // rethrow to be caught by outer catch
     }
 } catch (Exception $e) {
     logMessage("Error updating vehicle: " . $e->getMessage());
-    $response = [
-        'status' => 'error',
-        'message' => $e->getMessage(),
-        'timestamp' => time()
-    ];
+    
+    // Check if persistent cache file exists and is readable but not writable
+    if (file_exists($persistentCacheFile) && is_readable($persistentCacheFile) && !is_writable($persistentCacheFile)) {
+        logMessage("Persistent cache file exists but is not writable - permission issue");
+        $response = [
+            'status' => 'error',
+            'message' => 'Permission denied: Cannot write to persistent cache file',
+            'timestamp' => time()
+        ];
+    } else {
+        $response = [
+            'status' => 'error',
+            'message' => $e->getMessage(),
+            'timestamp' => time()
+        ];
+    }
 }
 
 // Send the response

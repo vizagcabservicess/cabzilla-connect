@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Info } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { VehicleManagement } from './VehicleManagement';
 import { directVehicleOperation, fixDatabaseTables, isPreviewMode } from '@/utils/apiHelper';
@@ -99,10 +100,19 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
           console.log('Vehicle check result after database fix:', vehicleData);
           setLoaded(true);
           setError(null);
+          
+          // Force a resync from persistent storage to ensure we have the latest data
+          await resyncVehicles();
         } catch (loadErr) {
           console.error('Error loading vehicle data after fix:', loadErr);
+          // Try a resync as a backup plan
+          await resyncVehicles();
         }
       } else {
+        // Try to resync from persistent storage even if the fix fails
+        toast.warning('Database fix not fully successful. Trying to sync from persistent storage...');
+        await resyncVehicles();
+        
         // Even if fix fails, still show the management screen in preview mode
         if (isPreviewMode()) {
           console.log('In preview mode, proceeding despite database fix failure');
@@ -114,6 +124,10 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
       }
     } catch (fixErr) {
       console.error('Error fixing database tables:', fixErr);
+      
+      // Try to resync from persistent storage as a fallback
+      toast.warning('Database fix failed. Trying to sync from persistent storage...');
+      await resyncVehicles();
       
       // Even if fix fails, still show the management screen in preview mode
       if (isPreviewMode()) {
@@ -256,14 +270,20 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
     <Card className="w-full max-w-4xl mx-auto">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Vehicle ID: {vehicleId}</CardTitle>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={resyncVehicles}
-          disabled={isResyncing}
-        >
-          {isResyncing ? 'Syncing...' : 'Sync from Persistent Storage'}
-        </Button>
+        <div className="flex gap-2 items-center">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={resyncVehicles}
+            disabled={isResyncing}
+          >
+            {isResyncing ? 'Syncing...' : 'Sync from Persistent Storage'}
+          </Button>
+          <Info 
+            className="h-4 w-4 text-blue-500 cursor-help" 
+            title="If changes don't persist after refresh, click this button to reload data from persistent storage"
+          />
+        </div>
       </CardHeader>
       <CardContent>
         {loaded ? (

@@ -1,189 +1,135 @@
 
 <?php
 /**
- * reload-vehicles.php - Reload vehicles from persistent storage
- * This endpoint ensures that vehicle data is properly refreshed from persistent storage
+ * reload-vehicles.php - Force reload vehicles from persistent storage
+ * This script helps to ensure that cached vehicle data is refreshed from the persistent storage
  */
 
-// Set CORS headers
+// Set headers for CORS and caching prevention
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode, X-Debug');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Admin-Mode, X-Force-Refresh, Cache-Control');
 header('Content-Type: application/json');
-header('Cache-Control: no-cache, no-store, must-revalidate');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
-// Handle OPTIONS request
+// Handle preflight request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
 
-// Create cache directory if needed
-$cacheDir = __DIR__ . '/../../cache';
-if (!file_exists($cacheDir)) {
-    mkdir($cacheDir, 0755, true);
-}
-
-// Create log directory if needed
+// Create log directory if it doesn't exist
 $logDir = __DIR__ . '/../../logs';
 if (!file_exists($logDir)) {
     mkdir($logDir, 0755, true);
 }
 
-// Log the request
-$logFile = $logDir . '/reload_vehicles_' . date('Y-m-d') . '.log';
-$timestamp = date('Y-m-d H:i:s');
-file_put_contents($logFile, "[$timestamp] Reloading vehicles data\n", FILE_APPEND);
-
-// Check for persistent cache file
-$persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
-
-// Initialize response
-$response = [
-    'status' => 'error',
-    'message' => 'Failed to reload vehicles',
-    'timestamp' => time()
-];
-
-if (file_exists($persistentCacheFile)) {
-    try {
-        // Read the persistent cache file
-        $persistentJson = file_get_contents($persistentCacheFile);
-        if ($persistentJson) {
-            $data = json_decode($persistentJson, true);
-            
-            if (is_array($data) && !empty($data)) {
-                $vehicleCount = count($data);
-                file_put_contents($logFile, "[$timestamp] Successfully loaded $vehicleCount vehicles from persistent cache\n", FILE_APPEND);
-                
-                // Create a regular cache file with the same data
-                $regularCacheFile = $cacheDir . '/vehicles_' . date('Ymd_His') . '.json';
-                file_put_contents($regularCacheFile, $persistentJson);
-                
-                // Update response
-                $response = [
-                    'status' => 'success',
-                    'message' => "Successfully reloaded $vehicleCount vehicles",
-                    'count' => $vehicleCount,
-                    'timestamp' => time()
-                ];
-            } else {
-                file_put_contents($logFile, "[$timestamp] Error: Persistent data is not a valid array or is empty\n", FILE_APPEND);
-            }
-        } else {
-            file_put_contents($logFile, "[$timestamp] Error: Failed to read persistent cache file\n", FILE_APPEND);
-        }
-    } catch (Exception $e) {
-        file_put_contents($logFile, "[$timestamp] Exception: " . $e->getMessage() . "\n", FILE_APPEND);
-    }
-} else {
-    file_put_contents($logFile, "[$timestamp] Error: Persistent cache file not found\n", FILE_APPEND);
-    
-    // Try to create a default persistent file
-    $defaultVehicles = [
-        [
-            'id' => 'sedan',
-            'vehicleId' => 'sedan',
-            'name' => 'Sedan',
-            'capacity' => 4,
-            'luggageCapacity' => 2,
-            'price' => 2500,
-            'basePrice' => 2500,
-            'pricePerKm' => 14,
-            'image' => '/cars/sedan.png',
-            'amenities' => ['AC', 'Bottle Water', 'Music System'],
-            'description' => 'Comfortable sedan suitable for 4 passengers.',
-            'ac' => true,
-            'nightHaltCharge' => 700,
-            'driverAllowance' => 250,
-            'isActive' => true
-        ],
-        [
-            'id' => 'ertiga',
-            'vehicleId' => 'ertiga',
-            'name' => 'Ertiga',
-            'capacity' => 6,
-            'luggageCapacity' => 3,
-            'price' => 3200,
-            'basePrice' => 3200,
-            'pricePerKm' => 18,
-            'image' => '/cars/ertiga.png',
-            'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
-            'description' => 'Spacious SUV suitable for 6 passengers.',
-            'ac' => true,
-            'nightHaltCharge' => 1000,
-            'driverAllowance' => 250,
-            'isActive' => true
-        ],
-        [
-            'id' => 'innova_crysta',
-            'vehicleId' => 'innova_crysta',
-            'name' => 'Innova Crysta',
-            'capacity' => 7,
-            'luggageCapacity' => 4,
-            'price' => 3800,
-            'basePrice' => 3800,
-            'pricePerKm' => 20,
-            'image' => '/cars/innova.png',
-            'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
-            'description' => 'Premium SUV with ample space for 7 passengers.',
-            'ac' => true,
-            'nightHaltCharge' => 1000,
-            'driverAllowance' => 250,
-            'isActive' => true
-        ],
-        [
-            'id' => 'luxury',
-            'vehicleId' => 'luxury',
-            'name' => 'Luxury Sedan',
-            'capacity' => 4,
-            'luggageCapacity' => 3,
-            'price' => 4500,
-            'basePrice' => 4500,
-            'pricePerKm' => 25,
-            'image' => '/cars/luxury.png',
-            'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point', 'Premium Amenities'],
-            'description' => 'Premium luxury sedan with high-end amenities for a comfortable journey.',
-            'ac' => true,
-            'nightHaltCharge' => 1200,
-            'driverAllowance' => 300,
-            'isActive' => true
-        ],
-        [
-            'id' => 'tempo_traveller',
-            'vehicleId' => 'tempo_traveller',
-            'name' => 'Tempo Traveller',
-            'capacity' => 12,
-            'luggageCapacity' => 8,
-            'price' => 5500,
-            'basePrice' => 5500,
-            'pricePerKm' => 25,
-            'image' => '/cars/tempo.png',
-            'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point', 'Pushback Seats'],
-            'description' => 'Large vehicle suitable for groups of up to 12 passengers.',
-            'ac' => true,
-            'nightHaltCharge' => 1200,
-            'driverAllowance' => 300,
-            'isActive' => true
-        ]
-    ];
-    
-    $jsonData = json_encode($defaultVehicles, JSON_PRETTY_PRINT);
-    if (file_put_contents($persistentCacheFile, $jsonData)) {
-        file_put_contents($logFile, "[$timestamp] Created new persistent cache file with default vehicles\n", FILE_APPEND);
-        
-        $response = [
-            'status' => 'success',
-            'message' => 'Created new persistent cache with default vehicles',
-            'count' => count($defaultVehicles),
-            'timestamp' => time()
-        ];
-    } else {
-        file_put_contents($logFile, "[$timestamp] Failed to create persistent cache file\n", FILE_APPEND);
-    }
+// Create cache directory if it doesn't exist
+$cacheDir = __DIR__ . '/../../cache';
+if (!file_exists($cacheDir)) {
+    mkdir($cacheDir, 0755, true);
 }
 
-// Return the response
-echo json_encode($response);
+// Function to log messages to a file
+function logMessage($message) {
+    global $logDir;
+    $logFile = $logDir . '/vehicle-reload-' . date('Y-m-d') . '.log';
+    $timestamp = date('Y-m-d H:i:s');
+    file_put_contents($logFile, "[$timestamp] $message\n", FILE_APPEND);
+}
+
+// Log the request
+logMessage("Vehicle reload request received");
+
+try {
+    // The persistent cache file path
+    $persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
+    
+    // Check if persistent file exists
+    if (!file_exists($persistentCacheFile)) {
+        logMessage("ERROR: Persistent cache file not found at $persistentCacheFile");
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'Persistent cache file not found',
+            'timestamp' => time()
+        ]);
+        exit;
+    }
+    
+    // Load the persistent data
+    $persistentJson = file_get_contents($persistentCacheFile);
+    if (!$persistentJson) {
+        logMessage("ERROR: Failed to read persistent cache file");
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'Failed to read persistent cache file',
+            'timestamp' => time()
+        ]);
+        exit;
+    }
+    
+    // Parse the persistent data
+    $persistentData = json_decode($persistentJson, true);
+    if (!is_array($persistentData)) {
+        logMessage("ERROR: Invalid JSON in persistent cache file");
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'Invalid JSON in persistent cache file',
+            'timestamp' => time()
+        ]);
+        exit;
+    }
+    
+    // Count the vehicles
+    $vehicleCount = count($persistentData);
+    logMessage("Loaded $vehicleCount vehicles from persistent cache");
+    
+    // Clear all other cache files
+    $cacheFiles = glob($cacheDir . '/vehicles_*.json');
+    $cleared = 0;
+    foreach ($cacheFiles as $file) {
+        // Don't delete the persistent file itself
+        if ($file !== $persistentCacheFile) {
+            if (@unlink($file)) {
+                logMessage("Cleared cache file: " . basename($file));
+                $cleared++;
+            }
+        }
+    }
+    
+    // Create temporary cache file with the reloaded data
+    $tempCacheFile = $cacheDir . '/vehicles_' . time() . '.json';
+    $jsonOptions = defined('JSON_PRETTY_PRINT') ? JSON_PRETTY_PRINT : 0;
+    $result = file_put_contents($tempCacheFile, json_encode($persistentData, $jsonOptions));
+    
+    if ($result === false) {
+        logMessage("ERROR: Failed to write temp cache file");
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'Failed to write temp cache file',
+            'timestamp' => time()
+        ]);
+        exit;
+    }
+    
+    logMessage("Successfully reloaded $vehicleCount vehicles and cleared $cleared cache files");
+    
+    // Return success response
+    echo json_encode([
+        'status' => 'success',
+        'message' => "Successfully reloaded vehicles from persistent storage",
+        'count' => $vehicleCount,
+        'cleared' => $cleared,
+        'timestamp' => time()
+    ]);
+    
+} catch (Exception $e) {
+    logMessage("ERROR: " . $e->getMessage());
+    echo json_encode([
+        'status' => 'error',
+        'message' => $e->getMessage(),
+        'timestamp' => time()
+    ]);
+}
