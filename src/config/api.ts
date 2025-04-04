@@ -42,5 +42,10 @@ export const getApiUrl = (endpoint: string): string => {
   // Ensure apiBaseUrl ends with a slash for proper concatenation
   const baseWithSlash = apiBaseUrl.endsWith('/') ? apiBaseUrl : `${apiBaseUrl}/`;
   
+  // Make sure there's no 'api/' already in the base URL if we're adding api endpoints
+  if (cleanEndpoint.startsWith('api/') && baseWithSlash.endsWith('api/')) {
+    return `${baseWithSlash}${cleanEndpoint.substring(4)}`;
+  }
+  
   return `${baseWithSlash}${cleanEndpoint}`;
 };

@@ -1,6 +1,6 @@
 
 import { toast } from 'sonner';
-import { apiBaseUrl, forceRefreshHeaders } from '@/config/api';
+import { apiBaseUrl, forceRefreshHeaders, getApiUrl } from '@/config/api';
 
 /**
  * Database connection check response type
@@ -19,11 +19,11 @@ export interface DatabaseConnectionResponse {
  */
 export const checkDatabaseConnection = async (): Promise<DatabaseConnectionResponse> => {
   try {
-    // Make sure we have a valid URL by properly handling the apiBaseUrl
-    const baseUrl = apiBaseUrl || '';
-    const url = baseUrl ? 
-      `${baseUrl}${baseUrl.endsWith('/') ? '' : '/'}api/direct-check-connection.php?_t=${Date.now()}` : 
-      `/api/direct-check-connection.php?_t=${Date.now()}`;
+    // Create a proper URL using the getApiUrl helper
+    const endpoint = 'api/direct-check-connection.php';
+    const url = getApiUrl(`${endpoint}?_t=${Date.now()}`);
+    
+    console.log('Checking database connection at:', url);
     
     const response = await fetch(url, {
       method: 'GET',
@@ -72,11 +72,11 @@ export const fixDatabaseTables = async () => {
       return false;
     }
     
-    // Make sure we have a valid URL
-    const baseUrl = apiBaseUrl || '';
-    const url = baseUrl ? 
-      `${baseUrl}${baseUrl.endsWith('/') ? '' : '/'}api/admin/fix-database.php?_t=${Date.now()}` : 
-      `/api/admin/fix-database.php?_t=${Date.now()}`;
+    // Use the proper URL formatting
+    const endpoint = 'api/admin/fix-database.php';
+    const url = getApiUrl(`${endpoint}?_t=${Date.now()}`);
+    
+    console.log('Fixing database tables at:', url);
     
     const response = await fetch(url, {
       method: 'GET',
@@ -138,11 +138,12 @@ const normalizeUrl = (endpoint: string): string => {
  */
 export const forceRefreshVehicles = async () => {
   try {
-    const endpoint = `/api/admin/reload-vehicles.php?_t=${Date.now()}`;
+    const endpoint = 'api/admin/reload-vehicles.php';
     console.log('Calling API:', endpoint);
     
-    // Use normalizeUrl to ensure we have a valid URL
-    const url = normalizeUrl(endpoint);
+    // Use the getApiUrl helper for proper URL formatting
+    const url = getApiUrl(`${endpoint}?_t=${Date.now()}`);
+    console.log('Full URL:', url);
     
     const response = await fetch(url, {
       method: 'GET',
@@ -158,8 +159,9 @@ export const forceRefreshVehicles = async () => {
       
       // Try alternative endpoint if primary fails
       console.log('Trying alternative refresh endpoint...');
-      const altEndpoint = `/api/admin/refresh-vehicles.php?_t=${Date.now()}`;
-      const altUrl = normalizeUrl(altEndpoint);
+      const altEndpoint = 'api/admin/refresh-vehicles.php';
+      const altUrl = getApiUrl(`${altEndpoint}?_t=${Date.now()}`);
+      console.log('Alternative URL:', altUrl);
       
       const altResponse = await fetch(altUrl, {
         method: 'GET',
@@ -231,18 +233,23 @@ export const directVehicleOperation = async (
   } = {}
 ) => {
   try {
-    // Use normalizeUrl to ensure we have a valid URL
-    const normalizedUrl = normalizeUrl(endpoint);
-    const url = new URL(normalizedUrl, window.location.origin);
+    // Use the getApiUrl helper for proper URL formatting
+    let formattedEndpoint = endpoint;
     
-    // Add any GET parameters from data object
-    if (method === 'GET' && options.data) {
-      Object.keys(options.data).forEach(key => {
-        url.searchParams.append(key, String(options.data[key]));
-      });
+    // If endpoint doesn't start with api/, add it
+    if (!endpoint.startsWith('api/') && !endpoint.startsWith('/api/')) {
+      formattedEndpoint = `api/${endpoint}`;
     }
     
-    console.log(`Performing ${method} operation to: ${url.toString()}`);
+    // Add timestamp parameter to prevent caching
+    if (!formattedEndpoint.includes('?')) {
+      formattedEndpoint = `${formattedEndpoint}?_t=${Date.now()}`;
+    } else {
+      formattedEndpoint = `${formattedEndpoint}&_t=${Date.now()}`;
+    }
+    
+    const url = getApiUrl(formattedEndpoint);
+    console.log(`Performing ${method} operation to: ${url}`);
     
     // Prepare headers
     const headers = {
@@ -260,7 +267,9 @@ export const directVehicleOperation = async (
     // Add body for non-GET requests
     if (method !== 'GET' && options.data) {
       if (headers['Content-Type'] === 'application/json') {
+        // Stringify the data properly
         requestOptions.body = JSON.stringify(options.data);
+        console.log('JSON request body:', requestOptions.body);
       } else if (headers['Content-Type']?.includes('multipart/form-data')) {
         // Remove the Content-Type header to let the browser set it with boundary
         delete headers['Content-Type'];
@@ -272,7 +281,7 @@ export const directVehicleOperation = async (
     }
     
     // Make the request
-    const response = await fetch(url.toString(), requestOptions);
+    const response = await fetch(url, requestOptions);
     
     // Check if response is OK
     if (!response.ok) {
@@ -281,15 +290,22 @@ export const directVehicleOperation = async (
       throw new Error(`API request failed: ${response.status}. ${errorText}`);
     }
     
-    // Parse JSON response
+    // First try to get the response as text
+    const text = await response.text();
+    console.log('Raw response text:', text);
+    
+    // Check if the text is empty
+    if (!text || text.trim() === '') {
+      console.warn('Received empty response');
+      return { status: 'success', message: 'Operation completed but returned empty response' };
+    }
+    
+    // Then try to parse it as JSON
     try {
-      const data = await response.json();
-      return data;
+      return JSON.parse(text);
     } catch (jsonError) {
       console.error('Error parsing JSON response:', jsonError);
-      const text = await response.text();
-      console.log('Raw response text:', text);
-      throw new Error('Failed to parse JSON response');
+      throw new Error(`Failed to parse JSON response: ${text}`);
     }
   } catch (error) {
     console.error('Error in directVehicleOperation:', error);

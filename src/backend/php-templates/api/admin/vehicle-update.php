@@ -56,11 +56,13 @@ $vehicleData = json_decode($inputData, true);
 // If JSON parsing fails, try using POST data
 if (!$vehicleData && !empty($_POST)) {
     $vehicleData = $_POST;
+    logDebug("Using POST data instead of JSON", $_POST);
 }
 
 // Also check if $_SERVER has vehicle data from an alias script
 if (!$vehicleData && isset($_SERVER['VEHICLE_DATA']) && is_array($_SERVER['VEHICLE_DATA'])) {
     $vehicleData = $_SERVER['VEHICLE_DATA'];
+    logDebug("Using vehicle data from SERVER", $vehicleData);
 }
 
 logDebug("Received update request with data", $vehicleData);
@@ -126,235 +128,136 @@ foreach ($persistentData as $index => $vehicle) {
     }
 }
 
-// Load database configuration
-require_once '../../config.php';
+// Normalize the vehicle data
+$normalizedVehicle = [];
 
-try {
-    // Connect to database
-    $conn = getDbConnection();
-    logDebug("Database connection established");
-    
-    // Normalize the vehicle data
-    $normalizedVehicle = [];
-    
-    // If we found the vehicle in persistent data, use it as base
-    if ($vehicleIndex >= 0) {
-        $normalizedVehicle = $persistentData[$vehicleIndex];
-    }
-    
-    // Update with new values
-    $normalizedVehicle['id'] = $vehicleId;
-    $normalizedVehicle['vehicleId'] = $vehicleId;
-    
-    // Only update these fields if they are provided
-    if (isset($vehicleData['name'])) {
-        $normalizedVehicle['name'] = $vehicleData['name'];
-    }
-    
-    if (isset($vehicleData['capacity'])) {
-        $normalizedVehicle['capacity'] = (int)$vehicleData['capacity'];
-    }
-    
-    if (isset($vehicleData['luggageCapacity'])) {
-        $normalizedVehicle['luggageCapacity'] = (int)$vehicleData['luggageCapacity'];
-    } else if (isset($vehicleData['luggage_capacity'])) {
-        $normalizedVehicle['luggageCapacity'] = (int)$vehicleData['luggage_capacity'];
-    }
-    
-    if (isset($vehicleData['ac'])) {
-        $normalizedVehicle['ac'] = (bool)$vehicleData['ac'];
-    }
-    
-    if (isset($vehicleData['image'])) {
-        $normalizedVehicle['image'] = $vehicleData['image'];
-    }
-    
-    if (isset($vehicleData['amenities'])) {
-        if (is_string($vehicleData['amenities'])) {
-            try {
-                // Try to parse as JSON first
-                $amenities = json_decode($vehicleData['amenities'], true);
-                if (is_array($amenities)) {
-                    $normalizedVehicle['amenities'] = $amenities;
-                } else {
-                    // If not valid JSON, try as comma-separated string
-                    $normalizedVehicle['amenities'] = array_map('trim', explode(',', $vehicleData['amenities']));
-                }
-            } catch (Exception $e) {
-                // Fallback to comma-separated
+// If we found the vehicle in persistent data, use it as base
+if ($vehicleIndex >= 0) {
+    $normalizedVehicle = $persistentData[$vehicleIndex];
+}
+
+// Update with new values
+$normalizedVehicle['id'] = $vehicleId;
+$normalizedVehicle['vehicleId'] = $vehicleId;
+
+// Only update these fields if they are provided
+if (isset($vehicleData['name'])) {
+    $normalizedVehicle['name'] = $vehicleData['name'];
+}
+
+if (isset($vehicleData['capacity'])) {
+    $normalizedVehicle['capacity'] = (int)$vehicleData['capacity'];
+}
+
+if (isset($vehicleData['luggageCapacity'])) {
+    $normalizedVehicle['luggageCapacity'] = (int)$vehicleData['luggageCapacity'];
+} else if (isset($vehicleData['luggage_capacity'])) {
+    $normalizedVehicle['luggageCapacity'] = (int)$vehicleData['luggage_capacity'];
+}
+
+if (isset($vehicleData['ac'])) {
+    $normalizedVehicle['ac'] = (bool)$vehicleData['ac'];
+}
+
+if (isset($vehicleData['image'])) {
+    $normalizedVehicle['image'] = $vehicleData['image'];
+}
+
+if (isset($vehicleData['amenities'])) {
+    if (is_string($vehicleData['amenities'])) {
+        try {
+            // Try to parse as JSON first
+            $amenities = json_decode($vehicleData['amenities'], true);
+            if (is_array($amenities)) {
+                $normalizedVehicle['amenities'] = $amenities;
+            } else {
+                // If not valid JSON, try as comma-separated string
                 $normalizedVehicle['amenities'] = array_map('trim', explode(',', $vehicleData['amenities']));
             }
-        } else {
-            $normalizedVehicle['amenities'] = $vehicleData['amenities'];
-        }
-    }
-    
-    if (isset($vehicleData['description'])) {
-        $normalizedVehicle['description'] = $vehicleData['description'];
-    }
-    
-    if (isset($vehicleData['isActive'])) {
-        $normalizedVehicle['isActive'] = (bool)$vehicleData['isActive'];
-    } else if (isset($vehicleData['is_active'])) {
-        $normalizedVehicle['isActive'] = (bool)$vehicleData['is_active'];
-    }
-    
-    if (isset($vehicleData['price'])) {
-        $normalizedVehicle['price'] = (float)$vehicleData['price'];
-    }
-    
-    if (isset($vehicleData['basePrice'])) {
-        $normalizedVehicle['basePrice'] = (float)$vehicleData['basePrice'];
-    } else if (isset($vehicleData['base_price'])) {
-        $normalizedVehicle['basePrice'] = (float)$vehicleData['base_price'];
-    }
-    
-    // Ensure price and basePrice are consistent
-    if (isset($normalizedVehicle['price']) && !isset($normalizedVehicle['basePrice'])) {
-        $normalizedVehicle['basePrice'] = $normalizedVehicle['price'];
-    } else if (!isset($normalizedVehicle['price']) && isset($normalizedVehicle['basePrice'])) {
-        $normalizedVehicle['price'] = $normalizedVehicle['basePrice'];
-    }
-    
-    if (isset($vehicleData['pricePerKm'])) {
-        $normalizedVehicle['pricePerKm'] = (float)$vehicleData['pricePerKm'];
-    } else if (isset($vehicleData['price_per_km'])) {
-        $normalizedVehicle['pricePerKm'] = (float)$vehicleData['price_per_km'];
-    }
-    
-    if (isset($vehicleData['nightHaltCharge'])) {
-        $normalizedVehicle['nightHaltCharge'] = (float)$vehicleData['nightHaltCharge'];
-    } else if (isset($vehicleData['night_halt_charge'])) {
-        $normalizedVehicle['nightHaltCharge'] = (float)$vehicleData['night_halt_charge'];
-    }
-    
-    if (isset($vehicleData['driverAllowance'])) {
-        $normalizedVehicle['driverAllowance'] = (float)$vehicleData['driverAllowance'];
-    } else if (isset($vehicleData['driver_allowance'])) {
-        $normalizedVehicle['driverAllowance'] = (float)$vehicleData['driver_allowance'];
-    }
-    
-    logDebug("Normalized vehicle data", $normalizedVehicle);
-    
-    // Update database
-    // First check if vehicle exists
-    $checkStmt = $conn->prepare("SELECT COUNT(*) as count FROM vehicles WHERE vehicle_id = ?");
-    $checkStmt->bind_param("s", $vehicleId);
-    $checkStmt->execute();
-    $result = $checkStmt->get_result();
-    $row = $result->fetch_assoc();
-    
-    if ($row['count'] > 0) {
-        // Vehicle exists, update it
-        $updateStmt = $conn->prepare("UPDATE vehicles SET 
-            name = ?, 
-            capacity = ?, 
-            luggage_capacity = ?, 
-            ac = ?, 
-            image = ?, 
-            amenities = ?, 
-            description = ?, 
-            is_active = ?, 
-            base_price = ?, 
-            price_per_km = ?, 
-            night_halt_charge = ?, 
-            driver_allowance = ?,
-            updated_at = CURRENT_TIMESTAMP 
-            WHERE vehicle_id = ?");
-        
-        // Prepare values for database
-        $name = $normalizedVehicle['name'] ?? '';
-        $capacity = $normalizedVehicle['capacity'] ?? 4;
-        $luggageCapacity = $normalizedVehicle['luggageCapacity'] ?? 2;
-        $ac = isset($normalizedVehicle['ac']) ? ($normalizedVehicle['ac'] ? 1 : 0) : 1;
-        $image = $normalizedVehicle['image'] ?? '';
-        $amenitiesJson = isset($normalizedVehicle['amenities']) ? json_encode($normalizedVehicle['amenities']) : null;
-        $description = $normalizedVehicle['description'] ?? '';
-        $isActive = isset($normalizedVehicle['isActive']) ? ($normalizedVehicle['isActive'] ? 1 : 0) : 1;
-        $basePrice = $normalizedVehicle['basePrice'] ?? $normalizedVehicle['price'] ?? 0;
-        $pricePerKm = $normalizedVehicle['pricePerKm'] ?? 0;
-        $nightHaltCharge = $normalizedVehicle['nightHaltCharge'] ?? 700;
-        $driverAllowance = $normalizedVehicle['driverAllowance'] ?? 250;
-        
-        $updateStmt->bind_param("siissssiiddds", 
-            $name, $capacity, $luggageCapacity, $ac, $image, $amenitiesJson, 
-            $description, $isActive, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, $vehicleId);
-        
-        if ($updateStmt->execute()) {
-            logDebug("Vehicle updated in database");
-        } else {
-            logDebug("Failed to update vehicle in database: " . $updateStmt->error);
+        } catch (Exception $e) {
+            // Fallback to comma-separated
+            $normalizedVehicle['amenities'] = array_map('trim', explode(',', $vehicleData['amenities']));
         }
     } else {
-        // Vehicle doesn't exist, insert it
-        $insertStmt = $conn->prepare("INSERT INTO vehicles (
-            vehicle_id, name, capacity, luggage_capacity, ac, image, amenities, 
-            description, is_active, base_price, price_per_km, night_halt_charge, driver_allowance
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        
-        // Prepare values for database
-        $name = $normalizedVehicle['name'] ?? '';
-        $capacity = $normalizedVehicle['capacity'] ?? 4;
-        $luggageCapacity = $normalizedVehicle['luggageCapacity'] ?? 2;
-        $ac = isset($normalizedVehicle['ac']) ? ($normalizedVehicle['ac'] ? 1 : 0) : 1;
-        $image = $normalizedVehicle['image'] ?? '';
-        $amenitiesJson = isset($normalizedVehicle['amenities']) ? json_encode($normalizedVehicle['amenities']) : null;
-        $description = $normalizedVehicle['description'] ?? '';
-        $isActive = isset($normalizedVehicle['isActive']) ? ($normalizedVehicle['isActive'] ? 1 : 0) : 1;
-        $basePrice = $normalizedVehicle['basePrice'] ?? $normalizedVehicle['price'] ?? 0;
-        $pricePerKm = $normalizedVehicle['pricePerKm'] ?? 0;
-        $nightHaltCharge = $normalizedVehicle['nightHaltCharge'] ?? 700;
-        $driverAllowance = $normalizedVehicle['driverAllowance'] ?? 250;
-        
-        $insertStmt->bind_param("ssiisssiiddd", 
-            $vehicleId, $name, $capacity, $luggageCapacity, $ac, $image, $amenitiesJson, 
-            $description, $isActive, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
-        
-        if ($insertStmt->execute()) {
-            logDebug("Vehicle inserted into database");
-        } else {
-            logDebug("Failed to insert vehicle into database: " . $insertStmt->error);
-        }
+        $normalizedVehicle['amenities'] = $vehicleData['amenities'];
     }
-    
-    // Update or add the vehicle in persistent data
-    if ($vehicleIndex >= 0) {
-        // Update existing vehicle
-        $persistentData[$vehicleIndex] = $normalizedVehicle;
-    } else {
-        // Add new vehicle
-        $persistentData[] = $normalizedVehicle;
-    }
-    
-    // Save the updated data back to the persistent cache file
-    if (file_put_contents($persistentCacheFile, json_encode($persistentData, JSON_PRETTY_PRINT))) {
-        logDebug("Updated persistent cache file");
-    } else {
-        logDebug("Failed to update persistent cache file");
-    }
-    
-    // Clear any regular cache files to ensure fresh data is loaded
-    $cacheFiles = glob($cacheDir . '/vehicles_*.json');
-    foreach ($cacheFiles as $file) {
-        if ($file !== $persistentCacheFile && !strpos($file, 'persistent_backup')) {
-            unlink($file);
-            logDebug("Cleared cache file: " . basename($file));
-        }
-    }
-    
-    // Return success response with updated vehicle data
-    echo json_encode([
-        'status' => 'success',
-        'message' => 'Vehicle updated successfully',
-        'vehicle' => $normalizedVehicle
-    ]);
-    
-} catch (Exception $e) {
-    logDebug("Error: " . $e->getMessage());
-    
-    http_response_code(500);
-    echo json_encode([
-        'status' => 'error',
-        'message' => $e->getMessage()
-    ]);
 }
+
+if (isset($vehicleData['description'])) {
+    $normalizedVehicle['description'] = $vehicleData['description'];
+}
+
+if (isset($vehicleData['isActive'])) {
+    $normalizedVehicle['isActive'] = (bool)$vehicleData['isActive'];
+} else if (isset($vehicleData['is_active'])) {
+    $normalizedVehicle['isActive'] = (bool)$vehicleData['is_active'];
+}
+
+if (isset($vehicleData['price'])) {
+    $normalizedVehicle['price'] = (float)$vehicleData['price'];
+}
+
+if (isset($vehicleData['basePrice'])) {
+    $normalizedVehicle['basePrice'] = (float)$vehicleData['basePrice'];
+} else if (isset($vehicleData['base_price'])) {
+    $normalizedVehicle['basePrice'] = (float)$vehicleData['base_price'];
+}
+
+// Ensure price and basePrice are consistent
+if (isset($normalizedVehicle['price']) && !isset($normalizedVehicle['basePrice'])) {
+    $normalizedVehicle['basePrice'] = $normalizedVehicle['price'];
+} else if (!isset($normalizedVehicle['price']) && isset($normalizedVehicle['basePrice'])) {
+    $normalizedVehicle['price'] = $normalizedVehicle['basePrice'];
+}
+
+if (isset($vehicleData['pricePerKm'])) {
+    $normalizedVehicle['pricePerKm'] = (float)$vehicleData['pricePerKm'];
+} else if (isset($vehicleData['price_per_km'])) {
+    $normalizedVehicle['pricePerKm'] = (float)$vehicleData['price_per_km'];
+}
+
+if (isset($vehicleData['nightHaltCharge'])) {
+    $normalizedVehicle['nightHaltCharge'] = (float)$vehicleData['nightHaltCharge'];
+} else if (isset($vehicleData['night_halt_charge'])) {
+    $normalizedVehicle['nightHaltCharge'] = (float)$vehicleData['night_halt_charge'];
+}
+
+if (isset($vehicleData['driverAllowance'])) {
+    $normalizedVehicle['driverAllowance'] = (float)$vehicleData['driverAllowance'];
+} else if (isset($vehicleData['driver_allowance'])) {
+    $normalizedVehicle['driverAllowance'] = (float)$vehicleData['driver_allowance'];
+}
+
+logDebug("Normalized vehicle data", $normalizedVehicle);
+
+// Update or add the vehicle in persistent data
+if ($vehicleIndex >= 0) {
+    // Update existing vehicle
+    $persistentData[$vehicleIndex] = $normalizedVehicle;
+} else {
+    // Add new vehicle
+    $persistentData[] = $normalizedVehicle;
+}
+
+// Save the updated data back to the persistent cache file
+if (file_put_contents($persistentCacheFile, json_encode($persistentData, JSON_PRETTY_PRINT))) {
+    logDebug("Updated persistent cache file");
+} else {
+    logDebug("Failed to update persistent cache file");
+}
+
+// Clear any regular cache files to ensure fresh data is loaded
+$cacheFiles = glob($cacheDir . '/vehicles_*.json');
+foreach ($cacheFiles as $file) {
+    if ($file !== $persistentCacheFile && !strpos($file, 'persistent_backup')) {
+        unlink($file);
+        logDebug("Cleared cache file: " . basename($file));
+    }
+}
+
+// Return success response with updated vehicle data
+echo json_encode([
+    'status' => 'success',
+    'message' => 'Vehicle updated successfully',
+    'vehicle' => $normalizedVehicle
+]);
