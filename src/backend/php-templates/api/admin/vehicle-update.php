@@ -1,13 +1,36 @@
 
 <?php
-// Mock PHP file for vehicle-update.php
-// Note: This file won't actually be executed in the Lovable preview environment,
-// but it helps document the expected API structure and responses.
+/**
+ * Enhanced vehicle update endpoint that stores data in MySQL database
+ * This endpoint properly saves vehicle data to the database for permanent storage
+ */
 
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, PUT, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode');
 header('Content-Type: application/json');
+
+// Create log directory if needed
+$logDir = __DIR__ . '/../../logs';
+if (!file_exists($logDir)) {
+    mkdir($logDir, 0755, true);
+}
+
+// Create cache directory if needed
+$cacheDir = __DIR__ . '/../../cache';
+if (!file_exists($cacheDir)) {
+    mkdir($cacheDir, 0755, true);
+}
+
+$logFile = $logDir . '/vehicle_update_' . date('Y-m-d') . '.log';
+$timestamp = date('Y-m-d H:i:s');
+
+// Include database utilities
+require_once __DIR__ . '/../utils/database.php';
+require_once __DIR__ . '/../common/db_helper.php';
+
+// Log the start of the request
+file_put_contents($logFile, "[$timestamp] Vehicle update request received\n", FILE_APPEND);
 
 // Handle OPTIONS preflight request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -18,6 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // Check if request method is valid
 if ($_SERVER['REQUEST_METHOD'] !== 'POST' && $_SERVER['REQUEST_METHOD'] !== 'PUT') {
     http_response_code(405);
+    file_put_contents($logFile, "[$timestamp] Invalid method: " . $_SERVER['REQUEST_METHOD'] . "\n", FILE_APPEND);
     echo json_encode([
         'status' => 'error',
         'message' => 'Method not allowed. Use POST or PUT'
@@ -32,11 +56,16 @@ $vehicleData = json_decode($inputData, true);
 // If JSON parsing fails, try using POST data
 if (!$vehicleData && !empty($_POST)) {
     $vehicleData = $_POST;
+    file_put_contents($logFile, "[$timestamp] Using POST data after JSON parse failed\n", FILE_APPEND);
 }
+
+// Log the received data
+file_put_contents($logFile, "[$timestamp] Received data: " . json_encode($vehicleData) . "\n", FILE_APPEND);
 
 // Check if vehicle data is valid
 if (!$vehicleData) {
     http_response_code(400);
+    file_put_contents($logFile, "[$timestamp] Invalid or missing vehicle data\n", FILE_APPEND);
     echo json_encode([
         'status' => 'error',
         'message' => 'Invalid or missing vehicle data'
@@ -47,6 +76,7 @@ if (!$vehicleData) {
 // Check if vehicle ID is provided
 if (!isset($vehicleData['id']) && !isset($vehicleData['vehicleId']) && !isset($vehicleData['vehicle_id'])) {
     http_response_code(400);
+    file_put_contents($logFile, "[$timestamp] Vehicle ID is required\n", FILE_APPEND);
     echo json_encode([
         'status' => 'error',
         'message' => 'Vehicle ID is required'
@@ -58,24 +88,9 @@ if (!isset($vehicleData['id']) && !isset($vehicleData['vehicleId']) && !isset($v
 $vehicleId = isset($vehicleData['id']) ? $vehicleData['id'] : 
             (isset($vehicleData['vehicleId']) ? $vehicleData['vehicleId'] : $vehicleData['vehicle_id']);
 
-// Create cache directory if needed
-$cacheDir = __DIR__ . '/../../cache';
-if (!file_exists($cacheDir)) {
-    mkdir($cacheDir, 0755, true);
-}
+file_put_contents($logFile, "[$timestamp] Processing update for vehicle ID: $vehicleId\n", FILE_APPEND);
 
-// Create log directory if needed
-$logDir = __DIR__ . '/../../logs';
-if (!file_exists($logDir)) {
-    mkdir($logDir, 0755, true);
-}
-
-$logFile = $logDir . '/vehicle_update_' . date('Y-m-d') . '.log';
-$timestamp = date('Y-m-d H:i:s');
-file_put_contents($logFile, "[$timestamp] Vehicle update request for $vehicleId\n", FILE_APPEND);
-file_put_contents($logFile, "[$timestamp] Data: " . json_encode($vehicleData) . "\n", FILE_APPEND);
-
-// The persistent cache file path
+// The persistent cache file path (used for backward compatibility)
 $persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
 
 // Try to load existing persistent data
@@ -181,7 +196,7 @@ if (!isset($vehicleData['isActive'])) {
         $persistentData[$vehicleIndex]['isActive'] : true;
 }
 
-// Update or add the vehicle in persistent data
+// Update/add to persistent cache file (for backward compatibility)
 if ($vehicleIndex >= 0) {
     // Update existing vehicle
     $persistentData[$vehicleIndex] = array_merge($persistentData[$vehicleIndex], $vehicleData);
@@ -190,22 +205,145 @@ if ($vehicleIndex >= 0) {
     $persistentData[] = $vehicleData;
 }
 
-// Save the updated data back to the persistent cache file
 file_put_contents($persistentCacheFile, json_encode($persistentData, JSON_PRETTY_PRINT));
+file_put_contents($logFile, "[$timestamp] Updated persistent cache file\n", FILE_APPEND);
+
+// CRITICAL: Now save to database as the primary storage
+$dbSuccess = false;
+$dbError = null;
+
+try {
+    // Connect to database
+    $conn = getDbConnectionWithRetry(3);
+    
+    if ($conn) {
+        file_put_contents($logFile, "[$timestamp] Successfully connected to database\n", FILE_APPEND);
+        
+        // Check if tables exist, create if not
+        $tablesExist = tableExists($conn, 'vehicles') || tableExists($conn, 'vehicle_types');
+        
+        if (!$tablesExist) {
+            file_put_contents($logFile, "[$timestamp] Vehicle tables don't exist, creating...\n", FILE_APPEND);
+            $result = ensureDatabaseTables($conn);
+            if ($result) {
+                file_put_contents($logFile, "[$timestamp] Successfully created database tables\n", FILE_APPEND);
+            } else {
+                throw new Exception("Failed to create required database tables");
+            }
+        }
+        
+        // Determine which table to use
+        $tableName = tableExists($conn, 'vehicles') ? 'vehicles' : 'vehicle_types';
+        
+        // Convert amenities to string for database storage
+        $amenitiesStr = isset($vehicleData['amenities']) ? 
+            (is_array($vehicleData['amenities']) ? json_encode($vehicleData['amenities']) : $vehicleData['amenities']) : 
+            '["AC", "Bottle Water", "Music System"]';
+        
+        // Check if vehicle already exists
+        $checkSql = "SELECT * FROM `$tableName` WHERE vehicle_id = ?";
+        $existingVehicles = executeQuery($conn, $checkSql, [$vehicleId], 's');
+        
+        if (is_array($existingVehicles) && count($existingVehicles) > 0) {
+            // Update existing record
+            file_put_contents($logFile, "[$timestamp] Updating existing vehicle in database\n", FILE_APPEND);
+            
+            $updateSql = "UPDATE `$tableName` SET 
+                name = ?, 
+                capacity = ?, 
+                luggage_capacity = ?, 
+                ac = ?, 
+                image = ?, 
+                amenities = ?, 
+                description = ?, 
+                is_active = ?, 
+                base_price = ?, 
+                price_per_km = ?, 
+                night_halt_charge = ?, 
+                driver_allowance = ? 
+                WHERE vehicle_id = ?";
+                
+            $updateResult = executeQuery($conn, $updateSql, [
+                $vehicleData['name'],
+                $vehicleData['capacity'],
+                $vehicleData['luggageCapacity'],
+                $vehicleData['ac'] ? 1 : 0,
+                $vehicleData['image'],
+                $amenitiesStr,
+                $vehicleData['description'],
+                $vehicleData['isActive'] ? 1 : 0,
+                $vehicleData['basePrice'],
+                $vehicleData['pricePerKm'],
+                $vehicleData['nightHaltCharge'],
+                $vehicleData['driverAllowance'],
+                $vehicleId
+            ], 'siiisissiddds');
+            
+            $dbSuccess = true;
+        } else {
+            // Insert new record
+            file_put_contents($logFile, "[$timestamp] Inserting new vehicle into database\n", FILE_APPEND);
+            
+            $insertSql = "INSERT INTO `$tableName` (
+                vehicle_id, 
+                name, 
+                capacity, 
+                luggage_capacity, 
+                ac, 
+                image, 
+                amenities, 
+                description, 
+                is_active, 
+                base_price, 
+                price_per_km, 
+                night_halt_charge, 
+                driver_allowance
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            
+            $insertResult = executeQuery($conn, $insertSql, [
+                $vehicleId,
+                $vehicleData['name'],
+                $vehicleData['capacity'],
+                $vehicleData['luggageCapacity'],
+                $vehicleData['ac'] ? 1 : 0,
+                $vehicleData['image'],
+                $amenitiesStr,
+                $vehicleData['description'],
+                $vehicleData['isActive'] ? 1 : 0,
+                $vehicleData['basePrice'],
+                $vehicleData['pricePerKm'],
+                $vehicleData['nightHaltCharge'],
+                $vehicleData['driverAllowance']
+            ], 'ssiiisissiddd');
+            
+            $dbSuccess = true;
+        }
+        
+        $conn->close();
+    }
+} catch (Exception $e) {
+    $dbError = $e->getMessage();
+    file_put_contents($logFile, "[$timestamp] Database error: " . $dbError . "\n", FILE_APPEND);
+}
 
 // Clear any regular cache files to ensure fresh data is loaded
 $cacheFiles = glob($cacheDir . '/vehicles_*.json');
 foreach ($cacheFiles as $file) {
     if ($file !== $persistentCacheFile) {
         unlink($file);
+        file_put_contents($logFile, "[$timestamp] Cleared cache file: " . basename($file) . "\n", FILE_APPEND);
     }
 }
 
-file_put_contents($logFile, "[$timestamp] Saved updated vehicle data to persistent cache\n", FILE_APPEND);
+file_put_contents($logFile, "[$timestamp] Vehicle update completed\n", FILE_APPEND);
 
-// Return success response with updated vehicle data
+// Return success response with updated vehicle data and database status
 echo json_encode([
     'status' => 'success',
     'message' => 'Vehicle updated successfully',
-    'vehicle' => $vehicleData
+    'vehicle' => $vehicleData,
+    'database' => [
+        'success' => $dbSuccess,
+        'error' => $dbError
+    ]
 ]);

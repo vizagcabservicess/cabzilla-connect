@@ -22,18 +22,18 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
   const [refreshCount, setRefreshCount] = useState(0);
   const maxAttempts = 3;
   
-  // New function to force a reload of vehicles from persistent storage
+  // Function to force a reload of vehicles from database
   const resyncVehicles = useCallback(async () => {
     if (isResyncing) return;
     
     try {
       setIsResyncing(true);
-      toast.info('Syncing vehicle data from persistent storage...');
+      toast.info('Syncing vehicle data from database...');
       
       // Clear the cache first
       clearVehicleDataCache();
       
-      // Call the reload-vehicles.php endpoint to force a reload from persistent storage
+      // Call the reload-vehicles.php endpoint to force a reload from database
       const response = await directVehicleOperation(
         `api/admin/reload-vehicles.php?_t=${Date.now()}`, 
         'GET',
@@ -49,15 +49,15 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
       console.log('Vehicle resync result:', response);
       
       if (response && response.status === 'success') {
-        toast.success(`Successfully resynced ${response.count || 0} vehicles from persistent storage`);
+        toast.success(`Successfully resynced ${response.count || 0} vehicles${response.source === 'database' ? ' from database' : ''}`);
         setRefreshCount(0); // Reset counter to trigger a fresh check
         setError(null); // Clear any errors
       } else {
-        toast.error('Failed to resync vehicles from persistent storage');
+        toast.error('Failed to resync vehicles from database');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error resyncing vehicles:', err);
-      toast.error('Failed to resync vehicles from persistent storage');
+      toast.error('Failed to resync vehicles: ' + (err?.message || 'Unknown error'));
     } finally {
       setIsResyncing(false);
     }
@@ -93,7 +93,7 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
         } else {
           setError(`Could not verify vehicle with ID: ${vehicleId}. Some features might not work correctly.`);
           
-          // Try resyncing from persistent storage
+          // Try resyncing from database
           await resyncVehicles();
           
           // Check again after resync
@@ -163,7 +163,7 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
             setError(null);
             setRefreshCount(0);
           } else {
-            // Try one last method - reload from persistent storage
+            // Try one last method - reload from database
             await resyncVehicles();
           }
         } catch (altError) {
@@ -205,7 +205,7 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
                 onClick={resyncVehicles}
                 disabled={isResyncing}
               >
-                {isResyncing ? 'Syncing...' : 'Resync Data'}
+                {isResyncing ? 'Syncing...' : 'Sync Database'}
               </Button>
             </div>
           </AlertDescription>
