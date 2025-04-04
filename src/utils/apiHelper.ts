@@ -2,10 +2,21 @@ import { toast } from 'sonner';
 import { apiBaseUrl, forceRefreshHeaders } from '@/config/api';
 
 /**
- * Check database connection directly
- * @returns Promise<boolean> - true if connection successful
+ * Database connection check response type
  */
-export const checkDatabaseConnection = async () => {
+export interface DatabaseConnectionResponse {
+  status: 'success' | 'error';
+  connection: boolean;
+  message?: string;
+  version?: string;
+  timestamp: number;
+}
+
+/**
+ * Check database connection directly
+ * @returns Promise<DatabaseConnectionResponse> - Connection check result
+ */
+export const checkDatabaseConnection = async (): Promise<DatabaseConnectionResponse> => {
   try {
     const response = await fetch(`${apiBaseUrl}/api/direct-check-connection.php?_t=${Date.now()}`, {
       method: 'GET',
@@ -17,14 +28,24 @@ export const checkDatabaseConnection = async () => {
     
     if (!response.ok) {
       console.error('Database connection check failed with status:', response.status);
-      return false;
+      return {
+        status: 'error',
+        connection: false,
+        message: `HTTP error: ${response.status}`,
+        timestamp: Date.now()
+      };
     }
     
     const data = await response.json();
-    return data.connection === true;
+    return data;
   } catch (error) {
     console.error('Error checking database connection:', error);
-    return false;
+    return {
+      status: 'error',
+      connection: false,
+      message: error instanceof Error ? error.message : 'Unknown error occurred',
+      timestamp: Date.now()
+    };
   }
 };
 
@@ -38,7 +59,7 @@ export const fixDatabaseTables = async () => {
     
     // First check database connection
     const connectionCheck = await checkDatabaseConnection();
-    if (!connectionCheck) {
+    if (!connectionCheck.connection) {
       console.error('Database connection check failed before attempting to fix tables');
       toast.error('Database connection check failed');
       return false;

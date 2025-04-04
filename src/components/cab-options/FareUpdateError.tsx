@@ -2,7 +2,7 @@
 import { Button } from "@/components/ui/button";
 import { AlertCircle, RefreshCcw, Database, ExternalLink, FileJson } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { fixDatabaseTables, checkDatabaseConnection } from "@/utils/apiHelper";
+import { fixDatabaseTables, checkDatabaseConnection, DatabaseConnectionResponse } from "@/utils/apiHelper";
 import { toast } from "sonner";
 import { clearVehicleDataCache } from "@/services/vehicleDataService";
 
@@ -35,7 +35,7 @@ export function FareUpdateError({
       toast.loading("Checking database connection...");
       
       // First check database connection
-      const connectionStatus = await checkDatabaseConnection();
+      const connectionStatus: DatabaseConnectionResponse = await checkDatabaseConnection();
       
       if (!connectionStatus || !connectionStatus.connection) {
         toast.error(`Database connection failed: ${connectionStatus?.message || 'Check your credentials'}`);
@@ -81,7 +81,7 @@ export function FareUpdateError({
     try {
       toast.loading("Checking database credentials...");
       
-      const connectionStatus = await checkDatabaseConnection();
+      const connectionStatus: DatabaseConnectionResponse = await checkDatabaseConnection();
       
       if (connectionStatus && connectionStatus.connection) {
         toast.success("Database connection successful!");
