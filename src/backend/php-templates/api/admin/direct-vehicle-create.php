@@ -4,10 +4,20 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
-ini_set('error_log', 'php-errors.log');
+
+// Create logs directory
+$logDir = __DIR__ . '/../../logs';
+if (!file_exists($logDir)) {
+    mkdir($logDir, 0755, true);
+}
+
+// Log file path
+$errorLogFile = $logDir . '/vehicle_create_' . date('Y-m-d') . '.log';
+ini_set('error_log', $errorLogFile);
 
 // Log every access to this script for debugging
-error_log("direct-vehicle-create.php accessed via " . $_SERVER['REQUEST_METHOD'] . ". Remote IP: " . $_SERVER['REMOTE_ADDR']);
+$timestamp = date('Y-m-d H:i:s');
+file_put_contents($errorLogFile, "[$timestamp] direct-vehicle-create.php accessed via " . $_SERVER['REQUEST_METHOD'] . ". Remote IP: " . $_SERVER['REMOTE_ADDR'] . "\n", FILE_APPEND);
 
 // Set headers first to avoid "headers already sent" issues
 header('Content-Type: application/json');
@@ -17,6 +27,12 @@ header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-W
 header('Cache-Control: no-cache, no-store, must-revalidate');
 header('Pragma: no-cache');
 header('Expires: 0');
+
+// Create cache directory
+$cacheDir = __DIR__ . '/../../cache';
+if (!file_exists($cacheDir)) {
+    mkdir($cacheDir, 0755, true);
+}
 
 // Function for consistent JSON responses
 function sendJsonResponse($status, $message, $data = null) {
@@ -35,6 +51,20 @@ function sendJsonResponse($status, $message, $data = null) {
     exit;
 }
 
+// Function to log debug info
+function logDebug($message, $data = null) {
+    global $logDir;
+    $logFile = $logDir . '/vehicle_create_' . date('Y-m-d') . '.log';
+    $timestamp = date('Y-m-d H:i:s');
+    
+    $logMessage = "[$timestamp] $message";
+    if ($data !== null) {
+        $logMessage .= ": " . json_encode($data);
+    }
+    
+    file_put_contents($logFile, $logMessage . "\n", FILE_APPEND);
+}
+
 // Handle OPTIONS request for CORS
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -43,23 +73,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // Only allow POST method
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    error_log("Invalid method: " . $_SERVER['REQUEST_METHOD']);
+    logDebug("Invalid method: " . $_SERVER['REQUEST_METHOD']);
     sendJsonResponse('error', 'Only POST method is allowed');
 }
 
 try {
+    // Load database configuration
+    require_once '../../config.php';
+    
     // Get raw input
     $rawInput = file_get_contents('php://input');
-    error_log("Raw input received: " . substr($rawInput, 0, 1000)); // Log first 1000 chars
+    logDebug("Raw input received: " . substr($rawInput, 0, 1000)); // Log first 1000 chars
     
     // Try to decode JSON input
     $input = json_decode($rawInput, true);
     
     // Fall back to POST data if JSON parsing fails
     if (json_last_error() !== JSON_ERROR_NONE) {
-        error_log("JSON decode error: " . json_last_error_msg());
+        logDebug("JSON decode error: " . json_last_error_msg());
         if (!empty($_POST)) {
-            error_log("Using POST data instead");
+            logDebug("Using POST data instead");
             $input = $_POST;
         }
     }
@@ -69,7 +102,7 @@ try {
         throw new Exception("No vehicle data provided or invalid format");
     }
     
-    error_log("Parsed input: " . print_r($input, true));
+    logDebug("Parsed input data", $input);
     
     // Generate a vehicle ID if not provided
     $vehicleId = !empty($input['vehicleId']) ? $input['vehicleId'] : 
@@ -79,35 +112,137 @@ try {
     // Extract basic vehicle information with fallbacks
     $name = !empty($input['name']) ? $input['name'] : 'Unnamed Vehicle';
     $capacity = isset($input['capacity']) ? (int)$input['capacity'] : 4;
+    $luggageCapacity = isset($input['luggageCapacity']) ? (int)$input['luggageCapacity'] : 2;
+    $basePrice = isset($input['basePrice']) ? (float)$input['basePrice'] : 
+               (isset($input['price']) ? (float)$input['price'] : 0);
+    $price = isset($input['price']) ? (float)$input['price'] : 
+           (isset($input['basePrice']) ? (float)$input['basePrice'] : 0);
+    $pricePerKm = isset($input['pricePerKm']) ? (float)$input['pricePerKm'] : 14;
+    $ac = isset($input['ac']) ? (bool)$input['ac'] : true;
+    $image = isset($input['image']) ? $input['image'] : '/cars/sedan.png';
+    $description = isset($input['description']) ? $input['description'] : '';
+    $isActive = isset($input['isActive']) ? (bool)$input['isActive'] : true;
+    $nightHaltCharge = isset($input['nightHaltCharge']) ? (float)$input['nightHaltCharge'] : 700;
+    $driverAllowance = isset($input['driverAllowance']) ? (float)$input['driverAllowance'] : 250;
     
-    // CRITICAL - Create comprehensive vehicle object with all possible fields
+    // Handle amenities
+    $amenities = ['AC'];
+    if (isset($input['amenities'])) {
+        if (is_array($input['amenities'])) {
+            $amenities = $input['amenities'];
+        } else if (is_string($input['amenities'])) {
+            try {
+                // Try to parse as JSON first
+                $parsedAmenities = json_decode($input['amenities'], true);
+                if (is_array($parsedAmenities)) {
+                    $amenities = $parsedAmenities;
+                } else {
+                    // If not valid JSON, try as comma-separated string
+                    $amenities = array_map('trim', explode(',', $input['amenities']));
+                }
+            } catch (Exception $e) {
+                // Fallback to comma-separated
+                $amenities = array_map('trim', explode(',', $input['amenities']));
+            }
+        }
+    }
+    
+    // Create comprehensive vehicle object with all fields
     $vehicleData = [
         'id' => $vehicleId,
         'vehicleId' => $vehicleId,
         'name' => $name,
         'capacity' => $capacity,
-        'luggageCapacity' => isset($input['luggageCapacity']) ? (int)$input['luggageCapacity'] : 2,
-        'price' => isset($input['price']) ? (int)$input['price'] : 
-                  (isset($input['basePrice']) ? (int)$input['basePrice'] : 0),
-        'basePrice' => isset($input['basePrice']) ? (int)$input['basePrice'] : 
-                      (isset($input['price']) ? (int)$input['price'] : 0),
-        'pricePerKm' => isset($input['pricePerKm']) ? (float)$input['pricePerKm'] : 0,
-        'image' => isset($input['image']) ? $input['image'] : '/cars/sedan.png',
-        'amenities' => isset($input['amenities']) ? $input['amenities'] : ['AC'],
-        'description' => isset($input['description']) ? $input['description'] : '',
-        'ac' => isset($input['ac']) ? (bool)$input['ac'] : true,
-        'nightHaltCharge' => isset($input['nightHaltCharge']) ? (int)$input['nightHaltCharge'] : 700,
-        'driverAllowance' => isset($input['driverAllowance']) ? (int)$input['driverAllowance'] : 250,
-        'isActive' => isset($input['isActive']) ? (bool)$input['isActive'] : true
+        'luggageCapacity' => $luggageCapacity,
+        'price' => $price,
+        'basePrice' => $basePrice,
+        'pricePerKm' => $pricePerKm,
+        'image' => $image,
+        'amenities' => $amenities,
+        'description' => $description,
+        'ac' => $ac,
+        'nightHaltCharge' => $nightHaltCharge,
+        'driverAllowance' => $driverAllowance,
+        'isActive' => $isActive
     ];
     
-    error_log("Prepared vehicle data: " . print_r($vehicleData, true));
+    logDebug("Prepared vehicle data", $vehicleData);
     
-    // In a real system, we'd save to database here
-    // For now, just return success with the vehicle data
-    sendJsonResponse('success', 'Vehicle created successfully', $vehicleData);
+    // Connect to database
+    $conn = getDbConnection();
+    
+    // Check if vehicle already exists
+    $checkStmt = $conn->prepare("SELECT COUNT(*) as count FROM vehicles WHERE vehicle_id = ?");
+    $checkStmt->bind_param("s", $vehicleId);
+    $checkStmt->execute();
+    $result = $checkStmt->get_result();
+    $row = $result->fetch_assoc();
+    
+    if ($row['count'] > 0) {
+        // Vehicle exists, return error
+        logDebug("Vehicle with ID $vehicleId already exists");
+        sendJsonResponse('error', "Vehicle with ID $vehicleId already exists. Use update endpoint instead.");
+    }
+    
+    // Insert into database
+    $insertStmt = $conn->prepare("INSERT INTO vehicles (
+        vehicle_id, name, capacity, luggage_capacity, ac, image, amenities, 
+        description, is_active, base_price, price_per_km, night_halt_charge, driver_allowance
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    
+    // Convert amenities to JSON string for database
+    $amenitiesJson = json_encode($amenities);
+    
+    // Convert boolean values for database
+    $acDB = $ac ? 1 : 0;
+    $isActiveDB = $isActive ? 1 : 0;
+    
+    $insertStmt->bind_param("ssiisssiiddd", 
+        $vehicleId, $name, $capacity, $luggageCapacity, $acDB, $image, $amenitiesJson, 
+        $description, $isActiveDB, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
+    
+    if ($insertStmt->execute()) {
+        logDebug("Vehicle inserted into database");
+        
+        // Update persistent cache
+        $persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
+        $persistentData = [];
+        
+        // Load existing cache if it exists
+        if (file_exists($persistentCacheFile)) {
+            $persistentJson = file_get_contents($persistentCacheFile);
+            if ($persistentJson) {
+                $persistentData = json_decode($persistentJson, true) ?: [];
+            }
+        }
+        
+        // Add new vehicle to persistent data
+        $persistentData[] = $vehicleData;
+        
+        // Save back to persistent cache
+        if (file_put_contents($persistentCacheFile, json_encode($persistentData, JSON_PRETTY_PRINT))) {
+            logDebug("Updated persistent cache file");
+        } else {
+            logDebug("Failed to update persistent cache file");
+        }
+        
+        // Clear other cache files
+        $cacheFiles = glob($cacheDir . '/vehicles_*.json');
+        foreach ($cacheFiles as $file) {
+            if ($file !== $persistentCacheFile && !strpos($file, 'persistent_backup')) {
+                unlink($file);
+                logDebug("Cleared cache file: " . basename($file));
+            }
+        }
+        
+        // Return success response
+        sendJsonResponse('success', 'Vehicle created successfully', $vehicleData);
+    } else {
+        logDebug("Failed to insert vehicle: " . $insertStmt->error);
+        throw new Exception("Failed to insert vehicle: " . $insertStmt->error);
+    }
     
 } catch (Exception $e) {
-    error_log("Error in direct-vehicle-create.php: " . $e->getMessage());
+    logDebug("Error in direct-vehicle-create.php: " . $e->getMessage());
     sendJsonResponse('error', $e->getMessage());
 }

@@ -1,6 +1,7 @@
+
 import { CabType } from '@/types/cab';
 import { apiBaseUrl } from '@/config/api';
-import { directVehicleOperation, formatDataForMultipart } from '@/utils/apiHelper';
+import { directVehicleOperation, formatDataForMultipart, forceRefreshVehicles } from '@/utils/apiHelper';
 import { toast } from 'sonner';
 
 /**
@@ -10,121 +11,80 @@ export const addVehicle = async (vehicle: CabType): Promise<CabType> => {
   try {
     console.log('Attempting to add vehicle:', vehicle);
     
-    // Add unique identifier to force cache bypass
+    // Generate unique timestamp to bypass caching
     const timestamp = Date.now();
     
-    // First try direct POST with JSON data - this is the most reliable method
+    // Prepare the vehicle data - ensure id and vehicleId are consistent
+    const preparedVehicle = {
+      ...vehicle,
+      id: vehicle.id || vehicle.vehicleId || `v_${Date.now()}`,
+      vehicleId: vehicle.vehicleId || vehicle.id || `v_${Date.now()}`,
+      isActive: vehicle.isActive !== false // default to active if not specified
+    };
+    
+    // First approach: direct JSON POST
     try {
-      console.log(`Trying direct JSON POST to /api/admin/add-vehicle-simple.php?_t=${timestamp}`);
+      console.log(`Trying direct JSON POST to create vehicle`);
       
-      const response = await fetch(`${apiBaseUrl}/api/admin/add-vehicle-simple.php?_t=${timestamp}`, {
+      const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-create.php?_t=${timestamp}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Requested-With': 'XMLHttpRequest',
           'X-Force-Refresh': 'true',
+          'X-Admin-Mode': 'true',
           'Cache-Control': 'no-cache, no-store, must-revalidate'
         },
-        body: JSON.stringify(vehicle)
+        body: JSON.stringify(preparedVehicle)
       });
       
-      console.log('Response status:', response.status);
-      const responseText = await response.text();
-      console.log('Response body:', responseText);
+      const data = await response.json();
       
-      // Check if response is plain HTML (indicating PHP isn't executing)
-      if (responseText.includes('<!DOCTYPE') || responseText.includes('<html')) {
-        console.error('PHP execution error: Server returned HTML instead of JSON');
-        throw new Error('Server configuration issue: PHP files not executing correctly');
-      }
+      if (data && data.status === 'success') {
+        console.log('Vehicle created successfully:', data);
+        
+        // Force a refresh of vehicle data to ensure it's loaded in the cache
+        await forceRefreshVehicles();
+        
+        return data.vehicle || preparedVehicle;
+      } 
       
-      try {
-        const result = JSON.parse(responseText);
-        if (result && result.status === 'success') {
-          console.log('Vehicle creation successful:', result);
-          return result.vehicle || vehicle;
-        } else {
-          throw new Error(result.message || 'Vehicle creation failed');
-        }
-      } catch (e) {
-        console.error('Failed to parse JSON response:', e);
-        throw new Error('Invalid server response format');
-      }
+      throw new Error(data.message || 'Failed to create vehicle');
     } catch (jsonError) {
       console.error('JSON POST method failed:', jsonError);
       
-      // Fallback to form data submission
-      try {
-        console.log('Falling back to FormData submission');
-        const formData = new FormData();
-        
-        // Convert all fields to FormData
-        Object.entries(vehicle).forEach(([key, value]) => {
-          if (typeof value !== 'undefined') {
-            // Handle arrays specially
-            if (Array.isArray(value)) {
-              formData.append(key, JSON.stringify(value));
-            } else {
-              formData.append(key, String(value));
-            }
-          }
-        });
-        
-        // Try debug endpoint specially designed for troubleshooting
-        const debugResponse = await fetch(`${apiBaseUrl}/api/admin/vehicle-create-debug.php?_t=${timestamp}`, {
-          method: 'POST',
-          body: formData
-        });
-        
-        const debugText = await debugResponse.text();
-        console.log('Debug endpoint response:', debugText);
-        
-        try {
-          const result = JSON.parse(debugText);
-          if (result && result.status === 'success') {
-            console.log('Vehicle creation successful via debug endpoint:', result);
-            return result.vehicle || vehicle;
-          }
-        } catch (e) {
-          console.error('Failed to parse debug response:', e);
-        }
-        
-        // If debug endpoint failed, try plain endpoint
-        const formResponse = await fetch(`${apiBaseUrl}/api/admin/add-vehicle-simple.php?_t=${timestamp}`, {
-          method: 'POST',
-          body: formData
-        });
-        
-        const formText = await formResponse.text();
-        console.log('FormData response:', formText);
-        
-        try {
-          const formResult = JSON.parse(formText);
-          if (formResult && formResult.status === 'success') {
-            console.log('Vehicle creation successful via form data:', formResult);
-            return formResult.vehicle || vehicle;
-          }
-        } catch (e) {
-          console.error('Failed to parse form response:', e);
-        }
-      } catch (formError) {
-        console.error('Form data submission failed:', formError);
+      // Try with FormData approach
+      console.log('Falling back to FormData submission');
+      const formData = formatDataForMultipart(preparedVehicle);
+      
+      const formResponse = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-create.php?_t=${timestamp}`, {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-Force-Refresh': 'true',
+          'X-Admin-Mode': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        },
+        body: formData
+      });
+      
+      if (!formResponse.ok) {
+        throw new Error(`Server returned ${formResponse.status}: ${formResponse.statusText}`);
       }
+      
+      const formData2 = await formResponse.json();
+      
+      if (formData2 && formData2.status === 'success') {
+        console.log('Vehicle created successfully via form data:', formData2);
+        
+        // Force refresh to ensure new vehicle appears in list
+        await forceRefreshVehicles();
+        
+        return formData2.vehicle || preparedVehicle;
+      }
+      
+      throw new Error(formData2?.message || 'Failed to create vehicle via form data');
     }
-    
-    // If we reach here, all API attempts failed
-    // For development, return the vehicle as if it succeeded
-    console.warn('All API attempts failed, returning original vehicle as fallback');
-    toast.warning('Could not connect to API server, operating in offline mode');
-    
-    // Add generated ID if missing
-    const resultVehicle = {
-      ...vehicle,
-      id: vehicle.id || vehicle.vehicleId || `vehicle_${Date.now()}`,
-      vehicleId: vehicle.vehicleId || vehicle.id || `vehicle_${Date.now()}`
-    };
-    
-    return resultVehicle;
   } catch (error) {
     console.error('Failed to add vehicle:', error);
     throw error;
@@ -144,7 +104,7 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
       throw new Error('Vehicle ID is required for update');
     }
     
-    // Make sure numeric fields are actually numbers and set default values for problematic fields
+    // Make sure numeric fields are actually numbers and set default values
     const preparedVehicle = {
       ...vehicle,
       id: vehicle.id || vehicle.vehicleId,
@@ -153,220 +113,127 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
       luggageCapacity: Number(vehicle.luggageCapacity || 2),
       basePrice: Number(vehicle.basePrice || vehicle.price || 0),
       price: Number(vehicle.price || vehicle.basePrice || 0),
-      pricePerKm: Number(vehicle.pricePerKm || 0),
-      // CRITICAL: Always provide default values for these fields to avoid NULL errors
+      pricePerKm: Number(vehicle.pricePerKm || 14),
       nightHaltCharge: Number(vehicle.nightHaltCharge || 700), 
-      driverAllowance: Number(vehicle.driverAllowance || 250)  
+      driverAllowance: Number(vehicle.driverAllowance || 250),
+      isActive: vehicle.isActive !== false // default to active if not specified
     };
     
     console.log('Prepared vehicle data for update:', preparedVehicle);
-
-    // Try multiple endpoints using form submission, which is more reliable with PHP
-    const formData = formatDataForMultipart(preparedVehicle);
     
-    // First try direct form submission to PHP endpoint
+    // Try multiple methods to ensure the update goes through
+    
+    // 1. Direct JSON approach
     try {
-      const unique = Date.now();
-      const url = `${apiBaseUrl}/api/admin/direct-vehicle-update.php?_t=${unique}`;
-      console.log('Trying direct form submission to:', url);
+      const timestamp = Date.now();
+      const url = `${apiBaseUrl}/api/admin/vehicle-update.php?_t=${timestamp}`;
       
-      // FIX: Remove origin header as browsers prevent setting this header manually
+      console.log('Trying direct JSON update to:', url);
+      
       const response = await fetch(url, {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'X-Requested-With': 'XMLHttpRequest',
-          'X-Force-Refresh': 'true',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'X-Admin-Mode': 'true'
-        }
-      });
-      
-      let responseData;
-      const contentType = response.headers.get('content-type');
-      
-      try {
-        if (contentType && contentType.includes('application/json')) {
-          responseData = await response.json();
-        } else {
-          const text = await response.text();
-          try {
-            responseData = JSON.parse(text);
-          } catch (e) {
-            console.error('Failed to parse response text:', text);
-            responseData = { status: 'error', message: 'Invalid JSON response' };
-          }
-        }
-      } catch (e) {
-        console.error('Failed to parse response:', e);
-        throw new Error('Failed to parse server response');
-      }
-      
-      if (response.ok && responseData?.status === 'success') {
-        console.log('Vehicle updated successfully via form submission');
-        return responseData.vehicle || preparedVehicle;
-      }
-      
-      console.warn('Direct form submission failed:', responseData);
-      
-      // If the error is "MySQL server has gone away", try the fix-vehicle-tables.php endpoint
-      if (responseData?.message && responseData.message.includes('MySQL server has gone away')) {
-        console.log('Detected "MySQL server has gone away" error, trying to fix database...');
-        
-        try {
-          const fixResponse = await fetch(`${apiBaseUrl}/api/admin/fix-vehicle-tables.php?_t=${Date.now()}`, {
-            method: 'GET',
-            headers: {
-              'X-Requested-With': 'XMLHttpRequest',
-              'X-Force-Refresh': 'true',
-              'Cache-Control': 'no-cache, no-store, must-revalidate'
-            }
-          });
-          
-          const fixData = await fixResponse.json();
-          console.log('Database fix response:', fixData);
-          
-          // Try the update again after fixing
-          if (fixData.status === 'success') {
-            console.log('Database fixed, retrying update...');
-            
-            // Wait a bit before retrying
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            const retryResponse = await fetch(url, {
-              method: 'POST',
-              body: formData,
-              headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'X-Force-Refresh': 'true',
-                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'X-Admin-Mode': 'true'
-              }
-            });
-            
-            if (retryResponse.ok) {
-              const retryData = await retryResponse.json();
-              if (retryData.status === 'success') {
-                console.log('Vehicle updated successfully after database fix');
-                return retryData.vehicle || preparedVehicle;
-              }
-            }
-          }
-        } catch (fixError) {
-          console.error('Failed to fix database:', fixError);
-        }
-      }
-    } catch (err) {
-      console.error('Direct form submission error:', err);
-    }
-    
-    // If form submission failed, try with different endpoints
-    const endpoints = [
-      'api/admin/direct-vehicle-modify.php',
-      'api/admin/direct-vehicle-update.php',
-      'api/admin/update-vehicle.php',
-      'api/admin/vehicle-update.php',
-      'api/admin/vehicles-update.php'
-    ];
-    
-    let lastError: Error | null = null;
-    
-    // Try each endpoint until one succeeds
-    for (const endpoint of endpoints) {
-      try {
-        // Add a timestamp to bypass cache
-        const timestampedEndpoint = `${endpoint}?_t=${Date.now()}`;
-        console.log(`Trying vehicle update endpoint: ${apiBaseUrl}/${timestampedEndpoint}`);
-        
-        const response = await directVehicleOperation(timestampedEndpoint, 'POST', {
-          headers: {
-            'X-Admin-Mode': 'true',
-            'X-Debug': 'true'
-          },
-          data: preparedVehicle
-        });
-        
-        if (response && response.status === 'success') {
-          return response.vehicle || preparedVehicle;
-        }
-      } catch (error: any) {
-        lastError = error;
-        console.error(`Error with endpoint ${endpoint}:`, error);
-        // Continue to the next endpoint
-      }
-    }
-    
-    // If all endpoints failed, try a direct fetch as a last resort
-    try {
-      console.log('Trying direct fetch as last resort for vehicle update...');
-      
-      // Use the direct-vehicle-modify.php endpoint which has better error handling
-      const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-modify.php?_t=${Date.now()}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Requested-With': 'XMLHttpRequest',
           'X-Force-Refresh': 'true',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-          'X-Admin-Mode': 'true'
+          'X-Admin-Mode': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
         },
         body: JSON.stringify(preparedVehicle)
       });
       
-      // Only try to parse JSON if the response is OK
-      if (response.ok) {
-        const responseText = await response.text();
-        try {
-          const result = JSON.parse(responseText);
-          if (result && result.status === 'success') {
-            return result.vehicle || preparedVehicle;
-          }
-        } catch (e) {
-          console.error('Failed to parse JSON:', e, responseText);
-        }
-      }
-    } catch (error) {
-      console.error('Last resort direct fetch failed:', error);
-    }
-    
-    // If direct API calls failed, try using the backup domain if available
-    if (typeof window !== 'undefined') {
-      try {
-        const backupDomain = 'https://vizagcabs.com';
-        console.log(`Trying backup domain: ${backupDomain}`);
-        const response = await fetch(`${backupDomain}/api/admin/direct-vehicle-update.php`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-Force-Refresh': 'true',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'X-Admin-Mode': 'true'
-          },
-          body: JSON.stringify(preparedVehicle)
-        });
+      const data = await response.json();
+      
+      if (data && data.status === 'success') {
+        console.log('Vehicle updated successfully via JSON:', data);
         
-        // Only try to parse JSON if the response is OK
-        if (response.ok) {
-          const responseText = await response.text();
-          try {
-            const result = JSON.parse(responseText);
-            if (result && result.status === 'success') {
-              return result.vehicle || preparedVehicle;
-            }
-          } catch (e) {
-            console.error('Failed to parse JSON from backup domain:', e, responseText);
-          }
-        }
-      } catch (error) {
-        console.error('Backup domain attempt failed:', error);
+        // Force refresh to ensure changes are reflected
+        await forceRefreshVehicles();
+        
+        return data.vehicle || preparedVehicle;
       }
+    } catch (jsonError) {
+      console.error('JSON update failed:', jsonError);
     }
     
-    // If we've reached here, all endpoints failed
-    throw lastError || new Error('Failed to update vehicle');
+    // 2. FormData approach
+    try {
+      const timestamp = Date.now();
+      const formData = formatDataForMultipart(preparedVehicle);
+      
+      const formResponse = await fetch(`${apiBaseUrl}/api/admin/vehicle-update.php?_t=${timestamp}`, {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-Force-Refresh': 'true',
+          'X-Admin-Mode': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        },
+        body: formData
+      });
+      
+      const formResult = await formResponse.json();
+      
+      if (formResult && formResult.status === 'success') {
+        console.log('Vehicle updated successfully via FormData:', formResult);
+        
+        // Force refresh to ensure changes are reflected
+        await forceRefreshVehicles();
+        
+        return formResult.vehicle || preparedVehicle;
+      }
+    } catch (formError) {
+      console.error('FormData update failed:', formError);
+    }
+    
+    // If we reach here, both approaches failed
+    // Try through our helper function
+    try {
+      const result = await directVehicleOperation('api/admin/update-vehicle.php', 'POST', {
+        headers: {
+          'X-Admin-Mode': 'true',
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        },
+        data: preparedVehicle
+      });
+      
+      if (result && result.status === 'success') {
+        console.log('Vehicle updated successfully via helper:', result);
+        
+        // Force refresh to ensure changes are reflected
+        await forceRefreshVehicles();
+        
+        return result.vehicle || preparedVehicle;
+      }
+    } catch (helperError) {
+      console.error('Helper update failed:', helperError);
+    }
+    
+    // If we're still here, try one more endpoint
+    try {
+      const result = await directVehicleOperation('api/admin/direct-vehicle-modify.php', 'POST', {
+        headers: {
+          'X-Admin-Mode': 'true',
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        },
+        data: preparedVehicle
+      });
+      
+      if (result && result.status === 'success') {
+        console.log('Vehicle updated successfully via modify endpoint:', result);
+        
+        // Force refresh to ensure changes are reflected
+        await forceRefreshVehicles();
+        
+        return result.vehicle || preparedVehicle;
+      }
+    } catch (modifyError) {
+      console.error('Modify endpoint failed:', modifyError);
+    }
+    
+    throw new Error('All update attempts failed');
   } catch (error) {
     console.error('Failed to update vehicle:', error);
     throw error;
@@ -378,65 +245,84 @@ export const updateVehicle = async (vehicle: CabType): Promise<CabType> => {
  */
 export const deleteVehicle = async (vehicleId: string): Promise<{ status: string, message?: string }> => {
   try {
-    // Try multiple endpoints in sequence to ensure higher success rate
-    const endpoints = [
-      'api/admin/direct-vehicle-delete.php',
-      'api/admin/delete-vehicle.php',
-      'api/admin/vehicle-delete.php'
-    ];
+    console.log(`Attempting to delete vehicle with ID: ${vehicleId}`);
     
-    let lastError: Error | null = null;
-    
-    // Try each endpoint until one succeeds
-    for (const endpoint of endpoints) {
-      try {
-        // Add a timestamp to bypass cache
-        const timestampedEndpoint = `${endpoint}?_t=${Date.now()}`;
-        console.log(`Trying vehicle deletion endpoint: ${apiBaseUrl}/${timestampedEndpoint}`);
-        
-        const response = await directVehicleOperation(timestampedEndpoint, 'POST', {
-          headers: {
-            'X-Admin-Mode': 'true',
-            'X-Debug': 'true'
-          },
-          data: { vehicleId }
-        });
-        
-        if (response && response.status === 'success') {
-          return { status: 'success' };
-        }
-      } catch (error: any) {
-        lastError = error;
-        console.error(`Error with endpoint ${endpoint}:`, error);
-        // Continue to the next endpoint
-      }
-    }
-    
-    // If all API endpoints failed, try a direct fetch as a last resort
+    // First approach: direct DELETE request
     try {
-      console.log('Trying direct fetch as last resort for vehicle deletion...');
-      const response = await fetch(`${apiBaseUrl}/api/admin/direct-vehicle-delete.php?id=${vehicleId}&_t=${Date.now()}`, {
-        method: 'POST',
+      const timestamp = Date.now();
+      
+      const response = await fetch(`${apiBaseUrl}/api/admin/vehicle-delete.php?id=${vehicleId}&_t=${timestamp}`, {
+        method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
           'X-Requested-With': 'XMLHttpRequest',
           'X-Force-Refresh': 'true',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'X-Admin-Mode': 'true'
-        },
-        body: JSON.stringify({ vehicleId })
+          'X-Admin-Mode': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
       });
       
-      const result = await response.json();
-      if (result && result.status === 'success') {
-        return { status: 'success' };
+      const data = await response.json();
+      
+      if (data && data.status === 'success') {
+        console.log('Vehicle deleted successfully:', data);
+        
+        // Force refresh to ensure deletion is reflected
+        await forceRefreshVehicles();
+        
+        return { status: 'success', message: data.message };
       }
-    } catch (error) {
-      console.error('Last resort direct fetch for deletion failed:', error);
+    } catch (deleteError) {
+      console.error('DELETE method failed:', deleteError);
     }
     
-    // If we've reached here, all endpoints failed
-    throw lastError || new Error('Failed to delete vehicle');
+    // Second approach: POST request with delete action
+    try {
+      const result = await directVehicleOperation('api/admin/vehicle-delete.php', 'POST', {
+        headers: {
+          'X-Admin-Mode': 'true',
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        },
+        data: { vehicleId, id: vehicleId }
+      });
+      
+      if (result && result.status === 'success') {
+        console.log('Vehicle deleted successfully via POST:', result);
+        
+        // Force refresh to ensure deletion is reflected
+        await forceRefreshVehicles();
+        
+        return { status: 'success', message: result.message };
+      }
+    } catch (postError) {
+      console.error('POST delete method failed:', postError);
+    }
+    
+    // If both approaches fail, try a more direct endpoint
+    try {
+      const directResult = await directVehicleOperation('api/admin/direct-vehicle-delete.php', 'POST', {
+        headers: {
+          'X-Admin-Mode': 'true',
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        },
+        data: { vehicleId, id: vehicleId }
+      });
+      
+      if (directResult && directResult.status === 'success') {
+        console.log('Vehicle deleted successfully via direct endpoint:', directResult);
+        
+        // Force refresh to ensure deletion is reflected
+        await forceRefreshVehicles();
+        
+        return { status: 'success', message: directResult.message };
+      }
+    } catch (directError) {
+      console.error('Direct delete method failed:', directError);
+    }
+    
+    throw new Error('All delete attempts failed');
   } catch (error: any) {
     console.error('Failed to delete vehicle:', error);
     throw new Error(error.message || 'Failed to delete vehicle');
@@ -448,7 +334,18 @@ export const deleteVehicle = async (vehicleId: string): Promise<{ status: string
  */
 export const getVehicle = async (vehicleId: string): Promise<CabType> => {
   try {
-    const response = await directVehicleOperation(`api/admin/vehicles-data.php?id=${vehicleId}&_t=${Date.now()}`, 'GET');
+    const timestamp = Date.now();
+    const response = await directVehicleOperation(
+      `api/admin/vehicles-data.php?id=${vehicleId}&_t=${timestamp}`, 
+      'GET',
+      {
+        headers: {
+          'X-Admin-Mode': 'true',
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
+      }
+    );
     
     if (response && response.vehicles && response.vehicles.length > 0) {
       return response.vehicles[0];
@@ -466,13 +363,19 @@ export const getVehicle = async (vehicleId: string): Promise<CabType> => {
  */
 export const getVehicles = async (includeInactive = false): Promise<CabType[]> => {
   try {
+    const timestamp = Date.now();
     const response = await directVehicleOperation(
       `api/admin/vehicles-data.php`, 
       'GET',
       {
         data: {
           includeInactive: includeInactive ? 'true' : 'false',
-          _t: Date.now()
+          _t: timestamp
+        },
+        headers: {
+          'X-Admin-Mode': 'true',
+          'X-Force-Refresh': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
         }
       }
     );

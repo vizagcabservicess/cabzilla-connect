@@ -44,22 +44,123 @@ function logMessage($message) {
 logMessage("Vehicle reload request received");
 
 try {
+    require_once '../../config.php'; // Include database config
+    
     // The persistent cache file path - this is our SOURCE OF TRUTH
     $persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
     
-    // Check if persistent file exists
+    // Check if persistent file exists, if not create it
     if (!file_exists($persistentCacheFile)) {
-        logMessage("ERROR: Persistent cache file not found at $persistentCacheFile");
-        echo json_encode([
-            'status' => 'error',
-            'message' => 'Persistent cache file not found',
-            'timestamp' => time(),
-            'cacheDir' => $cacheDir
-        ]);
-        exit;
+        logMessage("Persistent cache file not found, creating default.");
+        
+        // Default vehicles to use if no persistent cache
+        $defaultVehicles = [
+            [
+                "id" => "sedan",
+                "vehicleId" => "sedan",
+                "name" => "Sedan",
+                "capacity" => 4,
+                "luggageCapacity" => 2,
+                "price" => 2500,
+                "basePrice" => 2500,
+                "pricePerKm" => 14,
+                "image" => "/cars/sedan.png",
+                "amenities" => ["AC", "Bottle Water", "Music System"],
+                "description" => "Comfortable sedan suitable for 4 passengers.",
+                "ac" => true,
+                "nightHaltCharge" => 700,
+                "driverAllowance" => 250,
+                "isActive" => true
+            ],
+            [
+                "id" => "ertiga",
+                "vehicleId" => "ertiga",
+                "name" => "Ertiga",
+                "capacity" => 6,
+                "luggageCapacity" => 3,
+                "price" => 3200,
+                "basePrice" => 3200,
+                "pricePerKm" => 18,
+                "image" => "/cars/ertiga.png",
+                "amenities" => ["AC", "Bottle Water", "Music System", "Extra Legroom"],
+                "description" => "Spacious SUV suitable for 6 passengers.",
+                "ac" => true,
+                "nightHaltCharge" => 1000,
+                "driverAllowance" => 250,
+                "isActive" => true
+            ],
+            [
+                "id" => "innova_crysta",
+                "vehicleId" => "innova_crysta",
+                "name" => "Innova Crysta",
+                "capacity" => 7,
+                "luggageCapacity" => 4,
+                "price" => 3800,
+                "basePrice" => 3800,
+                "pricePerKm" => 20,
+                "image" => "/cars/innova.png",
+                "amenities" => ["AC", "Bottle Water", "Music System", "Extra Legroom", "Charging Point"],
+                "description" => "Premium SUV with ample space for 7 passengers.",
+                "ac" => true,
+                "nightHaltCharge" => 1000,
+                "driverAllowance" => 250,
+                "isActive" => true
+            ]
+        ];
+        
+        if (!file_put_contents($persistentCacheFile, json_encode($defaultVehicles, JSON_PRETTY_PRINT))) {
+            throw new Exception("Failed to create persistent cache file");
+        }
     }
     
-    // Load the persistent data - using direct file path for reliability
+    // Try to load vehicles from database first
+    $vehiclesFromDb = [];
+    
+    try {
+        // Connect to database
+        $conn = getDbConnection();
+        
+        $query = "SELECT * FROM vehicles";
+        $result = $conn->query($query);
+        
+        if ($result && $result->num_rows > 0) {
+            logMessage("Found {$result->num_rows} vehicles in database");
+            
+            while ($row = $result->fetch_assoc()) {
+                // Convert from DB schema names to frontend property names
+                $vehicle = [
+                    'id' => $row['vehicle_id'],
+                    'vehicleId' => $row['vehicle_id'],
+                    'name' => $row['name'],
+                    'capacity' => (int)$row['capacity'],
+                    'luggageCapacity' => (int)$row['luggage_capacity'],
+                    'basePrice' => (float)$row['base_price'],
+                    'price' => (float)$row['base_price'], // For backward compatibility
+                    'pricePerKm' => (float)$row['price_per_km'],
+                    'image' => $row['image'],
+                    'amenities' => json_decode($row['amenities'] ?? '["AC"]', true),
+                    'description' => $row['description'],
+                    'ac' => (bool)$row['ac'],
+                    'nightHaltCharge' => (float)$row['night_halt_charge'],
+                    'driverAllowance' => (float)$row['driver_allowance'],
+                    'isActive' => (bool)$row['is_active']
+                ];
+                
+                $vehiclesFromDb[] = $vehicle;
+            }
+            
+            // Update the persistent cache with database data
+            logMessage("Updating persistent cache with database data");
+            file_put_contents($persistentCacheFile, json_encode($vehiclesFromDb, JSON_PRETTY_PRINT));
+        } else {
+            logMessage("No vehicles found in database. Will use persistent cache if it exists.");
+        }
+    } catch (Exception $dbError) {
+        logMessage("Database error: " . $dbError->getMessage());
+        logMessage("Will fall back to persistent cache file");
+    }
+    
+    // Now load the persistent data
     $persistentJson = file_get_contents($persistentCacheFile);
     if (!$persistentJson) {
         logMessage("ERROR: Failed to read persistent cache file at $persistentCacheFile");
@@ -89,6 +190,13 @@ try {
     $vehicleCount = count($persistentData);
     logMessage("Loaded $vehicleCount vehicles from persistent cache");
     
+    // If we have vehicles from the database but none in persistent cache, sync persistent cache with DB
+    if (!empty($vehiclesFromDb) && empty($persistentData)) {
+        logMessage("Syncing persistent cache from database");
+        file_put_contents($persistentCacheFile, json_encode($vehiclesFromDb, JSON_PRETTY_PRINT));
+        $persistentData = $vehiclesFromDb;
+    }
+    
     // Clear all other cache files EXCEPT the persistent one
     $cacheFiles = glob($cacheDir . '/vehicles_*.json');
     $cleared = 0;
@@ -109,7 +217,7 @@ try {
     $tempCacheFile = $cacheDir . '/vehicles_' . $currentTime . '.json';
     $jsonOptions = defined('JSON_PRETTY_PRINT') ? JSON_PRETTY_PRINT : 0;
     
-    // Make a copy of the persistent data to ensure it's properly loaded
+    // Write the persistent data to a new cache file
     $result = file_put_contents($tempCacheFile, json_encode($persistentData, $jsonOptions));
     
     if ($result === false) {
@@ -127,6 +235,91 @@ try {
     $backupCacheFile = $cacheDir . '/vehicles_persistent_backup_' . $currentTime . '.json';
     if (copy($persistentCacheFile, $backupCacheFile)) {
         logMessage("Created backup of persistent cache at " . basename($backupCacheFile));
+    }
+    
+    // If database is available, make sure it's in sync with our persistent storage
+    if (!empty($vehiclesFromDb)) {
+        try {
+            $conn = getDbConnection();
+            
+            foreach ($persistentData as $vehicle) {
+                $vehicleId = $vehicle['id'] ?? $vehicle['vehicleId'] ?? '';
+                if (empty($vehicleId)) continue;
+                
+                // Check if this vehicle exists in DB
+                $checkStmt = $conn->prepare("SELECT COUNT(*) as count FROM vehicles WHERE vehicle_id = ?");
+                $checkStmt->bind_param("s", $vehicleId);
+                $checkStmt->execute();
+                $result = $checkStmt->get_result();
+                $row = $result->fetch_assoc();
+                
+                if ($row['count'] == 0) {
+                    // Vehicle doesn't exist in DB, insert it
+                    $name = $vehicle['name'] ?? '';
+                    $capacity = $vehicle['capacity'] ?? 4;
+                    $luggageCapacity = $vehicle['luggageCapacity'] ?? 2;
+                    $ac = isset($vehicle['ac']) ? ($vehicle['ac'] ? 1 : 0) : 1;
+                    $image = $vehicle['image'] ?? '';
+                    $amenities = isset($vehicle['amenities']) ? json_encode($vehicle['amenities']) : null;
+                    $description = $vehicle['description'] ?? '';
+                    $isActive = isset($vehicle['isActive']) ? ($vehicle['isActive'] ? 1 : 0) : 1;
+                    $basePrice = $vehicle['basePrice'] ?? $vehicle['price'] ?? 0;
+                    $pricePerKm = $vehicle['pricePerKm'] ?? 0;
+                    $nightHaltCharge = $vehicle['nightHaltCharge'] ?? 700;
+                    $driverAllowance = $vehicle['driverAllowance'] ?? 250;
+                    
+                    $insertStmt = $conn->prepare("INSERT INTO vehicles 
+                        (vehicle_id, name, capacity, luggage_capacity, ac, image, amenities, description, is_active, 
+                        base_price, price_per_km, night_halt_charge, driver_allowance) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                    
+                    $insertStmt->bind_param("ssiissssidddd", 
+                        $vehicleId, $name, $capacity, $luggageCapacity, $ac, $image, $amenities, 
+                        $description, $isActive, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance);
+                    
+                    if ($insertStmt->execute()) {
+                        logMessage("Inserted vehicle $vehicleId from persistent cache to database");
+                    } else {
+                        logMessage("Failed to insert vehicle $vehicleId: " . $insertStmt->error);
+                    }
+                } else {
+                    // Vehicle exists, update it
+                    $name = $vehicle['name'] ?? '';
+                    $capacity = $vehicle['capacity'] ?? 4;
+                    $luggageCapacity = $vehicle['luggageCapacity'] ?? 2;
+                    $ac = isset($vehicle['ac']) ? ($vehicle['ac'] ? 1 : 0) : 1;
+                    $image = $vehicle['image'] ?? '';
+                    $amenities = isset($vehicle['amenities']) ? json_encode($vehicle['amenities']) : null;
+                    $description = $vehicle['description'] ?? '';
+                    $isActive = isset($vehicle['isActive']) ? ($vehicle['isActive'] ? 1 : 0) : 1;
+                    $basePrice = $vehicle['basePrice'] ?? $vehicle['price'] ?? 0;
+                    $pricePerKm = $vehicle['pricePerKm'] ?? 0;
+                    $nightHaltCharge = $vehicle['nightHaltCharge'] ?? 700;
+                    $driverAllowance = $vehicle['driverAllowance'] ?? 250;
+                    
+                    $updateStmt = $conn->prepare("UPDATE vehicles SET 
+                        name = ?, capacity = ?, luggage_capacity = ?, ac = ?, image = ?, 
+                        amenities = ?, description = ?, is_active = ?, base_price = ?, 
+                        price_per_km = ?, night_halt_charge = ?, driver_allowance = ? 
+                        WHERE vehicle_id = ?");
+                    
+                    $updateStmt->bind_param("siisssiiddds", 
+                        $name, $capacity, $luggageCapacity, $ac, $image, $amenities, 
+                        $description, $isActive, $basePrice, $pricePerKm, $nightHaltCharge, $driverAllowance, $vehicleId);
+                    
+                    if ($updateStmt->execute()) {
+                        logMessage("Updated vehicle $vehicleId in database");
+                    } else {
+                        logMessage("Failed to update vehicle $vehicleId: " . $updateStmt->error);
+                    }
+                }
+            }
+            
+            logMessage("Database sync complete");
+            
+        } catch (Exception $syncError) {
+            logMessage("Error syncing with database: " . $syncError->getMessage());
+        }
     }
     
     logMessage("Successfully reloaded $vehicleCount vehicles, cleared $cleared cache files, and created new cache at " . basename($tempCacheFile));

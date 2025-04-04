@@ -1,11 +1,11 @@
 import { CabType } from '@/types/cab';
 import { apiBaseUrl, getApiUrl, defaultHeaders, forceRefreshHeaders } from '@/config/api';
-import { OutstationFare, LocalFare, AirportFare } from '@/types/cab';
 import { toast } from 'sonner';
+import { forceRefreshVehicles } from '@/utils/apiHelper';
 
 // Significantly reduced cache durations to ensure fresher data
-const JSON_CACHE_DURATION = 15 * 1000; // 15 seconds in milliseconds
-const API_CACHE_DURATION = 5 * 1000; // 5 seconds in milliseconds
+const JSON_CACHE_DURATION = 15 * 1000; // 15 seconds
+const API_CACHE_DURATION = 5 * 1000; // 5 seconds
 const ADMIN_CACHE_DURATION = 0; // No caching for admin views
 
 // Store fetched vehicle data in memory to reduce API calls
@@ -146,37 +146,12 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
   // Define the refresh function
   const refreshVehicleData = async (): Promise<CabType[]> => {
     try {
-      // For admin view, prioritize using the reload-vehicles endpoint first
-      // to ensure persistent storage is properly loaded
-      if (includeInactive && forceRefresh) {
+      // First, try to force a refresh from persistent storage
+      if (forceRefresh) {
         try {
-          console.log('Admin mode: First syncing from persistent storage...');
-          const reloadEndpoint = `/api/admin/reload-vehicles.php?${cacheBuster}`;
-          const reloadUrl = getApiUrl(reloadEndpoint);
-          
-          const reloadResponse = await fetch(reloadUrl, {
-            headers: {
-              ...forceRefreshHeaders,
-              'X-Admin-Mode': 'true',
-              'X-Force-Refresh': 'true',
-              'Cache-Control': 'no-cache, no-store, must-revalidate'
-            },
-            mode: 'cors',
-            cache: 'no-store'
-          });
-          
-          if (reloadResponse.ok) {
-            const reloadResult = await reloadResponse.json();
-            console.log('Reload result:', reloadResult);
-            
-            if (reloadResult.status !== 'success') {
-              console.warn('Reload operation was not successful:', reloadResult.message);
-            } else {
-              console.log(`Successfully reloaded ${reloadResult.count} vehicles from persistent storage`);
-            }
-          }
-        } catch (reloadError) {
-          console.error('Error reloading from persistent storage:', reloadError);
+          await forceRefreshVehicles();
+        } catch (refreshError) {
+          console.warn('Could not force refresh from persistent storage:', refreshError);
         }
       }
       
@@ -223,6 +198,8 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
               saveToLocalStorage(processedVehicles);
               lastSuccessfulRefresh = now;
               
+              console.log('Successfully loaded', processedVehicles.length, 'vehicles from JSON file');
+              
               return filterVehicles(processedVehicles, includeInactive);
             }
           } else {
@@ -235,7 +212,9 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
               'X-Admin-Mode': includeInactive ? 'true' : 'false',
               'X-Bypass-Cache': 'true',
               'X-Force-Refresh': forceRefresh ? 'true' : 'false',
-              'Cache-Control': 'no-cache, no-store, must-revalidate'
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'Expires': '0'
             };
             
             const response = await fetch(url, {
@@ -251,7 +230,7 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
             const data = await response.json();
             
             if (data && Array.isArray(data.vehicles) && data.vehicles.length > 0) {
-              console.log(`Received ${data.vehicles.length} vehicles from API`);
+              console.log(`Received ${data.vehicles.length} vehicles from API:`, data.vehicles);
               
               const processedVehicles = processVehicles(data.vehicles);
               
@@ -262,6 +241,8 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
               
               saveToLocalStorage(processedVehicles);
               lastSuccessfulRefresh = now;
+              
+              console.log('Successfully loaded', processedVehicles.length, 'vehicles from API');
               
               // Dispatch event to notify components about the refresh
               window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {

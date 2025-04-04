@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { directVehicleOperation, fixDatabaseTables, isPreviewMode } from '@/utils/apiHelper';
+import { directVehicleOperation, fixDatabaseTables, isPreviewMode, forceRefreshVehicles } from '@/utils/apiHelper';
 import { toast } from 'sonner';
 import { clearVehicleDataCache } from '@/services/vehicleDataService';
 
@@ -22,7 +22,7 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
   const [refreshCount, setRefreshCount] = useState(0);
   const maxAttempts = 3;
   
-  // New function to force a reload of vehicles from persistent storage
+  // Function to force a reload of vehicles from persistent storage
   const resyncVehicles = useCallback(async () => {
     if (isResyncing) return;
     
@@ -33,27 +33,41 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
       // Clear the cache first
       clearVehicleDataCache();
       
-      // Call the reload-vehicles.php endpoint to force a reload from persistent storage
-      const response = await directVehicleOperation(
-        `api/admin/reload-vehicles.php?_t=${Date.now()}`, 
-        'GET',
-        {
-          headers: {
-            'X-Admin-Mode': 'true',
-            'X-Force-Refresh': 'true',
-            'Cache-Control': 'no-cache, no-store, must-revalidate'
-          }
-        }
-      );
+      // Use the enhanced forceRefreshVehicles function
+      const success = await forceRefreshVehicles();
       
-      console.log('Vehicle resync result:', response);
-      
-      if (response && response.status === 'success') {
-        toast.success(`Successfully resynced ${response.count || 0} vehicles from persistent storage`);
-        setRefreshCount(0); // Reset counter to trigger a fresh check
+      if (success) {
+        toast.success(`Successfully resynced vehicles from persistent storage`);
+        setRefreshCount(prev => prev + 1); // Increment to trigger a fresh check
         setError(null); // Clear any errors
       } else {
-        toast.error('Failed to resync vehicles from persistent storage');
+        // Try direct API call as fallback
+        try {
+          const response = await directVehicleOperation(
+            `api/admin/reload-vehicles.php?_t=${Date.now()}`, 
+            'GET',
+            {
+              headers: {
+                'X-Admin-Mode': 'true',
+                'X-Force-Refresh': 'true',
+                'Cache-Control': 'no-cache, no-store, must-revalidate'
+              }
+            }
+          );
+          
+          console.log('Vehicle resync result:', response);
+          
+          if (response && response.status === 'success') {
+            toast.success(`Successfully resynced ${response.count || 0} vehicles from persistent storage`);
+            setRefreshCount(prev => prev + 1); // Increment to trigger a fresh check
+            setError(null); // Clear any errors
+          } else {
+            toast.error('Failed to resync vehicles from persistent storage');
+          }
+        } catch (directError) {
+          console.error('Direct API call failed:', directError);
+          toast.error('Failed to resync vehicles from persistent storage');
+        }
       }
     } catch (err) {
       console.error('Error resyncing vehicles:', err);
@@ -136,6 +150,7 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
       // Clear the vehicle data cache before fixing the database
       clearVehicleDataCache();
       
+      // Use the enhanced fixDatabaseTables function
       const fixed = await fixDatabaseTables();
       
       if (fixed) {
@@ -143,10 +158,13 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
         setError(null);
         // Reset refresh count to trigger a new check
         setRefreshCount(0);
+        
+        // Force a reload of vehicles after fixing the database
+        await resyncVehicles();
       } else {
         toast.error('Failed to fix database');
         
-        // Try alternate method
+        // Try alternate method - direct API call
         try {
           console.log('Trying alternate fix method...');
           const result = await directVehicleOperation('api/admin/fix-database.php', 'GET', {
@@ -162,6 +180,9 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
             toast.success('Database fixed successfully with alternate method');
             setError(null);
             setRefreshCount(0);
+            
+            // Force a reload of vehicles after fixing the database
+            await resyncVehicles();
           } else {
             // Try one last method - reload from persistent storage
             await resyncVehicles();

@@ -1,174 +1,106 @@
 
+// Configuration and helpers for API requests
+import { toast } from 'sonner';
 import { apiBaseUrl } from '@/config/api';
-import { formatDataForMultipart } from '@/config/requestConfig';
 
 /**
- * Check if we're running in the Lovable preview environment
+ * Function to determine if running in preview mode
  */
 export const isPreviewMode = (): boolean => {
-  return typeof window !== 'undefined' && 
-    (window.location.hostname.includes('lovableproject.com') || 
-     window.location.hostname.includes('lovable.dev') ||
-     window.location.hostname.includes('localhost'));
+  return (
+    typeof window !== 'undefined' &&
+    (window.location.hostname.includes('lovable.app') ||
+     window.location.hostname.includes('lovableproject.com') ||
+     window.location.hostname.includes('localhost'))
+  );
 };
 
-// Re-export formatDataForMultipart from config/requestConfig
-export { formatDataForMultipart };
-
 /**
- * Unified API operation function for direct vehicle operations
- * @param endpoint - API endpoint to call
- * @param method - HTTP method (GET, POST, PUT, DELETE)
- * @param options - Additional options including headers and data
- * @returns Promise with the response data
+ * Generic function to handle API operations for vehicles
  */
 export const directVehicleOperation = async (
   endpoint: string,
   method: string = 'GET',
-  options: any = {}
+  options: {
+    headers?: Record<string, string>;
+    data?: any;
+    mock?: any;
+    fallback?: any;
+  } = {}
 ): Promise<any> => {
+  // Use mock data in preview mode if provided
+  if (isPreviewMode() && options.mock) {
+    console.log(`[Preview Mode] Using mock data for ${endpoint}`);
+    
+    // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return options.mock;
+  }
+  
   try {
-    const url = endpoint.startsWith('http') ? endpoint : `${apiBaseUrl}/${endpoint.startsWith('/') ? endpoint.substring(1) : endpoint}`;
-    
-    // Extract headers and data from options
-    let headers: Record<string, string> = {};
-    let data: any = null;
-    
-    // Handle different ways headers and data might be provided
-    if (options) {
-      if (options.headers) {
-        headers = { ...options.headers };
-      }
-      
-      if (options.data) {
-        data = options.data;
-      }
-      
-      // Support for directly passed headers (for backward compatibility)
-      const knownHeaderKeys = [
-        'X-Admin-Mode', 'X-Debug', 'X-Force-Refresh',
-        'Content-Type', 'Authorization', 'Cache-Control',
-        'Pragma', 'Expires'
-      ];
-      
-      // Check for known header keys in the root options object
-      knownHeaderKeys.forEach(key => {
-        const lowercaseKey = key.toLowerCase();
-        if (options[key]) headers[key] = options[key];
-        if (options[lowercaseKey]) headers[lowercaseKey] = options[lowercaseKey];
-      });
-      
-      // If no data was explicitly provided, treat the rest of options as data
-      if (!data) {
-        // Filter out known header keys from options to create data
-        data = { ...options };
-        knownHeaderKeys.forEach(key => {
-          delete data[key];
-          delete data[key.toLowerCase()];
-        });
-        
-        // Also remove headers and data properties if they exist
-        delete data.headers;
-        delete data.data;
-        
-        // Only set data if there are properties left
-        if (Object.keys(data).length === 0) {
-          data = null;
-        }
-      }
-    }
-    
-    // Default headers for all requests
-    const defaultHeaders = {
-      'Content-Type': 'application/json',
-      'X-Requested-With': 'XMLHttpRequest',
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'X-Force-Refresh': 'true'
-    };
-    
-    // Merge default headers with provided headers
-    const finalHeaders = { ...defaultHeaders, ...headers };
-    
     // Prepare request options
     const requestOptions: RequestInit = {
       method,
-      headers: finalHeaders,
-      cache: 'no-store' as RequestCache
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        ...(options.headers || {})
+      }
     };
     
-    // Add body for non-GET requests if data is provided
-    if (method !== 'GET' && data) {
-      if (finalHeaders['Content-Type'] === 'application/x-www-form-urlencoded') {
-        // Handle form URL encoded data
-        requestOptions.body = new URLSearchParams(data).toString();
-      } else if (finalHeaders['Content-Type']?.includes('multipart/form-data')) {
-        // Handle multipart form data
-        delete finalHeaders['Content-Type']; // Let browser set this with boundary
-        requestOptions.body = formatDataForMultipart(data);
-      } else {
-        // Default to JSON
-        requestOptions.body = JSON.stringify(data);
-      }
+    // Add body data if provided and not GET request
+    if (options.data && method !== 'GET') {
+      requestOptions.body = JSON.stringify(options.data);
     }
     
-    // Handle GET requests with query parameters
-    let finalUrl = url;
-    if (method === 'GET' && data && Object.keys(data).length > 0) {
-      const queryParams = new URLSearchParams();
-      Object.entries(data).forEach(([key, value]) => {
+    // For GET requests with data, add as query params
+    let url = `${apiBaseUrl}/${endpoint}`;
+    if (options.data && method === 'GET') {
+      const params = new URLSearchParams();
+      Object.entries(options.data).forEach(([key, value]) => {
         if (value !== undefined && value !== null) {
-          queryParams.append(key, String(value));
+          params.append(key, String(value));
         }
       });
+      url += `?${params.toString()}`;
+    }
+    
+    // Make the request
+    console.log(`Calling API: ${url}`);
+    const response = await fetch(url, requestOptions);
+    
+    // If not OK response, try to parse error message
+    if (!response.ok) {
+      let errorDetails = {};
+      try {
+        errorDetails = await response.json();
+      } catch (e) {
+        // Ignore parse errors
+      }
       
-      // Append query parameters to URL if not empty
-      const queryString = queryParams.toString();
-      if (queryString) {
-        finalUrl += (finalUrl.includes('?') ? '&' : '?') + queryString;
+      throw new Error(`API request failed: ${response.status} ${response.statusText}. ${JSON.stringify(errorDetails)}`);
+    }
+    
+    // Parse and return JSON response
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      try {
+        return await response.json();
+      } catch (e) {
+        console.error('Error parsing JSON response:', e);
+        return null;
       }
     }
     
-    // Execute the fetch request
-    const response = await fetch(finalUrl, requestOptions);
-    
-    // For preview mode, return mock response to avoid server errors
-    if (!response.ok && isPreviewMode()) {
-      console.warn(`API error ${response.status} in preview mode, returning mock data`);
-      return { 
-        status: 'success', 
-        message: 'Preview mode: mock response',
-        timestamp: new Date().toISOString()
-      };
-    }
-    
-    // Handle JSON response
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      const jsonData = await response.json();
-      return jsonData;
-    }
-    
-    // Handle text response
-    const textData = await response.text();
-    
-    // Try to parse as JSON if possible
-    try {
-      return JSON.parse(textData);
-    } catch (e) {
-      // If not JSON, return text as is
-      return { text: textData, status: response.ok ? 'success' : 'error' };
-    }
+    // Return text for non-JSON responses
+    return await response.text();
   } catch (error) {
-    console.error(`API Error (${method} ${endpoint}):`, error);
+    console.error(`API error for ${endpoint}:`, error);
     
-    // If in preview mode, return mock data
-    if (isPreviewMode()) {
-      console.warn('API error in preview mode, returning mock data');
-      return { 
-        status: 'success', 
-        message: 'Preview mode: mock response for failed request',
-        timestamp: new Date().toISOString()
-      };
+    // Return fallback data if provided and in preview mode
+    if (isPreviewMode() && options.fallback) {
+      console.warn(`Using fallback data for ${endpoint}`);
+      return options.fallback;
     }
     
     throw error;
@@ -176,128 +108,123 @@ export const directVehicleOperation = async (
 };
 
 /**
- * Fix database tables - useful for recovery after errors
+ * Format data for multipart form submission
+ */
+export const formatDataForMultipart = (data: any): FormData => {
+  const formData = new FormData();
+  
+  // Special handling for JSON data
+  if (data) {
+    Object.entries(data).forEach(([key, value]) => {
+      if (value === undefined || value === null) return;
+      
+      if (Array.isArray(value)) {
+        // Serialize arrays as JSON
+        formData.append(key, JSON.stringify(value));
+      } else if (typeof value === 'object' && !(value instanceof File)) {
+        // Serialize objects as JSON
+        formData.append(key, JSON.stringify(value));
+      } else {
+        // Add primitive values or files directly
+        formData.append(key, value as any);
+      }
+    });
+  }
+  
+  return formData;
+};
+
+/**
+ * Utility to fix database tables
  */
 export const fixDatabaseTables = async (): Promise<boolean> => {
   try {
-    // First, attempt to clear any cached data to ensure fresh state
-    if (typeof window !== 'undefined') {
-      // Clear all localStorage cache related to vehicles
-      try {
-        const keysToRemove = [];
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (key && (key.startsWith('cachedVehicles') || 
-                      key.startsWith('localVehicles') || 
-                      key.startsWith('cabOptions_') ||
-                      key.startsWith('vehicle_') ||
-                      key.includes('vehicles'))) {
-            keysToRemove.push(key);
-          }
-        }
-        
-        keysToRemove.forEach(key => localStorage.removeItem(key));
-      } catch (e) {
-        console.error('Error clearing localStorage cache:', e);
+    console.log('Attempting to fix database tables...');
+    
+    // Clear any cached vehicle data first
+    const vehicleDataService = await import('@/services/vehicleDataService');
+    vehicleDataService.clearVehicleDataCache();
+    
+    // Call the fix-database endpoint
+    const response = await directVehicleOperation('api/admin/fix-database.php', 'GET', {
+      headers: {
+        'X-Admin-Mode': 'true',
+        'X-Force-Refresh': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
       }
+    });
+    
+    console.log('Fix database response:', response);
+    
+    if (response && response.status === 'success') {
+      console.log('Database tables fixed successfully');
+      return true;
     }
     
-    // Try multiple database fix endpoints for redundancy
-    const fixEndpoints = [
-      'api/admin/fix-database.php',
-      'api/admin/fix-vehicle-tables.php',
-      'api/admin/sync-airport-fares.php',
-      'api/admin/repair-database.php'
-    ];
-    
-    // Try each endpoint in sequence
-    for (const endpoint of fixEndpoints) {
-      try {
-        console.log(`Trying to fix database using endpoint: ${endpoint}`);
-        const response = await directVehicleOperation(endpoint, 'GET', {
-          headers: {
-            'X-Admin-Mode': 'true',
-            'X-Debug': 'true',
-            'X-Force-Refresh': 'true',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
-          },
-          data: {
-            _t: Date.now(), // Add timestamp to prevent caching
-            force: true
-          }
-        });
-        
-        if (response && response.status === 'success') {
-          console.log(`Database fixed successfully using ${endpoint}`);
-          
-          // Attempt to reload the persistent vehicle data
-          try {
-            const reloadResponse = await directVehicleOperation('api/admin/reload-vehicles.php', 'GET', {
-              headers: {
-                'X-Admin-Mode': 'true',
-                'X-Force-Refresh': 'true'
-              },
-              data: {
-                _t: Date.now()
-              }
-            });
-            
-            if (reloadResponse && reloadResponse.status === 'success') {
-              console.log('Successfully reloaded vehicle data after fix');
-            }
-          } catch (reloadErr) {
-            console.error('Error reloading vehicles after database fix:', reloadErr);
-          }
-          
-          return true;
-        }
-      } catch (endpointError) {
-        console.error(`Error with fix endpoint ${endpoint}:`, endpointError);
-        // Continue to the next endpoint
+    // Try alternative fix method
+    const altResponse = await fetch(`${apiBaseUrl}/api/admin/fix-vehicle-tables.php?_t=${Date.now()}`, {
+      method: 'GET',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-Force-Refresh': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'X-Admin-Mode': 'true'
       }
-    }
+    });
     
-    // If direct attempts failed, try a direct fetch as last resort
-    try {
-      console.log('Trying direct fetch as last resort for database fix...');
-      const response = await fetch(`${apiBaseUrl}/api/admin/fix-database.php?_t=${Date.now()}`, {
+    const altResult = await altResponse.json();
+    return altResult && altResult.status === 'success';
+  } catch (error) {
+    console.error('Error fixing database tables:', error);
+    return false;
+  }
+};
+
+/**
+ * Check database connection
+ */
+export const checkDatabaseConnection = async (): Promise<boolean> => {
+  try {
+    const response = await directVehicleOperation('api/admin/check-connection.php', 'GET', {
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-Admin-Mode': 'true'
+      }
+    });
+    
+    return response && response.connection === true;
+  } catch (error) {
+    console.error('Error checking database connection:', error);
+    return false;
+  }
+};
+
+/**
+ * Force a refresh of the vehicle data cache
+ */
+export const forceRefreshVehicles = async (): Promise<boolean> => {
+  try {
+    // First clear existing cache
+    const vehicleDataService = await import('@/services/vehicleDataService');
+    vehicleDataService.clearVehicleDataCache();
+    
+    // Call the reload endpoint
+    const response = await directVehicleOperation(
+      `api/admin/reload-vehicles.php?_t=${Date.now()}`,
+      'GET',
+      {
         headers: {
           'X-Admin-Mode': 'true',
           'X-Force-Refresh': 'true',
           'Cache-Control': 'no-cache, no-store, must-revalidate'
         }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data && data.status === 'success') {
-          console.log('Database fixed successfully using direct fetch');
-          return true;
-        }
       }
-    } catch (directFetchError) {
-      console.error('Error with direct fetch:', directFetchError);
-    }
+    );
     
-    // Fall back to preview mode if available
-    if (isPreviewMode()) {
-      console.log('In preview mode, simulating successful database fix');
-      return true;
-    }
-    
-    // If all direct attempts failed, return false
-    return false;
+    return response && response.status === 'success';
   } catch (error) {
-    console.error('Error fixing database tables:', error);
-    
-    // Fall back to preview mode if available
-    if (isPreviewMode()) {
-      console.log('In preview mode, simulating successful database fix despite error');
-      return true;
-    }
-    
+    console.error('Error refreshing vehicles:', error);
     return false;
   }
 };
