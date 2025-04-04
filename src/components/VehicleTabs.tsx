@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -68,6 +67,63 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
       setIsResyncing(false);
     }
   }, [isResyncing]);
+
+  // Function to fix database tables
+  const tryFixDatabase = async () => {
+    if (isFixing) return;
+    
+    setIsFixing(true);
+    toast.info('Attempting to fix database tables...');
+    
+    try {
+      // Clear the vehicle data cache before fixing
+      clearVehicleDataCache();
+      
+      const fixed = await fixDatabaseTables();
+      
+      if (fixed) {
+        toast.success('Database tables fixed successfully. Try again.');
+        // Try loading data again
+        try {
+          const vehicleData = await directVehicleOperation(
+            `api/admin/vehicles-data.php?id=${vehicleId}&_t=${Date.now()}`,
+            'GET',
+            {
+              headers: {
+                'X-Admin-Mode': 'true',
+                'X-Force-Refresh': 'true',
+                'Cache-Control': 'no-cache, no-store, must-revalidate'
+              }
+            }
+          );
+          console.log('Vehicle check result after database fix:', vehicleData);
+          setLoaded(true);
+          setError(null);
+        } catch (loadErr) {
+          console.error('Error loading vehicle data after fix:', loadErr);
+        }
+      } else {
+        // Even if fix fails, still show the management screen in preview mode
+        if (isPreviewMode()) {
+          console.log('In preview mode, proceeding despite database fix failure');
+          setLoaded(true);
+          setError(null);
+        } else {
+          toast.error('Could not fix database tables.');
+        }
+      }
+    } catch (fixErr) {
+      console.error('Error fixing database tables:', fixErr);
+      
+      // Even if fix fails, still show the management screen in preview mode
+      if (isPreviewMode()) {
+        setLoaded(true);
+        setError(null);
+      }
+    } finally {
+      setIsFixing(false);
+    }
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -152,62 +208,6 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
           setRefreshAttempts(prev => prev + 1);
           tryFixDatabase();
         }
-      }
-    };
-
-    const tryFixDatabase = async () => {
-      try {
-        if (isFixing) return;
-        
-        setIsFixing(true);
-        toast.info('Attempting to fix database tables...');
-        
-        // Clear the vehicle data cache before fixing
-        clearVehicleDataCache();
-        
-        const fixed = await fixDatabaseTables();
-        
-        if (fixed) {
-          toast.success('Database tables fixed successfully. Try again.');
-          // Try loading data again
-          try {
-            const vehicleData = await directVehicleOperation(
-              `api/admin/vehicles-data.php?id=${vehicleId}&_t=${Date.now()}`,
-              'GET',
-              {
-                headers: {
-                  'X-Admin-Mode': 'true',
-                  'X-Force-Refresh': 'true',
-                  'Cache-Control': 'no-cache, no-store, must-revalidate'
-                }
-              }
-            );
-            console.log('Vehicle check result after database fix:', vehicleData);
-            setLoaded(true);
-            setError(null);
-          } catch (loadErr) {
-            console.error('Error loading vehicle data after fix:', loadErr);
-          }
-        } else {
-          // Even if fix fails, still show the management screen in preview mode
-          if (isPreviewMode()) {
-            console.log('In preview mode, proceeding despite database fix failure');
-            setLoaded(true);
-            setError(null);
-          } else {
-            toast.error('Could not fix database tables.');
-          }
-        }
-      } catch (fixErr) {
-        console.error('Error fixing database tables:', fixErr);
-        
-        // Even if fix fails, still show the management screen in preview mode
-        if (isPreviewMode()) {
-          setLoaded(true);
-          setError(null);
-        }
-      } finally {
-        setIsFixing(false);
       }
     };
 
