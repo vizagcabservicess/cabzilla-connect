@@ -69,7 +69,7 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
           
           console.log('Vehicle resync result:', response);
           
-          if (response && response.status === 'success') {
+          if (response && response.status === 'success' && response.vehicles && response.vehicles.length > 0) {
             toast.success(`Successfully resynced ${response.count || 0} vehicles from ${response.source || 'database'}`);
             setRefreshAttempts(0); // Reset attempts counter
             setError(null); // Clear any errors

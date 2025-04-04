@@ -5,7 +5,6 @@ import { FareManagement } from './FareManagement';
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, Info, RefreshCw, BellOff, Database, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { 
   directVehicleOperation, 
   fixDatabaseTables, 
@@ -16,7 +15,8 @@ import {
   disableFallbackMode,
   checkDatabaseConnection,
   autoFixDatabaseIssues,
-  forceEnableFallbackMode
+  forceEnableFallbackMode,
+  DbConnectionResult
 } from '@/utils/apiHelper';
 import { toast } from 'sonner';
 import { clearVehicleDataCache } from '@/services/vehicleDataService';
@@ -39,7 +39,7 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
   const [isPreview, setIsPreview] = useState(false);
   const [isFallbackMode, setIsFallbackMode] = useState(false);
   const [isDbCheckModalOpen, setIsDbCheckModalOpen] = useState(false);
-  const [dbConnectionStatus, setDbConnectionStatus] = useState<{working: boolean, message: string} | null>(null);
+  const [dbConnectionStatus, setDbConnectionStatus] = useState<DbConnectionResult | null>(null);
   const [isCheckingDb, setIsCheckingDb] = useState(false);
   const [systemStatus, setSystemStatus] = useState<{
     database: 'unknown' | 'connected' | 'failed',
@@ -513,7 +513,7 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
     if (vehicleId) {
       checkVehicle();
     }
-  }, [vehicleId, refreshCount, resyncVehicles, isPreviewMode, isFallbackNeeded]);
+  }, [vehicleId, refreshCount, resyncVehicles]);
   
   // Render system status badges
   const renderSystemStatus = () => {

@@ -77,7 +77,7 @@ export function StatusPage() {
     setIsCountingVehicles(true);
     try {
       const data = await getMockVehicleData();
-      if (data && data.vehicles) {
+      if (data && Array.isArray(data.vehicles)) {
         setVehicleCount(data.vehicles.length);
       }
     } catch (error) {
