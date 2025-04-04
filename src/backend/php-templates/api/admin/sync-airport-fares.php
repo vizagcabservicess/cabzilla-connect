@@ -98,7 +98,7 @@ try {
                 logMessage("Database connection established");
                 
                 // Query all tables that might contain vehicle IDs
-                $tables = ['vehicles', 'vehicle_types', 'airport_transfer_fares', 'local_package_fares', 'outstation_fares'];
+                $tables = ['vehicles', 'vehicle_types', 'airport_transfer_fares', 'local_package_fares', 'outstation_fares', 'vehicle_pricing'];
                 
                 foreach ($tables as $table) {
                     try {
@@ -120,6 +120,27 @@ try {
                     } catch (Exception $e) {
                         logMessage("Error querying table $table: " . $e->getMessage());
                     }
+                }
+                
+                // Also try to get from vehicles table with id column
+                try {
+                    $checkTableQuery = "SHOW TABLES LIKE 'vehicles'";
+                    $checkResult = $conn->query($checkTableQuery);
+                    
+                    if ($checkResult && $checkResult->num_rows > 0) {
+                        $vehicleQuery = "SELECT DISTINCT id FROM vehicles";
+                        $vehicleResult = $conn->query($vehicleQuery);
+                        
+                        if ($vehicleResult && $vehicleResult->num_rows > 0) {
+                            while ($row = $vehicleResult->fetch_assoc()) {
+                                if (!empty($row['id']) && !in_array($row['id'], $allVehicleIds)) {
+                                    $allVehicleIds[] = $row['id'];
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception $e) {
+                    logMessage("Error querying vehicles table with id column: " . $e->getMessage());
                 }
                 
                 logMessage("Found " . count($allVehicleIds) . " unique vehicle IDs from database tables");
@@ -159,8 +180,21 @@ if (empty($vehicleIds)) {
     logMessage("Using " . count($vehicleIds) . " unique vehicles from all sources");
 }
 
-// In a real environment, we would now sync the airport fares table with these vehicle IDs
-// For this mock implementation, we'll just update the persistent data
+// If these specific vehicle IDs aren't in our list, add them explicitly
+$requiredVehicleIds = [
+    'innova_hycross',
+    'dzire_cng',
+    'tempo_traveller',
+    'toyota'
+];
+
+foreach ($requiredVehicleIds as $requiredId) {
+    if (!in_array($requiredId, $vehicleIds)) {
+        $vehicleIds[] = $requiredId;
+        logMessage("Added required vehicle ID not found in sources: " . $requiredId);
+    }
+}
+
 logMessage('Starting airport fares synchronization for vehicles: ' . implode(', ', $vehicleIds));
 
 // If database is available, try to get actual fare values
@@ -214,6 +248,14 @@ $defaultFares = [
         'basePrice' => 4000, 'pricePerKm' => 17, 'pickupPrice' => 1200, 'dropPrice' => 1200,
         'tier1Price' => 1000, 'tier2Price' => 1200, 'tier3Price' => 1400, 'tier4Price' => 1600, 'extraKmCharge' => 17
     ],
+    'innova_hycross' => [
+        'basePrice' => 4500, 'pricePerKm' => 18, 'pickupPrice' => 1200, 'dropPrice' => 1200,
+        'tier1Price' => 1000, 'tier2Price' => 1200, 'tier3Price' => 1400, 'tier4Price' => 1600, 'extraKmCharge' => 18
+    ],
+    'dzire_cng' => [
+        'basePrice' => 3200, 'pricePerKm' => 13, 'pickupPrice' => 800, 'dropPrice' => 800,
+        'tier1Price' => 600, 'tier2Price' => 800, 'tier3Price' => 1000, 'tier4Price' => 1200, 'extraKmCharge' => 13
+    ],
     'luxury' => [
         'basePrice' => 7000, 'pricePerKm' => 22, 'pickupPrice' => 2500, 'dropPrice' => 2500,
         'tier1Price' => 2000, 'tier2Price' => 2200, 'tier3Price' => 2500, 'tier4Price' => 3000, 'extraKmCharge' => 22
@@ -221,6 +263,14 @@ $defaultFares = [
     'tempo' => [
         'basePrice' => 6000, 'pricePerKm' => 19, 'pickupPrice' => 2000, 'dropPrice' => 2000,
         'tier1Price' => 1600, 'tier2Price' => 1800, 'tier3Price' => 2000, 'tier4Price' => 2500, 'extraKmCharge' => 19
+    ],
+    'tempo_traveller' => [
+        'basePrice' => 6000, 'pricePerKm' => 19, 'pickupPrice' => 2000, 'dropPrice' => 2000,
+        'tier1Price' => 1600, 'tier2Price' => 1800, 'tier3Price' => 2000, 'tier4Price' => 2500, 'extraKmCharge' => 19
+    ],
+    'toyota' => [
+        'basePrice' => 4500, 'pricePerKm' => 18, 'pickupPrice' => 1200, 'dropPrice' => 1200,
+        'tier1Price' => 1000, 'tier2Price' => 1200, 'tier3Price' => 1400, 'tier4Price' => 1600, 'extraKmCharge' => 18
     ],
     'default' => [
         'basePrice' => 3500, 'pricePerKm' => 15, 'pickupPrice' => 1000, 'dropPrice' => 1000,
@@ -236,29 +286,28 @@ foreach ($vehicleIds as $vehicleId) {
     // Check if vehicle already has airport fares in persistent data
     foreach ($persistentData as &$vehicle) {
         if (isset($vehicle['id']) && $vehicle['id'] === $vehicleId) {
-            if (!isset($vehicle['airportFares']) || !is_array($vehicle['airportFares'])) {
-                // If no airport fares for this vehicle, add default ones
-                // Get fares from database if available, otherwise use default values
-                if (isset($fareData[$vehicleId])) {
-                    $vehicle['airportFares'] = $fareData[$vehicleId];
-                    logMessage("Added database fares for vehicle: $vehicleId");
-                } else {
-                    // Choose appropriate default fares based on vehicle type
-                    $defaultFare = $defaultFares[$vehicleId] ?? $defaultFares['default'];
-                    $vehicle['airportFares'] = array_merge(['vehicleId' => $vehicleId, 'vehicle_id' => $vehicleId], $defaultFare);
-                    logMessage("Added default fares for vehicle: $vehicleId");
-                }
-                $updatedVehicles++;
+            // Check if there are existing airport fares for this vehicle
+            $hasExistingFares = isset($vehicle['airportFares']) && is_array($vehicle['airportFares']);
+            
+            // Get the appropriate fare source
+            $fareSource = isset($fareData[$vehicleId]) ? $fareData[$vehicleId] : null;
+            
+            // If no data in database or it's incomplete, use default values
+            if (!$fareSource || array_sum(array_filter(array_values($fareSource), 'is_numeric')) == 0) {
+                $defaultFare = $defaultFares[$vehicleId] ?? $defaultFares['default'];
+                $fareSource = array_merge(
+                    ['vehicleId' => $vehicleId, 'vehicle_id' => $vehicleId],
+                    $defaultFare
+                );
+                logMessage("Using default fares for vehicle: $vehicleId");
             } else {
-                // If vehicle has fares but they're from database, update them
-                if (isset($fareData[$vehicleId])) {
-                    $vehicle['airportFares'] = $fareData[$vehicleId];
-                    logMessage("Updated fares from database for vehicle: $vehicleId");
-                    $updatedVehicles++;
-                } else {
-                    logMessage("Vehicle $vehicleId already has airport fares");
-                }
+                logMessage("Using database fares for vehicle: $vehicleId");
             }
+            
+            // Update or set the airport fares
+            $vehicle['airportFares'] = $fareSource;
+            $updatedVehicles++;
+            
             $hasFares = true;
             break;
         }
@@ -266,11 +315,21 @@ foreach ($vehicleIds as $vehicleId) {
     
     // If vehicle not found in persistent data, add it
     if (!$hasFares) {
-        // Get fares from database if available, otherwise use default values
-        $vehicleFares = isset($fareData[$vehicleId]) ? 
-            $fareData[$vehicleId] : 
-            array_merge(['vehicleId' => $vehicleId, 'vehicle_id' => $vehicleId], $defaultFares[$vehicleId] ?? $defaultFares['default']);
-            
+        // Determine the appropriate fare source
+        $fareSource = isset($fareData[$vehicleId]) ? $fareData[$vehicleId] : null;
+        
+        // If no data in database or it's incomplete, use default values
+        if (!$fareSource || array_sum(array_filter(array_values($fareSource), 'is_numeric')) == 0) {
+            $defaultFare = $defaultFares[$vehicleId] ?? $defaultFares['default'];
+            $fareSource = array_merge(
+                ['vehicleId' => $vehicleId, 'vehicle_id' => $vehicleId],
+                $defaultFare
+            );
+            logMessage("Using default fares for new vehicle: $vehicleId");
+        } else {
+            logMessage("Using database fares for new vehicle: $vehicleId");
+        }
+        
         $vehicleName = ucwords(str_replace('_', ' ', $vehicleId));
         
         $newVehicle = [
@@ -278,7 +337,7 @@ foreach ($vehicleIds as $vehicleId) {
             'vehicleId' => $vehicleId,
             'vehicle_id' => $vehicleId,
             'name' => $vehicleName,
-            'airportFares' => $vehicleFares
+            'airportFares' => $fareSource
         ];
         $persistentData[] = $newVehicle;
         $updatedVehicles++;
@@ -298,95 +357,14 @@ if ($dbAvailable && $conn) {
     $syncedDbRecords = 0;
     
     try {
+        // First, check if the table exists
         $checkTableQuery = "SHOW TABLES LIKE 'airport_transfer_fares'";
         $checkResult = $conn->query($checkTableQuery);
+        $tableExists = $checkResult && $checkResult->num_rows > 0;
         
-        if ($checkResult && $checkResult->num_rows > 0) {
-            foreach ($vehicleIds as $vehicleId) {
-                $fares = null;
-                
-                // Find fares in persistent data
-                foreach ($persistentData as $vehicle) {
-                    if (isset($vehicle['id']) && $vehicle['id'] === $vehicleId && isset($vehicle['airportFares'])) {
-                        $fares = $vehicle['airportFares'];
-                        break;
-                    }
-                }
-                
-                if (!$fares) continue;
-                
-                // Check if vehicle exists in the table
-                $checkVehicleQuery = "SELECT vehicle_id FROM airport_transfer_fares WHERE vehicle_id = ?";
-                $checkStmt = $conn->prepare($checkVehicleQuery);
-                $checkStmt->bind_param("s", $vehicleId);
-                $checkStmt->execute();
-                $checkResult = $checkStmt->get_result();
-                $exists = $checkResult->num_rows > 0;
-                $checkStmt->close();
-                
-                if ($exists) {
-                    // Update existing record
-                    $updateQuery = "UPDATE airport_transfer_fares SET 
-                        base_price = ?, 
-                        price_per_km = ?, 
-                        pickup_price = ?, 
-                        drop_price = ?, 
-                        tier1_price = ?, 
-                        tier2_price = ?, 
-                        tier3_price = ?, 
-                        tier4_price = ?, 
-                        extra_km_charge = ?,
-                        updated_at = NOW()
-                        WHERE vehicle_id = ?";
-                        
-                    $stmt = $conn->prepare($updateQuery);
-                    $stmt->bind_param(
-                        "ddddddddds",
-                        $fares['basePrice'],
-                        $fares['pricePerKm'],
-                        $fares['pickupPrice'],
-                        $fares['dropPrice'],
-                        $fares['tier1Price'], 
-                        $fares['tier2Price'],
-                        $fares['tier3Price'],
-                        $fares['tier4Price'],
-                        $fares['extraKmCharge'],
-                        $vehicleId
-                    );
-                    $stmt->execute();
-                    $stmt->close();
-                } else {
-                    // Insert new record
-                    $insertQuery = "INSERT INTO airport_transfer_fares (
-                        vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
-                        tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge, 
-                        created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
-                    
-                    $stmt = $conn->prepare($insertQuery);
-                    $stmt->bind_param(
-                        "sddddddddd",
-                        $vehicleId,
-                        $fares['basePrice'],
-                        $fares['pricePerKm'],
-                        $fares['pickupPrice'],
-                        $fares['dropPrice'],
-                        $fares['tier1Price'], 
-                        $fares['tier2Price'],
-                        $fares['tier3Price'],
-                        $fares['tier4Price'],
-                        $fares['extraKmCharge']
-                    );
-                    $stmt->execute();
-                    $stmt->close();
-                }
-                
-                $syncedDbRecords++;
-            }
-            
-            logMessage("Synced $syncedDbRecords records to airport_transfer_fares table");
-        } else {
-            // Create the table if it doesn't exist
+        // If table doesn't exist, create it
+        if (!$tableExists) {
+            // Create the table
             $createTableQuery = "CREATE TABLE IF NOT EXISTS airport_transfer_fares (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 vehicle_id VARCHAR(50) NOT NULL,
@@ -406,13 +384,16 @@ if ($dbAvailable && $conn) {
             
             $conn->query($createTableQuery);
             logMessage("Created airport_transfer_fares table");
-            
-            // Now insert the records
-            $insertedRecords = 0;
+            $tableExists = true;
+        }
+        
+        if ($tableExists) {
+            // Process each vehicle ID
             foreach ($vehicleIds as $vehicleId) {
+                // Find the appropriate fares for this vehicle
                 $fares = null;
                 
-                // Find fares in persistent data
+                // First try to find fares in persistent data
                 foreach ($persistentData as $vehicle) {
                     if (isset($vehicle['id']) && $vehicle['id'] === $vehicleId && isset($vehicle['airportFares'])) {
                         $fares = $vehicle['airportFares'];
@@ -420,35 +401,104 @@ if ($dbAvailable && $conn) {
                     }
                 }
                 
-                if (!$fares) continue;
+                // If not found in persistent data, use default fares
+                if (!$fares) {
+                    $defaultFare = $defaultFares[$vehicleId] ?? $defaultFares['default'];
+                    $fares = array_merge(
+                        ['vehicleId' => $vehicleId, 'vehicle_id' => $vehicleId],
+                        $defaultFare
+                    );
+                    logMessage("Using default fares for vehicle in database: $vehicleId");
+                }
                 
-                // Insert new record
-                $insertQuery = "INSERT INTO airport_transfer_fares (
-                    vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
-                    tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge, 
-                    created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
-                
-                $stmt = $conn->prepare($insertQuery);
-                $stmt->bind_param(
-                    "sddddddddd",
-                    $vehicleId,
-                    $fares['basePrice'],
-                    $fares['pricePerKm'],
-                    $fares['pickupPrice'],
-                    $fares['dropPrice'],
-                    $fares['tier1Price'], 
-                    $fares['tier2Price'],
-                    $fares['tier3Price'],
-                    $fares['tier4Price'],
-                    $fares['extraKmCharge']
-                );
-                $stmt->execute();
-                $stmt->close();
-                $insertedRecords++;
+                // If we have fares now, proceed with database operations
+                if ($fares) {
+                    // Check if the vehicle exists in the table
+                    $checkVehicleQuery = "SELECT vehicle_id FROM airport_transfer_fares WHERE vehicle_id = ?";
+                    $checkStmt = $conn->prepare($checkVehicleQuery);
+                    $checkStmt->bind_param("s", $vehicleId);
+                    $checkStmt->execute();
+                    $checkResult = $checkStmt->get_result();
+                    $exists = $checkResult->num_rows > 0;
+                    $checkStmt->close();
+                    
+                    // Extract fare values, ensuring we have sensible defaults
+                    $basePrice = isset($fares['basePrice']) && $fares['basePrice'] > 0 ? $fares['basePrice'] : ($defaultFares[$vehicleId]['basePrice'] ?? $defaultFares['default']['basePrice']);
+                    $pricePerKm = isset($fares['pricePerKm']) && $fares['pricePerKm'] > 0 ? $fares['pricePerKm'] : ($defaultFares[$vehicleId]['pricePerKm'] ?? $defaultFares['default']['pricePerKm']);
+                    $pickupPrice = isset($fares['pickupPrice']) && $fares['pickupPrice'] > 0 ? $fares['pickupPrice'] : ($defaultFares[$vehicleId]['pickupPrice'] ?? $defaultFares['default']['pickupPrice']);
+                    $dropPrice = isset($fares['dropPrice']) && $fares['dropPrice'] > 0 ? $fares['dropPrice'] : ($defaultFares[$vehicleId]['dropPrice'] ?? $defaultFares['default']['dropPrice']);
+                    $tier1Price = isset($fares['tier1Price']) && $fares['tier1Price'] > 0 ? $fares['tier1Price'] : ($defaultFares[$vehicleId]['tier1Price'] ?? $defaultFares['default']['tier1Price']);
+                    $tier2Price = isset($fares['tier2Price']) && $fares['tier2Price'] > 0 ? $fares['tier2Price'] : ($defaultFares[$vehicleId]['tier2Price'] ?? $defaultFares['default']['tier2Price']);
+                    $tier3Price = isset($fares['tier3Price']) && $fares['tier3Price'] > 0 ? $fares['tier3Price'] : ($defaultFares[$vehicleId]['tier3Price'] ?? $defaultFares['default']['tier3Price']);
+                    $tier4Price = isset($fares['tier4Price']) && $fares['tier4Price'] > 0 ? $fares['tier4Price'] : ($defaultFares[$vehicleId]['tier4Price'] ?? $defaultFares['default']['tier4Price']);
+                    $extraKmCharge = isset($fares['extraKmCharge']) && $fares['extraKmCharge'] > 0 ? $fares['extraKmCharge'] : ($defaultFares[$vehicleId]['extraKmCharge'] ?? $defaultFares['default']['extraKmCharge']);
+                    
+                    if ($exists) {
+                        // Update existing record
+                        $updateQuery = "UPDATE airport_transfer_fares SET 
+                            base_price = ?, 
+                            price_per_km = ?, 
+                            pickup_price = ?, 
+                            drop_price = ?, 
+                            tier1_price = ?, 
+                            tier2_price = ?, 
+                            tier3_price = ?, 
+                            tier4_price = ?, 
+                            extra_km_charge = ?,
+                            updated_at = NOW()
+                            WHERE vehicle_id = ?";
+                            
+                        $stmt = $conn->prepare($updateQuery);
+                        $stmt->bind_param(
+                            "ddddddddds",
+                            $basePrice,
+                            $pricePerKm,
+                            $pickupPrice,
+                            $dropPrice,
+                            $tier1Price, 
+                            $tier2Price,
+                            $tier3Price,
+                            $tier4Price,
+                            $extraKmCharge,
+                            $vehicleId
+                        );
+                        $stmt->execute();
+                        $stmt->close();
+                        
+                        logMessage("Updated fares in database for vehicle: $vehicleId");
+                    } else {
+                        // Insert new record
+                        $insertQuery = "INSERT INTO airport_transfer_fares (
+                            vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
+                            tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge, 
+                            created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
+                        
+                        $stmt = $conn->prepare($insertQuery);
+                        $stmt->bind_param(
+                            "sddddddddd",
+                            $vehicleId,
+                            $basePrice,
+                            $pricePerKm,
+                            $pickupPrice,
+                            $dropPrice,
+                            $tier1Price, 
+                            $tier2Price,
+                            $tier3Price,
+                            $tier4Price,
+                            $extraKmCharge
+                        );
+                        $stmt->execute();
+                        $stmt->close();
+                        
+                        logMessage("Inserted new fares in database for vehicle: $vehicleId");
+                    }
+                    
+                    $syncedDbRecords++;
+                }
             }
             
-            logMessage("Inserted $insertedRecords records into new airport_transfer_fares table");
+            logMessage("Synced $syncedDbRecords records to airport_transfer_fares table");
         }
     } catch (Exception $e) {
         logMessage("Database sync error: " . $e->getMessage());

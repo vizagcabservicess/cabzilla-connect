@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,7 +8,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { directVehicleOperation } from '@/utils/apiHelper';
 import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, RefreshCw, Save } from "lucide-react";
+import { AlertCircle, RefreshCw, Save, Sync } from "lucide-react";
 import { fetchLocalFares, fetchAirportFares, updateLocalFares, updateAirportFares } from '@/services/fareManagementService';
 
 interface FareManagementProps {
@@ -512,8 +513,8 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
                 onClick={syncFares}
                 disabled={isSyncingFares || !vehicleId || (Date.now() - lastRefreshTimeRef.current < refreshCooldownMs)}
               >
-                <RefreshCw className={`h-4 w-4 mr-2 ${isSyncingFares ? 'animate-spin' : ''}`} />
-                Sync Fares
+                <Sync className={`h-4 w-4 mr-2 ${isSyncingFares ? 'animate-spin' : ''}`} />
+                Sync {fareType.charAt(0).toUpperCase() + fareType.slice(1)} Fares
               </Button>
             </div>
             

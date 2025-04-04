@@ -212,6 +212,11 @@ export async function updateAirportFares(fareData: Record<string, any>): Promise
             }
           });
           console.log('Sync result:', syncResult);
+          
+          // Notify the user about the sync
+          if (syncResult && syncResult.status === 'success') {
+            console.log('Airport fares synced successfully after update');
+          }
         } catch (syncError) {
           console.warn('Non-critical: Error during fare sync:', syncError);
         }

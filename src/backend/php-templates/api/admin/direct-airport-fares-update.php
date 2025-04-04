@@ -176,6 +176,47 @@ if ($pricePerKm <= 0) {
     file_put_contents($logFile, "[$timestamp] Using default price per km: {$fareData['pricePerKm']}\n", FILE_APPEND);
 }
 
+if ($pickupPrice <= 0) {
+    $fareData['pickupPrice'] = getDefaultPickupPrice($vehicleId);
+    $fareData['pickup'] = $fareData['pickupPrice'];
+    file_put_contents($logFile, "[$timestamp] Using default pickup price: {$fareData['pickupPrice']}\n", FILE_APPEND);
+}
+
+if ($dropPrice <= 0) {
+    $fareData['dropPrice'] = getDefaultDropPrice($vehicleId);
+    $fareData['drop'] = $fareData['dropPrice'];
+    file_put_contents($logFile, "[$timestamp] Using default drop price: {$fareData['dropPrice']}\n", FILE_APPEND);
+}
+
+if ($tier1Price <= 0) {
+    $fareData['tier1Price'] = getDefaultTier1Price($vehicleId);
+    $fareData['tier1'] = $fareData['tier1Price'];
+    file_put_contents($logFile, "[$timestamp] Using default tier1 price: {$fareData['tier1Price']}\n", FILE_APPEND);
+}
+
+if ($tier2Price <= 0) {
+    $fareData['tier2Price'] = getDefaultTier2Price($vehicleId);
+    $fareData['tier2'] = $fareData['tier2Price'];
+    file_put_contents($logFile, "[$timestamp] Using default tier2 price: {$fareData['tier2Price']}\n", FILE_APPEND);
+}
+
+if ($tier3Price <= 0) {
+    $fareData['tier3Price'] = getDefaultTier3Price($vehicleId);
+    $fareData['tier3'] = $fareData['tier3Price'];
+    file_put_contents($logFile, "[$timestamp] Using default tier3 price: {$fareData['tier3Price']}\n", FILE_APPEND);
+}
+
+if ($tier4Price <= 0) {
+    $fareData['tier4Price'] = getDefaultTier4Price($vehicleId);
+    $fareData['tier4'] = $fareData['tier4Price'];
+    file_put_contents($logFile, "[$timestamp] Using default tier4 price: {$fareData['tier4Price']}\n", FILE_APPEND);
+}
+
+if ($extraKmCharge <= 0) {
+    $fareData['extraKmCharge'] = getDefaultExtraKmCharge($vehicleId);
+    file_put_contents($logFile, "[$timestamp] Using default extra km charge: {$fareData['extraKmCharge']}\n", FILE_APPEND);
+}
+
 // Update database if available
 $databaseUpdated = false;
 try {
@@ -451,6 +492,42 @@ if (file_put_contents($persistentCacheFile, json_encode($persistentData, JSON_PR
     file_put_contents($logFile, "[$timestamp] ERROR: Failed to save persistent data\n", FILE_APPEND);
 }
 
+// Trigger the sync script to ensure all vehicles have fare entries
+if ($databaseUpdated) {
+    try {
+        // Make an internal request to the sync script
+        file_put_contents($logFile, "[$timestamp] Triggering airport fares sync after update\n", FILE_APPEND);
+        
+        // Using file_get_contents for a simple internal request
+        $syncUrl = 'http' . (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 's' : '') . '://' . 
+                   $_SERVER['HTTP_HOST'] . 
+                   dirname($_SERVER['REQUEST_URI']) . '/sync-airport-fares.php';
+        
+        // Add a cache buster
+        $syncUrl .= '?_t=' . time();
+        
+        file_put_contents($logFile, "[$timestamp] Sync URL: $syncUrl\n", FILE_APPEND);
+        
+        // This is just a trigger, we don't need to wait for the response
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 1, // Very short timeout
+                'header' => [
+                    'X-Admin-Mode: true',
+                    'X-Debug: true',
+                    'Cache-Control: no-cache'
+                ]
+            ]
+        ]);
+        
+        @file_get_contents($syncUrl, false, $context);
+        
+        file_put_contents($logFile, "[$timestamp] Sync request triggered\n", FILE_APPEND);
+    } catch (Exception $e) {
+        file_put_contents($logFile, "[$timestamp] Error triggering sync: " . $e->getMessage() . "\n", FILE_APPEND);
+    }
+}
+
 // Return success response
 echo json_encode([
     'status' => 'success',
@@ -536,4 +613,211 @@ function getDefaultPricePerKm($vehicleId) {
     }
     
     return $pricePerKm;
+}
+
+// Helper function to get default pickup price
+function getDefaultPickupPrice($vehicleId) {
+    $pickupPrice = 1000; // Default value
+    
+    switch (strtolower($vehicleId)) {
+        case 'sedan':
+            $pickupPrice = 800;
+            break;
+        case 'ertiga':
+            $pickupPrice = 1000;
+            break;
+        case 'innova_crysta':
+        case 'innova_hycross':
+        case 'innova crysta':
+        case 'innova hycross':
+            $pickupPrice = 1200;
+            break;
+        case 'dzire_cng':
+        case 'dzire cng':
+        case 'swift_dzire':
+        case 'swift dzire':
+            $pickupPrice = 800;
+            break;
+        case 'luxury':
+            $pickupPrice = 2500;
+            break;
+        case 'tempo':
+        case 'tempo_traveller':
+        case 'tempo traveller':
+            $pickupPrice = 2000;
+            break;
+        case 'toyota':
+            $pickupPrice = 1200;
+            break;
+    }
+    
+    return $pickupPrice;
+}
+
+// Helper function to get default drop price
+function getDefaultDropPrice($vehicleId) {
+    // Use same values as pickup price
+    return getDefaultPickupPrice($vehicleId);
+}
+
+// Helper function to get default tier1 price
+function getDefaultTier1Price($vehicleId) {
+    $tier1Price = 800; // Default value
+    
+    switch (strtolower($vehicleId)) {
+        case 'sedan':
+            $tier1Price = 600;
+            break;
+        case 'ertiga':
+            $tier1Price = 800;
+            break;
+        case 'innova_crysta':
+        case 'innova_hycross':
+        case 'innova crysta':
+        case 'innova hycross':
+            $tier1Price = 1000;
+            break;
+        case 'dzire_cng':
+        case 'dzire cng':
+        case 'swift_dzire':
+        case 'swift dzire':
+            $tier1Price = 600;
+            break;
+        case 'luxury':
+            $tier1Price = 2000;
+            break;
+        case 'tempo':
+        case 'tempo_traveller':
+        case 'tempo traveller':
+            $tier1Price = 1600;
+            break;
+        case 'toyota':
+            $tier1Price = 1000;
+            break;
+    }
+    
+    return $tier1Price;
+}
+
+// Helper function to get default tier2 price
+function getDefaultTier2Price($vehicleId) {
+    $tier2Price = 1000; // Default value
+    
+    switch (strtolower($vehicleId)) {
+        case 'sedan':
+            $tier2Price = 800;
+            break;
+        case 'ertiga':
+            $tier2Price = 1000;
+            break;
+        case 'innova_crysta':
+        case 'innova_hycross':
+        case 'innova crysta':
+        case 'innova hycross':
+            $tier2Price = 1200;
+            break;
+        case 'dzire_cng':
+        case 'dzire cng':
+        case 'swift_dzire':
+        case 'swift dzire':
+            $tier2Price = 800;
+            break;
+        case 'luxury':
+            $tier2Price = 2200;
+            break;
+        case 'tempo':
+        case 'tempo_traveller':
+        case 'tempo traveller':
+            $tier2Price = 1800;
+            break;
+        case 'toyota':
+            $tier2Price = 1200;
+            break;
+    }
+    
+    return $tier2Price;
+}
+
+// Helper function to get default tier3 price
+function getDefaultTier3Price($vehicleId) {
+    $tier3Price = 1200; // Default value
+    
+    switch (strtolower($vehicleId)) {
+        case 'sedan':
+            $tier3Price = 1000;
+            break;
+        case 'ertiga':
+            $tier3Price = 1200;
+            break;
+        case 'innova_crysta':
+        case 'innova_hycross':
+        case 'innova crysta':
+        case 'innova hycross':
+            $tier3Price = 1400;
+            break;
+        case 'dzire_cng':
+        case 'dzire cng':
+        case 'swift_dzire':
+        case 'swift dzire':
+            $tier3Price = 1000;
+            break;
+        case 'luxury':
+            $tier3Price = 2500;
+            break;
+        case 'tempo':
+        case 'tempo_traveller':
+        case 'tempo traveller':
+            $tier3Price = 2000;
+            break;
+        case 'toyota':
+            $tier3Price = 1400;
+            break;
+    }
+    
+    return $tier3Price;
+}
+
+// Helper function to get default tier4 price
+function getDefaultTier4Price($vehicleId) {
+    $tier4Price = 1400; // Default value
+    
+    switch (strtolower($vehicleId)) {
+        case 'sedan':
+            $tier4Price = 1200;
+            break;
+        case 'ertiga':
+            $tier4Price = 1400;
+            break;
+        case 'innova_crysta':
+        case 'innova_hycross':
+        case 'innova crysta':
+        case 'innova hycross':
+            $tier4Price = 1600;
+            break;
+        case 'dzire_cng':
+        case 'dzire cng':
+        case 'swift_dzire':
+        case 'swift dzire':
+            $tier4Price = 1200;
+            break;
+        case 'luxury':
+            $tier4Price = 3000;
+            break;
+        case 'tempo':
+        case 'tempo_traveller':
+        case 'tempo traveller':
+            $tier4Price = 2500;
+            break;
+        case 'toyota':
+            $tier4Price = 1600;
+            break;
+    }
+    
+    return $tier4Price;
+}
+
+// Helper function to get default extra km charge
+function getDefaultExtraKmCharge($vehicleId) {
+    // Use same values as price per km
+    return getDefaultPricePerKm($vehicleId);
 }
