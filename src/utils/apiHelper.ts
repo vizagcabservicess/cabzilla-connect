@@ -1,3 +1,4 @@
+
 import { toast } from 'sonner';
 import { apiBaseUrl, forceRefreshHeaders, getApiUrl } from '@/config/api';
 
@@ -32,18 +33,33 @@ export const checkDatabaseConnection = async (): Promise<DatabaseConnectionRespo
       }
     });
     
-    if (!response.ok) {
-      console.error('Database connection check failed with status:', response.status);
+    // Check if the response is HTML instead of JSON
+    const contentType = response.headers.get('content-type') || '';
+    const text = await response.text();
+    
+    if (contentType.includes('text/html') || text.includes('<!DOCTYPE html>') || text.includes('<html')) {
+      console.error('Received HTML response instead of JSON:', text.substring(0, 200));
       return {
         status: 'error',
         connection: false,
-        message: `HTTP error: ${response.status}`,
+        message: 'Received HTML response instead of JSON. The API endpoint is not configured correctly.',
         timestamp: Date.now()
       };
     }
     
-    const data = await response.json();
-    return data;
+    try {
+      // Try to parse the response as JSON
+      const data = JSON.parse(text);
+      return data;
+    } catch (jsonError) {
+      console.error('Failed to parse JSON response:', jsonError);
+      return {
+        status: 'error',
+        connection: false,
+        message: `Failed to parse JSON response: ${text.substring(0, 100)}...`,
+        timestamp: Date.now()
+      };
+    }
   } catch (error) {
     console.error('Error checking database connection:', error);
     return {
@@ -85,15 +101,27 @@ export const fixDatabaseTables = async () => {
       }
     });
     
-    if (!response.ok) {
-      console.error('Failed to fix database tables with status:', response.status);
+    // Check for HTML response
+    const contentType = response.headers.get('content-type') || '';
+    const text = await response.text();
+    
+    if (contentType.includes('text/html') || text.includes('<!DOCTYPE html>') || text.includes('<html')) {
+      console.error('Received HTML response instead of JSON:', text.substring(0, 200));
+      toast.error('Received HTML response instead of JSON. The API endpoint is not configured correctly.');
       return false;
     }
     
-    const data = await response.json();
-    return data.status === 'success';
+    try {
+      const data = JSON.parse(text);
+      return data.status === 'success';
+    } catch (jsonError) {
+      console.error('Failed to parse JSON response:', jsonError, 'Raw text:', text);
+      toast.error(`Failed to parse JSON response: ${text.substring(0, 100)}...`);
+      return false;
+    }
   } catch (error) {
     console.error('Error fixing database tables:', error);
+    toast.error('Error fixing database: ' + (error instanceof Error ? error.message : 'Unknown error'));
     return false;
   }
 };
@@ -156,9 +184,12 @@ export const forceRefreshVehicles = async () => {
       cache: 'no-store'
     });
     
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Failed to refresh vehicles:', errorText);
+    // Check for HTML response
+    const contentType = response.headers.get('content-type') || '';
+    const text = await response.text();
+    
+    if (contentType.includes('text/html') || text.includes('<!DOCTYPE html>') || text.includes('<html')) {
+      console.error('Received HTML response instead of JSON:', text.substring(0, 200));
       
       // Try alternative endpoint if primary fails
       console.log('Trying alternative refresh endpoint...');
@@ -176,19 +207,30 @@ export const forceRefreshVehicles = async () => {
         cache: 'no-store'
       });
       
-      if (!altResponse.ok) {
-        console.error('Alternative refresh also failed:', await altResponse.text());
+      const altText = await altResponse.text();
+      if (altText.includes('<!DOCTYPE html>') || altText.includes('<html')) {
+        console.error('Alternative refresh also failed - received HTML:', altText.substring(0, 200));
         return false;
       }
       
-      const altData = await altResponse.json();
-      console.log('Alternative refresh response:', altData);
-      return altData.status === 'success';
+      try {
+        const altData = JSON.parse(altText);
+        console.log('Alternative refresh response:', altData);
+        return altData.status === 'success';
+      } catch (jsonError) {
+        console.error('Failed to parse JSON from alternative endpoint:', jsonError);
+        return false;
+      }
     }
     
-    const data = await response.json();
-    console.log('Force refresh response:', data);
-    return data.status === 'success';
+    try {
+      const data = JSON.parse(text);
+      console.log('Force refresh response:', data);
+      return data.status === 'success';
+    } catch (jsonError) {
+      console.error('Failed to parse JSON response:', jsonError);
+      return false;
+    }
   } catch (error) {
     console.error('Error forcing refresh of vehicles:', error);
     return false;
@@ -280,9 +322,29 @@ export const directVehicleOperation = async (
       }
       
       if (headers['Content-Type'] === 'application/json') {
-        // Stringify the data properly
-        requestOptions.body = JSON.stringify(options.data);
-        console.log('JSON request body:', requestOptions.body);
+        // Stringify the data properly - handle circular references
+        try {
+          // Use custom replacer function to handle circular references
+          const seenObjects = new WeakMap();
+          const replacer = (key: string, value: any) => {
+            if (typeof value === 'object' && value !== null) {
+              if (seenObjects.has(value)) {
+                return '[Circular Reference]';
+              }
+              seenObjects.set(value, true);
+            }
+            return value;
+          };
+          
+          requestOptions.body = JSON.stringify(options.data, replacer);
+          console.log('JSON request body:', requestOptions.body);
+        } catch (stringifyError) {
+          console.error('Error stringifying request data:', stringifyError);
+          
+          // Fallback - create a clean copy without circular references
+          const cleanData = { ...options.data };
+          requestOptions.body = JSON.stringify(cleanData);
+        }
       } else if (headers['Content-Type']?.includes('multipart/form-data')) {
         // Remove the Content-Type header to let the browser set it with boundary
         delete headers['Content-Type'];

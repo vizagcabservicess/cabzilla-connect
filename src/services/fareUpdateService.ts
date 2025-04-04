@@ -247,9 +247,12 @@ export async function updateAirportFares(
   fareData: Record<string, any>
 ): Promise<void> {
   try {
+    // Create a clean copy of the fare data to avoid circular references
+    const cleanFareData = { ...fareData };
+    
     // Ensure vehicleId is present in all possible formats
     const updatedFareData: AirportFare = {
-      ...fareData,
+      ...cleanFareData,
       vehicleId: vehicleId,
       vehicle_id: vehicleId,
       id: vehicleId
@@ -258,46 +261,58 @@ export async function updateAirportFares(
     console.log('Updating airport fares with data:', updatedFareData);
     
     // Try the direct API first
+    let success = false;
+    let errorMessage = '';
+    
     try {
       const directResult = await directVehicleOperation('/api/admin/direct-airport-fares-update.php', 'POST', {
         headers: {
           'X-Admin-Mode': 'true',
-          'X-Debug': 'true'
+          'X-Debug': 'true',
+          'Content-Type': 'application/json'
         },
         data: updatedFareData
       });
       
-      if (!directResult || directResult.status !== 'success') {
-        const directError = directResult?.message || 'Unknown error in direct API';
-        console.error('Direct API error:', directError);
-        throw new Error(`Direct API: ${directError}`);
+      if (directResult && directResult.status === 'success') {
+        success = true;
+        console.log('Successfully updated airport fares using direct API');
+      } else {
+        errorMessage = `Direct API: ${directResult?.message || 'Unknown error in direct API'}`;
+        console.error('Direct API error:', errorMessage);
       }
-      
-      console.log('Successfully updated airport fares using direct API');
     } catch (directError: any) {
+      errorMessage = `Direct API: ${directError.message || 'Request failed'}`;
       console.error('Direct API failed:', directError);
-      
-      // Try the fare update API as a backup
+    }
+    
+    // If direct API failed, try the fare update API as a backup
+    if (!success) {
       try {
         const updateResult = await directVehicleOperation('/api/admin/airport-fares-update.php', 'POST', {
           headers: {
             'X-Admin-Mode': 'true',
-            'X-Debug': 'true'
+            'X-Debug': 'true',
+            'Content-Type': 'application/json'
           },
           data: updatedFareData
         });
         
-        if (!updateResult || updateResult.status !== 'success') {
-          const updateError = updateResult?.message || 'Unknown error in fare update API';
-          console.error('Fare Update API error:', updateError);
-          throw new Error(`Direct API: ${directError.message || 'Request failed'}, Fare Update API: ${updateError}`);
+        if (updateResult && updateResult.status === 'success') {
+          success = true;
+          console.log('Successfully updated airport fares using fare update API');
+        } else {
+          errorMessage += `, Fare Update API: ${updateResult?.message || 'Unknown error in fare update API'}`;
+          console.error('Fare Update API error:', updateResult?.message);
         }
-        
-        console.log('Successfully updated airport fares using fare update API');
       } catch (updateError: any) {
+        errorMessage += `, Fare Update API: ${updateError.message || 'Request failed'}`;
         console.error('Fare Update API failed:', updateError);
-        throw new Error(`Direct API: ${directError.message || 'Request failed'}, Fare Update API: ${updateError.message || 'Missing required parameter: vehicleId'}, Fare Service failed: ${updateError.message || 'Request failed'}`);
       }
+    }
+    
+    if (!success) {
+      throw new Error(errorMessage || 'Failed to update airport fares');
     }
     
     // Dispatch an event to notify other components that airport fare data has been updated

@@ -27,6 +27,12 @@ file_put_contents($logFile, "[$timestamp] Direct airport fares request received\
 file_put_contents($logFile, "[$timestamp] GET params: " . json_encode($_GET) . "\n", FILE_APPEND);
 file_put_contents($logFile, "[$timestamp] POST params: " . json_encode($_POST) . "\n", FILE_APPEND);
 
+// Try to get raw input for more detailed logging
+$rawInput = file_get_contents('php://input');
+if (!empty($rawInput)) {
+    file_put_contents($logFile, "[$timestamp] Raw input: " . $rawInput . "\n", FILE_APPEND);
+}
+
 // Get vehicle ID from query parameters - support multiple parameter names
 $vehicleId = null;
 $possibleKeys = ['vehicleId', 'vehicle_id', 'id', 'vehicle-id', 'vehicleType', 'vehicle_type', 'cabType', 'cab_type'];
@@ -52,32 +58,29 @@ if (!$vehicleId) {
 }
 
 // If still not found, check JSON input
-if (!$vehicleId) {
-    $json = file_get_contents('php://input');
-    if (!empty($json)) {
-        $jsonData = json_decode($json, true);
-        if (json_last_error() === JSON_ERROR_NONE) {
+if (!$vehicleId && !empty($rawInput)) {
+    $jsonData = json_decode($rawInput, true);
+    if (json_last_error() === JSON_ERROR_NONE) {
+        foreach ($possibleKeys as $key) {
+            if (isset($jsonData[$key]) && !empty($jsonData[$key])) {
+                $vehicleId = $jsonData[$key];
+                file_put_contents($logFile, "[$timestamp] Found vehicle ID in JSON data '$key': $vehicleId\n", FILE_APPEND);
+                break;
+            }
+        }
+        
+        // Check if there's a nested data property
+        if (!$vehicleId && isset($jsonData['data']) && is_array($jsonData['data'])) {
             foreach ($possibleKeys as $key) {
-                if (isset($jsonData[$key]) && !empty($jsonData[$key])) {
-                    $vehicleId = $jsonData[$key];
-                    file_put_contents($logFile, "[$timestamp] Found vehicle ID in JSON data '$key': $vehicleId\n", FILE_APPEND);
+                if (isset($jsonData['data'][$key]) && !empty($jsonData['data'][$key])) {
+                    $vehicleId = $jsonData['data'][$key];
+                    file_put_contents($logFile, "[$timestamp] Found vehicle ID in nested JSON data['$key']: $vehicleId\n", FILE_APPEND);
                     break;
                 }
             }
-            
-            // Check if there's a nested data property
-            if (!$vehicleId && isset($jsonData['data']) && is_array($jsonData['data'])) {
-                foreach ($possibleKeys as $key) {
-                    if (isset($jsonData['data'][$key]) && !empty($jsonData['data'][$key])) {
-                        $vehicleId = $jsonData['data'][$key];
-                        file_put_contents($logFile, "[$timestamp] Found vehicle ID in nested JSON data['$key']: $vehicleId\n", FILE_APPEND);
-                        break;
-                    }
-                }
-            }
-        } else {
-            file_put_contents($logFile, "[$timestamp] Invalid JSON input: " . json_last_error_msg() . "\n", FILE_APPEND);
         }
+    } else {
+        file_put_contents($logFile, "[$timestamp] Invalid JSON input: " . json_last_error_msg() . "\n", FILE_APPEND);
     }
 }
 
@@ -88,6 +91,7 @@ if ($vehicleId && strpos($vehicleId, 'item-') === 0) {
 }
 
 if (!$vehicleId) {
+    file_put_contents($logFile, "[$timestamp] ERROR: No vehicle ID found in request\n", FILE_APPEND);
     http_response_code(400);
     echo json_encode([
         'status' => 'error',

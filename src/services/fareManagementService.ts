@@ -1,118 +1,191 @@
 
 import { directVehicleOperation } from '@/utils/apiHelper';
-import { getApiUrl } from '@/config/api';
 
-export interface FareData {
-  vehicleId: string;
-  basePrice?: number;
-  pricePerKm?: number;
-  pickupPrice?: number;
-  dropPrice?: number;
-  tier1Price?: number;
-  tier2Price?: number;
-  tier3Price?: number;
-  tier4Price?: number;
-  extraKmCharge?: number;
-  price4hrs40km?: number;
-  price8hrs80km?: number;
-  price10hrs100km?: number;
-  priceExtraHour?: number;
-  // Airport specific fields
-  priceOneWay?: number;
-  priceRoundTrip?: number;
-  nightCharges?: number;
-  extraWaitingCharges?: number;
-}
-
-export const fetchLocalFares = async (vehicleId?: string): Promise<FareData[]> => {
+/**
+ * Fetch local fares for a specific vehicle
+ * @param vehicleId Vehicle ID to fetch fares for
+ * @returns Promise with array of local fare data
+ */
+export async function fetchLocalFares(vehicleId: string): Promise<any[]> {
   try {
-    const endpoint = `api/admin/direct-local-fares.php${vehicleId ? `?vehicle_id=${vehicleId}` : ''}`;
-    const result = await directVehicleOperation(endpoint, 'GET', {
+    const results = await directVehicleOperation(`/api/admin/direct-local-fares.php`, 'GET', {
       headers: {
         'X-Admin-Mode': 'true',
-        'X-Force-Refresh': 'true',
-        'Cache-Control': 'no-cache, no-store, must-revalidate'
-      }
+        'X-Debug': 'true',
+        'Cache-Control': 'no-cache'
+      },
+      data: { vehicleId }
     });
-
-    console.log('Local fares response:', result);
     
-    return result.fares || [];
+    if (results && results.fares && Array.isArray(results.fares)) {
+      return results.fares;
+    }
+    
+    return [];
   } catch (error) {
     console.error('Error fetching local fares:', error);
     throw error;
   }
-};
+}
 
-export const fetchAirportFares = async (vehicleId?: string): Promise<FareData[]> => {
+/**
+ * Fetch airport fares for a specific vehicle
+ * @param vehicleId Vehicle ID to fetch fares for
+ * @returns Promise with array of airport fare data
+ */
+export async function fetchAirportFares(vehicleId: string): Promise<any[]> {
   try {
-    const endpoint = `api/admin/direct-airport-fares.php${vehicleId ? `?vehicle_id=${vehicleId}` : ''}`;
-    const result = await directVehicleOperation(endpoint, 'GET', {
+    const results = await directVehicleOperation(`/api/admin/direct-airport-fares.php?vehicleId=${encodeURIComponent(vehicleId)}`, 'GET', {
       headers: {
         'X-Admin-Mode': 'true',
-        'X-Force-Refresh': 'true',
-        'Cache-Control': 'no-cache, no-store, must-revalidate'
+        'X-Debug': 'true',
+        'Cache-Control': 'no-cache'
       }
     });
-
-    console.log('Airport fares response:', result);
     
-    return result.fares || [];
+    if (results && results.fares && Array.isArray(results.fares)) {
+      return results.fares;
+    }
+    
+    return [];
   } catch (error) {
     console.error('Error fetching airport fares:', error);
     throw error;
   }
-};
+}
 
-export const updateLocalFares = async (fareData: FareData): Promise<void> => {
+/**
+ * Update local fares for a specific vehicle
+ * @param fareData Local fare data to update
+ * @returns Promise that resolves when update is complete
+ */
+export async function updateLocalFares(fareData: Record<string, any>): Promise<void> {
+  if (!fareData.vehicleId) {
+    throw new Error('Vehicle ID is required to update local fares');
+  }
+  
   try {
-    console.log('Updating local fares with data:', fareData);
+    // Create a clean copy of data to avoid circular references
+    const cleanData = { ...fareData };
     
-    const result = await directVehicleOperation('api/admin/local-fares-update.php', 'POST', {
+    // Ensure both vehicleId formats are present
+    cleanData.vehicle_id = cleanData.vehicleId;
+    
+    // Try the direct API first
+    const directResult = await directVehicleOperation('/api/admin/direct-local-fares-update.php', 'POST', {
       headers: {
         'X-Admin-Mode': 'true',
-        'X-Force-Refresh': 'true'
+        'X-Debug': 'true',
+        'Content-Type': 'application/json'
       },
-      data: fareData
+      data: cleanData
     });
-
-    console.log('Local fares update response:', result);
-
-    if (result.status === 'error') {
-      throw new Error(result.message || 'Failed to update local fares');
+    
+    if (!directResult || directResult.status !== 'success') {
+      const directError = directResult?.message || 'Unknown error in direct API';
+      
+      // Try the fare update API as a backup
+      const updateResult = await directVehicleOperation('/api/admin/local-fares-update.php', 'POST', {
+        headers: {
+          'X-Admin-Mode': 'true',
+          'X-Debug': 'true',
+          'Content-Type': 'application/json'
+        },
+        data: cleanData
+      });
+      
+      if (!updateResult || updateResult.status !== 'success') {
+        throw new Error(`Failed to update local fares: ${directError}`);
+      }
     }
+    
+    // Dispatch event for any listeners
+    const event = new CustomEvent('fare-data-updated', { 
+      detail: { fareType: 'local', vehicleId: fareData.vehicleId } 
+    });
+    window.dispatchEvent(event);
+    
   } catch (error) {
     console.error('Error updating local fares:', error);
     throw error;
   }
-};
+}
 
-export const updateAirportFares = async (fareData: FareData): Promise<void> => {
+/**
+ * Update airport fares for a specific vehicle
+ * @param fareData Airport fare data to update
+ * @returns Promise that resolves when update is complete
+ */
+export async function updateAirportFares(fareData: Record<string, any>): Promise<void> {
+  if (!fareData.vehicleId) {
+    throw new Error('Vehicle ID is required to update airport fares');
+  }
+  
   try {
-    console.log('Updating airport fares with data:', fareData);
+    // Create a clean copy of data to avoid circular references
+    const cleanData = { ...fareData };
     
-    // Ensure we have both field formats (for compatibility with different backends)
-    const dataToSend = {
-      ...fareData,
-      vehicleId: fareData.vehicleId,
-      vehicle_id: fareData.vehicleId
-    };
+    // Ensure all vehicle ID formats are present
+    cleanData.vehicle_id = cleanData.vehicleId;
+    cleanData.id = cleanData.vehicleId;
     
-    const result = await directVehicleOperation('api/admin/airport-fares-update.php', 'POST', {
-      headers: {
-        'X-Admin-Mode': 'true', 
-        'X-Force-Refresh': 'true'
-      },
-      data: dataToSend
-    });
-
-    console.log('Airport fares update response:', result);
-
-    if (result.status === 'error') {
-      throw new Error(result.message || 'Failed to update airport fares');
+    // Try the direct API first
+    let success = false;
+    let errorMessage = '';
+    
+    try {
+      const directResult = await directVehicleOperation('/api/admin/direct-airport-fares-update.php', 'POST', {
+        headers: {
+          'X-Admin-Mode': 'true',
+          'X-Debug': 'true',
+          'Content-Type': 'application/json'
+        },
+        data: cleanData
+      });
+      
+      if (directResult && directResult.status === 'success') {
+        success = true;
+      } else {
+        errorMessage = directResult?.message || 'Unknown error in direct API';
+      }
+    } catch (directError: any) {
+      errorMessage = directError.message || 'Request to direct API failed';
     }
+    
+    // Try backup API if direct one failed
+    if (!success) {
+      try {
+        const updateResult = await directVehicleOperation('/api/admin/airport-fares-update.php', 'POST', {
+          headers: {
+            'X-Admin-Mode': 'true',
+            'X-Debug': 'true',
+            'Content-Type': 'application/json'
+          },
+          data: cleanData
+        });
+        
+        if (updateResult && updateResult.status === 'success') {
+          success = true;
+        } else {
+          errorMessage += `, Backup API: ${updateResult?.message || 'Unknown error in backup API'}`;
+        }
+      } catch (updateError: any) {
+        errorMessage += `, Backup API: ${updateError.message || 'Request to backup API failed'}`;
+      }
+    }
+    
+    if (!success) {
+      throw new Error(`Failed to update airport fares: ${errorMessage}`);
+    }
+    
+    // Dispatch event for any listeners
+    const event = new CustomEvent('fare-data-updated', { 
+      detail: { fareType: 'airport', vehicleId: fareData.vehicleId } 
+    });
+    window.dispatchEvent(event);
+    
   } catch (error) {
     console.error('Error updating airport fares:', error);
     throw error;
   }
-};
+}
