@@ -31,12 +31,20 @@ export const getApiUrl = (endpoint: string): string => {
     return endpoint;
   }
   
-  // For preview/development mode, use relative URLs to avoid CORS issues
-  if (window.location.hostname.includes('lovableproject.com') || 
-      window.location.hostname.includes('localhost') ||
-      window.location.hostname.includes('lovable.app')) {
+  // For development environments and certain domains, use relative URLs
+  // This helps avoid CORS issues in development and preview environments
+  if (window.location.hostname.includes('localhost') || 
+      window.location.hostname.includes('lovable.app') ||
+      window.location.hostname.includes('lovableproject.com')) {
+    
     // Remove leading slash if present for relative URLs
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
+    
+    // Ensure API directory paths are preserved
+    if (!cleanEndpoint.startsWith('api/') && !cleanEndpoint.startsWith('data/')) {
+      return `api/${cleanEndpoint}`;
+    }
+    
     return cleanEndpoint;
   }
   
