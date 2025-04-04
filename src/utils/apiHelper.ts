@@ -38,18 +38,19 @@ export const directVehicleOperation = async (
     };
 
     // For GET requests, remove Content-Type header and encode params in the URL
+    let finalUrl = url;
     if (method === 'GET' && options.data) {
       const params = new URLSearchParams();
       Object.entries(options.data).forEach(([key, value]) => {
         params.append(key, String(value));
       });
       const separator = url.includes('?') ? '&' : '?';
-      fetchOptions.url = `${url}${separator}${params.toString()}`;
+      finalUrl = `${url}${separator}${params.toString()}`;
     } else if (method !== 'GET' && options.data) {
       fetchOptions.body = JSON.stringify(options.data);
     }
 
-    const response = await fetch(fetchOptions.url || url, fetchOptions);
+    const response = await fetch(finalUrl, fetchOptions);
     
     if (!response.ok) {
       throw new Error(`API response not OK: ${response.status}`);
