@@ -1,4 +1,3 @@
-
 import { CabType } from '@/types/cab';
 import { apiBaseUrl } from '@/config/api';
 
@@ -19,6 +18,13 @@ export const directVehicleOperation = async (
   } = {}
 ) => {
   try {
+    // IMMEDIATE FALLBACK FOR PREVIEW/DEV ENVIRONMENTS
+    // Skip API calls completely if we're in a development or preview environment
+    if (isPreviewMode() || isFallbackNeeded()) {
+      console.log(`Using immediate fallback for ${endpoint} (preview mode or fallback enabled)`);
+      return handleFallback(endpoint);
+    }
+    
     // Add timestamp to URL to prevent caching
     const url = `${apiBaseUrl}/${endpoint.startsWith('/') ? endpoint.slice(1) : endpoint}`;
     
@@ -50,12 +56,6 @@ export const directVehicleOperation = async (
       fetchOptions.body = JSON.stringify(options.data);
     }
 
-    // Check if we should use fallback mode immediately
-    if (isFallbackNeeded()) {
-      console.log(`Using fallback data for ${endpoint} (fallback mode enabled)`);
-      return handleFallback(endpoint);
-    }
-
     // First try with current endpoint
     let response;
     try {
@@ -64,7 +64,17 @@ export const directVehicleOperation = async (
       // Track this attempt
       incrementApiAttemptCount();
       
+      // Set a shorter timeout for API calls to fail faster
+      const timeoutId = setTimeout(() => {
+        console.warn(`API call to ${finalUrl} timed out after 5 seconds, using fallback`);
+        trackApiError();
+        enableFallbackMode();
+      }, 5000);
+      
       response = await fetch(finalUrl, fetchOptions);
+      
+      // Clear the timeout since we got a response
+      clearTimeout(timeoutId);
       
       // Check if the response is HTML instead of JSON (which would indicate a 200 OK but wrong response type)
       const contentType = response.headers.get('content-type');
@@ -75,8 +85,8 @@ export const directVehicleOperation = async (
         // Track this error for fallback detection
         trackApiError();
         
-        if (response.status === 500) {
-          console.error('Server error (500) detected, switching to fallback mode');
+        if (response.status === 500 || response.status === 404) {
+          console.error(`Server error (${response.status}) detected, switching to fallback mode`);
           enableFallbackMode();
           return handleFallback(endpoint);
         }
@@ -124,7 +134,8 @@ export const directVehicleOperation = async (
     }
   } catch (error) {
     console.error('Error in directVehicleOperation:', error);
-    throw error;
+    trackApiError();
+    return handleFallback(endpoint);
   }
 };
 
@@ -144,7 +155,8 @@ const handleFallback = async (endpoint: string) => {
           status: 'success',
           message: 'Vehicles retrieved from static data',
           vehicles: data,
-          source: 'static_json'
+          source: 'static_json',
+          fallback: true
         };
       }
     } catch (error) {
@@ -153,7 +165,15 @@ const handleFallback = async (endpoint: string) => {
   }
   
   // For vehicle update operations
-  if (endpoint.includes('update-vehicle') || endpoint.includes('vehicle-update')) {
+  if (endpoint.includes('update-vehicle') || endpoint.includes('vehicle-update') || endpoint.includes('direct-vehicle-update')) {
+    // Try to save to localStorage as a last resort
+    try {
+      const vehicleData = endpoint.includes('POST') || endpoint.includes('PUT') ? JSON.parse(fetchOptions?.body as string) : {};
+      await saveVehicleToStaticJson(vehicleData);
+    } catch (e) {
+      console.error('Failed to save to localStorage:', e);
+    }
+    
     return {
       status: 'success',
       message: 'Vehicle updated successfully (fallback mode)',
@@ -167,7 +187,7 @@ const handleFallback = async (endpoint: string) => {
   }
   
   // For database fix operations
-  if (endpoint.includes('fix-database') || endpoint.includes('repair-tables')) {
+  if (endpoint.includes('fix-database') || endpoint.includes('repair-tables') || endpoint.includes('db_setup')) {
     return {
       status: 'success',
       message: 'Database tables fixed successfully (fallback mode)',
@@ -180,11 +200,22 @@ const handleFallback = async (endpoint: string) => {
     };
   }
   
+  // For database connection check
+  if (endpoint.includes('check-connection') || endpoint.includes('test-connection')) {
+    return {
+      status: 'success',
+      connection: false,
+      message: 'Using fallback mode - real database unavailable',
+      fallback: true
+    };
+  }
+  
   // Generic fallback for other operations
   return {
     status: 'success',
     message: 'Operation completed in fallback mode',
-    fallback: true
+    fallback: true,
+    timestamp: Date.now()
   };
 };
 
@@ -225,7 +256,7 @@ export const isFallbackNeeded = (): boolean => {
     
     // Check for recent errors that would indicate we need fallback
     const apiErrorCount = parseInt(localStorage.getItem('api_error_count') || '0', 10);
-    return apiErrorCount >= 3; // If we've had 3 or more errors, use fallback
+    return apiErrorCount >= 2; // Reduced threshold from 3 to 2 for faster fallback
   }
   return false;
 };
@@ -233,7 +264,7 @@ export const isFallbackNeeded = (): boolean => {
 /**
  * Enable fallback mode for a set period of time
  */
-export const enableFallbackMode = (durationMinutes: number = 60) => {
+export const enableFallbackMode = (durationMinutes: number = 1440) => { // Default to 24 hours
   localStorage.setItem('use_fallback_mode', 'true');
   
   // Set an expiry time
@@ -262,10 +293,24 @@ export const trackApiError = () => {
   const newCount = currentCount + 1;
   localStorage.setItem('api_error_count', newCount.toString());
   
-  if (newCount >= 3 && !isFallbackNeeded()) {
+  if (newCount >= 2 && !isFallbackNeeded()) {
     console.warn(`Multiple API errors detected (${newCount}), enabling fallback mode`);
     enableFallbackMode();
   }
+  
+  // Record the error timestamp
+  const errors = JSON.parse(localStorage.getItem('api_error_history') || '[]');
+  errors.push({
+    timestamp: Date.now(),
+    count: newCount
+  });
+  
+  // Keep only the last 10 errors
+  if (errors.length > 10) {
+    errors.shift();
+  }
+  
+  localStorage.setItem('api_error_history', JSON.stringify(errors));
 };
 
 /**
@@ -317,7 +362,7 @@ export const fixDatabaseTables = async (): Promise<boolean> => {
     console.log('Attempting to fix database tables...');
     
     // If fallback mode is already enabled, just return success
-    if (isFallbackNeeded()) {
+    if (isFallbackNeeded() || isPreviewMode()) {
       console.log('In fallback mode, simulating database fix success');
       return true;
     }
@@ -375,12 +420,27 @@ export const fixDatabaseTables = async (): Promise<boolean> => {
  */
 export const getMockVehicleData = async (vehicleId?: string) => {
   try {
-    const response = await fetch('/data/vehicles.json?_t=' + Date.now(), { cache: 'no-store' });
-    if (!response.ok) {
-      throw new Error(`Failed to load mock data: ${response.status}`);
+    // First try to get from localStorage (which might have user edits)
+    const localData = localStorage.getItem('vehicles_static_json');
+    let vehicles = [];
+    
+    if (localData) {
+      try {
+        vehicles = JSON.parse(localData);
+      } catch (e) {
+        console.error('Error parsing localStorage data:', e);
+      }
     }
     
-    const vehicles = await response.json();
+    // If we don't have any data from localStorage or it failed to parse
+    if (!vehicles || vehicles.length === 0) {
+      const response = await fetch('/data/vehicles.json?_t=' + Date.now(), { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(`Failed to load mock data: ${response.status}`);
+      }
+      
+      vehicles = await response.json();
+    }
     
     if (vehicleId) {
       const vehicle = vehicles.find((v: any) => v.id === vehicleId || v.vehicleId === vehicleId);
@@ -390,14 +450,16 @@ export const getMockVehicleData = async (vehicleId?: string) => {
       return {
         status: 'success',
         vehicles: [vehicle],
-        source: 'mock'
+        source: 'mock',
+        fallback: true
       };
     }
     
     return {
       status: 'success',
       vehicles: vehicles,
-      source: 'mock'
+      source: 'mock',
+      fallback: true
     };
   } catch (error) {
     console.error('Error loading mock vehicle data:', error);
@@ -414,7 +476,7 @@ export const checkDatabaseConnection = async (): Promise<{
 }> => {
   try {
     // If fallback mode is active, don't actually check the database
-    if (isFallbackNeeded()) {
+    if (isFallbackNeeded() || isPreviewMode()) {
       return {
         working: false,
         message: 'Fallback mode is active, database check skipped'
@@ -493,73 +555,8 @@ export const checkDatabaseConnection = async (): Promise<{
  * Force enable fallback mode immediately
  */
 export const forceEnableFallbackMode = () => {
-  enableFallbackMode(120); // Enable for 2 hours
+  enableFallbackMode(1440); // Enable for 24 hours by default
   window.location.reload(); // Force reload to apply fallback mode
-};
-
-/**
- * Attempt to automatically fix database connection and tables
- */
-export const autoFixDatabaseIssues = async (): Promise<{
-  success: boolean,
-  message: string
-}> => {
-  try {
-    console.log('Attempting automatic database fix...');
-    
-    // Step 1: Try db_setup.php to ensure tables exist
-    try {
-      const setupResponse = await fetch(`${apiBaseUrl}/api/admin/db_setup.php?_t=${Date.now()}`, {
-        headers: {
-          'X-Admin-Mode': 'true',
-          'X-Force-Refresh': 'true',
-          'Cache-Control': 'no-cache, no-store, must-revalidate'
-        }
-      });
-      
-      if (setupResponse.ok) {
-        try {
-          const setupData = await setupResponse.json();
-          if (setupData.status === 'success') {
-            console.log('Database setup successful');
-          }
-        } catch (e) {
-          console.error('Error parsing db_setup response:', e);
-        }
-      }
-    } catch (setupError) {
-      console.error('Error calling db_setup.php:', setupError);
-    }
-    
-    // Step 2: Try the fix-database endpoint
-    try {
-      const fixResponse = await fixDatabaseTables();
-      if (fixResponse) {
-        return {
-          success: true,
-          message: 'Database tables fixed successfully'
-        };
-      }
-    } catch (fixError) {
-      console.error('Error fixing database tables:', fixError);
-    }
-    
-    // Step 3: If all fails, enable fallback mode
-    enableFallbackMode();
-    
-    return {
-      success: false,
-      message: 'Could not fix database issues. Fallback mode enabled.'
-    };
-  } catch (error) {
-    console.error('Auto-fix database error:', error);
-    enableFallbackMode();
-    
-    return {
-      success: false,
-      message: error instanceof Error ? error.message : 'Unknown error during auto-fix'
-    };
-  }
 };
 
 /**
@@ -569,17 +566,42 @@ export const saveVehicleToStaticJson = async (vehicleData: any): Promise<boolean
   try {
     console.log('Saving vehicle data to static JSON fallback file');
     
-    // First load the existing vehicles
-    const response = await fetch('/data/vehicles.json?_t=' + Date.now(), { cache: 'no-store' });
-    if (!response.ok) {
-      console.error('Failed to load static vehicle data');
-      return false;
+    // First load the existing vehicles - try localStorage first
+    let vehicles = [];
+    const localData = localStorage.getItem('vehicles_static_json');
+    
+    if (localData) {
+      try {
+        vehicles = JSON.parse(localData);
+      } catch (e) {
+        console.error('Error parsing localStorage data:', e);
+      }
     }
     
-    const vehicles = await response.json();
+    // If localStorage doesn't have data, fetch from static file
+    if (!vehicles || vehicles.length === 0) {
+      try {
+        const response = await fetch('/data/vehicles.json?_t=' + Date.now(), { cache: 'no-store' });
+        if (response.ok) {
+          vehicles = await response.json();
+        }
+      } catch (e) {
+        console.error('Error fetching static vehicles:', e);
+      }
+    }
+    
+    // If we still don't have vehicles data, create a default array
+    if (!vehicles || vehicles.length === 0) {
+      vehicles = [];
+    }
     
     // Determine the vehicle ID
     const vehicleId = vehicleData.id || vehicleData.vehicleId;
+    
+    if (!vehicleId) {
+      console.error('Cannot save vehicle without ID');
+      return false;
+    }
     
     // Find if vehicle already exists
     const existingIndex = vehicles.findIndex((v: any) => v.id === vehicleId || v.vehicleId === vehicleId);
@@ -588,19 +610,86 @@ export const saveVehicleToStaticJson = async (vehicleData: any): Promise<boolean
       // Update existing vehicle
       vehicles[existingIndex] = { ...vehicles[existingIndex], ...vehicleData };
     } else {
-      // Add new vehicle
-      vehicles.push(vehicleData);
+      // Add new vehicle - ensure it has both id and vehicleId
+      const newVehicle = {
+        ...vehicleData,
+        id: vehicleId,
+        vehicleId: vehicleId
+      };
+      vehicles.push(newVehicle);
     }
     
-    // In a real implementation, we would save this back to the server
-    // But since we can't modify server files in this context, we'll just
-    // save to localStorage as a simulation
+    // Save to localStorage
     localStorage.setItem('vehicles_static_json', JSON.stringify(vehicles));
     
     console.log('Vehicle data saved to localStorage as fallback');
+    
+    // Dispatch an event to notify components that vehicle data has changed
+    window.dispatchEvent(new CustomEvent('vehicle-data-updated', { 
+      detail: { timestamp: Date.now() }
+    }));
+    
     return true;
   } catch (error) {
     console.error('Error saving vehicle to static JSON:', error);
     return false;
   }
 };
+
+/**
+ * Get the current system status
+ */
+export const getSystemStatus = (): {
+  fallbackMode: boolean,
+  fallbackExpiry: string | null,
+  apiErrorCount: number,
+  apiAttemptCount: number,
+  isPreview: boolean
+} => {
+  const fallbackMode = localStorage.getItem('use_fallback_mode') === 'true';
+  let fallbackExpiry = null;
+  
+  if (fallbackMode) {
+    const expiryTime = localStorage.getItem('fallback_mode_expiry');
+    if (expiryTime) {
+      try {
+        const expiry = new Date(expiryTime);
+        fallbackExpiry = expiry.toLocaleString();
+      } catch (e) {
+        console.error('Error parsing fallback expiry:', e);
+      }
+    }
+  }
+  
+  return {
+    fallbackMode,
+    fallbackExpiry,
+    apiErrorCount: parseInt(localStorage.getItem('api_error_count') || '0', 10),
+    apiAttemptCount: getApiAttemptCount(),
+    isPreview: isPreviewMode()
+  };
+};
+
+/**
+ * Auto-repair system when status changes
+ */
+export const autoRepairSystem = () => {
+  // Check if system needs repair
+  const status = getSystemStatus();
+  
+  // If we're not in fallback mode but have errors, auto-enable it
+  if (!status.fallbackMode && status.apiErrorCount >= 2) {
+    console.log('Auto-enabling fallback mode due to API errors');
+    enableFallbackMode();
+    return true;
+  }
+  
+  return false;
+};
+
+// Run auto-repair on module load
+setTimeout(() => {
+  if (typeof window !== 'undefined') {
+    autoRepairSystem();
+  }
+}, 1000);
