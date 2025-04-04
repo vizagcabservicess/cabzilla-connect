@@ -123,6 +123,12 @@ try {
         exit;
     }
     
+    // Also create a backup of the persistent file
+    $backupCacheFile = $cacheDir . '/vehicles_persistent_backup_' . $currentTime . '.json';
+    if (copy($persistentCacheFile, $backupCacheFile)) {
+        logMessage("Created backup of persistent cache at " . basename($backupCacheFile));
+    }
+    
     logMessage("Successfully reloaded $vehicleCount vehicles, cleared $cleared cache files, and created new cache at " . basename($tempCacheFile));
     
     // Return success response with detailed information

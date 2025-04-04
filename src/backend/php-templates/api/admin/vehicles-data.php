@@ -8,10 +8,11 @@
 // Set headers for CORS
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode, X-Debug');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode, X-Debug, Cache-Control');
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate');
 header('Pragma: no-cache');
+header('Expires: 0');
 
 // Handle OPTIONS preflight request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -135,8 +136,59 @@ if (!file_exists($persistentCacheFile)) {
             'isActive' => true
         ]
     ];
-    file_put_contents($persistentCacheFile, json_encode($defaultVehicles, JSON_PRETTY_PRINT));
-    file_put_contents($logFile, "[$timestamp] Created new persistent cache file with default vehicles\n", FILE_APPEND);
+    
+    $jsonOptions = defined('JSON_PRETTY_PRINT') ? JSON_PRETTY_PRINT : 0;
+    $writeResult = file_put_contents($persistentCacheFile, json_encode($defaultVehicles, $jsonOptions));
+    
+    if ($writeResult === false) {
+        file_put_contents($logFile, "[$timestamp] Failed to write default vehicles to persistent cache\n", FILE_APPEND);
+    } else {
+        file_put_contents($logFile, "[$timestamp] Created new persistent cache file with default vehicles\n", FILE_APPEND);
+    }
+} else if ($forceRefresh) {
+    // If we're doing a force refresh, first check if we need to reload from persistent storage
+    file_put_contents($logFile, "[$timestamp] Force refresh requested, checking if reload from persistent storage is needed\n", FILE_APPEND);
+    
+    // Try to load the persistent data first to make sure it's valid
+    $persistentJson = file_get_contents($persistentCacheFile);
+    if ($persistentJson) {
+        try {
+            $persistentData = json_decode($persistentJson, true);
+            if (!is_array($persistentData)) {
+                file_put_contents($logFile, "[$timestamp] Invalid persistent data format, not an array\n", FILE_APPEND);
+                // Try to create a backup of the problematic file
+                $backupFile = $cacheDir . '/vehicles_persistent_backup_' . time() . '.json';
+                copy($persistentCacheFile, $backupFile);
+                file_put_contents($logFile, "[$timestamp] Created backup of problematic file at $backupFile\n", FILE_APPEND);
+            } else {
+                file_put_contents($logFile, "[$timestamp] Successfully loaded " . count($persistentData) . " vehicles from persistent storage\n", FILE_APPEND);
+            }
+        } catch (Exception $e) {
+            file_put_contents($logFile, "[$timestamp] Error parsing persistent JSON: " . $e->getMessage() . "\n", FILE_APPEND);
+            // Try to create a backup of the problematic file
+            $backupFile = $cacheDir . '/vehicles_persistent_backup_' . time() . '.json';
+            copy($persistentCacheFile, $backupFile);
+            file_put_contents($logFile, "[$timestamp] Created backup of problematic file at $backupFile\n", FILE_APPEND);
+        }
+    } else {
+        file_put_contents($logFile, "[$timestamp] Failed to read persistent cache file\n", FILE_APPEND);
+    }
+}
+
+// For admin access, clear any temporary cache files before loading
+if ($forceRefresh) {
+    $cacheFiles = glob($cacheDir . '/vehicles_*.json');
+    $cleared = 0;
+    foreach ($cacheFiles as $file) {
+        // Don't delete the persistent file itself
+        if ($file !== $persistentCacheFile) {
+            if (@unlink($file)) {
+                $cleared++;
+                file_put_contents($logFile, "[$timestamp] Cleared temporary cache file: " . basename($file) . "\n", FILE_APPEND);
+            }
+        }
+    }
+    file_put_contents($logFile, "[$timestamp] Force refresh: cleared $cleared temporary cache files\n", FILE_APPEND);
 }
 
 // Just include the main vehicles-data.php which now has persistent storage logic

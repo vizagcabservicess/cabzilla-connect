@@ -281,7 +281,7 @@ export const VehicleTabs: React.FC<VehicleTabsProps> = ({ vehicleId }) => {
           </Button>
           <Info 
             className="h-4 w-4 text-blue-500 cursor-help" 
-            title="If changes don't persist after refresh, click this button to reload data from persistent storage"
+            aria-label="If changes don't persist after refresh, click this button to reload data from persistent storage"
           />
         </div>
       </CardHeader>

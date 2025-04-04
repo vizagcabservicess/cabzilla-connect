@@ -19,14 +19,14 @@ if (isset($_SERVER['HTTP_ORIGIN'])) {
 }
 
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, PATCH');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, Origin, X-Auth-Token, X-Force-Refresh, X-Admin-Mode, X-Debug, *');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, Origin, X-Auth-Token, X-Force-Refresh, X-Admin-Mode, X-Debug, Cache-Control, *');
 header('Access-Control-Max-Age: 86400'); 
 header('Access-Control-Expose-Headers: *');
 header('Vary: Origin, Access-Control-Request-Method, Access-Control-Request-Headers');
 header('X-Content-Type-Options: nosniff');
 
 // Add debugging headers
-header('X-API-Version: 1.5.0');
+header('X-API-Version: 1.5.1');
 header('X-CORS-Status: Ultra-Enhanced');
 header('X-Debug-Endpoint: vehicles-data');
 header('X-Debug-Origin: ' . ($_SERVER['HTTP_ORIGIN'] ?? 'none'));
@@ -66,7 +66,7 @@ if (!file_exists($cacheDir)) {
     @mkdir($cacheDir, 0755, true);
 }
 
-// CRITICAL: Define the persistent cache file path - this is our source of truth
+// CRITICAL: Define the persistent cache file path - this is our SINGLE SOURCE OF TRUTH
 $persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
 
 // Create log directory if needed
@@ -80,7 +80,7 @@ $timestamp = date('Y-m-d H:i:s');
 $logMessage = "[$timestamp] Vehicles data request with includeInactive=$includeInactive, forceRefresh=$forceRefresh, isAdminMode=$isAdminMode" . ($vehicleId ? ", vehicleId=$vehicleId" : "") . "\n";
 file_put_contents($logFile, $logMessage, FILE_APPEND);
 
-// ALWAYS load directly from the persistent cache file - this is now our SOURCE OF TRUTH
+// ALWAYS load directly from the persistent cache file - this is now our SINGLE SOURCE OF TRUTH
 $persistentData = [];
 if (file_exists($persistentCacheFile)) {
     file_put_contents($logFile, "[$timestamp] Loading from persistent cache file: $persistentCacheFile\n", FILE_APPEND);
@@ -91,11 +91,23 @@ if (file_exists($persistentCacheFile)) {
             if (is_array($data)) {
                 file_put_contents($logFile, "[$timestamp] Loaded " . count($data) . " vehicles from persistent cache\n", FILE_APPEND);
                 $persistentData = $data;
+            } else {
+                file_put_contents($logFile, "[$timestamp] JSON decode resulted in non-array: " . gettype($data) . "\n", FILE_APPEND);
+                // Create a backup of the problematic file
+                $backupFile = $cacheDir . '/vehicles_persistent_backup_' . time() . '.json';
+                copy($persistentCacheFile, $backupFile);
+                file_put_contents($logFile, "[$timestamp] Created backup of problematic file at $backupFile\n", FILE_APPEND);
             }
         } catch (Exception $e) {
             file_put_contents($logFile, "[$timestamp] Failed to parse persistent JSON: " . $e->getMessage() . "\n", FILE_APPEND);
+            // Create a backup of the problematic file
+            $backupFile = $cacheDir . '/vehicles_persistent_backup_' . time() . '.json';
+            copy($persistentCacheFile, $backupFile);
+            file_put_contents($logFile, "[$timestamp] Created backup of problematic file at $backupFile\n", FILE_APPEND);
             $persistentData = [];
         }
+    } else {
+        file_put_contents($logFile, "[$timestamp] Failed to read persistent cache file\n", FILE_APPEND);
     }
 } else {
     file_put_contents($logFile, "[$timestamp] Persistent cache file not found at $persistentCacheFile\n", FILE_APPEND);
@@ -193,8 +205,14 @@ $defaultVehicles = [
 // If we have no persistent data, use the default data and save it as persistent
 if (empty($persistentData)) {
     $persistentData = $defaultVehicles;
-    file_put_contents($persistentCacheFile, json_encode($persistentData, JSON_PRETTY_PRINT));
-    file_put_contents($logFile, "[$timestamp] No persistent data found, initialized with default vehicles\n", FILE_APPEND);
+    $jsonOptions = defined('JSON_PRETTY_PRINT') ? JSON_PRETTY_PRINT : 0;
+    $writeResult = file_put_contents($persistentCacheFile, json_encode($persistentData, $jsonOptions));
+    
+    if ($writeResult === false) {
+        file_put_contents($logFile, "[$timestamp] Failed to write default vehicles to persistent cache\n", FILE_APPEND);
+    } else {
+        file_put_contents($logFile, "[$timestamp] No persistent data found, initialized with default vehicles\n", FILE_APPEND);
+    }
 }
 
 // Merge default vehicles with persistent data - ensuring we have all required vehicles
@@ -236,6 +254,8 @@ if ($vehicleId) {
     if (!empty($filteredVehicles)) {
         $vehicles = $filteredVehicles;
         file_put_contents($logFile, "[$timestamp] Filtered to vehicle ID: $vehicleId\n", FILE_APPEND);
+    } else {
+        file_put_contents($logFile, "[$timestamp] WARNING: No vehicle found with ID: $vehicleId\n", FILE_APPEND);
     }
 }
 
