@@ -1,7 +1,8 @@
+
 <?php
 /**
- * ENHANCED - Special endpoint for vehicle data with MySQL database storage
- * This file serves as the primary data source for vehicle information
+ * ENHANCED - Special endpoint for vehicle data with ultra-robust CORS support
+ * This file serves as a CORS-friendly wrapper for the main vehicles-data.php
  */
 
 // Set ultra-aggressive CORS headers for maximum browser compatibility
@@ -25,7 +26,7 @@ header('Vary: Origin, Access-Control-Request-Method, Access-Control-Request-Head
 header('X-Content-Type-Options: nosniff');
 
 // Add debugging headers
-header('X-API-Version: 2.0.0');
+header('X-API-Version: 1.5.1');
 header('X-CORS-Status: Ultra-Enhanced');
 header('X-Debug-Endpoint: vehicles-data');
 header('X-Debug-Origin: ' . ($_SERVER['HTTP_ORIGIN'] ?? 'none'));
@@ -59,333 +60,173 @@ if ($isAdminMode) {
     $includeInactive = true;
 }
 
-// Create log directory if needed
-$logDir = __DIR__ . '/../../logs';
-if (!file_exists($logDir)) {
-    @mkdir($logDir, 0755, true);
-}
-
 // Create cache directory if needed
 $cacheDir = __DIR__ . '/../../cache';
 if (!file_exists($cacheDir)) {
     @mkdir($cacheDir, 0755, true);
 }
 
-// Persistent cache file path - as a fallback
+// CRITICAL: Define the persistent cache file path - this is our SINGLE SOURCE OF TRUTH
 $persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
+
+// Create log directory if needed
+$logDir = __DIR__ . '/../../logs';
+if (!file_exists($logDir)) {
+    @mkdir($logDir, 0755, true);
+}
 
 $logFile = $logDir . '/vehicles_data_' . date('Y-m-d') . '.log';
 $timestamp = date('Y-m-d H:i:s');
 $logMessage = "[$timestamp] Vehicles data request with includeInactive=$includeInactive, forceRefresh=$forceRefresh, isAdminMode=$isAdminMode" . ($vehicleId ? ", vehicleId=$vehicleId" : "") . "\n";
 file_put_contents($logFile, $logMessage, FILE_APPEND);
 
-// Include database utilities
-require_once __DIR__ . '/utils/database.php';
-require_once __DIR__ . '/common/db_helper.php';
-
-// Initialize vehicles array
-$vehicles = [];
-$loadedFromDatabase = false;
-$dbError = null;
-
-// PRIORITY 1: Try to load from database first
-try {
-    file_put_contents($logFile, "[$timestamp] Attempting to load vehicles from database\n", FILE_APPEND);
-    
-    // Get database connection
-    $conn = getDbConnectionWithRetry(3);
-    
-    if ($conn) {
-        // Check if vehicles table exists
-        $tableExists = tableExists($conn, 'vehicles') || tableExists($conn, 'vehicle_types');
-        
-        if ($tableExists) {
-            // Determine which table to use
-            $tableName = tableExists($conn, 'vehicles') ? 'vehicles' : 'vehicle_types';
-            
-            // Build query based on parameters
-            $sql = "SELECT * FROM `$tableName`";
-            
-            if (!$includeInactive) {
-                $sql .= " WHERE is_active = 1";
-            }
-            
-            if ($vehicleId) {
-                if (strpos($sql, 'WHERE') !== false) {
-                    $sql .= " AND (vehicle_id = ? OR id = ?)";
-                } else {
-                    $sql .= " WHERE (vehicle_id = ? OR id = ?)";
-                }
-                
-                // Execute query with vehicle ID parameter
-                $result = executeQuery($conn, $sql, [$vehicleId, $vehicleId], 'ss');
+// ALWAYS load directly from the persistent cache file - this is now our SINGLE SOURCE OF TRUTH
+$persistentData = [];
+if (file_exists($persistentCacheFile)) {
+    file_put_contents($logFile, "[$timestamp] Loading from persistent cache file: $persistentCacheFile\n", FILE_APPEND);
+    $persistentJson = file_get_contents($persistentCacheFile);
+    if ($persistentJson) {
+        try {
+            $data = json_decode($persistentJson, true);
+            if (is_array($data)) {
+                file_put_contents($logFile, "[$timestamp] Loaded " . count($data) . " vehicles from persistent cache\n", FILE_APPEND);
+                $persistentData = $data;
             } else {
-                // Execute query without parameters
-                $result = executeQuery($conn, $sql);
-            }
-            
-            if (is_array($result)) {
-                // Format database results to match expected vehicle structure
-                foreach ($result as $row) {
-                    $amenitiesArray = [];
-                    
-                    // Handle amenities field which may be stored as JSON string or comma-separated string
-                    if (!empty($row['amenities'])) {
-                        if (is_string($row['amenities'])) {
-                            // Try to decode as JSON first
-                            $decodedAmenities = json_decode($row['amenities'], true);
-                            if (is_array($decodedAmenities)) {
-                                $amenitiesArray = $decodedAmenities;
-                            } else {
-                                // Fall back to comma-separated string
-                                $amenitiesArray = array_map('trim', explode(',', $row['amenities']));
-                            }
-                        } else if (is_array($row['amenities'])) {
-                            $amenitiesArray = $row['amenities'];
-                        }
-                    }
-                    
-                    // Format the vehicle data
-                    $vehicle = [
-                        'id' => $row['vehicle_id'] ?? $row['id'] ?? '',
-                        'vehicleId' => $row['vehicle_id'] ?? $row['id'] ?? '',
-                        'name' => $row['name'] ?? '',
-                        'capacity' => (int)($row['capacity'] ?? 4),
-                        'luggageCapacity' => (int)($row['luggage_capacity'] ?? $row['luggageCapacity'] ?? 2),
-                        'price' => (float)($row['price'] ?? $row['base_price'] ?? 2500),
-                        'basePrice' => (float)($row['base_price'] ?? $row['price'] ?? 2500),
-                        'pricePerKm' => (float)($row['price_per_km'] ?? $row['pricePerKm'] ?? 14),
-                        'image' => $row['image'] ?? '/cars/sedan.png',
-                        'amenities' => $amenitiesArray,
-                        'description' => $row['description'] ?? '',
-                        'ac' => (bool)($row['ac'] ?? true),
-                        'nightHaltCharge' => (float)($row['night_halt_charge'] ?? $row['nightHaltCharge'] ?? 700),
-                        'driverAllowance' => (float)($row['driver_allowance'] ?? $row['driverAllowance'] ?? 250),
-                        'isActive' => (bool)($row['is_active'] ?? $row['isActive'] ?? true)
-                    ];
-                    
-                    $vehicles[] = $vehicle;
-                }
-                
-                $loadedFromDatabase = true;
-                file_put_contents($logFile, "[$timestamp] Successfully loaded " . count($vehicles) . " vehicles from database table $tableName\n", FILE_APPEND);
-                
-                // Also update the persistent cache to keep it in sync
-                file_put_contents($persistentCacheFile, json_encode($vehicles, JSON_PRETTY_PRINT));
-                file_put_contents($logFile, "[$timestamp] Updated persistent cache with database data\n", FILE_APPEND);
-            } else {
-                file_put_contents($logFile, "[$timestamp] Database query failed or returned no results\n", FILE_APPEND);
-            }
-        } else {
-            file_put_contents($logFile, "[$timestamp] Required tables (vehicles or vehicle_types) don't exist\n", FILE_APPEND);
-            
-            // Try to create the tables
-            $result = ensureDatabaseTables($conn);
-            if ($result) {
-                file_put_contents($logFile, "[$timestamp] Created database tables successfully\n", FILE_APPEND);
-            }
-        }
-        
-        // Close the database connection
-        $conn->close();
-    }
-} catch (Exception $e) {
-    $dbError = $e->getMessage();
-    file_put_contents($logFile, "[$timestamp] Database error: " . $dbError . "\n", FILE_APPEND);
-}
-
-// PRIORITY 2: If database failed or returned no results, load from persistent cache
-if (!$loadedFromDatabase || empty($vehicles)) {
-    file_put_contents($logFile, "[$timestamp] Database load failed or returned empty. Falling back to persistent cache\n", FILE_APPEND);
-    
-    if (file_exists($persistentCacheFile)) {
-        file_put_contents($logFile, "[$timestamp] Loading from persistent cache file: $persistentCacheFile\n", FILE_APPEND);
-        $persistentJson = file_get_contents($persistentCacheFile);
-        
-        if ($persistentJson) {
-            try {
-                $data = json_decode($persistentJson, true);
-                if (is_array($data)) {
-                    file_put_contents($logFile, "[$timestamp] Loaded " . count($data) . " vehicles from persistent cache\n", FILE_APPEND);
-                    $vehicles = $data;
-                } else {
-                    file_put_contents($logFile, "[$timestamp] JSON decode resulted in non-array: " . gettype($data) . "\n", FILE_APPEND);
-                    // Create a backup of the problematic file
-                    $backupFile = $cacheDir . '/vehicles_persistent_backup_' . time() . '.json';
-                    copy($persistentCacheFile, $backupFile);
-                    file_put_contents($logFile, "[$timestamp] Created backup of problematic file at $backupFile\n", FILE_APPEND);
-                }
-            } catch (Exception $e) {
-                file_put_contents($logFile, "[$timestamp] Failed to parse persistent JSON: " . $e->getMessage() . "\n", FILE_APPEND);
+                file_put_contents($logFile, "[$timestamp] JSON decode resulted in non-array: " . gettype($data) . "\n", FILE_APPEND);
                 // Create a backup of the problematic file
                 $backupFile = $cacheDir . '/vehicles_persistent_backup_' . time() . '.json';
                 copy($persistentCacheFile, $backupFile);
                 file_put_contents($logFile, "[$timestamp] Created backup of problematic file at $backupFile\n", FILE_APPEND);
             }
-        } else {
-            file_put_contents($logFile, "[$timestamp] Failed to read persistent cache file\n", FILE_APPEND);
+        } catch (Exception $e) {
+            file_put_contents($logFile, "[$timestamp] Failed to parse persistent JSON: " . $e->getMessage() . "\n", FILE_APPEND);
+            // Create a backup of the problematic file
+            $backupFile = $cacheDir . '/vehicles_persistent_backup_' . time() . '.json';
+            copy($persistentCacheFile, $backupFile);
+            file_put_contents($logFile, "[$timestamp] Created backup of problematic file at $backupFile\n", FILE_APPEND);
+            $persistentData = [];
         }
     } else {
-        file_put_contents($logFile, "[$timestamp] Persistent cache file not found at $persistentCacheFile\n", FILE_APPEND);
+        file_put_contents($logFile, "[$timestamp] Failed to read persistent cache file\n", FILE_APPEND);
+    }
+} else {
+    file_put_contents($logFile, "[$timestamp] Persistent cache file not found at $persistentCacheFile\n", FILE_APPEND);
+}
+
+// Hardcoded vehicle data for demonstration/fallback
+$defaultVehicles = [
+    [
+        'id' => 'sedan',
+        'vehicleId' => 'sedan',
+        'name' => 'Sedan',
+        'capacity' => 4,
+        'luggageCapacity' => 2,
+        'price' => 2500,
+        'basePrice' => 2500,
+        'pricePerKm' => 14,
+        'image' => '/cars/sedan.png',
+        'amenities' => ['AC', 'Bottle Water', 'Music System'],
+        'description' => 'Comfortable sedan suitable for 4 passengers.',
+        'ac' => true,
+        'nightHaltCharge' => 700,
+        'driverAllowance' => 250,
+        'isActive' => true
+    ],
+    [
+        'id' => 'ertiga',
+        'vehicleId' => 'ertiga',
+        'name' => 'Ertiga',
+        'capacity' => 6,
+        'luggageCapacity' => 3,
+        'price' => 3200,
+        'basePrice' => 3200,
+        'pricePerKm' => 18,
+        'image' => '/cars/ertiga.png',
+        'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
+        'description' => 'Spacious SUV suitable for 6 passengers.',
+        'ac' => true,
+        'nightHaltCharge' => 1000,
+        'driverAllowance' => 250,
+        'isActive' => true
+    ],
+    [
+        'id' => 'innova_crysta',
+        'vehicleId' => 'innova_crysta',
+        'name' => 'Innova Crysta',
+        'capacity' => 7,
+        'luggageCapacity' => 4,
+        'price' => 3800,
+        'basePrice' => 3800,
+        'pricePerKm' => 20,
+        'image' => '/cars/innova.png',
+        'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
+        'description' => 'Premium SUV with ample space for 7 passengers.',
+        'ac' => true,
+        'nightHaltCharge' => 1000,
+        'driverAllowance' => 250,
+        'isActive' => true
+    ],
+    [
+        'id' => 'luxury',
+        'vehicleId' => 'luxury',
+        'name' => 'Luxury Sedan',
+        'capacity' => 4,
+        'luggageCapacity' => 3,
+        'price' => 4500,
+        'basePrice' => 4500,
+        'pricePerKm' => 25,
+        'image' => '/cars/luxury.png',
+        'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point', 'Premium Amenities'],
+        'description' => 'Premium luxury sedan with high-end amenities for a comfortable journey.',
+        'ac' => true,
+        'nightHaltCharge' => 1200,
+        'driverAllowance' => 300,
+        'isActive' => true
+    ],
+    [
+        'id' => 'tempo_traveller',
+        'vehicleId' => 'tempo_traveller',
+        'name' => 'Tempo Traveller',
+        'capacity' => 12,
+        'luggageCapacity' => 8,
+        'price' => 5500,
+        'basePrice' => 5500,
+        'pricePerKm' => 25,
+        'image' => '/cars/tempo.png',
+        'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point', 'Pushback Seats'],
+        'description' => 'Large vehicle suitable for groups of up to 12 passengers.',
+        'ac' => true,
+        'nightHaltCharge' => 1200,
+        'driverAllowance' => 300,
+        'isActive' => true
+    ]
+];
+
+// If we have no persistent data, use the default data and save it as persistent
+if (empty($persistentData)) {
+    $persistentData = $defaultVehicles;
+    $jsonOptions = defined('JSON_PRETTY_PRINT') ? JSON_PRETTY_PRINT : 0;
+    $writeResult = file_put_contents($persistentCacheFile, json_encode($persistentData, $jsonOptions));
+    
+    if ($writeResult === false) {
+        file_put_contents($logFile, "[$timestamp] Failed to write default vehicles to persistent cache\n", FILE_APPEND);
+    } else {
+        file_put_contents($logFile, "[$timestamp] No persistent data found, initialized with default vehicles\n", FILE_APPEND);
     }
 }
 
-// PRIORITY 3: If both database and persistent cache failed, use fallback defaults
-if (empty($vehicles)) {
-    file_put_contents($logFile, "[$timestamp] No vehicles found in database or persistent cache. Using default vehicles\n", FILE_APPEND);
-    
-    // Default vehicle data as fallback
-    $vehicles = [
-        [
-            'id' => 'sedan',
-            'vehicleId' => 'sedan',
-            'name' => 'Sedan',
-            'capacity' => 4,
-            'luggageCapacity' => 2,
-            'price' => 2500,
-            'basePrice' => 2500,
-            'pricePerKm' => 14,
-            'image' => '/cars/sedan.png',
-            'amenities' => ['AC', 'Bottle Water', 'Music System'],
-            'description' => 'Comfortable sedan suitable for 4 passengers.',
-            'ac' => true,
-            'nightHaltCharge' => 700,
-            'driverAllowance' => 250,
-            'isActive' => true
-        ],
-        [
-            'id' => 'ertiga',
-            'vehicleId' => 'ertiga',
-            'name' => 'Ertiga',
-            'capacity' => 6,
-            'luggageCapacity' => 3,
-            'price' => 3200,
-            'basePrice' => 3200,
-            'pricePerKm' => 18,
-            'image' => '/cars/ertiga.png',
-            'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
-            'description' => 'Spacious SUV suitable for 6 passengers.',
-            'ac' => true,
-            'nightHaltCharge' => 1000,
-            'driverAllowance' => 250,
-            'isActive' => true
-        ],
-        [
-            'id' => 'innova_crysta',
-            'vehicleId' => 'innova_crysta',
-            'name' => 'Innova Crysta',
-            'capacity' => 7,
-            'luggageCapacity' => 4,
-            'price' => 3800,
-            'basePrice' => 3800,
-            'pricePerKm' => 20,
-            'image' => '/cars/innova.png',
-            'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
-            'description' => 'Premium SUV with ample space for 7 passengers.',
-            'ac' => true,
-            'nightHaltCharge' => 1000,
-            'driverAllowance' => 250,
-            'isActive' => true
-        ],
-        [
-            'id' => 'luxury',
-            'vehicleId' => 'luxury',
-            'name' => 'Luxury Sedan',
-            'capacity' => 4,
-            'luggageCapacity' => 3,
-            'price' => 4500,
-            'basePrice' => 4500,
-            'pricePerKm' => 25,
-            'image' => '/cars/luxury.png',
-            'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point', 'Premium Amenities'],
-            'description' => 'Premium luxury sedan with high-end amenities for a comfortable journey.',
-            'ac' => true,
-            'nightHaltCharge' => 1200,
-            'driverAllowance' => 300,
-            'isActive' => true
-        ],
-        [
-            'id' => 'tempo_traveller',
-            'vehicleId' => 'tempo_traveller',
-            'name' => 'Tempo Traveller',
-            'capacity' => 12,
-            'luggageCapacity' => 8,
-            'price' => 5500,
-            'basePrice' => 5500,
-            'pricePerKm' => 25,
-            'image' => '/cars/tempo.png',
-            'amenities' => ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point', 'Pushback Seats'],
-            'description' => 'Large vehicle suitable for groups of up to 12 passengers.',
-            'ac' => true,
-            'nightHaltCharge' => 1200,
-            'driverAllowance' => 300,
-            'isActive' => true
-        ]
-    ];
-    
-    // Save the default vehicles to the persistent cache
-    file_put_contents($persistentCacheFile, json_encode($vehicles, JSON_PRETTY_PRINT));
-    file_put_contents($logFile, "[$timestamp] Created new persistent cache with default vehicles\n", FILE_APPEND);
-    
-    // Also try to save these to the database if we had a connection
-    try {
-        $conn = getDbConnectionWithRetry(1); // Try once quickly
-        
-        if ($conn) {
-            // Check if vehicles table exists
-            $tableExists = tableExists($conn, 'vehicles') || tableExists($conn, 'vehicle_types');
-            
-            if (!$tableExists) {
-                // Try to create tables first
-                ensureDatabaseTables($conn);
-            }
-            
-            // Determine which table to use
-            $tableName = tableExists($conn, 'vehicles') ? 'vehicles' : 'vehicle_types';
-            
-            file_put_contents($logFile, "[$timestamp] Inserting default vehicles into database table $tableName\n", FILE_APPEND);
-            
-            // Insert default vehicles into the database
-            foreach ($vehicles as $vehicle) {
-                // Check if the vehicle already exists
-                $checkSql = "SELECT COUNT(*) as count FROM `$tableName` WHERE vehicle_id = ?";
-                $checkResult = executeQuery($conn, $checkSql, [$vehicle['vehicleId']], 's');
-                
-                if (is_array($checkResult) && $checkResult[0]['count'] == 0) {
-                    // Convert amenities to a string format for storage
-                    $amenitiesStr = is_array($vehicle['amenities']) ? json_encode($vehicle['amenities']) : $vehicle['amenities'];
-                    
-                    // Insert the vehicle
-                    $insertSql = "INSERT INTO `$tableName` (
-                        vehicle_id, name, capacity, luggage_capacity, ac, image, 
-                        amenities, description, is_active, base_price, price_per_km, 
-                        night_halt_charge, driver_allowance
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-                    
-                    executeQuery($conn, $insertSql, [
-                        $vehicle['vehicleId'],
-                        $vehicle['name'],
-                        $vehicle['capacity'],
-                        $vehicle['luggageCapacity'],
-                        $vehicle['ac'] ? 1 : 0,
-                        $vehicle['image'],
-                        $amenitiesStr,
-                        $vehicle['description'],
-                        $vehicle['isActive'] ? 1 : 0,
-                        $vehicle['basePrice'],
-                        $vehicle['pricePerKm'],
-                        $vehicle['nightHaltCharge'],
-                        $vehicle['driverAllowance']
-                    ], 'ssiisissiiddd');
-                }
-            }
-            
-            $conn->close();
-        }
-    } catch (Exception $e) {
-        file_put_contents($logFile, "[$timestamp] Error inserting default vehicles into database: " . $e->getMessage() . "\n", FILE_APPEND);
+// Merge default vehicles with persistent data - ensuring we have all required vehicles
+$knownVehicleIds = array_column($persistentData, 'id');
+foreach ($defaultVehicles as $defaultVehicle) {
+    if (!in_array($defaultVehicle['id'], $knownVehicleIds)) {
+        $persistentData[] = $defaultVehicle;
+        file_put_contents($logFile, "[$timestamp] Added missing default vehicle: {$defaultVehicle['id']}\n", FILE_APPEND);
     }
 }
+
+// ALWAYS use the persistent data as our vehicle source
+$vehicles = $persistentData;
+file_put_contents($logFile, "[$timestamp] Using " . count($vehicles) . " vehicles from persistent data\n", FILE_APPEND);
 
 // Filter inactive vehicles if needed
 if (!$includeInactive) {
@@ -418,8 +259,10 @@ if ($vehicleId) {
     }
 }
 
-// Response with detailed info for admin mode
+// Debugging: Print cache file location
 if ($isAdminMode) {
+    file_put_contents($logFile, "[$timestamp] ADMIN MODE - debug info: using persistent cache at $persistentCacheFile with " . count($persistentData) . " vehicles\n", FILE_APPEND);
+    // Update response to include cache file info
     echo json_encode([
         'status' => 'success',
         'message' => 'Vehicles retrieved successfully',
@@ -429,10 +272,9 @@ if ($isAdminMode) {
         'includeInactive' => $includeInactive,
         'forceRefresh' => $forceRefresh,
         'isAdminMode' => $isAdminMode,
-        'source' => $loadedFromDatabase ? 'database' : 'cache',
         'debug' => [
             'persistentCacheFile' => $persistentCacheFile,
-            'dbError' => $dbError
+            'persistentDataCount' => count($persistentData)
         ]
     ]);
 } else {
