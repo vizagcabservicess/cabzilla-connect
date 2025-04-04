@@ -1,111 +1,181 @@
-export const forceEnableFallbackMode = () => {
-  localStorage.setItem('fallbackMode', 'true');
-  localStorage.setItem('fallbackExpiry', new Date(Date.now() + 1000 * 60 * 60).toISOString()); // 1 hour
-  console.warn('Fallback mode ENABLED. API requests will be mocked.');
+
+import { apiBaseUrl } from '@/config/api';
+import { toast } from "sonner";
+
+const DEBUG_API = true;
+
+// Check if we're in a development or preview environment
+export const isPreviewMode = (): boolean => {
+  return process.env.NODE_ENV === 'development' || 
+    window.location.hostname.includes('preview') || 
+    window.location.hostname.includes('localhost');
 };
 
-export const disableFallbackMode = () => {
-  localStorage.removeItem('fallbackMode');
-  localStorage.removeItem('fallbackExpiry');
-  console.warn('Fallback mode DISABLED. API requests will be attempted.');
-};
-
-export const isFallbackModeEnabled = () => {
-  const fallbackMode = localStorage.getItem('fallbackMode');
-  const fallbackExpiry = localStorage.getItem('fallbackExpiry');
+// Format data for multipart form submission
+export const formatDataForMultipart = (data: Record<string, any>): FormData => {
+  const formData = new FormData();
   
-  if (fallbackMode === 'true' && fallbackExpiry) {
-    const expiry = new Date(fallbackExpiry);
-    if (expiry > new Date()) {
-      console.warn('Fallback mode is ENABLED.');
-      return true;
+  Object.entries(data).forEach(([key, value]) => {
+    if (value !== null && value !== undefined) {
+      if (typeof value === 'object' && !(value instanceof File) && !(value instanceof Blob)) {
+        formData.append(key, JSON.stringify(value));
+      } else {
+        formData.append(key, value);
+      }
+    }
+  });
+  
+  return formData;
+};
+
+// Enable fallback mode for vehicle data
+export const forceEnableFallbackMode = (): void => {
+  localStorage.setItem('useFallbackMode', 'true');
+  
+  // Dispatch an event to notify other components
+  window.dispatchEvent(new CustomEvent('fallback-mode-enabled'));
+  
+  console.log('Fallback mode enabled.');
+  toast.info('Using fallback mode for vehicle data.');
+};
+
+// For backward compatibility
+export const enableFallbackMode = forceEnableFallbackMode;
+
+// Check if fallback mode is needed
+export const isFallbackNeeded = (): boolean => {
+  return localStorage.getItem('useFallbackMode') === 'true' || isPreviewMode();
+};
+
+// Direct vehicle operation for admin operations
+export const directVehicleOperation = async (
+  endpoint: string,
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
+  data?: any,
+  isAdmin: boolean = false
+): Promise<any> => {
+  try {
+    const headers: Record<string, string> = {
+      'X-Requested-With': 'XMLHttpRequest',
+    };
+
+    if (isAdmin) {
+      headers['X-Admin-Mode'] = 'true';
+    }
+
+    // For GET requests
+    if (method === 'GET') {
+      const queryParams = data ? `?${new URLSearchParams(data).toString()}` : '';
+      const url = `${apiBaseUrl}/${endpoint}${queryParams}`;
+      
+      if (DEBUG_API) console.log(`API ${method} request to: ${url}`);
+      
+      const response = await fetch(url, { method, headers });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error ${response.status}`);
+      }
+      
+      return await response.json();
+    }
+    
+    // For POST, PUT, DELETE requests
+    const url = `${apiBaseUrl}/${endpoint}`;
+    
+    if (DEBUG_API) console.log(`API ${method} request to: ${url}`, data);
+    
+    let body: string | FormData;
+    
+    if (data instanceof FormData) {
+      body = data;
     } else {
-      console.warn('Fallback mode is EXPIRED.');
-      localStorage.removeItem('fallbackMode');
-      localStorage.removeItem('fallbackExpiry');
-      return false;
+      headers['Content-Type'] = 'application/json';
+      body = JSON.stringify(data || {});
     }
-  }
-  
-  return false;
-};
-
-export const getFallbackExpiry = () => {
-  return localStorage.getItem('fallbackExpiry') || null;
-};
-
-export const getSystemStatus = () => {
-  return {
-    fallbackMode: isFallbackModeEnabled(),
-    fallbackExpiry: getFallbackExpiry(),
-    apiErrorCount: 0, // TODO: Implement error tracking
-    databaseStatus: 'ok', // TODO: Implement database status check
-    serverStatus: 'ok', // TODO: Implement server status check
-    isPreview: import.meta.env.MODE === 'development',
-  };
-};
-
-export const fixDatabaseTables = async () => {
-  console.log('Attempting to fix database tables...');
-  
-  try {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
-    const timestamp = Date.now();
-    const options = {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'X-System-Repair': 'true',
-        'Cache-Control': 'no-cache'
-      }
-    };
     
-    // Try to fix database issues
-    const response = await fetch(`${baseUrl}/api/admin/fix-database.php?_t=${timestamp}`, options);
+    const response = await fetch(url, {
+      method,
+      headers,
+      body
+    });
     
     if (!response.ok) {
-      console.error('Database fix failed with status:', response.status);
-      return false;
+      const errorText = await response.text();
+      throw new Error(`HTTP error ${response.status}: ${errorText}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error(`Error in ${endpoint}:`, error);
+    throw error;
+  }
+};
+
+// Fix database tables helper function
+export const fixDatabaseTables = async (): Promise<boolean> => {
+  try {
+    const response = await fetch(`${apiBaseUrl}/api/admin/fix-database-tables.php?_t=${Date.now()}`, {
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-Admin-Mode': 'true'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error ${response.status}`);
     }
     
     const data = await response.json();
-    console.log('Database fix response:', data);
     return data.success === true;
   } catch (error) {
-    console.error('Error during database fix:', error);
+    console.error("Error fixing database tables:", error);
     return false;
   }
 };
 
-// Add the missing function
-export const autoFixDatabaseIssues = async () => {
-  console.log('Attempting to auto-fix database issues...');
-  
+// Check database connection
+export const checkDatabaseConnection = async (): Promise<boolean> => {
   try {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://saddlebrown-oryx-227656.hostingersite.com';
-    const timestamp = Date.now();
-    const options = {
-      method: 'GET',
+    const response = await fetch(`${apiBaseUrl}/api/admin/check-connection.php?_t=${Date.now()}`, {
       headers: {
-        'Accept': 'application/json',
-        'X-System-Repair': 'true',
-        'Cache-Control': 'no-cache'
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-Admin-Mode': 'true'
       }
-    };
-    
-    // Try to fix database issues
-    const response = await fetch(`${baseUrl}/api/admin/fix-database.php?_t=${timestamp}`, options);
+    });
     
     if (!response.ok) {
-      console.error('Database auto-fix failed with status:', response.status);
-      return false;
+      throw new Error(`HTTP error ${response.status}`);
     }
     
     const data = await response.json();
-    console.log('Database auto-fix response:', data);
-    return data.success === true;
+    return data.connection === true;
   } catch (error) {
-    console.error('Error during database auto-fix:', error);
+    console.error("Error checking database connection:", error);
     return false;
+  }
+};
+
+// Get mock vehicle data for fallback
+export const getMockVehicleData = async (): Promise<any[]> => {
+  try {
+    // First try to get from localStorage
+    const cachedData = localStorage.getItem('mockVehicleData');
+    if (cachedData) {
+      return JSON.parse(cachedData);
+    }
+    
+    // If not in localStorage, fetch from public data
+    const response = await fetch('/data/vehicles.json');
+    const data = await response.json();
+    
+    // Cache in localStorage
+    localStorage.setItem('mockVehicleData', JSON.stringify(data.vehicles));
+    
+    return data.vehicles;
+  } catch (error) {
+    console.error("Error fetching mock vehicle data:", error);
+    return [];
   }
 };
