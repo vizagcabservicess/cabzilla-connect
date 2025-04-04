@@ -136,6 +136,9 @@ try {
     $tier4Price = floatval($requestData['tier4Price'] ?? $requestData['tier4_price'] ?? 0);
     $extraKmCharge = floatval($requestData['extraKmCharge'] ?? $requestData['extra_km_charge'] ?? 0);
     
+    // Always try to apply defaults if values are missing/zero
+    $forceCreation = true;
+    
     // Apply defaults if values are missing/zero and force creation is enabled
     if ($forceCreation) {
         $defaultKey = isset($defaultFares[$vehicleId]) ? $vehicleId : 'default';
@@ -362,6 +365,28 @@ try {
         } else {
             logMessage("Updated pricing entry for $vehicleId with trip type $tripType");
         }
+    }
+    
+    // Trigger sync to ensure all vehicle records are properly updated
+    $syncCommand = "php " . __DIR__ . "/sync-airport-fares.php";
+    if (function_exists('exec')) {
+        @exec($syncCommand . " > /dev/null 2>&1 &");
+        logMessage("Triggered background sync with exec");
+    } else {
+        // Try alternative method using file_get_contents with a timeout
+        $syncUrl = "http" . (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 's' : '') . 
+                  "://" . $_SERVER['HTTP_HOST'] . 
+                  dirname($_SERVER['REQUEST_URI']) . "/sync-airport-fares.php";
+        
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 1, // 1 second timeout to avoid blocking
+                'header' => "X-Force-Creation: true\r\n"
+            ]
+        ]);
+        
+        @file_get_contents($syncUrl, false, $context);
+        logMessage("Triggered background sync with HTTP request");
     }
     
     // Success response

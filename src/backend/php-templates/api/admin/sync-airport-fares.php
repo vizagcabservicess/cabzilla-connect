@@ -55,9 +55,9 @@ if (file_exists($lockFile)) {
 // Update lock file with current timestamp
 file_put_contents($lockFile, $now);
 
-// Check if force creation is requested
-$forceCreation = isset($_SERVER['HTTP_X_FORCE_CREATION']) && $_SERVER['HTTP_X_FORCE_CREATION'] === 'true';
-logMessage('Force creation flag: ' . ($forceCreation ? 'true' : 'false'));
+// Always force creation to ensure defaults are applied
+$forceCreation = true;
+logMessage('Force creation flag: enabled by default');
 
 // Create cache directory if needed
 $cacheDir = __DIR__ . '/../../cache';
@@ -144,6 +144,18 @@ $requiredVehicleIds = [
     'toyota'
 ];
 
+// ID mappings for numeric IDs
+$numericIdMap = [
+    '1' => 'sedan',
+    '2' => 'ertiga', 
+    '180' => 'etios',
+    '1266' => 'innova_crysta',
+    '592' => 'tempo',
+    '1270' => 'tempo',
+    '1271' => 'dzire_cng',
+    '1272' => 'innova_hycross'
+];
+
 // Process data and synchronize
 try {
     // Include database configuration
@@ -163,6 +175,7 @@ try {
     // Ensure airport_transfer_fares table exists
     $checkTableSql = "SHOW TABLES LIKE 'airport_transfer_fares'";
     $tableResult = $conn->query($checkTableSql);
+    
     if ($tableResult->num_rows === 0) {
         // Create the table
         $createTableSql = "
@@ -231,6 +244,11 @@ try {
         while ($row = $idResult->fetch_assoc()) {
             if (!empty($row['id']) && !in_array($row['id'], $allVehicleIds)) {
                 $allVehicleIds[] = $row['id'];
+                
+                // If the ID is numeric and has a mapping, add the mapped version too
+                if (isset($numericIdMap[$row['id']]) && !in_array($numericIdMap[$row['id']], $allVehicleIds)) {
+                    $allVehicleIds[] = $numericIdMap[$row['id']];
+                }
             }
         }
     }
@@ -245,6 +263,16 @@ try {
                     $allVehicleIds[] = $row['vehicle_id'];
                 }
             }
+        }
+    }
+    
+    // Add numeric ID mappings to ensure we're covering all variants
+    foreach ($numericIdMap as $numId => $strId) {
+        if (!in_array($strId, $allVehicleIds)) {
+            $allVehicleIds[] = $strId;
+        }
+        if (!in_array($numId, $allVehicleIds)) {
+            $allVehicleIds[] = $numId;
         }
     }
     
@@ -269,11 +297,17 @@ try {
         $checkStmt->execute();
         $checkResult = $checkStmt->get_result();
         
+        // Determine which default values to use
+        $defaultKey = 'default';
+        if (isset($defaultFares[$vehicleId])) {
+            $defaultKey = $vehicleId;
+        } else if (is_numeric($vehicleId) && isset($numericIdMap[$vehicleId]) && isset($defaultFares[$numericIdMap[$vehicleId]])) {
+            $defaultKey = $numericIdMap[$vehicleId];
+        }
+        
+        $defaults = $defaultFares[$defaultKey];
+        
         if ($checkResult->num_rows === 0 || $forceCreation) {
-            // Vehicle doesn't exist, create it with default values
-            $defaultKey = isset($defaultFares[$vehicleId]) ? $vehicleId : 'default';
-            $defaults = $defaultFares[$defaultKey];
-            
             // If force creation and vehicle already exists, update with defaults if needed
             if ($checkResult->num_rows > 0 && $forceCreation) {
                 $updateSql = "
@@ -380,6 +414,29 @@ try {
         }
         
         $processed++;
+    }
+    
+    // Make sure we've also created vehicle entries if needed
+    foreach ($requiredVehicleIds as $requiredId) {
+        $checkVehicleExistsSql = "SELECT id FROM vehicles WHERE vehicle_id = ? OR id = ?";
+        $checkVehicleStmt = $conn->prepare($checkVehicleExistsSql);
+        $checkVehicleStmt->bind_param("ss", $requiredId, $requiredId);
+        $checkVehicleStmt->execute();
+        $vehicleExists = $checkVehicleStmt->get_result()->num_rows > 0;
+        
+        if (!$vehicleExists) {
+            // Create the vehicle
+            $vehicleName = ucfirst(str_replace(['_', '-'], ' ', $requiredId));
+            $insertVehicleSql = "INSERT INTO vehicles (vehicle_id, name, is_active) VALUES (?, ?, 1)";
+            $insertVehicleStmt = $conn->prepare($insertVehicleSql);
+            $insertVehicleStmt->bind_param("ss", $requiredId, $vehicleName);
+            
+            if ($insertVehicleStmt->execute()) {
+                logMessage("Created missing vehicle record for $requiredId");
+            } else {
+                logMessage("Failed to create vehicle record for $requiredId: " . $insertVehicleStmt->error);
+            }
+        }
     }
     
     // Return success response with statistics

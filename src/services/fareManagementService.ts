@@ -144,10 +144,24 @@ export async function updateAirportFares(fareData: Record<string, any>): Promise
     // Ensure vehicleId is consistent in all required formats
     cleanData.vehicle_id = fareData.vehicleId;
     
+    // Make sure we have defaults for all required values
+    if (!cleanData.basePrice) cleanData.basePrice = 0;
+    if (!cleanData.pricePerKm) cleanData.pricePerKm = 0;
+    if (!cleanData.pickupPrice) cleanData.pickupPrice = 0;
+    if (!cleanData.dropPrice) cleanData.dropPrice = 0;
+    if (!cleanData.tier1Price) cleanData.tier1Price = 0;
+    if (!cleanData.tier2Price) cleanData.tier2Price = 0;
+    if (!cleanData.tier3Price) cleanData.tier3Price = 0;
+    if (!cleanData.tier4Price) cleanData.tier4Price = 0;
+    if (!cleanData.extraKmCharge) cleanData.extraKmCharge = 0;
+    
     // Remove circular references that might cause stack overflow
     const sanitizedData = JSON.parse(JSON.stringify(cleanData));
     
     console.log('Sanitized airport fare data to send:', sanitizedData);
+    
+    // Force creation flag to ensure defaults are applied if needed
+    const forceCreation = true;
     
     // Try the direct API first
     let success = false;
@@ -159,7 +173,7 @@ export async function updateAirportFares(fareData: Record<string, any>): Promise
         headers: {
           'X-Admin-Mode': 'true',
           'X-Debug': 'true',
-          'X-Force-Creation': 'true',
+          'X-Force-Creation': forceCreation ? 'true' : 'false',
           'Content-Type': 'application/json'
         },
         data: sanitizedData
@@ -186,7 +200,7 @@ export async function updateAirportFares(fareData: Record<string, any>): Promise
           headers: {
             'X-Admin-Mode': 'true',
             'X-Debug': 'true',
-            'X-Force-Creation': 'true',
+            'X-Force-Creation': forceCreation ? 'true' : 'false',
             'Content-Type': 'application/json'
           },
           data: sanitizedData
@@ -217,7 +231,7 @@ export async function updateAirportFares(fareData: Record<string, any>): Promise
     });
     window.dispatchEvent(event);
     
-    // Try to sync the fares after a successful update
+    // Always try to sync the fares after a successful update
     try {
       console.log('Triggering airport fares sync after update...');
       setTimeout(async () => {
@@ -246,6 +260,54 @@ export async function updateAirportFares(fareData: Record<string, any>): Promise
     
   } catch (error) {
     console.error('Error updating airport fares:', error);
+    throw error;
+  }
+}
+
+/**
+ * Force synchronization of airport fares to ensure all vehicles have entries
+ * @returns Promise that resolves when sync is complete
+ */
+export async function syncAirportFares(): Promise<any> {
+  try {
+    console.log('Forcing sync of airport fares...');
+    const result = await directVehicleOperation('/api/admin/sync-airport-fares.php', 'GET', {
+      headers: {
+        'X-Admin-Mode': 'true',
+        'X-Debug': 'true',
+        'X-Force-Creation': 'true',
+        'Cache-Control': 'no-cache'
+      }
+    });
+    
+    console.log('Airport fares sync result:', result);
+    return result;
+  } catch (error) {
+    console.error('Error syncing airport fares:', error);
+    throw error;
+  }
+}
+
+/**
+ * Force synchronization of local fares to ensure all vehicles have entries
+ * @returns Promise that resolves when sync is complete
+ */
+export async function syncLocalFares(): Promise<any> {
+  try {
+    console.log('Forcing sync of local fares...');
+    const result = await directVehicleOperation('/api/admin/sync-local-fares.php', 'GET', {
+      headers: {
+        'X-Admin-Mode': 'true',
+        'X-Debug': 'true',
+        'X-Force-Creation': 'true',
+        'Cache-Control': 'no-cache'
+      }
+    });
+    
+    console.log('Local fares sync result:', result);
+    return result;
+  } catch (error) {
+    console.error('Error syncing local fares:', error);
     throw error;
   }
 }
