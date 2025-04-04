@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -217,7 +218,8 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       const result = await directVehicleOperation(endpoint, 'GET', {
         headers: {
           'X-Admin-Mode': 'true',
-          'X-Debug': 'true'
+          'X-Debug': 'true',
+          'X-Force-Creation': 'true'
         }
       });
       

@@ -105,6 +105,22 @@ export async function updateLocalFares(fareData: Record<string, any>): Promise<v
     });
     window.dispatchEvent(event);
     
+    // Try to sync the fares after a successful update
+    try {
+      setTimeout(async () => {
+        await directVehicleOperation('/api/admin/sync-local-fares.php', 'GET', {
+          headers: {
+            'X-Admin-Mode': 'true',
+            'X-Debug': 'true',
+            'X-Force-Creation': 'true',
+            'Cache-Control': 'no-cache'
+          }
+        });
+      }, 1000);
+    } catch (syncError) {
+      console.warn('Non-critical: Failed to trigger fares sync after update:', syncError);
+    }
+    
   } catch (error) {
     console.error('Error updating local fares:', error);
     throw error;
@@ -143,6 +159,7 @@ export async function updateAirportFares(fareData: Record<string, any>): Promise
         headers: {
           'X-Admin-Mode': 'true',
           'X-Debug': 'true',
+          'X-Force-Creation': 'true',
           'Content-Type': 'application/json'
         },
         data: sanitizedData
@@ -169,6 +186,7 @@ export async function updateAirportFares(fareData: Record<string, any>): Promise
           headers: {
             'X-Admin-Mode': 'true',
             'X-Debug': 'true',
+            'X-Force-Creation': 'true',
             'Content-Type': 'application/json'
           },
           data: sanitizedData
@@ -208,6 +226,7 @@ export async function updateAirportFares(fareData: Record<string, any>): Promise
             headers: {
               'X-Admin-Mode': 'true',
               'X-Debug': 'true',
+              'X-Force-Creation': 'true',
               'Cache-Control': 'no-cache'
             }
           });
