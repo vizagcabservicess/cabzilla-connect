@@ -203,8 +203,10 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
               return filterVehicles(processedVehicles, includeInactive);
             }
           } else {
-            // Try API endpoint
-            const url = getApiUrl(endpoint);
+            // Try API endpoint - use normalized URL construction via window.location
+            const baseUrl = window.location.origin;
+            const url = endpoint.startsWith('/') ? `${baseUrl}${endpoint}` : `${baseUrl}/${endpoint}`;
+            
             console.log(`Fetching vehicle data from: ${url}`);
             
             const headers = {
@@ -242,7 +244,8 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
               saveToLocalStorage(processedVehicles);
               lastSuccessfulRefresh = now;
               
-              console.log('Successfully loaded', processedVehicles.length, 'vehicles from API');
+              console.log('Successfully loaded', processedVehicles.length, 'vehicles from primary API');
+              console.log('Refreshed and cached', processedVehicles.length, 'vehicles');
               
               // Dispatch event to notify components about the refresh
               window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {

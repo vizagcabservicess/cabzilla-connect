@@ -37,7 +37,7 @@ export function FareUpdateError({
       // First check database connection
       const connectionStatus: DatabaseConnectionResponse = await checkDatabaseConnection();
       
-      if (!connectionStatus || !connectionStatus.connection) {
+      if (!connectionStatus || connectionStatus.connection === false) {
         toast.error(`Database connection failed: ${connectionStatus?.message || 'Check your credentials'}`);
         toast.error("Please verify your database credentials in configuration files");
         return;
@@ -83,7 +83,7 @@ export function FareUpdateError({
       
       const connectionStatus: DatabaseConnectionResponse = await checkDatabaseConnection();
       
-      if (connectionStatus && connectionStatus.connection) {
+      if (connectionStatus && connectionStatus.connection === true) {
         toast.success("Database connection successful!");
         if (connectionStatus.version) {
           toast.info(`Connected to MySQL version: ${connectionStatus.version}`);

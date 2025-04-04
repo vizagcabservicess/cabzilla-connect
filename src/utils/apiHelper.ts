@@ -1,3 +1,4 @@
+
 import { toast } from 'sonner';
 import { apiBaseUrl, forceRefreshHeaders } from '@/config/api';
 
@@ -18,7 +19,13 @@ export interface DatabaseConnectionResponse {
  */
 export const checkDatabaseConnection = async (): Promise<DatabaseConnectionResponse> => {
   try {
-    const response = await fetch(`${apiBaseUrl}/api/direct-check-connection.php?_t=${Date.now()}`, {
+    // Make sure we have a valid URL by properly handling the apiBaseUrl
+    const baseUrl = apiBaseUrl || '';
+    const url = baseUrl ? 
+      `${baseUrl}${baseUrl.endsWith('/') ? '' : '/'}api/direct-check-connection.php?_t=${Date.now()}` : 
+      `/api/direct-check-connection.php?_t=${Date.now()}`;
+    
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
         ...forceRefreshHeaders,
@@ -65,7 +72,13 @@ export const fixDatabaseTables = async () => {
       return false;
     }
     
-    const response = await fetch(`${apiBaseUrl}/api/admin/fix-database.php?_t=${Date.now()}`, {
+    // Make sure we have a valid URL
+    const baseUrl = apiBaseUrl || '';
+    const url = baseUrl ? 
+      `${baseUrl}${baseUrl.endsWith('/') ? '' : '/'}api/admin/fix-database.php?_t=${Date.now()}` : 
+      `/api/admin/fix-database.php?_t=${Date.now()}`;
+    
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
         ...forceRefreshHeaders,
@@ -97,14 +110,41 @@ export const isPreviewMode = () => {
 };
 
 /**
+ * Normalize URL for API requests
+ * @param endpoint - API endpoint path
+ * @returns Properly formatted URL
+ */
+const normalizeUrl = (endpoint: string): string => {
+  // If endpoint is already a full URL, return it
+  if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
+    return endpoint;
+  }
+  
+  // Make sure endpoint starts with a slash if needed
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  
+  // If apiBaseUrl is empty, use relative path
+  if (!apiBaseUrl) {
+    return cleanEndpoint;
+  }
+  
+  // Ensure there's no double slash when joining base and endpoint
+  return `${apiBaseUrl.endsWith('/') ? apiBaseUrl.slice(0, -1) : apiBaseUrl}${cleanEndpoint}`;
+};
+
+/**
  * Force a refresh of vehicle data from persistent storage or database
  * @returns Promise<boolean> - true if refresh was successful
  */
 export const forceRefreshVehicles = async () => {
   try {
-    console.log('Calling API:', `/api/admin/reload-vehicles.php?_t=${Date.now()}`);
+    const endpoint = `/api/admin/reload-vehicles.php?_t=${Date.now()}`;
+    console.log('Calling API:', endpoint);
     
-    const response = await fetch(`${apiBaseUrl}/api/admin/reload-vehicles.php?_t=${Date.now()}`, {
+    // Use normalizeUrl to ensure we have a valid URL
+    const url = normalizeUrl(endpoint);
+    
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
         ...forceRefreshHeaders,
@@ -118,7 +158,10 @@ export const forceRefreshVehicles = async () => {
       
       // Try alternative endpoint if primary fails
       console.log('Trying alternative refresh endpoint...');
-      const altResponse = await fetch(`${apiBaseUrl}/api/admin/refresh-vehicles.php?_t=${Date.now()}`, {
+      const altEndpoint = `/api/admin/refresh-vehicles.php?_t=${Date.now()}`;
+      const altUrl = normalizeUrl(altEndpoint);
+      
+      const altResponse = await fetch(altUrl, {
         method: 'GET',
         headers: {
           ...forceRefreshHeaders,
@@ -188,7 +231,9 @@ export const directVehicleOperation = async (
   } = {}
 ) => {
   try {
-    const url = new URL(`${apiBaseUrl}/${endpoint.startsWith('/') ? endpoint.slice(1) : endpoint}`);
+    // Use normalizeUrl to ensure we have a valid URL
+    const normalizedUrl = normalizeUrl(endpoint);
+    const url = new URL(normalizedUrl, window.location.origin);
     
     // Add any GET parameters from data object
     if (method === 'GET' && options.data) {
@@ -196,6 +241,8 @@ export const directVehicleOperation = async (
         url.searchParams.append(key, String(options.data[key]));
       });
     }
+    
+    console.log(`Performing ${method} operation to: ${url.toString()}`);
     
     // Prepare headers
     const headers = {
