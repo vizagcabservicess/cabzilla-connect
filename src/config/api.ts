@@ -26,26 +26,19 @@ export const forceRefreshHeaders = {
  * @returns Full API URL
  */
 export const getApiUrl = (endpoint: string): string => {
+  // If the window object is available, prefer using current origin
+  const base = typeof window !== 'undefined' ? window.location.origin : apiBaseUrl;
+  
   // If endpoint already includes http/https, return it as is
   if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
     return endpoint;
   }
   
-  // If no apiBaseUrl is set, just use the endpoint as a relative path
-  if (!apiBaseUrl) {
-    return endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  }
+  // Remove trailing slash from base URL if present
+  const cleanBase = (base || '').endsWith('/') ? base.slice(0, -1) : base;
   
-  // Remove leading slash from endpoint if present to avoid double slashes
-  const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
+  // Add leading slash to endpoint if not present
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   
-  // Ensure apiBaseUrl ends with a slash for proper concatenation
-  const baseWithSlash = apiBaseUrl.endsWith('/') ? apiBaseUrl : `${apiBaseUrl}/`;
-  
-  // Make sure there's no 'api/' already in the base URL if we're adding api endpoints
-  if (cleanEndpoint.startsWith('api/') && baseWithSlash.endsWith('api/')) {
-    return `${baseWithSlash}${cleanEndpoint.substring(4)}`;
-  }
-  
-  return `${baseWithSlash}${cleanEndpoint}`;
+  return `${cleanBase}${cleanEndpoint}`;
 };

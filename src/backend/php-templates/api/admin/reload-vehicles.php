@@ -45,32 +45,138 @@ function logDebug($message, $data = null) {
 
 logDebug("Vehicle reload requested");
 
-// Load data from persistent storage
+// First, try to fetch data from the actual database
+$dbVehicles = [];
+$useDatabase = false;
+
+// Check if we can include the database configuration
+if (file_exists(__DIR__ . '/../../config.php')) {
+    try {
+        require_once __DIR__ . '/../../config.php';
+        if (function_exists('getDbConnection')) {
+            $conn = getDbConnection();
+            if ($conn) {
+                logDebug("Connected to database successfully");
+                $useDatabase = true;
+                
+                // Query the vehicles table
+                $query = "SELECT * FROM vehicles";
+                $result = $conn->query($query);
+                
+                if ($result) {
+                    logDebug("Successfully queried vehicles table");
+                    while ($row = $result->fetch_assoc()) {
+                        $amenities = [];
+                        
+                        // Parse amenities from JSON or string
+                        if (!empty($row['amenities'])) {
+                            if (substr($row['amenities'], 0, 1) === '[') {
+                                // Try to parse as JSON array
+                                try {
+                                    $amenities = json_decode($row['amenities'], true);
+                                    if (!is_array($amenities)) {
+                                        $amenities = explode(',', str_replace(['[', ']', '"', "'"], '', $row['amenities']));
+                                    }
+                                } catch (Exception $e) {
+                                    $amenities = explode(',', str_replace(['[', ']', '"', "'"], '', $row['amenities']));
+                                }
+                            } else {
+                                // Parse as comma-separated string
+                                $amenities = explode(',', $row['amenities']);
+                            }
+                        }
+                        
+                        // Parse numeric values to proper types
+                        $dbVehicles[] = [
+                            'id' => $row['vehicle_id'] ?? $row['id'],
+                            'vehicleId' => $row['vehicle_id'] ?? $row['id'],
+                            'name' => $row['name'],
+                            'capacity' => (int)($row['capacity'] ?? 4),
+                            'luggageCapacity' => (int)($row['luggage_capacity'] ?? 2),
+                            'price' => (float)($row['base_price'] ?? 0),
+                            'basePrice' => (float)($row['base_price'] ?? 0),
+                            'pricePerKm' => (float)($row['price_per_km'] ?? 0),
+                            'image' => $row['image'] ?? ('/cars/' . ($row['vehicle_id'] ?? $row['id']) . '.png'),
+                            'amenities' => $amenities,
+                            'description' => $row['description'] ?? '',
+                            'ac' => (bool)($row['ac'] ?? true),
+                            'nightHaltCharge' => (float)($row['night_halt_charge'] ?? 700),
+                            'driverAllowance' => (float)($row['driver_allowance'] ?? 250),
+                            'isActive' => (bool)($row['is_active'] ?? true)
+                        ];
+                    }
+                    
+                    logDebug("Loaded " . count($dbVehicles) . " vehicles from database");
+                }
+                
+                $conn->close();
+            }
+        }
+    } catch (Exception $e) {
+        logDebug("Database error: " . $e->getMessage());
+    }
+}
+
+// Load data from persistent storage (as fallback or to merge with DB data)
 $persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
-$vehicles = [];
+$persistentVehicles = [];
 
 if (file_exists($persistentCacheFile)) {
     $persistentJson = file_get_contents($persistentCacheFile);
     if ($persistentJson) {
         try {
-            $vehicles = json_decode($persistentJson, true);
-            if (!is_array($vehicles)) {
-                $vehicles = [];
+            $persistentVehicles = json_decode($persistentJson, true);
+            if (!is_array($persistentVehicles)) {
+                $persistentVehicles = [];
                 logDebug("Persistent data is not an array");
             } else {
-                logDebug("Loaded " . count($vehicles) . " vehicles from persistent cache");
+                logDebug("Loaded " . count($persistentVehicles) . " vehicles from persistent cache");
             }
         } catch (Exception $e) {
             logDebug("Failed to parse persistent JSON: " . $e->getMessage());
-            $vehicles = [];
+            $persistentVehicles = [];
         }
     } else {
         logDebug("Persistent cache file exists but is empty");
     }
 } else {
     logDebug("Persistent cache file does not exist");
+}
+
+// Merge data from database and persistent storage (database takes precedence)
+$vehicles = [];
+
+if (count($dbVehicles) > 0) {
+    // Create an associative array by ID for easier merging
+    $vehiclesById = [];
     
-    // If persistent file doesn't exist yet, create demo data
+    // First add persistent vehicles
+    foreach ($persistentVehicles as $vehicle) {
+        $id = $vehicle['id'] ?? $vehicle['vehicleId'] ?? '';
+        if (!empty($id)) {
+            $vehiclesById[$id] = $vehicle;
+        }
+    }
+    
+    // Then overwrite with database vehicles (they take precedence)
+    foreach ($dbVehicles as $vehicle) {
+        $id = $vehicle['id'] ?? $vehicle['vehicleId'] ?? '';
+        if (!empty($id)) {
+            $vehiclesById[$id] = $vehicle;
+        }
+    }
+    
+    // Convert back to indexed array
+    $vehicles = array_values($vehiclesById);
+    logDebug("Merged database and persistent storage data: " . count($vehicles) . " total vehicles");
+} else {
+    // If no database vehicles, use persistent vehicles
+    $vehicles = $persistentVehicles;
+    logDebug("Using only persistent storage data: " . count($vehicles) . " vehicles");
+}
+
+// If we have no data at all, create demo data
+if (empty($vehicles)) {
     $vehicles = [
         [
             'id' => 'sedan',
@@ -142,9 +248,15 @@ if (file_exists($persistentCacheFile)) {
         ]
     ];
     
-    // Save demo data to persistent cache
-    file_put_contents($persistentCacheFile, json_encode($vehicles, JSON_PRETTY_PRINT));
-    logDebug("Created new persistent cache with demo data");
+    logDebug("No vehicles found, using demo data");
+}
+
+// ALWAYS save the current merged set to persistent storage
+// This ensures the persistent cache is always up-to-date
+if (file_put_contents($persistentCacheFile, json_encode($vehicles, JSON_PRETTY_PRINT))) {
+    logDebug("Updated persistent cache with " . count($vehicles) . " vehicles");
+} else {
+    logDebug("Failed to write to persistent cache file");
 }
 
 // Filter inactive vehicles if requested
@@ -158,7 +270,7 @@ if (!$includeInactive) {
     logDebug("Filtered inactive vehicles. Before: $vehicleCount, After: " . count($vehicles));
 }
 
-// Clear all regular cache files
+// Clear all regular cache files (except the persistent one)
 $cacheFiles = glob($cacheDir . '/vehicles_*.json');
 foreach ($cacheFiles as $file) {
     if ($file !== $persistentCacheFile && !strpos($file, 'persistent_backup')) {

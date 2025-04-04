@@ -255,9 +255,130 @@ foreach ($cacheFiles as $file) {
     }
 }
 
+// Try to update the database if possible
+$dbUpdated = false;
+try {
+    if (file_exists(__DIR__ . '/../../config.php')) {
+        require_once __DIR__ . '/../../config.php';
+        if (function_exists('getDbConnection')) {
+            $conn = getDbConnection();
+            if ($conn) {
+                // Convert amenities to JSON string if needed
+                $amenitiesJson = is_array($normalizedVehicle['amenities']) 
+                    ? json_encode($normalizedVehicle['amenities']) 
+                    : json_encode([]);
+                
+                // Check if vehicle exists in database
+                $checkQuery = "SELECT id FROM vehicles WHERE vehicle_id = ?";
+                $stmt = $conn->prepare($checkQuery);
+                $stmt->bind_param('s', $vehicleId);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                
+                if ($result->num_rows > 0) {
+                    // Update existing record
+                    $query = "UPDATE vehicles SET 
+                        name = ?, 
+                        capacity = ?, 
+                        luggage_capacity = ?,
+                        base_price = ?,
+                        price_per_km = ?,
+                        image = ?,
+                        amenities = ?,
+                        description = ?,
+                        ac = ?,
+                        night_halt_charge = ?,
+                        driver_allowance = ?,
+                        is_active = ?,
+                        updated_at = NOW()
+                        WHERE vehicle_id = ?";
+                    
+                    $stmt = $conn->prepare($query);
+                    
+                    $name = $normalizedVehicle['name'];
+                    $capacity = $normalizedVehicle['capacity'];
+                    $luggageCapacity = $normalizedVehicle['luggageCapacity'];
+                    $basePrice = $normalizedVehicle['basePrice'];
+                    $pricePerKm = $normalizedVehicle['pricePerKm'];
+                    $image = $normalizedVehicle['image'];
+                    $description = $normalizedVehicle['description'];
+                    $ac = $normalizedVehicle['ac'] ? 1 : 0;
+                    $nightHaltCharge = $normalizedVehicle['nightHaltCharge'];
+                    $driverAllowance = $normalizedVehicle['driverAllowance'];
+                    $isActive = $normalizedVehicle['isActive'] ? 1 : 0;
+                    
+                    $stmt->bind_param('siiddsssidis', 
+                        $name, 
+                        $capacity, 
+                        $luggageCapacity,
+                        $basePrice,
+                        $pricePerKm,
+                        $image,
+                        $amenitiesJson,
+                        $description,
+                        $ac,
+                        $nightHaltCharge,
+                        $driverAllowance,
+                        $isActive,
+                        $vehicleId
+                    );
+                    
+                    $stmt->execute();
+                    logDebug("Updated vehicle in database: " . $stmt->affected_rows . " rows affected");
+                    $dbUpdated = true;
+                } else {
+                    // Insert new record
+                    $query = "INSERT INTO vehicles 
+                        (vehicle_id, name, capacity, luggage_capacity, base_price, price_per_km, 
+                        image, amenities, description, ac, night_halt_charge, driver_allowance, is_active, created_at, updated_at) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
+                    
+                    $stmt = $conn->prepare($query);
+                    
+                    $name = $normalizedVehicle['name'];
+                    $capacity = $normalizedVehicle['capacity'];
+                    $luggageCapacity = $normalizedVehicle['luggageCapacity'];
+                    $basePrice = $normalizedVehicle['basePrice'];
+                    $pricePerKm = $normalizedVehicle['pricePerKm'];
+                    $image = $normalizedVehicle['image'];
+                    $description = $normalizedVehicle['description'];
+                    $ac = $normalizedVehicle['ac'] ? 1 : 0;
+                    $nightHaltCharge = $normalizedVehicle['nightHaltCharge'];
+                    $driverAllowance = $normalizedVehicle['driverAllowance'];
+                    $isActive = $normalizedVehicle['isActive'] ? 1 : 0;
+                    
+                    $stmt->bind_param('ssiiddssidii', 
+                        $vehicleId,
+                        $name, 
+                        $capacity, 
+                        $luggageCapacity,
+                        $basePrice,
+                        $pricePerKm,
+                        $image,
+                        $amenitiesJson,
+                        $description,
+                        $ac,
+                        $nightHaltCharge,
+                        $driverAllowance,
+                        $isActive
+                    );
+                    
+                    $stmt->execute();
+                    logDebug("Inserted new vehicle in database: " . $conn->insert_id);
+                    $dbUpdated = true;
+                }
+                
+                $conn->close();
+            }
+        }
+    }
+} catch (Exception $e) {
+    logDebug("Database error: " . $e->getMessage());
+}
+
 // Return success response with updated vehicle data
 echo json_encode([
     'status' => 'success',
-    'message' => 'Vehicle updated successfully',
+    'message' => 'Vehicle updated successfully' . ($dbUpdated ? ' (in database and cache)' : ' (in cache only)'),
     'vehicle' => $normalizedVehicle
 ]);
