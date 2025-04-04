@@ -25,17 +25,66 @@ $timestamp = date('Y-m-d H:i:s');
 // Log this request
 file_put_contents($logFile, "[$timestamp] Direct airport fares request received\n", FILE_APPEND);
 file_put_contents($logFile, "[$timestamp] GET params: " . json_encode($_GET) . "\n", FILE_APPEND);
+file_put_contents($logFile, "[$timestamp] POST params: " . json_encode($_POST) . "\n", FILE_APPEND);
 
 // Get vehicle ID from query parameters - support multiple parameter names
 $vehicleId = null;
-$possibleKeys = ['vehicleId', 'vehicle_id', 'id'];
+$possibleKeys = ['vehicleId', 'vehicle_id', 'id', 'vehicle-id', 'vehicleType', 'vehicle_type', 'cabType', 'cab_type'];
 
+// First check URL parameters
 foreach ($possibleKeys as $key) {
     if (isset($_GET[$key]) && !empty($_GET[$key])) {
         $vehicleId = $_GET[$key];
-        file_put_contents($logFile, "[$timestamp] Found vehicle ID in '$key': $vehicleId\n", FILE_APPEND);
+        file_put_contents($logFile, "[$timestamp] Found vehicle ID in URL parameter '$key': $vehicleId\n", FILE_APPEND);
         break;
     }
+}
+
+// Then check POST data if still not found
+if (!$vehicleId) {
+    foreach ($possibleKeys as $key) {
+        if (isset($_POST[$key]) && !empty($_POST[$key])) {
+            $vehicleId = $_POST[$key];
+            file_put_contents($logFile, "[$timestamp] Found vehicle ID in POST data '$key': $vehicleId\n", FILE_APPEND);
+            break;
+        }
+    }
+}
+
+// If still not found, check JSON input
+if (!$vehicleId) {
+    $json = file_get_contents('php://input');
+    if (!empty($json)) {
+        $jsonData = json_decode($json, true);
+        if (json_last_error() === JSON_ERROR_NONE) {
+            foreach ($possibleKeys as $key) {
+                if (isset($jsonData[$key]) && !empty($jsonData[$key])) {
+                    $vehicleId = $jsonData[$key];
+                    file_put_contents($logFile, "[$timestamp] Found vehicle ID in JSON data '$key': $vehicleId\n", FILE_APPEND);
+                    break;
+                }
+            }
+            
+            // Check if there's a nested data property
+            if (!$vehicleId && isset($jsonData['data']) && is_array($jsonData['data'])) {
+                foreach ($possibleKeys as $key) {
+                    if (isset($jsonData['data'][$key]) && !empty($jsonData['data'][$key])) {
+                        $vehicleId = $jsonData['data'][$key];
+                        file_put_contents($logFile, "[$timestamp] Found vehicle ID in nested JSON data['$key']: $vehicleId\n", FILE_APPEND);
+                        break;
+                    }
+                }
+            }
+        } else {
+            file_put_contents($logFile, "[$timestamp] Invalid JSON input: " . json_last_error_msg() . "\n", FILE_APPEND);
+        }
+    }
+}
+
+// Clean up vehicle ID if it has a prefix like 'item-'
+if ($vehicleId && strpos($vehicleId, 'item-') === 0) {
+    $vehicleId = substr($vehicleId, 5);
+    file_put_contents($logFile, "[$timestamp] Cleaned vehicle ID from prefix: $vehicleId\n", FILE_APPEND);
 }
 
 if (!$vehicleId) {
@@ -45,6 +94,7 @@ if (!$vehicleId) {
         'message' => 'Vehicle ID is required',
         'debug' => [
             'get_params' => $_GET,
+            'post_params' => $_POST,
             'timestamp' => $timestamp
         ]
     ]);
@@ -92,34 +142,49 @@ foreach ($persistentData as $vehicle) {
 // Define default fares based on vehicle type
 $defaultFares = [
     'sedan' => [
-        'priceOneWay' => 1500,
-        'priceRoundTrip' => 2800,
-        'nightCharges' => 300,
-        'extraWaitingCharges' => 150
+        'pickupPrice' => 800,
+        'dropPrice' => 800,
+        'tier1Price' => 600,
+        'tier2Price' => 800,
+        'tier3Price' => 1000,
+        'tier4Price' => 1200,
+        'extraKmCharge' => 12
     ],
     'ertiga' => [
-        'priceOneWay' => 1800,
-        'priceRoundTrip' => 3400,
-        'nightCharges' => 350,
-        'extraWaitingCharges' => 200
+        'pickupPrice' => 1000,
+        'dropPrice' => 1000,
+        'tier1Price' => 800,
+        'tier2Price' => 1000,
+        'tier3Price' => 1200,
+        'tier4Price' => 1400,
+        'extraKmCharge' => 15
     ],
     'innova_crysta' => [
-        'priceOneWay' => 2200,
-        'priceRoundTrip' => 4000,
-        'nightCharges' => 400,
-        'extraWaitingCharges' => 250
+        'pickupPrice' => 1200,
+        'dropPrice' => 1200,
+        'tier1Price' => 1000,
+        'tier2Price' => 1200,
+        'tier3Price' => 1400,
+        'tier4Price' => 1600,
+        'extraKmCharge' => 17
     ],
     'luxury' => [
-        'priceOneWay' => 2600,
-        'priceRoundTrip' => 4800, 
-        'nightCharges' => 500,
-        'extraWaitingCharges' => 300
+        'pickupPrice' => 2500,
+        'dropPrice' => 2500,
+        'tier1Price' => 2000,
+        'tier2Price' => 2200,
+        'tier3Price' => 2500,
+        'tier4Price' => 3000,
+        'extraKmCharge' => 22
     ],
     'tempo_traveller' => [
-        'priceOneWay' => 3500,
-        'priceRoundTrip' => 6000,
-        'nightCharges' => 600,
-        'extraWaitingCharges' => 350
+        'pickupPrice' => 2000,
+        'dropPrice' => 2000,
+        'tier1Price' => 1600,
+        'tier2Price' => 1800,
+        'tier3Price' => 2000,
+        'tier4Price' => 2500,
+        'extraKmCharge' => 19
     ]
 ];
 
@@ -130,10 +195,13 @@ if ($savedFares) {
 } else {
     // Get default fare for the vehicle, or create empty fare if vehicle type not found
     $fare = isset($defaultFares[$vehicleId]) ? $defaultFares[$vehicleId] : [
-        'priceOneWay' => 0,
-        'priceRoundTrip' => 0,
-        'nightCharges' => 0,
-        'extraWaitingCharges' => 0
+        'pickupPrice' => 0,
+        'dropPrice' => 0,
+        'tier1Price' => 0,
+        'tier2Price' => 0,
+        'tier3Price' => 0,
+        'tier4Price' => 0,
+        'extraKmCharge' => 0
     ];
     file_put_contents($logFile, "[$timestamp] Using default fares for vehicle $vehicleId\n", FILE_APPEND);
 }
@@ -141,6 +209,14 @@ if ($savedFares) {
 // Add vehicle ID to fare data (include both formats for compatibility)
 $fare['vehicleId'] = $vehicleId;
 $fare['vehicle_id'] = $vehicleId;
+
+// Also add pickup/drop in alternate format for compatibility
+$fare['pickup'] = $fare['pickupPrice'];
+$fare['drop'] = $fare['dropPrice'];
+$fare['tier1'] = $fare['tier1Price'];
+$fare['tier2'] = $fare['tier2Price'];
+$fare['tier3'] = $fare['tier3Price'];
+$fare['tier4'] = $fare['tier4Price'];
 
 // Log the response
 file_put_contents($logFile, "[$timestamp] Responding with fare data: " . json_encode($fare) . "\n", FILE_APPEND);
@@ -152,6 +228,7 @@ echo json_encode([
     'fares' => [$fare],
     'debug' => [
         'vehicle_id' => $vehicleId,
+        'vehicleId' => $vehicleId,
         'timestamp' => time()
     ]
 ], JSON_PARTIAL_OUTPUT_ON_ERROR);
