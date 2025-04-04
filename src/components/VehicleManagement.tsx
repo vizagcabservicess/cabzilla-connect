@@ -5,6 +5,7 @@ import { FareManagement } from './FareManagement';
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, Info, RefreshCw, BellOff, Database, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { 
   directVehicleOperation, 
   fixDatabaseTables, 
