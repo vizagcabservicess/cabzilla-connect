@@ -346,31 +346,31 @@ try {
     
     if ($jsonData && file_put_contents($persistentCacheFile, $jsonData)) {
         logMessage("Successfully saved persistent vehicle data with " . count($persistentData) . " vehicles");
+        
+        // Clear any regular cache files to ensure fresh data is loaded
+        $cacheFiles = glob($cacheDir . '/vehicles_*.json');
+        foreach ($cacheFiles as $file) {
+            if ($file !== $persistentCacheFile) {
+                @unlink($file);
+                logMessage("Cleared cache file: " . basename($file));
+            }
+        }
+        
+        // Format response with the updated vehicle data
+        $response = [
+            'status' => 'success',
+            'message' => 'Vehicle updated successfully',
+            'id' => $vehicleId,
+            'timestamp' => time(),
+            'vehicle' => $formattedVehicle
+        ];
     } else {
         logMessage("Failed to save persistent vehicle data");
         if (json_last_error() !== JSON_ERROR_NONE) {
             logMessage("JSON encoding error: " . json_last_error_msg());
         }
+        throw new Exception("Failed to save vehicle data to persistent storage");
     }
-    
-    // Clear any regular cache files to ensure fresh data is loaded
-    $cacheFiles = glob($cacheDir . '/vehicles_*.json');
-    foreach ($cacheFiles as $file) {
-        if ($file !== $persistentCacheFile) {
-            @unlink($file);
-            logMessage("Cleared cache file: " . basename($file));
-        }
-    }
-    
-    // Format response with the updated vehicle data
-    $response = [
-        'status' => 'success',
-        'message' => 'Vehicle updated successfully',
-        'id' => $vehicleId,
-        'timestamp' => time(),
-        'vehicle' => $formattedVehicle
-    ];
-    
 } catch (Exception $e) {
     logMessage("Error updating vehicle: " . $e->getMessage());
     $response = [

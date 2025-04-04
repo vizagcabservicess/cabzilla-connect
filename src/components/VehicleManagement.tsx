@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FareManagement } from './FareManagement';
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,9 +17,51 @@ interface VehicleManagementProps {
 export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId }) => {
   const [error, setError] = useState<string | null>(null);
   const [isFixing, setIsFixing] = useState(false);
+  const [isResyncing, setIsResyncing] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("local");
   const [refreshCount, setRefreshCount] = useState(0);
   const maxAttempts = 3;
+  
+  // New function to force a reload of vehicles from persistent storage
+  const resyncVehicles = useCallback(async () => {
+    if (isResyncing) return;
+    
+    try {
+      setIsResyncing(true);
+      toast.info('Syncing vehicle data from persistent storage...');
+      
+      // Clear the cache first
+      clearVehicleDataCache();
+      
+      // Call the reload-vehicles.php endpoint to force a reload from persistent storage
+      const response = await directVehicleOperation(
+        `api/admin/reload-vehicles.php?_t=${Date.now()}`, 
+        'GET',
+        {
+          headers: {
+            'X-Admin-Mode': 'true',
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          }
+        }
+      );
+      
+      console.log('Vehicle resync result:', response);
+      
+      if (response && response.status === 'success') {
+        toast.success(`Successfully resynced ${response.count || 0} vehicles from persistent storage`);
+        setRefreshCount(0); // Reset counter to trigger a fresh check
+        setError(null); // Clear any errors
+      } else {
+        toast.error('Failed to resync vehicles from persistent storage');
+      }
+    } catch (err) {
+      console.error('Error resyncing vehicles:', err);
+      toast.error('Failed to resync vehicles from persistent storage');
+    } finally {
+      setIsResyncing(false);
+    }
+  }, [isResyncing]);
   
   // Check if vehicle exists
   useEffect(() => {
@@ -38,7 +80,9 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
         const result = await directVehicleOperation(endpoint, 'GET', {
           headers: {
             'X-Admin-Mode': 'true',
-            'X-Debug': 'true'
+            'X-Debug': 'true',
+            'X-Force-Refresh': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
           }
         });
         
@@ -48,6 +92,24 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
           setError(null);
         } else {
           setError(`Could not verify vehicle with ID: ${vehicleId}. Some features might not work correctly.`);
+          
+          // Try resyncing from persistent storage
+          await resyncVehicles();
+          
+          // Check again after resync
+          const retryEndpoint = `api/admin/check-vehicle.php?id=${encodeURIComponent(vehicleId)}&_t=${Date.now()}`;
+          const retryResult = await directVehicleOperation(retryEndpoint, 'GET', {
+            headers: {
+              'X-Admin-Mode': 'true',
+              'X-Debug': 'true',
+              'X-Force-Refresh': 'true',
+              'Cache-Control': 'no-cache, no-store, must-revalidate'
+            }
+          });
+          
+          if (retryResult && retryResult.status === 'success') {
+            setError(null);
+          }
         }
       } catch (err) {
         console.error('Error checking vehicle:', err);
@@ -61,7 +123,7 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
     if (vehicleId) {
       checkVehicle();
     }
-  }, [vehicleId, refreshCount]);
+  }, [vehicleId, refreshCount, resyncVehicles]);
   
   const handleFixDatabase = async () => {
     setIsFixing(true);
@@ -90,7 +152,9 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
           const result = await directVehicleOperation('api/admin/fix-database.php', 'GET', {
             headers: {
               'X-Admin-Mode': 'true',
-              'X-Debug': 'true'
+              'X-Debug': 'true',
+              'X-Force-Refresh': 'true',
+              'Cache-Control': 'no-cache, no-store, must-revalidate'
             }
           });
           
@@ -99,16 +163,20 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
             setError(null);
             setRefreshCount(0);
           } else {
-            toast.error('All database fix attempts failed');
+            // Try one last method - reload from persistent storage
+            await resyncVehicles();
           }
         } catch (altError) {
           console.error('Error with alternate fix:', altError);
-          toast.error('All database fix attempts failed');
+          // Try resyncing as a last resort
+          await resyncVehicles();
         }
       }
     } catch (err) {
       console.error('Error fixing database:', err);
-      toast.error('Failed to fix database');
+      toast.error('Failed to fix database tables');
+      // Try resyncing as a last resort
+      await resyncVehicles();
     } finally {
       setIsFixing(false);
     }
@@ -122,14 +190,24 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
           <AlertTitle>Warning</AlertTitle>
           <AlertDescription className="flex items-center justify-between">
             <span>{error}</span>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleFixDatabase}
-              disabled={isFixing}
-            >
-              {isFixing ? 'Fixing...' : 'Fix Database'}
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleFixDatabase}
+                disabled={isFixing}
+              >
+                {isFixing ? 'Fixing...' : 'Fix Database'}
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={resyncVehicles}
+                disabled={isResyncing}
+              >
+                {isResyncing ? 'Syncing...' : 'Resync Data'}
+              </Button>
+            </div>
           </AlertDescription>
         </Alert>
       )}
@@ -161,10 +239,10 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
             <TabsTrigger value="airport">Airport Fares</TabsTrigger>
           </TabsList>
           <TabsContent value="local">
-            <FareManagement vehicleId={vehicleId} fareType="local" />
+            <FareManagement vehicleId={vehicleId} fareType="local" key={`local-${refreshCount}`} />
           </TabsContent>
           <TabsContent value="airport">
-            <FareManagement vehicleId={vehicleId} fareType="airport" />
+            <FareManagement vehicleId={vehicleId} fareType="airport" key={`airport-${refreshCount}`} />
           </TabsContent>
         </Tabs>
       )}
