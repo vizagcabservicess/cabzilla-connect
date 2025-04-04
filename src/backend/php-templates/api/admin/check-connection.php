@@ -1,4 +1,3 @@
-
 <?php
 /**
  * check-connection.php - Check database connectivity
@@ -24,14 +23,39 @@ try {
     // Use the reusable database connection checker
     $connectionStatus = checkDatabaseConnection();
     
+    // If not connected, try alternative credentials
+    if (!$connectionStatus['connection']) {
+        // Try alternative connection with direct credentials
+        try {
+            $dbHost = 'localhost';
+            $dbName = 'u64460565_db_be';
+            $dbUser = 'u64460565_usr_be';
+            $dbPass = 'Vizag@1213';
+            
+            $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+            
+            if (!$conn->connect_error) {
+                $dbInfoResult = $conn->query("SELECT VERSION() as version");
+                if ($dbInfoResult && $row = $dbInfoResult->fetch_assoc()) {
+                    $connectionStatus['version'] = $row['version'];
+                }
+                
+                $connectionStatus['status'] = 'success';
+                $connectionStatus['connection'] = true;
+                $connectionStatus['message'] = 'Connected with alternative credentials';
+                
+                // Close connection
+                $conn->close();
+            }
+        } catch (Exception $e) {
+            // Alternative connection also failed, keep original error
+        }
+    }
+    
     // Add database info if connected
     if ($connectionStatus['connection']) {
-        // Try to get database info
+        // Get detailed connection info
         $conn = getDbConnectionWithRetry(2);
-        $dbInfoResult = $conn->query("SELECT VERSION() as version");
-        if ($dbInfoResult && $row = $dbInfoResult->fetch_assoc()) {
-            $connectionStatus['version'] = $row['version'];
-        }
         
         // Check vehicles table structure
         $structureResult = $conn->query("DESCRIBE vehicles");

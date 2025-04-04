@@ -117,8 +117,8 @@ try {
         
         // Hardcoded database credentials specific to this environment
         $dbHost = 'localhost';
-        $dbName = 'u644605165_db_be';
-        $dbUser = 'u644605165_usr_be';
+        $dbName = 'u64460565_db_be';
+        $dbUser = 'u64460565_usr_be';
         $dbPass = 'Vizag@1213';
         
         while ($attempts < $maxRetries) {

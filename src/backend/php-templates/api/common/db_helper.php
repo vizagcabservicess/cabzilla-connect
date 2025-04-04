@@ -60,6 +60,45 @@ function getDbConnectionWithRetry($maxRetries = 3) {
 }
 
 /**
+ * Check database connection and return status
+ *
+ * @return array Connection status information
+ */
+function checkDatabaseConnection() {
+    try {
+        $conn = getDbConnectionWithRetry(2);
+        
+        $isConnected = ($conn instanceof mysqli && !$conn->connect_error);
+        $version = null;
+        
+        if ($isConnected) {
+            // Get database version
+            $versionResult = $conn->query("SELECT VERSION() as version");
+            if ($versionResult && $row = $versionResult->fetch_assoc()) {
+                $version = $row['version'];
+            }
+            
+            $conn->close();
+        }
+        
+        return [
+            'status' => $isConnected ? 'success' : 'error',
+            'connection' => $isConnected,
+            'version' => $version,
+            'timestamp' => time()
+        ];
+    } catch (Exception $e) {
+        error_log("Database connection check failed: " . $e->getMessage());
+        return [
+            'status' => 'error',
+            'connection' => false,
+            'message' => $e->getMessage(),
+            'timestamp' => time()
+        ];
+    }
+}
+
+/**
  * Log message to a file with timestamp
  * 
  * @param string $message Message to log

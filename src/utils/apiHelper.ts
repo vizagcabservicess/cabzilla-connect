@@ -132,6 +132,67 @@ export const formatDataForMultipart = (data: any): FormData => {
 };
 
 /**
+ * Enhanced check database connection with detailed error handling
+ */
+export const checkDatabaseConnection = async (): Promise<any> => {
+  try {
+    const timestamp = Date.now();
+    console.log('Checking database connection...');
+    
+    // First try the standard connection check
+    const response = await directVehicleOperation(`api/admin/check-connection.php?_t=${timestamp}`, 'GET', {
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-Admin-Mode': 'true'
+      }
+    });
+    
+    // If successful, return the response
+    if (response && response.connection === true) {
+      console.log('Database connection successful:', response);
+      return response;
+    }
+    
+    // If failed, try alternative direct check
+    try {
+      console.log('Standard connection check failed, trying direct check...');
+      
+      const directCheckResponse = await fetch(`${apiBaseUrl}/api/admin/direct-check-connection.php?_t=${timestamp}`, {
+        method: 'GET',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-Admin-Mode': 'true',
+          'X-Debug': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
+      });
+      
+      // Parse response (with error handling)
+      try {
+        const directCheckResult = await directCheckResponse.json();
+        console.log('Direct connection check result:', directCheckResult);
+        return directCheckResult;
+      } catch (parseError) {
+        console.error('Error parsing direct check response:', parseError);
+        return response; // Return the original response
+      }
+      
+    } catch (directCheckError) {
+      console.error('Direct connection check error:', directCheckError);
+      return response; // Return the original response
+    }
+  } catch (error) {
+    console.error('Error checking database connection:', error);
+    return {
+      status: 'error',
+      connection: false,
+      message: error instanceof Error ? error.message : 'Unknown error checking database connection'
+    };
+  }
+};
+
+/**
  * Utility to fix database tables
  */
 export const fixDatabaseTables = async (): Promise<boolean> => {
@@ -169,30 +230,17 @@ export const fixDatabaseTables = async (): Promise<boolean> => {
       }
     });
     
-    const altResult = await altResponse.json();
-    return altResult && altResult.status === 'success';
+    // Handle non-JSON response
+    const contentType = altResponse.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      const altResult = await altResponse.json();
+      return altResult && altResult.status === 'success';
+    } else {
+      console.warn('Non-JSON response from fix-vehicle-tables.php');
+      return false;
+    }
   } catch (error) {
     console.error('Error fixing database tables:', error);
-    return false;
-  }
-};
-
-/**
- * Check database connection
- */
-export const checkDatabaseConnection = async (): Promise<boolean> => {
-  try {
-    const response = await directVehicleOperation('api/admin/check-connection.php', 'GET', {
-      headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'X-Requested-With': 'XMLHttpRequest',
-        'X-Admin-Mode': 'true'
-      }
-    });
-    
-    return response && response.connection === true;
-  } catch (error) {
-    console.error('Error checking database connection:', error);
     return false;
   }
 };

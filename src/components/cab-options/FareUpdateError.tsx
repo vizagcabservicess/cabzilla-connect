@@ -2,7 +2,7 @@
 import { Button } from "@/components/ui/button";
 import { AlertCircle, RefreshCcw, Database, ExternalLink, FileJson } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { fixDatabaseTables } from "@/utils/apiHelper";
+import { fixDatabaseTables, checkDatabaseConnection } from "@/utils/apiHelper";
 import { toast } from "sonner";
 import { clearVehicleDataCache } from "@/services/vehicleDataService";
 
@@ -32,9 +32,20 @@ export function FareUpdateError({
   // Enhanced handler for database fixes with improved error handling
   const handleFixDatabase = async () => {
     try {
+      toast.loading("Checking database connection...");
+      
+      // First check database connection
+      const connectionStatus = await checkDatabaseConnection();
+      
+      if (!connectionStatus || !connectionStatus.connection) {
+        toast.error(`Database connection failed: ${connectionStatus?.message || 'Check your credentials'}`);
+        toast.error("Please verify your database credentials in configuration files");
+        return;
+      }
+      
       toast.loading("Attempting to fix database tables...");
       
-      // First, clear any cached vehicle data
+      // Clear any cached vehicle data
       clearVehicleDataCache();
       
       const success = await fixDatabaseTables();
@@ -62,6 +73,27 @@ export function FareUpdateError({
       } else {
         toast.error(`Failed to fix database tables: ${err.message || 'Unknown error'}`);
       }
+    }
+  };
+
+  // Handle database credential issues
+  const handleDatabaseCredentials = async () => {
+    try {
+      toast.loading("Checking database credentials...");
+      
+      const connectionStatus = await checkDatabaseConnection();
+      
+      if (connectionStatus && connectionStatus.connection) {
+        toast.success("Database connection successful!");
+        if (connectionStatus.version) {
+          toast.info(`Connected to MySQL version: ${connectionStatus.version}`);
+        }
+      } else {
+        toast.error(`Database connection failed: ${connectionStatus?.message || 'Unknown error'}`);
+        toast.error("Please verify database credentials in config files");
+      }
+    } catch (err: any) {
+      toast.error(`Error checking credentials: ${err.message || 'Unknown error'}`);
     }
   };
 
@@ -103,6 +135,18 @@ export function FareUpdateError({
             >
               <Database className="mr-2 h-4 w-4" />
               Fix Database {hasConnectionError ? "(Connection Error)" : ""}
+            </Button>
+          )}
+          
+          {isAdmin && hasConnectionError && (
+            <Button 
+              size="sm" 
+              variant="outline" 
+              onClick={handleDatabaseCredentials} 
+              className="flex items-center"
+            >
+              <Database className="mr-2 h-4 w-4" />
+              Check Credentials
             </Button>
           )}
           
