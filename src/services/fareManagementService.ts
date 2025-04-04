@@ -201,14 +201,20 @@ export async function updateAirportFares(fareData: Record<string, any>): Promise
     
     // Try to sync the fares after a successful update
     try {
+      console.log('Triggering airport fares sync after update...');
       setTimeout(async () => {
-        console.log('Triggering airport fares sync after update...');
-        await directVehicleOperation('/api/admin/sync-airport-fares.php', 'GET', {
-          headers: {
-            'X-Admin-Mode': 'true',
-            'X-Debug': 'true'
-          }
-        });
+        try {
+          const syncResult = await directVehicleOperation('/api/admin/sync-airport-fares.php', 'GET', {
+            headers: {
+              'X-Admin-Mode': 'true',
+              'X-Debug': 'true',
+              'Cache-Control': 'no-cache'
+            }
+          });
+          console.log('Sync result:', syncResult);
+        } catch (syncError) {
+          console.warn('Non-critical: Error during fare sync:', syncError);
+        }
       }, 1000);
     } catch (syncError) {
       console.warn('Non-critical: Failed to trigger fares sync after update:', syncError);

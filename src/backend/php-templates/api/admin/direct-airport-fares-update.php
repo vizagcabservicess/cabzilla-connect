@@ -165,6 +165,242 @@ $fareData = [
     'pricePerKm' => $pricePerKm
 ];
 
+// Check for zero values and set defaults if needed
+if ($basePrice <= 0) {
+    $fareData['basePrice'] = getDefaultBasePrice($vehicleId);
+    file_put_contents($logFile, "[$timestamp] Using default base price: {$fareData['basePrice']}\n", FILE_APPEND);
+}
+
+if ($pricePerKm <= 0) {
+    $fareData['pricePerKm'] = getDefaultPricePerKm($vehicleId);
+    file_put_contents($logFile, "[$timestamp] Using default price per km: {$fareData['pricePerKm']}\n", FILE_APPEND);
+}
+
+// Update database if available
+$databaseUpdated = false;
+try {
+    // Try to include database configuration
+    $dbConfig = __DIR__ . '/../../config.php';
+    
+    if (file_exists($dbConfig)) {
+        require_once $dbConfig;
+        if (function_exists('getDbConnection')) {
+            $conn = getDbConnection();
+            if ($conn) {
+                file_put_contents($logFile, "[$timestamp] Database connection established\n", FILE_APPEND);
+                
+                // Check if airport_transfer_fares table exists
+                $checkTableQuery = "SHOW TABLES LIKE 'airport_transfer_fares'";
+                $checkResult = $conn->query($checkTableQuery);
+                
+                if ($checkResult && $checkResult->num_rows > 0) {
+                    // Check if record exists
+                    $checkVehicleQuery = "SELECT vehicle_id FROM airport_transfer_fares WHERE vehicle_id = ?";
+                    $checkStmt = $conn->prepare($checkVehicleQuery);
+                    $checkStmt->bind_param("s", $vehicleId);
+                    $checkStmt->execute();
+                    $checkResult = $checkStmt->get_result();
+                    $exists = $checkResult->num_rows > 0;
+                    $checkStmt->close();
+                    
+                    if ($exists) {
+                        // Update existing record
+                        $updateQuery = "UPDATE airport_transfer_fares SET 
+                            base_price = ?, 
+                            price_per_km = ?, 
+                            pickup_price = ?, 
+                            drop_price = ?, 
+                            tier1_price = ?, 
+                            tier2_price = ?, 
+                            tier3_price = ?, 
+                            tier4_price = ?, 
+                            extra_km_charge = ?,
+                            updated_at = NOW()
+                            WHERE vehicle_id = ?";
+                            
+                        $stmt = $conn->prepare($updateQuery);
+                        $stmt->bind_param(
+                            "ddddddddds",
+                            $fareData['basePrice'],
+                            $fareData['pricePerKm'],
+                            $fareData['pickupPrice'],
+                            $fareData['dropPrice'],
+                            $fareData['tier1Price'], 
+                            $fareData['tier2Price'],
+                            $fareData['tier3Price'],
+                            $fareData['tier4Price'],
+                            $fareData['extraKmCharge'],
+                            $vehicleId
+                        );
+                        $stmt->execute();
+                        $stmt->close();
+                        
+                        file_put_contents($logFile, "[$timestamp] Updated airport fares in database for $vehicleId\n", FILE_APPEND);
+                    } else {
+                        // Insert new record
+                        $insertQuery = "INSERT INTO airport_transfer_fares (
+                            vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
+                            tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge, 
+                            created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
+                        
+                        $stmt = $conn->prepare($insertQuery);
+                        $stmt->bind_param(
+                            "sddddddddd",
+                            $vehicleId,
+                            $fareData['basePrice'],
+                            $fareData['pricePerKm'],
+                            $fareData['pickupPrice'],
+                            $fareData['dropPrice'],
+                            $fareData['tier1Price'], 
+                            $fareData['tier2Price'],
+                            $fareData['tier3Price'],
+                            $fareData['tier4Price'],
+                            $fareData['extraKmCharge']
+                        );
+                        $stmt->execute();
+                        $stmt->close();
+                        
+                        file_put_contents($logFile, "[$timestamp] Inserted new airport fares in database for $vehicleId\n", FILE_APPEND);
+                    }
+                    
+                    $databaseUpdated = true;
+                } else {
+                    // Create the table
+                    $createTableQuery = "CREATE TABLE IF NOT EXISTS airport_transfer_fares (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        vehicle_id VARCHAR(50) NOT NULL,
+                        base_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                        price_per_km DECIMAL(5,2) NOT NULL DEFAULT 0,
+                        pickup_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                        drop_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                        tier1_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                        tier2_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                        tier3_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                        tier4_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+                        extra_km_charge DECIMAL(5,2) NOT NULL DEFAULT 0,
+                        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        UNIQUE KEY vehicle_id (vehicle_id)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+                    
+                    $conn->query($createTableQuery);
+                    
+                    // Insert the record
+                    $insertQuery = "INSERT INTO airport_transfer_fares (
+                        vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
+                        tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge, 
+                        created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
+                    
+                    $stmt = $conn->prepare($insertQuery);
+                    $stmt->bind_param(
+                        "sddddddddd",
+                        $vehicleId,
+                        $fareData['basePrice'],
+                        $fareData['pricePerKm'],
+                        $fareData['pickupPrice'],
+                        $fareData['dropPrice'],
+                        $fareData['tier1Price'], 
+                        $fareData['tier2Price'],
+                        $fareData['tier3Price'],
+                        $fareData['tier4Price'],
+                        $fareData['extraKmCharge']
+                    );
+                    $stmt->execute();
+                    $stmt->close();
+                    
+                    file_put_contents($logFile, "[$timestamp] Created airport_transfer_fares table and inserted record for $vehicleId\n", FILE_APPEND);
+                    $databaseUpdated = true;
+                }
+                
+                // Update vehicle_pricing table for compatibility
+                $checkVehiclePricingQuery = "SHOW TABLES LIKE 'vehicle_pricing'";
+                $checkVehiclePricingResult = $conn->query($checkVehiclePricingQuery);
+                
+                if ($checkVehiclePricingResult && $checkVehiclePricingResult->num_rows > 0) {
+                    // Check if record exists
+                    $checkVehiclePricingRecordQuery = "SELECT id FROM vehicle_pricing WHERE vehicle_id = ? AND trip_type = 'airport'";
+                    $checkVehiclePricingStmt = $conn->prepare($checkVehiclePricingRecordQuery);
+                    $checkVehiclePricingStmt->bind_param("s", $vehicleId);
+                    $checkVehiclePricingStmt->execute();
+                    $checkVehiclePricingResult = $checkVehiclePricingStmt->get_result();
+                    $vehiclePricingExists = $checkVehiclePricingResult->num_rows > 0;
+                    $checkVehiclePricingStmt->close();
+                    
+                    if ($vehiclePricingExists) {
+                        // Update existing record
+                        $updateVehiclePricingQuery = "UPDATE vehicle_pricing SET 
+                            airport_base_price = ?, 
+                            airport_price_per_km = ?, 
+                            airport_pickup_price = ?, 
+                            airport_drop_price = ?, 
+                            airport_tier1_price = ?, 
+                            airport_tier2_price = ?, 
+                            airport_tier3_price = ?, 
+                            airport_tier4_price = ?, 
+                            airport_extra_km_charge = ?,
+                            updated_at = NOW()
+                            WHERE vehicle_id = ? AND trip_type = 'airport'";
+                            
+                        $updateVehiclePricingStmt = $conn->prepare($updateVehiclePricingQuery);
+                        $updateVehiclePricingStmt->bind_param(
+                            "ddddddddds",
+                            $fareData['basePrice'],
+                            $fareData['pricePerKm'],
+                            $fareData['pickupPrice'],
+                            $fareData['dropPrice'],
+                            $fareData['tier1Price'], 
+                            $fareData['tier2Price'],
+                            $fareData['tier3Price'],
+                            $fareData['tier4Price'],
+                            $fareData['extraKmCharge'],
+                            $vehicleId
+                        );
+                        $updateVehiclePricingStmt->execute();
+                        $updateVehiclePricingStmt->close();
+                        
+                        file_put_contents($logFile, "[$timestamp] Updated airport fares in vehicle_pricing table for $vehicleId\n", FILE_APPEND);
+                    } else {
+                        // Insert new record
+                        $tripType = 'airport';
+                        $insertVehiclePricingQuery = "INSERT INTO vehicle_pricing (
+                            vehicle_id, trip_type, airport_base_price, airport_price_per_km, 
+                            airport_pickup_price, airport_drop_price, 
+                            airport_tier1_price, airport_tier2_price, airport_tier3_price, airport_tier4_price, 
+                            airport_extra_km_charge, created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
+                        
+                        $insertVehiclePricingStmt = $conn->prepare($insertVehiclePricingQuery);
+                        $insertVehiclePricingStmt->bind_param(
+                            "ssdddddddd",
+                            $vehicleId,
+                            $tripType,
+                            $fareData['basePrice'],
+                            $fareData['pricePerKm'],
+                            $fareData['pickupPrice'],
+                            $fareData['dropPrice'],
+                            $fareData['tier1Price'], 
+                            $fareData['tier2Price'],
+                            $fareData['tier3Price'],
+                            $fareData['tier4Price'],
+                            $fareData['extraKmCharge']
+                        );
+                        $insertVehiclePricingStmt->execute();
+                        $insertVehiclePricingStmt->close();
+                        
+                        file_put_contents($logFile, "[$timestamp] Inserted airport fares in vehicle_pricing table for $vehicleId\n", FILE_APPEND);
+                    }
+                }
+            } else {
+                file_put_contents($logFile, "[$timestamp] Failed to establish database connection\n", FILE_APPEND);
+            }
+        }
+    }
+} catch (Exception $e) {
+    file_put_contents($logFile, "[$timestamp] Database error: " . $e->getMessage() . "\n", FILE_APPEND);
+}
+
 // Log the fare data
 file_put_contents($logFile, "[$timestamp] Fare data to save: " . json_encode($fareData) . "\n", FILE_APPEND);
 
@@ -201,7 +437,7 @@ if (!$vehicleUpdated) {
         'id' => $vehicleId,
         'vehicleId' => $vehicleId,
         'vehicle_id' => $vehicleId,
-        'name' => ucfirst($vehicleId),
+        'name' => ucfirst(str_replace('_', ' ', $vehicleId)),
         'airportFares' => $fareData
     ];
     $persistentData[] = $newVehicle;
@@ -220,5 +456,84 @@ echo json_encode([
     'status' => 'success',
     'message' => 'Airport fares updated successfully',
     'vehicleId' => $vehicleId,
-    'data' => $fareData
+    'data' => $fareData,
+    'databaseUpdated' => $databaseUpdated
 ]);
+
+// Helper function to get default base price based on vehicle type
+function getDefaultBasePrice($vehicleId) {
+    $basePrice = 3500; // Default value
+    
+    switch (strtolower($vehicleId)) {
+        case 'sedan':
+            $basePrice = 3000;
+            break;
+        case 'ertiga':
+            $basePrice = 3500;
+            break;
+        case 'innova_crysta':
+        case 'innova_hycross':
+        case 'innova crysta':
+        case 'innova hycross':
+            $basePrice = 4000;
+            break;
+        case 'dzire_cng':
+        case 'dzire cng':
+        case 'swift_dzire':
+        case 'swift dzire':
+            $basePrice = 3200;
+            break;
+        case 'luxury':
+            $basePrice = 7000;
+            break;
+        case 'tempo':
+        case 'tempo_traveller':
+        case 'tempo traveller':
+            $basePrice = 6000;
+            break;
+        case 'toyota':
+            $basePrice = 4500;
+            break;
+    }
+    
+    return $basePrice;
+}
+
+// Helper function to get default price per km based on vehicle type
+function getDefaultPricePerKm($vehicleId) {
+    $pricePerKm = 15; // Default value
+    
+    switch (strtolower($vehicleId)) {
+        case 'sedan':
+            $pricePerKm = 12;
+            break;
+        case 'ertiga':
+            $pricePerKm = 15;
+            break;
+        case 'innova_crysta':
+        case 'innova_hycross':
+        case 'innova crysta':
+        case 'innova hycross':
+            $pricePerKm = 17;
+            break;
+        case 'dzire_cng':
+        case 'dzire cng':
+        case 'swift_dzire':
+        case 'swift dzire':
+            $pricePerKm = 13;
+            break;
+        case 'luxury':
+            $pricePerKm = 22;
+            break;
+        case 'tempo':
+        case 'tempo_traveller':
+        case 'tempo traveller':
+            $pricePerKm = 19;
+            break;
+        case 'toyota':
+            $pricePerKm = 18;
+            break;
+    }
+    
+    return $pricePerKm;
+}
