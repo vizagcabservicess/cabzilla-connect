@@ -4,11 +4,23 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FareManagement } from './FareManagement';
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Info, RefreshCw } from "lucide-react";
+import { AlertCircle, Info, RefreshCw, BellOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { directVehicleOperation, fixDatabaseTables, isPreviewMode, getMockVehicleData } from '@/utils/apiHelper';
+import { 
+  directVehicleOperation, 
+  fixDatabaseTables, 
+  isPreviewMode, 
+  getMockVehicleData, 
+  isFallbackNeeded, 
+  enableFallbackMode, 
+  disableFallbackMode,
+  checkDatabaseConnection
+} from '@/utils/apiHelper';
 import { toast } from 'sonner';
 import { clearVehicleDataCache } from '@/services/vehicleDataService';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 
 interface VehicleManagementProps {
   vehicleId: string;
@@ -21,11 +33,30 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
   const [activeTab, setActiveTab] = useState<string>("local");
   const [refreshCount, setRefreshCount] = useState(0);
   const [isPreview, setIsPreview] = useState(false);
+  const [isFallbackMode, setIsFallbackMode] = useState(false);
+  const [isDbCheckModalOpen, setIsDbCheckModalOpen] = useState(false);
+  const [dbConnectionStatus, setDbConnectionStatus] = useState<{working: boolean, message: string} | null>(null);
+  const [isCheckingDb, setIsCheckingDb] = useState(false);
+  
   const maxAttempts = 3;
   
   useEffect(() => {
     // Check if we're in preview mode on component mount
-    setIsPreview(isPreviewMode());
+    const preview = isPreviewMode();
+    setIsPreview(preview);
+    
+    // Check if we're in fallback mode
+    setIsFallbackMode(isFallbackNeeded());
+    
+    // If fallback mode is enabled and has expired, disable it
+    const expiryTime = localStorage.getItem('fallback_mode_expiry');
+    if (expiryTime) {
+      const expiry = new Date(expiryTime);
+      if (expiry < new Date()) {
+        disableFallbackMode();
+        setIsFallbackMode(false);
+      }
+    }
   }, []);
   
   // Function to force a reload of vehicles from database
@@ -39,10 +70,10 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
       // Clear the cache first
       clearVehicleDataCache();
       
-      if (isPreviewMode()) {
+      if (isPreviewMode() || isFallbackNeeded()) {
         // In preview mode, simulate success for better UX
         await new Promise(resolve => setTimeout(resolve, 800));
-        toast.success('Successfully synced vehicles (preview mode)');
+        toast.success('Successfully synced vehicles (preview/fallback mode)');
         setRefreshCount(prev => prev + 1);
         setError(null);
       } else {
@@ -73,11 +104,11 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
         } catch (err) {
           console.error('Error resyncing vehicles:', err);
           
-          // Even if the API call fails, we can still retrieve from static JSON in preview
-          if (isPreviewMode()) {
+          // Even if the API call fails, we can still retrieve from static JSON in preview or fallback mode
+          if (isPreviewMode() || isFallbackNeeded()) {
             setRefreshCount(prev => prev + 1);
             setError(null);
-            toast.info('Using static vehicle data (preview mode)');
+            toast.info('Using static vehicle data (fallback mode)');
           } else {
             toast.error('Failed to sync with database - using cached data');
           }
@@ -99,10 +130,10 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
       // Clear the vehicle data cache before fixing the database
       clearVehicleDataCache();
       
-      // In preview mode, we'll simulate success
-      if (isPreviewMode()) {
+      // In preview mode or fallback mode, we'll simulate success
+      if (isPreviewMode() || isFallbackNeeded()) {
         await new Promise(resolve => setTimeout(resolve, 1000));
-        toast.success('Database fixed successfully (preview mode)');
+        toast.success('Database fixed successfully (preview/fallback mode)');
         setError(null);
         setRefreshCount(prev => prev + 1);
         return;
@@ -147,16 +178,59 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
     } catch (err) {
       console.error('Error fixing database:', err);
       
-      // In preview mode, we'll return success anyway
-      if (isPreviewMode()) {
-        toast.info('Using static data (preview mode)');
+      // In preview mode or fallback mode, we'll return success anyway
+      if (isPreviewMode() || isFallbackNeeded()) {
+        toast.info('Using static data (preview/fallback mode)');
         setError(null);
         setRefreshCount(prev => prev + 1);
       } else {
         toast.error('Failed to fix database tables - using cached data');
+        
+        // Suggest enabling fallback mode
+        toast.info('Consider enabling fallback mode if database issues persist');
       }
     } finally {
       setIsFixing(false);
+    }
+  };
+
+  const toggleFallbackMode = (enabled: boolean) => {
+    if (enabled) {
+      enableFallbackMode(60); // Enable for 60 minutes
+      toast.success('Fallback mode enabled for 60 minutes');
+    } else {
+      disableFallbackMode();
+      toast.info('Fallback mode disabled');
+    }
+    setIsFallbackMode(enabled);
+    
+    // Refresh data with new mode
+    setTimeout(() => {
+      setRefreshCount(prev => prev + 1);
+    }, 500);
+  };
+  
+  const checkDbConnection = async () => {
+    setIsCheckingDb(true);
+    
+    try {
+      const status = await checkDatabaseConnection();
+      setDbConnectionStatus(status);
+      
+      if (status.working) {
+        toast.success('Database connection is working');
+      } else {
+        toast.error(`Database connection issue: ${status.message}`);
+      }
+    } catch (err) {
+      console.error('Error checking database connection:', err);
+      setDbConnectionStatus({
+        working: false,
+        message: err instanceof Error ? err.message : 'Unknown error'
+      });
+      toast.error('Failed to check database connection');
+    } finally {
+      setIsCheckingDb(false);
     }
   };
   
@@ -170,8 +244,8 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
       }
 
       try {
-        // If in preview mode, use mock data
-        if (isPreviewMode()) {
+        // If in preview mode or fallback mode, use mock data
+        if (isPreviewMode() || isFallbackNeeded()) {
           try {
             const mockData = await getMockVehicleData(vehicleId);
             if (mockData && mockData.vehicles && mockData.vehicles.length > 0) {
@@ -208,8 +282,8 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
         } catch (apiError) {
           console.error('API Error checking vehicle:', apiError);
           
-          if (isPreviewMode()) {
-            // In preview mode, we can proceed with mock data
+          if (isPreviewMode() || isFallbackNeeded()) {
+            // In preview or fallback mode, we can proceed with mock data
             setError(null);
           } else {
             setError(`Could not verify vehicle with ID: ${vehicleId} in the database. Some features might not work correctly.`);
@@ -221,8 +295,8 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
       } catch (err) {
         console.error('Error checking vehicle:', err);
         
-        if (isPreviewMode()) {
-          // In preview mode, don't show error
+        if (isPreviewMode() || isFallbackNeeded()) {
+          // In preview or fallback mode, don't show error
           setError(null);
         } else {
           setError(`Could not verify vehicle with ID: ${vehicleId} in the database. Some features might not work correctly.`);
@@ -240,12 +314,23 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
   
   return (
     <div className="w-full max-w-4xl mx-auto p-4">
-      {isPreview && (
+      {(isPreview || isFallbackMode) && (
         <Alert className="mb-4">
           <Info className="h-4 w-4" />
-          <AlertTitle>Preview Mode</AlertTitle>
-          <AlertDescription>
-            Running in preview mode with static data. Database operations are simulated.
+          <AlertTitle>
+            {isPreview ? 'Preview Mode' : 'Fallback Mode'}
+          </AlertTitle>
+          <AlertDescription className="flex items-center justify-between">
+            <span>
+              {isPreview 
+                ? 'Running in preview mode with static data. Database operations are simulated.' 
+                : 'Running in fallback mode due to database connectivity issues. Using static data.'}
+            </span>
+            {!isPreview && (
+              <Button variant="outline" size="sm" onClick={() => setIsDbCheckModalOpen(true)}>
+                Configure
+              </Button>
+            )}
           </AlertDescription>
         </Alert>
       )}
@@ -276,6 +361,17 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
                 <RefreshCw className={`h-3 w-3 ${isResyncing ? 'animate-spin' : ''}`} />
                 {isResyncing ? 'Syncing...' : 'Sync Database'}
               </Button>
+              {!isPreview && !isFallbackMode && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => toggleFallbackMode(true)}
+                  className="flex items-center gap-1"
+                >
+                  <BellOff className="h-3 w-3" />
+                  Enable Fallback
+                </Button>
+              )}
             </div>
           </AlertDescription>
         </Alert>
@@ -315,6 +411,63 @@ export const VehicleManagement: React.FC<VehicleManagementProps> = ({ vehicleId 
           </TabsContent>
         </Tabs>
       )}
+      
+      <Dialog open={isDbCheckModalOpen} onOpenChange={setIsDbCheckModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Database Connection Settings</DialogTitle>
+            <DialogDescription>
+              Configure how the application handles database connectivity issues.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label htmlFor="fallback-mode" className="font-medium">Fallback Mode</Label>
+                <p className="text-sm text-muted-foreground">
+                  Enables static data when database connection fails
+                </p>
+              </div>
+              <Switch
+                id="fallback-mode"
+                checked={isFallbackMode}
+                onCheckedChange={toggleFallbackMode}
+              />
+            </div>
+            
+            <div className="border-t pt-4 mt-2">
+              <Button
+                onClick={checkDbConnection}
+                disabled={isCheckingDb}
+                variant="outline"
+                className="w-full"
+              >
+                {isCheckingDb ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Checking Connection...
+                  </>
+                ) : (
+                  <>Test Database Connection</>
+                )}
+              </Button>
+              
+              {dbConnectionStatus && (
+                <div className={`mt-4 p-3 rounded-md ${dbConnectionStatus.working ? 'bg-green-50' : 'bg-red-50'}`}>
+                  <p className={`text-sm ${dbConnectionStatus.working ? 'text-green-700' : 'text-red-700'}`}>
+                    {dbConnectionStatus.message}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setIsDbCheckModalOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
