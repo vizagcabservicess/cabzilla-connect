@@ -1,244 +1,64 @@
-// Configuration and helpers for API requests
 import { toast } from 'sonner';
-import { apiBaseUrl } from '@/config/api';
+import { apiBaseUrl, forceRefreshHeaders } from '@/config/api';
 
 /**
- * Function to determine if running in development/preview mode
+ * Check database connection directly
+ * @returns Promise<boolean> - true if connection successful
  */
-export const isPreviewMode = (): boolean => {
-  return (
-    typeof window !== 'undefined' &&
-    (window.location.hostname.includes('localhost') ||
-     window.location.hostname.includes('127.0.0.1') ||
-     window.location.hostname.includes('demo'))
-  );
-};
-
-/**
- * Generic function to handle API operations for vehicles
- */
-export const directVehicleOperation = async (
-  endpoint: string,
-  method: string = 'GET',
-  options: {
-    headers?: Record<string, string>;
-    data?: any;
-    mock?: any;
-    fallback?: any;
-  } = {}
-): Promise<any> => {
-  // Use mock data in preview mode if provided
-  if (isPreviewMode() && options.mock) {
-    console.log(`[Development Mode] Using mock data for ${endpoint}`);
-    await new Promise(resolve => setTimeout(resolve, 300));
-    return options.mock;
-  }
-  
+export const checkDatabaseConnection = async () => {
   try {
-    // Prepare request options
-    const requestOptions: RequestInit = {
-      method,
+    const response = await fetch(`${apiBaseUrl}/api/direct-check-connection.php?_t=${Date.now()}`, {
+      method: 'GET',
       headers: {
-        'Content-Type': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
-        ...(options.headers || {})
-      }
-    };
-    
-    // Add body data if provided and not GET request
-    if (options.data && method !== 'GET') {
-      requestOptions.body = JSON.stringify(options.data);
-    }
-    
-    // For GET requests with data, add as query params
-    let url = `${apiBaseUrl}/${endpoint}`;
-    if (options.data && method === 'GET') {
-      const params = new URLSearchParams();
-      Object.entries(options.data).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          params.append(key, String(value));
-        }
-      });
-      url += `?${params.toString()}`;
-    }
-    
-    // Make the request
-    console.log(`Calling API: ${url}`);
-    const response = await fetch(url, requestOptions);
-    
-    // If not OK response, try to parse error message
-    if (!response.ok) {
-      let errorDetails = {};
-      try {
-        errorDetails = await response.json();
-      } catch (e) {
-        // Ignore parse errors
-      }
-      
-      throw new Error(`API request failed: ${response.status} ${response.statusText}. ${JSON.stringify(errorDetails)}`);
-    }
-    
-    // Parse and return JSON response
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      try {
-        return await response.json();
-      } catch (e) {
-        console.error('Error parsing JSON response:', e);
-        return null;
-      }
-    }
-    
-    // Return text for non-JSON responses
-    return await response.text();
-  } catch (error) {
-    console.error(`API error for ${endpoint}:`, error);
-    
-    // Return fallback data if provided and in preview mode
-    if (isPreviewMode() && options.fallback) {
-      console.warn(`Using fallback data for ${endpoint}`);
-      return options.fallback;
-    }
-    
-    throw error;
-  }
-};
-
-/**
- * Format data for multipart form submission
- */
-export const formatDataForMultipart = (data: any): FormData => {
-  const formData = new FormData();
-  
-  // Special handling for JSON data
-  if (data) {
-    Object.entries(data).forEach(([key, value]) => {
-      if (value === undefined || value === null) return;
-      
-      if (Array.isArray(value)) {
-        // Serialize arrays as JSON
-        formData.append(key, JSON.stringify(value));
-      } else if (typeof value === 'object' && !(value instanceof File)) {
-        // Serialize objects as JSON
-        formData.append(key, JSON.stringify(value));
-      } else {
-        // Add primitive values or files directly
-        formData.append(key, value as any);
-      }
-    });
-  }
-  
-  return formData;
-};
-
-/**
- * Enhanced check database connection with detailed error handling
- */
-export const checkDatabaseConnection = async (): Promise<any> => {
-  try {
-    const timestamp = Date.now();
-    console.log('Checking database connection...');
-    
-    // First try the standard connection check
-    const response = await directVehicleOperation(`api/admin/check-connection.php?_t=${timestamp}`, 'GET', {
-      headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'X-Requested-With': 'XMLHttpRequest',
+        ...forceRefreshHeaders,
         'X-Admin-Mode': 'true'
       }
     });
     
-    // If successful, return the response
-    if (response && response.connection === true) {
-      console.log('Database connection successful:', response);
-      return response;
+    if (!response.ok) {
+      console.error('Database connection check failed with status:', response.status);
+      return false;
     }
     
-    // If failed, try alternative direct check
-    try {
-      console.log('Standard connection check failed, trying direct check...');
-      
-      const directCheckResponse = await fetch(`${apiBaseUrl}/api/admin/direct-check-connection.php?_t=${timestamp}`, {
-        method: 'GET',
-        headers: {
-          'X-Requested-With': 'XMLHttpRequest',
-          'X-Admin-Mode': 'true',
-          'X-Debug': 'true',
-          'Cache-Control': 'no-cache, no-store, must-revalidate'
-        }
-      });
-      
-      // Parse response (with error handling)
-      try {
-        const directCheckResult = await directCheckResponse.json();
-        console.log('Direct connection check result:', directCheckResult);
-        return directCheckResult;
-      } catch (parseError) {
-        console.error('Error parsing direct check response:', parseError);
-        return response; // Return the original response
-      }
-      
-    } catch (directCheckError) {
-      console.error('Direct connection check error:', directCheckError);
-      return response; // Return the original response
-    }
+    const data = await response.json();
+    return data.connection === true;
   } catch (error) {
     console.error('Error checking database connection:', error);
-    return {
-      status: 'error',
-      connection: false,
-      message: error instanceof Error ? error.message : 'Unknown error checking database connection'
-    };
+    return false;
   }
 };
 
 /**
- * Utility to fix database tables
+ * Fix database tables and structure
+ * @returns Promise<boolean> - true if fix was successful
  */
-export const fixDatabaseTables = async (): Promise<boolean> => {
+export const fixDatabaseTables = async () => {
   try {
     console.log('Attempting to fix database tables...');
     
-    // Clear any cached vehicle data first
-    const vehicleDataService = await import('@/services/vehicleDataService');
-    vehicleDataService.clearVehicleDataCache();
-    
-    // Call the fix-database endpoint
-    const response = await directVehicleOperation('api/admin/fix-database.php', 'GET', {
-      headers: {
-        'X-Admin-Mode': 'true',
-        'X-Force-Refresh': 'true',
-        'Cache-Control': 'no-cache, no-store, must-revalidate'
-      }
-    });
-    
-    console.log('Fix database response:', response);
-    
-    if (response && response.status === 'success') {
-      console.log('Database tables fixed successfully');
-      return true;
+    // First check database connection
+    const connectionCheck = await checkDatabaseConnection();
+    if (!connectionCheck) {
+      console.error('Database connection check failed before attempting to fix tables');
+      toast.error('Database connection check failed');
+      return false;
     }
     
-    // Try alternative fix method
-    const altResponse = await fetch(`${apiBaseUrl}/api/admin/fix-vehicle-tables.php?_t=${Date.now()}`, {
+    const response = await fetch(`${apiBaseUrl}/api/admin/fix-database.php?_t=${Date.now()}`, {
       method: 'GET',
       headers: {
-        'X-Requested-With': 'XMLHttpRequest',
-        'X-Force-Refresh': 'true',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        ...forceRefreshHeaders,
         'X-Admin-Mode': 'true'
       }
     });
     
-    // Handle non-JSON response
-    const contentType = altResponse.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      const altResult = await altResponse.json();
-      return altResult && altResult.status === 'success';
-    } else {
-      console.warn('Non-JSON response from fix-vehicle-tables.php');
+    if (!response.ok) {
+      console.error('Failed to fix database tables with status:', response.status);
       return false;
     }
+    
+    const data = await response.json();
+    return data.status === 'success';
   } catch (error) {
     console.error('Error fixing database tables:', error);
     return false;
@@ -246,84 +66,165 @@ export const fixDatabaseTables = async (): Promise<boolean> => {
 };
 
 /**
- * Force a refresh of the vehicle data cache
+ * Determine if the app is running in preview mode
+ * @returns boolean - true if in preview mode
  */
-export const forceRefreshVehicles = async (): Promise<boolean> => {
+export const isPreviewMode = () => {
+  return window.location.hostname.includes('lovableproject.com') || 
+    window.location.hostname.includes('localhost') ||
+    window.location.hostname.includes('127.0.0.1');
+};
+
+/**
+ * Force a refresh of vehicle data from persistent storage or database
+ * @returns Promise<boolean> - true if refresh was successful
+ */
+export const forceRefreshVehicles = async () => {
   try {
-    // First clear existing cache
-    const vehicleDataService = await import('@/services/vehicleDataService');
-    vehicleDataService.clearVehicleDataCache();
+    console.log('Calling API:', `/api/admin/reload-vehicles.php?_t=${Date.now()}`);
     
-    // Call the reload endpoint
-    const response = await directVehicleOperation(
-      `api/admin/reload-vehicles.php?_t=${Date.now()}`,
-      'GET',
-      {
-        headers: {
-          'X-Admin-Mode': 'true',
-          'X-Force-Refresh': 'true',
-          'Cache-Control': 'no-cache, no-store, must-revalidate'
-        }
+    const response = await fetch(`${apiBaseUrl}/api/admin/reload-vehicles.php?_t=${Date.now()}`, {
+      method: 'GET',
+      headers: {
+        ...forceRefreshHeaders,
+        'X-Admin-Mode': 'true'
       }
-    );
+    });
     
-    return response && response.status === 'success';
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Failed to refresh vehicles:', errorText);
+      
+      // Try alternative endpoint if primary fails
+      console.log('Trying alternative refresh endpoint...');
+      const altResponse = await fetch(`${apiBaseUrl}/api/admin/refresh-vehicles.php?_t=${Date.now()}`, {
+        method: 'GET',
+        headers: {
+          ...forceRefreshHeaders,
+          'X-Admin-Mode': 'true'
+        }
+      });
+      
+      if (!altResponse.ok) {
+        console.error('Alternative refresh also failed:', await altResponse.text());
+        return false;
+      }
+      
+      const altData = await altResponse.json();
+      console.log('Alternative refresh response:', altData);
+      return altData.status === 'success';
+    }
+    
+    const data = await response.json();
+    console.log('Force refresh response:', data);
+    return data.status === 'success';
   } catch (error) {
-    console.error('Error refreshing vehicles:', error);
+    console.error('Error forcing refresh of vehicles:', error);
     return false;
   }
 };
 
 /**
- * Create a new vehicle
+ * Format data for multipart form submission
+ * @param data Object to format as FormData
+ * @returns FormData object
  */
-export const createVehicle = async (vehicleData: any): Promise<any> => {
-  try {
-    return await directVehicleOperation('api/admin/direct-vehicle-create.php', 'POST', {
-      data: vehicleData,
-      headers: {
-        'X-Admin-Mode': 'true',
-        'X-Force-Refresh': 'true'
-      }
-    });
-  } catch (error) {
-    console.error('Error creating vehicle:', error);
-    throw error;
-  }
+export const formatDataForMultipart = (data: Record<string, any>): FormData => {
+  const formData = new FormData();
+  
+  Object.keys(data).forEach(key => {
+    const value = data[key];
+    
+    if (value === undefined || value === null) {
+      return;
+    }
+    
+    if (Array.isArray(value)) {
+      formData.append(key, JSON.stringify(value));
+    } else if (typeof value === 'object' && !(value instanceof File)) {
+      formData.append(key, JSON.stringify(value));
+    } else {
+      formData.append(key, value);
+    }
+  });
+  
+  return formData;
 };
 
 /**
- * Update an existing vehicle
+ * Perform a direct operation on vehicle data
+ * @param endpoint API endpoint to call
+ * @param method HTTP method to use
+ * @param options Additional request options
+ * @returns Promise with response data
  */
-export const updateVehicle = async (vehicleData: any): Promise<any> => {
+export const directVehicleOperation = async (
+  endpoint: string,
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
+  options: {
+    headers?: Record<string, string>;
+    data?: any;
+  } = {}
+) => {
   try {
-    return await directVehicleOperation('api/admin/direct-vehicle-update.php', 'POST', {
-      data: vehicleData,
-      headers: {
-        'X-Admin-Mode': 'true',
-        'X-Force-Refresh': 'true'
+    const url = new URL(`${apiBaseUrl}/${endpoint.startsWith('/') ? endpoint.slice(1) : endpoint}`);
+    
+    // Add any GET parameters from data object
+    if (method === 'GET' && options.data) {
+      Object.keys(options.data).forEach(key => {
+        url.searchParams.append(key, String(options.data[key]));
+      });
+    }
+    
+    // Prepare headers
+    const headers = {
+      ...forceRefreshHeaders,
+      ...(options.headers || {})
+    };
+    
+    // Prepare request options
+    const requestOptions: RequestInit = {
+      method,
+      headers,
+      credentials: 'include'
+    };
+    
+    // Add body for non-GET requests
+    if (method !== 'GET' && options.data) {
+      if (headers['Content-Type'] === 'application/json') {
+        requestOptions.body = JSON.stringify(options.data);
+      } else if (headers['Content-Type']?.includes('multipart/form-data')) {
+        // Remove the Content-Type header to let the browser set it with boundary
+        delete headers['Content-Type'];
+        requestOptions.body = formatDataForMultipart(options.data);
+      } else {
+        // Default to form data
+        requestOptions.body = formatDataForMultipart(options.data);
       }
-    });
+    }
+    
+    // Make the request
+    const response = await fetch(url.toString(), requestOptions);
+    
+    // Check if response is OK
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Error in directVehicleOperation (${response.status}):`, errorText);
+      throw new Error(`API request failed: ${response.status}. ${errorText}`);
+    }
+    
+    // Parse JSON response
+    try {
+      const data = await response.json();
+      return data;
+    } catch (jsonError) {
+      console.error('Error parsing JSON response:', jsonError);
+      const text = await response.text();
+      console.log('Raw response text:', text);
+      throw new Error('Failed to parse JSON response');
+    }
   } catch (error) {
-    console.error('Error updating vehicle:', error);
-    throw error;
-  }
-};
-
-/**
- * Delete a vehicle
- */
-export const deleteVehicle = async (vehicleId: string): Promise<any> => {
-  try {
-    return await directVehicleOperation('api/admin/vehicle-delete.php', 'POST', {
-      data: { id: vehicleId },
-      headers: {
-        'X-Admin-Mode': 'true',
-        'X-Force-Refresh': 'true'
-      }
-    });
-  } catch (error) {
-    console.error('Error deleting vehicle:', error);
+    console.error('Error in directVehicleOperation:', error);
     throw error;
   }
 };

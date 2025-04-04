@@ -1,3 +1,4 @@
+
 <?php
 /**
  * check-connection.php - Check database connectivity
@@ -28,8 +29,8 @@ try {
         // Try alternative connection with direct credentials
         try {
             $dbHost = 'localhost';
-            $dbName = 'u64460565_db_be';
-            $dbUser = 'u64460565_usr_be';
+            $dbName = 'u644605165_db_be';
+            $dbUser = 'u644605165_usr_be';
             $dbPass = 'Vizag@1213';
             
             $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
