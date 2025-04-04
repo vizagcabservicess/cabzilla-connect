@@ -1,4 +1,3 @@
-
 import { toast } from 'sonner';
 import { apiBaseUrl, forceRefreshHeaders, getApiUrl } from '@/config/api';
 
@@ -133,24 +132,28 @@ const normalizeUrl = (endpoint: string): string => {
 };
 
 /**
- * Force a refresh of vehicle data from persistent storage or database
+ * Force a refresh of vehicle data from database first, then persistent storage
  * @returns Promise<boolean> - true if refresh was successful
  */
 export const forceRefreshVehicles = async () => {
   try {
-    const endpoint = 'api/admin/reload-vehicles.php';
-    console.log('Calling API:', endpoint);
+    // Create descriptive log message for debugging
+    console.log('Starting vehicle refresh from database...');
     
-    // Use the getApiUrl helper for proper URL formatting
+    // Use the getApiUrl helper for proper URL formatting with timestamp to prevent caching
+    const endpoint = 'api/admin/reload-vehicles.php';
     const url = getApiUrl(`${endpoint}?_t=${Date.now()}`);
-    console.log('Full URL:', url);
+    console.log('Refresh URL:', url);
     
     const response = await fetch(url, {
       method: 'GET',
       headers: {
         ...forceRefreshHeaders,
-        'X-Admin-Mode': 'true'
-      }
+        'X-Admin-Mode': 'true',
+        'X-Database-First': 'true' // Signal to prioritize database
+      },
+      // This helps ensure we're not getting cached responses
+      cache: 'no-store'
     });
     
     if (!response.ok) {
@@ -159,16 +162,18 @@ export const forceRefreshVehicles = async () => {
       
       // Try alternative endpoint if primary fails
       console.log('Trying alternative refresh endpoint...');
-      const altEndpoint = 'api/admin/refresh-vehicles.php';
-      const altUrl = getApiUrl(`${altEndpoint}?_t=${Date.now()}`);
+      const altEndpoint = 'api/admin/direct-vehicle-modify.php';
+      const altUrl = getApiUrl(`${altEndpoint}?action=load&_t=${Date.now()}`);
       console.log('Alternative URL:', altUrl);
       
       const altResponse = await fetch(altUrl, {
         method: 'GET',
         headers: {
           ...forceRefreshHeaders,
-          'X-Admin-Mode': 'true'
-        }
+          'X-Admin-Mode': 'true',
+          'X-Database-First': 'true' // Signal to prioritize database
+        },
+        cache: 'no-store'
       });
       
       if (!altResponse.ok) {
@@ -254,6 +259,7 @@ export const directVehicleOperation = async (
     // Prepare headers
     const headers = {
       ...forceRefreshHeaders,
+      'X-Database-First': 'true', // Signal to prioritize database
       ...(options.headers || {})
     };
     
@@ -261,7 +267,8 @@ export const directVehicleOperation = async (
     const requestOptions: RequestInit = {
       method,
       headers,
-      credentials: 'include'
+      credentials: 'include',
+      cache: 'no-store' // Ensure we don't use cached responses
     };
     
     // Add body for non-GET requests
@@ -300,12 +307,18 @@ export const directVehicleOperation = async (
       return { status: 'success', message: 'Operation completed but returned empty response' };
     }
     
+    // Check if response is HTML instead of JSON (common error with PHP endpoints)
+    if (text.includes('<!DOCTYPE html>') || text.includes('<html>')) {
+      console.error('Received HTML response instead of JSON:', text.substring(0, 200));
+      throw new Error('Received HTML instead of JSON. The API endpoint is not configured correctly.');
+    }
+    
     // Then try to parse it as JSON
     try {
       return JSON.parse(text);
     } catch (jsonError) {
-      console.error('Error parsing JSON response:', jsonError);
-      throw new Error(`Failed to parse JSON response: ${text}`);
+      console.error('Error parsing JSON response:', jsonError, 'Raw text:', text);
+      throw new Error(`Failed to parse JSON response: ${text.substring(0, 100)}...`);
     }
   } catch (error) {
     console.error('Error in directVehicleOperation:', error);

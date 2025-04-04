@@ -31,11 +31,14 @@ export const getApiUrl = (endpoint: string): string => {
     return endpoint;
   }
   
-  // For development environments and certain domains, use relative URLs
-  // This helps avoid CORS issues in development and preview environments
+  // IMPORTANT: Never use external domains for API calls from the browser
+  // This prevents calls to external domains like vizagup.com
+  
+  // For all environments, use relative URLs to avoid CORS and external domain issues
   if (window.location.hostname.includes('localhost') || 
       window.location.hostname.includes('lovable.app') ||
-      window.location.hostname.includes('lovableproject.com')) {
+      window.location.hostname.includes('lovableproject.com') ||
+      true) { // Always use relative URLs
     
     // Remove leading slash if present for relative URLs
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
@@ -48,13 +51,10 @@ export const getApiUrl = (endpoint: string): string => {
     return cleanEndpoint;
   }
   
-  // For production, use origin or apiBaseUrl
+  // This code path should never be reached due to 'true' condition above
+  // but kept for backward compatibility
   const base = typeof window !== 'undefined' ? window.location.origin : apiBaseUrl;
-  
-  // Remove trailing slash from base URL if present
   const cleanBase = (base || '').endsWith('/') ? base.slice(0, -1) : base;
-  
-  // Add leading slash to endpoint if not present
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   
   return `${cleanBase}${cleanEndpoint}`;

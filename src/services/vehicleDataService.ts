@@ -3,8 +3,8 @@ import { apiBaseUrl, getApiUrl, defaultHeaders, forceRefreshHeaders } from '@/co
 import { toast } from 'sonner';
 import { forceRefreshVehicles } from '@/utils/apiHelper';
 
-// Significantly reduced cache durations to ensure fresher data
-const JSON_CACHE_DURATION = 15 * 1000; // 15 seconds
+// Shorter cache durations to ensure fresher data
+const JSON_CACHE_DURATION = 10 * 1000; // 10 seconds
 const API_CACHE_DURATION = 5 * 1000; // 5 seconds
 const ADMIN_CACHE_DURATION = 0; // No caching for admin views
 
@@ -19,7 +19,7 @@ let cachedVehicles: {
 let lastSuccessfulRefresh = 0;
 let pendingRefreshPromise: Promise<CabType[]> | null = null;
 
-// Default vehicles as fallback
+// Default vehicles as last resort fallback (should never be used if database connection works)
 const DEFAULT_VEHICLES: CabType[] = [
   {
     id: 'sedan',
@@ -103,368 +103,260 @@ export const clearVehicleDataCache = () => {
 };
 
 /**
- * Fetches vehicle data from database via API
+ * Refresh vehicle data from database and persistence layer
+ * Prioritizes database over static JSON
+ */
+const refreshVehicleData = async (forceRefresh = false, includeInactive = false): Promise<CabType[]> => {
+  try {
+    // First, try direct database endpoints
+    const endpoints = [
+      // Prioritize direct database endpoints
+      `api/admin/direct-vehicle-modify.php?action=load&includeInactive=${includeInactive}&_t=${Date.now()}`,
+      `api/admin/vehicles-data.php?_t=${Date.now()}&includeInactive=${includeInactive}&force=${forceRefresh}`,
+      `api/admin/get-vehicles.php?_t=${Date.now()}&includeInactive=${includeInactive}`
+    ];
+    
+    let vehicles: CabType[] | null = null;
+    let errorMessage = '';
+    
+    // Try each endpoint in sequence until we get valid data
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Fetching vehicle data from: ${window.location.origin}/${endpoint}`);
+        const response = await fetch(getApiUrl(endpoint), {
+          method: 'GET',
+          headers: {
+            ...forceRefreshHeaders,
+            'X-Admin-Mode': includeInactive ? 'true' : 'false',
+            'X-Bypass-Cache': 'true',
+            'X-Database-First': 'true'
+          },
+          cache: 'no-store' // Force fresh request
+        });
+        
+        // Check if response is OK
+        if (!response.ok) {
+          errorMessage += `Endpoint ${endpoint} returned ${response.status}. `;
+          continue;
+        }
+        
+        // Get response text
+        const text = await response.text();
+        
+        // Skip HTML responses (PHP errors)
+        if (text.includes('<!DOCTYPE html>') || text.includes('<html>')) {
+          errorMessage += `Endpoint ${endpoint} returned HTML instead of JSON. `;
+          continue;
+        }
+        
+        // Parse JSON
+        const data = JSON.parse(text);
+        
+        // Validate response structure
+        if (data.vehicles && Array.isArray(data.vehicles)) {
+          vehicles = data.vehicles;
+          console.log(`Successfully loaded ${vehicles.length} vehicles from primary API`);
+          break;
+        } else if (data.status === 'success' && data.data && Array.isArray(data.data)) {
+          vehicles = data.data;
+          console.log(`Successfully loaded ${vehicles.length} vehicles from API endpoint`);
+          break;
+        } else if (Array.isArray(data)) {
+          vehicles = data;
+          console.log(`Successfully loaded ${vehicles.length} vehicles from API array`);
+          break;
+        }
+        
+        errorMessage += `Endpoint ${endpoint} returned invalid data structure. `;
+      } catch (error) {
+        console.error(`Error fetching vehicles from ${endpoint}:`, error);
+        errorMessage += `Endpoint ${endpoint} error: ${error instanceof Error ? error.message : 'Unknown error'}. `;
+      }
+    }
+    
+    // If we have vehicles from an API, cache them and return
+    if (vehicles && vehicles.length > 0) {
+      // Cache the result
+      cachedVehicles.api = { data: vehicles, timestamp: Date.now() };
+      lastSuccessfulRefresh = Date.now();
+      
+      // Cache in localStorage too
+      try {
+        localStorage.setItem('cachedVehicles', JSON.stringify(vehicles));
+        localStorage.setItem('cachedVehiclesTimestamp', Date.now().toString());
+      } catch (e) {
+        console.warn('Could not cache vehicles in localStorage:', e);
+      }
+      
+      // Cache by tripType for faster access
+      try {
+        localStorage.setItem('cabOptions_all', JSON.stringify(vehicles));
+        localStorage.setItem('cabOptions_all_timestamp', Date.now().toString());
+      } catch (e) {
+        console.warn('Could not cache by trip type:', e);
+      }
+      
+      console.log(`Refreshed and cached ${vehicles.length} vehicles`);
+      
+      // Notify listeners
+      window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
+        detail: { count: vehicles.length, source: 'api', timestamp: Date.now() }
+      }));
+      
+      return vehicles;
+    }
+    
+    // If direct API calls failed, try the static JSON file as a fallback
+    console.log('Fetching from vehicles.json');
+    const jsonResponse = await fetch(getApiUrl(`data/vehicles.json?_t=${Date.now()}`), {
+      cache: 'no-store' // Disable caching for this request
+    });
+    
+    if (jsonResponse.ok) {
+      const jsonVehicles = await jsonResponse.json();
+      cachedVehicles.json = { data: jsonVehicles, timestamp: Date.now() };
+      console.log(`Successfully loaded ${jsonVehicles.length} vehicles from JSON file`);
+      
+      // Store JSON vehicles in localStorage as a fallback
+      try {
+        localStorage.setItem('localVehicles', JSON.stringify(jsonVehicles));
+      } catch (e) {
+        console.warn('Could not store JSON vehicles in localStorage:', e);
+      }
+      
+      // Dispatch event for JSON fallback
+      window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
+        detail: { count: jsonVehicles.length, source: 'json', timestamp: Date.now() }
+      }));
+      
+      // Only return JSON vehicles if we didn't get API vehicles
+      return jsonVehicles;
+    }
+    
+    console.warn('Could not fetch vehicles from any source.');
+    throw new Error(`Failed to fetch vehicles: ${errorMessage}`);
+  } catch (error) {
+    console.error('Error refreshing vehicle data:', error);
+    
+    // Try to force a refresh using the specialized function
+    try {
+      await forceRefreshVehicles();
+    } catch (refreshError) {
+      console.error('Error forcing refresh of vehicles:', refreshError);
+    }
+    
+    // If we have cached data, return it as a last resort
+    if (cachedVehicles.api && cachedVehicles.api.data.length > 0) {
+      return cachedVehicles.api.data;
+    }
+    
+    if (cachedVehicles.json && cachedVehicles.json.data.length > 0) {
+      return cachedVehicles.json.data;
+    }
+    
+    // Try localStorage cache
+    try {
+      const localStorageVehicles = localStorage.getItem('cachedVehicles') || localStorage.getItem('localVehicles');
+      if (localStorageVehicles) {
+        const parsed = JSON.parse(localStorageVehicles);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          console.log(`Found ${parsed.length} vehicles in localStorage cache`);
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.error('Error reading from localStorage:', e);
+    }
+    
+    // As a last resort, return default vehicles
+    console.warn('Using default vehicles as last resort');
+    return DEFAULT_VEHICLES;
+  }
+};
+
+/**
+ * Fetches vehicle data, prioritizing database over static JSON
  * @param forceRefresh Force data refresh (bypass cache)
  * @param includeInactive Include inactive vehicles in the result
  */
 export const getVehicleData = async (forceRefresh = false, includeInactive = false): Promise<CabType[]> => {
   console.log(`getVehicleData called with forceRefresh=${forceRefresh}, includeInactive=${includeInactive}`);
   
-  // If there's already a refresh in progress, wait for it
-  if (pendingRefreshPromise && !includeInactive) {
+  // Check if we're currently refreshing
+  if (pendingRefreshPromise) {
     console.log('Reusing pending refresh promise');
     try {
-      const vehicles = await pendingRefreshPromise;
-      return filterVehicles(vehicles, includeInactive);
+      return await pendingRefreshPromise;
     } catch (error) {
       console.error('Pending refresh promise failed:', error);
-      // Continue with new refresh
+      // Continue to refresh again
     }
   }
   
+  // Check if we have valid cache
   const now = Date.now();
-  const cacheBuster = `_t=${now}`;
+  const cacheDuration = includeInactive ? ADMIN_CACHE_DURATION : (forceRefresh ? 0 : API_CACHE_DURATION);
   
-  // Always force refresh for admin views
+  // Admin views should always get fresh data
   if (includeInactive) {
     forceRefresh = true;
-    console.log("Admin view detected (includeInactive=true), forcing refresh");
   }
   
-  // Check if we've had a successful refresh recently
-  const refreshCooldown = includeInactive ? ADMIN_CACHE_DURATION : 10000; // 10 seconds for normal view
-  if (lastSuccessfulRefresh > 0 && now - lastSuccessfulRefresh < refreshCooldown && !forceRefresh) {
-    console.log(`Skipping refresh, last successful refresh was ${Math.floor((now - lastSuccessfulRefresh)/1000)}s ago`);
-    
-    // If we have API cache, use it
-    if (cachedVehicles.api && cachedVehicles.api.timestamp > lastSuccessfulRefresh) {
-      console.log('Using API cache');
-      return filterVehicles(cachedVehicles.api.data, includeInactive);
-    }
+  // Check API cache first (database-sourced data)
+  if (!forceRefresh && 
+      cachedVehicles.api && 
+      cachedVehicles.api.data.length > 0 && 
+      now - cachedVehicles.api.timestamp < cacheDuration) {
+    console.log(`Using API cache with ${cachedVehicles.api.data.length} vehicles`);
+    return filterVehicles(cachedVehicles.api.data, includeInactive);
   }
   
-  // Define the refresh function
-  const refreshVehicleData = async (): Promise<CabType[]> => {
-    try {
-      // First, try to force a refresh from persistent storage
-      if (forceRefresh) {
-        try {
-          await forceRefreshVehicles();
-        } catch (refreshError) {
-          console.warn('Could not force refresh from persistent storage:', refreshError);
-        }
-      }
-      
-      // Try multiple endpoints for best results, with admin endpoints first for admin views
-      let endpoints = [];
-      
-      // If in admin mode, prioritize admin endpoints
-      if (includeInactive) {
-        endpoints = [
-          `/api/admin/vehicles-data.php?${cacheBuster}&includeInactive=true&force=true`, 
-          `/api/vehicles-data.php?${cacheBuster}&includeInactive=true&force=true`,
-          `/api/admin/get-vehicles.php?${cacheBuster}&includeInactive=true`,
-          null // Marker for JSON file
-        ];
-      } else {
-        endpoints = [
-          `/api/vehicles-data.php?${cacheBuster}&includeInactive=${includeInactive ? 'true' : 'false'}&force=${forceRefresh ? 'true' : 'false'}`,
-          `/api/admin/get-vehicles.php?${cacheBuster}&includeInactive=${includeInactive ? 'true' : 'false'}`,
-          `/api/admin/vehicles-data.php?${cacheBuster}&includeInactive=${includeInactive ? 'true' : 'false'}&force=${forceRefresh ? 'true' : 'false'}`,
-          null // Marker for JSON file
-        ];
-      }
-      
-      for (const endpoint of endpoints) {
-        try {
-          if (endpoint === null) {
-            // Try local JSON file
-            console.log('Fetching from vehicles.json');
-            const jsonResponse = await fetch(`/data/vehicles.json?${cacheBuster}`, {
-              headers: { 'Cache-Control': 'no-cache' }
-            });
-            
-            if (!jsonResponse.ok) throw new Error('JSON fetch failed');
-            
-            const jsonData = await jsonResponse.json();
-            if (Array.isArray(jsonData) && jsonData.length > 0) {
-              const processedVehicles = processVehicles(jsonData);
-              
-              cachedVehicles.json = {
-                data: processedVehicles,
-                timestamp: now
-              };
-              
-              saveToLocalStorage(processedVehicles);
-              lastSuccessfulRefresh = now;
-              
-              console.log('Successfully loaded', processedVehicles.length, 'vehicles from JSON file');
-              
-              return filterVehicles(processedVehicles, includeInactive);
-            }
-          } else {
-            // Try API endpoint - use normalized URL construction via window.location
-            const baseUrl = window.location.origin;
-            const url = endpoint.startsWith('/') ? `${baseUrl}${endpoint}` : `${baseUrl}/${endpoint}`;
-            
-            console.log(`Fetching vehicle data from: ${url}`);
-            
-            const headers = {
-              ...forceRefreshHeaders,
-              'X-Admin-Mode': includeInactive ? 'true' : 'false',
-              'X-Bypass-Cache': 'true',
-              'X-Force-Refresh': forceRefresh ? 'true' : 'false',
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
-              'Pragma': 'no-cache',
-              'Expires': '0'
-            };
-            
-            const response = await fetch(url, {
-              headers,
-              mode: 'cors',
-              cache: 'no-store'
-            });
-            
-            if (!response.ok) {
-              throw new Error(`API response not OK: ${response.status}`);
-            }
-            
-            const data = await response.json();
-            
-            if (data && Array.isArray(data.vehicles) && data.vehicles.length > 0) {
-              console.log(`Received ${data.vehicles.length} vehicles from API:`, data.vehicles);
-              
-              const processedVehicles = processVehicles(data.vehicles);
-              
-              cachedVehicles.api = {
-                data: processedVehicles,
-                timestamp: now
-              };
-              
-              saveToLocalStorage(processedVehicles);
-              lastSuccessfulRefresh = now;
-              
-              console.log('Successfully loaded', processedVehicles.length, 'vehicles from primary API');
-              console.log('Refreshed and cached', processedVehicles.length, 'vehicles');
-              
-              // Dispatch event to notify components about the refresh
-              window.dispatchEvent(new CustomEvent('vehicle-data-refreshed', {
-                detail: { 
-                  count: processedVehicles.length,
-                  timestamp: now,
-                  isAdminView: includeInactive
-                }
-              }));
-              
-              return filterVehicles(processedVehicles, includeInactive);
-            }
-          }
-        } catch (error) {
-          console.error(`Error fetching vehicles from ${endpoint || 'JSON file'}:`, error);
-          // Continue to next endpoint
-        }
-      }
-      
-      // If all endpoints failed, try to use localStorage
-      try {
-        const cachedVehiclesString = localStorage.getItem('cachedVehicles') || localStorage.getItem('localVehicles');
-        if (cachedVehiclesString) {
-          const cachedVehiclesData = JSON.parse(cachedVehiclesString);
-          if (Array.isArray(cachedVehiclesData) && cachedVehiclesData.length > 0) {
-            console.log('Using localStorage cached vehicles');
-            
-            cachedVehicles.fallback = {
-              data: cachedVehiclesData,
-              timestamp: now
-            };
-            
-            return filterVehicles(cachedVehiclesData, includeInactive);
-          }
-        }
-      } catch (localStorageError) {
-        console.error('Error using localStorage cache:', localStorageError);
-      }
-      
-      // As last resort, use default vehicles
-      console.log('Using default vehicles as last resort');
-      
-      cachedVehicles.fallback = {
-        data: [...DEFAULT_VEHICLES],
-        timestamp: now
-      };
-      
-      saveToLocalStorage(DEFAULT_VEHICLES);
-      
-      // Dispatch event for default vehicles
-      window.dispatchEvent(new CustomEvent('vehicle-data-fallback', {
-        detail: { 
-          count: DEFAULT_VEHICLES.length,
-          timestamp: now,
-          isDefault: true
-        }
-      }));
-      
-      return filterVehicles(DEFAULT_VEHICLES, includeInactive);
-    } catch (error) {
-      console.error('Refresh vehicle data failed:', error);
-      
-      // Try to use any available cache as fallback
-      if (cachedVehicles.api && cachedVehicles.api.data.length > 0) {
-        return filterVehicles(cachedVehicles.api.data, includeInactive);
-      }
-      
-      if (cachedVehicles.json && cachedVehicles.json.data.length > 0) {
-        return filterVehicles(cachedVehicles.json.data, includeInactive);
-      }
-      
-      if (cachedVehicles.fallback && cachedVehicles.fallback.data.length > 0) {
-        return filterVehicles(cachedVehicles.fallback.data, includeInactive);
-      }
-      
-      return filterVehicles(DEFAULT_VEHICLES, includeInactive);
-    } finally {
-      pendingRefreshPromise = null;
-    }
-  };
+  // Then check JSON cache (static file data)
+  if (!forceRefresh && 
+      cachedVehicles.json && 
+      cachedVehicles.json.data.length > 0 && 
+      now - cachedVehicles.json.timestamp < JSON_CACHE_DURATION) {
+    console.log(`Using JSON cache with ${cachedVehicles.json.data.length} vehicles`);
+    return filterVehicles(cachedVehicles.json.data, includeInactive);
+  }
   
-  // Create and store the refresh promise
-  pendingRefreshPromise = refreshVehicleData();
-  return pendingRefreshPromise;
-};
-
-/**
- * Save vehicles to localStorage with proper cache keys
- */
-function saveToLocalStorage(vehicles: CabType[]) {
+  // We need to refresh, store the promise
+  pendingRefreshPromise = refreshVehicleData(forceRefresh, includeInactive);
+  
   try {
-    const now = Date.now();
-    localStorage.setItem('cachedVehicles', JSON.stringify(vehicles));
-    localStorage.setItem('cachedVehiclesTimestamp', now.toString());
-    localStorage.setItem('localVehicles', JSON.stringify(vehicles));
-    
-    // Also cache by trip type for quicker access
-    localStorage.setItem('cabOptions_all', JSON.stringify(vehicles));
-    localStorage.setItem('cabOptions_all_timestamp', now.toString());
-  } catch (e) {
-    console.error('Error saving vehicles to localStorage:', e);
-  }
-}
-
-/**
- * Wrapper function to get a list of vehicle types (IDs and names)
- * This is used in selectors where we only need basic vehicle info
- */
-export const getVehicleTypes = async (forceRefresh = false, includeInactive = false): Promise<{id: string, name: string}[]> => {
-  try {
-    const vehicles = await getVehicleData(forceRefresh, includeInactive);
-    return vehicles.map(v => ({ 
-      id: v.id || v.vehicleId || '',
-      name: v.name || ucwords((v.id || '').replace(/_/g, ' '))
-    }));
+    // Wait for refresh to complete
+    const vehicles = await pendingRefreshPromise;
+    // Return filtered vehicles
+    return filterVehicles(vehicles, includeInactive);
   } catch (error) {
-    console.error('Error getting vehicle types:', error);
-    return DEFAULT_VEHICLES.map(v => ({ 
-      id: v.id || '',
-      name: v.name || ''
-    }));
+    console.error('Error refreshing vehicle data:', error);
+    throw error;
+  } finally {
+    // Clear the pending promise
+    pendingRefreshPromise = null;
   }
 };
 
-// Helper function to filter vehicles by active status
-function filterVehicles(vehicles: CabType[], includeInactive: boolean): CabType[] {
+/**
+ * Filter vehicles based on the includeInactive flag
+ */
+const filterVehicles = (vehicles: CabType[], includeInactive: boolean): CabType[] => {
   if (includeInactive) {
     return vehicles;
   }
-  return vehicles.filter(v => v.isActive !== false);
-}
+  
+  return vehicles.filter(vehicle => vehicle.isActive !== false);
+};
 
-// Helper function to process vehicle data to ensure consistent format
-function processVehicles(vehicles: any[]): CabType[] {
-  return vehicles.map(vehicle => {
-    // Handle amenities that might be parsed JSON strings
-    let amenities = ['AC'];
-    if (Array.isArray(vehicle.amenities)) {
-      amenities = vehicle.amenities;
-    } else if (typeof vehicle.amenities === 'string') {
-      try {
-        // Try to parse as JSON
-        const parsedAmenities = JSON.parse(vehicle.amenities);
-        if (Array.isArray(parsedAmenities)) {
-          amenities = parsedAmenities;
-        } else {
-          // Try to parse as comma-separated string
-          amenities = vehicle.amenities.split(',').map((a: string) => a.trim());
-        }
-      } catch (e) {
-        // If parsing fails, try to clean up the string and split it
-        const cleaned = vehicle.amenities.replace(/[\[\]"']/g, '');
-        amenities = cleaned.split(',').map((a: string) => a.trim());
-      }
-    }
-    
-    // Normalize vehicle ID
-    const id = String(vehicle.id || vehicle.vehicleId || vehicle.vehicle_id || '').trim();
-    
-    // Ensure isActive is correctly set (default to true)
-    let isActive = true;
-    if (typeof vehicle.isActive === 'boolean') {
-      isActive = vehicle.isActive;
-    } else if (vehicle.isActive === 0 || vehicle.isActive === '0' || vehicle.isActive === 'false') {
-      isActive = false;
-    } else if (typeof vehicle.is_active === 'boolean') {
-      isActive = vehicle.is_active;
-    } else if (vehicle.is_active === 0 || vehicle.is_active === '0' || vehicle.is_active === 'false') {
-      isActive = false;
-    }
-    
-    // Process capacity from various possible sources
-    let capacity = 4; // Default
-    if (vehicle.capacity !== undefined && vehicle.capacity !== null) {
-      const parsedCapacity = parseInt(String(vehicle.capacity), 10);
-      capacity = isNaN(parsedCapacity) ? 4 : parsedCapacity;
-    } else if (vehicle.seats !== undefined && vehicle.seats !== null) {
-      const parsedSeats = parseInt(String(vehicle.seats), 10);
-      capacity = isNaN(parsedSeats) ? 4 : parsedSeats;
-    }
-    
-    // Process luggage capacity from various possible sources
-    let luggageCapacity = 2; // Default
-    if (vehicle.luggageCapacity !== undefined && vehicle.luggageCapacity !== null) {
-      const parsedLuggage = parseInt(String(vehicle.luggageCapacity), 10);
-      luggageCapacity = isNaN(parsedLuggage) ? 2 : parsedLuggage;
-    } else if (vehicle.luggage_capacity !== undefined && vehicle.luggage_capacity !== null) {
-      const parsedLuggage = parseInt(String(vehicle.luggage_capacity), 10);
-      luggageCapacity = isNaN(parsedLuggage) ? 2 : parsedLuggage;
-    }
-    
-    // Ensure numeric values for prices
-    const basePrice = parseFloat(String(vehicle.price || vehicle.basePrice || vehicle.base_price || 0));
-    const pricePerKm = parseFloat(String(vehicle.pricePerKm || vehicle.price_per_km || 0));
-    const nightHaltCharge = parseFloat(String(vehicle.nightHaltCharge || vehicle.night_halt_charge || 700));
-    const driverAllowance = parseFloat(String(vehicle.driverAllowance || vehicle.driver_allowance || 250));
-    
-    // Ensure all properties have appropriate defaults
-    return {
-      id: id,
-      vehicleId: id,
-      name: vehicle.name || ucwords(id.replace(/_/g, ' ')),
-      capacity: capacity,
-      luggageCapacity: luggageCapacity,
-      price: basePrice,
-      basePrice: basePrice,
-      pricePerKm: pricePerKm,
-      image: vehicle.image || `/cars/${id}.png`.toLowerCase(),
-      amenities: amenities.filter(a => a), // Filter empty amenities
-      description: vehicle.description || '',
-      ac: vehicle.ac === false ? false : true,
-      nightHaltCharge: nightHaltCharge,
-      driverAllowance: driverAllowance,
-      isActive: isActive
-    };
-  });
-}
-
-// Utility function to capitalize words
-function ucwords(str: string): string {
-  return (str || '').replace(/\b\w/g, match => match.toUpperCase());
-}
+/**
+ * Get vehicle types (distinct cab types)
+ */
+export const getVehicleTypes = async (): Promise<string[]> => {
+  try {
+    const vehicles = await getVehicleData();
+    return vehicles.map(v => v.id);
+  } catch (error) {
+    console.error('Error getting vehicle types:', error);
+    return DEFAULT_VEHICLES.map(v => v.id);
+  }
+};

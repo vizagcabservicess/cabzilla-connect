@@ -1,4 +1,3 @@
-
 <?php
 /**
  * direct-vehicle-modify.php - Direct database operations for vehicle data
@@ -8,7 +7,7 @@
 // Set CORS headers
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Admin-Mode, X-Force-Refresh');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Admin-Mode, X-Force-Refresh, X-Database-First');
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
@@ -42,6 +41,14 @@ function logModifyDebug($message, $data = null) {
     }
     
     file_put_contents($logFile, $logMessage . "\n", FILE_APPEND);
+}
+
+// Check if this is a load action (GET request with action=load)
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['action'] === 'load') {
+    logModifyDebug("Received vehicle load request");
+    // Get all vehicles from database
+    loadVehiclesFromDatabase();
+    exit;
 }
 
 // Get input data from various sources
@@ -188,6 +195,33 @@ $dbMessage = "Database operation failed";
 $dbInsertId = 0;
 
 if ($conn) {
+    // Make sure vehicles table exists
+    try {
+        $createTableQuery = "CREATE TABLE IF NOT EXISTS vehicles (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            vehicle_id VARCHAR(50) UNIQUE NOT NULL,
+            name VARCHAR(100) NOT NULL,
+            capacity INT DEFAULT 4,
+            luggage_capacity INT DEFAULT 2,
+            base_price DECIMAL(10,2) DEFAULT 0,
+            price_per_km DECIMAL(10,2) DEFAULT 0,
+            image VARCHAR(255),
+            amenities TEXT,
+            description TEXT,
+            ac TINYINT(1) DEFAULT 1,
+            night_halt_charge DECIMAL(10,2) DEFAULT 700,
+            driver_allowance DECIMAL(10,2) DEFAULT 250,
+            is_active TINYINT(1) DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )";
+        
+        $conn->query($createTableQuery);
+        logModifyDebug("Ensured vehicles table exists");
+    } catch (Exception $e) {
+        logModifyDebug("Error creating vehicles table: " . $e->getMessage());
+    }
+
     // Check if vehicle exists
     $checkQuery = "SELECT * FROM vehicles WHERE vehicle_id = ?";
     $stmt = $conn->prepare($checkQuery);
@@ -363,6 +397,19 @@ if ($saveResult === false) {
     logModifyDebug("Saved to persistent cache successfully");
 }
 
+// Update static JSON file to keep it in sync with database
+try {
+    $staticJsonPath = __DIR__ . '/../../../data/vehicles.json';
+    if (file_exists($staticJsonPath) && is_writable($staticJsonPath)) {
+        file_put_contents($staticJsonPath, json_encode($persistentData, $jsonOptions));
+        logModifyDebug("Updated static vehicles.json file");
+    } else {
+        logModifyDebug("Static JSON file doesn't exist or isn't writable: $staticJsonPath");
+    }
+} catch (Exception $e) {
+    logModifyDebug("Error updating static JSON: " . $e->getMessage());
+}
+
 // Clear all temporary cache files
 $cacheFiles = glob($cacheDir . '/vehicles_*.json');
 foreach ($cacheFiles as $file) {
@@ -404,4 +451,180 @@ try {
     }
 } catch (Exception $e) {
     logModifyDebug("Error triggering reload: " . $e->getMessage());
+}
+
+/**
+ * Function to load all vehicles from database
+ */
+function loadVehiclesFromDatabase() {
+    global $conn, $cacheDir, $logDir;
+    
+    logModifyDebug("Loading all vehicles from database");
+    
+    // Get database connection if not already available
+    if (!$conn) {
+        // Try to include config
+        if (file_exists(__DIR__ . '/../../config.php')) {
+            require_once __DIR__ . '/../../config.php';
+            if (function_exists('getDbConnection')) {
+                $conn = getDbConnection();
+                logModifyDebug("Got database connection from config for loading");
+            }
+        }
+        
+        // If still no connection, try direct connection
+        if (!$conn && class_exists('mysqli')) {
+            $dbHost = 'localhost';
+            $dbName = 'u64460565_db_be';
+            $dbUser = 'u64460565_usr_be';
+            $dbPass = 'Vizag@1213';
+            
+            try {
+                $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+                if ($conn->connect_error) {
+                    logModifyDebug("Failed to connect to database for loading: " . $conn->connect_error);
+                    $conn = null;
+                } else {
+                    $conn->set_charset("utf8mb4");
+                    logModifyDebug("Connected to database with direct credentials for loading");
+                }
+            } catch (Exception $e) {
+                logModifyDebug("Connection error for loading: " . $e->getMessage());
+                $conn = null;
+            }
+        }
+    }
+    
+    $vehicles = [];
+    $source = 'unknown';
+    
+    // Get vehicles from database if connection available
+    if ($conn) {
+        try {
+            // Query all vehicles
+            $query = "SELECT * FROM vehicles";
+            $includeInactive = isset($_GET['includeInactive']) && ($_GET['includeInactive'] === 'true' || $_GET['includeInactive'] === '1');
+            
+            if (!$includeInactive) {
+                $query .= " WHERE is_active = 1";
+            }
+            
+            $result = $conn->query($query);
+            
+            if ($result && $result->num_rows > 0) {
+                logModifyDebug("Found {$result->num_rows} vehicles in database");
+                
+                while ($row = $result->fetch_assoc()) {
+                    // Convert database row to vehicle object
+                    $vehicle = [
+                        'id' => $row['vehicle_id'],
+                        'vehicleId' => $row['vehicle_id'],
+                        'name' => $row['name'],
+                        'capacity' => (int)$row['capacity'],
+                        'luggageCapacity' => (int)$row['luggage_capacity'],
+                        'price' => (float)$row['base_price'],
+                        'basePrice' => (float)$row['base_price'],
+                        'pricePerKm' => (float)$row['price_per_km'],
+                        'image' => $row['image'],
+                        'amenities' => json_decode($row['amenities']) ?: ['AC', 'Water'],
+                        'description' => $row['description'],
+                        'ac' => (bool)$row['ac'],
+                        'nightHaltCharge' => (float)$row['night_halt_charge'],
+                        'driverAllowance' => (float)$row['driver_allowance'],
+                        'isActive' => (bool)$row['is_active']
+                    ];
+                    
+                    $vehicles[] = $vehicle;
+                }
+                
+                $source = 'database';
+            } else {
+                logModifyDebug("No vehicles found in database or query error");
+            }
+            
+            $conn->close();
+        } catch (Exception $e) {
+            logModifyDebug("Error querying database: " . $e->getMessage());
+        }
+    }
+    
+    // If no vehicles from database, try persistent cache
+    if (empty($vehicles)) {
+        logModifyDebug("No vehicles from database, trying persistent cache");
+        $persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
+        
+        if (file_exists($persistentCacheFile)) {
+            $persistentJson = file_get_contents($persistentCacheFile);
+            if ($persistentJson) {
+                try {
+                    $persistentData = json_decode($persistentJson, true);
+                    if (is_array($persistentData) && !empty($persistentData)) {
+                        $vehicles = $persistentData;
+                        $source = 'persistent_cache';
+                        logModifyDebug("Loaded " . count($vehicles) . " vehicles from persistent cache");
+                    }
+                } catch (Exception $e) {
+                    logModifyDebug("Error parsing persistent cache: " . $e->getMessage());
+                }
+            }
+        }
+    }
+    
+    // If still no vehicles, try static JSON
+    if (empty($vehicles)) {
+        logModifyDebug("No vehicles from database or persistent cache, trying static JSON");
+        $staticJsonPath = __DIR__ . '/../../../data/vehicles.json';
+        
+        if (file_exists($staticJsonPath)) {
+            $staticJson = file_get_contents($staticJsonPath);
+            if ($staticJson) {
+                try {
+                    $staticData = json_decode($staticJson, true);
+                    if (is_array($staticData) && !empty($staticData)) {
+                        $vehicles = $staticData;
+                        $source = 'static_json';
+                        logModifyDebug("Loaded " . count($vehicles) . " vehicles from static JSON");
+                    }
+                } catch (Exception $e) {
+                    logModifyDebug("Error parsing static JSON: " . $e->getMessage());
+                }
+            }
+        }
+    }
+    
+    // Return the vehicles
+    echo json_encode([
+        'status' => 'success',
+        'message' => 'Vehicles loaded from ' . $source,
+        'source' => $source,
+        'count' => count($vehicles),
+        'vehicles' => $vehicles,
+        'timestamp' => time()
+    ]);
+    
+    // Also update the persistent cache if we loaded from database
+    if ($source === 'database' && !empty($vehicles)) {
+        $persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
+        $jsonOptions = defined('JSON_PRETTY_PRINT') ? JSON_PRETTY_PRINT : 0;
+        $saveResult = file_put_contents($persistentCacheFile, json_encode($vehicles, $jsonOptions));
+        
+        if ($saveResult === false) {
+            logModifyDebug("Failed to update persistent cache with database data");
+        } else {
+            logModifyDebug("Updated persistent cache with database data");
+        }
+        
+        // Also update static JSON file
+        try {
+            $staticJsonPath = __DIR__ . '/../../../data/vehicles.json';
+            if (file_exists($staticJsonPath) && is_writable($staticJsonPath)) {
+                file_put_contents($staticJsonPath, json_encode($vehicles, $jsonOptions));
+                logModifyDebug("Updated static JSON with database data");
+            }
+        } catch (Exception $e) {
+            logModifyDebug("Error updating static JSON: " . $e->getMessage());
+        }
+    }
+    
+    exit;
 }
