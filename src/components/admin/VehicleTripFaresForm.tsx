@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +28,12 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 interface VehicleTripFaresFormProps {
   tripType: 'outstation' | 'local' | 'airport';
   onSuccess?: () => void;
+}
+
+// Define a vehicle type interface to ensure consistency
+interface VehicleType {
+  id: string;
+  name: string;
 }
 
 export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFormProps) {
@@ -68,7 +75,7 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
         console.log(`Loading vehicles for ${tripType} management...`);
         
         // Array to collect all vehicles from different sources
-        let allVehicles: {id: string, name: string}[] = [];
+        let allVehicles: VehicleType[] = [];
         
         // First try to get vehicles from the direct API endpoint
         try {
@@ -191,10 +198,36 @@ export function VehicleTripFaresForm({ tripType, onSuccess }: VehicleTripFaresFo
         
         // Also get the standard vehicle types as fallback
         try {
-          const vehicleTypes = await getVehicleTypes(true, true);
+          // Fixed: Call getVehicleTypes without arguments
+          const vehicleTypes = await getVehicleTypes();
+          
+          // Make sure the returned vehicle types conform to our VehicleType interface
+          const typedVehicleTypes: VehicleType[] = Array.isArray(vehicleTypes) 
+            ? vehicleTypes.map(vType => {
+                // Handle if vType is just a string (vehicle ID)
+                if (typeof vType === 'string') {
+                  return {
+                    id: vType,
+                    name: vType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+                  };
+                }
+                // Handle if vType is an object but might not have the exact interface
+                if (typeof vType === 'object' && vType !== null) {
+                  return {
+                    id: vType.id || vType.vehicleId || vType.vehicle_id || String(vType),
+                    name: vType.name || vType.id || vType.vehicleId || vType.vehicle_id || String(vType)
+                  };
+                }
+                // Fallback for any other case
+                return {
+                  id: String(vType),
+                  name: String(vType)
+                };
+              })
+            : [];
           
           // Add vehicle types that aren't already in the list
-          vehicleTypes.forEach(vType => {
+          typedVehicleTypes.forEach(vType => {
             if (!allVehicles.some(v => v.id === vType.id)) {
               allVehicles.push(vType);
             }
