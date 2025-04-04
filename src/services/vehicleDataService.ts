@@ -146,13 +146,59 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
   // Define the refresh function
   const refreshVehicleData = async (): Promise<CabType[]> => {
     try {
-      // Try multiple endpoints for best results
-      const endpoints = [
-        `/api/vehicles-data.php?${cacheBuster}&includeInactive=${includeInactive ? 'true' : 'false'}&force=${forceRefresh ? 'true' : 'false'}`,
-        `/api/admin/get-vehicles.php?${cacheBuster}&includeInactive=${includeInactive ? 'true' : 'false'}`,
-        `/api/admin/vehicles-data.php?${cacheBuster}&includeInactive=${includeInactive ? 'true' : 'false'}&force=${forceRefresh ? 'true' : 'false'}`,
-        null // Marker for JSON file
-      ];
+      // For admin view, prioritize using the reload-vehicles endpoint first
+      // to ensure persistent storage is properly loaded
+      if (includeInactive && forceRefresh) {
+        try {
+          console.log('Admin mode: First syncing from persistent storage...');
+          const reloadEndpoint = `/api/admin/reload-vehicles.php?${cacheBuster}`;
+          const reloadUrl = getApiUrl(reloadEndpoint);
+          
+          const reloadResponse = await fetch(reloadUrl, {
+            headers: {
+              ...forceRefreshHeaders,
+              'X-Admin-Mode': 'true',
+              'X-Force-Refresh': 'true',
+              'Cache-Control': 'no-cache, no-store, must-revalidate'
+            },
+            mode: 'cors',
+            cache: 'no-store'
+          });
+          
+          if (reloadResponse.ok) {
+            const reloadResult = await reloadResponse.json();
+            console.log('Reload result:', reloadResult);
+            
+            if (reloadResult.status !== 'success') {
+              console.warn('Reload operation was not successful:', reloadResult.message);
+            } else {
+              console.log(`Successfully reloaded ${reloadResult.count} vehicles from persistent storage`);
+            }
+          }
+        } catch (reloadError) {
+          console.error('Error reloading from persistent storage:', reloadError);
+        }
+      }
+      
+      // Try multiple endpoints for best results, with admin endpoints first for admin views
+      let endpoints = [];
+      
+      // If in admin mode, prioritize admin endpoints
+      if (includeInactive) {
+        endpoints = [
+          `/api/admin/vehicles-data.php?${cacheBuster}&includeInactive=true&force=true`, 
+          `/api/vehicles-data.php?${cacheBuster}&includeInactive=true&force=true`,
+          `/api/admin/get-vehicles.php?${cacheBuster}&includeInactive=true`,
+          null // Marker for JSON file
+        ];
+      } else {
+        endpoints = [
+          `/api/vehicles-data.php?${cacheBuster}&includeInactive=${includeInactive ? 'true' : 'false'}&force=${forceRefresh ? 'true' : 'false'}`,
+          `/api/admin/get-vehicles.php?${cacheBuster}&includeInactive=${includeInactive ? 'true' : 'false'}`,
+          `/api/admin/vehicles-data.php?${cacheBuster}&includeInactive=${includeInactive ? 'true' : 'false'}&force=${forceRefresh ? 'true' : 'false'}`,
+          null // Marker for JSON file
+        ];
+      }
       
       for (const endpoint of endpoints) {
         try {
@@ -187,7 +233,9 @@ export const getVehicleData = async (forceRefresh = false, includeInactive = fal
             const headers = {
               ...forceRefreshHeaders,
               'X-Admin-Mode': includeInactive ? 'true' : 'false',
-              'X-Bypass-Cache': 'true'
+              'X-Bypass-Cache': 'true',
+              'X-Force-Refresh': forceRefresh ? 'true' : 'false',
+              'Cache-Control': 'no-cache, no-store, must-revalidate'
             };
             
             const response = await fetch(url, {

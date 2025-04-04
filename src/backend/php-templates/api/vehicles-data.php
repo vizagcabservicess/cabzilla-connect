@@ -66,7 +66,7 @@ if (!file_exists($cacheDir)) {
     @mkdir($cacheDir, 0755, true);
 }
 
-// Create a persistent cache file to store updated vehicle data
+// CRITICAL: Define the persistent cache file path - this is our source of truth
 $persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
 
 // Create log directory if needed
@@ -80,9 +80,10 @@ $timestamp = date('Y-m-d H:i:s');
 $logMessage = "[$timestamp] Vehicles data request with includeInactive=$includeInactive, forceRefresh=$forceRefresh, isAdminMode=$isAdminMode" . ($vehicleId ? ", vehicleId=$vehicleId" : "") . "\n";
 file_put_contents($logFile, $logMessage, FILE_APPEND);
 
-// Try to load persistent cache first - this is CRITICAL for persistence
+// ALWAYS load directly from the persistent cache file - this is now our SOURCE OF TRUTH
 $persistentData = [];
 if (file_exists($persistentCacheFile)) {
+    file_put_contents($logFile, "[$timestamp] Loading from persistent cache file: $persistentCacheFile\n", FILE_APPEND);
     $persistentJson = file_get_contents($persistentCacheFile);
     if ($persistentJson) {
         try {
@@ -96,6 +97,8 @@ if (file_exists($persistentCacheFile)) {
             $persistentData = [];
         }
     }
+} else {
+    file_put_contents($logFile, "[$timestamp] Persistent cache file not found at $persistentCacheFile\n", FILE_APPEND);
 }
 
 // Hardcoded vehicle data for demonstration/fallback
@@ -203,7 +206,7 @@ foreach ($defaultVehicles as $defaultVehicle) {
     }
 }
 
-// Always use the persistent data as our vehicle source
+// ALWAYS use the persistent data as our vehicle source
 $vehicles = $persistentData;
 file_put_contents($logFile, "[$timestamp] Using " . count($vehicles) . " vehicles from persistent data\n", FILE_APPEND);
 
@@ -236,17 +239,34 @@ if ($vehicleId) {
     }
 }
 
-// Return JSON response
-echo json_encode([
-    'status' => 'success',
-    'message' => 'Vehicles retrieved successfully',
-    'vehicles' => $vehicles,
-    'count' => count($vehicles),
-    'timestamp' => time(),
-    'includeInactive' => $includeInactive,
-    'forceRefresh' => $forceRefresh,
-    'isAdminMode' => $isAdminMode
-]);
-
-// Save the persistent data back if it was changed
-file_put_contents($persistentCacheFile, json_encode($persistentData, JSON_PRETTY_PRINT));
+// Debugging: Print cache file location
+if ($isAdminMode) {
+    file_put_contents($logFile, "[$timestamp] ADMIN MODE - debug info: using persistent cache at $persistentCacheFile with " . count($persistentData) . " vehicles\n", FILE_APPEND);
+    // Update response to include cache file info
+    echo json_encode([
+        'status' => 'success',
+        'message' => 'Vehicles retrieved successfully',
+        'vehicles' => $vehicles,
+        'count' => count($vehicles),
+        'timestamp' => time(),
+        'includeInactive' => $includeInactive,
+        'forceRefresh' => $forceRefresh,
+        'isAdminMode' => $isAdminMode,
+        'debug' => [
+            'persistentCacheFile' => $persistentCacheFile,
+            'persistentDataCount' => count($persistentData)
+        ]
+    ]);
+} else {
+    // Standard response for non-admin requests
+    echo json_encode([
+        'status' => 'success',
+        'message' => 'Vehicles retrieved successfully',
+        'vehicles' => $vehicles,
+        'count' => count($vehicles),
+        'timestamp' => time(),
+        'includeInactive' => $includeInactive,
+        'forceRefresh' => $forceRefresh,
+        'isAdminMode' => $isAdminMode
+    ]);
+}

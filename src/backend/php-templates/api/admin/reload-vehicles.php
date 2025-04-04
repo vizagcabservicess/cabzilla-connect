@@ -44,7 +44,7 @@ function logMessage($message) {
 logMessage("Vehicle reload request received");
 
 try {
-    // The persistent cache file path
+    // The persistent cache file path - this is our SOURCE OF TRUTH
     $persistentCacheFile = $cacheDir . '/vehicles_persistent.json';
     
     // Check if persistent file exists
@@ -53,19 +53,21 @@ try {
         echo json_encode([
             'status' => 'error',
             'message' => 'Persistent cache file not found',
-            'timestamp' => time()
+            'timestamp' => time(),
+            'cacheDir' => $cacheDir
         ]);
         exit;
     }
     
-    // Load the persistent data
+    // Load the persistent data - using direct file path for reliability
     $persistentJson = file_get_contents($persistentCacheFile);
     if (!$persistentJson) {
-        logMessage("ERROR: Failed to read persistent cache file");
+        logMessage("ERROR: Failed to read persistent cache file at $persistentCacheFile");
         echo json_encode([
             'status' => 'error',
             'message' => 'Failed to read persistent cache file',
-            'timestamp' => time()
+            'timestamp' => time(),
+            'persistentFile' => $persistentCacheFile
         ]);
         exit;
     }
@@ -73,11 +75,12 @@ try {
     // Parse the persistent data
     $persistentData = json_decode($persistentJson, true);
     if (!is_array($persistentData)) {
-        logMessage("ERROR: Invalid JSON in persistent cache file");
+        logMessage("ERROR: Invalid JSON in persistent cache file: " . substr($persistentJson, 0, 100) . "...");
         echo json_encode([
             'status' => 'error',
             'message' => 'Invalid JSON in persistent cache file',
-            'timestamp' => time()
+            'timestamp' => time(),
+            'jsonError' => json_last_error_msg()
         ]);
         exit;
     }
@@ -86,7 +89,7 @@ try {
     $vehicleCount = count($persistentData);
     logMessage("Loaded $vehicleCount vehicles from persistent cache");
     
-    // Clear all other cache files
+    // Clear all other cache files EXCEPT the persistent one
     $cacheFiles = glob($cacheDir . '/vehicles_*.json');
     $cleared = 0;
     foreach ($cacheFiles as $file) {
@@ -95,34 +98,42 @@ try {
             if (@unlink($file)) {
                 logMessage("Cleared cache file: " . basename($file));
                 $cleared++;
+            } else {
+                logMessage("Failed to clear cache file: " . basename($file));
             }
         }
     }
     
-    // Create temporary cache file with the reloaded data
-    $tempCacheFile = $cacheDir . '/vehicles_' . time() . '.json';
+    // Create timestamp-based cache files to ensure fresh data
+    $currentTime = time();
+    $tempCacheFile = $cacheDir . '/vehicles_' . $currentTime . '.json';
     $jsonOptions = defined('JSON_PRETTY_PRINT') ? JSON_PRETTY_PRINT : 0;
+    
+    // Make a copy of the persistent data to ensure it's properly loaded
     $result = file_put_contents($tempCacheFile, json_encode($persistentData, $jsonOptions));
     
     if ($result === false) {
-        logMessage("ERROR: Failed to write temp cache file");
+        logMessage("ERROR: Failed to write temp cache file to $tempCacheFile");
         echo json_encode([
             'status' => 'error',
             'message' => 'Failed to write temp cache file',
-            'timestamp' => time()
+            'timestamp' => time(),
+            'tempFile' => $tempCacheFile
         ]);
         exit;
     }
     
-    logMessage("Successfully reloaded $vehicleCount vehicles and cleared $cleared cache files");
+    logMessage("Successfully reloaded $vehicleCount vehicles, cleared $cleared cache files, and created new cache at " . basename($tempCacheFile));
     
-    // Return success response
+    // Return success response with detailed information
     echo json_encode([
         'status' => 'success',
         'message' => "Successfully reloaded vehicles from persistent storage",
         'count' => $vehicleCount,
         'cleared' => $cleared,
-        'timestamp' => time()
+        'persistentFile' => basename($persistentCacheFile),
+        'newCacheFile' => basename($tempCacheFile),
+        'timestamp' => $currentTime
     ]);
     
 } catch (Exception $e) {
