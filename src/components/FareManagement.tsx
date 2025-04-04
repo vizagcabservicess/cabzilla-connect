@@ -18,18 +18,15 @@ interface FareManagementProps {
 interface FareData {
   vehicleId?: string;
   vehicle_id?: string;
-  // Local fare fields
   price4hrs40km?: number;
   price8hrs80km?: number;
   price10hrs100km?: number;
   priceExtraKm?: number;
   priceExtraHour?: number;
-  // Airport fare fields
   priceOneWay?: number;
   priceRoundTrip?: number;
   nightCharges?: number;
   extraWaitingCharges?: number;
-  // Additional fields for multi-tier pricing
   basePrice?: number;
   pricePerKm?: number;
   pickupPrice?: number;
@@ -39,7 +36,6 @@ interface FareData {
   tier3Price?: number;
   tier4Price?: number;
   extraKmCharge?: number;
-  // For flexible property access
   [key: string]: any;
 }
 
@@ -60,8 +56,8 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
   const maxFetchAttempts = 3;
   const lastRefreshTimeRef = useRef<number>(0);
   const lastSaveTimeRef = useRef<number>(0);
-  const refreshCooldownMs = 5000; // 5 seconds between refreshes
-  const saveCooldownMs = 2000; // 2 seconds between saves
+  const refreshCooldownMs = 5000;
+  const saveCooldownMs = 2000;
   
   const loadFareData = async () => {
     const now = Date.now();
@@ -457,7 +453,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="tier4Price">Tier 4 Price (> 30km) (₹)</Label>
+              <Label htmlFor="tier4Price">Tier 4 Price ({'>'}30km) (₹)</Label>
               <Input
                 id="tier4Price"
                 name="tier4Price"
