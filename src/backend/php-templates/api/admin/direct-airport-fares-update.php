@@ -87,6 +87,10 @@ $defaultFares = [
         'basePrice' => 4500, 'pricePerKm' => 18, 'pickupPrice' => 1200, 'dropPrice' => 1200,
         'tier1Price' => 1000, 'tier2Price' => 1200, 'tier3Price' => 1400, 'tier4Price' => 1600, 'extraKmCharge' => 18
     ],
+    'etios' => [
+        'basePrice' => 3200, 'pricePerKm' => 13, 'pickupPrice' => 800, 'dropPrice' => 800,
+        'tier1Price' => 600, 'tier2Price' => 800, 'tier3Price' => 1000, 'tier4Price' => 1200, 'extraKmCharge' => 13
+    ],
     'default' => [
         'basePrice' => 3500, 'pricePerKm' => 15, 'pickupPrice' => 1000, 'dropPrice' => 1000,
         'tier1Price' => 800, 'tier2Price' => 1000, 'tier3Price' => 1200, 'tier4Price' => 1400, 'extraKmCharge' => 15
@@ -125,35 +129,78 @@ try {
         logMessage("Mapped numeric ID $originalId to $vehicleId");
     }
     
-    // Extract fare values with fallbacks
-    $basePrice = floatval($requestData['basePrice'] ?? $requestData['base_price'] ?? 0);
-    $pricePerKm = floatval($requestData['pricePerKm'] ?? $requestData['price_per_km'] ?? 0);
-    $pickupPrice = floatval($requestData['pickupPrice'] ?? $requestData['pickup_price'] ?? 0);
-    $dropPrice = floatval($requestData['dropPrice'] ?? $requestData['drop_price'] ?? 0);
-    $tier1Price = floatval($requestData['tier1Price'] ?? $requestData['tier1_price'] ?? 0);
-    $tier2Price = floatval($requestData['tier2Price'] ?? $requestData['tier2_price'] ?? 0);
-    $tier3Price = floatval($requestData['tier3Price'] ?? $requestData['tier3_price'] ?? 0);
-    $tier4Price = floatval($requestData['tier4Price'] ?? $requestData['tier4_price'] ?? 0);
-    $extraKmCharge = floatval($requestData['extraKmCharge'] ?? $requestData['extra_km_charge'] ?? 0);
-    
-    // Always try to apply defaults if values are missing/zero
-    $forceCreation = true;
-    
-    // Apply defaults if values are missing/zero and force creation is enabled
-    if ($forceCreation) {
-        $defaultKey = isset($defaultFares[$vehicleId]) ? $vehicleId : 'default';
-        $defaults = $defaultFares[$defaultKey];
-        
-        if ($basePrice == 0) $basePrice = $defaults['basePrice'];
-        if ($pricePerKm == 0) $pricePerKm = $defaults['pricePerKm'];
-        if ($pickupPrice == 0) $pickupPrice = $defaults['pickupPrice'];
-        if ($dropPrice == 0) $dropPrice = $defaults['dropPrice'];
-        if ($tier1Price == 0) $tier1Price = $defaults['tier1Price'];
-        if ($tier2Price == 0) $tier2Price = $defaults['tier2Price'];
-        if ($tier3Price == 0) $tier3Price = $defaults['tier3Price'];
-        if ($tier4Price == 0) $tier4Price = $defaults['tier4Price'];
-        if ($extraKmCharge == 0) $extraKmCharge = $defaults['extraKmCharge'];
+    // Determine which default values to use
+    $defaultKey = 'default';
+    foreach (array_keys($defaultFares) as $key) {
+        if ($key !== 'default' && (strpos(strtolower($vehicleId), $key) !== false || strtolower($vehicleId) === $key)) {
+            $defaultKey = $key;
+            break;
+        }
     }
+    
+    $defaults = $defaultFares[$defaultKey];
+    logMessage("Using defaults for '$defaultKey' for vehicle '$vehicleId'");
+    
+    // Extract fare values with fallbacks to defaults
+    $basePrice = isset($requestData['basePrice']) && $requestData['basePrice'] > 0 ? 
+                 floatval($requestData['basePrice']) : 
+                 (isset($requestData['base_price']) && $requestData['base_price'] > 0 ? 
+                  floatval($requestData['base_price']) : $defaults['basePrice']);
+    
+    $pricePerKm = isset($requestData['pricePerKm']) && $requestData['pricePerKm'] > 0 ? 
+                  floatval($requestData['pricePerKm']) : 
+                  (isset($requestData['price_per_km']) && $requestData['price_per_km'] > 0 ? 
+                   floatval($requestData['price_per_km']) : $defaults['pricePerKm']);
+    
+    $pickupPrice = isset($requestData['pickupPrice']) && $requestData['pickupPrice'] > 0 ? 
+                   floatval($requestData['pickupPrice']) : 
+                   (isset($requestData['pickup_price']) && $requestData['pickup_price'] > 0 ? 
+                    floatval($requestData['pickup_price']) : 
+                    (isset($requestData['pickup']) && $requestData['pickup'] > 0 ?
+                     floatval($requestData['pickup']) : $defaults['pickupPrice']));
+    
+    $dropPrice = isset($requestData['dropPrice']) && $requestData['dropPrice'] > 0 ? 
+                 floatval($requestData['dropPrice']) : 
+                 (isset($requestData['drop_price']) && $requestData['drop_price'] > 0 ? 
+                  floatval($requestData['drop_price']) : 
+                  (isset($requestData['drop']) && $requestData['drop'] > 0 ?
+                   floatval($requestData['drop']) : $defaults['dropPrice']));
+    
+    $tier1Price = isset($requestData['tier1Price']) && $requestData['tier1Price'] > 0 ? 
+                  floatval($requestData['tier1Price']) : 
+                  (isset($requestData['tier1_price']) && $requestData['tier1_price'] > 0 ? 
+                   floatval($requestData['tier1_price']) : 
+                   (isset($requestData['tier1']) && $requestData['tier1'] > 0 ?
+                    floatval($requestData['tier1']) : $defaults['tier1Price']));
+    
+    $tier2Price = isset($requestData['tier2Price']) && $requestData['tier2Price'] > 0 ? 
+                  floatval($requestData['tier2Price']) : 
+                  (isset($requestData['tier2_price']) && $requestData['tier2_price'] > 0 ? 
+                   floatval($requestData['tier2_price']) : 
+                   (isset($requestData['tier2']) && $requestData['tier2'] > 0 ?
+                    floatval($requestData['tier2']) : $defaults['tier2Price']));
+    
+    $tier3Price = isset($requestData['tier3Price']) && $requestData['tier3Price'] > 0 ? 
+                  floatval($requestData['tier3Price']) : 
+                  (isset($requestData['tier3_price']) && $requestData['tier3_price'] > 0 ? 
+                   floatval($requestData['tier3_price']) : 
+                   (isset($requestData['tier3']) && $requestData['tier3'] > 0 ?
+                    floatval($requestData['tier3']) : $defaults['tier3Price']));
+    
+    $tier4Price = isset($requestData['tier4Price']) && $requestData['tier4Price'] > 0 ? 
+                  floatval($requestData['tier4Price']) : 
+                  (isset($requestData['tier4_price']) && $requestData['tier4_price'] > 0 ? 
+                   floatval($requestData['tier4_price']) : 
+                   (isset($requestData['tier4']) && $requestData['tier4'] > 0 ?
+                    floatval($requestData['tier4']) : $defaults['tier4Price']));
+    
+    $extraKmCharge = isset($requestData['extraKmCharge']) && $requestData['extraKmCharge'] > 0 ? 
+                     floatval($requestData['extraKmCharge']) : 
+                     (isset($requestData['extra_km_charge']) && $requestData['extra_km_charge'] > 0 ? 
+                      floatval($requestData['extra_km_charge']) : $defaults['extraKmCharge']);
+    
+    // Always force creation for better UX
+    $forceCreation = true;
     
     // Database operations
     require_once __DIR__ . '/../../config.php';
@@ -209,10 +256,10 @@ try {
     
     if ($checkResult->num_rows === 0) {
         // Vehicle not found, create it
-        $insertVehicleSql = "INSERT INTO vehicles (vehicle_id, name, is_active) VALUES (?, ?, 1)";
+        $insertVehicleSql = "INSERT INTO vehicles (id, vehicle_id, name, is_active) VALUES (?, ?, ?, 1)";
         $insertStmt = $conn->prepare($insertVehicleSql);
         $vehicleName = ucfirst(str_replace(['_', '-'], ' ', $vehicleId));
-        $insertStmt->bind_param("ss", $vehicleId, $vehicleName);
+        $insertStmt->bind_param("sss", $vehicleId, $vehicleId, $vehicleName);
         
         if (!$insertStmt->execute()) {
             logMessage("Warning: Failed to create vehicle: " . $insertStmt->error);

@@ -71,12 +71,22 @@ export async function updateLocalFares(fareData: Record<string, any>): Promise<v
     // Ensure both vehicleId formats are present
     cleanData.vehicle_id = cleanData.vehicleId;
     
+    // Apply default values for any missing fields
+    if (!cleanData.price4hrs40km) cleanData.price4hrs40km = 2500;
+    if (!cleanData.price8hrs80km) cleanData.price8hrs80km = 4000;
+    if (!cleanData.price10hrs100km) cleanData.price10hrs100km = 5000;
+    if (!cleanData.priceExtraKm) cleanData.priceExtraKm = 15;
+    if (!cleanData.priceExtraHour) cleanData.priceExtraHour = 200;
+    
+    console.log('Updating local fares with clean data:', cleanData);
+    
     // Try the direct API first
     const directResult = await directVehicleOperation('/api/admin/direct-local-fares-update.php', 'POST', {
       headers: {
         'X-Admin-Mode': 'true',
         'X-Debug': 'true',
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'X-Force-Creation': 'true'
       },
       data: cleanData
     });
@@ -89,7 +99,8 @@ export async function updateLocalFares(fareData: Record<string, any>): Promise<v
         headers: {
           'X-Admin-Mode': 'true',
           'X-Debug': 'true',
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'X-Force-Creation': 'true'
         },
         data: cleanData
       });
@@ -108,14 +119,7 @@ export async function updateLocalFares(fareData: Record<string, any>): Promise<v
     // Try to sync the fares after a successful update
     try {
       setTimeout(async () => {
-        await directVehicleOperation('/api/admin/sync-local-fares.php', 'GET', {
-          headers: {
-            'X-Admin-Mode': 'true',
-            'X-Debug': 'true',
-            'X-Force-Creation': 'true',
-            'Cache-Control': 'no-cache'
-          }
-        });
+        await syncLocalFares();
       }, 1000);
     } catch (syncError) {
       console.warn('Non-critical: Failed to trigger fares sync after update:', syncError);
@@ -144,21 +148,63 @@ export async function updateAirportFares(fareData: Record<string, any>): Promise
     // Ensure vehicleId is consistent in all required formats
     cleanData.vehicle_id = fareData.vehicleId;
     
-    // Make sure we have defaults for all required values
-    if (!cleanData.basePrice) cleanData.basePrice = 0;
-    if (!cleanData.pricePerKm) cleanData.pricePerKm = 0;
-    if (!cleanData.pickupPrice) cleanData.pickupPrice = 0;
-    if (!cleanData.dropPrice) cleanData.dropPrice = 0;
-    if (!cleanData.tier1Price) cleanData.tier1Price = 0;
-    if (!cleanData.tier2Price) cleanData.tier2Price = 0;
-    if (!cleanData.tier3Price) cleanData.tier3Price = 0;
-    if (!cleanData.tier4Price) cleanData.tier4Price = 0;
-    if (!cleanData.extraKmCharge) cleanData.extraKmCharge = 0;
+    // Default values based on vehicle type
+    let baseDefaults = {
+      basePrice: 3000,
+      pricePerKm: 15,
+      pickupPrice: 1000,
+      dropPrice: 1000,
+      tier1Price: 800,
+      tier2Price: 1000,
+      tier3Price: 1200,
+      tier4Price: 1400,
+      extraKmCharge: 15,
+      nightCharges: 300,
+      extraWaitingCharges: 200
+    };
     
-    // Remove circular references that might cause stack overflow
-    const sanitizedData = JSON.parse(JSON.stringify(cleanData));
+    // Apply vehicle-specific defaults if needed
+    const vehicleId = cleanData.vehicleId.toLowerCase();
+    if (vehicleId.includes('sedan')) {
+      baseDefaults = {
+        basePrice: 3000, pricePerKm: 12, pickupPrice: 800, dropPrice: 800,
+        tier1Price: 600, tier2Price: 800, tier3Price: 1000, tier4Price: 1200, 
+        extraKmCharge: 12, nightCharges: 250, extraWaitingCharges: 150
+      };
+    } else if (vehicleId.includes('ertiga')) {
+      baseDefaults = {
+        basePrice: 3500, pricePerKm: 15, pickupPrice: 1000, dropPrice: 1000,
+        tier1Price: 800, tier2Price: 1000, tier3Price: 1200, tier4Price: 1400, 
+        extraKmCharge: 15, nightCharges: 300, extraWaitingCharges: 200
+      };
+    } else if (vehicleId.includes('innova') || vehicleId.includes('crysta')) {
+      baseDefaults = {
+        basePrice: 4000, pricePerKm: 17, pickupPrice: 1200, dropPrice: 1200,
+        tier1Price: 1000, tier2Price: 1200, tier3Price: 1400, tier4Price: 1600, 
+        extraKmCharge: 17, nightCharges: 350, extraWaitingCharges: 250
+      };
+    } else if (vehicleId.includes('tempo')) {
+      baseDefaults = {
+        basePrice: 6000, pricePerKm: 19, pickupPrice: 2000, dropPrice: 2000,
+        tier1Price: 1600, tier2Price: 1800, tier3Price: 2000, tier4Price: 2500, 
+        extraKmCharge: 19, nightCharges: 400, extraWaitingCharges: 300
+      };
+    } else if (vehicleId.includes('luxury')) {
+      baseDefaults = {
+        basePrice: 7000, pricePerKm: 22, pickupPrice: 2500, dropPrice: 2500,
+        tier1Price: 2000, tier2Price: 2200, tier3Price: 2500, tier4Price: 3000, 
+        extraKmCharge: 22, nightCharges: 450, extraWaitingCharges: 350
+      };
+    }
     
-    console.log('Sanitized airport fare data to send:', sanitizedData);
+    // Apply defaults for any zero or missing values
+    for (const [key, defaultValue] of Object.entries(baseDefaults)) {
+      if (!cleanData[key] || cleanData[key] === 0) {
+        cleanData[key] = defaultValue;
+      }
+    }
+    
+    console.log('Updating airport fare data with defaults applied:', cleanData);
     
     // Force creation flag to ensure defaults are applied if needed
     const forceCreation = true;
@@ -176,7 +222,7 @@ export async function updateAirportFares(fareData: Record<string, any>): Promise
           'X-Force-Creation': forceCreation ? 'true' : 'false',
           'Content-Type': 'application/json'
         },
-        data: sanitizedData
+        data: cleanData
       });
       
       console.log('Direct API response:', directResult);
@@ -203,7 +249,7 @@ export async function updateAirportFares(fareData: Record<string, any>): Promise
             'X-Force-Creation': forceCreation ? 'true' : 'false',
             'Content-Type': 'application/json'
           },
-          data: sanitizedData
+          data: cleanData
         });
         
         console.log('Backup API response:', backupResult);
@@ -235,24 +281,7 @@ export async function updateAirportFares(fareData: Record<string, any>): Promise
     try {
       console.log('Triggering airport fares sync after update...');
       setTimeout(async () => {
-        try {
-          const syncResult = await directVehicleOperation('/api/admin/sync-airport-fares.php', 'GET', {
-            headers: {
-              'X-Admin-Mode': 'true',
-              'X-Debug': 'true',
-              'X-Force-Creation': 'true',
-              'Cache-Control': 'no-cache'
-            }
-          });
-          console.log('Sync result:', syncResult);
-          
-          // Notify the user about the sync
-          if (syncResult && syncResult.status === 'success') {
-            console.log('Airport fares synced successfully after update');
-          }
-        } catch (syncError) {
-          console.warn('Non-critical: Error during fare sync:', syncError);
-        }
+        await syncAirportFares();
       }, 1000);
     } catch (syncError) {
       console.warn('Non-critical: Failed to trigger fares sync after update:', syncError);

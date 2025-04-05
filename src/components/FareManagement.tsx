@@ -8,8 +8,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { directVehicleOperation } from '@/utils/apiHelper';
 import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, RefreshCw, Save } from "lucide-react";
-import { fetchLocalFares, fetchAirportFares, updateLocalFares, updateAirportFares } from '@/services/fareManagementService';
+import { AlertCircle, RefreshCw, Save, Database } from "lucide-react";
+import { fetchLocalFares, fetchAirportFares, updateLocalFares, updateAirportFares, syncAirportFares, syncLocalFares } from '@/services/fareManagementService';
 
 interface FareManagementProps {
   vehicleId: string;
@@ -60,6 +60,84 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
   const refreshCooldownMs = 5000;
   const saveCooldownMs = 2000;
   
+  // Default values for different vehicle types
+  const defaultValues: Record<string, Record<string, Record<string, number>>> = {
+    airport: {
+      sedan: {
+        basePrice: 3000, pricePerKm: 12, pickupPrice: 800, dropPrice: 800,
+        tier1Price: 600, tier2Price: 800, tier3Price: 1000, tier4Price: 1200, extraKmCharge: 12
+      },
+      ertiga: {
+        basePrice: 3500, pricePerKm: 15, pickupPrice: 1000, dropPrice: 1000,
+        tier1Price: 800, tier2Price: 1000, tier3Price: 1200, tier4Price: 1400, extraKmCharge: 15
+      },
+      innova_crysta: {
+        basePrice: 4000, pricePerKm: 17, pickupPrice: 1200, dropPrice: 1200,
+        tier1Price: 1000, tier2Price: 1200, tier3Price: 1400, tier4Price: 1600, extraKmCharge: 17
+      },
+      tempo: {
+        basePrice: 6000, pricePerKm: 19, pickupPrice: 2000, dropPrice: 2000,
+        tier1Price: 1600, tier2Price: 1800, tier3Price: 2000, tier4Price: 2500, extraKmCharge: 19
+      },
+      luxury: {
+        basePrice: 7000, pricePerKm: 22, pickupPrice: 2500, dropPrice: 2500,
+        tier1Price: 2000, tier2Price: 2200, tier3Price: 2500, tier4Price: 3000, extraKmCharge: 22
+      }
+    },
+    local: {
+      sedan: {
+        price4hrs40km: 1800, price8hrs80km: 3000, price10hrs100km: 3600, 
+        priceExtraKm: 12, priceExtraHour: 200
+      },
+      ertiga: {
+        price4hrs40km: 2200, price8hrs80km: 3600, price10hrs100km: 4500, 
+        priceExtraKm: 15, priceExtraHour: 250
+      },
+      innova_crysta: {
+        price4hrs40km: 2600, price8hrs80km: 4200, price10hrs100km: 5200, 
+        priceExtraKm: 18, priceExtraHour: 300
+      },
+      tempo: {
+        price4hrs40km: 4500, price8hrs80km: 7000, price10hrs100km: 8500, 
+        priceExtraKm: 22, priceExtraHour: 400
+      },
+      luxury: {
+        price4hrs40km: 3500, price8hrs80km: 5500, price10hrs100km: 6500, 
+        priceExtraKm: 22, priceExtraHour: 350
+      }
+    }
+  };
+
+  // Apply default values based on vehicle type
+  const applyDefaultValues = (vehicleId: string): FareData => {
+    const simpleVehicleId = vehicleId.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    let vehicleType = simpleVehicleId;
+    
+    // Try to find matching vehicle type
+    if (simpleVehicleId.includes('sedan') || simpleVehicleId === '1') {
+      vehicleType = 'sedan';
+    } else if (simpleVehicleId.includes('ertiga') || simpleVehicleId === '2') {
+      vehicleType = 'ertiga';
+    } else if (simpleVehicleId.includes('innova') || simpleVehicleId.includes('crysta') || simpleVehicleId === '1266') {
+      vehicleType = 'innova_crysta';
+    } else if (simpleVehicleId.includes('tempo') || simpleVehicleId === '592' || simpleVehicleId === '1270') {
+      vehicleType = 'tempo';
+    } else if (simpleVehicleId.includes('luxury')) {
+      vehicleType = 'luxury';
+    }
+    
+    // Get default values for the matched vehicle type or use sedan as fallback
+    const defaults = defaultValues[fareType]?.[vehicleType] || 
+                    defaultValues[fareType]?.['sedan'] || 
+                    {};
+    
+    return {
+      vehicleId,
+      vehicle_id: vehicleId,
+      ...defaults
+    };
+  };
+  
   const loadFareData = async () => {
     const now = Date.now();
     if (now - lastRefreshTimeRef.current < refreshCooldownMs) {
@@ -103,32 +181,64 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
         const loadedFare = result[0];
         console.log(`Loaded ${fareType} fare data:`, loadedFare);
         
-        const updatedFare = {
-          ...loadedFare,
-          vehicleId: vehicleId,
-          vehicle_id: vehicleId
-        };
+        const hasZeroValues = Object.entries(loadedFare).some(([key, value]) => {
+          return typeof value === 'number' && 
+                 value === 0 && 
+                 key !== 'id' && 
+                 !key.includes('_id') && 
+                 !key.includes('vehicle');
+        });
         
-        setFareData(updatedFare);
+        // Apply defaults if any important values are zero
+        if (hasZeroValues) {
+          const defaults = applyDefaultValues(vehicleId);
+          console.log(`Applying default values for ${vehicleId}:`, defaults);
+          
+          const mergedFare = {
+            ...loadedFare,
+            ...Object.fromEntries(
+              Object.entries(defaults).filter(([key, value]) => {
+                return typeof value === 'number' && 
+                      (loadedFare[key] === undefined || loadedFare[key] === 0);
+              })
+            ),
+            vehicleId: vehicleId,
+            vehicle_id: vehicleId
+          };
+          
+          setFareData(mergedFare);
+        } else {
+          const updatedFare = {
+            ...loadedFare,
+            vehicleId: vehicleId,
+            vehicle_id: vehicleId
+          };
+          
+          setFareData(updatedFare);
+        }
+        
         setError(null);
       } else {
         console.warn('No fare data returned:', result);
         
-        setFareData({ 
-          vehicleId,
-          vehicle_id: vehicleId 
-        });
+        // Apply default values for this vehicle
+        const defaultData = applyDefaultValues(vehicleId);
+        console.log(`Applying default values for ${vehicleId}:`, defaultData);
         
-        setError(`No ${fareType} fare data found for this vehicle.`);
+        setFareData(defaultData);
+        
+        setError(`No ${fareType} fare data found in database. Using default values.`);
       }
     } catch (err) {
       console.error(`Error loading ${fareType} fare data:`, err);
-      setError(`Failed to load fare data. ${err instanceof Error ? err.message : ''}`);
       
-      setFareData({ 
-        vehicleId,
-        vehicle_id: vehicleId 
-      });
+      // Apply default values when there's an error
+      const defaultData = applyDefaultValues(vehicleId);
+      console.log(`Applying default values after error for ${vehicleId}:`, defaultData);
+      
+      setFareData(defaultData);
+      
+      setError(`Failed to load fare data. Using default values. ${err instanceof Error ? err.message : ''}`);
     } finally {
       if (mountedRef.current) {
         setIsLoading(false);
@@ -205,23 +315,14 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     setError(null);
     
     try {
-      let endpoint = '';
-      
-      if (fareType === 'local') {
-        endpoint = 'api/admin/sync-local-fares.php';
-      } else if (fareType === 'airport') {
-        endpoint = 'api/admin/sync-airport-fares.php';
-      }
-      
       console.log(`Syncing ${fareType} fares from database tables`);
       
-      const result = await directVehicleOperation(endpoint, 'GET', {
-        headers: {
-          'X-Admin-Mode': 'true',
-          'X-Debug': 'true',
-          'X-Force-Creation': 'true'
-        }
-      });
+      let result;
+      if (fareType === 'local') {
+        result = await syncLocalFares();
+      } else if (fareType === 'airport') {
+        result = await syncAirportFares();
+      }
       
       if (result && (result.status === 'success' || result.status === 'throttled')) {
         if (result.status === 'throttled') {
@@ -372,23 +473,23 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
         <>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="priceOneWay">One Way Transfer (₹)</Label>
+              <Label htmlFor="basePrice">Base Price (₹)</Label>
               <Input
-                id="priceOneWay"
-                name="priceOneWay"
+                id="basePrice"
+                name="basePrice"
                 type="number"
-                value={fareData.priceOneWay || 0}
+                value={fareData.basePrice || 0}
                 onChange={handleInputChange}
               />
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="priceRoundTrip">Round Trip Transfer (₹)</Label>
+              <Label htmlFor="pricePerKm">Price Per KM (₹)</Label>
               <Input
-                id="priceRoundTrip"
-                name="priceRoundTrip"
+                id="pricePerKm"
+                name="pricePerKm"
                 type="number"
-                value={fareData.priceRoundTrip || 0}
+                value={fareData.pricePerKm || 0}
                 onChange={handleInputChange}
               />
             </div>
@@ -396,23 +497,23 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
           
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="nightCharges">Night Charges (₹)</Label>
+              <Label htmlFor="pickupPrice">Pickup Price (₹)</Label>
               <Input
-                id="nightCharges"
-                name="nightCharges"
+                id="pickupPrice"
+                name="pickupPrice"
                 type="number"
-                value={fareData.nightCharges || 0}
+                value={fareData.pickupPrice || 0}
                 onChange={handleInputChange}
               />
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="extraWaitingCharges">Extra Waiting Charges (₹/hr)</Label>
+              <Label htmlFor="dropPrice">Drop Price (₹)</Label>
               <Input
-                id="extraWaitingCharges"
-                name="extraWaitingCharges"
+                id="dropPrice"
+                name="dropPrice"
                 type="number"
-                value={fareData.extraWaitingCharges || 0}
+                value={fareData.dropPrice || 0}
                 onChange={handleInputChange}
               />
             </div>
@@ -477,6 +578,30 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
                 onChange={handleInputChange}
               />
             </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="nightCharges">Night Charges (₹)</Label>
+              <Input
+                id="nightCharges"
+                name="nightCharges"
+                type="number"
+                value={fareData.nightCharges || 0}
+                onChange={handleInputChange}
+              />
+            </div>
+          </div>
+          
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="extraWaitingCharges">Extra Waiting Charges (₹/hr)</Label>
+              <Input
+                id="extraWaitingCharges"
+                name="extraWaitingCharges"
+                type="number"
+                value={fareData.extraWaitingCharges || 0}
+                onChange={handleInputChange}
+              />
+            </div>
           </div>
         </>
       );
@@ -489,9 +614,9 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     <Card>
       <CardContent className="p-6 space-y-4">
         {error && (
-          <Alert variant="destructive" className="mb-4">
+          <Alert variant={error.includes('default values') ? "default" : "destructive"} className="mb-4">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Error</AlertTitle>
+            <AlertTitle>{error.includes('default values') ? 'Notice' : 'Error'}</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
@@ -509,13 +634,14 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
               </h3>
               
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 onClick={syncFares}
                 disabled={isSyncingFares || !vehicleId || (Date.now() - lastRefreshTimeRef.current < refreshCooldownMs)}
+                className="flex items-center gap-2"
               >
-                <RefreshCw className={`h-4 w-4 mr-2 ${isSyncingFares ? 'animate-spin' : ''}`} />
-                Sync {fareType.charAt(0).toUpperCase() + fareType.slice(1)} Fares
+                <Database className={`h-4 w-4 ${isSyncingFares ? 'animate-pulse' : ''}`} />
+                <span>Sync {fareType.charAt(0).toUpperCase() + fareType.slice(1)} Fares</span>
               </Button>
             </div>
             
@@ -531,15 +657,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       </CardContent>
       
       <CardFooter className="bg-muted/50 px-6 py-4 border-t">
-        <div className="flex justify-end w-full">
-          <Button
-            onClick={saveFareData}
-            disabled={isSaving || isLoading || !vehicleId || (Date.now() - lastSaveTimeRef.current < saveCooldownMs)}
-            className="mr-2"
-          >
-            {isSaving ? <Spinner size="sm" className="mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-            Save Changes
-          </Button>
+        <div className="flex justify-between w-full">
           <Button
             variant="outline"
             onClick={loadFareData}
@@ -547,6 +665,14 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
             Refresh
+          </Button>
+          
+          <Button
+            onClick={saveFareData}
+            disabled={isSaving || isLoading || !vehicleId || (Date.now() - lastSaveTimeRef.current < saveCooldownMs)}
+          >
+            {isSaving ? <Spinner size="sm" className="mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+            Save Changes
           </Button>
         </div>
       </CardFooter>
