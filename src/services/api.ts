@@ -89,51 +89,93 @@ export const authAPI = {
     try {
       console.log('Starting login attempt with credentials:', { email: credentials.email, passwordLength: credentials.password?.length });
       
-      // Use a specific hardcoded path for login - this is the most reliable approach
+      // HARDCODED PATH: Use the most direct and reliable path possible for login
       const loginUrl = '/api/login.php';
       
       console.log(`Attempting login with hardcoded endpoint: ${loginUrl}`);
       
-      // Try a fetch request first to test if the endpoint is accessible
-      const testResponse = await fetch(loginUrl, {
-        method: 'OPTIONS',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache'
-        },
-        cache: 'no-store'
-      });
-      
-      console.log('Login preflight check:', {
-        status: testResponse.status,
-        statusText: testResponse.statusText,
-      });
-      
-      // Now perform the actual login
-      const response = await axios.post(loginUrl, credentials, {
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Accept': 'application/json'
-        }
-      });
-      
-      const data = response.data;
-      console.log('Login response received:', { 
-        status: response.status,
-        hasToken: !!data.token,
-        userData: data.user ? 'User data present' : 'No user data'
-      });
-      
-      if (data.token) {
-        localStorage.setItem('authToken', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
-        console.log('Auth token and user data saved to localStorage');
+      // Try a fetch request to test if the endpoint is accessible
+      try {
+        const testResponse = await fetch(loginUrl, {
+          method: 'OPTIONS',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache'
+          },
+          cache: 'no-store'
+        });
+        
+        console.log('Login preflight check:', {
+          status: testResponse.status,
+          statusText: testResponse.statusText,
+        });
+      } catch (e) {
+        console.warn('Preflight check failed, proceeding anyway:', e);
       }
       
-      return data;
+      // Try direct fetch first for maximum reliability
+      try {
+        console.log('Attempting direct fetch to login endpoint');
+        const response = await fetch(loginUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify(credentials),
+          cache: 'no-store'
+        });
+        
+        console.log('Direct fetch login response:', {
+          status: response.status,
+          statusText: response.statusText,
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Login response data:', data);
+          
+          if (data.token) {
+            localStorage.setItem('authToken', data.token);
+            localStorage.setItem('user', JSON.stringify(data.user));
+            console.log('Auth token and user data saved to localStorage');
+            return data;
+          } else {
+            throw new Error('No token in response');
+          }
+        }
+        throw new Error(`Login failed with status: ${response.status}`);
+      } catch (fetchError) {
+        console.warn('Direct fetch login failed, falling back to axios:', fetchError);
+        
+        // If direct fetch fails, try axios
+        const response = await axios.post(loginUrl, credentials, {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Accept': 'application/json'
+          }
+        });
+        
+        const data = response.data;
+        console.log('Axios login response received:', { 
+          status: response.status,
+          hasToken: !!data.token,
+          userData: data.user ? 'User data present' : 'No user data'
+        });
+        
+        if (data.token) {
+          localStorage.setItem('authToken', data.token);
+          localStorage.setItem('user', JSON.stringify(data.user));
+          console.log('Auth token and user data saved to localStorage');
+        }
+        
+        return data;
+      }
     } catch (error) {
       console.error('Login error details:', error);
       

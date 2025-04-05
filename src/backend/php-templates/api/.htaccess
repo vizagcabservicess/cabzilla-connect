@@ -1,3 +1,4 @@
+
 # Enable URL rewriting with aggressive CORS configuration
 RewriteEngine On
 RewriteBase /api/
@@ -31,6 +32,10 @@ RewriteRule .* - [R=200,L]
 
 # CRITICAL: Set PHP handler for all PHP files
 AddHandler application/x-httpd-php .php
+
+# NEW: Direct login.php files without any conditions - HIGHEST PRIORITY
+RewriteRule ^login\.php$ login.php [L,QSA]
+RewriteRule ^login$ login.php [L,QSA]
 
 # ABSOLUTE HIGHEST PRIORITY: Define direct login handling for root login requests
 # These rules must come before any other rules to ensure they take precedence

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { z } from "zod";
@@ -135,20 +134,53 @@ export function LoginForm() {
       console.log("Login attempt with email:", values.email);
       
       try {
-        // Use HTTP-only cookies to store authentication token
-        const response = await authAPI.login(values);
+        // Use direct fetch for maximum reliability
+        const loginUrl = '/api/login.php';
+        console.log(`Attempting login with endpoint: ${loginUrl}`);
         
-        if (response.token) {
-          // Login succeeded, update toast
+        // Make the login request using fetch directly
+        const response = await fetch(loginUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify(values),
+          cache: 'no-store'
+        });
+        
+        // Log the raw response data
+        console.log('Login response received:', { 
+          status: response.status,
+          statusText: response.statusText,
+          headers: Object.fromEntries([...response.headers.entries()])
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Login failed with status: ${response.status}`);
+        }
+        
+        // Parse the JSON response
+        const data = await response.json();
+        console.log('Login response data:', data);
+        
+        if (data.token) {
+          // Store the token and user data
+          localStorage.setItem('authToken', data.token);
+          localStorage.setItem('user', JSON.stringify(data.user));
+          
+          // Update toast to show success
           toast.success('Login successful', { 
             id: loginToastId, 
-            description: `Welcome back, ${response.user?.name || 'User'}!` 
+            description: `Welcome back, ${data.user?.name || 'User'}!` 
           });
           
           console.log("Login successful, token saved", { 
-            tokenLength: response.token.length,
-            tokenParts: response.token.split('.').length,
-            user: response.user?.id
+            tokenLength: data.token.length,
+            tokenParts: data.token.split('.').length,
+            user: data.user?.id
           });
           
           // Force a page reload to ensure fresh state

@@ -31,7 +31,8 @@ export const getApiUrl = (endpoint: string): string => {
     return endpoint;
   }
   
-  // For login endpoints, use the direct path to ensure maximum compatibility
+  // CRITICAL: Special handling for login endpoints
+  // Always use plain /api/login.php for maximum reliability
   if (endpoint === 'login.php' || endpoint === 'login' || endpoint === '/login' || endpoint === '/login.php') {
     return '/api/login.php';
   }
