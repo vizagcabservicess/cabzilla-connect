@@ -38,17 +38,21 @@ if (!empty($input)) {
     }
 }
 
-// Determine if this is a signup or login request based on URI
+// Determine if this is a signup or login request based on URI and data
 $isSignup = strpos($_SERVER['REQUEST_URI'], 'signup') !== false || 
-           strpos($_SERVER['REQUEST_URI'], 'register') !== false;
+           strpos($_SERVER['REQUEST_URI'], 'register') !== false ||
+           (isset($data['name']) && isset($data['phone']));
 
 $responseMessage = $isSignup ? "Debug signup successful" : "Debug login successful";
+
+// Generate a unique token with timestamp
+$token = 'debug-token-' . time() . '-' . rand(1000, 9999);
 
 // Always return success
 echo json_encode([
     'status' => 'success',
     'message' => $responseMessage,
-    'token' => 'debug-token-' . time(),
+    'token' => $token,
     'user' => [
         'id' => 1,
         'name' => $data['name'] ?? 'Debug User',

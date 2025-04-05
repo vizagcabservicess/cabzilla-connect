@@ -49,69 +49,65 @@ export function SignupForm() {
       // Show a toast to indicate signup is in progress
       const loadingToastId = toast.loading("Creating your account...");
       
+      console.log("Attempting signup with debug-login.php endpoint directly...");
+      
+      // Direct fetch call to debug-login.php with explicit parameters
+      const response = await fetch('/api/debug-login.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'Cache-Control': 'no-cache'
+        },
+        body: JSON.stringify(values)
+      });
+      
+      console.log("Signup response status:", response.status);
+      
+      if (!response.ok) {
+        throw new Error(`Signup failed with status: ${response.status}`);
+      }
+      
+      // Get the response text for debugging
+      const responseText = await response.text();
+      console.log("Signup response text:", responseText);
+      
+      // Parse the response
+      let data;
       try {
-        console.log("Attempting signup with debug-login.php endpoint...");
+        data = JSON.parse(responseText);
+      } catch (e) {
+        throw new Error(`Invalid JSON response: ${responseText.substring(0, 100)}...`);
+      }
+      
+      console.log("Signup response data:", data);
+      
+      if (data.token) {
+        // Store auth data
+        localStorage.setItem('authToken', data.token);
+        localStorage.setItem('user', JSON.stringify({
+          ...data.user,
+          name: values.name,
+          email: values.email,
+          phone: values.phone
+        }));
         
-        // Use the working debug-login endpoint that we know works
-        const response = await fetch('/api/debug-login.php', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
-          body: JSON.stringify(values)
+        // Success - update the loading toast
+        toast.success("Account created successfully!", { id: loadingToastId });
+        
+        uiToast({
+          title: "Welcome to our service!",
+          description: "Your account has been created successfully. You'll be redirected to your dashboard.",
+          duration: 5000,
         });
         
-        console.log("Signup response status:", response.status);
-        
-        if (!response.ok) {
-          throw new Error(`Signup failed with status: ${response.status}`);
-        }
-        
-        // Get the response text for debugging
-        const responseText = await response.text();
-        console.log("Signup response text:", responseText);
-        
-        // Parse the response
-        let data;
-        try {
-          data = JSON.parse(responseText);
-        } catch (e) {
-          throw new Error(`Invalid JSON response: ${responseText.substring(0, 100)}...`);
-        }
-        
-        console.log("Signup response data:", data);
-        
-        if (data.token) {
-          // Store auth data same as login
-          localStorage.setItem('authToken', data.token);
-          localStorage.setItem('user', JSON.stringify({
-            ...data.user,
-            name: values.name,
-            email: values.email,
-            phone: values.phone
-          }));
-          
-          // Success - update the loading toast
-          toast.success("Account created successfully!", { id: loadingToastId });
-          
-          uiToast({
-            title: "Welcome to our service!",
-            description: "Your account has been created successfully. You'll be redirected to your dashboard.",
-            duration: 5000,
-          });
-          
-          // Short delay before redirecting to ensure toast is seen
-          setTimeout(() => {
-            navigate('/dashboard');
-          }, 1000);
-        } else {
-          throw new Error("Signup failed: No token received");
-        }
-      } catch (signupError) {
-        // Update the loading toast to show error
-        toast.error("Signup failed", { id: loadingToastId });
-        throw signupError;
+        // Short delay before redirecting to ensure toast is seen
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 1000);
+      } else {
+        throw new Error("Signup failed: No token received");
       }
     } catch (error) {
       console.error("Signup error:", error);

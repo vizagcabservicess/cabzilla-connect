@@ -40,6 +40,7 @@ RewriteRule ^api/login$ debug-login.php [L,QSA]
 RewriteRule ^api/login\.php$ debug-login.php [L,QSA]
 RewriteRule ^auth/login$ debug-login.php [L,QSA]
 RewriteRule ^auth/login\.php$ debug-login.php [L,QSA]
+
 # Add signup redirect to debug-login.php
 RewriteRule ^signup$ debug-login.php [L,QSA]
 RewriteRule ^signup\.php$ debug-login.php [L,QSA]

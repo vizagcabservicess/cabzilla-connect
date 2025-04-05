@@ -29,7 +29,7 @@ error_log("API Request: " . json_encode($requestData));
 if (preg_match('/\/(api\/)?(login|signup|register)(\.php)?$/i', $_SERVER['REQUEST_URI'])) {
     // Log the forwarding
     error_log("Forwarding to debug-login.php from path: " . $_SERVER['REQUEST_URI']);
-    include_once __DIR__ . '/debug-login.php';
+    require_once __DIR__ . '/debug-login.php';
     exit;
 }
 
