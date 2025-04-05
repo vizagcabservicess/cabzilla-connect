@@ -31,7 +31,7 @@ export const getApiUrl = (endpoint: string): string => {
     return endpoint;
   }
   
-  // For login.php, use the direct path to ensure compatibility
+  // For login endpoints, use the direct path to ensure maximum compatibility
   if (endpoint === 'login.php' || endpoint === 'login' || endpoint === '/login' || endpoint === '/login.php') {
     return '/api/login.php';
   }

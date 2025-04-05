@@ -38,7 +38,7 @@ export function LoginForm() {
 
   useEffect(() => {
     // Display API URL for debugging
-    const url = import.meta.env.VITE_API_BASE_URL || '';
+    const url = import.meta.env.VITE_API_URL || '';
     setApiUrl(url);
     
     // Clear any stale tokens on login page load
@@ -65,10 +65,10 @@ export function LoginForm() {
     try {
       setConnectionStatus('testing');
       setIsTesting(true);
-      console.log(`Testing API connection to /api/login`);
+      console.log(`Testing API connection to /api/login.php`);
       
       // Try OPTIONS request first (preflight)
-      const response = await fetch(`/api/login`, {
+      const response = await fetch(`/api/login.php`, {
         method: 'OPTIONS',
         headers: {
           'Accept': 'application/json',
@@ -92,7 +92,7 @@ export function LoginForm() {
         
         toast.success('API connection successful', {
           duration: 3000,
-          description: `Connected to /api/login`
+          description: `Connected to /api/login.php`
         });
       } else {
         setConnectionStatus('failed');
