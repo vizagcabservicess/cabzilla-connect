@@ -8,19 +8,23 @@ import { directVehicleOperation } from '@/utils/apiHelper';
  */
 export async function fetchLocalFares(vehicleId: string): Promise<any[]> {
   try {
+    console.log(`Fetching local fares for vehicle ID: ${vehicleId}`);
     const results = await directVehicleOperation(`/api/admin/direct-local-fares.php`, 'GET', {
       headers: {
         'X-Admin-Mode': 'true',
         'X-Debug': 'true',
-        'Cache-Control': 'no-cache'
+        'Cache-Control': 'no-cache',
+        'X-No-HTML': 'true' // Signal to the server to avoid HTML responses
       },
       data: { vehicleId }
     });
     
     if (results && results.fares && Array.isArray(results.fares)) {
+      console.log(`Received ${results.fares.length} local fare records`);
       return results.fares;
     }
     
+    console.warn('No local fares found in response:', results);
     return [];
   } catch (error) {
     console.error('Error fetching local fares:', error);
@@ -35,18 +39,22 @@ export async function fetchLocalFares(vehicleId: string): Promise<any[]> {
  */
 export async function fetchAirportFares(vehicleId: string): Promise<any[]> {
   try {
+    console.log(`Fetching airport fares for vehicle ID: ${vehicleId}`);
     const results = await directVehicleOperation(`/api/admin/direct-airport-fares.php?vehicleId=${encodeURIComponent(vehicleId)}`, 'GET', {
       headers: {
         'X-Admin-Mode': 'true',
         'X-Debug': 'true',
-        'Cache-Control': 'no-cache'
+        'Cache-Control': 'no-cache',
+        'X-No-HTML': 'true' // Signal to the server to avoid HTML responses
       }
     });
     
     if (results && results.fares && Array.isArray(results.fares)) {
+      console.log(`Received ${results.fares.length} airport fare records`);
       return results.fares;
     }
     
+    console.warn('No airport fares found in response:', results);
     return [];
   } catch (error) {
     console.error('Error fetching airport fares:', error);
@@ -86,12 +94,14 @@ export async function updateLocalFares(fareData: Record<string, any>): Promise<v
         'X-Admin-Mode': 'true',
         'X-Debug': 'true',
         'Content-Type': 'application/json',
-        'X-Force-Creation': 'true'
+        'X-Force-Creation': 'true',
+        'X-No-HTML': 'true' // Signal to the server to avoid HTML responses
       },
       data: cleanData
     });
     
     if (!directResult || directResult.status !== 'success') {
+      console.warn('Direct API update failed, trying backup API:', directResult);
       const directError = directResult?.message || 'Unknown error in direct API';
       
       // Try the fare update API as a backup
@@ -100,7 +110,8 @@ export async function updateLocalFares(fareData: Record<string, any>): Promise<v
           'X-Admin-Mode': 'true',
           'X-Debug': 'true',
           'Content-Type': 'application/json',
-          'X-Force-Creation': 'true'
+          'X-Force-Creation': 'true',
+          'X-No-HTML': 'true' // Signal to the server to avoid HTML responses
         },
         data: cleanData
       });
@@ -232,7 +243,8 @@ export async function updateAirportFares(fareData: Record<string, any>): Promise
           'X-Admin-Mode': 'true',
           'X-Debug': 'true',
           'X-Force-Creation': forceCreation ? 'true' : 'false',
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'X-No-HTML': 'true' // Signal to the server to avoid HTML responses
         },
         data: cleanData
       });
@@ -259,7 +271,8 @@ export async function updateAirportFares(fareData: Record<string, any>): Promise
             'X-Admin-Mode': 'true',
             'X-Debug': 'true',
             'X-Force-Creation': forceCreation ? 'true' : 'false',
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'X-No-HTML': 'true' // Signal to the server to avoid HTML responses
           },
           data: cleanData
         });
@@ -317,7 +330,8 @@ export async function syncAirportFares(): Promise<any> {
         'X-Admin-Mode': 'true',
         'X-Debug': 'true',
         'X-Force-Creation': 'true',
-        'Cache-Control': 'no-cache'
+        'Cache-Control': 'no-cache',
+        'X-No-HTML': 'true' // Signal to the server to avoid HTML responses
       },
       data: {
         sync: true,
@@ -345,7 +359,8 @@ export async function syncLocalFares(): Promise<any> {
         'X-Admin-Mode': 'true',
         'X-Debug': 'true',
         'X-Force-Creation': 'true',
-        'Cache-Control': 'no-cache'
+        'Cache-Control': 'no-cache',
+        'X-No-HTML': 'true' // Signal to the server to avoid HTML responses
       },
       data: {
         sync: true,
