@@ -8,7 +8,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { directVehicleOperation } from '@/utils/apiHelper';
 import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, RefreshCw, Save, Database, SyncIcon } from "lucide-react";
+import { AlertCircle, RefreshCw, Save, Database, RotateCw } from "lucide-react";
 import { fetchLocalFares, fetchAirportFares, updateLocalFares, updateAirportFares, syncAirportFares, syncLocalFares } from '@/services/fareManagementService';
 
 interface FareManagementProps {
