@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { z } from "zod";
@@ -133,7 +134,7 @@ export function LoginForm() {
       console.log("Login attempt with email:", values.email);
       
       // Use HTTP-only cookies to store authentication token
-      const response = await authAPI.login(values.email, values.password);
+      const response = await authAPI.login(values);
       
       if (response.token) {
         // Login succeeded, update toast

@@ -23,16 +23,12 @@ export {
   isTourTripType
 } from './tripTypes';
 
-// Import and re-export from apiHelper
+// Import and re-export from config instead of fareService
 export { 
   getBypassHeaders,
   getForcedRequestConfig,
-  formatDataForMultipart,
-  checkDatabaseConnection,
-  fixDatabaseTables,
-  forceRefreshVehicles
-} from '@/utils/apiHelper';
-export type { DatabaseConnectionResponse } from '@/utils/apiHelper';
+  formatDataForMultipart
+} from '@/config/requestConfig';
 
 // Re-export all methods from fareService
 export { 
@@ -78,7 +74,7 @@ export {
 
 // Export getData function from vehicleDataService
 export { 
-  fetchVehicles as getVehicleData,
+  getVehicleData,
   clearVehicleDataCache,
   getVehicleTypes
 } from '@/services/vehicleDataService';
