@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { VehicleManagement } from "@/components/admin/VehicleManagement";
 import { VehiclePricingManagement } from "@/components/admin/VehiclePricingManagement";
 import { UserManagement } from "@/components/admin/UserManagement";
-import { BookingsManagement } from "@/components/admin/BookingsManagement";
+import BookingsManagement from "@/components/admin/BookingsManagement";
 import { VehicleTripFaresForm } from "@/components/admin/VehicleTripFaresForm";
 import { Button } from "@/components/ui/button";
 import { Plus } from 'lucide-react';
@@ -41,7 +41,7 @@ export default function AdminDashboardPage() {
               Add New Vehicle
             </Button>
           </div>
-          <VehicleManagement vehicleId="" />
+          <VehicleManagement />
         </TabsContent>
 
         <TabsContent value="pricing">

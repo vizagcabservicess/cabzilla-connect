@@ -14,7 +14,7 @@ interface Booking {
   vehicle: string;
   status: string;
   amount: number;
-  user_id: string; // Corrected from userId to user_id
+  user_id: string;
 }
 
 export default function DashboardPage() {
@@ -39,7 +39,7 @@ export default function DashboardPage() {
             vehicle: 'Sedan',
             status: 'completed',
             amount: 1200,
-            user_id: '1'  // Corrected from userId to user_id
+            user_id: '1'
           },
           { 
             id: '2', 
@@ -49,7 +49,7 @@ export default function DashboardPage() {
             vehicle: 'SUV',
             status: 'pending',
             amount: 800,
-            user_id: '1'  // Corrected from userId to user_id
+            user_id: '1'
           },
           { 
             id: '3', 
@@ -59,7 +59,7 @@ export default function DashboardPage() {
             vehicle: 'Luxury',
             status: 'confirmed',
             amount: 1500,
-            user_id: '1'  // Corrected from userId to user_id
+            user_id: '1'
           },
           { 
             id: '4', 
@@ -69,7 +69,7 @@ export default function DashboardPage() {
             vehicle: 'Tempo',
             status: 'cancelled',
             amount: 2000,
-            user_id: '1'  // Corrected from userId to user_id
+            user_id: '1'
           }
         ]);
       } finally {

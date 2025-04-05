@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -47,6 +46,7 @@ export function UserManagement() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const { toast: uiToast } = useToast();
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
   
   useEffect(() => {
     // Get current user ID from auth API
@@ -117,6 +117,24 @@ export function UserManagement() {
     } catch (error) {
       console.error('Error updating user role:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to update user role');
+    }
+  };
+  
+  const updateUserRole = async (userId: string, role: string) => {
+    try {
+      setIsUpdating(true);
+      await authAPI.updateUserRole(userId, role);
+      toast.success('User role updated successfully');
+      
+      // Update local state
+      setUsers(users.map(user => 
+        user.id === userId ? {...user, role} : user
+      ));
+    } catch (error) {
+      console.error('Error updating user role:', error);
+      toast.error('Failed to update user role');
+    } finally {
+      setIsUpdating(false);
     }
   };
   

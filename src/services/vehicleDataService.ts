@@ -1,326 +1,176 @@
 
-import { directVehicleOperation } from '@/utils/apiHelper';
+import { CabType } from '@/types/cab';
+import axios from 'axios';
 
-// Local cache of vehicle data
-let vehicleDataCache: any[] | null = null;
-let cacheTimestamp: number = 0;
-const CACHE_EXPIRY = 60 * 1000; // 60 seconds
+let vehicleDataCache: CabType[] = [];
+let cacheExpirationTime = 0;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
-/**
- * Clear the vehicle data cache to force a fresh fetch next time
- */
-export function clearVehicleDataCache() {
-  console.log('Clearing vehicle data cache');
-  vehicleDataCache = null;
-  cacheTimestamp = 0;
-}
-
-/**
- * Check if the cache is valid
- */
-function isCacheValid(): boolean {
-  return (
-    vehicleDataCache !== null &&
-    cacheTimestamp > 0 &&
-    Date.now() - cacheTimestamp < CACHE_EXPIRY
-  );
-}
-
-/**
- * Get vehicle data from API or cache
- * @param forceRefresh Force a refresh from the API
- * @returns Promise with vehicle data
- */
-export async function getVehicleData(forceRefresh: boolean = false): Promise<any[]> {
-  return fetchVehicles(true, forceRefresh);
-}
-
-/**
- * Get available vehicle types
- * @returns Promise with array of vehicle type names
- */
-export async function getVehicleTypes(): Promise<string[]> {
-  const vehicles = await getVehicleData();
-  const types = vehicles.map(v => v.name || v.vehicleType || '').filter(Boolean);
-  return [...new Set(types)]; // Return unique values only
-}
-
-/**
- * Fetch vehicles from the API or from local storage if API fails
- * @param includeInactive Whether to include inactive vehicles
- * @param forceRefresh Force a refresh from the API
- * @returns Promise with an array of vehicle data
- */
-export async function fetchVehicles(
-  includeInactive: boolean = false,
-  forceRefresh: boolean = false
-): Promise<any[]> {
-  // Return from cache if valid and not forcing refresh
-  if (!forceRefresh && isCacheValid()) {
-    console.log('Using cached vehicle data', { count: vehicleDataCache?.length });
-    return vehicleDataCache || [];
-  }
-
-  console.log('Fetching vehicles from API', { includeInactive, forceRefresh });
-  
-  try {
-    // Try API endpoint first with timestamp to prevent caching
-    const apiEndpoint = `api/admin/direct-vehicle-modify.php?action=load&includeInactive=${includeInactive}&_t=${Date.now()}`;
-    const apiResult = await directVehicleOperation(apiEndpoint, 'GET', {
-      headers: {
-        'X-Admin-Mode': 'true',
-        'X-Force-Refresh': 'true',
-        'Cache-Control': 'no-cache, no-store, must-revalidate'
-      }
-    });
-
-    if (apiResult && apiResult.vehicles && Array.isArray(apiResult.vehicles)) {
-      console.log('Successfully fetched vehicles from API endpoint 1', {
-        count: apiResult.vehicles.length
-      });
-      vehicleDataCache = apiResult.vehicles;
-      cacheTimestamp = Date.now();
-      
-      // Store in local storage as backup
-      try {
-        localStorage.setItem('vehicleData', JSON.stringify(apiResult.vehicles));
-        localStorage.setItem('vehicleDataTimestamp', Date.now().toString());
-      } catch (storageError) {
-        console.warn('Failed to store vehicle data in local storage', storageError);
-      }
-      
-      return apiResult.vehicles;
-    }
-
-    // Try alternate endpoint
-    console.log('First endpoint failed, trying alternate endpoint');
-    const altEndpoint = `api/admin/vehicles-data.php?_t=${Date.now()}&includeInactive=${includeInactive}&force=true`;
-    const altResult = await directVehicleOperation(altEndpoint, 'GET', {
-      headers: {
-        'X-Admin-Mode': 'true',
-        'X-Force-Refresh': 'true',
-        'Cache-Control': 'no-cache, no-store, must-revalidate'
-      }
-    });
-
-    if (altResult && altResult.vehicles && Array.isArray(altResult.vehicles)) {
-      console.log('Successfully fetched vehicles from API endpoint 2', {
-        count: altResult.vehicles.length
-      });
-      vehicleDataCache = altResult.vehicles;
-      cacheTimestamp = Date.now();
-      
-      // Store in local storage as backup
-      try {
-        localStorage.setItem('vehicleData', JSON.stringify(altResult.vehicles));
-        localStorage.setItem('vehicleDataTimestamp', Date.now().toString());
-      } catch (storageError) {
-        console.warn('Failed to store vehicle data in local storage', storageError);
-      }
-      
-      return altResult.vehicles;
-    }
-
-    // Try third endpoint
-    console.log('Second endpoint failed, trying third endpoint');
-    const thirdEndpoint = `api/admin/get-vehicles.php?_t=${Date.now()}&includeInactive=${includeInactive}`;
-    const thirdResult = await directVehicleOperation(thirdEndpoint, 'GET', {
-      headers: {
-        'X-Admin-Mode': 'true',
-        'X-Force-Refresh': 'true',
-        'Cache-Control': 'no-cache, no-store, must-revalidate'
-      }
-    });
-
-    if (thirdResult && Array.isArray(thirdResult)) {
-      console.log('Successfully fetched vehicles from API endpoint 3', {
-        count: thirdResult.length
-      });
-      vehicleDataCache = thirdResult;
-      cacheTimestamp = Date.now();
-      
-      // Store in local storage as backup
-      try {
-        localStorage.setItem('vehicleData', JSON.stringify(thirdResult));
-        localStorage.setItem('vehicleDataTimestamp', Date.now().toString());
-      } catch (storageError) {
-        console.warn('Failed to store vehicle data in local storage', storageError);
-      }
-      
-      return thirdResult;
-    }
-
-    // If all API calls fail, try to load from local JSON file
-    console.log('All API endpoints failed, trying local JSON file');
-    const jsonResult = await fetch(`data/vehicles.json?_t=${Date.now()}`);
-    
-    if (jsonResult.ok) {
-      const jsonData = await jsonResult.json();
-      console.log('Successfully loaded vehicles from JSON file', {
-        count: jsonData.length
-      });
-      vehicleDataCache = jsonData;
-      cacheTimestamp = Date.now();
-      
-      // Store in local storage as backup
-      try {
-        localStorage.setItem('vehicleData', JSON.stringify(jsonData));
-        localStorage.setItem('vehicleDataTimestamp', Date.now().toString());
-      } catch (storageError) {
-        console.warn('Failed to store vehicle data in local storage', storageError);
-      }
-      
-      return jsonData;
-    }
-
-    // If local JSON file fails, try to load from local storage
-    console.log('Local JSON file failed, trying local storage');
-    const storedData = localStorage.getItem('vehicleData');
-    if (storedData) {
-      try {
-        const parsedData = JSON.parse(storedData);
-        console.log('Successfully loaded vehicles from local storage', {
-          count: parsedData.length
-        });
-        vehicleDataCache = parsedData;
-        cacheTimestamp = Date.now();
-        return parsedData;
-      } catch (parseError) {
-        console.error('Failed to parse vehicle data from local storage', parseError);
-      }
-    }
-
-    // If everything fails, use fallback data
-    console.log('All sources failed, using fallback data');
-    const fallbackData = getFallbackVehicles();
-    vehicleDataCache = fallbackData;
-    cacheTimestamp = Date.now();
-    return fallbackData;
-  } catch (error) {
-    console.error('Error fetching vehicles:', error);
-    
-    // Try local JSON file as first fallback
-    try {
-      console.log('Error with API, trying local JSON file');
-      const jsonResult = await fetch(`data/vehicles.json?_t=${Date.now()}`);
-      if (jsonResult.ok) {
-        const jsonData = await jsonResult.json();
-        console.log('Successfully loaded vehicles from JSON fallback', {
-          count: jsonData.length
-        });
-        vehicleDataCache = jsonData;
-        cacheTimestamp = Date.now();
-        return jsonData;
-      }
-    } catch (jsonError) {
-      console.error('Error fetching local JSON file:', jsonError);
-    }
-    
-    // Try local storage as second fallback
-    const storedData = localStorage.getItem('vehicleData');
-    if (storedData) {
-      try {
-        const parsedData = JSON.parse(storedData);
-        console.log('Successfully loaded vehicles from local storage fallback', {
-          count: parsedData.length
-        });
-        vehicleDataCache = parsedData;
-        cacheTimestamp = Date.now();
-        return parsedData;
-      } catch (parseError) {
-        console.error('Failed to parse vehicle data from local storage', parseError);
-      }
-    }
-    
-    // If everything fails, use fallback data
-    console.log('All fallbacks failed, using hardcoded data');
-    const fallbackData = getFallbackVehicles();
-    vehicleDataCache = fallbackData;
-    cacheTimestamp = Date.now();
-    return fallbackData;
-  }
-}
-
-/**
- * Get a fallback set of vehicles when all fetch methods fail
- * @returns Array of basic vehicle data
- */
-function getFallbackVehicles(): any[] {
-  return [
-    {
-      id: 'sedan',
-      name: 'Sedan',
-      capacity: 4,
-      luggageCapacity: 2,
-      price: 2500,
+// Mock data for development
+const mockVehicles: CabType[] = [
+  {
+    id: 'sedan',
+    name: 'Sedan',
+    description: 'Comfortable sedan with AC',
+    image: '/vehicles/sedan.jpg',
+    capacity: 4,
+    active: true,
+    basePrice: 1500,
+    pricePerKm: 14,
+    airportFares: {
+      basePrice: 800,
       pricePerKm: 14,
-      image: '/cars/sedan.png',
-      amenities: ['AC', 'Bottle Water', 'Music System'],
-      description: 'Comfortable sedan suitable for 4 passengers.',
-      ac: true,
-      nightHaltCharge: 700,
+      airportFee: 150,
+      dropPrice: 1200,
+      pickupPrice: 1500,
+      tier1Price: 800,
+      tier2Price: 1200,
+      tier3Price: 1800,
+      tier4Price: 2500,
+      extraKmCharge: 14
+    },
+    outstationFares: {
+      basePrice: 4200,
+      pricePerKm: 14,
+      roundTripPricePerKm: 12,
+      roundTripBasePrice: 3780,
       driverAllowance: 250,
-      isActive: true
+      nightHaltCharge: 700
     },
-    {
-      id: 'ertiga',
-      name: 'Ertiga',
-      capacity: 6,
-      luggageCapacity: 3,
-      price: 3200,
-      pricePerKm: 18,
-      image: '/cars/ertiga.png',
-      amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom'],
-      description: 'Spacious SUV suitable for 6 passengers.',
-      ac: true,
-      nightHaltCharge: 1000,
-      driverAllowance: 250,
-      isActive: true
-    },
-    {
-      id: 'innova_crysta',
-      name: 'Innova Crysta',
-      capacity: 7,
-      luggageCapacity: 4,
-      price: 3800,
-      pricePerKm: 20,
-      image: '/cars/innova.png',
-      amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
-      description: 'Premium SUV with ample space for 7 passengers.',
-      ac: true,
-      nightHaltCharge: 1000,
-      driverAllowance: 250,
-      isActive: true
-    },
-    {
-      id: 'luxury',
-      name: 'Luxury Sedan',
-      capacity: 4,
-      luggageCapacity: 3,
-      price: 4500,
-      pricePerKm: 25,
-      image: '/cars/luxury.png',
-      amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point', 'Premium Amenities'],
-      description: 'Premium luxury sedan with high-end amenities for a comfortable journey.',
-      ac: true,
-      nightHaltCharge: 1200,
-      driverAllowance: 300,
-      isActive: true
-    },
-    {
-      id: 'tempo',
-      name: 'Tempo Traveller',
-      capacity: 12,
-      luggageCapacity: 8,
-      price: 5500,
-      pricePerKm: 22,
-      image: '/cars/tempo.png',
-      amenities: ['AC', 'Bottle Water', 'Music System', 'Extra Legroom', 'Charging Point'],
-      description: 'Spacious van suitable for group travel of up to 12 passengers.',
-      ac: true,
-      nightHaltCharge: 1200,
-      driverAllowance: 300,
-      isActive: true
+    localPackageFares: {
+      price4hrs40km: 800,
+      price8hrs80km: 1500,
+      price10hrs100km: 1800,
+      extraHourPrice: 150,
+      extraKmPrice: 14
     }
-  ];
-}
+  },
+  {
+    id: 'ertiga',
+    name: 'Ertiga',
+    description: 'Spacious SUV for family',
+    image: '/vehicles/ertiga.jpg',
+    capacity: 6,
+    active: true,
+    basePrice: 1800,
+    pricePerKm: 18,
+    airportFares: {
+      basePrice: 1000,
+      pricePerKm: 18,
+      airportFee: 150,
+      dropPrice: 1500,
+      pickupPrice: 1800,
+      tier1Price: 1000,
+      tier2Price: 1500,
+      tier3Price: 2200,
+      tier4Price: 3000,
+      extraKmCharge: 18
+    },
+    outstationFares: {
+      basePrice: 5400,
+      pricePerKm: 18,
+      roundTripPricePerKm: 15,
+      roundTripBasePrice: 4860,
+      driverAllowance: 250,
+      nightHaltCharge: 1000
+    },
+    localPackageFares: {
+      price4hrs40km: 1000,
+      price8hrs80km: 1800,
+      price10hrs100km: 2200,
+      extraHourPrice: 200,
+      extraKmPrice: 18
+    }
+  },
+  {
+    id: 'innova',
+    name: 'Innova',
+    description: 'Premium SUV for comfort',
+    image: '/vehicles/innova.jpg',
+    capacity: 7,
+    active: true,
+    basePrice: 2200,
+    pricePerKm: 20,
+    airportFares: {
+      basePrice: 1200,
+      pricePerKm: 20,
+      airportFee: 150,
+      dropPrice: 1800,
+      pickupPrice: 2100,
+      tier1Price: 1200,
+      tier2Price: 1800,
+      tier3Price: 2600,
+      tier4Price: 3600,
+      extraKmCharge: 20
+    },
+    outstationFares: {
+      basePrice: 6000,
+      pricePerKm: 20,
+      roundTripPricePerKm: 17,
+      roundTripBasePrice: 5400,
+      driverAllowance: 250,
+      nightHaltCharge: 1000
+    },
+    localPackageFares: {
+      price4hrs40km: 1200,
+      price8hrs80km: 2200,
+      price10hrs100km: 2600,
+      extraHourPrice: 250,
+      extraKmPrice: 20
+    }
+  }
+];
+
+// Function to fetch vehicle data
+export const fetchVehicles = async (): Promise<CabType[]> => {
+  // If we have cached data and it's not expired, return it
+  const now = Date.now();
+  if (vehicleDataCache.length > 0 && now < cacheExpirationTime) {
+    console.log('Using cached vehicle data');
+    return vehicleDataCache;
+  }
+
+  try {
+    console.log('Fetching vehicle data from API');
+    const response = await axios.get('/api/vehicles-data.php');
+    
+    // Check if response is valid
+    if (response.data && Array.isArray(response.data.vehicles)) {
+      vehicleDataCache = response.data.vehicles;
+      cacheExpirationTime = now + CACHE_DURATION;
+      console.log('Fetched vehicles:', vehicleDataCache);
+      return vehicleDataCache;
+    }
+    
+    // Fall back to mock data if response is invalid
+    console.warn('Invalid vehicle data from API, using mock data');
+    vehicleDataCache = mockVehicles;
+    cacheExpirationTime = now + CACHE_DURATION;
+    return vehicleDataCache;
+  } catch (error) {
+    console.error('Error fetching vehicle data:', error);
+    
+    // Fall back to mock data if API fails
+    console.warn('Using mock vehicle data due to API error');
+    vehicleDataCache = mockVehicles;
+    cacheExpirationTime = now + CACHE_DURATION;
+    return vehicleDataCache;
+  }
+};
+
+// Alias for backward compatibility
+export const getVehicleData = fetchVehicles;
+
+// Function to clear vehicle data cache
+export const clearVehicleDataCache = () => {
+  vehicleDataCache = [];
+  cacheExpirationTime = 0;
+  console.log('Vehicle data cache cleared');
+};
+
+// Function to get vehicle types
+export const getVehicleTypes = async (): Promise<string[]> => {
+  const vehicles = await fetchVehicles();
+  const types = [...new Set(vehicles.map(vehicle => vehicle.name))];
+  return types;
+};

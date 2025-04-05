@@ -29,8 +29,10 @@ export {
   getForcedRequestConfig,
   formatDataForMultipart,
   checkDatabaseConnection,
-  DatabaseConnectionResponse
+  fixDatabaseTables,
+  forceRefreshVehicles
 } from '@/utils/apiHelper';
+export type { DatabaseConnectionResponse } from '@/utils/apiHelper';
 
 // Re-export all methods from fareService
 export { 
