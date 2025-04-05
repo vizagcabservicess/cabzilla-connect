@@ -23,11 +23,13 @@ export {
   isTourTripType
 } from './tripTypes';
 
-// Import and re-export from config instead of fareService
+// Import and re-export from apiHelper
 export { 
   getBypassHeaders,
   getForcedRequestConfig,
-  formatDataForMultipart
+  formatDataForMultipart,
+  checkDatabaseConnection,
+  DatabaseConnectionResponse
 } from '@/utils/apiHelper';
 
 // Re-export all methods from fareService

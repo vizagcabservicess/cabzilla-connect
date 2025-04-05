@@ -1,151 +1,143 @@
 
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
-import { FareManagement } from "@/components/admin/FareManagement";
-import { AirportFareManagement } from "@/components/admin/AirportFareManagement";
-import { LocalFareManagement } from "@/components/admin/LocalFareManagement";
-import { OutstationFareManagement } from "@/components/admin/OutstationFareManagement";
-import { DashboardMetrics } from "@/components/admin/DashboardMetrics";
-import { AdminBookingsList } from "@/components/admin/AdminBookingsList";
-import VehicleManagement from "@/components/admin/VehicleManagement";
+import { VehicleManagement } from "@/components/admin/VehicleManagement";
 import { VehiclePricingManagement } from "@/components/admin/VehiclePricingManagement";
 import { UserManagement } from "@/components/admin/UserManagement";
-import { DriverManagement } from "@/components/admin/DriverManagement";
-import { AdminNotifications } from "@/components/admin/AdminNotifications";
-import { Database, CreditCard, Car, CalendarDays, Users, Map, Settings } from 'lucide-react';
+import { BookingsManagement } from "@/components/admin/BookingsManagement";
+import { VehicleTripFaresForm } from "@/components/admin/VehicleTripFaresForm";
+import { Button } from "@/components/ui/button";
+import { Plus } from 'lucide-react';
 
 export default function AdminDashboardPage() {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState("vehicles");
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string>("");
+  const [vehicleAction, setVehicleAction] = useState<"manage" | "pricing">("manage");
+  const [tripFareType, setTripFareType] = useState<"outstation" | "local" | "airport">("local");
+
+  const handleAddFareClick = (fareType: "outstation" | "local" | "airport") => {
+    setActiveTab("add-fares");
+    setTripFareType(fareType);
+  };
 
   return (
-    <div className="container mx-auto py-8">
-      <div className="flex flex-col md:flex-row justify-between items-start mb-8 gap-4">
-        <div>
-          <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-          <p className="text-gray-500">Manage bookings, users, vehicles, and fare prices</p>
-        </div>
-        
-        <div className="flex gap-2">
-          <Link to="/admin/database">
-            <Button variant="outline" className="flex items-center gap-2">
-              <Database className="h-4 w-4" />
-              Database Management
-            </Button>
-          </Link>
-          <Button variant="outline" className="flex items-center gap-2">
-            <Settings className="h-4 w-4" />
-            Settings
-          </Button>
-        </div>
-      </div>
-      
-      <AdminNotifications />
-      
-      <Tabs defaultValue="dashboard" value={activeTab} onValueChange={setActiveTab} className="mt-6">
-        <TabsList className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2 mb-8">
-          <TabsTrigger value="dashboard" className="flex gap-1 items-center">
-            <CreditCard className="h-4 w-4" />
-            <span className="hidden sm:inline">Dashboard</span>
-          </TabsTrigger>
-          <TabsTrigger value="bookings" className="flex gap-1 items-center">
-            <CalendarDays className="h-4 w-4" />
-            <span className="hidden sm:inline">Bookings</span>
-          </TabsTrigger>
-          <TabsTrigger value="vehicles" className="flex gap-1 items-center">
-            <Car className="h-4 w-4" />
-            <span className="hidden sm:inline">Vehicles</span>
-          </TabsTrigger>
-          <TabsTrigger value="fares" className="flex gap-1 items-center">
-            <Map className="h-4 w-4" />
-            <span className="hidden sm:inline">Fares</span>
-          </TabsTrigger>
-          <TabsTrigger value="users" className="flex gap-1 items-center">
-            <Users className="h-4 w-4" />
-            <span className="hidden sm:inline">Users</span>
-          </TabsTrigger>
-          <TabsTrigger value="drivers" className="flex gap-1 items-center">
-            <Users className="h-4 w-4" />
-            <span className="hidden sm:inline">Drivers</span>
-          </TabsTrigger>
-          <TabsTrigger value="reports" className="flex gap-1 items-center">
-            <CreditCard className="h-4 w-4" />
-            <span className="hidden sm:inline">Reports</span>
-          </TabsTrigger>
+    <div className="container mx-auto py-6">
+      <h1 className="text-3xl font-bold mb-6">Admin Dashboard</h1>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid grid-cols-5 mb-8">
+          <TabsTrigger value="vehicles">Vehicles</TabsTrigger>
+          <TabsTrigger value="pricing">Vehicle Pricing</TabsTrigger>
+          <TabsTrigger value="users">Users</TabsTrigger>
+          <TabsTrigger value="bookings">Bookings</TabsTrigger>
+          <TabsTrigger value="fares">Fare Management</TabsTrigger>
         </TabsList>
-        
-        <TabsContent value="dashboard">
-          <DashboardMetrics />
-        </TabsContent>
-        
-        <TabsContent value="bookings">
-          <AdminBookingsList />
-        </TabsContent>
-        
+
         <TabsContent value="vehicles">
-          <Tabs defaultValue="management">
-            <TabsList className="mb-4">
-              <TabsTrigger value="management">Vehicle Types</TabsTrigger>
-              <TabsTrigger value="pricing">Vehicle Pricing</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="management">
-              <VehicleManagement />
-            </TabsContent>
-            
-            <TabsContent value="pricing">
-              <VehiclePricingManagement />
-            </TabsContent>
-          </Tabs>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold">Vehicle Management</h2>
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Add New Vehicle
+            </Button>
+          </div>
+          <VehicleManagement vehicleId="" />
         </TabsContent>
-        
-        <TabsContent value="fares">
-          <Tabs defaultValue="outstation">
-            <TabsList className="mb-4">
-              <TabsTrigger value="outstation">Outstation</TabsTrigger>
-              <TabsTrigger value="local">Local Package</TabsTrigger>
-              <TabsTrigger value="airport">Airport</TabsTrigger>
-              <TabsTrigger value="all">All Fares</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="outstation">
-              <OutstationFareManagement />
-            </TabsContent>
-            
-            <TabsContent value="local">
-              <LocalFareManagement />
-            </TabsContent>
-            
-            <TabsContent value="airport">
-              <AirportFareManagement />
-            </TabsContent>
-            
-            <TabsContent value="all">
-              <FareManagement />
-            </TabsContent>
-          </Tabs>
+
+        <TabsContent value="pricing">
+          <div className="mb-4">
+            <h2 className="text-xl font-semibold mb-4">Vehicle Pricing</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <Button
+                variant="outline"
+                onClick={() => setVehicleAction("manage")}
+                className={vehicleAction === "manage" ? "border-primary bg-primary/10" : ""}
+              >
+                Manage Base Pricing
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleAddFareClick("local")}
+                className={activeTab === "add-fares" && tripFareType === "local" ? "border-primary bg-primary/10" : ""}
+              >
+                Local Trip Fares
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleAddFareClick("airport")}
+                className={activeTab === "add-fares" && tripFareType === "airport" ? "border-primary bg-primary/10" : ""}
+              >
+                Airport Trip Fares
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleAddFareClick("outstation")}
+                className={activeTab === "add-fares" && tripFareType === "outstation" ? "border-primary bg-primary/10" : ""}
+              >
+                Outstation Trip Fares
+              </Button>
+            </div>
+            <VehiclePricingManagement vehicleId={selectedVehicleId} />
+          </div>
         </TabsContent>
-        
+
         <TabsContent value="users">
-          <UserManagement />
+          <div className="mb-4">
+            <h2 className="text-xl font-semibold mb-4">User Management</h2>
+            <UserManagement />
+          </div>
         </TabsContent>
-        
-        <TabsContent value="drivers">
-          <DriverManagement />
+
+        <TabsContent value="bookings">
+          <div className="mb-4">
+            <h2 className="text-xl font-semibold mb-4">Booking Management</h2>
+            <BookingsManagement />
+          </div>
         </TabsContent>
-        
-        <TabsContent value="reports">
-          <Card>
-            <CardHeader>
-              <CardTitle>Reports</CardTitle>
-              <CardDescription>View and generate reports</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p>Reporting functionality coming soon.</p>
-            </CardContent>
-          </Card>
+
+        <TabsContent value="fares">
+          <div className="mb-4">
+            <h2 className="text-xl font-semibold mb-6">Fare Management</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <Button
+                variant="outline"
+                onClick={() => handleAddFareClick("local")}
+                className={tripFareType === "local" ? "border-primary bg-primary/10" : ""}
+              >
+                Local Trip Fares
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleAddFareClick("airport")}
+                className={tripFareType === "airport" ? "border-primary bg-primary/10" : ""}
+              >
+                Airport Trip Fares
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleAddFareClick("outstation")}
+                className={tripFareType === "outstation" ? "border-primary bg-primary/10" : ""}
+              >
+                Outstation Trip Fares
+              </Button>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="add-fares">
+          <div className="mb-4">
+            <h2 className="text-xl font-semibold mb-4">
+              {tripFareType === "local"
+                ? "Local Trip Fares"
+                : tripFareType === "airport"
+                ? "Airport Trip Fares"
+                : "Outstation Trip Fares"}
+            </h2>
+            <VehicleTripFaresForm
+              tripType={tripFareType}
+              onSuccess={() => setActiveTab("fares")}
+            />
+          </div>
         </TabsContent>
       </Tabs>
     </div>

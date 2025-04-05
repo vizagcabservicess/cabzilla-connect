@@ -1,6 +1,25 @@
 
 // Import the correct API
 import { fareAPI } from '@/services/api';
+import { CabType } from '@/types/cab';
+
+// Define the types needed for tours
+export interface TourInfo {
+  id: string;
+  name: string;
+  distance: number;
+  days: number;
+  image: string;
+}
+
+export interface TourFares {
+  [tourId: string]: {
+    sedan: number;
+    ertiga: number;
+    innova: number;
+    [key: string]: number;
+  }
+}
 
 export const availableTours: TourInfo[] = [
   {

@@ -1,4 +1,3 @@
-
 import axios, { AxiosRequestConfig } from 'axios';
 
 // Debug mode and preview mode flags
@@ -10,6 +9,58 @@ const IS_PREVIEW_MODE = window.location.href.includes('preview') || window.locat
  */
 export const isPreviewMode = () => {
   return IS_PREVIEW_MODE;
+};
+
+/**
+ * Get headers that bypass common API restrictions
+ */
+export const getBypassHeaders = (): Record<string, string> => {
+  return {
+    'X-Bypass-Cache': 'true',
+    'X-Force-Refresh': 'true',
+    'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'Origin': window.location.origin,
+    'X-Requested-With': 'XMLHttpRequest',
+    'Accept': '*/*'
+  };
+};
+
+/**
+ * Get forced request configuration with bypass headers and cache settings
+ */
+export const getForcedRequestConfig = () => {
+  return {
+    headers: getBypassHeaders(),
+    timeout: 60000, // Increased timeout for maximum reliability
+    cache: 'no-store' as const,
+    mode: 'cors' as const,
+    credentials: 'omit' as const, // Don't send credentials for CORS
+    keepalive: true, // Keep connection alive
+    redirect: 'follow' as const, // Follow redirects
+    referrerPolicy: 'no-referrer' as const // Don't send referrer for CORS
+  };
+};
+
+/**
+ * Format data for multipart form submission
+ * This is more reliable for PHP endpoints than JSON
+ */
+export const formatDataForMultipart = (data: Record<string, any>): FormData => {
+  const formData = new FormData();
+  
+  Object.entries(data).forEach(([key, value]) => {
+    // Handle arrays and objects
+    if (typeof value === 'object' && value !== null) {
+      formData.append(key, JSON.stringify(value));
+    } else {
+      // Convert other values to string
+      formData.append(key, String(value ?? ''));
+    }
+  });
+  
+  return formData;
 };
 
 /**
@@ -75,45 +126,6 @@ export async function checkDatabaseConnection(): Promise<DatabaseConnectionRespo
       timeStamp: Date.now()
     };
   }
-}
-
-/**
- * Format data for multipart form submission
- * @param data Object containing data to format
- * @returns FormData object
- */
-export function formatDataForMultipart(data: Record<string, any>): FormData {
-  const formData = new FormData();
-  
-  for (const key in data) {
-    if (data.hasOwnProperty(key)) {
-      const value = data[key];
-      
-      if (value === undefined || value === null) {
-        // Skip undefined or null values
-        continue;
-      }
-      
-      if (Array.isArray(value)) {
-        // Handle arrays by appending each item with array notation in the key
-        value.forEach((item, index) => {
-          if (typeof item === 'object' && item !== null) {
-            formData.append(`${key}[${index}]`, JSON.stringify(item));
-          } else {
-            formData.append(`${key}[${index}]`, String(item));
-          }
-        });
-      } else if (typeof value === 'object' && value !== null && !(value instanceof File)) {
-        // Handle objects by converting to JSON string
-        formData.append(key, JSON.stringify(value));
-      } else {
-        // Handle primitives and Files
-        formData.append(key, value);
-      }
-    }
-  }
-  
-  return formData;
 }
 
 /**

@@ -1,6 +1,32 @@
-
-// Import the correct function
 import { getVehicleData } from '@/services/vehicleDataService';
+import { CabType, FareCalculationParams } from '@/types/cab';
+
+// Function to get available cab options
+export async function getCabOptions(): Promise<CabType[]> {
+  const vehicles = await getVehicleData();
+  // Filter for active vehicles only
+  return vehicles.filter(vehicle => vehicle.isActive !== false);
+}
+
+// Get cab options by ID or type
+export async function getCabById(cabId: string): Promise<CabType | undefined> {
+  const options = await getVehicleData();
+  return options.find(cab => cab.id === cabId);
+}
+
+// Function to format price with Indian Rupees symbol
+export const formatPrice = (price: number | string): string => {
+  if (typeof price === 'string') {
+    price = parseFloat(price);
+  }
+  
+  if (isNaN(price)) {
+    return '₹0';
+  }
+  
+  // Format with Indian Rupee symbol and thousands separators
+  return '₹' + price.toLocaleString('en-IN');
+};
 
 // Store the loaded cab types for reuse
 let cabTypesCache: CabType[] = [];
@@ -514,11 +540,6 @@ export const reloadCabTypes = async (forceRefresh: boolean = false): Promise<Cab
     
     return defaultCabs;
   }
-};
-
-// Function to format price with Indian Rupees symbol
-export const formatPrice = (price: number): string => {
-  return `₹${price.toLocaleString('en-IN')}`;
 };
 
 // Function to clear fare cache (placeholder for compatibility)

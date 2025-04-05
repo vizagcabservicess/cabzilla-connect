@@ -1,627 +1,533 @@
-import { useState, useEffect } from 'react';
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { toast } from "sonner";
-import { useToast } from "@/hooks/use-toast";
+
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { 
-  AlertCircle, 
-  RefreshCw, 
-  Save, 
-  PlusCircle, 
-  Trash2, 
-  Edit, 
-  Globe,
-  Map,
-  Car,
-  Bookmark
-} from "lucide-react";
+import { toast } from 'sonner';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Loader2, AlertCircle, Database } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { TourFare, FareUpdateRequest } from '@/types/api';
-import { fareAPI } from '@/services/api';
-import { reloadCabTypes } from '@/lib/cabData';
 import { 
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from "@/components/ui/table";
+import { fareAPI } from '@/services/api';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogFooter, 
+  DialogHeader, 
+  DialogTitle 
 } from "@/components/ui/dialog";
-
-const formSchema = z.object({
-  tourId: z.string().min(1, { message: "Tour is required" }),
-  sedan: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  ertiga: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  innova: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  tempo: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  luxury: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-});
-
-const newTourFormSchema = z.object({
-  tourId: z.string().min(1, { message: "Tour ID is required" }),
-  tourName: z.string().min(1, { message: "Tour name is required" }),
-  sedan: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  ertiga: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  innova: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  tempo: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-  luxury: z.coerce.number().min(0, { message: "Price cannot be negative" }),
-});
+import { Label } from "@/components/ui/label";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
+import { getVehicleData } from '@/services/vehicleDataService';
+import { syncAirportFares, syncLocalFares } from '@/services/fareManagementService';
 
 export function FareManagement() {
-  const [tourFares, setTourFares] = useState<TourFare[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("tours");
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [addTourDialogOpen, setAddTourDialogOpen] = useState(false);
-  const { toast: uiToast } = useToast();
+  const [tourFares, setTourFares] = useState<any[]>([]);
+  const [vehiclePricing, setVehiclePricing] = useState<any[]>([]);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [selectedFare, setSelectedFare] = useState<any>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      tourId: "",
-      sedan: 0,
-      ertiga: 0,
-      innova: 0,
-      tempo: 0,
-      luxury: 0,
-    },
-  });
+  // Form state for editing
+  const [editTourId, setEditTourId] = useState('');
+  const [editSedan, setEditSedan] = useState(0);
+  const [editErtiga, setEditErtiga] = useState(0);
+  const [editInnova, setEditInnova] = useState(0);
   
-  const newTourForm = useForm<z.infer<typeof newTourFormSchema>>({
-    resolver: zodResolver(newTourFormSchema),
-    defaultValues: {
-      tourId: "",
-      tourName: "",
-      sedan: 0,
-      ertiga: 0,
-      innova: 0,
-      tempo: 0,
-      luxury: 0,
-    },
-  });
+  // Form state for adding
+  const [newTourId, setNewTourId] = useState('');
+  const [newSedan, setNewSedan] = useState(0);
+  const [newErtiga, setNewErtiga] = useState(0);
+  const [newInnova, setNewInnova] = useState(0);
   
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    try {
-      setIsLoading(true);
-      console.log("Submitting fare update:", values);
-      
-      localStorage.removeItem('cabFares');
-      localStorage.removeItem('tourFares');
-      sessionStorage.removeItem('cabFares');
-      sessionStorage.removeItem('tourFares');
-      sessionStorage.removeItem('calculatedFares');
-      
-      await reloadCabTypes();
-      
-      const data = await fareAPI.updateTourFares(values as FareUpdateRequest);
-      console.log("Fare update response:", data);
-      
-      toast.success("Tour fare updated successfully");
-      await fetchTourFares();
-    } catch (error) {
-      console.error("Error updating fare:", error);
-      toast.error("Failed to update fare");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  const onAddTourSubmit = async (values: z.infer<typeof newTourFormSchema>) => {
-    try {
-      setIsLoading(true);
-      console.log("Adding new tour:", values);
-      
-      const newTourData: TourFare = {
-        id: 0,
-        tourId: values.tourId,
-        tourName: values.tourName,
-        sedan: values.sedan,
-        ertiga: values.ertiga,
-        innova: values.innova,
-        tempo: values.tempo,
-        luxury: values.luxury
-      };
-      
-      localStorage.removeItem('cabFares');
-      localStorage.removeItem('tourFares');
-      sessionStorage.removeItem('cabFares');
-      sessionStorage.removeItem('tourFares');
-      sessionStorage.removeItem('calculatedFares');
-      
-      await reloadCabTypes();
-      
-      const data = await fareAPI.addTourFare(newTourData);
-      console.log("New tour added:", data);
-      
-      toast.success("New tour added successfully");
-      await fetchTourFares();
-      setAddTourDialogOpen(false);
-      newTourForm.reset();
-    } catch (error) {
-      console.error("Error adding tour:", error);
-      toast.error("Failed to add new tour");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  const handleDeleteTour = async (tourId: string) => {
-    if (!confirm("Are you sure you want to delete this tour? This action cannot be undone.")) {
-      return;
-    }
-    
-    try {
-      setIsRefreshing(true);
-      
-      localStorage.removeItem('cabFares');
-      localStorage.removeItem('tourFares');
-      sessionStorage.removeItem('cabFares');
-      sessionStorage.removeItem('tourFares');
-      sessionStorage.removeItem('calculatedFares');
-      
-      await reloadCabTypes();
-      
-      const data = await fareAPI.deleteTourFare(tourId);
-      console.log("Tour deleted:", data);
-      
-      toast.success("Tour deleted successfully");
-      await fetchTourFares();
-    } catch (error) {
-      console.error("Error deleting tour:", error);
-      toast.error("Failed to delete tour");
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
+  // Available vehicle types
+  const [vehicleTypes, setVehicleTypes] = useState<string[]>([]);
   
   useEffect(() => {
-    fetchTourFares();
+    fetchData();
+    fetchVehicleTypes();
   }, []);
   
-  const fetchTourFares = async () => {
+  const fetchVehicleTypes = async () => {
     try {
-      setIsRefreshing(true);
-      setError(null);
-      console.log("Manually refreshing tour fares...");
-      
-      localStorage.removeItem('cabFares');
-      localStorage.removeItem('tourFares');
-      sessionStorage.removeItem('cabFares');
-      sessionStorage.removeItem('tourFares');
-      sessionStorage.removeItem('calculatedFares');
-      
-      await reloadCabTypes();
-      
-      const data = await fareAPI.getTourFares();
-      
-      if (Array.isArray(data) && data.length > 0) {
-        console.log("Fetched tour fares:", data);
-        setTourFares(data);
-        toast.success("Tour fares refreshed");
-      } else {
-        console.warn("Empty or invalid tour fares data:", data);
-        setError("No tour fares data available. The API may be down or returned an empty result.");
-      }
+      const vehicles = await getVehicleData();
+      const types = [...new Set(vehicles.map(v => v.name || '').filter(Boolean))];
+      setVehicleTypes(types);
     } catch (error) {
-      console.error("Error refreshing tour fares:", error);
-      setError("Failed to refresh tour fares. Please try again.");
-      toast.error("Failed to refresh tour fares");
-    } finally {
-      setIsRefreshing(false);
+      console.error('Error fetching vehicle types:', error);
+      setVehicleTypes(['Sedan', 'Ertiga', 'Innova']); // Fallback
     }
   };
   
-  const handleTourSelect = (tourId: string) => {
-    const selectedTour = tourFares.find(fare => fare.tourId === tourId);
-    if (selectedTour) {
-      form.setValue("tourId", selectedTour.tourId);
-      form.setValue("sedan", selectedTour.sedan);
-      form.setValue("ertiga", selectedTour.ertiga);
-      form.setValue("innova", selectedTour.innova);
-      form.setValue("tempo", selectedTour.tempo || 0);
-      form.setValue("luxury", selectedTour.luxury || 0);
+  const fetchData = async () => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      // Fetch tour fares
+      const tourFaresData = await fareAPI.getTourFares();
+      setTourFares(Array.isArray(tourFaresData) ? tourFaresData : []);
+      
+      // Fetch vehicle pricing
+      const pricingData = await fareAPI.getVehiclePricing();
+      setVehiclePricing(Array.isArray(pricingData) ? pricingData : []);
+    } catch (err) {
+      console.error('Error fetching fare data:', err);
+      setError('Failed to load fare data. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const handleSyncTables = async () => {
+    setIsSyncing(true);
+    setError(null);
+    
+    try {
+      toast.info('Syncing fare tables...');
+      
+      // Sync local fares
+      const localResult = await syncLocalFares();
+      console.log('Local fares sync result:', localResult);
+      
+      // Sync airport fares
+      const airportResult = await syncAirportFares();
+      console.log('Airport fares sync result:', airportResult);
+      
+      if (localResult.success || airportResult.success) {
+        toast.success('Fare tables synced successfully');
+        await fetchData();
+      } else {
+        toast.error('Failed to sync fare tables');
+        setError('Failed to sync fare tables. Please check server logs.');
+      }
+    } catch (err) {
+      console.error('Error syncing fare tables:', err);
+      toast.error('Failed to sync fare tables');
+      setError('Failed to sync fare tables. Please check server logs.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+  
+  const handleEditTourFare = (fare: any) => {
+    setSelectedFare(fare);
+    setEditTourId(fare.tourId || '');
+    setEditSedan(fare.sedan || 0);
+    setEditErtiga(fare.ertiga || 0);
+    setEditInnova(fare.innova || 0);
+    setIsEditDialogOpen(true);
+  };
+  
+  const handleUpdateTourFare = async () => {
+    if (!selectedFare) return;
+    
+    setIsSaving(true);
+    
+    try {
+      const updateData = {
+        tourId: editTourId,
+        sedan: editSedan,
+        ertiga: editErtiga,
+        innova: editInnova
+      };
+      
+      await fareAPI.updateTourFare(updateData);
+      toast.success('Tour fare updated successfully');
+      setIsEditDialogOpen(false);
+      fetchData();
+    } catch (err) {
+      console.error('Error updating tour fare:', err);
+      toast.error('Failed to update tour fare');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  
+  const handleAddTourFare = async () => {
+    setIsSaving(true);
+    
+    try {
+      if (!newTourId) {
+        toast.error('Tour ID is required');
+        return;
+      }
+      
+      const newFare = {
+        tourId: newTourId,
+        sedan: newSedan,
+        ertiga: newErtiga,
+        innova: newInnova
+      };
+      
+      await fareAPI.addTourFare(newFare);
+      toast.success('Tour fare added successfully');
+      setIsAddDialogOpen(false);
+      
+      // Reset form
+      setNewTourId('');
+      setNewSedan(0);
+      setNewErtiga(0);
+      setNewInnova(0);
+      
+      fetchData();
+    } catch (err) {
+      console.error('Error adding tour fare:', err);
+      toast.error('Failed to add tour fare');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  
+  const handleDeleteTourFare = async () => {
+    if (!selectedFare) return;
+    
+    setIsSaving(true);
+    
+    try {
+      await fareAPI.deleteTourFare(selectedFare.tourId);
+      toast.success('Tour fare deleted successfully');
+      setIsDeleteDialogOpen(false);
+      fetchData();
+    } catch (err) {
+      console.error('Error deleting tour fare:', err);
+      toast.error('Failed to delete tour fare');
+    } finally {
+      setIsSaving(false);
     }
   };
 
   return (
-    <Tabs defaultValue="update">
-      <TabsList>
-        <TabsTrigger value="update" className="flex items-center gap-1">
-          <Edit className="h-4 w-4" /> Update Tour Fares
-        </TabsTrigger>
-        <TabsTrigger value="all" className="flex items-center gap-1">
-          <Globe className="h-4 w-4" /> View All Fares
-        </TabsTrigger>
-        <TabsTrigger value="add" className="flex items-center gap-1">
-          <PlusCircle className="h-4 w-4" /> Add New Tour
-        </TabsTrigger>
-      </TabsList>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold mb-1">Fare Management</h2>
+          <p className="text-muted-foreground">Manage tour fares and vehicle pricing</p>
+        </div>
+        <Button onClick={handleSyncTables} disabled={isSyncing}>
+          {isSyncing ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Syncing...
+            </>
+          ) : (
+            <>
+              <Database className="mr-2 h-4 w-4" />
+              Sync Tables
+            </>
+          )}
+        </Button>
+      </div>
       
-      <TabsContent value="update">
-        <Card>
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <CardTitle className="flex items-center gap-2">
-                <Map className="h-5 w-5" /> Update Tour Fares
-              </CardTitle>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={fetchTourFares} 
-                disabled={isRefreshing}
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                Refresh
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {error && (
-              <Alert variant="destructive" className="mb-4">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-            
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                <FormField
-                  control={form.control}
-                  name="tourId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Select Tour</FormLabel>
-                      <Select 
-                        onValueChange={(value) => {
-                          field.onChange(value);
-                          handleTourSelect(value);
-                        }}
-                        value={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a tour" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {tourFares.map((fare) => (
-                            <SelectItem key={fare.tourId} value={fare.tourId}>
-                              {fare.tourName}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <div className="grid gap-4 grid-cols-2 md:grid-cols-3">
-                  <FormField
-                    control={form.control}
-                    name="sedan"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Sedan Price</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="ertiga"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Ertiga Price</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="innova"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Innova Price</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="tempo"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Tempo Price</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="luxury"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Luxury Price</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="tours">Tour Fares</TabsTrigger>
+          <TabsTrigger value="vehicles">Vehicle Pricing</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="tours">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Tour Fares</CardTitle>
+              <Button onClick={() => setIsAddDialogOpen(true)}>Add Tour Fare</Button>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="flex flex-col items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <p className="mt-2 text-muted-foreground">Loading tour fares...</p>
                 </div>
-                
-                <div className="flex gap-4">
-                  <Button type="submit" className="flex-1" disabled={isLoading}>
-                    {isLoading ? (
-                      <>
-                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                        Updating...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="mr-2 h-4 w-4" />
-                        Update Fare
-                      </>
-                    )}
-                  </Button>
-                  
-                  <Button 
-                    type="button" 
-                    variant="destructive"
-                    onClick={() => handleDeleteTour(form.getValues().tourId)}
-                    disabled={isLoading || !form.getValues().tourId}
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Delete Tour
-                  </Button>
+              ) : tourFares.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">No tour fares found</p>
                 </div>
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
-      </TabsContent>
-      
-      <TabsContent value="add">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <PlusCircle className="h-5 w-5" /> Add New Tour
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Form {...newTourForm}>
-              <form onSubmit={newTourForm.handleSubmit(onAddTourSubmit)} className="space-y-6">
-                <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
-                  <FormField
-                    control={newTourForm.control}
-                    name="tourId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Tour ID (unique identifier)</FormLabel>
-                        <FormControl>
-                          <Input placeholder="e.g., araku-valley" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={newTourForm.control}
-                    name="tourName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Tour Name (display name)</FormLabel>
-                        <FormControl>
-                          <Input placeholder="e.g., Araku Valley Tour" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                
-                <div className="grid gap-4 grid-cols-2 md:grid-cols-3">
-                  <FormField
-                    control={newTourForm.control}
-                    name="sedan"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Sedan Price</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={newTourForm.control}
-                    name="ertiga"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Ertiga Price</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={newTourForm.control}
-                    name="innova"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Innova Price</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={newTourForm.control}
-                    name="tempo"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Tempo Price</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={newTourForm.control}
-                    name="luxury"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Luxury Price</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? (
-                    <>
-                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                      Adding Tour...
-                    </>
-                  ) : (
-                    <>
-                      <PlusCircle className="mr-2 h-4 w-4" />
-                      Add New Tour
-                    </>
-                  )}
-                </Button>
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
-      </TabsContent>
-      
-      <TabsContent value="all">
-        <Card>
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <CardTitle className="flex items-center gap-2">
-                <Globe className="h-5 w-5" /> All Tour Fares
-              </CardTitle>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={fetchTourFares} 
-                disabled={isRefreshing}
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                Refresh
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {error && (
-              <Alert variant="destructive" className="mb-4">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-            
-            {isRefreshing ? (
-              <div className="flex justify-center p-10">
-                <RefreshCw className="h-10 w-10 animate-spin text-gray-400" />
-              </div>
-            ) : tourFares.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-2 px-2">Tour</th>
-                      <th className="text-right py-2 px-2">Sedan</th>
-                      <th className="text-right py-2 px-2">Ertiga</th>
-                      <th className="text-right py-2 px-2">Innova</th>
-                      <th className="text-right py-2 px-2">Tempo</th>
-                      <th className="text-right py-2 px-2">Luxury</th>
-                      <th className="text-right py-2 px-2">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tourFares.map((fare) => (
-                      <tr key={fare.tourId} className="border-b hover:bg-gray-50">
-                        <td className="py-2 px-2">{fare.tourName}</td>
-                        <td className="text-right py-2 px-2">₹{fare.sedan.toLocaleString('en-IN')}</td>
-                        <td className="text-right py-2 px-2">₹{fare.ertiga.toLocaleString('en-IN')}</td>
-                        <td className="text-right py-2 px-2">₹{fare.innova.toLocaleString('en-IN')}</td>
-                        <td className="text-right py-2 px-2">₹{fare.tempo.toLocaleString('en-IN')}</td>
-                        <td className="text-right py-2 px-2">₹{fare.luxury.toLocaleString('en-IN')}</td>
-                        <td className="text-right py-2 px-2">
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Tour ID</TableHead>
+                      <TableHead>Sedan (₹)</TableHead>
+                      <TableHead>Ertiga (₹)</TableHead>
+                      <TableHead>Innova (₹)</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {tourFares.map((fare, index) => (
+                      <TableRow key={fare.tourId || index}>
+                        <TableCell className="font-medium">{fare.tourId}</TableCell>
+                        <TableCell>{fare.sedan}</TableCell>
+                        <TableCell>{fare.ertiga}</TableCell>
+                        <TableCell>{fare.innova}</TableCell>
+                        <TableCell className="text-right space-x-2">
                           <Button 
                             variant="ghost" 
                             size="sm"
-                            onClick={() => handleTourSelect(fare.tourId)}
-                            className="text-blue-600 hover:text-blue-800"
+                            onClick={() => handleEditTourFare(fare)}
                           >
-                            <Edit className="h-4 w-4" />
+                            Edit
                           </Button>
                           <Button 
                             variant="ghost" 
                             size="sm"
-                            onClick={() => handleDeleteTour(fare.tourId)}
-                            className="text-red-600 hover:text-red-800"
+                            onClick={() => {
+                              setSelectedFare(fare);
+                              setIsDeleteDialogOpen(true);
+                            }}
                           >
-                            <Trash2 className="h-4 w-4" />
+                            Delete
                           </Button>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="text-center py-10 text-gray-500">
-                No tour fares found.
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </TabsContent>
-    </Tabs>
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="vehicles">
+          <Card>
+            <CardHeader>
+              <CardTitle>Vehicle Pricing</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="flex flex-col items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <p className="mt-2 text-muted-foreground">Loading vehicle pricing...</p>
+                </div>
+              ) : vehiclePricing.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">No vehicle pricing found</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Vehicle</TableHead>
+                      <TableHead>Base Price (₹)</TableHead>
+                      <TableHead>Price per KM (₹)</TableHead>
+                      <TableHead>Night Halt (₹)</TableHead>
+                      <TableHead>Driver Allowance (₹)</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {vehiclePricing.map((pricing) => (
+                      <TableRow key={pricing.vehicleId}>
+                        <TableCell className="font-medium">
+                          {pricing.name || pricing.vehicleId}
+                        </TableCell>
+                        <TableCell>{pricing.basePrice}</TableCell>
+                        <TableCell>{pricing.pricePerKm}</TableCell>
+                        <TableCell>{pricing.nightHaltCharge}</TableCell>
+                        <TableCell>{pricing.driverAllowance}</TableCell>
+                        <TableCell>
+                          {pricing.isActive ? (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              Active
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                              Inactive
+                            </span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Edit Tour Fare Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Tour Fare</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="tourId">Tour ID</Label>
+              <Input
+                id="tourId"
+                value={editTourId}
+                onChange={(e) => setEditTourId(e.target.value)}
+                disabled
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="sedan">Sedan Price (₹)</Label>
+              <Input
+                id="sedan"
+                type="number"
+                value={editSedan}
+                onChange={(e) => setEditSedan(Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ertiga">Ertiga Price (₹)</Label>
+              <Input
+                id="ertiga"
+                type="number"
+                value={editErtiga}
+                onChange={(e) => setEditErtiga(Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="innova">Innova Price (₹)</Label>
+              <Input
+                id="innova"
+                type="number"
+                value={editInnova}
+                onChange={(e) => setEditInnova(Number(e.target.value))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleUpdateTourFare} disabled={isSaving}>
+              {isSaving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save Changes'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Tour Fare Dialog */}
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Tour Fare</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="newTourId">Tour ID</Label>
+              <Input
+                id="newTourId"
+                value={newTourId}
+                onChange={(e) => setNewTourId(e.target.value)}
+                placeholder="e.g., coastal_tour"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="newSedan">Sedan Price (₹)</Label>
+              <Input
+                id="newSedan"
+                type="number"
+                value={newSedan}
+                onChange={(e) => setNewSedan(Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="newErtiga">Ertiga Price (₹)</Label>
+              <Input
+                id="newErtiga"
+                type="number"
+                value={newErtiga}
+                onChange={(e) => setNewErtiga(Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="newInnova">Innova Price (₹)</Label>
+              <Input
+                id="newInnova"
+                type="number"
+                value={newInnova}
+                onChange={(e) => setNewInnova(Number(e.target.value))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddTourFare} disabled={isSaving}>
+              {isSaving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                'Add Tour Fare'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Tour Fare Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Tour Fare</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p>
+              Are you sure you want to delete the fare for tour <span className="font-semibold">{selectedFare?.tourId}</span>?
+              This action cannot be undone.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleDeleteTourFare}
+              disabled={isSaving}
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
