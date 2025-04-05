@@ -50,7 +50,9 @@ export function SignupForm() {
       const loadingToastId = toast.loading("Creating your account...");
       
       try {
-        // Use direct debug endpoint for signup (will auto-succeed)
+        console.log("Attempting signup with debug-login.php endpoint...");
+        
+        // Use the working debug-login endpoint that we know works
         const response = await fetch('/api/debug-login.php', {
           method: 'POST',
           headers: {
@@ -60,11 +62,25 @@ export function SignupForm() {
           body: JSON.stringify(values)
         });
         
+        console.log("Signup response status:", response.status);
+        
         if (!response.ok) {
           throw new Error(`Signup failed with status: ${response.status}`);
         }
         
-        const data = await response.json();
+        // Get the response text for debugging
+        const responseText = await response.text();
+        console.log("Signup response text:", responseText);
+        
+        // Parse the response
+        let data;
+        try {
+          data = JSON.parse(responseText);
+        } catch (e) {
+          throw new Error(`Invalid JSON response: ${responseText.substring(0, 100)}...`);
+        }
+        
+        console.log("Signup response data:", data);
         
         if (data.token) {
           // Store auth data same as login

@@ -25,10 +25,10 @@ $requestData = [
 // Log the request for debugging
 error_log("API Request: " . json_encode($requestData));
 
-// If the path is /api/login or api/login.php, forward to debug-login.php
-if (preg_match('/\/(api\/)?login(\.php)?$/i', $_SERVER['REQUEST_URI'])) {
+// If the path is /api/login, /api/signup or similar, forward to debug-login.php
+if (preg_match('/\/(api\/)?(login|signup|register)(\.php)?$/i', $_SERVER['REQUEST_URI'])) {
     // Log the forwarding
-    error_log("Forwarding to debug-login.php");
+    error_log("Forwarding to debug-login.php from path: " . $_SERVER['REQUEST_URI']);
     include_once __DIR__ . '/debug-login.php';
     exit;
 }
@@ -40,6 +40,7 @@ echo json_encode([
     'version' => '1.0.0',
     'endpoints' => [
         'login' => '/api/login.php',
+        'signup' => '/api/signup.php',
         'status' => '/api/status.php',
         'admin' => '/api/admin/status.php',
     ],

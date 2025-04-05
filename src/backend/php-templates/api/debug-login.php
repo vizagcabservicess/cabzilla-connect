@@ -38,15 +38,22 @@ if (!empty($input)) {
     }
 }
 
+// Determine if this is a signup or login request based on URI
+$isSignup = strpos($_SERVER['REQUEST_URI'], 'signup') !== false || 
+           strpos($_SERVER['REQUEST_URI'], 'register') !== false;
+
+$responseMessage = $isSignup ? "Debug signup successful" : "Debug login successful";
+
 // Always return success
 echo json_encode([
     'status' => 'success',
-    'message' => 'Debug login successful',
+    'message' => $responseMessage,
     'token' => 'debug-token-' . time(),
     'user' => [
         'id' => 1,
-        'name' => 'Debug User',
+        'name' => $data['name'] ?? 'Debug User',
         'email' => $data['email'] ?? 'debug@example.com',
+        'phone' => $data['phone'] ?? '1234567890',
         'role' => 'admin'
     ],
     'request' => [

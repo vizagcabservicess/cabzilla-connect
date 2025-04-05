@@ -31,10 +31,12 @@ export const getApiUrl = (endpoint: string): string => {
     return endpoint;
   }
   
-  // SUPER IMPORTANT: For login, ALWAYS use the debug endpoint
+  // SUPER IMPORTANT: For login and signup, ALWAYS use the debug endpoint
   // This provides maximum reliability in all environments
   if (endpoint === 'login.php' || endpoint === 'login' || endpoint === '/login' || endpoint === '/login.php' || 
-      endpoint.includes('login') || endpoint.includes('auth')) {
+      endpoint.includes('login') || endpoint.includes('auth') ||
+      endpoint === 'signup.php' || endpoint === 'signup' || endpoint === '/signup' || endpoint === '/signup.php' ||
+      endpoint.includes('signup') || endpoint.includes('register')) {
     return '/api/debug-login.php';
   }
   
