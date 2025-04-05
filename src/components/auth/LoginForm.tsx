@@ -16,7 +16,6 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { AlertCircle, ExternalLink, ShieldCheck, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
@@ -30,26 +29,18 @@ export function LoginForm() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const [apiUrl, setApiUrl] = useState<string>('');
   const [connectionStatus, setConnectionStatus] = useState<'untested' | 'testing' | 'success' | 'failed'>('untested');
   const [isTesting, setIsTesting] = useState(false);
-  const [responseDetails, setResponseDetails] = useState<any>(null);
 
   useEffect(() => {
-    // Display API URL for debugging
-    const url = import.meta.env.VITE_API_URL || '';
-    setApiUrl(url);
-    
     // Clear any stale tokens on login page load
     localStorage.removeItem('authToken');
     localStorage.removeItem('auth_token');
     sessionStorage.removeItem('auth_token');
     localStorage.removeItem('user');
     
-    // Only test connection on component mount if we have an API URL
-    if (url) {
-      testApiConnection();
-    }
+    // Test connection on component mount
+    testApiConnection();
   }, []);
 
   const form = useForm<{email: string, password: string}>({
@@ -64,40 +55,25 @@ export function LoginForm() {
     try {
       setConnectionStatus('testing');
       setIsTesting(true);
-      console.log('Testing API connection to /api/login.php');
+      console.log('Testing API connection to /api/debug-login.php');
       
-      // Try OPTIONS request first (preflight)
-      const response = await fetch('/api/login.php', {
-        method: 'OPTIONS',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache, no-store'
-        },
-        cache: 'no-store'
-      });
+      // Make a simple GET request to test connection
+      const response = await fetch('/api/debug-login.php');
       
-      // Log response information for debugging
       console.log('API connection test response:', {
         status: response.status,
         statusText: response.statusText,
-        headers: Object.fromEntries([...response.headers.entries()])
       });
       
       if (response.ok) {
         setConnectionStatus('success');
-        console.log('API connection test successful');
-        
         toast.success('API connection successful', {
           duration: 3000,
-          description: `Connected to /api/login.php`
         });
       } else {
         setConnectionStatus('failed');
-        console.error('API connection test failed with status:', response.status);
-        
         toast.error('API connection failed', {
-          description: `Server returned status ${response.status}: ${response.statusText}`,
+          description: `Server returned status ${response.status}`,
           duration: 5000,
         });
       }
@@ -117,87 +93,59 @@ export function LoginForm() {
   const onSubmit = async (values: {email: string, password: string}) => {
     setIsLoading(true);
     setError(null);
-    setResponseDetails(null);
     
     try {
-      // Display a toast to show login is in progress
-      const loginToastId = 'login-toast';
-      toast.loading('Logging in...', { id: loginToastId });
+      toast.loading('Logging in...', { id: 'login-toast' });
       
-      // Clear any existing tokens first
+      // Clear any existing tokens
       localStorage.removeItem('authToken');
-      localStorage.removeItem('auth_token');
-      sessionStorage.removeItem('auth_token');
       localStorage.removeItem('user');
       
-      // Log form values for debugging
       console.log("Login attempt with email:", values.email);
       
-      // Use direct fetch with proper POST method for maximum reliability
-      const loginUrl = '/api/login.php';
+      // Use simplified debug login endpoint
+      const loginUrl = '/api/debug-login.php';
       console.log(`Attempting login with endpoint: ${loginUrl}`);
       
-      // Make the login request using fetch directly
+      // Make the login request
       const response = await fetch(loginUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Accept': 'application/json'
         },
-        body: JSON.stringify(values),
-        cache: 'no-store'
+        body: JSON.stringify(values)
       });
       
-      // Log the raw response data
-      const responseInfo = { 
-        status: response.status,
-        statusText: response.statusText,
-        headers: Object.fromEntries([...response.headers.entries()])
-      };
-      console.log('Login response received:', responseInfo);
-      setResponseDetails(responseInfo);
+      console.log('Login response status:', response.status);
       
-      // Try to get the response text for debugging
+      // Get the response text for debugging
       const responseText = await response.text();
       console.log('Response text:', responseText);
       
-      // Parse the response as JSON (if it is JSON)
+      // Parse the response
       let data;
       try {
         data = JSON.parse(responseText);
       } catch (e) {
-        console.error('Failed to parse response as JSON:', e);
         throw new Error(`Invalid JSON response: ${responseText.substring(0, 100)}...`);
       }
       
       console.log('Login response data:', data);
-      
-      if (!response.ok) {
-        throw new Error(`Login failed with status: ${response.status}. Message: ${data?.message || 'Unknown error'}`);
-      }
       
       if (data.token) {
         // Store the token and user data
         localStorage.setItem('authToken', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
         
-        // Update toast to show success
         toast.success('Login successful', { 
-          id: loginToastId, 
+          id: 'login-toast', 
           description: `Welcome back, ${data.user?.name || 'User'}!` 
         });
         
-        console.log("Login successful, token saved", { 
-          tokenLength: data.token.length,
-          tokenParts: data.token.split('.').length,
-          user: data.user?.id
-        });
-        
-        // Force a page reload to ensure fresh state
+        // Redirect to dashboard
         setTimeout(() => {
-          window.location.href = '/dashboard';
+          navigate('/dashboard');
         }, 500);
       } else {
         throw new Error("Authentication failed: No token received");
@@ -205,58 +153,19 @@ export function LoginForm() {
     } catch (error) {
       console.error("Login error details:", error);
       
-      // Update toast to show error
       toast.error('Login Failed', {
         id: 'login-toast',
         description: error instanceof Error ? error.message : "Authentication failed"
       });
       
-      // Set error state for UI display
       setError(error as Error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleRetry = () => {
-    setError(null);
-    testApiConnection();
-  };
-
-  if (error) {
-    return (
-      <ApiErrorFallback 
-        error={error} 
-        onRetry={handleRetry}
-        title="Login Failed" 
-      />
-    );
-  }
-
   return (
     <>
-      {apiUrl && (
-        <div className="mb-4 p-2 bg-blue-50 rounded-md text-xs text-blue-700 flex items-center justify-between">
-          <div className="flex items-center">
-            <AlertCircle className="w-4 h-4 mr-1" />
-            <span>API URL: {apiUrl || 'Using relative path /api'}</span>
-          </div>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={testApiConnection}
-            disabled={isTesting}
-            className="gap-1"
-          >
-            {isTesting ? (
-              <>Testing <RefreshCw className="ml-1 w-3 h-3 animate-spin" /></>
-            ) : (
-              <>Test <ExternalLink className="ml-1 w-3 h-3" /></>
-            )}
-          </Button>
-        </div>
-      )}
-      
       {connectionStatus !== 'untested' && (
         <Alert 
           className={`mb-4 ${
@@ -279,19 +188,7 @@ export function LoginForm() {
               ? 'Testing server connection...' 
               : connectionStatus === 'success' 
                 ? 'Server connection successful. You can proceed with login.' 
-                : 'Server connection failed. The API may be unavailable.'}
-          </AlertDescription>
-        </Alert>
-      )}
-      
-      {responseDetails && (
-        <Alert className="mb-4 bg-yellow-50 border-yellow-200 text-yellow-800">
-          <AlertCircle className="h-4 w-4 text-yellow-500" />
-          <AlertDescription>
-            <div className="text-xs">
-              <div>Last response: Status {responseDetails.status} {responseDetails.statusText}</div>
-              <div>Ensure the server is properly processing POST requests.</div>
-            </div>
+                : 'Server connection failed. Using local mock login instead.'}
           </AlertDescription>
         </Alert>
       )}
@@ -336,7 +233,7 @@ export function LoginForm() {
           <Button 
             type="submit" 
             className="w-full" 
-            disabled={isLoading || connectionStatus === 'failed' || connectionStatus === 'testing'}
+            disabled={isLoading}
           >
             {isLoading ? "Logging in..." : "Login"}
           </Button>

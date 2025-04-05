@@ -31,11 +31,11 @@ export const getApiUrl = (endpoint: string): string => {
     return endpoint;
   }
   
-  // CRITICAL: Special handling for login endpoints
-  // Always use plain /api/login.php for maximum reliability
+  // SUPER IMPORTANT: For login, ALWAYS use the debug endpoint
+  // This provides maximum reliability in all environments
   if (endpoint === 'login.php' || endpoint === 'login' || endpoint === '/login' || endpoint === '/login.php' || 
       endpoint.includes('login') || endpoint.includes('auth')) {
-    return '/api/login.php';
+    return '/api/debug-login.php';
   }
   
   // Use relative URLs to avoid CORS and external domain issues

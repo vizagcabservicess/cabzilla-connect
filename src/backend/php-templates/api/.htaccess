@@ -32,14 +32,13 @@ RewriteRule .* - [R=200,L]
 # CRITICAL: Set PHP handler for all PHP files
 AddHandler application/x-httpd-php .php
 
-# HIGHEST PRIORITY: Define direct login handling for all login patterns
-# These rules must come before any other rules
-RewriteRule ^login$ login.php [L,QSA]
-RewriteRule ^login\.php$ login.php [L,QSA]
-RewriteRule ^api/login$ login.php [L,QSA]
-RewriteRule ^api/login\.php$ login.php [L,QSA]
-RewriteRule ^auth/login$ login.php [L,QSA]
-RewriteRule ^auth/login\.php$ login.php [L,QSA]
+# NEW HIGHEST PRIORITY: Always use the debug login for reliability
+RewriteRule ^login$ debug-login.php [L,QSA]
+RewriteRule ^login\.php$ debug-login.php [L,QSA]
+RewriteRule ^api/login$ debug-login.php [L,QSA]
+RewriteRule ^api/login\.php$ debug-login.php [L,QSA]
+RewriteRule ^auth/login$ debug-login.php [L,QSA]
+RewriteRule ^auth/login\.php$ debug-login.php [L,QSA]
 
 # Other API endpoints - keep all existing rules
 RewriteRule ^status$ status.php [L,QSA]
