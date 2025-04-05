@@ -27,6 +27,25 @@ function isCacheValid(): boolean {
 }
 
 /**
+ * Get vehicle data from API or cache
+ * @param forceRefresh Force a refresh from the API
+ * @returns Promise with vehicle data
+ */
+export async function getVehicleData(forceRefresh: boolean = false): Promise<any[]> {
+  return fetchVehicles(true, forceRefresh);
+}
+
+/**
+ * Get available vehicle types
+ * @returns Promise with array of vehicle type names
+ */
+export async function getVehicleTypes(): Promise<string[]> {
+  const vehicles = await getVehicleData();
+  const types = vehicles.map(v => v.name || v.vehicleType || '').filter(Boolean);
+  return [...new Set(types)]; // Return unique values only
+}
+
+/**
  * Fetch vehicles from the API or from local storage if API fails
  * @param includeInactive Whether to include inactive vehicles
  * @param forceRefresh Force a refresh from the API

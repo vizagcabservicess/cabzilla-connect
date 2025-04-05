@@ -1,3 +1,4 @@
+
 import axios, { AxiosRequestConfig } from 'axios';
 
 // Debug mode and preview mode flags
@@ -10,6 +11,110 @@ const IS_PREVIEW_MODE = window.location.href.includes('preview') || window.locat
 export const isPreviewMode = () => {
   return IS_PREVIEW_MODE;
 };
+
+/**
+ * Check database connection
+ * @returns Promise with connection status
+ */
+export interface DatabaseConnectionResponse {
+  connection: boolean;
+  message?: string;
+  version?: string;
+  timeStamp?: number;
+}
+
+export async function checkDatabaseConnection(): Promise<DatabaseConnectionResponse> {
+  try {
+    console.log('Checking database connection...');
+    
+    // Try the dedicated database-check endpoint
+    const response = await directVehicleOperation('api/admin/check-database.php', 'GET', {
+      headers: {
+        'X-Admin-Mode': 'true',
+        'X-Debug': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      }
+    });
+    
+    if (response && response.connection === true) {
+      console.log('Database connection successful', response);
+      return response;
+    }
+    
+    if (IS_PREVIEW_MODE) {
+      console.log('[PREVIEW MODE] Simulating successful database connection');
+      return {
+        connection: true,
+        message: 'Preview mode simulated connection',
+        version: 'Preview',
+        timeStamp: Date.now()
+      };
+    }
+    
+    console.warn('Database connection failed', response);
+    return {
+      connection: false,
+      message: response?.message || 'Failed to connect to database',
+      timeStamp: Date.now()
+    };
+  } catch (error) {
+    console.error('Error checking database connection:', error);
+    
+    if (IS_PREVIEW_MODE) {
+      return {
+        connection: true,
+        message: 'Preview mode simulated connection',
+        version: 'Preview',
+        timeStamp: Date.now()
+      };
+    }
+    
+    return {
+      connection: false,
+      message: error instanceof Error ? error.message : 'Unknown error checking database connection',
+      timeStamp: Date.now()
+    };
+  }
+}
+
+/**
+ * Format data for multipart form submission
+ * @param data Object containing data to format
+ * @returns FormData object
+ */
+export function formatDataForMultipart(data: Record<string, any>): FormData {
+  const formData = new FormData();
+  
+  for (const key in data) {
+    if (data.hasOwnProperty(key)) {
+      const value = data[key];
+      
+      if (value === undefined || value === null) {
+        // Skip undefined or null values
+        continue;
+      }
+      
+      if (Array.isArray(value)) {
+        // Handle arrays by appending each item with array notation in the key
+        value.forEach((item, index) => {
+          if (typeof item === 'object' && item !== null) {
+            formData.append(`${key}[${index}]`, JSON.stringify(item));
+          } else {
+            formData.append(`${key}[${index}]`, String(item));
+          }
+        });
+      } else if (typeof value === 'object' && value !== null && !(value instanceof File)) {
+        // Handle objects by converting to JSON string
+        formData.append(key, JSON.stringify(value));
+      } else {
+        // Handle primitives and Files
+        formData.append(key, value);
+      }
+    }
+  }
+  
+  return formData;
+}
 
 /**
  * Directly call a vehicle operation API endpoint

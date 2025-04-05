@@ -1,7 +1,7 @@
-
 import axios from 'axios';
 import { isPreviewMode } from '@/utils/apiHelper';
 import { toast } from 'sonner';
+import { BookingUpdateRequest, BookingStatus } from '@/types/api';
 
 // Demo data for preview mode
 const DEMO_USER = {
@@ -178,6 +178,41 @@ export const authAPI = {
   logout() {
     localStorage.removeItem('authToken');
     localStorage.removeItem('userData');
+  },
+  
+  // Check if user is admin
+  isAdmin() {
+    if (isPreviewMode()) {
+      return true;
+    }
+    
+    const user = this.getCurrentUser();
+    return user && user.role === 'admin';
+  },
+  
+  // Get all users (admin only)
+  async getAllUsers() {
+    if (isPreviewMode()) {
+      return [
+        { id: 1, name: 'Demo User', email: 'demo@example.com', role: 'admin', createdAt: '2023-01-01' },
+        { id: 2, name: 'John Doe', email: 'john@example.com', role: 'user', createdAt: '2023-01-02' },
+        { id: 3, name: 'Jane Smith', email: 'jane@example.com', role: 'user', createdAt: '2023-01-03' }
+      ];
+    }
+    
+    const response = await api.get('/admin/users.php');
+    return response.data;
+  },
+  
+  // Update user role (admin only)
+  async updateUserRole(userId: number, role: string) {
+    if (isPreviewMode()) {
+      console.log(`[PREVIEW MODE] Updated user ${userId} role to ${role}`);
+      return { success: true };
+    }
+    
+    const response = await api.post('/admin/update-user.php', { id: userId, role });
+    return response.data;
   }
 };
 
@@ -247,67 +282,17 @@ export const bookingAPI = {
           id: 102,
           userId: 1,
           bookingNumber: 'BK12346',
-          pickupLocation: 'Hotel Oberoi, Nariman Point',
+          pickupLocation: 'Hotel Oberoi',
           dropLocation: 'Mumbai Airport',
           pickupDate: '2025-04-12T14:00:00',
-          returnDate: null,
           cabType: 'SUV',
           distance: 28,
           tripType: 'airport',
           tripMode: 'one-way',
           totalAmount: 1800,
           status: 'pending',
-          passengerName: 'John Doe',
-          passengerPhone: '+911234567890',
-          passengerEmail: 'john@example.com',
-          driverName: null,
-          driverPhone: null,
           createdAt: '2025-04-02T10:15:00',
           updatedAt: '2025-04-02T10:15:00'
-        },
-        {
-          id: 103,
-          userId: 1,
-          bookingNumber: 'BK12347',
-          pickupLocation: 'Hotel Taj, Colaba',
-          dropLocation: 'Pune',
-          pickupDate: '2025-03-25T09:00:00',
-          returnDate: '2025-03-26T18:00:00',
-          cabType: 'Tempo Traveller',
-          distance: 150,
-          tripType: 'outstation',
-          tripMode: 'round-trip',
-          totalAmount: 8500,
-          status: 'completed',
-          passengerName: 'John Doe Family Trip',
-          passengerPhone: '+911234567890',
-          passengerEmail: 'john@example.com',
-          driverName: 'Santosh Sharma',
-          driverPhone: '+919988776655',
-          createdAt: '2025-03-20T11:30:00',
-          updatedAt: '2025-03-27T19:15:00'
-        },
-        {
-          id: 104,
-          userId: 1,
-          bookingNumber: 'BK12348',
-          pickupLocation: 'Office, BKC',
-          dropLocation: null,
-          pickupDate: '2025-03-15T10:00:00',
-          returnDate: '2025-03-15T18:00:00',
-          cabType: 'Sedan',
-          distance: 40,
-          tripType: 'local',
-          tripMode: 'rental',
-          totalAmount: 2500,
-          status: 'cancelled',
-          passengerName: 'John Doe',
-          passengerPhone: '+911234567890',
-          passengerEmail: 'john@example.com',
-          driverName: null,
-          driverPhone: null,
-          createdAt: '2025-03-14T09:30:00',
-          updatedAt: '2025-03-14T12:15:00'
         }
       ];
     }
@@ -324,6 +309,62 @@ export const bookingAPI = {
       console.error('Error fetching user bookings:', error);
       throw error;
     }
+  },
+  
+  // Get all bookings (admin only)
+  async getAllBookings(status?: string) {
+    if (isPreviewMode()) {
+      const mockBookings = [
+        {
+          id: 101,
+          user_id: 1,
+          bookingNumber: 'BK12345',
+          pickupLocation: 'Mumbai Airport',
+          dropLocation: 'Hotel Taj, Colaba',
+          pickupDate: '2025-04-10T10:00:00',
+          returnDate: null,
+          cabType: 'Sedan',
+          distance: 25,
+          tripType: 'airport',
+          tripMode: 'one-way',
+          totalAmount: 1500,
+          status: 'confirmed',
+          passengerName: 'John Doe',
+          passengerPhone: '+911234567890',
+          passengerEmail: 'john@example.com',
+          driverName: 'Rajesh Kumar',
+          driverPhone: '+919876543210',
+          createdAt: '2025-04-01T08:30:00',
+          updatedAt: '2025-04-01T09:15:00'
+        },
+        {
+          id: 102,
+          user_id: 1,
+          bookingNumber: 'BK12346',
+          pickupLocation: 'Hotel Oberoi',
+          dropLocation: 'Mumbai Airport',
+          pickupDate: '2025-04-12T14:00:00',
+          cabType: 'SUV',
+          distance: 28,
+          tripType: 'airport',
+          tripMode: 'one-way',
+          totalAmount: 1800,
+          status: 'pending',
+          createdAt: '2025-04-02T10:15:00',
+          updatedAt: '2025-04-02T10:15:00'
+        }
+      ];
+      
+      if (status && status !== 'all') {
+        return mockBookings.filter(b => b.status === status);
+      }
+      
+      return mockBookings;
+    }
+    
+    const query = status && status !== 'all' ? `?status=${status}` : '';
+    const response = await api.get(`/admin/bookings.php${query}`);
+    return response.data;
   },
   
   // Get booking details
@@ -361,6 +402,11 @@ export const bookingAPI = {
     return response.data;
   },
   
+  // Get booking by ID (alias for getBookingDetails)
+  async getBookingById(bookingId: number | string) {
+    return this.getBookingDetails(bookingId);
+  },
+  
   // Cancel booking
   async cancelBooking(bookingId: number | string) {
     // Check if in preview mode
@@ -373,6 +419,55 @@ export const bookingAPI = {
     const response = await api.post(`/update-booking.php`, {
       id: bookingId,
       status: 'cancelled'
+    });
+    return response.data;
+  },
+  
+  // Delete booking (admin only)
+  async deleteBooking(bookingId: number | string) {
+    if (isPreviewMode()) {
+      toast.success('Booking deleted successfully in preview mode');
+      return { status: 'success', message: 'Booking deleted successfully' };
+    }
+    
+    const response = await api.post(`/admin/delete-booking.php`, { id: bookingId });
+    return response.data;
+  },
+  
+  // Update booking status
+  async updateBookingStatus(bookingId: number | string, status: BookingStatus) {
+    if (isPreviewMode()) {
+      toast.success(`Booking status updated to ${status} in preview mode`);
+      return { 
+        status: 'success', 
+        message: `Booking status updated to ${status}`,
+        updatedAt: new Date().toISOString()
+      };
+    }
+    
+    const response = await api.post(`/admin/update-booking-status.php`, {
+      id: bookingId,
+      status: status
+    });
+    return response.data;
+  },
+  
+  // Update booking details
+  async updateBooking(bookingId: number | string, data: Partial<BookingUpdateRequest>) {
+    if (isPreviewMode()) {
+      toast.success('Booking updated successfully in preview mode');
+      return { 
+        ...data,
+        id: bookingId,
+        status: 'success', 
+        message: 'Booking updated successfully',
+        updatedAt: new Date().toISOString()
+      };
+    }
+    
+    const response = await api.post(`/admin/update-booking.php`, {
+      id: bookingId,
+      ...data
     });
     return response.data;
   },
@@ -451,6 +546,58 @@ export const vehicleAPI = {
     }
     
     const response = await api.get('/vehicles.php');
+    return response.data;
+  }
+};
+
+// Fare API for managing fares
+export const fareAPI = {
+  // Get tour fares
+  async getTourFares() {
+    if (isPreviewMode()) {
+      return [
+        { id: 1, tourId: 'tour1', tourName: 'Mumbai to Pune', sedan: 3000, ertiga: 3500, innova: 4000, tempo: 5000, luxury: 6000 },
+        { id: 2, tourId: 'tour2', tourName: 'Mumbai to Lonavala', sedan: 2500, ertiga: 3000, innova: 3500, tempo: 4500, luxury: 5500 }
+      ];
+    }
+    
+    const response = await api.get('/admin/tour-fares.php');
+    return response.data;
+  },
+  
+  // Update tour fare
+  async updateTourFare(fareData: any) {
+    if (isPreviewMode()) {
+      toast.success('Tour fare updated successfully in preview mode');
+      return { status: 'success', message: 'Tour fare updated successfully' };
+    }
+    
+    const response = await api.post('/admin/update-tour-fare.php', fareData);
+    return response.data;
+  },
+  
+  // Get vehicle pricing
+  async getVehiclePricing() {
+    if (isPreviewMode()) {
+      return [
+        { id: 1, vehicleType: 'Sedan', vehicleId: 'sedan', basePrice: 2500, pricePerKm: 14, isActive: true },
+        { id: 2, vehicleType: 'Ertiga', vehicleId: 'ertiga', basePrice: 3000, pricePerKm: 16, isActive: true },
+        { id: 3, vehicleType: 'Innova', vehicleId: 'innova', basePrice: 3500, pricePerKm: 18, isActive: true }
+      ];
+    }
+    
+    const response = await api.get('/admin/vehicle-pricing.php');
+    return response.data;
+  },
+  
+  // Update vehicle pricing
+  async updateVehiclePricing(pricingData: any) {
+    if (isPreviewMode()) {
+      toast.success('Vehicle pricing updated successfully in preview mode');
+      return { status: 'success', message: 'Vehicle pricing updated successfully' };
+    }
+    
+    const response = await api.post('/admin/update-vehicle-pricing.php', pricingData);
     return response.data;
   }
 };

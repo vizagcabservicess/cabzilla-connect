@@ -28,7 +28,7 @@ export {
   getBypassHeaders,
   getForcedRequestConfig,
   formatDataForMultipart
-} from '@/config/requestConfig';
+} from '@/utils/apiHelper';
 
 // Re-export all methods from fareService
 export { 
@@ -74,7 +74,7 @@ export {
 
 // Export getData function from vehicleDataService
 export { 
-  getVehicleData,
+  fetchVehicles as getVehicleData,
   clearVehicleDataCache,
   getVehicleTypes
 } from '@/services/vehicleDataService';

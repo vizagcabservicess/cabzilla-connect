@@ -1,5 +1,5 @@
 
-import { CabType } from '@/types/cab';
+// Import the correct function
 import { getVehicleData } from '@/services/vehicleDataService';
 
 // Store the loaded cab types for reuse

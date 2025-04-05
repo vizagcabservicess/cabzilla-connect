@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -316,7 +315,6 @@ export function VehicleFareManagement() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {/* Use the combined vehicle list from both sources */}
                           {[...vehiclePricing.map(p => ({
                             id: p.vehicleType,
                             name: p.vehicleType

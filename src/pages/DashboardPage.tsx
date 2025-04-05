@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -22,7 +21,7 @@ const MAX_RETRIES = 3;
 const MOCK_BOOKINGS: Booking[] = [
   {
     id: 101,
-    userId: 1,
+    user_id: 1, // Changed from userId to user_id
     bookingNumber: 'BK12345',
     pickupLocation: 'Mumbai Airport',
     dropLocation: 'Hotel Taj, Colaba',
@@ -44,7 +43,7 @@ const MOCK_BOOKINGS: Booking[] = [
   },
   {
     id: 102,
-    userId: 1,
+    user_id: 1,
     bookingNumber: 'BK12346',
     pickupLocation: 'Hotel Oberoi, Nariman Point',
     dropLocation: 'Mumbai Airport',
@@ -66,7 +65,7 @@ const MOCK_BOOKINGS: Booking[] = [
   },
   {
     id: 103,
-    userId: 1,
+    user_id: 1,
     bookingNumber: 'BK12347',
     pickupLocation: 'Hotel Taj, Colaba',
     dropLocation: 'Pune',
@@ -88,7 +87,7 @@ const MOCK_BOOKINGS: Booking[] = [
   },
   {
     id: 104,
-    userId: 1,
+    user_id: 1,
     bookingNumber: 'BK12348',
     pickupLocation: 'Office, BKC',
     dropLocation: null,
