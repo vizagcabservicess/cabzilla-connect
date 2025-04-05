@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -60,7 +59,6 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
   const refreshCooldownMs = 5000;
   const saveCooldownMs = 2000;
   
-  // Default values for different vehicle types
   const defaultValues: Record<string, Record<string, Record<string, number>>> = {
     airport: {
       sedan: {
@@ -149,13 +147,10 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     }
   };
 
-  // Apply default values based on vehicle type and ID
   const applyDefaultValues = (vehicleId: string): FareData => {
-    // Normalize vehicle ID for matching
     const normalizedId = vehicleId.toLowerCase().replace(/[^a-z0-9_]/g, '_');
-    let vehicleType = 'sedan'; // Default to sedan if no match
+    let vehicleType = 'sedan';
     
-    // Match vehicle type by keywords in ID
     if (normalizedId.includes('sedan')) {
       vehicleType = 'sedan';
     } else if (normalizedId.includes('ertiga')) {
@@ -188,7 +183,6 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       vehicleType = 'dzire_cng';
     }
     
-    // Get default values for the matched vehicle type or use sedan as fallback
     const defaults = defaultValues[fareType]?.[vehicleType] || 
                      defaultValues[fareType]?.['sedan'] || 
                      {};
@@ -245,7 +239,6 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
         const loadedFare = result[0];
         console.log(`Loaded ${fareType} fare data:`, loadedFare);
         
-        // Check for zero or missing values
         const hasZeroValues = Object.entries(loadedFare).some(([key, value]) => {
           return typeof value === 'number' && 
                  value === 0 && 
@@ -254,7 +247,6 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
                  !key.includes('vehicle');
         });
         
-        // Apply defaults if any important values are zero
         if (hasZeroValues) {
           const defaults = applyDefaultValues(vehicleId);
           console.log(`Applying default values for ${vehicleId} due to zero values:`, defaults);
@@ -273,7 +265,6 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
           
           setFareData(mergedFare);
         } else {
-          // Ensure vehicle ID is correctly set
           setFareData({
             ...loadedFare,
             vehicleId: vehicleId,
@@ -281,7 +272,6 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
           });
         }
       } else {
-        // No data found - apply all defaults
         const defaults = applyDefaultValues(vehicleId);
         console.log(`No fare data found. Using defaults for ${vehicleId}:`, defaults);
         setFareData(defaults);
@@ -290,7 +280,6 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       console.error(`Error loading ${fareType} fare data:`, err);
       setError(`Failed to load fare data: ${err instanceof Error ? err.message : 'Unknown error'}`);
       
-      // Apply defaults on error
       const defaults = applyDefaultValues(vehicleId);
       console.log(`Using defaults due to error for ${vehicleId}:`, defaults);
       setFareData(defaults);
@@ -317,7 +306,6 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
         toast.success('Airport fares synced successfully');
       }
       
-      // Reload data after sync
       setTimeout(() => {
         loadFareData();
       }, 1000);
@@ -347,11 +335,9 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       return;
     }
     
-    // Apply defaults to ensure no zero values
     const dataWithDefaults = { ...fareData };
     const defaults = applyDefaultValues(vehicleId);
     
-    // Replace any zero values with defaults
     Object.entries(dataWithDefaults).forEach(([key, value]) => {
       if (typeof value === 'number' && 
           value === 0 && 
@@ -378,7 +364,6 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       
       toast.success(`${fareType} fares updated successfully`);
       
-      // Reload data after save to get server-side computed values
       setTimeout(() => {
         loadFareData();
       }, 1000);
@@ -400,7 +385,6 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     }));
   };
   
-  // Load fare data when component mounts or vehicleId changes
   useEffect(() => {
     mountedRef.current = true;
     fetchAttempts.current = 0;
@@ -411,7 +395,6 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     };
   }, [vehicleId, fareType]);
   
-  // Set up event listener for fare updates from other components
   useEffect(() => {
     const handleFareUpdate = (event: CustomEvent) => {
       if (
@@ -433,7 +416,6 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     };
   }, [fareType, vehicleId]);
   
-  // Render different inputs based on fareType
   const renderFareInputs = () => {
     if (fareType === 'local') {
       return (
