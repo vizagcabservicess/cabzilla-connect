@@ -33,7 +33,8 @@ export const getApiUrl = (endpoint: string): string => {
   
   // CRITICAL: Special handling for login endpoints
   // Always use plain /api/login.php for maximum reliability
-  if (endpoint === 'login.php' || endpoint === 'login' || endpoint === '/login' || endpoint === '/login.php') {
+  if (endpoint === 'login.php' || endpoint === 'login' || endpoint === '/login' || endpoint === '/login.php' || 
+      endpoint.includes('login') || endpoint.includes('auth')) {
     return '/api/login.php';
   }
   

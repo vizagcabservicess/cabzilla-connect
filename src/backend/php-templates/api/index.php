@@ -5,10 +5,10 @@
 // Set CORS headers to allow all origins and methods
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, Accept');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Force-Refresh, X-Admin-Mode, X-Debug, Accept');
 header('Content-Type: application/json');
 
-// For OPTIONS preflight requests
+// For OPTIONS preflight requests - CRITICAL for browser CORS compliance
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
@@ -22,9 +22,13 @@ $requestData = [
     'time' => date('Y-m-d H:i:s')
 ];
 
+// Log the request for debugging
+error_log("API Request: " . json_encode($requestData));
+
 // If the path is /api/login or api/login.php, forward to login.php
 if (preg_match('/\/(api\/)?login(\.php)?$/i', $_SERVER['REQUEST_URI'])) {
-    // Forward to login.php
+    // Log the forwarding
+    error_log("Forwarding to login.php");
     include_once __DIR__ . '/login.php';
     exit;
 }
@@ -43,4 +47,3 @@ echo json_encode([
     'serverTime' => date('Y-m-d H:i:s'),
     'timestamp' => time()
 ]);
-?>

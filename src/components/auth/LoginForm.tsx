@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { z } from "zod";
@@ -15,8 +16,6 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { authAPI } from '@/services/api';
-import { LoginRequest } from '@/types/api';
 import { ApiErrorFallback } from '@/components/ApiErrorFallback';
 import { AlertCircle, ExternalLink, ShieldCheck, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -34,6 +33,7 @@ export function LoginForm() {
   const [apiUrl, setApiUrl] = useState<string>('');
   const [connectionStatus, setConnectionStatus] = useState<'untested' | 'testing' | 'success' | 'failed'>('untested');
   const [isTesting, setIsTesting] = useState(false);
+  const [responseDetails, setResponseDetails] = useState<any>(null);
 
   useEffect(() => {
     // Display API URL for debugging
@@ -52,7 +52,7 @@ export function LoginForm() {
     }
   }, []);
 
-  const form = useForm<LoginRequest>({
+  const form = useForm<{email: string, password: string}>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
       email: "",
@@ -64,17 +64,16 @@ export function LoginForm() {
     try {
       setConnectionStatus('testing');
       setIsTesting(true);
-      console.log(`Testing API connection to /api/login.php`);
+      console.log('Testing API connection to /api/login.php');
       
       // Try OPTIONS request first (preflight)
-      const response = await fetch(`/api/login.php`, {
+      const response = await fetch('/api/login.php', {
         method: 'OPTIONS',
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
           'Cache-Control': 'no-cache, no-store'
         },
-        // Add cache busting
         cache: 'no-store'
       });
       
@@ -115,9 +114,10 @@ export function LoginForm() {
     }
   };
 
-  const onSubmit = async (values: LoginRequest) => {
+  const onSubmit = async (values: {email: string, password: string}) => {
     setIsLoading(true);
     setError(null);
+    setResponseDetails(null);
     
     try {
       // Display a toast to show login is in progress
@@ -133,73 +133,83 @@ export function LoginForm() {
       // Log form values for debugging
       console.log("Login attempt with email:", values.email);
       
+      // Use direct fetch with proper POST method for maximum reliability
+      const loginUrl = '/api/login.php';
+      console.log(`Attempting login with endpoint: ${loginUrl}`);
+      
+      // Make the login request using fetch directly
+      const response = await fetch(loginUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(values),
+        cache: 'no-store'
+      });
+      
+      // Log the raw response data
+      const responseInfo = { 
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries([...response.headers.entries()])
+      };
+      console.log('Login response received:', responseInfo);
+      setResponseDetails(responseInfo);
+      
+      // Try to get the response text for debugging
+      const responseText = await response.text();
+      console.log('Response text:', responseText);
+      
+      // Parse the response as JSON (if it is JSON)
+      let data;
       try {
-        // Use direct fetch for maximum reliability
-        const loginUrl = '/api/login.php';
-        console.log(`Attempting login with endpoint: ${loginUrl}`);
+        data = JSON.parse(responseText);
+      } catch (e) {
+        console.error('Failed to parse response as JSON:', e);
+        throw new Error(`Invalid JSON response: ${responseText.substring(0, 100)}...`);
+      }
+      
+      console.log('Login response data:', data);
+      
+      if (!response.ok) {
+        throw new Error(`Login failed with status: ${response.status}. Message: ${data?.message || 'Unknown error'}`);
+      }
+      
+      if (data.token) {
+        // Store the token and user data
+        localStorage.setItem('authToken', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
         
-        // Make the login request using fetch directly
-        const response = await fetch(loginUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Accept': 'application/json'
-          },
-          body: JSON.stringify(values),
-          cache: 'no-store'
+        // Update toast to show success
+        toast.success('Login successful', { 
+          id: loginToastId, 
+          description: `Welcome back, ${data.user?.name || 'User'}!` 
         });
         
-        // Log the raw response data
-        console.log('Login response received:', { 
-          status: response.status,
-          statusText: response.statusText,
-          headers: Object.fromEntries([...response.headers.entries()])
+        console.log("Login successful, token saved", { 
+          tokenLength: data.token.length,
+          tokenParts: data.token.split('.').length,
+          user: data.user?.id
         });
         
-        if (!response.ok) {
-          throw new Error(`Login failed with status: ${response.status}`);
-        }
-        
-        // Parse the JSON response
-        const data = await response.json();
-        console.log('Login response data:', data);
-        
-        if (data.token) {
-          // Store the token and user data
-          localStorage.setItem('authToken', data.token);
-          localStorage.setItem('user', JSON.stringify(data.user));
-          
-          // Update toast to show success
-          toast.success('Login successful', { 
-            id: loginToastId, 
-            description: `Welcome back, ${data.user?.name || 'User'}!` 
-          });
-          
-          console.log("Login successful, token saved", { 
-            tokenLength: data.token.length,
-            tokenParts: data.token.split('.').length,
-            user: data.user?.id
-          });
-          
-          // Force a page reload to ensure fresh state
-          setTimeout(() => {
-            window.location.href = '/dashboard';
-          }, 500);
-        } else {
-          throw new Error("Authentication failed: No token received");
-        }
-      } catch (error) {
-        // Update toast to show error
-        toast.error('Login Failed', {
-          id: loginToastId,
-          description: error instanceof Error ? error.message : "Authentication failed"
-        });
-        throw error;
+        // Force a page reload to ensure fresh state
+        setTimeout(() => {
+          window.location.href = '/dashboard';
+        }, 500);
+      } else {
+        throw new Error("Authentication failed: No token received");
       }
     } catch (error) {
       console.error("Login error details:", error);
+      
+      // Update toast to show error
+      toast.error('Login Failed', {
+        id: 'login-toast',
+        description: error instanceof Error ? error.message : "Authentication failed"
+      });
       
       // Set error state for UI display
       setError(error as Error);
@@ -270,6 +280,18 @@ export function LoginForm() {
               : connectionStatus === 'success' 
                 ? 'Server connection successful. You can proceed with login.' 
                 : 'Server connection failed. The API may be unavailable.'}
+          </AlertDescription>
+        </Alert>
+      )}
+      
+      {responseDetails && (
+        <Alert className="mb-4 bg-yellow-50 border-yellow-200 text-yellow-800">
+          <AlertCircle className="h-4 w-4 text-yellow-500" />
+          <AlertDescription>
+            <div className="text-xs">
+              <div>Last response: Status {responseDetails.status} {responseDetails.statusText}</div>
+              <div>Ensure the server is properly processing POST requests.</div>
+            </div>
           </AlertDescription>
         </Alert>
       )}

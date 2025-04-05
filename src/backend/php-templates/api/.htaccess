@@ -1,4 +1,3 @@
-
 # Enable URL rewriting with aggressive CORS configuration
 RewriteEngine On
 RewriteBase /api/
@@ -18,7 +17,7 @@ RewriteBase /api/
 
 # Set access headers for all responses
 <IfModule mod_headers.c>
-    # Set CORS headers unconditionally for all responses
+    # Always set CORS headers for maximum compatibility
     Header always set Access-Control-Allow-Origin "*"
     Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
     Header always set Access-Control-Allow-Headers "*"
@@ -33,22 +32,16 @@ RewriteRule .* - [R=200,L]
 # CRITICAL: Set PHP handler for all PHP files
 AddHandler application/x-httpd-php .php
 
-# NEW: Direct login.php files without any conditions - HIGHEST PRIORITY
-RewriteRule ^login\.php$ login.php [L,QSA]
-RewriteRule ^login$ login.php [L,QSA]
-
-# ABSOLUTE HIGHEST PRIORITY: Define direct login handling for root login requests
-# These rules must come before any other rules to ensure they take precedence
+# HIGHEST PRIORITY: Define direct login handling for all login patterns
+# These rules must come before any other rules
 RewriteRule ^login$ login.php [L,QSA]
 RewriteRule ^login\.php$ login.php [L,QSA]
-# Also catch /api/login
 RewriteRule ^api/login$ login.php [L,QSA]
 RewriteRule ^api/login\.php$ login.php [L,QSA]
-# And auth/login patterns
 RewriteRule ^auth/login$ login.php [L,QSA]
 RewriteRule ^auth/login\.php$ login.php [L,QSA]
 
-# Other API endpoints can remain as they are
+# Other API endpoints - keep all existing rules
 RewriteRule ^status$ status.php [L,QSA]
 RewriteRule ^admin/status$ admin/status.php [L,QSA]
 RewriteRule ^admin/status\.php$ admin/status.php [L,QSA]
@@ -135,7 +128,7 @@ Header set X-Script-Filename "%{SCRIPT_FILENAME}e"
 
 # Protect PHP files from direct access
 <Files "*.php">
-    # Allow all requests through - critical for CORS
+    # Allow all requests through
     Require all granted
 </Files>
 
