@@ -82,6 +82,22 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       luxury: {
         basePrice: 7000, pricePerKm: 22, pickupPrice: 2500, dropPrice: 2500,
         tier1Price: 2000, tier2Price: 2200, tier3Price: 2500, tier4Price: 3000, extraKmCharge: 22
+      },
+      innova_hycross: {
+        basePrice: 4500, pricePerKm: 18, pickupPrice: 1200, dropPrice: 1200,
+        tier1Price: 1000, tier2Price: 1200, tier3Price: 1400, tier4Price: 1600, extraKmCharge: 18
+      },
+      toyota: {
+        basePrice: 4500, pricePerKm: 18, pickupPrice: 1200, dropPrice: 1200,
+        tier1Price: 1000, tier2Price: 1200, tier3Price: 1400, tier4Price: 1600, extraKmCharge: 18
+      },
+      etios: {
+        basePrice: 3200, pricePerKm: 13, pickupPrice: 800, dropPrice: 800,
+        tier1Price: 600, tier2Price: 800, tier3Price: 1000, tier4Price: 1200, extraKmCharge: 13
+      },
+      dzire_cng: {
+        basePrice: 3200, pricePerKm: 13, pickupPrice: 800, dropPrice: 800,
+        tier1Price: 600, tier2Price: 800, tier3Price: 1000, tier4Price: 1200, extraKmCharge: 13
       }
     },
     local: {
@@ -104,6 +120,22 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       luxury: {
         price4hrs40km: 3500, price8hrs80km: 5500, price10hrs100km: 6500, 
         priceExtraKm: 22, priceExtraHour: 350
+      },
+      innova_hycross: {
+        price4hrs40km: 3000, price8hrs80km: 4500, price10hrs100km: 5500, 
+        priceExtraKm: 18, priceExtraHour: 300
+      },
+      toyota: {
+        price4hrs40km: 3000, price8hrs80km: 4500, price10hrs100km: 5500, 
+        priceExtraKm: 18, priceExtraHour: 300
+      },
+      etios: {
+        price4hrs40km: 2000, price8hrs80km: 3200, price10hrs100km: 4000, 
+        priceExtraKm: 13, priceExtraHour: 200
+      },
+      dzire_cng: {
+        price4hrs40km: 2000, price8hrs80km: 3200, price10hrs100km: 4000, 
+        priceExtraKm: 13, priceExtraHour: 200
       }
     }
   };
@@ -111,19 +143,27 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
   // Apply default values based on vehicle type
   const applyDefaultValues = (vehicleId: string): FareData => {
     const simpleVehicleId = vehicleId.toLowerCase().replace(/[^a-z0-9_]/g, '_');
-    let vehicleType = simpleVehicleId;
+    let vehicleType = 'default';
     
     // Try to find matching vehicle type
     if (simpleVehicleId.includes('sedan') || simpleVehicleId === '1') {
       vehicleType = 'sedan';
     } else if (simpleVehicleId.includes('ertiga') || simpleVehicleId === '2') {
       vehicleType = 'ertiga';
+    } else if (simpleVehicleId.includes('innova') && simpleVehicleId.includes('hycross')) {
+      vehicleType = 'innova_hycross';
     } else if (simpleVehicleId.includes('innova') || simpleVehicleId.includes('crysta') || simpleVehicleId === '1266') {
       vehicleType = 'innova_crysta';
     } else if (simpleVehicleId.includes('tempo') || simpleVehicleId === '592' || simpleVehicleId === '1270') {
       vehicleType = 'tempo';
     } else if (simpleVehicleId.includes('luxury')) {
       vehicleType = 'luxury';
+    } else if (simpleVehicleId.includes('toyota')) {
+      vehicleType = 'toyota';
+    } else if (simpleVehicleId.includes('etios') || simpleVehicleId === '180') {
+      vehicleType = 'etios';
+    } else if (simpleVehicleId.includes('dzire') || simpleVehicleId === '1271') {
+      vehicleType = 'dzire_cng';
     }
     
     // Get default values for the matched vehicle type or use sedan as fallback
@@ -208,261 +248,222 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
           
           setFareData(mergedFare);
         } else {
-          const updatedFare = {
+          // Ensure vehicle ID is correctly set
+          setFareData({
             ...loadedFare,
             vehicleId: vehicleId,
             vehicle_id: vehicleId
-          };
-          
-          setFareData(updatedFare);
+          });
         }
-        
-        setError(null);
       } else {
-        console.warn('No fare data returned:', result);
-        
-        // Apply default values for this vehicle
-        const defaultData = applyDefaultValues(vehicleId);
-        console.log(`Applying default values for ${vehicleId}:`, defaultData);
-        
-        setFareData(defaultData);
-        
-        setError(`No ${fareType} fare data found in database. Using default values.`);
+        // No data found - apply all defaults
+        const defaults = applyDefaultValues(vehicleId);
+        console.log(`No fare data found. Using defaults for ${vehicleId}:`, defaults);
+        setFareData(defaults);
       }
     } catch (err) {
       console.error(`Error loading ${fareType} fare data:`, err);
+      setError(`Failed to load fare data: ${err instanceof Error ? err.message : 'Unknown error'}`);
       
-      // Apply default values when there's an error
-      const defaultData = applyDefaultValues(vehicleId);
-      console.log(`Applying default values after error for ${vehicleId}:`, defaultData);
-      
-      setFareData(defaultData);
-      
-      setError(`Failed to load fare data. Using default values. ${err instanceof Error ? err.message : ''}`);
+      // Apply defaults on error
+      const defaults = applyDefaultValues(vehicleId);
+      console.log(`Using defaults due to error for ${vehicleId}:`, defaults);
+      setFareData(defaults);
     } finally {
-      if (mountedRef.current) {
-        setIsLoading(false);
-        requestInProgress.current = false;
+      setIsLoading(false);
+      requestInProgress.current = false;
+    }
+  };
+  
+  const syncFares = async () => {
+    if (isSyncingFares) return;
+    
+    setIsSyncingFares(true);
+    setError(null);
+    
+    try {
+      if (fareType === 'local') {
+        await syncLocalFares();
+        toast.success('Local fares synced successfully');
+      } else if (fareType === 'airport') {
+        await syncAirportFares();
+        toast.success('Airport fares synced successfully');
       }
+      
+      // Reload data after sync
+      setTimeout(() => {
+        loadFareData();
+      }, 1000);
+    } catch (err) {
+      console.error(`Error syncing ${fareType} fares:`, err);
+      setError(`Failed to sync fares: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      toast.error(`Failed to sync ${fareType} fares`);
+    } finally {
+      setIsSyncingFares(false);
     }
   };
   
   const saveFareData = async () => {
     const now = Date.now();
     if (now - lastSaveTimeRef.current < saveCooldownMs) {
-      toast.info("Please wait a moment before saving again");
+      console.log(`Save throttled, last save was ${(now - lastSaveTimeRef.current)/1000}s ago`);
       return;
     }
     
-    if (!vehicleId || vehicleId.trim() === '' || isSaving) {
-      if (!vehicleId || vehicleId.trim() === '') {
-        setError("Vehicle ID is missing. Cannot save fares.");
-      }
+    if (isSaving) {
+      console.log('Already saving, please wait...');
       return;
     }
+    
+    if (!vehicleId || vehicleId.trim() === '') {
+      setError('No vehicle selected');
+      return;
+    }
+    
+    // Apply defaults to ensure no zero values
+    const dataWithDefaults = { ...fareData };
+    const defaults = applyDefaultValues(vehicleId);
+    
+    // Replace any zero values with defaults
+    Object.entries(dataWithDefaults).forEach(([key, value]) => {
+      if (typeof value === 'number' && 
+          value === 0 && 
+          key !== 'id' && 
+          !key.includes('_id') && 
+          !key.includes('vehicle') &&
+          defaults[key]) {
+        dataWithDefaults[key] = defaults[key];
+      }
+    });
     
     lastSaveTimeRef.current = now;
     setIsSaving(true);
     setError(null);
     
     try {
-      const dataToSave = {
-        ...fareData,
-        vehicleId: vehicleId,
-        vehicle_id: vehicleId
-      };
-      
-      console.log(`Saving ${fareType} fare data:`, dataToSave);
+      console.log(`Saving ${fareType} fare data:`, dataWithDefaults);
       
       if (fareType === 'local') {
-        await updateLocalFares(dataToSave);
+        await updateLocalFares(dataWithDefaults);
       } else if (fareType === 'airport') {
-        await updateAirportFares(dataToSave);
+        await updateAirportFares(dataWithDefaults);
       }
       
-      toast.success(`${fareType.charAt(0).toUpperCase() + fareType.slice(1)} fares updated successfully`);
+      toast.success(`${fareType} fares updated successfully`);
       
-      lastFetchTime.current = Date.now();
-      fetchAttempts.current = 0;
-      
+      // Reload data after save to get server-side computed values
       setTimeout(() => {
-        if (mountedRef.current) {
-          loadFareData();
-        }
-      }, 1500);
+        loadFareData();
+      }, 1000);
     } catch (err) {
       console.error(`Error saving ${fareType} fare data:`, err);
-      toast.error(`Failed to update ${fareType} fares: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      setError(`Failed to update fares. ${err instanceof Error ? err.message : ''}`);
+      setError(`Failed to save fare data: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      toast.error(`Failed to update ${fareType} fares`);
     } finally {
-      if (mountedRef.current) {
-        setIsSaving(false);
-      }
+      setIsSaving(false);
     }
   };
   
-  const syncFares = async () => {
-    const now = Date.now();
-    if (now - lastRefreshTimeRef.current < refreshCooldownMs) {
-      toast.info("Please wait a moment before syncing again");
-      return;
-    }
-    
-    if (isSyncingFares) return;
-    
-    lastRefreshTimeRef.current = now;
-    setIsSyncingFares(true);
-    setError(null);
-    
-    try {
-      console.log(`Syncing ${fareType} fares from database tables`);
-      
-      let result;
-      if (fareType === 'local') {
-        result = await syncLocalFares();
-      } else if (fareType === 'airport') {
-        result = await syncAirportFares();
-      }
-      
-      if (result && (result.status === 'success' || result.status === 'throttled')) {
-        if (result.status === 'throttled') {
-          toast.info(result.message || "Sync operation throttled. Please try again in a few moments.");
-        } else {
-          toast.success(`${fareType.charAt(0).toUpperCase() + fareType.slice(1)} fares synced successfully`);
-          
-          fetchAttempts.current = 0;
-          
-          setTimeout(() => {
-            if (mountedRef.current) {
-              loadFareData();
-            }
-          }, 1500);
-        }
-      } else {
-        console.error('Error syncing fares:', result);
-        toast.error(result?.message || 'Failed to sync fares');
-        setError(result?.message || 'Failed to sync fares');
-      }
-    } catch (err) {
-      console.error(`Error syncing ${fareType} fares:`, err);
-      toast.error('Failed to sync fares');
-      setError(`Failed to sync fares. ${err instanceof Error ? err.message : ''}`);
-    } finally {
-      if (mountedRef.current) {
-        setIsSyncingFares(false);
-      }
-    }
-  };
-  
-  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = event.target;
-    
-    const numericValue = !isNaN(Number(value)) ? Number(value) : value;
+  const handleInputChange = (field: string, value: string) => {
+    const numericValue = value === '' ? 0 : parseFloat(value);
     
     setFareData(prev => ({
       ...prev,
-      [name]: numericValue,
-      vehicleId: vehicleId,
-      vehicle_id: vehicleId
+      [field]: numericValue,
     }));
   };
   
+  // Load fare data when component mounts or vehicleId changes
   useEffect(() => {
     mountedRef.current = true;
     fetchAttempts.current = 0;
-    
-    setFareData(prev => ({
-      ...prev,
-      vehicleId: vehicleId,
-      vehicle_id: vehicleId
-    }));
-    
-    if (vehicleId && vehicleId.trim() !== '') {
-      loadFareData();
-    }
-    
-    const handleFareDataUpdated = (event: Event) => {
-      if (!mountedRef.current) return;
-      
-      const customEvent = event as CustomEvent;
-      const detail = customEvent.detail;
-      
-      if (detail && detail.fareType === fareType && detail.vehicleId === vehicleId) {
-        console.log('Fare data updated externally, reloading...');
-        fetchAttempts.current = 0;
-        loadFareData();
-      }
-    };
-    
-    window.addEventListener('fare-data-updated', handleFareDataUpdated);
+    loadFareData();
     
     return () => {
       mountedRef.current = false;
-      window.removeEventListener('fare-data-updated', handleFareDataUpdated);
     };
   }, [vehicleId, fareType]);
   
-  const renderFareFields = () => {
+  // Set up event listener for fare updates from other components
+  useEffect(() => {
+    const handleFareUpdate = (event: CustomEvent) => {
+      if (
+        event.detail?.fareType === fareType && 
+        event.detail?.vehicleId === vehicleId &&
+        mountedRef.current
+      ) {
+        console.log('Detected fare update event, reloading data...');
+        setTimeout(() => {
+          loadFareData();
+        }, 1000);
+      }
+    };
+    
+    window.addEventListener('fare-data-updated', handleFareUpdate as EventListener);
+    
+    return () => {
+      window.removeEventListener('fare-data-updated', handleFareUpdate as EventListener);
+    };
+  }, [fareType, vehicleId]);
+  
+  // Render different inputs based on fareType
+  const renderFareInputs = () => {
     if (fareType === 'local') {
       return (
         <>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
               <Label htmlFor="price4hrs40km">4 Hours / 40 KM Package (₹)</Label>
               <Input
                 id="price4hrs40km"
-                name="price4hrs40km"
                 type="number"
                 value={fareData.price4hrs40km || 0}
-                onChange={handleInputChange}
+                onChange={(e) => handleInputChange('price4hrs40km', e.target.value)}
+                placeholder="e.g. 1800"
               />
             </div>
-            
-            <div className="space-y-2">
+            <div>
               <Label htmlFor="price8hrs80km">8 Hours / 80 KM Package (₹)</Label>
               <Input
                 id="price8hrs80km"
-                name="price8hrs80km"
                 type="number"
                 value={fareData.price8hrs80km || 0}
-                onChange={handleInputChange}
+                onChange={(e) => handleInputChange('price8hrs80km', e.target.value)}
+                placeholder="e.g. 3000"
               />
             </div>
           </div>
-          
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
               <Label htmlFor="price10hrs100km">10 Hours / 100 KM Package (₹)</Label>
               <Input
                 id="price10hrs100km"
-                name="price10hrs100km"
                 type="number"
                 value={fareData.price10hrs100km || 0}
-                onChange={handleInputChange}
+                onChange={(e) => handleInputChange('price10hrs100km', e.target.value)}
+                placeholder="e.g. 3600"
               />
             </div>
-            
-            <div className="space-y-2">
+            <div>
               <Label htmlFor="priceExtraKm">Extra KM Charge (₹)</Label>
               <Input
                 id="priceExtraKm"
-                name="priceExtraKm"
                 type="number"
                 value={fareData.priceExtraKm || 0}
-                onChange={handleInputChange}
+                onChange={(e) => handleInputChange('priceExtraKm', e.target.value)}
+                placeholder="e.g. 12"
               />
             </div>
           </div>
-          
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
               <Label htmlFor="priceExtraHour">Extra Hour Charge (₹)</Label>
               <Input
                 id="priceExtraHour"
-                name="priceExtraHour"
                 type="number"
                 value={fareData.priceExtraHour || 0}
-                onChange={handleInputChange}
+                onChange={(e) => handleInputChange('priceExtraHour', e.target.value)}
+                placeholder="e.g. 200"
               />
             </div>
           </div>
@@ -471,135 +472,103 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     } else if (fareType === 'airport') {
       return (
         <>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
               <Label htmlFor="basePrice">Base Price (₹)</Label>
               <Input
                 id="basePrice"
-                name="basePrice"
                 type="number"
                 value={fareData.basePrice || 0}
-                onChange={handleInputChange}
+                onChange={(e) => handleInputChange('basePrice', e.target.value)}
+                placeholder="e.g. 3000"
               />
             </div>
-            
-            <div className="space-y-2">
+            <div>
               <Label htmlFor="pricePerKm">Price Per KM (₹)</Label>
               <Input
                 id="pricePerKm"
-                name="pricePerKm"
                 type="number"
                 value={fareData.pricePerKm || 0}
-                onChange={handleInputChange}
+                onChange={(e) => handleInputChange('pricePerKm', e.target.value)}
+                placeholder="e.g. 15"
               />
             </div>
           </div>
-          
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
               <Label htmlFor="pickupPrice">Pickup Price (₹)</Label>
               <Input
                 id="pickupPrice"
-                name="pickupPrice"
                 type="number"
                 value={fareData.pickupPrice || 0}
-                onChange={handleInputChange}
+                onChange={(e) => handleInputChange('pickupPrice', e.target.value)}
+                placeholder="e.g. 1000"
               />
             </div>
-            
-            <div className="space-y-2">
+            <div>
               <Label htmlFor="dropPrice">Drop Price (₹)</Label>
               <Input
                 id="dropPrice"
-                name="dropPrice"
                 type="number"
                 value={fareData.dropPrice || 0}
-                onChange={handleInputChange}
+                onChange={(e) => handleInputChange('dropPrice', e.target.value)}
+                placeholder="e.g. 1000"
               />
             </div>
           </div>
-          
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="tier1Price">Tier 1 Price (≤ 10km) (₹)</Label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="tier1Price">Tier 1 Price (₹)</Label>
               <Input
                 id="tier1Price"
-                name="tier1Price"
                 type="number"
                 value={fareData.tier1Price || 0}
-                onChange={handleInputChange}
+                onChange={(e) => handleInputChange('tier1Price', e.target.value)}
+                placeholder="e.g. 800"
               />
             </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="tier2Price">Tier 2 Price (≤ 20km) (₹)</Label>
+            <div>
+              <Label htmlFor="tier2Price">Tier 2 Price (₹)</Label>
               <Input
                 id="tier2Price"
-                name="tier2Price"
                 type="number"
                 value={fareData.tier2Price || 0}
-                onChange={handleInputChange}
+                onChange={(e) => handleInputChange('tier2Price', e.target.value)}
+                placeholder="e.g. 1000"
               />
             </div>
           </div>
-          
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="tier3Price">Tier 3 Price (≤ 30km) (₹)</Label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="tier3Price">Tier 3 Price (₹)</Label>
               <Input
                 id="tier3Price"
-                name="tier3Price"
                 type="number"
                 value={fareData.tier3Price || 0}
-                onChange={handleInputChange}
+                onChange={(e) => handleInputChange('tier3Price', e.target.value)}
+                placeholder="e.g. 1200"
               />
             </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="tier4Price">Tier 4 Price ({'>'}30km) (₹)</Label>
+            <div>
+              <Label htmlFor="tier4Price">Tier 4 Price (₹)</Label>
               <Input
                 id="tier4Price"
-                name="tier4Price"
                 type="number"
                 value={fareData.tier4Price || 0}
-                onChange={handleInputChange}
+                onChange={(e) => handleInputChange('tier4Price', e.target.value)}
+                placeholder="e.g. 1400"
               />
             </div>
           </div>
-          
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
               <Label htmlFor="extraKmCharge">Extra KM Charge (₹)</Label>
               <Input
                 id="extraKmCharge"
-                name="extraKmCharge"
                 type="number"
                 value={fareData.extraKmCharge || 0}
-                onChange={handleInputChange}
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="nightCharges">Night Charges (₹)</Label>
-              <Input
-                id="nightCharges"
-                name="nightCharges"
-                type="number"
-                value={fareData.nightCharges || 0}
-                onChange={handleInputChange}
-              />
-            </div>
-          </div>
-          
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="extraWaitingCharges">Extra Waiting Charges (₹/hr)</Label>
-              <Input
-                id="extraWaitingCharges"
-                name="extraWaitingCharges"
-                type="number"
-                value={fareData.extraWaitingCharges || 0}
-                onChange={handleInputChange}
+                onChange={(e) => handleInputChange('extraKmCharge', e.target.value)}
+                placeholder="e.g. 15"
               />
             </div>
           </div>
@@ -611,12 +580,12 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
   };
   
   return (
-    <Card>
-      <CardContent className="p-6 space-y-4">
+    <Card className="w-full">
+      <CardContent className="pt-6">
         {error && (
-          <Alert variant={error.includes('default values') ? "default" : "destructive"} className="mb-4">
+          <Alert variant="destructive" className="mb-4">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>{error.includes('default values') ? 'Notice' : 'Error'}</AlertTitle>
+            <AlertTitle>Error</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
@@ -627,54 +596,40 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
             <span className="ml-2">Loading fare data...</span>
           </div>
         ) : (
-          <>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold capitalize">
-                {fareType} Fare Configuration
-              </h3>
-              
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={syncFares}
-                disabled={isSyncingFares || !vehicleId || (Date.now() - lastRefreshTimeRef.current < refreshCooldownMs)}
-                className="flex items-center gap-2"
-              >
-                <Database className={`h-4 w-4 ${isSyncingFares ? 'animate-pulse' : ''}`} />
-                <span>Sync {fareType.charAt(0).toUpperCase() + fareType.slice(1)} Fares</span>
-              </Button>
-            </div>
-            
-            {renderFareFields()}
-            
-            {!vehicleId && (
-              <div className="text-center py-4">
-                <p className="text-muted-foreground">Please select a vehicle to manage fares.</p>
-              </div>
-            )}
-          </>
+          <div className="space-y-4">
+            {renderFareInputs()}
+          </div>
         )}
       </CardContent>
-      
-      <CardFooter className="bg-muted/50 px-6 py-4 border-t">
-        <div className="flex justify-between w-full">
-          <Button
-            variant="outline"
+      <CardFooter className="border-t px-6 py-4 flex flex-wrap gap-2 justify-between">
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
             onClick={loadFareData}
-            disabled={isLoading || !vehicleId || (Date.now() - lastRefreshTimeRef.current < refreshCooldownMs)}
+            disabled={isLoading || isSaving}
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
           
-          <Button
-            onClick={saveFareData}
-            disabled={isSaving || isLoading || !vehicleId || (Date.now() - lastSaveTimeRef.current < saveCooldownMs)}
+          <Button 
+            variant="outline" 
+            onClick={syncFares}
+            disabled={isLoading || isSaving || isSyncingFares}
           >
-            {isSaving ? <Spinner size="sm" className="mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-            Save Changes
+            <Database className={`mr-2 h-4 w-4 ${isSyncingFares ? 'animate-spin' : ''}`} />
+            Sync Tables
           </Button>
         </div>
+        
+        <Button 
+          variant="default" 
+          onClick={saveFareData}
+          disabled={isLoading || isSaving}
+        >
+          <Save className="mr-2 h-4 w-4" />
+          {isSaving ? 'Saving...' : `Save ${fareType === 'local' ? 'Local' : 'Airport'} Fare`}
+        </Button>
       </CardFooter>
     </Card>
   );

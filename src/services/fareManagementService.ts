@@ -195,6 +195,18 @@ export async function updateAirportFares(fareData: Record<string, any>): Promise
         tier1Price: 2000, tier2Price: 2200, tier3Price: 2500, tier4Price: 3000, 
         extraKmCharge: 22, nightCharges: 450, extraWaitingCharges: 350
       };
+    } else if (vehicleId.includes('dzire')) {
+      baseDefaults = {
+        basePrice: 3200, pricePerKm: 13, pickupPrice: 800, dropPrice: 800,
+        tier1Price: 600, tier2Price: 800, tier3Price: 1000, tier4Price: 1200, 
+        extraKmCharge: 13, nightCharges: 250, extraWaitingCharges: 150
+      };
+    } else if (vehicleId.includes('etios')) {
+      baseDefaults = {
+        basePrice: 3200, pricePerKm: 13, pickupPrice: 800, dropPrice: 800,
+        tier1Price: 600, tier2Price: 800, tier3Price: 1000, tier4Price: 1200, 
+        extraKmCharge: 13, nightCharges: 250, extraWaitingCharges: 150
+      };
     }
     
     // Apply defaults for any zero or missing values
