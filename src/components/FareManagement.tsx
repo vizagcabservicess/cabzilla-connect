@@ -4,665 +4,630 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Spinner } from "@/components/ui/spinner";
-import { directVehicleOperation } from '@/utils/apiHelper';
+import { fetchLocalFares, fetchAirportFares, updateLocalFares, updateAirportFares, syncLocalFares, syncAirportFares } from '@/services/fareManagementService';
 import { toast } from 'sonner';
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, RefreshCw, Save, Database, RotateCw } from "lucide-react";
-import { fetchLocalFares, fetchAirportFares, updateLocalFares, updateAirportFares, syncAirportFares, syncLocalFares } from '@/services/fareManagementService';
+import { Loader2, RotateCw, Save, AlertCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { isPreviewMode } from '@/utils/apiHelper';
 
 interface FareManagementProps {
   vehicleId: string;
   fareType: 'local' | 'airport';
 }
 
-interface FareData {
-  vehicleId?: string;
-  vehicle_id?: string;
-  price4hrs40km?: number;
-  price8hrs80km?: number;
-  price10hrs100km?: number;
-  priceExtraKm?: number;
-  priceExtraHour?: number;
-  priceOneWay?: number;
-  priceRoundTrip?: number;
-  nightCharges?: number;
-  extraWaitingCharges?: number;
-  basePrice?: number;
-  pricePerKm?: number;
-  pickupPrice?: number;
-  dropPrice?: number;
-  tier1Price?: number;
-  tier2Price?: number;
-  tier3Price?: number;
-  tier4Price?: number;
-  extraKmCharge?: number;
-  [key: string]: any;
-}
-
-export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareType }) => {
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isSyncingFares, setIsSyncingFares] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [fareData, setFareData] = useState<FareData>({
-    vehicleId: vehicleId,
-    vehicle_id: vehicleId
-  });
+// Default values based on vehicle type
+const getDefaultLocalFares = (vehicleId: string) => {
+  const vehicleType = vehicleId.toLowerCase();
   
-  const lastFetchTime = useRef<number>(0);
-  const requestInProgress = useRef<boolean>(false);
-  const mountedRef = useRef<boolean>(true);
-  const fetchAttempts = useRef<number>(0);
-  const maxFetchAttempts = 3;
-  const lastRefreshTimeRef = useRef<number>(0);
-  const lastSaveTimeRef = useRef<number>(0);
-  const refreshCooldownMs = 5000;
-  const saveCooldownMs = 2000;
-  
-  const defaultValues: Record<string, Record<string, Record<string, number>>> = {
-    airport: {
-      sedan: {
-        basePrice: 3000, pricePerKm: 12, pickupPrice: 800, dropPrice: 800,
-        tier1Price: 600, tier2Price: 800, tier3Price: 1000, tier4Price: 1200, 
-        extraKmCharge: 12, nightCharges: 250, extraWaitingCharges: 150
-      },
-      ertiga: {
-        basePrice: 3500, pricePerKm: 15, pickupPrice: 1000, dropPrice: 1000,
-        tier1Price: 800, tier2Price: 1000, tier3Price: 1200, tier4Price: 1400, 
-        extraKmCharge: 15, nightCharges: 300, extraWaitingCharges: 200
-      },
-      innova_crysta: {
-        basePrice: 4000, pricePerKm: 17, pickupPrice: 1200, dropPrice: 1200,
-        tier1Price: 1000, tier2Price: 1200, tier3Price: 1400, tier4Price: 1600, 
-        extraKmCharge: 17, nightCharges: 350, extraWaitingCharges: 250
-      },
-      tempo: {
-        basePrice: 6000, pricePerKm: 19, pickupPrice: 2000, dropPrice: 2000,
-        tier1Price: 1600, tier2Price: 1800, tier3Price: 2000, tier4Price: 2500, 
-        extraKmCharge: 19, nightCharges: 400, extraWaitingCharges: 300
-      },
-      luxury: {
-        basePrice: 7000, pricePerKm: 22, pickupPrice: 2500, dropPrice: 2500,
-        tier1Price: 2000, tier2Price: 2200, tier3Price: 2500, tier4Price: 3000, 
-        extraKmCharge: 22, nightCharges: 450, extraWaitingCharges: 350
-      },
-      innova_hycross: {
-        basePrice: 4500, pricePerKm: 18, pickupPrice: 1200, dropPrice: 1200,
-        tier1Price: 1000, tier2Price: 1200, tier3Price: 1400, tier4Price: 1600, 
-        extraKmCharge: 18, nightCharges: 350, extraWaitingCharges: 250
-      },
-      toyota: {
-        basePrice: 4500, pricePerKm: 18, pickupPrice: 1200, dropPrice: 1200,
-        tier1Price: 1000, tier2Price: 1200, tier3Price: 1400, tier4Price: 1600, 
-        extraKmCharge: 18, nightCharges: 350, extraWaitingCharges: 250
-      },
-      etios: {
-        basePrice: 3200, pricePerKm: 13, pickupPrice: 800, dropPrice: 800,
-        tier1Price: 600, tier2Price: 800, tier3Price: 1000, tier4Price: 1200, 
-        extraKmCharge: 13, nightCharges: 250, extraWaitingCharges: 150
-      },
-      dzire_cng: {
-        basePrice: 3200, pricePerKm: 13, pickupPrice: 800, dropPrice: 800,
-        tier1Price: 600, tier2Price: 800, tier3Price: 1000, tier4Price: 1200, 
-        extraKmCharge: 13, nightCharges: 250, extraWaitingCharges: 150
-      }
-    },
-    local: {
-      sedan: {
-        price4hrs40km: 1800, price8hrs80km: 3000, price10hrs100km: 3600, 
-        priceExtraKm: 12, priceExtraHour: 200
-      },
-      ertiga: {
-        price4hrs40km: 2200, price8hrs80km: 3600, price10hrs100km: 4500, 
-        priceExtraKm: 15, priceExtraHour: 250
-      },
-      innova_crysta: {
-        price4hrs40km: 2600, price8hrs80km: 4200, price10hrs100km: 5200, 
-        priceExtraKm: 18, priceExtraHour: 300
-      },
-      tempo: {
-        price4hrs40km: 4500, price8hrs80km: 7000, price10hrs100km: 8500, 
-        priceExtraKm: 22, priceExtraHour: 400
-      },
-      luxury: {
-        price4hrs40km: 3500, price8hrs80km: 5500, price10hrs100km: 6500, 
-        priceExtraKm: 22, priceExtraHour: 350
-      },
-      innova_hycross: {
-        price4hrs40km: 3000, price8hrs80km: 4500, price10hrs100km: 5500, 
-        priceExtraKm: 18, priceExtraHour: 300
-      },
-      toyota: {
-        price4hrs40km: 3000, price8hrs80km: 4500, price10hrs100km: 5500, 
-        priceExtraKm: 18, priceExtraHour: 300
-      },
-      etios: {
-        price4hrs40km: 2000, price8hrs80km: 3200, price10hrs100km: 4000, 
-        priceExtraKm: 13, priceExtraHour: 200
-      },
-      dzire_cng: {
-        price4hrs40km: 2000, price8hrs80km: 3200, price10hrs100km: 4000, 
-        priceExtraKm: 13, priceExtraHour: 200
-      }
-    }
-  };
-
-  const applyDefaultValues = (vehicleId: string): FareData => {
-    const normalizedId = vehicleId.toLowerCase().replace(/[^a-z0-9_]/g, '_');
-    let vehicleType = 'sedan';
-    
-    if (normalizedId.includes('sedan')) {
-      vehicleType = 'sedan';
-    } else if (normalizedId.includes('ertiga')) {
-      vehicleType = 'ertiga';
-    } else if (normalizedId.includes('innova') && normalizedId.includes('hycross')) {
-      vehicleType = 'innova_hycross';
-    } else if (normalizedId.includes('innova') || normalizedId.includes('crysta')) {
-      vehicleType = 'innova_crysta';
-    } else if (normalizedId.includes('tempo')) {
-      vehicleType = 'tempo';
-    } else if (normalizedId.includes('luxury')) {
-      vehicleType = 'luxury';
-    } else if (normalizedId.includes('toyota')) {
-      vehicleType = 'toyota';
-    } else if (normalizedId.includes('etios')) {
-      vehicleType = 'etios';
-    } else if (normalizedId.includes('dzire')) {
-      vehicleType = 'dzire_cng';
-    } else if (normalizedId === '1') {
-      vehicleType = 'sedan';
-    } else if (normalizedId === '2') {
-      vehicleType = 'ertiga';
-    } else if (['1266', '3', '4'].includes(normalizedId)) {
-      vehicleType = 'innova_crysta';
-    } else if (['592', '1270', '5'].includes(normalizedId)) {
-      vehicleType = 'tempo';
-    } else if (normalizedId === '180') {
-      vehicleType = 'etios';
-    } else if (normalizedId === '1271') {
-      vehicleType = 'dzire_cng';
-    }
-    
-    const defaults = defaultValues[fareType]?.[vehicleType] || 
-                     defaultValues[fareType]?.['sedan'] || 
-                     {};
-    
-    console.log(`Applied ${fareType} defaults for ${vehicleId} (matched as ${vehicleType}):`, defaults);
-    
+  if (vehicleType.includes('sedan') || vehicleType.includes('dzire') || vehicleType.includes('etios')) {
     return {
       vehicleId,
-      vehicle_id: vehicleId,
-      ...defaults
+      price4hrs40km: 2000,
+      price8hrs80km: 3500,
+      price10hrs100km: 4500,
+      priceExtraKm: 12,
+      priceExtraHour: 150
     };
-  };
+  } else if (vehicleType.includes('ertiga')) {
+    return {
+      vehicleId,
+      price4hrs40km: 2500,
+      price8hrs80km: 4000,
+      price10hrs100km: 5000,
+      priceExtraKm: 15,
+      priceExtraHour: 200
+    };
+  } else if (vehicleType.includes('innova') || vehicleType.includes('crysta')) {
+    return {
+      vehicleId,
+      price4hrs40km: 3000,
+      price8hrs80km: 4800,
+      price10hrs100km: 6000,
+      priceExtraKm: 17,
+      priceExtraHour: 250
+    };
+  } else if (vehicleType.includes('tempo')) {
+    return {
+      vehicleId,
+      price4hrs40km: 4000,
+      price8hrs80km: 6000,
+      price10hrs100km: 8000,
+      priceExtraKm: 20,
+      priceExtraHour: 300
+    };
+  } else if (vehicleType.includes('luxury')) {
+    return {
+      vehicleId,
+      price4hrs40km: 3500,
+      price8hrs80km: 5500,
+      price10hrs100km: 7000,
+      priceExtraKm: 18,
+      priceExtraHour: 300
+    };
+  } else {
+    // Default values for unknown vehicle types
+    return {
+      vehicleId,
+      price4hrs40km: 2500,
+      price8hrs80km: 4000,
+      price10hrs100km: 5000,
+      priceExtraKm: 15,
+      priceExtraHour: 200
+    };
+  }
+};
+
+// Default values for airport fares based on vehicle type
+const getDefaultAirportFares = (vehicleId: string) => {
+  const vehicleType = vehicleId.toLowerCase();
   
-  const loadFareData = async () => {
-    const now = Date.now();
-    if (now - lastRefreshTimeRef.current < refreshCooldownMs) {
-      console.log(`Refresh throttled, last refresh was ${(now - lastRefreshTimeRef.current)/1000}s ago`);
+  if (vehicleType.includes('sedan') || vehicleType.includes('dzire') || vehicleType.includes('etios')) {
+    return {
+      vehicleId,
+      basePrice: 3000,
+      pricePerKm: 12,
+      pickupPrice: 800,
+      dropPrice: 800,
+      tier1Price: 600,
+      tier2Price: 800,
+      tier3Price: 1000,
+      tier4Price: 1200,
+      extraKmCharge: 12,
+      nightCharges: 250,
+      extraWaitingCharges: 150
+    };
+  } else if (vehicleType.includes('ertiga')) {
+    return {
+      vehicleId,
+      basePrice: 3500,
+      pricePerKm: 15,
+      pickupPrice: 1000,
+      dropPrice: 1000,
+      tier1Price: 800,
+      tier2Price: 1000,
+      tier3Price: 1200,
+      tier4Price: 1400,
+      extraKmCharge: 15,
+      nightCharges: 300,
+      extraWaitingCharges: 200
+    };
+  } else if (vehicleType.includes('innova') || vehicleType.includes('crysta')) {
+    return {
+      vehicleId,
+      basePrice: 4000,
+      pricePerKm: 17,
+      pickupPrice: 1200,
+      dropPrice: 1200,
+      tier1Price: 1000,
+      tier2Price: 1200,
+      tier3Price: 1400,
+      tier4Price: 1600,
+      extraKmCharge: 17,
+      nightCharges: 350,
+      extraWaitingCharges: 250
+    };
+  } else if (vehicleType.includes('tempo')) {
+    return {
+      vehicleId,
+      basePrice: 6000,
+      pricePerKm: 19,
+      pickupPrice: 2000,
+      dropPrice: 2000,
+      tier1Price: 1600,
+      tier2Price: 1800,
+      tier3Price: 2000,
+      tier4Price: 2500,
+      extraKmCharge: 19,
+      nightCharges: 400,
+      extraWaitingCharges: 300
+    };
+  } else if (vehicleType.includes('luxury')) {
+    return {
+      vehicleId,
+      basePrice: 7000,
+      pricePerKm: 22,
+      pickupPrice: 2500,
+      dropPrice: 2500,
+      tier1Price: 2000,
+      tier2Price: 2200,
+      tier3Price: 2500,
+      tier4Price: 3000,
+      extraKmCharge: 22,
+      nightCharges: 450,
+      extraWaitingCharges: 350
+    };
+  } else {
+    // Default values for unknown vehicle types
+    return {
+      vehicleId,
+      basePrice: 3500,
+      pricePerKm: 15,
+      pickupPrice: 1000,
+      dropPrice: 1000,
+      tier1Price: 800,
+      tier2Price: 1000,
+      tier3Price: 1200,
+      tier4Price: 1400,
+      extraKmCharge: 15,
+      nightCharges: 300,
+      extraWaitingCharges: 200
+    };
+  }
+};
+
+export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareType }) => {
+  const initialFormRef = useRef<Record<string, any> | null>(null);
+  const [formValues, setFormValues] = useState<Record<string, any>>(
+    fareType === 'local' ? getDefaultLocalFares(vehicleId) : getDefaultAirportFares(vehicleId)
+  );
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isMockData, setIsMockData] = useState(false);
+
+  // Fetch fare data
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!vehicleId) {
+        setError('No vehicle ID provided');
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+      
+      try {
+        let fetchedData: any = null;
+        
+        if (fareType === 'local') {
+          try {
+            const data = await fetchLocalFares(vehicleId);
+            if (data && data.length > 0) {
+              fetchedData = data[0];
+              setIsMockData(false);
+            }
+          } catch (fetchError) {
+            console.error('Error fetching local fares:', fetchError);
+          }
+          
+          // If no data returned or error occurred, use default values
+          if (!fetchedData) {
+            console.log('Using default local fares for', vehicleId);
+            fetchedData = getDefaultLocalFares(vehicleId);
+            setIsMockData(true);
+          }
+        } else {
+          try {
+            const data = await fetchAirportFares(vehicleId);
+            if (data && data.length > 0) {
+              fetchedData = data[0];
+              setIsMockData(false);
+            }
+          } catch (fetchError) {
+            console.error('Error fetching airport fares:', fetchError);
+          }
+          
+          // If no data returned or error occurred, use default values
+          if (!fetchedData) {
+            console.log('Using default airport fares for', vehicleId);
+            fetchedData = getDefaultAirportFares(vehicleId);
+            setIsMockData(true);
+          }
+        }
+        
+        // Ensure vehicleId is set
+        fetchedData.vehicleId = vehicleId;
+        
+        // Update form values and initial form reference
+        setFormValues(fetchedData);
+        initialFormRef.current = { ...fetchedData };
+        
+        // Special handling for preview mode
+        if (isPreviewMode()) {
+          console.log('In preview mode, using default fare settings');
+          if (!fetchedData.vehicle_id) {
+            fetchedData.vehicle_id = vehicleId; // Ensure both ID formats exist
+          }
+        }
+      } catch (err) {
+        console.error(`Error fetching ${fareType} fares:`, err);
+        setError(`Failed to fetch ${fareType} fares: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        
+        // Set default values as a fallback
+        const defaultValues = fareType === 'local' 
+          ? getDefaultLocalFares(vehicleId) 
+          : getDefaultAirportFares(vehicleId);
+        
+        setFormValues(defaultValues);
+        initialFormRef.current = { ...defaultValues };
+        setIsMockData(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [vehicleId, fareType]);
+
+  // Handle form input changes
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    const numValue = parseFloat(value);
+    
+    setFormValues(prev => ({
+      ...prev,
+      [name]: !isNaN(numValue) ? numValue : value
+    }));
+  };
+
+  // Handle form submission
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!vehicleId) {
+      toast.error('Vehicle ID is required');
       return;
     }
-    
-    if (requestInProgress.current) {
-      console.log('Request already in progress, skipping...');
-      return;
-    }
-    
-    if (fetchAttempts.current >= maxFetchAttempts) {
-      console.log('Max fetch attempts reached, not trying again');
-      return;
-    }
-    
-    if (!vehicleId || vehicleId.trim() === '') {
-      setError('No vehicle selected');
-      return;
-    }
-    
-    lastRefreshTimeRef.current = now;
-    lastFetchTime.current = now;
-    requestInProgress.current = true;
-    fetchAttempts.current += 1;
-    
-    setIsLoading(true);
-    setError(null);
     
     try {
-      let result: FareData[] = [];
+      setSaving(true);
+      setError(null);
+      
+      // Ensure form values have the vehicleId
+      const submitData = {
+        ...formValues,
+        vehicleId
+      };
       
       if (fareType === 'local') {
-        result = await fetchLocalFares(vehicleId);
-      } else if (fareType === 'airport') {
-        result = await fetchAirportFares(vehicleId);
-      }
-      
-      if (result && result.length > 0) {
-        const loadedFare = result[0];
-        console.log(`Loaded ${fareType} fare data:`, loadedFare);
-        
-        const hasZeroValues = Object.entries(loadedFare).some(([key, value]) => {
-          return typeof value === 'number' && 
-                 value === 0 && 
-                 key !== 'id' && 
-                 !key.includes('_id') && 
-                 !key.includes('vehicle');
-        });
-        
-        if (hasZeroValues) {
-          const defaults = applyDefaultValues(vehicleId);
-          console.log(`Applying default values for ${vehicleId} due to zero values:`, defaults);
-          
-          const mergedFare = {
-            ...loadedFare,
-            ...Object.fromEntries(
-              Object.entries(defaults).filter(([key, value]) => {
-                return typeof value === 'number' && 
-                      (loadedFare[key] === undefined || loadedFare[key] === 0);
-              })
-            ),
-            vehicleId: vehicleId,
-            vehicle_id: vehicleId
-          };
-          
-          setFareData(mergedFare);
-        } else {
-          setFareData({
-            ...loadedFare,
-            vehicleId: vehicleId,
-            vehicle_id: vehicleId
-          });
-        }
+        await updateLocalFares(submitData);
+        toast.success('Local fares updated successfully');
       } else {
-        const defaults = applyDefaultValues(vehicleId);
-        console.log(`No fare data found. Using defaults for ${vehicleId}:`, defaults);
-        setFareData(defaults);
+        await updateAirportFares(submitData);
+        toast.success('Airport fares updated successfully');
       }
-    } catch (err) {
-      console.error(`Error loading ${fareType} fare data:`, err);
-      setError(`Failed to load fare data: ${err instanceof Error ? err.message : 'Unknown error'}`);
       
-      const defaults = applyDefaultValues(vehicleId);
-      console.log(`Using defaults due to error for ${vehicleId}:`, defaults);
-      setFareData(defaults);
+      // Update initial form values reference to detect changes
+      initialFormRef.current = { ...submitData };
+    } catch (err) {
+      console.error(`Error updating ${fareType} fares:`, err);
+      setError(`Failed to update ${fareType} fares: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      toast.error(`Failed to update ${fareType} fares: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
-      setIsLoading(false);
-      requestInProgress.current = false;
+      setSaving(false);
     }
   };
   
-  const syncFares = async () => {
-    if (isSyncingFares) return;
-    
-    setIsSyncingFares(true);
-    setError(null);
-    
+  // Handle sync tables
+  const handleSyncTables = async () => {
     try {
-      console.log(`Syncing ${fareType} fares...`);
+      setSyncing(true);
+      setError(null);
       
       if (fareType === 'local') {
         await syncLocalFares();
-        toast.success('Local fares synced successfully');
-      } else if (fareType === 'airport') {
+        toast.success('Local fares tables synced successfully');
+      } else {
         await syncAirportFares();
-        toast.success('Airport fares synced successfully');
+        toast.success('Airport fares tables synced successfully');
       }
       
-      setTimeout(() => {
-        loadFareData();
-      }, 1000);
-    } catch (err) {
-      console.error(`Error syncing ${fareType} fares:`, err);
-      setError(`Failed to sync fares: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      toast.error(`Failed to sync ${fareType} fares`);
-    } finally {
-      setIsSyncingFares(false);
-    }
-  };
-  
-  const saveFareData = async () => {
-    const now = Date.now();
-    if (now - lastSaveTimeRef.current < saveCooldownMs) {
-      console.log(`Save throttled, last save was ${(now - lastSaveTimeRef.current)/1000}s ago`);
-      return;
-    }
-    
-    if (isSaving) {
-      console.log('Already saving, please wait...');
-      return;
-    }
-    
-    if (!vehicleId || vehicleId.trim() === '') {
-      setError('No vehicle selected');
-      return;
-    }
-    
-    const dataWithDefaults = { ...fareData };
-    const defaults = applyDefaultValues(vehicleId);
-    
-    Object.entries(dataWithDefaults).forEach(([key, value]) => {
-      if (typeof value === 'number' && 
-          value === 0 && 
-          key !== 'id' && 
-          !key.includes('_id') && 
-          !key.includes('vehicle') &&
-          defaults[key]) {
-        dataWithDefaults[key] = defaults[key];
-      }
-    });
-    
-    lastSaveTimeRef.current = now;
-    setIsSaving(true);
-    setError(null);
-    
-    try {
-      console.log(`Saving ${fareType} fare data:`, dataWithDefaults);
-      
+      // Refresh data after sync
       if (fareType === 'local') {
-        await updateLocalFares(dataWithDefaults);
-      } else if (fareType === 'airport') {
-        await updateAirportFares(dataWithDefaults);
+        const data = await fetchLocalFares(vehicleId);
+        if (data && data.length > 0) {
+          setFormValues(data[0]);
+          initialFormRef.current = { ...data[0] };
+          setIsMockData(false);
+        }
+      } else {
+        const data = await fetchAirportFares(vehicleId);
+        if (data && data.length > 0) {
+          setFormValues(data[0]);
+          initialFormRef.current = { ...data[0] };
+          setIsMockData(false);
+        }
       }
-      
-      toast.success(`${fareType} fares updated successfully`);
-      
-      setTimeout(() => {
-        loadFareData();
-      }, 1000);
     } catch (err) {
-      console.error(`Error saving ${fareType} fare data:`, err);
-      setError(`Failed to save fare data: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      toast.error(`Failed to update ${fareType} fares`);
+      console.error(`Error syncing ${fareType} fares tables:`, err);
+      setError(`Failed to sync ${fareType} fares tables: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      toast.error(`Failed to sync ${fareType} fares tables`);
     } finally {
-      setIsSaving(false);
+      setSyncing(false);
     }
   };
-  
-  const handleInputChange = (field: string, value: string) => {
-    const numericValue = value === '' ? 0 : parseFloat(value);
+
+  // Detect form has unsaved changes
+  const hasChanges = () => {
+    if (!initialFormRef.current) return false;
     
-    setFareData(prev => ({
-      ...prev,
-      [field]: numericValue,
-    }));
-  };
-  
-  useEffect(() => {
-    mountedRef.current = true;
-    fetchAttempts.current = 0;
-    loadFareData();
-    
-    return () => {
-      mountedRef.current = false;
-    };
-  }, [vehicleId, fareType]);
-  
-  useEffect(() => {
-    const handleFareUpdate = (event: CustomEvent) => {
+    for (const key in formValues) {
       if (
-        event.detail?.fareType === fareType && 
-        event.detail?.vehicleId === vehicleId &&
-        mountedRef.current
+        formValues[key] !== initialFormRef.current[key] && 
+        key !== 'updatedAt' && 
+        key !== 'createdAt'
       ) {
-        console.log('Detected fare update event, reloading data...');
-        setTimeout(() => {
-          loadFareData();
-        }, 1000);
+        return true;
       }
-    };
-    
-    window.addEventListener('fare-data-updated', handleFareUpdate as EventListener);
-    
-    return () => {
-      window.removeEventListener('fare-data-updated', handleFareUpdate as EventListener);
-    };
-  }, [fareType, vehicleId]);
-  
-  const renderFareInputs = () => {
-    if (fareType === 'local') {
-      return (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="price4hrs40km">4 Hours / 40 KM Package (₹)</Label>
-              <Input
-                id="price4hrs40km"
-                type="number"
-                value={fareData.price4hrs40km || 0}
-                onChange={(e) => handleInputChange('price4hrs40km', e.target.value)}
-                placeholder="e.g. 1800"
-              />
-            </div>
-            <div>
-              <Label htmlFor="price8hrs80km">8 Hours / 80 KM Package (₹)</Label>
-              <Input
-                id="price8hrs80km"
-                type="number"
-                value={fareData.price8hrs80km || 0}
-                onChange={(e) => handleInputChange('price8hrs80km', e.target.value)}
-                placeholder="e.g. 3000"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="price10hrs100km">10 Hours / 100 KM Package (₹)</Label>
-              <Input
-                id="price10hrs100km"
-                type="number"
-                value={fareData.price10hrs100km || 0}
-                onChange={(e) => handleInputChange('price10hrs100km', e.target.value)}
-                placeholder="e.g. 3600"
-              />
-            </div>
-            <div>
-              <Label htmlFor="priceExtraKm">Extra KM Charge (₹)</Label>
-              <Input
-                id="priceExtraKm"
-                type="number"
-                value={fareData.priceExtraKm || 0}
-                onChange={(e) => handleInputChange('priceExtraKm', e.target.value)}
-                placeholder="e.g. 12"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="priceExtraHour">Extra Hour Charge (₹)</Label>
-              <Input
-                id="priceExtraHour"
-                type="number"
-                value={fareData.priceExtraHour || 0}
-                onChange={(e) => handleInputChange('priceExtraHour', e.target.value)}
-                placeholder="e.g. 200"
-              />
-            </div>
-          </div>
-        </>
-      );
-    } else if (fareType === 'airport') {
-      return (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="basePrice">Base Price (₹)</Label>
-              <Input
-                id="basePrice"
-                type="number"
-                value={fareData.basePrice || 0}
-                onChange={(e) => handleInputChange('basePrice', e.target.value)}
-                placeholder="e.g. 3000"
-              />
-            </div>
-            <div>
-              <Label htmlFor="pricePerKm">Price Per KM (₹)</Label>
-              <Input
-                id="pricePerKm"
-                type="number"
-                value={fareData.pricePerKm || 0}
-                onChange={(e) => handleInputChange('pricePerKm', e.target.value)}
-                placeholder="e.g. 15"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="pickupPrice">Pickup Price (₹)</Label>
-              <Input
-                id="pickupPrice"
-                type="number"
-                value={fareData.pickupPrice || 0}
-                onChange={(e) => handleInputChange('pickupPrice', e.target.value)}
-                placeholder="e.g. 1000"
-              />
-            </div>
-            <div>
-              <Label htmlFor="dropPrice">Drop Price (₹)</Label>
-              <Input
-                id="dropPrice"
-                type="number"
-                value={fareData.dropPrice || 0}
-                onChange={(e) => handleInputChange('dropPrice', e.target.value)}
-                placeholder="e.g. 1000"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="tier1Price">Tier 1 Price (₹)</Label>
-              <Input
-                id="tier1Price"
-                type="number"
-                value={fareData.tier1Price || 0}
-                onChange={(e) => handleInputChange('tier1Price', e.target.value)}
-                placeholder="e.g. 800"
-              />
-            </div>
-            <div>
-              <Label htmlFor="tier2Price">Tier 2 Price (₹)</Label>
-              <Input
-                id="tier2Price"
-                type="number"
-                value={fareData.tier2Price || 0}
-                onChange={(e) => handleInputChange('tier2Price', e.target.value)}
-                placeholder="e.g. 1000"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="tier3Price">Tier 3 Price (₹)</Label>
-              <Input
-                id="tier3Price"
-                type="number"
-                value={fareData.tier3Price || 0}
-                onChange={(e) => handleInputChange('tier3Price', e.target.value)}
-                placeholder="e.g. 1200"
-              />
-            </div>
-            <div>
-              <Label htmlFor="tier4Price">Tier 4 Price (₹)</Label>
-              <Input
-                id="tier4Price"
-                type="number"
-                value={fareData.tier4Price || 0}
-                onChange={(e) => handleInputChange('tier4Price', e.target.value)}
-                placeholder="e.g. 1400"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="extraKmCharge">Extra KM Charge (₹)</Label>
-              <Input
-                id="extraKmCharge"
-                type="number"
-                value={fareData.extraKmCharge || 0}
-                onChange={(e) => handleInputChange('extraKmCharge', e.target.value)}
-                placeholder="e.g. 15"
-              />
-            </div>
-            <div>
-              <Label htmlFor="nightCharges">Night Charges (₹)</Label>
-              <Input
-                id="nightCharges"
-                type="number"
-                value={fareData.nightCharges || 0}
-                onChange={(e) => handleInputChange('nightCharges', e.target.value)}
-                placeholder="e.g. 300"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="extraWaitingCharges">Extra Waiting Charges (₹)</Label>
-              <Input
-                id="extraWaitingCharges"
-                type="number"
-                value={fareData.extraWaitingCharges || 0}
-                onChange={(e) => handleInputChange('extraWaitingCharges', e.target.value)}
-                placeholder="e.g. 200"
-              />
-            </div>
-          </div>
-        </>
-      );
     }
     
-    return null;
+    return false;
   };
-  
+
   return (
-    <Card className="w-full">
-      <CardContent className="pt-6">
-        {error && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Error</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-        
-        {isLoading ? (
-          <div className="flex justify-center items-center py-8">
-            <Spinner size="lg" />
-            <span className="ml-2">Loading fare data...</span>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {renderFareInputs()}
-          </div>
-        )}
-      </CardContent>
-      <CardFooter className="border-t px-6 py-4 flex flex-wrap gap-2 justify-between">
-        <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            onClick={loadFareData}
-            disabled={isLoading || isSaving}
-          >
-            <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
+    <Card>
+      <form onSubmit={handleSubmit}>
+        <CardContent className="space-y-6 pt-6">
+          {error && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
           
+          {isMockData && (
+            <Alert variant="warning" className="mb-4 bg-yellow-50 border-yellow-200">
+              <AlertCircle className="h-4 w-4 text-yellow-600" />
+              <AlertDescription className="text-yellow-700">
+                Using default values. Data hasn't been saved to the database yet.
+              </AlertDescription>
+            </Alert>
+          )}
+          
+          {loading ? (
+            <div className="flex justify-center items-center py-10">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <span className="ml-2">Loading fare data...</span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {fareType === 'local' ? (
+                // Local fare fields
+                <>
+                  <div>
+                    <Label htmlFor="price4hrs40km">4 Hours, 40 KM Package (₹)</Label>
+                    <Input
+                      id="price4hrs40km"
+                      name="price4hrs40km"
+                      type="number"
+                      value={formValues.price4hrs40km || ''}
+                      onChange={handleInputChange}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="price8hrs80km">8 Hours, 80 KM Package (₹)</Label>
+                    <Input
+                      id="price8hrs80km"
+                      name="price8hrs80km"
+                      type="number"
+                      value={formValues.price8hrs80km || ''}
+                      onChange={handleInputChange}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="price10hrs100km">10 Hours, 100 KM Package (₹)</Label>
+                    <Input
+                      id="price10hrs100km"
+                      name="price10hrs100km"
+                      type="number"
+                      value={formValues.price10hrs100km || ''}
+                      onChange={handleInputChange}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="priceExtraKm">Extra KM Charge (₹)</Label>
+                    <Input
+                      id="priceExtraKm"
+                      name="priceExtraKm"
+                      type="number"
+                      value={formValues.priceExtraKm || ''}
+                      onChange={handleInputChange}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="priceExtraHour">Extra Hour Charge (₹)</Label>
+                    <Input
+                      id="priceExtraHour"
+                      name="priceExtraHour"
+                      type="number"
+                      value={formValues.priceExtraHour || ''}
+                      onChange={handleInputChange}
+                      className="mt-1"
+                    />
+                  </div>
+                </>
+              ) : (
+                // Airport fare fields
+                <>
+                  <div>
+                    <Label htmlFor="basePrice">Base Price (₹)</Label>
+                    <Input
+                      id="basePrice"
+                      name="basePrice"
+                      type="number"
+                      value={formValues.basePrice || ''}
+                      onChange={handleInputChange}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="pricePerKm">Price per KM (₹)</Label>
+                    <Input
+                      id="pricePerKm"
+                      name="pricePerKm"
+                      type="number"
+                      value={formValues.pricePerKm || ''}
+                      onChange={handleInputChange}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="pickupPrice">Pickup Price (₹)</Label>
+                    <Input
+                      id="pickupPrice"
+                      name="pickupPrice"
+                      type="number"
+                      value={formValues.pickupPrice || ''}
+                      onChange={handleInputChange}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="dropPrice">Drop Price (₹)</Label>
+                    <Input
+                      id="dropPrice"
+                      name="dropPrice"
+                      type="number"
+                      value={formValues.dropPrice || ''}
+                      onChange={handleInputChange}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="tier1Price">Tier 1 Price (₹)</Label>
+                    <Input
+                      id="tier1Price"
+                      name="tier1Price"
+                      type="number"
+                      value={formValues.tier1Price || ''}
+                      onChange={handleInputChange}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="tier2Price">Tier 2 Price (₹)</Label>
+                    <Input
+                      id="tier2Price"
+                      name="tier2Price"
+                      type="number"
+                      value={formValues.tier2Price || ''}
+                      onChange={handleInputChange}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="tier3Price">Tier 3 Price (₹)</Label>
+                    <Input
+                      id="tier3Price"
+                      name="tier3Price"
+                      type="number"
+                      value={formValues.tier3Price || ''}
+                      onChange={handleInputChange}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="tier4Price">Tier 4 Price (₹)</Label>
+                    <Input
+                      id="tier4Price"
+                      name="tier4Price"
+                      type="number"
+                      value={formValues.tier4Price || ''}
+                      onChange={handleInputChange}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="extraKmCharge">Extra KM Charge (₹)</Label>
+                    <Input
+                      id="extraKmCharge"
+                      name="extraKmCharge"
+                      type="number"
+                      value={formValues.extraKmCharge || ''}
+                      onChange={handleInputChange}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="nightCharges">Night Charges (₹)</Label>
+                    <Input
+                      id="nightCharges"
+                      name="nightCharges"
+                      type="number"
+                      value={formValues.nightCharges || ''}
+                      onChange={handleInputChange}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="extraWaitingCharges">Extra Waiting Charges (₹)</Label>
+                    <Input
+                      id="extraWaitingCharges"
+                      name="extraWaitingCharges"
+                      type="number"
+                      value={formValues.extraWaitingCharges || ''}
+                      onChange={handleInputChange}
+                      className="mt-1"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </CardContent>
+        <CardFooter className="flex flex-col sm:flex-row justify-between space-y-2 sm:space-y-0 sm:space-x-2">
           <Button 
+            type="button" 
             variant="outline" 
-            onClick={syncFares}
-            disabled={isLoading || isSaving || isSyncingFares}
+            onClick={handleSyncTables}
+            disabled={syncing || loading || saving}
           >
-            <Database className={`mr-2 h-4 w-4 ${isSyncingFares ? 'animate-spin' : ''}`} />
-            Sync Tables
+            {syncing ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Syncing...
+              </>
+            ) : (
+              <>
+                <RotateCw className="h-4 w-4 mr-2" />
+                Sync Tables
+              </>
+            )}
           </Button>
-        </div>
-        
-        <Button 
-          variant="default" 
-          onClick={saveFareData}
-          disabled={isLoading || isSaving}
-        >
-          <Save className="mr-2 h-4 w-4" />
-          {isSaving ? 'Saving...' : `Save ${fareType === 'local' ? 'Local' : 'Airport'} Fare`}
-        </Button>
-      </CardFooter>
+          <Button 
+            type="submit" 
+            disabled={saving || loading || syncing || !hasChanges()}
+          >
+            {saving ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4 mr-2" />
+                Save Changes
+              </>
+            )}
+          </Button>
+        </CardFooter>
+      </form>
     </Card>
   );
 };

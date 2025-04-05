@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -13,8 +14,114 @@ import { Booking, BookingStatus, DashboardMetrics as DashboardMetricsType } from
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { DashboardMetrics } from '@/components/admin/DashboardMetrics';
 import { ApiErrorFallback } from "@/components/ApiErrorFallback";
+import { isPreviewMode } from '@/utils/apiHelper';
 
 const MAX_RETRIES = 3;
+
+// Mock bookings for preview mode
+const MOCK_BOOKINGS: Booking[] = [
+  {
+    id: 101,
+    userId: 1,
+    bookingNumber: 'BK12345',
+    pickupLocation: 'Mumbai Airport',
+    dropLocation: 'Hotel Taj, Colaba',
+    pickupDate: '2025-04-10T10:00:00',
+    returnDate: null,
+    cabType: 'Sedan',
+    distance: 25,
+    tripType: 'airport',
+    tripMode: 'one-way',
+    totalAmount: 1500,
+    status: 'confirmed',
+    passengerName: 'John Doe',
+    passengerPhone: '+911234567890',
+    passengerEmail: 'john@example.com',
+    driverName: 'Rajesh Kumar',
+    driverPhone: '+919876543210',
+    createdAt: '2025-04-01T08:30:00',
+    updatedAt: '2025-04-01T09:15:00'
+  },
+  {
+    id: 102,
+    userId: 1,
+    bookingNumber: 'BK12346',
+    pickupLocation: 'Hotel Oberoi, Nariman Point',
+    dropLocation: 'Mumbai Airport',
+    pickupDate: '2025-04-12T14:00:00',
+    returnDate: null,
+    cabType: 'SUV',
+    distance: 28,
+    tripType: 'airport',
+    tripMode: 'one-way',
+    totalAmount: 1800,
+    status: 'pending',
+    passengerName: 'John Doe',
+    passengerPhone: '+911234567890',
+    passengerEmail: 'john@example.com',
+    driverName: null,
+    driverPhone: null,
+    createdAt: '2025-04-02T10:15:00',
+    updatedAt: '2025-04-02T10:15:00'
+  },
+  {
+    id: 103,
+    userId: 1,
+    bookingNumber: 'BK12347',
+    pickupLocation: 'Hotel Taj, Colaba',
+    dropLocation: 'Pune',
+    pickupDate: '2025-03-25T09:00:00',
+    returnDate: '2025-03-26T18:00:00',
+    cabType: 'Tempo Traveller',
+    distance: 150,
+    tripType: 'outstation',
+    tripMode: 'round-trip',
+    totalAmount: 8500,
+    status: 'completed',
+    passengerName: 'John Doe Family Trip',
+    passengerPhone: '+911234567890',
+    passengerEmail: 'john@example.com',
+    driverName: 'Santosh Sharma',
+    driverPhone: '+919988776655',
+    createdAt: '2025-03-20T11:30:00',
+    updatedAt: '2025-03-27T19:15:00'
+  },
+  {
+    id: 104,
+    userId: 1,
+    bookingNumber: 'BK12348',
+    pickupLocation: 'Office, BKC',
+    dropLocation: null,
+    pickupDate: '2025-03-15T10:00:00',
+    returnDate: '2025-03-15T18:00:00',
+    cabType: 'Sedan',
+    distance: 40,
+    tripType: 'local',
+    tripMode: 'rental',
+    totalAmount: 2500,
+    status: 'cancelled',
+    passengerName: 'John Doe',
+    passengerPhone: '+911234567890',
+    passengerEmail: 'john@example.com',
+    driverName: null,
+    driverPhone: null,
+    createdAt: '2025-03-14T09:30:00',
+    updatedAt: '2025-03-14T12:15:00'
+  }
+];
+
+// Mock metrics for preview mode
+const MOCK_METRICS: DashboardMetricsType = {
+  totalBookings: 48,
+  activeRides: 5,
+  totalRevenue: 125000,
+  availableDrivers: 12,
+  busyDrivers: 18,
+  avgRating: 4.7,
+  upcomingRides: 15,
+  availableStatuses: ['pending', 'confirmed', 'completed', 'cancelled'],
+  currentFilter: 'all'
+};
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -29,27 +136,54 @@ export default function DashboardPage() {
   const [adminMetrics, setAdminMetrics] = useState<DashboardMetricsType | null>(null);
   const [isLoadingAdminMetrics, setIsLoadingAdminMetrics] = useState(false);
   const [adminMetricsError, setAdminMetricsError] = useState<Error | null>(null);
+  const [usingMockData, setUsingMockData] = useState(false);
 
   // Check if user is logged in and get user data
   useEffect(() => {
     const checkAuth = async () => {
-      if (!authAPI.isAuthenticated()) {
+      if (!authAPI.isAuthenticated() && !isPreviewMode()) {
         navigate('/login', { state: { from: location.pathname } });
         return;
       }
 
       try {
-        const userData = authAPI.getCurrentUser();
+        let userData = authAPI.getCurrentUser();
+        
+        // Use mock user data in preview mode
+        if (!userData && isPreviewMode()) {
+          console.log('Using mock user data in preview mode');
+          userData = {
+            id: 1,
+            name: 'Demo User',
+            email: 'demo@example.com',
+            role: 'admin' // Set as admin in preview mode for testing
+          };
+          setUsingMockData(true);
+        }
+        
         if (userData) {
           setUser(userData);
           setIsAdmin(userData.role === 'admin');
-        } else {
+        } else if (!isPreviewMode()) {
           throw new Error('User data not found');
         }
       } catch (error) {
         console.error('Error getting user data:', error);
-        // Don't redirect here, just show an error message
-        toast.error('Error loading user data. Please try logging in again.');
+        
+        if (isPreviewMode()) {
+          // Use mock data in preview mode
+          setUser({
+            id: 1,
+            name: 'Demo User',
+            email: 'demo@example.com',
+            role: 'admin'
+          });
+          setIsAdmin(true);
+          setUsingMockData(true);
+        } else {
+          // Don't redirect, just show an error message
+          toast.error('Error loading user data. Please try logging in again.');
+        }
       }
     };
 
@@ -58,7 +192,7 @@ export default function DashboardPage() {
 
   // Fetch bookings data
   const fetchBookings = useCallback(async () => {
-    if (!authAPI.isAuthenticated()) {
+    if (!authAPI.isAuthenticated() && !isPreviewMode()) {
       navigate('/login');
       return;
     }
@@ -66,26 +200,45 @@ export default function DashboardPage() {
     try {
       setIsRefreshing(true);
       setError(null);
-      const data = await bookingAPI.getUserBookings();
-      setBookings(data);
-      setRetryCount(0); // Reset retry count on success
+      
+      if (isPreviewMode()) {
+        // Use mock data in preview mode
+        console.log('Using mock booking data in preview mode');
+        setBookings(MOCK_BOOKINGS);
+        setUsingMockData(true);
+        setRetryCount(0);
+      } else {
+        const data = await bookingAPI.getUserBookings();
+        setBookings(data);
+        setUsingMockData(false);
+        setRetryCount(0); // Reset retry count on success
+      }
     } catch (error) {
       console.error('Error fetching bookings:', error);
-      setError(error instanceof Error ? error : new Error('Failed to fetch bookings'));
       
-      // Only show toast on first error
-      if (retryCount === 0) {
-        toast.error('Error loading bookings. Retrying...');
-      }
-      
-      // Increment retry count
-      setRetryCount(prev => prev + 1);
-      
-      // Auto-retry if under max retries
-      if (retryCount < MAX_RETRIES) {
-        setTimeout(() => {
-          fetchBookings();
-        }, 3000); // Wait 3 seconds before retrying
+      if (isPreviewMode()) {
+        // Use mock data in preview mode
+        console.log('Using mock booking data in preview mode due to error');
+        setBookings(MOCK_BOOKINGS);
+        setUsingMockData(true);
+        setRetryCount(0);
+      } else {
+        setError(error instanceof Error ? error : new Error('Failed to fetch bookings'));
+        
+        // Only show toast on first error
+        if (retryCount === 0) {
+          toast.error('Error loading bookings. Retrying...');
+        }
+        
+        // Increment retry count
+        setRetryCount(prev => prev + 1);
+        
+        // Auto-retry if under max retries
+        if (retryCount < MAX_RETRIES) {
+          setTimeout(() => {
+            fetchBookings();
+          }, 3000); // Wait 3 seconds before retrying
+        }
       }
     } finally {
       setIsLoading(false);
@@ -95,16 +248,33 @@ export default function DashboardPage() {
 
   // Fetch admin metrics if user is admin
   const fetchAdminMetrics = useCallback(async () => {
-    if (!isAdmin) return;
+    if (!isAdmin && !isPreviewMode()) return;
     
     try {
       setIsLoadingAdminMetrics(true);
       setAdminMetricsError(null);
-      const data = await bookingAPI.getAdminDashboardMetrics('week');
-      setAdminMetrics(data);
+      
+      if (isPreviewMode()) {
+        // Use mock data in preview mode
+        console.log('Using mock metrics data in preview mode');
+        setAdminMetrics(MOCK_METRICS);
+        setUsingMockData(true);
+      } else {
+        const data = await bookingAPI.getAdminDashboardMetrics('week');
+        setAdminMetrics(data);
+        setUsingMockData(false);
+      }
     } catch (error) {
       console.error('Error fetching admin metrics:', error);
-      setAdminMetricsError(error instanceof Error ? error : new Error('Failed to fetch admin metrics'));
+      
+      if (isPreviewMode()) {
+        // Use mock data in preview mode
+        console.log('Using mock metrics data in preview mode due to error');
+        setAdminMetrics(MOCK_METRICS);
+        setUsingMockData(true);
+      } else {
+        setAdminMetricsError(error instanceof Error ? error : new Error('Failed to fetch admin metrics'));
+      }
     } finally {
       setIsLoadingAdminMetrics(false);
     }
@@ -117,7 +287,7 @@ export default function DashboardPage() {
 
   // Fetch admin metrics if user is admin
   useEffect(() => {
-    if (isAdmin) {
+    if (isAdmin || isPreviewMode()) {
       fetchAdminMetrics();
     }
   }, [isAdmin, fetchAdminMetrics]);
@@ -184,7 +354,7 @@ export default function DashboardPage() {
   }
 
   // If error occurred and max retries exceeded
-  if (error && retryCount >= MAX_RETRIES) {
+  if (error && retryCount >= MAX_RETRIES && !isPreviewMode()) {
     return (
       <ApiErrorFallback 
         error={error} 
@@ -197,6 +367,15 @@ export default function DashboardPage() {
 
   return (
     <div className="container mx-auto py-10 px-4">
+      {usingMockData && (
+        <Alert className="mb-4 bg-blue-50 border-blue-200">
+          <Info className="h-4 w-4 text-blue-600" />
+          <AlertDescription className="text-blue-700">
+            Using demo data for preview purposes. In production, real data from the database will be displayed.
+          </AlertDescription>
+        </Alert>
+      )}
+      
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-bold">Dashboard</h1>

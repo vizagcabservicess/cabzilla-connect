@@ -1,583 +1,323 @@
-import { toast } from 'sonner';
-import { apiBaseUrl, forceRefreshHeaders, getApiUrl } from '@/config/api';
+import axios, { AxiosRequestConfig } from 'axios';
+
+// Debug mode and preview mode flags
+const DEBUG = true;
+const IS_PREVIEW_MODE = window.location.href.includes('preview') || window.location.href.includes('localhost');
 
 /**
- * Database connection check response type
- */
-export interface DatabaseConnectionResponse {
-  status: 'success' | 'error';
-  connection: boolean;
-  message?: string;
-  version?: string;
-  timestamp: number;
-}
-
-/**
- * Check database connection directly
- * @returns Promise<DatabaseConnectionResponse> - Connection check result
- */
-export const checkDatabaseConnection = async (): Promise<DatabaseConnectionResponse> => {
-  try {
-    // Create a proper URL using the getApiUrl helper
-    const endpoint = 'api/direct-check-connection.php';
-    const url = getApiUrl(`${endpoint}?_t=${Date.now()}`);
-    
-    console.log('Checking database connection at:', url);
-    
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        ...forceRefreshHeaders,
-        'X-Admin-Mode': 'true'
-      }
-    });
-    
-    // Check if the response is HTML instead of JSON
-    const contentType = response.headers.get('content-type') || '';
-    const text = await response.text();
-    
-    if (contentType.includes('text/html') || text.includes('<!DOCTYPE html>') || text.includes('<html')) {
-      console.error('Received HTML response instead of JSON:', text.substring(0, 200));
-      
-      // In Lovable preview environment, return a mock success response
-      if (isPreviewMode()) {
-        console.log('Preview mode detected, returning mock success response');
-        return {
-          status: 'success',
-          connection: true,
-          message: 'Mock connection successful (preview mode)',
-          version: 'Preview',
-          timestamp: Date.now()
-        };
-      }
-      
-      return {
-        status: 'error',
-        connection: false,
-        message: 'Received HTML response instead of JSON. The API endpoint is not configured correctly.',
-        timestamp: Date.now()
-      };
-    }
-    
-    try {
-      // Try to parse the response as JSON
-      const data = JSON.parse(text);
-      return data;
-    } catch (jsonError) {
-      console.error('Failed to parse JSON response:', jsonError);
-      
-      // In Lovable preview environment, return a mock success response
-      if (isPreviewMode()) {
-        console.log('Preview mode detected, returning mock success response after JSON parse error');
-        return {
-          status: 'success',
-          connection: true,
-          message: 'Mock connection successful (preview mode)',
-          version: 'Preview',
-          timestamp: Date.now()
-        };
-      }
-      
-      return {
-        status: 'error',
-        connection: false,
-        message: `Failed to parse JSON response: ${text.substring(0, 100)}...`,
-        timestamp: Date.now()
-      };
-    }
-  } catch (error) {
-    console.error('Error checking database connection:', error);
-    
-    // In Lovable preview environment, return a mock success response
-    if (isPreviewMode()) {
-      console.log('Preview mode detected, returning mock success response after fetch error');
-      return {
-        status: 'success',
-        connection: true,
-        message: 'Mock connection successful (preview mode)',
-        version: 'Preview',
-        timestamp: Date.now()
-      };
-    }
-    
-    return {
-      status: 'error',
-      connection: false,
-      message: error instanceof Error ? error.message : 'Unknown error occurred',
-      timestamp: Date.now()
-    };
-  }
-};
-
-/**
- * Fix database tables and structure
- * @returns Promise<boolean> - true if fix was successful
- */
-export const fixDatabaseTables = async () => {
-  try {
-    console.log('Attempting to fix database tables...');
-    
-    // First check database connection
-    const connectionCheck = await checkDatabaseConnection();
-    if (!connectionCheck.connection) {
-      console.error('Database connection check failed before attempting to fix tables');
-      toast.error('Database connection check failed');
-      
-      // In preview mode, we'll return success anyway
-      if (isPreviewMode()) {
-        console.log('Preview mode detected, returning mock success for database fix');
-        toast.success('Database fixed successfully (preview mode)');
-        return true;
-      }
-      
-      return false;
-    }
-    
-    // Use the proper URL formatting
-    const endpoint = 'api/admin/fix-database.php';
-    const url = getApiUrl(`${endpoint}?_t=${Date.now()}`);
-    
-    console.log('Fixing database tables at:', url);
-    
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        ...forceRefreshHeaders,
-        'X-Admin-Mode': 'true'
-      }
-    });
-    
-    // Check for HTML response
-    const contentType = response.headers.get('content-type') || '';
-    const text = await response.text();
-    
-    if (contentType.includes('text/html') || text.includes('<!DOCTYPE html>') || text.includes('<html')) {
-      console.error('Received HTML response instead of JSON:', text.substring(0, 200));
-      
-      // In preview mode, we'll return success anyway
-      if (isPreviewMode()) {
-        console.log('Preview mode detected, returning mock success for database fix despite HTML response');
-        toast.success('Database fixed successfully (preview mode)');
-        return true;
-      }
-      
-      toast.error('Received HTML response instead of JSON. The API endpoint is not configured correctly.');
-      return false;
-    }
-    
-    try {
-      const data = JSON.parse(text);
-      return data.status === 'success';
-    } catch (jsonError) {
-      console.error('Failed to parse JSON response:', jsonError, 'Raw text:', text);
-      
-      // In preview mode, we'll return success anyway
-      if (isPreviewMode()) {
-        console.log('Preview mode detected, returning mock success for database fix despite JSON parse error');
-        toast.success('Database fixed successfully (preview mode)');
-        return true;
-      }
-      
-      toast.error(`Failed to parse JSON response: ${text.substring(0, 100)}...`);
-      return false;
-    }
-  } catch (error) {
-    console.error('Error fixing database tables:', error);
-    
-    // In preview mode, we'll return success anyway
-    if (isPreviewMode()) {
-      console.log('Preview mode detected, returning mock success for database fix despite error');
-      toast.success('Database fixed successfully (preview mode)');
-      return true;
-    }
-    
-    toast.error('Error fixing database: ' + (error instanceof Error ? error.message : 'Unknown error'));
-    return false;
-  }
-};
-
-/**
- * Determine if the app is running in preview mode
- * @returns boolean - true if in preview mode
+ * Function to check if we're in preview mode
  */
 export const isPreviewMode = () => {
-  return window.location.hostname.includes('lovableproject.com') || 
-    window.location.hostname.includes('localhost') ||
-    window.location.hostname.includes('127.0.0.1');
+  return IS_PREVIEW_MODE;
 };
 
 /**
- * Normalize URL for API requests
- * @param endpoint - API endpoint path
- * @returns Properly formatted URL
+ * Directly call a vehicle operation API endpoint
+ * @param endpoint The API endpoint to call
+ * @param method HTTP method to use (GET, POST, PUT, DELETE)
+ * @param options Additional request options (headers, data, etc.)
+ * @returns Promise that resolves with the API response
  */
-const normalizeUrl = (endpoint: string): string => {
-  // If endpoint is already a full URL, return it
-  if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
-    return endpoint;
-  }
-  
-  // Make sure endpoint starts with a slash if needed
-  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  
-  // If apiBaseUrl is empty, use relative path
-  if (!apiBaseUrl) {
-    return cleanEndpoint;
-  }
-  
-  // Ensure there's no double slash when joining base and endpoint
-  return `${apiBaseUrl.endsWith('/') ? apiBaseUrl.slice(0, -1) : apiBaseUrl}${cleanEndpoint}`;
-};
-
-/**
- * Force a refresh of vehicle data from database first, then persistent storage
- * @returns Promise<boolean> - true if refresh was successful
- */
-export const forceRefreshVehicles = async () => {
-  try {
-    // Create descriptive log message for debugging
-    console.log('Starting vehicle refresh from database...');
-    
-    // Use the getApiUrl helper for proper URL formatting with timestamp to prevent caching
-    const endpoint = 'api/admin/reload-vehicles.php';
-    const url = getApiUrl(`${endpoint}?_t=${Date.now()}`);
-    console.log('Refresh URL:', url);
-    
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        ...forceRefreshHeaders,
-        'X-Admin-Mode': 'true',
-        'X-Database-First': 'true' // Signal to prioritize database
-      },
-      // This helps ensure we're not getting cached responses
-      cache: 'no-store'
-    });
-    
-    // Check for HTML response
-    const contentType = response.headers.get('content-type') || '';
-    const text = await response.text();
-    
-    if (contentType.includes('text/html') || text.includes('<!DOCTYPE html>') || text.includes('<html')) {
-      console.error('Received HTML response instead of JSON:', text.substring(0, 200));
-      
-      // Try alternative endpoint if primary fails
-      console.log('Trying alternative refresh endpoint...');
-      const altEndpoint = 'api/admin/direct-vehicle-modify.php';
-      const altUrl = getApiUrl(`${altEndpoint}?action=load&_t=${Date.now()}`);
-      console.log('Alternative URL:', altUrl);
-      
-      const altResponse = await fetch(altUrl, {
-        method: 'GET',
-        headers: {
-          ...forceRefreshHeaders,
-          'X-Admin-Mode': 'true',
-          'X-Database-First': 'true' // Signal to prioritize database
-        },
-        cache: 'no-store'
-      });
-      
-      const altText = await altResponse.text();
-      if (altText.includes('<!DOCTYPE html>') || altText.includes('<html')) {
-        console.error('Alternative refresh also failed - received HTML:', altText.substring(0, 200));
-        return false;
-      }
-      
-      try {
-        const altData = JSON.parse(altText);
-        console.log('Alternative refresh response:', altData);
-        return altData.status === 'success';
-      } catch (jsonError) {
-        console.error('Failed to parse JSON from alternative endpoint:', jsonError);
-        return false;
-      }
-    }
-    
-    try {
-      const data = JSON.parse(text);
-      console.log('Force refresh response:', data);
-      return data.status === 'success';
-    } catch (jsonError) {
-      console.error('Failed to parse JSON response:', jsonError);
-      return false;
-    }
-  } catch (error) {
-    console.error('Error forcing refresh of vehicles:', error);
-    return false;
-  }
-};
-
-/**
- * Format data for multipart form submission
- * @param data Object to format as FormData
- * @returns FormData object
- */
-export const formatDataForMultipart = (data: Record<string, any>): FormData => {
-  const formData = new FormData();
-  
-  Object.keys(data).forEach(key => {
-    const value = data[key];
-    
-    if (value === undefined || value === null) {
-      return;
-    }
-    
-    if (Array.isArray(value)) {
-      formData.append(key, JSON.stringify(value));
-    } else if (typeof value === 'object' && !(value instanceof File)) {
-      formData.append(key, JSON.stringify(value));
-    } else {
-      formData.append(key, value);
-    }
-  });
-  
-  return formData;
-};
-
-/**
- * Perform a direct operation on vehicle data
- * @param endpoint API endpoint to call
- * @param method HTTP method to use
- * @param options Additional request options
- * @returns Promise with response data
- */
-export const directVehicleOperation = async (
-  endpoint: string,
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
-  options: {
-    headers?: Record<string, string>;
-    data?: any;
+export async function directVehicleOperation(
+  endpoint: string, 
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE', 
+  options: { 
+    headers?: Record<string, string>, 
+    data?: any,
+    params?: Record<string, string>
   } = {}
-) => {
+): Promise<any> {
+  // Check preview mode
+  if (IS_PREVIEW_MODE && endpoint.includes('admin')) {
+    console.log(`[PREVIEW MODE] Simulating API call to ${endpoint} with method ${method}`);
+    
+    // Return mock success for vehicle operations in preview mode
+    if (endpoint.includes('vehicle')) {
+      console.log(`[PREVIEW MODE] Returning mock success for vehicle operation`, options.data);
+      return { status: 'success', message: 'Operation simulated in preview mode' };
+    }
+  }
+  
   try {
-    // Use the getApiUrl helper for proper URL formatting
-    let formattedEndpoint = endpoint;
-    
-    // If endpoint doesn't start with api/, add it
-    if (!endpoint.startsWith('api/') && !endpoint.startsWith('/api/')) {
-      formattedEndpoint = `api/${endpoint}`;
-    }
-    
-    // Add timestamp parameter to prevent caching
-    if (!formattedEndpoint.includes('?')) {
-      formattedEndpoint = `${formattedEndpoint}?_t=${Date.now()}`;
-    } else {
-      formattedEndpoint = `${formattedEndpoint}&_t=${Date.now()}`;
-    }
-    
-    const url = getApiUrl(formattedEndpoint);
-    console.log(`Performing ${method} operation to: ${url}`);
-    
-    // Prepare headers
-    const headers = {
-      ...forceRefreshHeaders,
-      'X-Database-First': 'true', // Signal to prioritize database
-      ...(options.headers || {})
+    // Default headers all requests should use
+    const defaultHeaders = {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'X-Bypass-Cache': 'true',
+      'X-Force-Refresh': 'true',
+      'X-Database-First': 'true',
+      'X-Requested-With': 'XMLHttpRequest',
+      'X-No-HTML': 'true' // Signal to avoid HTML responses
     };
     
-    // Prepare request options
-    const requestOptions: RequestInit = {
+    // Ensure endpoint has correct format
+    let url = endpoint;
+    if (!url.startsWith('http') && !url.startsWith('/')) {
+      url = `/${url}`;
+    }
+    
+    // If URL starts with /api/, make it relative to prevent CORS issues
+    if (url.startsWith('/api/')) {
+      url = `api${url.substring(4)}`;
+    }
+    
+    if (DEBUG) {
+      console.log(`API Request: ${method} ${url}`);
+      if (options.data) {
+        console.log('Request data:', options.data);
+      }
+    }
+    
+    // Prepare request config
+    const config: AxiosRequestConfig = {
       method,
-      headers,
-      credentials: 'include',
-      cache: 'no-store', // Ensure we don't use cached responses
-      mode: 'cors' // Explicitly enable CORS
+      url,
+      headers: {
+        ...defaultHeaders,
+        ...options.headers
+      },
+      ...(options.data && { data: options.data }),
+      ...(options.params && { params: options.params })
     };
-    
-    // Add body for non-GET requests
-    if (method !== 'GET' && options.data) {
-      // Set appropriate content type if not specified
-      if (!headers['Content-Type']) {
-        headers['Content-Type'] = 'application/json';
-      }
-      
-      if (headers['Content-Type'] === 'application/json') {
-        // Stringify the data properly - handle circular references
-        try {
-          // Use custom replacer function to handle circular references
-          const seenObjects = new WeakMap();
-          const replacer = (key: string, value: any) => {
-            if (typeof value === 'object' && value !== null) {
-              if (seenObjects.has(value)) {
-                return '[Circular Reference]';
-              }
-              seenObjects.set(value, true);
-            }
-            return value;
-          };
-          
-          requestOptions.body = JSON.stringify(options.data, replacer);
-          console.log('JSON request body:', requestOptions.body);
-        } catch (stringifyError) {
-          console.error('Error stringifying request data:', stringifyError);
-          
-          // Fallback - create a clean copy without circular references
-          const cleanData = { ...options.data };
-          requestOptions.body = JSON.stringify(cleanData);
-        }
-      } else if (headers['Content-Type']?.includes('multipart/form-data')) {
-        // Remove the Content-Type header to let the browser set it with boundary
-        delete headers['Content-Type'];
-        requestOptions.body = formatDataForMultipart(options.data);
-      } else {
-        // Default to form data
-        requestOptions.body = formatDataForMultipart(options.data);
-      }
-    }
     
     // Make the request
-    const response = await fetch(url, requestOptions);
+    const response = await axios(config);
     
-    // Check content type to handle different response formats
-    const contentType = response.headers.get('content-type') || '';
+    // Check if the response is HTML instead of JSON (common error)
+    const contentType = response.headers['content-type'] || '';
     
-    // First try to get the response as text
-    const text = await response.text();
-    console.log('Raw response text:', text);
-    console.log('Response status:', response.status, 'Content-Type:', contentType);
-    
-    // Check if the text is empty
-    if (!text || text.trim() === '') {
-      console.warn('Received empty response');
-      return { status: 'success', message: 'Operation completed but returned empty response' };
+    if (contentType.includes('text/html') || 
+        (typeof response.data === 'string' && response.data.trim().startsWith('<'))) {
+      console.error('Received HTML response instead of JSON:', response);
+      
+      // Extract error message from HTML if possible
+      let errorMsg = 'Received HTML response instead of JSON';
+      if (typeof response.data === 'string') {
+        const titleMatch = response.data.match(/<title>(.*?)<\/title>/);
+        if (titleMatch && titleMatch[1]) {
+          errorMsg = `Server error: ${titleMatch[1]}`;
+        }
+      }
+      
+      // Create a structured error response
+      return {
+        status: 'error',
+        message: errorMsg,
+        isHtmlResponse: true,
+        originalData: typeof response.data === 'string' ? response.data.substring(0, 500) + '...' : 'Non-string HTML response'
+      };
     }
     
-    // Check if response is HTML instead of JSON (common error with PHP endpoints)
-    if (text.includes('<!DOCTYPE html>') || text.includes('<html>')) {
-      console.error('Received HTML response instead of JSON:', text.substring(0, 200));
+    if (DEBUG) {
+      console.log(`API Response from ${url}:`, response.data);
+    }
+    
+    return response.data;
+  } catch (error: any) {
+    console.error(`API Error (${endpoint}):`, error);
+    
+    // Handle HTML responses in error cases
+    if (error.response) {
+      const contentType = error.response.headers['content-type'] || '';
       
-      // In preview mode, we'll return a mock response
-      if (isPreviewMode()) {
-        console.log('Preview mode detected, returning mock success response despite HTML response');
+      if (contentType.includes('text/html') || 
+          (typeof error.response.data === 'string' && error.response.data.trim().startsWith('<'))) {
+        console.error('Received HTML error response:', error.response);
         
-        // For GET requests, return mock data based on the endpoint
-        if (method === 'GET') {
-          if (endpoint.includes('direct-airport-fares.php')) {
-            return {
-              status: 'success',
-              message: 'Mock airport fares retrieved',
-              fares: [{
-                vehicleId: options.data?.vehicleId || 'sedan',
-                vehicle_id: options.data?.vehicleId || 'sedan',
-                pickupPrice: 800,
-                dropPrice: 800,
-                tier1Price: 600,
-                tier2Price: 800,
-                tier3Price: 1000,
-                tier4Price: 1200,
-                extraKmCharge: 12
-              }]
-            };
-          } else if (endpoint.includes('direct-local-fares.php')) {
-            return {
-              status: 'success',
-              message: 'Mock local fares retrieved',
-              fares: [{
-                vehicleId: options.data?.vehicleId || 'sedan',
-                vehicle_id: options.data?.vehicleId || 'sedan',
-                price4hrs40km: 1000,
-                price8hrs80km: 1800, 
-                price10hrs100km: 2200,
-                priceExtraKm: 14,
-                priceExtraHour: 150
-              }]
-            };
+        // Extract error message from HTML if possible
+        let errorMsg = 'Received HTML error response';
+        if (typeof error.response.data === 'string') {
+          const titleMatch = error.response.data.match(/<title>(.*?)<\/title>/);
+          if (titleMatch && titleMatch[1]) {
+            errorMsg = `Server error: ${titleMatch[1]}`;
           }
         }
         
-        return {
-          status: 'success',
-          message: 'Mock operation successful (preview mode)'
-        };
-      }
-      
-      throw new Error('Received HTML instead of JSON. The API endpoint is not configured correctly.');
-    }
-    
-    // Then try to parse it as JSON
-    try {
-      const jsonData = JSON.parse(text);
-      
-      // Check if response is OK
-      if (!response.ok) {
-        console.error(`Error in directVehicleOperation (${response.status}):`, jsonData);
-        throw new Error(`API request failed: ${response.status}. ${jsonData.message || ''}`);
-      }
-      
-      return jsonData;
-    } catch (jsonError) {
-      console.error('Error parsing JSON response:', jsonError, 'Raw text:', text);
-      
-      // If in preview mode, return a simulated success response
-      if (isPreviewMode()) {
-        console.log('Preview mode detected, returning mock success response after JSON parse error');
-        
-        // For POST requests, we'll simulate success
-        if (method === 'POST') {
-          return {
-            status: 'success',
-            message: 'Mock operation succeeded (preview mode)'
-          };
-        }
-        
-        // For GET requests, return mock data based on the endpoint
-        if (endpoint.includes('direct-airport-fares.php')) {
-          return {
-            status: 'success',
-            message: 'Mock airport fares retrieved',
-            fares: [{
-              vehicleId: options.data?.vehicleId || 'sedan',
-              vehicle_id: options.data?.vehicleId || 'sedan',
-              pickupPrice: 800,
-              dropPrice: 800,
-              tier1Price: 600,
-              tier2Price: 800,
-              tier3Price: 1000,
-              tier4Price: 1200,
-              extraKmCharge: 12
-            }]
-          };
-        } else if (endpoint.includes('direct-local-fares.php')) {
-          return {
-            status: 'success',
-            message: 'Mock local fares retrieved',
-            fares: [{
-              vehicleId: options.data?.vehicleId || 'sedan',
-              vehicle_id: options.data?.vehicleId || 'sedan',
-              price4hrs40km: 1000,
-              price8hrs80km: 1800, 
-              price10hrs100km: 2200,
-              priceExtraKm: 14,
-              priceExtraHour: 150
-            }]
+        // Add debugging info for preview mode
+        if (IS_PREVIEW_MODE) {
+          console.log('[PREVIEW MODE] Returning mock response due to HTML error');
+          return { 
+            status: 'success', 
+            message: 'Mock response in preview mode (original request failed)',
+            debugError: errorMsg 
           };
         }
         
         return {
-          status: 'success',
-          message: 'Mock operation successful (preview mode)'
+          status: 'error',
+          message: errorMsg,
+          isHtmlResponse: true,
+          originalData: typeof error.response.data === 'string' ? error.response.data.substring(0, 500) + '...' : 'Non-string HTML response'
         };
       }
       
-      // If we received HTML but failed to detect it earlier, throw a more specific error
-      if (text.includes('<') && text.includes('>')) {
-        throw new Error('Received invalid response format (possibly HTML). Check server configuration.');
-      }
-      
-      throw new Error(`Failed to parse JSON response: ${text.substring(0, 100)}...`);
+      // Return the error response data if available
+      return error.response.data || { status: 'error', message: error.message };
     }
-  } catch (error) {
-    console.error('Error in directVehicleOperation:', error);
     
-    // In preview mode, provide a mock successful response
-    if (isPreviewMode()) {
-      console.log('Preview mode detected, returning mock success despite error');
-      return {
-        status: 'success',
-        message: 'Mock operation successful (preview mode)'
+    // Add mock response for preview mode
+    if (IS_PREVIEW_MODE) {
+      console.log('[PREVIEW MODE] Returning mock response due to error');
+      return { 
+        status: 'success', 
+        message: 'Mock response in preview mode (original request failed)',
+        debugError: error.message 
       };
     }
     
-    throw error;
+    // Otherwise return a generic error response
+    return { status: 'error', message: error.message };
   }
-};
+}
+
+/**
+ * Fix database tables by resetting and recreating them
+ * @returns Promise<boolean> True if fixed successfully
+ */
+export async function fixDatabaseTables(): Promise<boolean> {
+  try {
+    console.log('Attempting to fix database tables...');
+    
+    // First, try the dedicated fix-database endpoint
+    const fixResponse = await directVehicleOperation('api/admin/fix-database.php', 'POST', {
+      headers: {
+        'X-Admin-Mode': 'true',
+        'X-Debug': 'true',
+        'X-Force-Creation': 'true'
+      },
+      data: {
+        force: true,
+        reset: true,
+        recreate: true
+      }
+    });
+    
+    if (fixResponse && fixResponse.status === 'success') {
+      console.log('Database tables fixed successfully with fix-database.php', fixResponse);
+      return true;
+    }
+    
+    console.warn('Primary fix method failed, trying database initialization...', fixResponse);
+    
+    // If that fails, try the database initialization endpoint
+    const initResponse = await directVehicleOperation('api/admin/init-database.php', 'POST', {
+      headers: {
+        'X-Admin-Mode': 'true',
+        'X-Debug': 'true',
+        'X-Force-Creation': 'true'
+      },
+      data: {
+        force: true,
+        reset: true,
+        allowReinitialize: true
+      }
+    });
+    
+    if (initResponse && initResponse.status === 'success') {
+      console.log('Database tables initialized successfully with init-database.php', initResponse);
+      return true;
+    }
+    
+    console.warn('Both fix methods failed, trying sync endpoints...', initResponse);
+    
+    // Try to sync fares as a last resort
+    try {
+      const syncLocal = await directVehicleOperation('api/admin/sync-local-fares.php', 'POST', {
+        headers: {
+          'X-Admin-Mode': 'true',
+          'X-Debug': 'true',
+          'X-Force-Creation': 'true'
+        },
+        data: {
+          sync: true,
+          applyDefaults: true,
+          force: true
+        }
+      });
+      
+      const syncAirport = await directVehicleOperation('api/admin/sync-airport-fares.php', 'POST', {
+        headers: {
+          'X-Admin-Mode': 'true',
+          'X-Debug': 'true',
+          'X-Force-Creation': 'true'
+        },
+        data: {
+          sync: true,
+          applyDefaults: true,
+          force: true
+        }
+      });
+      
+      console.log('Sync results:', { local: syncLocal, airport: syncAirport });
+      
+      // If either sync worked, consider it a partial success
+      if ((syncLocal && syncLocal.status === 'success') || 
+          (syncAirport && syncAirport.status === 'success')) {
+        console.log('Partial database fix via sync successful');
+        return true;
+      }
+    } catch (syncError) {
+      console.error('Error during sync attempts:', syncError);
+    }
+    
+    console.error('All fix methods failed');
+    return false;
+  } catch (error) {
+    console.error('Error fixing database tables:', error);
+    return false;
+  }
+}
+
+/**
+ * Force a reload of vehicle data from persistent storage
+ */
+export async function forceRefreshVehicles(): Promise<boolean> {
+  try {
+    console.log('Forcing refresh of vehicle data from persistent storage...');
+    
+    // Try the reload-vehicles.php endpoint
+    const response = await directVehicleOperation('api/admin/reload-vehicles.php', 'GET', {
+      headers: {
+        'X-Admin-Mode': 'true',
+        'X-Force-Refresh': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      }
+    });
+    
+    if (response && response.status === 'success') {
+      console.log('Successfully refreshed vehicles from persistent storage', response);
+      return true;
+    }
+    
+    console.warn('Primary refresh method failed, trying backup method...', response);
+    
+    // Try direct-vehicle-modify.php as a backup
+    const backupResponse = await directVehicleOperation('api/admin/direct-vehicle-modify.php', 'GET', {
+      headers: {
+        'X-Admin-Mode': 'true',
+        'X-Force-Refresh': 'true',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      },
+      params: {
+        action: 'load',
+        force: 'true',
+        reload: 'true',
+        includeInactive: 'true',
+        _t: Date.now().toString()
+      }
+    });
+    
+    if (backupResponse && (backupResponse.status === 'success' || backupResponse.vehicles)) {
+      console.log('Successfully refreshed vehicles using backup method', backupResponse);
+      return true;
+    }
+    
+    console.error('All refresh methods failed');
+    return false;
+  } catch (error) {
+    console.error('Error refreshing vehicles:', error);
+    return false;
+  }
+}
