@@ -87,13 +87,21 @@ const handleApiError = (error: any): never => {
 export const authAPI = {
   login: async (credentials: LoginRequest): Promise<AuthResponse> => {
     try {
-      // Use relative URL for login endpoint
+      // Use direct path to the login endpoint
       const loginEndpoint = 'login.php';
       const url = getApiUrl(loginEndpoint);
       
       console.log(`Attempting login with endpoint: ${url}`);
       
-      const response = await api.post(url, credentials);
+      // Use axios directly instead of the api instance to ensure proper URL resolution
+      const response = await axios.post(url, credentials, {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
+      });
+      
       const data = response.data;
       
       if (data.token) {
@@ -103,6 +111,7 @@ export const authAPI = {
       
       return data;
     } catch (error) {
+      console.error('Login error details:', error);
       return handleApiError(error);
     }
   },

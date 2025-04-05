@@ -65,10 +65,10 @@ export function LoginForm() {
     try {
       setConnectionStatus('testing');
       setIsTesting(true);
-      console.log(`Testing API connection to ${apiUrl}`);
+      console.log(`Testing API connection to /api/login`);
       
       // Try OPTIONS request first (preflight)
-      const response = await fetch(`${apiUrl}/api/login`, {
+      const response = await fetch(`/api/login`, {
         method: 'OPTIONS',
         headers: {
           'Accept': 'application/json',
@@ -92,7 +92,7 @@ export function LoginForm() {
         
         toast.success('API connection successful', {
           duration: 3000,
-          description: `Connected to ${apiUrl}`
+          description: `Connected to /api/login`
         });
       } else {
         setConnectionStatus('failed');
@@ -197,7 +197,7 @@ export function LoginForm() {
         <div className="mb-4 p-2 bg-blue-50 rounded-md text-xs text-blue-700 flex items-center justify-between">
           <div className="flex items-center">
             <AlertCircle className="w-4 h-4 mr-1" />
-            <span>API URL: {apiUrl}</span>
+            <span>API URL: {apiUrl || 'Using relative path /api'}</span>
           </div>
           <Button 
             variant="ghost" 

@@ -31,8 +31,10 @@ export const getApiUrl = (endpoint: string): string => {
     return endpoint;
   }
   
-  // IMPORTANT: Never use external domains for API calls from the browser
-  // This prevents calls to external domains like vizagup.com
+  // For login.php, use the direct path to ensure compatibility
+  if (endpoint === 'login.php' || endpoint === 'login' || endpoint === '/login' || endpoint === '/login.php') {
+    return '/api/login.php';
+  }
   
   // Use relative URLs to avoid CORS and external domain issues
   // Remove leading slash if present for relative URLs

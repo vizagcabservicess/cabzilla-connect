@@ -32,7 +32,7 @@ RewriteRule .* - [R=200,L]
 # CRITICAL: Set PHP handler for all PHP files
 AddHandler application/x-httpd-php .php
 
-# Define login endpoints with multiple paths for maximum compatibility
+# HIGHEST PRIORITY: Define login endpoints with multiple paths for maximum compatibility
 RewriteRule ^login$ login.php [L,QSA]
 RewriteRule ^login\.php$ login.php [L,QSA]
 RewriteRule ^auth/login$ login.php [L,QSA]
