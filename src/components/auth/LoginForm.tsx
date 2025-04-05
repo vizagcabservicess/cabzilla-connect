@@ -122,7 +122,8 @@ export function LoginForm() {
     
     try {
       // Display a toast to show login is in progress
-      toast.loading('Logging in...', { id: 'login-toast' });
+      const loginToastId = 'login-toast';
+      toast.loading('Logging in...', { id: loginToastId });
       
       // Clear any existing tokens first
       localStorage.removeItem('authToken');
@@ -133,37 +134,40 @@ export function LoginForm() {
       // Log form values for debugging
       console.log("Login attempt with email:", values.email);
       
-      // Use HTTP-only cookies to store authentication token
-      const response = await authAPI.login(values);
-      
-      if (response.token) {
-        // Login succeeded, update toast
-        toast.success('Login successful', { 
-          id: 'login-toast', 
-          description: `Welcome back, ${response.user?.name || 'User'}!` 
-        });
+      try {
+        // Use HTTP-only cookies to store authentication token
+        const response = await authAPI.login(values);
         
-        console.log("Login successful, token saved", { 
-          tokenLength: response.token.length,
-          tokenParts: response.token.split('.').length,
-          user: response.user?.id
+        if (response.token) {
+          // Login succeeded, update toast
+          toast.success('Login successful', { 
+            id: loginToastId, 
+            description: `Welcome back, ${response.user?.name || 'User'}!` 
+          });
+          
+          console.log("Login successful, token saved", { 
+            tokenLength: response.token.length,
+            tokenParts: response.token.split('.').length,
+            user: response.user?.id
+          });
+          
+          // Force a page reload to ensure fresh state
+          setTimeout(() => {
+            window.location.href = '/dashboard';
+          }, 500);
+        } else {
+          throw new Error("Authentication failed: No token received");
+        }
+      } catch (error) {
+        // Update toast to show error
+        toast.error('Login Failed', {
+          id: loginToastId,
+          description: error instanceof Error ? error.message : "Authentication failed"
         });
-        
-        // Force a page reload to ensure fresh state
-        setTimeout(() => {
-          window.location.href = '/dashboard';
-        }, 500);
-      } else {
-        throw new Error("Authentication failed: No token received");
+        throw error;
       }
     } catch (error) {
       console.error("Login error details:", error);
-      
-      // Update toast to show error
-      toast.error('Login Failed', {
-        id: 'login-toast',
-        description: error instanceof Error ? error.message : "Authentication failed"
-      });
       
       // Set error state for UI display
       setError(error as Error);

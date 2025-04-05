@@ -34,28 +34,14 @@ export const getApiUrl = (endpoint: string): string => {
   // IMPORTANT: Never use external domains for API calls from the browser
   // This prevents calls to external domains like vizagup.com
   
-  // For all environments, use relative URLs to avoid CORS and external domain issues
-  if (window.location.hostname.includes('localhost') || 
-      window.location.hostname.includes('lovable.app') ||
-      window.location.hostname.includes('lovableproject.com') ||
-      true) { // Always use relative URLs
-    
-    // Remove leading slash if present for relative URLs
-    const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
-    
-    // Ensure API directory paths are preserved
-    if (!cleanEndpoint.startsWith('api/') && !cleanEndpoint.startsWith('data/')) {
-      return `api/${cleanEndpoint}`;
-    }
-    
-    return cleanEndpoint;
+  // Use relative URLs to avoid CORS and external domain issues
+  // Remove leading slash if present for relative URLs
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
+  
+  // Ensure API directory paths are preserved
+  if (!cleanEndpoint.startsWith('api/') && !cleanEndpoint.startsWith('data/')) {
+    return `api/${cleanEndpoint}`;
   }
   
-  // This code path should never be reached due to 'true' condition above
-  // but kept for backward compatibility
-  const base = typeof window !== 'undefined' ? window.location.origin : apiBaseUrl;
-  const cleanBase = (base || '').endsWith('/') ? base.slice(0, -1) : base;
-  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  
-  return `${cleanBase}${cleanEndpoint}`;
+  return cleanEndpoint;
 };

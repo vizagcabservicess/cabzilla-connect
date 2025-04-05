@@ -32,50 +32,11 @@ RewriteRule .* - [R=200,L]
 # CRITICAL: Set PHP handler for all PHP files
 AddHandler application/x-httpd-php .php
 
-# CRITICAL VEHICLE ENDPOINTS - HIGHEST PRIORITY
-# Direct mappings for add vehicle endpoint with multiple variants
-RewriteRule ^admin/direct-vehicle-create$ admin/direct-vehicle-create.php [L,QSA]
-RewriteRule ^admin/direct-vehicle-create\.php$ admin/direct-vehicle-create.php [L,QSA]
-RewriteRule ^direct-vehicle-create$ admin/direct-vehicle-create.php [L,QSA]
-RewriteRule ^direct-vehicle-create\.php$ admin/direct-vehicle-create.php [L,QSA]
-
-# Make add-vehicle-simple accessible from multiple paths
-RewriteRule ^admin/add-vehicle-simple$ admin/add-vehicle-simple.php [L,QSA]
-RewriteRule ^admin/add-vehicle-simple\.php$ admin/add-vehicle-simple.php [L,QSA]
-RewriteRule ^add-vehicle-simple$ admin/add-vehicle-simple.php [L,QSA]
-RewriteRule ^add-vehicle-simple\.php$ admin/add-vehicle-simple.php [L,QSA]
-
-# Legacy aliases for vehicle creation
-RewriteRule ^admin/vehicle-create$ admin/direct-vehicle-create.php [L,QSA]
-RewriteRule ^admin/vehicle-create\.php$ admin/direct-vehicle-create.php [L,QSA]
-RewriteRule ^vehicle-create$ admin/direct-vehicle-create.php [L,QSA]
-RewriteRule ^vehicle-create\.php$ admin/direct-vehicle-create.php [L,QSA]
-RewriteRule ^admin/add-vehicle$ admin/add-vehicle-simple.php [L,QSA]
-RewriteRule ^admin/add-vehicle\.php$ admin/add-vehicle-simple.php [L,QSA]
-RewriteRule ^add-vehicle$ admin/add-vehicle-simple.php [L,QSA]
-RewriteRule ^add-vehicle\.php$ admin/add-vehicle-simple.php [L,QSA]
-
-# Debug endpoint for troubleshooting (explicit mapping)
-RewriteRule ^admin/vehicle-create-debug$ admin/vehicle-create-debug.php [L,QSA]
-RewriteRule ^admin/vehicle-create-debug\.php$ admin/vehicle-create-debug.php [L,QSA]
-RewriteRule ^vehicle-create-debug$ admin/vehicle-create-debug.php [L,QSA]
-RewriteRule ^vehicle-create-debug\.php$ admin/vehicle-create-debug.php [L,QSA]
-
-# Diagnostic endpoint for PHP testing
-RewriteRule ^phpinfo$ phpinfo.php [L,QSA]
-
-# Allow access to all PHP files directly
-<Files "*.php">
-    Require all granted
-</Files>
-
-# Critical: Prevent HTML error responses for PHP files
-<FilesMatch "\.php$">
-    # Force PHP processing even if system wants to serve as plain text
-    SetHandler application/x-httpd-php
-    # Set JSON content type for API responses
-    Header always set Content-Type "application/json" env=REDIRECT_STATUS=200
-</FilesMatch>
+# Define login endpoints with multiple paths for maximum compatibility
+RewriteRule ^login$ login.php [L,QSA]
+RewriteRule ^login\.php$ login.php [L,QSA]
+RewriteRule ^auth/login$ login.php [L,QSA]
+RewriteRule ^auth/login\.php$ login.php [L,QSA]
 
 # Other API endpoints can remain as they are
 RewriteRule ^status$ status.php [L,QSA]
@@ -147,7 +108,6 @@ RewriteRule ^bookings/([^/]+)$ bookings.php?id=$1 [L,QSA]
 RewriteRule ^update-booking$ update-booking.php [L,QSA]
 RewriteRule ^update-booking/([^/]+)$ update-booking.php?id=$1 [L,QSA]
 RewriteRule ^search-bookings$ search-bookings.php [L,QSA]
-RewriteRule ^login$ login.php [L,QSA]
 RewriteRule ^register$ register.php [L,QSA]
 RewriteRule ^user$ user.php [L,QSA]
 RewriteRule ^user/([^/]+)$ user.php?id=$1 [L,QSA]

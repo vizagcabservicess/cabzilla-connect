@@ -6,6 +6,7 @@ import {
   DashboardMetrics, AuthUser, VehiclePricing, VehiclePricingUpdateRequest,
   BookingUpdateRequest
 } from '@/types/api';
+import { getApiUrl } from '@/config/api';
 
 const API_BASE_URL = '/api';
 
@@ -86,7 +87,13 @@ const handleApiError = (error: any): never => {
 export const authAPI = {
   login: async (credentials: LoginRequest): Promise<AuthResponse> => {
     try {
-      const response = await api.post('/login.php', credentials);
+      // Use relative URL for login endpoint
+      const loginEndpoint = 'login.php';
+      const url = getApiUrl(loginEndpoint);
+      
+      console.log(`Attempting login with endpoint: ${url}`);
+      
+      const response = await api.post(url, credentials);
       const data = response.data;
       
       if (data.token) {
