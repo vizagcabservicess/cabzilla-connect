@@ -8,7 +8,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { directVehicleOperation } from '@/utils/apiHelper';
 import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, RefreshCw, Save, Database } from "lucide-react";
+import { AlertCircle, RefreshCw, Save, Database, SyncIcon } from "lucide-react";
 import { fetchLocalFares, fetchAirportFares, updateLocalFares, updateAirportFares, syncAirportFares, syncLocalFares } from '@/services/fareManagementService';
 
 interface FareManagementProps {
@@ -65,39 +65,48 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     airport: {
       sedan: {
         basePrice: 3000, pricePerKm: 12, pickupPrice: 800, dropPrice: 800,
-        tier1Price: 600, tier2Price: 800, tier3Price: 1000, tier4Price: 1200, extraKmCharge: 12
+        tier1Price: 600, tier2Price: 800, tier3Price: 1000, tier4Price: 1200, 
+        extraKmCharge: 12, nightCharges: 250, extraWaitingCharges: 150
       },
       ertiga: {
         basePrice: 3500, pricePerKm: 15, pickupPrice: 1000, dropPrice: 1000,
-        tier1Price: 800, tier2Price: 1000, tier3Price: 1200, tier4Price: 1400, extraKmCharge: 15
+        tier1Price: 800, tier2Price: 1000, tier3Price: 1200, tier4Price: 1400, 
+        extraKmCharge: 15, nightCharges: 300, extraWaitingCharges: 200
       },
       innova_crysta: {
         basePrice: 4000, pricePerKm: 17, pickupPrice: 1200, dropPrice: 1200,
-        tier1Price: 1000, tier2Price: 1200, tier3Price: 1400, tier4Price: 1600, extraKmCharge: 17
+        tier1Price: 1000, tier2Price: 1200, tier3Price: 1400, tier4Price: 1600, 
+        extraKmCharge: 17, nightCharges: 350, extraWaitingCharges: 250
       },
       tempo: {
         basePrice: 6000, pricePerKm: 19, pickupPrice: 2000, dropPrice: 2000,
-        tier1Price: 1600, tier2Price: 1800, tier3Price: 2000, tier4Price: 2500, extraKmCharge: 19
+        tier1Price: 1600, tier2Price: 1800, tier3Price: 2000, tier4Price: 2500, 
+        extraKmCharge: 19, nightCharges: 400, extraWaitingCharges: 300
       },
       luxury: {
         basePrice: 7000, pricePerKm: 22, pickupPrice: 2500, dropPrice: 2500,
-        tier1Price: 2000, tier2Price: 2200, tier3Price: 2500, tier4Price: 3000, extraKmCharge: 22
+        tier1Price: 2000, tier2Price: 2200, tier3Price: 2500, tier4Price: 3000, 
+        extraKmCharge: 22, nightCharges: 450, extraWaitingCharges: 350
       },
       innova_hycross: {
         basePrice: 4500, pricePerKm: 18, pickupPrice: 1200, dropPrice: 1200,
-        tier1Price: 1000, tier2Price: 1200, tier3Price: 1400, tier4Price: 1600, extraKmCharge: 18
+        tier1Price: 1000, tier2Price: 1200, tier3Price: 1400, tier4Price: 1600, 
+        extraKmCharge: 18, nightCharges: 350, extraWaitingCharges: 250
       },
       toyota: {
         basePrice: 4500, pricePerKm: 18, pickupPrice: 1200, dropPrice: 1200,
-        tier1Price: 1000, tier2Price: 1200, tier3Price: 1400, tier4Price: 1600, extraKmCharge: 18
+        tier1Price: 1000, tier2Price: 1200, tier3Price: 1400, tier4Price: 1600, 
+        extraKmCharge: 18, nightCharges: 350, extraWaitingCharges: 250
       },
       etios: {
         basePrice: 3200, pricePerKm: 13, pickupPrice: 800, dropPrice: 800,
-        tier1Price: 600, tier2Price: 800, tier3Price: 1000, tier4Price: 1200, extraKmCharge: 13
+        tier1Price: 600, tier2Price: 800, tier3Price: 1000, tier4Price: 1200, 
+        extraKmCharge: 13, nightCharges: 250, extraWaitingCharges: 150
       },
       dzire_cng: {
         basePrice: 3200, pricePerKm: 13, pickupPrice: 800, dropPrice: 800,
-        tier1Price: 600, tier2Price: 800, tier3Price: 1000, tier4Price: 1200, extraKmCharge: 13
+        tier1Price: 600, tier2Price: 800, tier3Price: 1000, tier4Price: 1200, 
+        extraKmCharge: 13, nightCharges: 250, extraWaitingCharges: 150
       }
     },
     local: {
@@ -140,36 +149,51 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     }
   };
 
-  // Apply default values based on vehicle type
+  // Apply default values based on vehicle type and ID
   const applyDefaultValues = (vehicleId: string): FareData => {
-    const simpleVehicleId = vehicleId.toLowerCase().replace(/[^a-z0-9_]/g, '_');
-    let vehicleType = 'default';
+    // Normalize vehicle ID for matching
+    const normalizedId = vehicleId.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    let vehicleType = 'sedan'; // Default to sedan if no match
     
-    // Try to find matching vehicle type
-    if (simpleVehicleId.includes('sedan') || simpleVehicleId === '1') {
+    // Match vehicle type by keywords in ID
+    if (normalizedId.includes('sedan')) {
       vehicleType = 'sedan';
-    } else if (simpleVehicleId.includes('ertiga') || simpleVehicleId === '2') {
+    } else if (normalizedId.includes('ertiga')) {
       vehicleType = 'ertiga';
-    } else if (simpleVehicleId.includes('innova') && simpleVehicleId.includes('hycross')) {
+    } else if (normalizedId.includes('innova') && normalizedId.includes('hycross')) {
       vehicleType = 'innova_hycross';
-    } else if (simpleVehicleId.includes('innova') || simpleVehicleId.includes('crysta') || simpleVehicleId === '1266') {
+    } else if (normalizedId.includes('innova') || normalizedId.includes('crysta')) {
       vehicleType = 'innova_crysta';
-    } else if (simpleVehicleId.includes('tempo') || simpleVehicleId === '592' || simpleVehicleId === '1270') {
+    } else if (normalizedId.includes('tempo')) {
       vehicleType = 'tempo';
-    } else if (simpleVehicleId.includes('luxury')) {
+    } else if (normalizedId.includes('luxury')) {
       vehicleType = 'luxury';
-    } else if (simpleVehicleId.includes('toyota')) {
+    } else if (normalizedId.includes('toyota')) {
       vehicleType = 'toyota';
-    } else if (simpleVehicleId.includes('etios') || simpleVehicleId === '180') {
+    } else if (normalizedId.includes('etios')) {
       vehicleType = 'etios';
-    } else if (simpleVehicleId.includes('dzire') || simpleVehicleId === '1271') {
+    } else if (normalizedId.includes('dzire')) {
+      vehicleType = 'dzire_cng';
+    } else if (normalizedId === '1') {
+      vehicleType = 'sedan';
+    } else if (normalizedId === '2') {
+      vehicleType = 'ertiga';
+    } else if (['1266', '3', '4'].includes(normalizedId)) {
+      vehicleType = 'innova_crysta';
+    } else if (['592', '1270', '5'].includes(normalizedId)) {
+      vehicleType = 'tempo';
+    } else if (normalizedId === '180') {
+      vehicleType = 'etios';
+    } else if (normalizedId === '1271') {
       vehicleType = 'dzire_cng';
     }
     
     // Get default values for the matched vehicle type or use sedan as fallback
     const defaults = defaultValues[fareType]?.[vehicleType] || 
-                    defaultValues[fareType]?.['sedan'] || 
-                    {};
+                     defaultValues[fareType]?.['sedan'] || 
+                     {};
+    
+    console.log(`Applied ${fareType} defaults for ${vehicleId} (matched as ${vehicleType}):`, defaults);
     
     return {
       vehicleId,
@@ -221,6 +245,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
         const loadedFare = result[0];
         console.log(`Loaded ${fareType} fare data:`, loadedFare);
         
+        // Check for zero or missing values
         const hasZeroValues = Object.entries(loadedFare).some(([key, value]) => {
           return typeof value === 'number' && 
                  value === 0 && 
@@ -232,7 +257,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
         // Apply defaults if any important values are zero
         if (hasZeroValues) {
           const defaults = applyDefaultValues(vehicleId);
-          console.log(`Applying default values for ${vehicleId}:`, defaults);
+          console.log(`Applying default values for ${vehicleId} due to zero values:`, defaults);
           
           const mergedFare = {
             ...loadedFare,
@@ -282,6 +307,8 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     setError(null);
     
     try {
+      console.log(`Syncing ${fareType} fares...`);
+      
       if (fareType === 'local') {
         await syncLocalFares();
         toast.success('Local fares synced successfully');
@@ -569,6 +596,28 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
                 value={fareData.extraKmCharge || 0}
                 onChange={(e) => handleInputChange('extraKmCharge', e.target.value)}
                 placeholder="e.g. 15"
+              />
+            </div>
+            <div>
+              <Label htmlFor="nightCharges">Night Charges (₹)</Label>
+              <Input
+                id="nightCharges"
+                type="number"
+                value={fareData.nightCharges || 0}
+                onChange={(e) => handleInputChange('nightCharges', e.target.value)}
+                placeholder="e.g. 300"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="extraWaitingCharges">Extra Waiting Charges (₹)</Label>
+              <Input
+                id="extraWaitingCharges"
+                type="number"
+                value={fareData.extraWaitingCharges || 0}
+                onChange={(e) => handleInputChange('extraWaitingCharges', e.target.value)}
+                placeholder="e.g. 200"
               />
             </div>
           </div>

@@ -148,7 +148,8 @@ export async function updateAirportFares(fareData: Record<string, any>): Promise
     // Ensure vehicleId is consistent in all required formats
     cleanData.vehicle_id = fareData.vehicleId;
     
-    // Default values based on vehicle type
+    // Default values based on vehicle type - apply when any value is 0 or missing
+    const vehicleId = cleanData.vehicleId.toLowerCase();
     let baseDefaults = {
       basePrice: 3000,
       pricePerKm: 15,
@@ -164,7 +165,6 @@ export async function updateAirportFares(fareData: Record<string, any>): Promise
     };
     
     // Apply vehicle-specific defaults if needed
-    const vehicleId = cleanData.vehicleId.toLowerCase();
     if (vehicleId.includes('sedan')) {
       baseDefaults = {
         basePrice: 3000, pricePerKm: 12, pickupPrice: 800, dropPrice: 800,
@@ -312,12 +312,16 @@ export async function updateAirportFares(fareData: Record<string, any>): Promise
 export async function syncAirportFares(): Promise<any> {
   try {
     console.log('Forcing sync of airport fares...');
-    const result = await directVehicleOperation('/api/admin/sync-airport-fares.php', 'GET', {
+    const result = await directVehicleOperation('/api/admin/sync-airport-fares.php', 'POST', {
       headers: {
         'X-Admin-Mode': 'true',
         'X-Debug': 'true',
         'X-Force-Creation': 'true',
         'Cache-Control': 'no-cache'
+      },
+      data: {
+        sync: true,
+        applyDefaults: true
       }
     });
     
@@ -336,12 +340,16 @@ export async function syncAirportFares(): Promise<any> {
 export async function syncLocalFares(): Promise<any> {
   try {
     console.log('Forcing sync of local fares...');
-    const result = await directVehicleOperation('/api/admin/sync-local-fares.php', 'GET', {
+    const result = await directVehicleOperation('/api/admin/sync-local-fares.php', 'POST', {
       headers: {
         'X-Admin-Mode': 'true',
         'X-Debug': 'true',
         'X-Force-Creation': 'true',
         'Cache-Control': 'no-cache'
+      },
+      data: {
+        sync: true,
+        applyDefaults: true
       }
     });
     
