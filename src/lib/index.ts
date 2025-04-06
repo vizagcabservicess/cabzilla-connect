@@ -59,16 +59,24 @@ export {
   getVehicle as getVehicleById
 } from '@/services/directVehicleService';
 
-// Export fare update service functions - using fareUpdateService instead of fareManagementService
+// Export fare update service functions with the correct names
 export {
+  updateOutstationFare,
+  updateLocalFare,
+  updateAirportFare,
   updateOutstationFares,
   updateLocalFares,
-  updateAirportFares
+  updateAirportFares,
+  getAllOutstationFares,
+  getAllLocalFares,
+  getAllAirportFares,
+  syncAirportFares,
+  getDirectAirportFare
 } from '@/services/fareUpdateService';
 
 // Export special sync functions from fareManagementService
 export {
-  syncAirportFares,
+  syncAirportFares as syncAirportFaresFromManagement,
   syncLocalFares
 } from '@/services/fareManagementService';
 
