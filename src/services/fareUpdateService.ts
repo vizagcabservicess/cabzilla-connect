@@ -349,7 +349,7 @@ export const getAllAirportFares = async (): Promise<Record<string, any>> => {
   }
 };
 
-// Helper functions for specific uses
+// Helper functions with the correct names for specific uses
 
 /**
  * Update outstation fares with individual parameters
