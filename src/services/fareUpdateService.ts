@@ -36,8 +36,8 @@ interface AirportFareUpdate {
   tier3Price: number;
   tier4Price: number;
   extraKmCharge: number;
-  nightCharges: number;
-  extraWaitingCharges: number;
+  nightCharges?: number;
+  extraWaitingCharges?: number;
 }
 
 export interface FareUpdateResponse {
@@ -67,13 +67,12 @@ export const updateOutstationFare = async (data: OutstationFareUpdate): Promise<
       'api/admin/outstation-fares-update.php',
       'POST',
       {
-        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Admin-Mode': 'true',
           'Cache-Control': 'no-cache, no-store, must-revalidate'
         },
-        body: JSON.stringify(fareData)
+        data: JSON.stringify(fareData)
       }
     );
     
@@ -108,13 +107,12 @@ export const updateLocalFare = async (data: LocalFareUpdate): Promise<FareUpdate
       'api/admin/local-fares-update.php',
       'POST',
       {
-        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Admin-Mode': 'true',
           'Cache-Control': 'no-cache, no-store, must-revalidate'
         },
-        body: JSON.stringify(fareData)
+        data: JSON.stringify(fareData)
       }
     );
     
@@ -140,7 +138,9 @@ export const updateAirportFare = async (data: AirportFareUpdate): Promise<FareUp
     const fareData = {
       ...data,
       vehicleId: data.vehicleId || data.vehicle_id,
-      vehicle_id: data.vehicle_id || data.vehicleId
+      vehicle_id: data.vehicle_id || data.vehicleId,
+      nightCharges: data.nightCharges || 0,
+      extraWaitingCharges: data.extraWaitingCharges || 0
     };
     
     console.log('Updating airport fare for vehicle', fareData.vehicleId, ':', fareData);
@@ -151,14 +151,13 @@ export const updateAirportFare = async (data: AirportFareUpdate): Promise<FareUp
         'api/direct-airport-fares.php',
         'POST',
         {
-          method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'X-Admin-Mode': 'true',
             'X-Force-Creation': 'true',
             'Cache-Control': 'no-cache, no-store, must-revalidate'
           },
-          body: JSON.stringify(fareData)
+          data: JSON.stringify(fareData)
         }
       );
       
@@ -176,14 +175,13 @@ export const updateAirportFare = async (data: AirportFareUpdate): Promise<FareUp
       'api/admin/direct-airport-fares-update.php',
       'POST',
       {
-        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Admin-Mode': 'true',
           'X-Force-Creation': 'true',
           'Cache-Control': 'no-cache, no-store, must-revalidate'
         },
-        body: JSON.stringify(fareData)
+        data: JSON.stringify(fareData)
       }
     );
     
@@ -211,14 +209,13 @@ export const syncOutstationFares = async (applyDefaults: boolean = true): Promis
       'api/outstation-fares-sync.php', 
       'POST',
       {
-        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Admin-Mode': 'true',
           'X-Force-Creation': 'true',
           'Cache-Control': 'no-cache, no-store, must-revalidate'
         },
-        body: JSON.stringify({ applyDefaults })
+        data: JSON.stringify({ applyDefaults })
       }
     );
     
@@ -246,14 +243,13 @@ export const syncLocalFares = async (applyDefaults: boolean = true): Promise<boo
       'api/local-fares-sync.php', 
       'POST',
       {
-        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Admin-Mode': 'true',
           'X-Force-Creation': 'true',
           'Cache-Control': 'no-cache, no-store, must-revalidate'
         },
-        body: JSON.stringify({ applyDefaults })
+        data: JSON.stringify({ applyDefaults })
       }
     );
     
@@ -281,14 +277,13 @@ export const syncAirportFares = async (applyDefaults: boolean = true): Promise<b
       'api/airport-fares-sync.php', 
       'POST',
       {
-        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Admin-Mode': 'true',
           'X-Force-Creation': 'true',
           'Cache-Control': 'no-cache, no-store, must-revalidate'
         },
-        body: JSON.stringify({ applyDefaults })
+        data: JSON.stringify({ applyDefaults })
       }
     );
     
@@ -332,7 +327,9 @@ export const getDirectAirportFare = async (vehicleId: string): Promise<AirportFa
           ...(typeof directResponse.fares === 'object' && !Array.isArray(directResponse.fares) 
             ? directResponse.fares 
             : {}),
-          vehicleId
+          vehicleId,
+          nightCharges: 0,
+          extraWaitingCharges: 0
         } as AirportFare;
       }
     } catch (directError) {
@@ -357,7 +354,9 @@ export const getDirectAirportFare = async (vehicleId: string): Promise<AirportFa
     if (response && response.status === 'success' && response.fare) {
       return {
         ...response.fare,
-        vehicleId
+        vehicleId,
+        nightCharges: response.fare.nightCharges || 0,
+        extraWaitingCharges: response.fare.extraWaitingCharges || 0
       } as AirportFare;
     }
     
@@ -368,6 +367,111 @@ export const getDirectAirportFare = async (vehicleId: string): Promise<AirportFa
   }
 };
 
-export const updateOutstationFares = updateOutstationFare;
-export const updateLocalFares = updateLocalFare;
-export const updateAirportFares = updateAirportFare;
+// Add the missing functions for VehicleTripFaresForm.tsx
+export const getAllOutstationFares = async (): Promise<Record<string, any>> => {
+  try {
+    const response = await directVehicleOperation(
+      'api/admin/direct-outstation-fares.php',
+      'GET',
+      {
+        headers: {
+          'X-Admin-Mode': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
+      }
+    );
+    
+    if (response && response.status === 'success' && response.fares) {
+      return response.fares;
+    }
+    
+    return {};
+  } catch (error) {
+    console.error('Error getting all outstation fares:', error);
+    return {};
+  }
+};
+
+export const getAllLocalFares = async (): Promise<Record<string, any>> => {
+  try {
+    const response = await directVehicleOperation(
+      'api/admin/direct-local-fares.php',
+      'GET',
+      {
+        headers: {
+          'X-Admin-Mode': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
+      }
+    );
+    
+    if (response && response.status === 'success' && response.fares) {
+      return response.fares;
+    }
+    
+    return {};
+  } catch (error) {
+    console.error('Error getting all local fares:', error);
+    return {};
+  }
+};
+
+export const getAllAirportFares = async (): Promise<Record<string, any>> => {
+  try {
+    const response = await directVehicleOperation(
+      'api/admin/direct-airport-fares.php',
+      'GET',
+      {
+        headers: {
+          'X-Admin-Mode': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
+      }
+    );
+    
+    if (response && response.status === 'success' && response.fares) {
+      return response.fares;
+    }
+    
+    return {};
+  } catch (error) {
+    console.error('Error getting all airport fares:', error);
+    return {};
+  }
+};
+
+// Update function signatures to match usage in VehicleTripFaresForm
+export const updateOutstationFares = async (vehicleId: string, basePrice: number, pricePerKm: number, roundTripBasePrice: number, roundTripPricePerKm: number, driverAllowance: number, nightHaltCharge: number): Promise<FareUpdateResponse> => {
+  return updateOutstationFare({
+    vehicleId,
+    basePrice,
+    pricePerKm,
+    roundTripBasePrice,
+    roundTripPricePerKm,
+    driverAllowance,
+    nightHaltCharge
+  });
+};
+
+export const updateLocalFares = async (data: LocalFareUpdate): Promise<FareUpdateResponse> => {
+  return updateLocalFare(data);
+};
+
+export const updateAirportFares = async (vehicleId: string, locationFares: any): Promise<FareUpdateResponse> => {
+  const fareData: AirportFareUpdate = {
+    vehicleId,
+    basePrice: locationFares.basePrice || 0,
+    pricePerKm: locationFares.pricePerKm || 0,
+    pickupPrice: locationFares.pickupPrice || locationFares.pickup || 0,
+    dropPrice: locationFares.dropPrice || locationFares.drop || 0,
+    tier1Price: locationFares.tier1Price || locationFares.tier1 || 0,
+    tier2Price: locationFares.tier2Price || locationFares.tier2 || 0,
+    tier3Price: locationFares.tier3Price || locationFares.tier3 || 0,
+    tier4Price: locationFares.tier4Price || locationFares.tier4 || 0,
+    extraKmCharge: locationFares.extraKmCharge || 0,
+    nightCharges: locationFares.nightCharges || 0,
+    extraWaitingCharges: locationFares.extraWaitingCharges || 0
+  };
+  
+  return updateAirportFare(fareData);
+};
