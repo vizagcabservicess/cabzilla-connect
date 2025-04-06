@@ -66,7 +66,11 @@ export function LocalFareForm({ vehicleId, initialData, onSuccess }: LocalFareFo
     try {
       const updateData = {
         vehicleId,
-        ...values
+        price4hrs40km: values.price4hrs40km,
+        price8hrs80km: values.price8hrs80km,
+        price10hrs100km: values.price10hrs100km,
+        priceExtraKm: values.priceExtraKm,
+        priceExtraHour: values.priceExtraHour
       };
       
       console.log("Updating local fares with data:", updateData);

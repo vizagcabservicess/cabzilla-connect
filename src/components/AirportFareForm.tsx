@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -85,7 +84,17 @@ export function AirportFareForm({ vehicleId, initialData, onSuccess }: AirportFa
     try {
       const updateData = {
         vehicleId,
-        ...values
+        basePrice: values.basePrice,
+        pricePerKm: values.pricePerKm,
+        pickupPrice: values.pickupPrice,
+        dropPrice: values.dropPrice,
+        tier1Price: values.tier1Price,
+        tier2Price: values.tier2Price,
+        tier3Price: values.tier3Price,
+        tier4Price: values.tier4Price,
+        extraKmCharge: values.extraKmCharge,
+        nightCharges: values.nightCharges,
+        extraWaitingCharges: values.extraWaitingCharges
       };
       
       console.log("Updating airport fares with data:", updateData);

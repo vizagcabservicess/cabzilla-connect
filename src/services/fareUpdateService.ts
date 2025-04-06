@@ -1,4 +1,3 @@
-
 import { directVehicleOperation } from '@/utils/apiHelper';
 import { toast } from 'sonner';
 import { AirportFare, LocalFare, OutstationFare } from '@/types/cab';
@@ -36,8 +35,8 @@ interface AirportFareUpdate {
   tier3Price: number;
   tier4Price: number;
   extraKmCharge: number;
-  nightCharges?: number;
-  extraWaitingCharges?: number;
+  nightCharges: number;
+  extraWaitingCharges: number;
 }
 
 export interface FareUpdateResponse {
@@ -441,37 +440,14 @@ export const getAllAirportFares = async (): Promise<Record<string, any>> => {
 };
 
 // Update function signatures to match usage in VehicleTripFaresForm
-export const updateOutstationFares = async (vehicleId: string, basePrice: number, pricePerKm: number, roundTripBasePrice: number, roundTripPricePerKm: number, driverAllowance: number, nightHaltCharge: number): Promise<FareUpdateResponse> => {
-  return updateOutstationFare({
-    vehicleId,
-    basePrice,
-    pricePerKm,
-    roundTripBasePrice,
-    roundTripPricePerKm,
-    driverAllowance,
-    nightHaltCharge
-  });
+export const updateOutstationFares = async (data: OutstationFareUpdate): Promise<FareUpdateResponse> => {
+  return updateOutstationFare(data);
 };
 
 export const updateLocalFares = async (data: LocalFareUpdate): Promise<FareUpdateResponse> => {
   return updateLocalFare(data);
 };
 
-export const updateAirportFares = async (vehicleId: string, locationFares: any): Promise<FareUpdateResponse> => {
-  const fareData: AirportFareUpdate = {
-    vehicleId,
-    basePrice: locationFares.basePrice || 0,
-    pricePerKm: locationFares.pricePerKm || 0,
-    pickupPrice: locationFares.pickupPrice || locationFares.pickup || 0,
-    dropPrice: locationFares.dropPrice || locationFares.drop || 0,
-    tier1Price: locationFares.tier1Price || locationFares.tier1 || 0,
-    tier2Price: locationFares.tier2Price || locationFares.tier2 || 0,
-    tier3Price: locationFares.tier3Price || locationFares.tier3 || 0,
-    tier4Price: locationFares.tier4Price || locationFares.tier4 || 0,
-    extraKmCharge: locationFares.extraKmCharge || 0,
-    nightCharges: locationFares.nightCharges || 0,
-    extraWaitingCharges: locationFares.extraWaitingCharges || 0
-  };
-  
-  return updateAirportFare(fareData);
+export const updateAirportFares = async (data: AirportFareUpdate): Promise<FareUpdateResponse> => {
+  return updateAirportFare(data);
 };
