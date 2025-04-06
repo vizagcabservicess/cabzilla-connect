@@ -18,6 +18,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+// Setup error handling to return proper JSON responses
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+error_reporting(E_ALL);
+
 // Create log directory
 $logDir = __DIR__ . '/../logs';
 if (!file_exists($logDir)) {
@@ -82,5 +87,18 @@ if ($vehicleId) {
 $_SERVER['HTTP_X_ADMIN_MODE'] = 'true';
 $_SERVER['HTTP_X_FORCE_CREATION'] = 'true';
 
-// Forward the request to the admin endpoint
-require_once __DIR__ . '/admin/direct-airport-fares.php';
+try {
+    // Forward the request to the admin endpoint
+    require_once __DIR__ . '/admin/direct-airport-fares.php';
+} catch (Exception $e) {
+    // Log the error
+    file_put_contents($logFile, "[$timestamp] ERROR: Failed to load admin/direct-airport-fares.php: " . $e->getMessage() . "\n", FILE_APPEND);
+    
+    // Return a proper JSON error response
+    http_response_code(500);
+    echo json_encode([
+        'status' => 'error',
+        'message' => 'Internal server error: ' . $e->getMessage(),
+        'timestamp' => time()
+    ], JSON_PRETTY_PRINT);
+}

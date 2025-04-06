@@ -171,7 +171,50 @@ try {
             }
         }
         
-        // Fix 4: Ensure all vehicles have corresponding entries in pricing tables
+        // Fix 4: Fix airport_transfer_fares table and add missing columns if they don't exist
+        if ($conn->query("SHOW TABLES LIKE 'airport_transfer_fares'")->num_rows > 0) {
+            logMessage("Checking airport_transfer_fares table for missing columns");
+            
+            // Check for night_charges column
+            $nightChargesExists = $conn->query("SHOW COLUMNS FROM airport_transfer_fares LIKE 'night_charges'")->num_rows > 0;
+            if (!$nightChargesExists) {
+                logMessage("Adding night_charges column to airport_transfer_fares");
+                $conn->query("ALTER TABLE airport_transfer_fares ADD COLUMN night_charges DECIMAL(10,2) DEFAULT 150");
+                $response['details']['tables_fixed'][] = "airport_transfer_fares - Added night_charges column";
+            }
+            
+            // Check for extra_waiting_charges column
+            $extraWaitingChargesExists = $conn->query("SHOW COLUMNS FROM airport_transfer_fares LIKE 'extra_waiting_charges'")->num_rows > 0;
+            if (!$extraWaitingChargesExists) {
+                logMessage("Adding extra_waiting_charges column to airport_transfer_fares");
+                $conn->query("ALTER TABLE airport_transfer_fares ADD COLUMN extra_waiting_charges DECIMAL(10,2) DEFAULT 100");
+                $response['details']['tables_fixed'][] = "airport_transfer_fares - Added extra_waiting_charges column";
+            }
+            
+            // Update any NULL values to defaults
+            $conn->query("UPDATE airport_transfer_fares SET night_charges = 150 WHERE night_charges IS NULL");
+            $conn->query("UPDATE airport_transfer_fares SET extra_waiting_charges = 100 WHERE extra_waiting_charges IS NULL");
+            
+            // Ensure vehicle_id has a unique index
+            $indexExists = false;
+            $indexResult = $conn->query("SHOW INDEX FROM airport_transfer_fares WHERE Key_name = 'vehicle_id'");
+            $indexExists = $indexResult && $indexResult->num_rows > 0;
+            
+            if (!$indexExists) {
+                logMessage("Adding unique index on vehicle_id to airport_transfer_fares");
+                // Try adding the unique index, but don't fail if it can't be added (might have duplicates)
+                try {
+                    $conn->query("ALTER TABLE airport_transfer_fares ADD UNIQUE INDEX vehicle_id (vehicle_id)");
+                    $response['details']['tables_fixed'][] = "airport_transfer_fares - Added unique index on vehicle_id";
+                } catch (Exception $indexEx) {
+                    // Log but continue
+                    logMessage("Could not add unique index to airport_transfer_fares: " . $indexEx->getMessage());
+                    $response['details']['tables_failed'][] = "airport_transfer_fares - Failed to add unique index: " . $indexEx->getMessage();
+                }
+            }
+        }
+        
+        // Fix 5: Ensure all vehicles have corresponding entries in pricing tables
         $vehiclesResult = $conn->query("SELECT id, vehicle_id FROM vehicles");
         while ($vehicle = $vehiclesResult->fetch_assoc()) {
             $vehicleId = $vehicle['id'] ?? $vehicle['vehicle_id'];
@@ -238,19 +281,28 @@ try {
                     $response['details']['vehicle_pricing_entries'][] = "Created airport transfer pricing for $vehicleId";
                 }
             } else {
-                // Check if night_charges and extra_waiting_charges columns exist
-                $airportColumnsResult = $conn->query("SHOW COLUMNS FROM airport_transfer_fares LIKE 'night_charges'");
-                if ($airportColumnsResult->num_rows == 0) {
-                    // Add night_charges column if it doesn't exist
-                    $conn->query("ALTER TABLE airport_transfer_fares ADD COLUMN night_charges DECIMAL(10,2) DEFAULT 150");
-                    $response['details']['tables_fixed'][] = "Added night_charges column to airport_transfer_fares";
-                }
-                
-                $airportColumnsResult = $conn->query("SHOW COLUMNS FROM airport_transfer_fares LIKE 'extra_waiting_charges'");
-                if ($airportColumnsResult->num_rows == 0) {
-                    // Add extra_waiting_charges column if it doesn't exist
-                    $conn->query("ALTER TABLE airport_transfer_fares ADD COLUMN extra_waiting_charges DECIMAL(10,2) DEFAULT 100");
-                    $response['details']['tables_fixed'][] = "Added extra_waiting_charges column to airport_transfer_fares";
+                // Check if night_charges and extra_waiting_charges columns exist and update them if needed
+                $checkNulls = $conn->query("SELECT night_charges, extra_waiting_charges FROM airport_transfer_fares WHERE vehicle_id = '$vehicleId'");
+                if ($checkNulls && $row = $checkNulls->fetch_assoc()) {
+                    $updateNeeded = false;
+                    $updateFields = [];
+                    
+                    if (is_null($row['night_charges'])) {
+                        $updateFields[] = "night_charges = 150";
+                        $updateNeeded = true;
+                    }
+                    
+                    if (is_null($row['extra_waiting_charges'])) {
+                        $updateFields[] = "extra_waiting_charges = 100";
+                        $updateNeeded = true;
+                    }
+                    
+                    if ($updateNeeded) {
+                        $updateQuery = "UPDATE airport_transfer_fares SET " . implode(", ", $updateFields) . " WHERE vehicle_id = '$vehicleId'";
+                        if ($conn->query($updateQuery)) {
+                            $response['details']['tables_fixed'][] = "Fixed NULL values in airport_transfer_fares for vehicle $vehicleId";
+                        }
+                    }
                 }
             }
         }

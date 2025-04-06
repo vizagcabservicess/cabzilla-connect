@@ -50,12 +50,14 @@ export interface FareUpdateResponse {
   timestamp: number;
 }
 
-// Use a boolean flag to prevent recursive calls
+// Use boolean flags with timeouts to prevent recursive calls
 let isUpdatingFare = false;
 let isSyncingFares = false;
 let isUpdatingOutstationFare = false;
 let isUpdatingLocalFare = false;
 let clearCacheInProgress = false;
+let clearCacheTimestamp = 0; // Track the last time cache was cleared
+const CACHE_CLEAR_COOLDOWN = 2000; // 2 seconds cooldown to prevent rapid cache clearing
 
 /**
  * Updates the fare for a vehicle with outstation fare data
@@ -93,7 +95,10 @@ export const updateOutstationFare = async (data: OutstationFare): Promise<FareUp
     console.error('Error updating outstation fare:', error);
     throw error;
   } finally {
-    isUpdatingOutstationFare = false;
+    // Use setTimeout to release the lock after a short delay
+    setTimeout(() => {
+      isUpdatingOutstationFare = false;
+    }, 500);
   }
 };
 
@@ -119,7 +124,7 @@ export const updateAirportFare = async (data: AirportFare): Promise<FareUpdateRe
     console.log('Updating airport fare for vehicle', fareData.vehicleId, ':', fareData);
     
     const response = await directVehicleOperation(
-      'api/admin/airport-fares-update.php',
+      'api/admin/direct-airport-fares-update.php',
       'POST',
       {
         headers: {
@@ -143,7 +148,10 @@ export const updateAirportFare = async (data: AirportFare): Promise<FareUpdateRe
     console.error('Error updating airport fare:', error);
     throw error;
   } finally {
-    isUpdatingFare = false;
+    // Use setTimeout to release the lock after a short delay
+    setTimeout(() => {
+      isUpdatingFare = false;
+    }, 500);
   }
 };
 
@@ -193,7 +201,10 @@ export const updateLocalFare = async (data: LocalFare): Promise<FareUpdateRespon
     console.error('Error updating local fare:', error);
     throw error;
   } finally {
-    isUpdatingLocalFare = false;
+    // Use setTimeout to release the lock after a short delay
+    setTimeout(() => {
+      isUpdatingLocalFare = false;
+    }, 500);
   }
 };
 
@@ -211,7 +222,7 @@ export const syncAirportFares = async (applyDefaults: boolean = true): Promise<b
     console.log('Syncing airport fares with applyDefaults =', applyDefaults);
     
     const response = await directVehicleOperation(
-      'api/airport-fares-sync.php', 
+      'api/admin/sync-airport-fares.php', 
       'POST',
       {
         headers: {
@@ -235,7 +246,10 @@ export const syncAirportFares = async (applyDefaults: boolean = true): Promise<b
     console.error('Error syncing airport fares:', error);
     return false;
   } finally {
-    isSyncingFares = false;
+    // Use setTimeout to release the lock after a short delay
+    setTimeout(() => {
+      isSyncingFares = false;
+    }, 1000);
   }
 };
 
@@ -392,36 +406,61 @@ export const getAllAirportFares = async (): Promise<Record<string, any>> => {
 
 /**
  * Clear cache safely (prevent recursive calls)
+ * This is the function causing the stack overflow
  */
 export const clearCache = (): void => {
-  if (clearCacheInProgress) {
-    console.log('Cache clearing already in progress, skipping duplicate call');
+  const now = Date.now();
+  
+  // Check if we're already clearing the cache or if we've cleared it recently
+  if (clearCacheInProgress || (now - clearCacheTimestamp < CACHE_CLEAR_COOLDOWN)) {
+    console.log('Cache clearing already in progress or on cooldown, skipping duplicate call');
     return;
   }
   
   try {
     clearCacheInProgress = true;
-    console.log('Clearing fare cache');
+    clearCacheTimestamp = now;
+    
+    console.log('Clearing fare cache at timestamp:', now);
     
     // Clear localStorage items
-    localStorage.removeItem('outstation_fares');
-    localStorage.removeItem('airport_fares');
-    localStorage.removeItem('local_fares');
-    localStorage.removeItem('vehicle_data');
+    try {
+      localStorage.removeItem('outstation_fares');
+      localStorage.removeItem('airport_fares');
+      localStorage.removeItem('local_fares');
+      localStorage.removeItem('vehicle_data');
+      
+      // Set a flag to indicate cache has been cleared
+      localStorage.setItem('fare_cache_cleared', now.toString());
+    } catch (storageError) {
+      console.error('Error accessing localStorage:', storageError);
+    }
     
-    // Set a flag to indicate cache has been cleared
-    localStorage.setItem('fare_cache_cleared', Date.now().toString());
+    // Dispatch event safely with a debounced approach
+    const dispatchCacheEvent = () => {
+      try {
+        // Only dispatch if we're still the active clearer (avoid multiple dispatches)
+        if (clearCacheTimestamp === now) {
+          console.log('Dispatching fare-cache-cleared event');
+          window.dispatchEvent(new CustomEvent('fare-cache-cleared'));
+        }
+      } catch (eventError) {
+        console.error('Error dispatching cache cleared event:', eventError);
+      }
+    };
     
-    // Dispatch event safely
-    setTimeout(() => {
-      window.dispatchEvent(new CustomEvent('fare-cache-cleared'));
-    }, 100);
+    // Delay the event dispatch to prevent rapid recursive calls
+    setTimeout(dispatchCacheEvent, 300);
   } catch (error: any) {
     console.error('Error clearing cache:', error);
   } finally {
+    // Release the lock after a longer delay to prevent rapid calls
     setTimeout(() => {
-      clearCacheInProgress = false;
-    }, 500);
+      if (clearCacheTimestamp === now) {
+        clearCacheInProgress = false;
+        console.log('Cache clearing lock released');
+      }
+    }, 1000);
   }
 };
 
