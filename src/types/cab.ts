@@ -59,7 +59,6 @@ export interface LocalFare {
 }
 
 export interface AirportFare {
-  vehicleId?: string;  // Vehicle ID for API calls
   basePrice: number;
   pricePerKm: number;
   dropPrice: number;
@@ -69,8 +68,6 @@ export interface AirportFare {
   tier3Price: number;   // 21-30 KM
   tier4Price: number;   // 31+ KM
   extraKmCharge: number;
-  nightCharges?: number;
-  extraWaitingCharges?: number;
 }
 
 // Additional interfaces needed for the application

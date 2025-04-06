@@ -22,22 +22,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Disable displaying errors directly, but log them
-ini_set('display_errors', 0);
-ini_set('log_errors', 1);
+// Error reporting
+ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
-// Create log directory
-$logDir = dirname(__FILE__) . '/../../logs';
-if (!file_exists($logDir)) {
-    mkdir($logDir, 0755, true);
-}
-
-// Set error log file
-$logFile = $logDir . '/fix-database.log';
-ini_set('error_log', $logFile);
-
-// Initialize response
+// Response array
 $response = [
     'status' => 'error',
     'message' => 'Unknown error occurred',
@@ -49,13 +38,6 @@ $response = [
     ],
     'timestamp' => time()
 ];
-
-// Logging function
-function logMessage($message) {
-    global $logDir;
-    $timestamp = date('Y-m-d H:i:s');
-    error_log("[$timestamp] " . $message . "\n", 3, $logDir . '/fix-database.log');
-}
 
 try {
     // Define database connection - FIXED credentials with proper escaping 
@@ -101,8 +83,14 @@ try {
         throw new Exception("Failed to connect to database after {$maxRetries} attempts: " . $lastError->getMessage());
     }
     
-    // Log success
-    logMessage("Database connection successful");
+    // Enable logging
+    $logDir = dirname(__FILE__) . '/../../logs';
+    if (!file_exists($logDir)) {
+        mkdir($logDir, 0755, true);
+    }
+    
+    $logFile = $logDir . '/fix-database.log';
+    error_log(date('Y-m-d H:i:s') . " - Starting database fix\n", 3, $logFile);
     
     // Begin transaction
     $conn->begin_transaction();
@@ -110,7 +98,7 @@ try {
     try {
         // Fix 1: Check if vehicles table exists and fix night_halt_charge and driver_allowance fields
         if ($conn->query("SHOW TABLES LIKE 'vehicles'")->num_rows > 0) {
-            logMessage("Fixing vehicles table");
+            error_log(date('Y-m-d H:i:s') . " - Fixing vehicles table\n", 3, $logFile);
             
             // Ensure night_halt_charge and driver_allowance are NOT NULL with DEFAULT values
             $conn->query("
@@ -128,7 +116,7 @@ try {
         
         // Fix 2: Check if outstation_fares table exists and fix its columns
         if ($conn->query("SHOW TABLES LIKE 'outstation_fares'")->num_rows > 0) {
-            logMessage("Fixing outstation_fares table");
+            error_log(date('Y-m-d H:i:s') . " - Fixing outstation_fares table\n", 3, $logFile);
             
             // Ensure night_halt_charge and driver_allowance are NOT NULL with DEFAULT values
             $conn->query("
@@ -159,62 +147,19 @@ try {
             }
             
             if (in_array('night_halt_charge', $columns)) {
-                logMessage("Found night_halt_charge in $table, fixing");
+                error_log(date('Y-m-d H:i:s') . " - Found night_halt_charge in $table, fixing\n", 3, $logFile);
                 $conn->query("UPDATE `$table` SET night_halt_charge = 700 WHERE night_halt_charge IS NULL");
                 $response['details']['tables_fixed'][] = "$table - NULL values fixed in night_halt_charge";
             }
             
             if (in_array('driver_allowance', $columns)) {
-                logMessage("Found driver_allowance in $table, fixing");
+                error_log(date('Y-m-d H:i:s') . " - Found driver_allowance in $table, fixing\n", 3, $logFile);
                 $conn->query("UPDATE `$table` SET driver_allowance = 250 WHERE driver_allowance IS NULL");
                 $response['details']['tables_fixed'][] = "$table - NULL values fixed in driver_allowance";
             }
         }
         
-        // Fix 4: Fix airport_transfer_fares table and add missing columns if they don't exist
-        if ($conn->query("SHOW TABLES LIKE 'airport_transfer_fares'")->num_rows > 0) {
-            logMessage("Checking airport_transfer_fares table for missing columns");
-            
-            // Check for night_charges column
-            $nightChargesExists = $conn->query("SHOW COLUMNS FROM airport_transfer_fares LIKE 'night_charges'")->num_rows > 0;
-            if (!$nightChargesExists) {
-                logMessage("Adding night_charges column to airport_transfer_fares");
-                $conn->query("ALTER TABLE airport_transfer_fares ADD COLUMN night_charges DECIMAL(10,2) DEFAULT 150");
-                $response['details']['tables_fixed'][] = "airport_transfer_fares - Added night_charges column";
-            }
-            
-            // Check for extra_waiting_charges column
-            $extraWaitingChargesExists = $conn->query("SHOW COLUMNS FROM airport_transfer_fares LIKE 'extra_waiting_charges'")->num_rows > 0;
-            if (!$extraWaitingChargesExists) {
-                logMessage("Adding extra_waiting_charges column to airport_transfer_fares");
-                $conn->query("ALTER TABLE airport_transfer_fares ADD COLUMN extra_waiting_charges DECIMAL(10,2) DEFAULT 100");
-                $response['details']['tables_fixed'][] = "airport_transfer_fares - Added extra_waiting_charges column";
-            }
-            
-            // Update any NULL values to defaults
-            $conn->query("UPDATE airport_transfer_fares SET night_charges = 150 WHERE night_charges IS NULL");
-            $conn->query("UPDATE airport_transfer_fares SET extra_waiting_charges = 100 WHERE extra_waiting_charges IS NULL");
-            
-            // Ensure vehicle_id has a unique index
-            $indexExists = false;
-            $indexResult = $conn->query("SHOW INDEX FROM airport_transfer_fares WHERE Key_name = 'vehicle_id'");
-            $indexExists = $indexResult && $indexResult->num_rows > 0;
-            
-            if (!$indexExists) {
-                logMessage("Adding unique index on vehicle_id to airport_transfer_fares");
-                // Try adding the unique index, but don't fail if it can't be added (might have duplicates)
-                try {
-                    $conn->query("ALTER TABLE airport_transfer_fares ADD UNIQUE INDEX vehicle_id (vehicle_id)");
-                    $response['details']['tables_fixed'][] = "airport_transfer_fares - Added unique index on vehicle_id";
-                } catch (Exception $indexEx) {
-                    // Log but continue
-                    logMessage("Could not add unique index to airport_transfer_fares: " . $indexEx->getMessage());
-                    $response['details']['tables_failed'][] = "airport_transfer_fares - Failed to add unique index: " . $indexEx->getMessage();
-                }
-            }
-        }
-        
-        // Fix 5: Ensure all vehicles have corresponding entries in pricing tables
+        // Fix 4: Ensure all vehicles have corresponding entries in pricing tables
         $vehiclesResult = $conn->query("SELECT id, vehicle_id FROM vehicles");
         while ($vehicle = $vehiclesResult->fetch_assoc()) {
             $vehicleId = $vehicle['id'] ?? $vehicle['vehicle_id'];
@@ -269,40 +214,14 @@ try {
                     INSERT INTO airport_transfer_fares (
                         vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
                         tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge,
-                        night_charges, extra_waiting_charges,
                         created_at, updated_at
                     ) VALUES (
-                        '$vehicleId', 3000, 12, 800, 800, 600, 800, 1000, 1200, 12, 
-                        150, 100, NOW(), NOW()
+                        '$vehicleId', 3000, 12, 800, 800, 600, 800, 1000, 1200, 12, NOW(), NOW()
                     )
                 ");
                 
                 if ($insertAirport) {
                     $response['details']['vehicle_pricing_entries'][] = "Created airport transfer pricing for $vehicleId";
-                }
-            } else {
-                // Check if night_charges and extra_waiting_charges columns exist and update them if needed
-                $checkNulls = $conn->query("SELECT night_charges, extra_waiting_charges FROM airport_transfer_fares WHERE vehicle_id = '$vehicleId'");
-                if ($checkNulls && $row = $checkNulls->fetch_assoc()) {
-                    $updateNeeded = false;
-                    $updateFields = [];
-                    
-                    if (is_null($row['night_charges'])) {
-                        $updateFields[] = "night_charges = 150";
-                        $updateNeeded = true;
-                    }
-                    
-                    if (is_null($row['extra_waiting_charges'])) {
-                        $updateFields[] = "extra_waiting_charges = 100";
-                        $updateNeeded = true;
-                    }
-                    
-                    if ($updateNeeded) {
-                        $updateQuery = "UPDATE airport_transfer_fares SET " . implode(", ", $updateFields) . " WHERE vehicle_id = '$vehicleId'";
-                        if ($conn->query($updateQuery)) {
-                            $response['details']['tables_fixed'][] = "Fixed NULL values in airport_transfer_fares for vehicle $vehicleId";
-                        }
-                    }
                 }
             }
         }
@@ -325,13 +244,13 @@ try {
     
 } catch (Exception $e) {
     $errorMessage = "Error fixing database tables: " . $e->getMessage();
-    logMessage($errorMessage);
+    error_log(date('Y-m-d H:i:s') . " - $errorMessage\n", 3, $logFile ?? null);
     
     $response['status'] = 'error';
     $response['message'] = $errorMessage;
     $response['details']['errors'][] = $e->getMessage();
 }
 
-// Send response with JSON_PARTIAL_OUTPUT_ON_ERROR to ensure valid JSON even if there's an error
+// Send response
 echo json_encode($response, JSON_PARTIAL_OUTPUT_ON_ERROR | JSON_PRETTY_PRINT);
 exit;

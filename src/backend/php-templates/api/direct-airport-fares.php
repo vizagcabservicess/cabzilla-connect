@@ -2,7 +2,7 @@
 <?php
 /**
  * Direct Airport Fares API - Public facing version
- * Retrieves airport fare data for vehicles
+ * Forwards to the admin endpoint for compatibility
  */
 
 // Set CORS headers
@@ -18,11 +18,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Setup error handling to return proper JSON responses
-ini_set('display_errors', 0);
-ini_set('log_errors', 1);
-error_reporting(E_ALL);
-
 // Create log directory
 $logDir = __DIR__ . '/../logs';
 if (!file_exists($logDir)) {
@@ -32,84 +27,60 @@ if (!file_exists($logDir)) {
 $logFile = $logDir . '/direct_airport_fares_' . date('Y-m-d') . '.log';
 $timestamp = date('Y-m-d H:i:s');
 
-// Get vehicleId from all possible sources
+// Log the redirect for debugging
+file_put_contents($logFile, "[$timestamp] Redirecting direct-airport-fares.php to admin/direct-airport-fares.php\n", FILE_APPEND);
+file_put_contents($logFile, "[$timestamp] Request method: " . $_SERVER['REQUEST_METHOD'] . "\n", FILE_APPEND);
+file_put_contents($logFile, "[$timestamp] Query string: " . $_SERVER['QUERY_STRING'] . "\n", FILE_APPEND);
+
+// Capture raw input for debugging
+$rawInput = file_get_contents('php://input');
+file_put_contents($logFile, "[$timestamp] Raw input: " . $rawInput . "\n", FILE_APPEND);
+
+// Check for vehicle ID in all possible parameter names
+$vehicleIdParams = ['id', 'vehicleId', 'vehicle_id', 'vehicleid'];
 $vehicleId = null;
 
-// First check URL parameters - use all common parameter names
-if (isset($_GET['id'])) {
-    $vehicleId = $_GET['id'];
-} elseif (isset($_GET['vehicleId'])) {
-    $vehicleId = $_GET['vehicleId'];
-} elseif (isset($_GET['vehicle_id'])) {
-    $vehicleId = $_GET['vehicle_id'];
+// First check URL parameters
+foreach ($vehicleIdParams as $param) {
+    if (isset($_GET[$param]) && !empty($_GET[$param])) {
+        $vehicleId = $_GET[$param];
+        file_put_contents($logFile, "[$timestamp] Found vehicle ID in URL parameter '$param': $vehicleId\n", FILE_APPEND);
+        break;
+    }
 }
 
-// Log the request with vehicle ID
-file_put_contents($logFile, "[$timestamp] Direct airport fares request received. Method: {$_SERVER['REQUEST_METHOD']}, Vehicle ID: " . ($vehicleId ?? 'not provided') . "\n", FILE_APPEND);
+// If not found in URL, check JSON input
+if (!$vehicleId && !empty($rawInput)) {
+    $jsonData = json_decode($rawInput, true);
+    if ($jsonData) {
+        foreach ($vehicleIdParams as $param) {
+            if (isset($jsonData[$param]) && !empty($jsonData[$param])) {
+                $vehicleId = $jsonData[$param];
+                file_put_contents($logFile, "[$timestamp] Found vehicle ID in JSON input '$param': $vehicleId\n", FILE_APPEND);
+                break;
+            }
+        }
+    }
+}
 
-// Set admin headers to ensure permission
+// If we have a vehicle ID, make sure it's properly passed to the admin endpoint
+if ($vehicleId) {
+    // Set it in all possible parameter locations to ensure it's found
+    $_GET['id'] = $vehicleId;
+    $_REQUEST['id'] = $vehicleId;
+    $_GET['vehicleId'] = $vehicleId;
+    $_REQUEST['vehicleId'] = $vehicleId;
+    $_GET['vehicle_id'] = $vehicleId;
+    $_REQUEST['vehicle_id'] = $vehicleId;
+    
+    file_put_contents($logFile, "[$timestamp] Setting vehicle ID in all parameters: $vehicleId\n", FILE_APPEND);
+} else {
+    file_put_contents($logFile, "[$timestamp] WARNING: No vehicle ID found in request\n", FILE_APPEND);
+}
+
+// Forward headers to ensure admin permissions
 $_SERVER['HTTP_X_ADMIN_MODE'] = 'true';
 $_SERVER['HTTP_X_FORCE_CREATION'] = 'true';
 
-// If no vehicle ID is provided, return error
-if (!$vehicleId) {
-    http_response_code(400);
-    echo json_encode([
-        'status' => 'error',
-        'message' => 'Vehicle ID is required',
-        'timestamp' => time()
-    ]);
-    exit;
-}
-
-// Simple mock data generator for testing purposes
-function generateMockFare($vehicleId) {
-    $basePrice = rand(1000, 3000);
-    return [
-        'id' => rand(1, 1000),
-        'vehicleId' => $vehicleId,
-        'vehicle_id' => $vehicleId,
-        'basePrice' => $basePrice,
-        'pricePerKm' => rand(10, 25),
-        'pickupPrice' => $basePrice + rand(200, 500),
-        'dropPrice' => $basePrice + rand(100, 400),
-        'tier1Price' => $basePrice - rand(100, 200),
-        'tier2Price' => $basePrice,
-        'tier3Price' => $basePrice + rand(100, 300),
-        'tier4Price' => $basePrice + rand(400, 600),
-        'extraKmCharge' => rand(10, 20),
-        'nightCharges' => rand(200, 500),
-        'extraWaitingCharges' => rand(50, 150),
-        'createdAt' => date('Y-m-d H:i:s'),
-        'updatedAt' => date('Y-m-d H:i:s')
-    ];
-}
-
-try {
-    // Try to include the admin endpoint safely
-    if (file_exists(__DIR__ . '/admin/direct-airport-fares.php')) {
-        include_once __DIR__ . '/admin/direct-airport-fares.php';
-    } else {
-        // If the admin file doesn't exist, use mock data for preview
-        $fare = generateMockFare($vehicleId);
-        
-        echo json_encode([
-            'status' => 'success',
-            'message' => 'Mock fare data generated for preview',
-            'fare' => $fare,
-            'isMock' => true,
-            'timestamp' => time()
-        ]);
-    }
-} catch (Exception $e) {
-    // Log the error
-    file_put_contents($logFile, "[$timestamp] ERROR: " . $e->getMessage() . "\n", FILE_APPEND);
-    
-    // Return a proper JSON error response
-    http_response_code(500);
-    echo json_encode([
-        'status' => 'error',
-        'message' => 'Internal server error: ' . $e->getMessage(),
-        'timestamp' => time()
-    ]);
-}
+// Forward the request to the admin endpoint
+require_once __DIR__ . '/admin/direct-airport-fares.php';
