@@ -1,0 +1,13 @@
+
+{
+    "id": 124,
+    "vehicleId": "ertiga",
+    "vehicle_id": "ertiga",
+    "price4hrs40km": 1500,
+    "price8hrs80km": 2600,
+    "price10hrs100km": 3100,
+    "priceExtraKm": 15,
+    "priceExtraHour": 250,
+    "updatedAt": "2025-04-06 07:00:00",
+    "createdAt": "2025-04-06 07:00:00"
+}
