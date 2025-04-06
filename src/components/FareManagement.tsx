@@ -5,6 +5,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import { AirportFareForm } from './AirportFareForm';
 import { LocalFareForm } from './LocalFareForm';
+import { OutstationFareForm } from './OutstationFareForm';
 import { toast } from 'sonner';
 
 interface FareManagementProps {
@@ -80,11 +81,11 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
           )}
 
           {fareType === 'outstation' && (
-            <Card>
-              <CardContent className="p-6">
-                <p className="text-muted-foreground">Outstation fare management will be implemented soon.</p>
-              </CardContent>
-            </Card>
+            <OutstationFareForm
+              vehicleId={vehicleId}
+              onFareUpdated={handleFareUpdated}
+              key={`outstation-${vehicleId}-${refreshCount}`}
+            />
           )}
         </div>
       )}

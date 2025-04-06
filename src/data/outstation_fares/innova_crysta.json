@@ -1,0 +1,14 @@
+
+{
+    "id": 125,
+    "vehicleId": "innova_crysta",
+    "vehicle_id": "innova_crysta",
+    "baseFare": 3800,
+    "pricePerKm": 20,
+    "roundTripBaseFare": 3400,
+    "roundTripPricePerKm": 18,
+    "driverAllowance": 250,
+    "nightHaltCharge": 1000,
+    "updatedAt": "2025-04-06 07:00:00",
+    "createdAt": "2025-04-06 07:00:00"
+}
