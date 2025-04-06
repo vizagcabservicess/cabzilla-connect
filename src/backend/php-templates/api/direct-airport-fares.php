@@ -36,16 +36,46 @@ file_put_contents($logFile, "[$timestamp] Query string: " . $_SERVER['QUERY_STRI
 $rawInput = file_get_contents('php://input');
 file_put_contents($logFile, "[$timestamp] Raw input: " . $rawInput . "\n", FILE_APPEND);
 
-// Get vehicle ID from URL parameters
-$vehicleId = isset($_GET['id']) ? $_GET['id'] : 
-            (isset($_GET['vehicleId']) ? $_GET['vehicleId'] : 
-            (isset($_GET['vehicle_id']) ? $_GET['vehicle_id'] : null));
+// Check for vehicle ID in all possible parameter names
+$vehicleIdParams = ['id', 'vehicleId', 'vehicle_id', 'vehicleid'];
+$vehicleId = null;
 
-// If we have a vehicle ID from the URL, make sure it's properly passed to the admin endpoint
+// First check URL parameters
+foreach ($vehicleIdParams as $param) {
+    if (isset($_GET[$param]) && !empty($_GET[$param])) {
+        $vehicleId = $_GET[$param];
+        file_put_contents($logFile, "[$timestamp] Found vehicle ID in URL parameter '$param': $vehicleId\n", FILE_APPEND);
+        break;
+    }
+}
+
+// If not found in URL, check JSON input
+if (!$vehicleId && !empty($rawInput)) {
+    $jsonData = json_decode($rawInput, true);
+    if ($jsonData) {
+        foreach ($vehicleIdParams as $param) {
+            if (isset($jsonData[$param]) && !empty($jsonData[$param])) {
+                $vehicleId = $jsonData[$param];
+                file_put_contents($logFile, "[$timestamp] Found vehicle ID in JSON input '$param': $vehicleId\n", FILE_APPEND);
+                break;
+            }
+        }
+    }
+}
+
+// If we have a vehicle ID, make sure it's properly passed to the admin endpoint
 if ($vehicleId) {
+    // Set it in all possible parameter locations to ensure it's found
     $_GET['id'] = $vehicleId;
     $_REQUEST['id'] = $vehicleId;
-    file_put_contents($logFile, "[$timestamp] Using vehicleId from URL: " . $vehicleId . "\n", FILE_APPEND);
+    $_GET['vehicleId'] = $vehicleId;
+    $_REQUEST['vehicleId'] = $vehicleId;
+    $_GET['vehicle_id'] = $vehicleId;
+    $_REQUEST['vehicle_id'] = $vehicleId;
+    
+    file_put_contents($logFile, "[$timestamp] Setting vehicle ID in all parameters: $vehicleId\n", FILE_APPEND);
+} else {
+    file_put_contents($logFile, "[$timestamp] WARNING: No vehicle ID found in request\n", FILE_APPEND);
 }
 
 // Forward headers to ensure admin permissions

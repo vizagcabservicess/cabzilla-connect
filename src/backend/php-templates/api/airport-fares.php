@@ -13,7 +13,7 @@ header('Expires: 0');
 
 // Add debugging headers
 header('X-Debug-File: airport-fares.php');
-header('X-API-Version: 1.0.1');
+header('X-API-Version: 1.0.2');
 header('X-Timestamp: ' . time());
 
 // Handle preflight OPTIONS request
@@ -51,6 +51,24 @@ try {
     $useAirportTable = false;
     
     if ($airportTableExists) {
+        // Check if the required columns exist
+        $columnCheck = $conn->query("SHOW COLUMNS FROM airport_transfer_fares LIKE 'night_charges'");
+        $nightChargesExists = $columnCheck && $columnCheck->num_rows > 0;
+        
+        if (!$nightChargesExists) {
+            // Add the missing columns if they don't exist
+            error_log("Adding missing night_charges column to airport_transfer_fares table");
+            $conn->query("ALTER TABLE airport_transfer_fares ADD COLUMN night_charges DECIMAL(10,2) DEFAULT 0");
+        }
+        
+        $columnCheck = $conn->query("SHOW COLUMNS FROM airport_transfer_fares LIKE 'extra_waiting_charges'");
+        $extraWaitingChargesExists = $columnCheck && $columnCheck->num_rows > 0;
+        
+        if (!$extraWaitingChargesExists) {
+            error_log("Adding missing extra_waiting_charges column to airport_transfer_fares table");
+            $conn->query("ALTER TABLE airport_transfer_fares ADD COLUMN extra_waiting_charges DECIMAL(10,2) DEFAULT 0");
+        }
+        
         // First check if the airport_transfer_fares table has data
         $countQuery = "SELECT COUNT(*) as count FROM airport_transfer_fares";
         $countResult = $conn->query($countQuery);
@@ -74,7 +92,9 @@ try {
                     atf.tier2_price AS tier2Price,
                     atf.tier3_price AS tier3Price,
                     atf.tier4_price AS tier4Price,
-                    atf.extra_km_charge AS extraKmCharge
+                    atf.extra_km_charge AS extraKmCharge,
+                    atf.night_charges AS nightCharges,
+                    atf.extra_waiting_charges AS extraWaitingCharges
                 FROM 
                     airport_transfer_fares atf
             ";
@@ -104,7 +124,9 @@ try {
                 vp.airport_tier2_price AS tier2Price,
                 vp.airport_tier3_price AS tier3Price,
                 vp.airport_tier4_price AS tier4Price,
-                vp.airport_extra_km_charge AS extraKmCharge
+                vp.airport_extra_km_charge AS extraKmCharge,
+                vp.airport_night_charges AS nightCharges,
+                vp.airport_extra_waiting_charges AS extraWaitingCharges
             FROM 
                 vehicle_pricing vp
             WHERE 
@@ -162,7 +184,9 @@ try {
             'tier2Price' => floatval($row['tier2Price'] ?? 0),
             'tier3Price' => floatval($row['tier3Price'] ?? 0),
             'tier4Price' => floatval($row['tier4Price'] ?? 0),
-            'extraKmCharge' => floatval($row['extraKmCharge'] ?? 0)
+            'extraKmCharge' => floatval($row['extraKmCharge'] ?? 0),
+            'nightCharges' => floatval($row['nightCharges'] ?? 0),
+            'extraWaitingCharges' => floatval($row['extraWaitingCharges'] ?? 0)
         ];
         
         error_log("Fare data for $id: " . json_encode($fares[$id]));
