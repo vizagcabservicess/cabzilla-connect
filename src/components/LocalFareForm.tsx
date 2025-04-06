@@ -10,15 +10,18 @@ import { toast } from "sonner";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { LocalFare } from '@/types/cab';
-import { updateLocalFares } from '@/services/fareUpdateService';
+import { updateLocalFare } from '@/services/fareUpdateService';
+import { FareUpdateError } from './cab-options/FareUpdateError';
 
 const localFareSchema = z.object({
-  price4hrs40km: z.coerce.number().min(0, "Price must be a positive number"),
-  price8hrs80km: z.coerce.number().min(0, "Price must be a positive number"),
-  price10hrs100km: z.coerce.number().min(0, "Price must be a positive number"),
-  priceExtraKm: z.coerce.number().min(0, "Extra kilometer price must be a positive number"),
-  priceExtraHour: z.coerce.number().min(0, "Extra hour price must be a positive number"),
+  price4hrs40km: z.coerce.number().min(0, "4 hour package price must be a positive number"),
+  price8hrs80km: z.coerce.number().min(0, "8 hour package price must be a positive number"),
+  price10hrs100km: z.coerce.number().min(0, "10 hour package price must be a positive number"),
+  priceExtraKm: z.coerce.number().min(0, "Extra km charge must be a positive number"),
+  priceExtraHour: z.coerce.number().min(0, "Extra hour charge must be a positive number"),
 });
+
+type LocalFareFormValues = z.infer<typeof localFareSchema>;
 
 interface LocalFareFormProps {
   vehicleId: string;
@@ -28,9 +31,9 @@ interface LocalFareFormProps {
 
 export function LocalFareForm({ vehicleId, initialData, onSuccess }: LocalFareFormProps) {
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Error | null>(null);
 
-  const form = useForm<z.infer<typeof localFareSchema>>({
+  const form = useForm<LocalFareFormValues>({
     resolver: zodResolver(localFareSchema),
     defaultValues: {
       price4hrs40km: 0,
@@ -44,19 +47,20 @@ export function LocalFareForm({ vehicleId, initialData, onSuccess }: LocalFareFo
   // Update form when initial data changes
   useEffect(() => {
     if (initialData) {
+      console.log("Setting initial local fare data:", initialData);
       form.reset({
-        price4hrs40km: initialData.price4hrs40km || initialData.package4hr40km || 0,
-        price8hrs80km: initialData.price8hrs80km || initialData.package8hr80km || 0,
-        price10hrs100km: initialData.price10hrs100km || initialData.package10hr100km || 0,
-        priceExtraKm: initialData.priceExtraKm || initialData.extraKmRate || 0,
-        priceExtraHour: initialData.priceExtraHour || initialData.extraHourRate || 0,
+        price4hrs40km: initialData.price4hrs40km || 0,
+        price8hrs80km: initialData.price8hrs80km || 0,
+        price10hrs100km: initialData.price10hrs100km || 0,
+        priceExtraKm: initialData.priceExtraKm || 0,
+        priceExtraHour: initialData.priceExtraHour || 0,
       });
     }
   }, [initialData, form]);
 
-  async function onSubmit(values: z.infer<typeof localFareSchema>) {
+  async function onSubmit(values: LocalFareFormValues) {
     if (!vehicleId) {
-      setError("Vehicle ID is required");
+      setError(new Error("Vehicle ID is required"));
       return;
     }
 
@@ -64,6 +68,7 @@ export function LocalFareForm({ vehicleId, initialData, onSuccess }: LocalFareFo
     setError(null);
 
     try {
+      // Make sure all required fields are included and not undefined
       const updateData = {
         vehicleId,
         price4hrs40km: values.price4hrs40km,
@@ -75,7 +80,7 @@ export function LocalFareForm({ vehicleId, initialData, onSuccess }: LocalFareFo
       
       console.log("Updating local fares with data:", updateData);
       
-      const response = await updateLocalFares(updateData);
+      const response = await updateLocalFare(updateData);
       
       console.log("Local fare update response:", response);
       
@@ -86,14 +91,14 @@ export function LocalFareForm({ vehicleId, initialData, onSuccess }: LocalFareFo
         }
       } else {
         const errorMessage = response?.message || "Failed to update local fares";
-        setError(errorMessage);
+        const newError = new Error(errorMessage);
+        setError(newError);
         toast.error(errorMessage);
       }
     } catch (err: any) {
       console.error("Error updating local fares:", err);
-      const errorMessage = err?.message || "An unexpected error occurred";
-      setError(errorMessage);
-      toast.error(errorMessage);
+      setError(err);
+      toast.error(err?.message || "An unexpected error occurred");
     } finally {
       setIsLoading(false);
     }
@@ -102,10 +107,11 @@ export function LocalFareForm({ vehicleId, initialData, onSuccess }: LocalFareFo
   return (
     <div className="space-y-4">
       {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
+        <FareUpdateError 
+          error={error} 
+          onRetry={() => form.handleSubmit(onSubmit)()} 
+          isAdmin={true}
+        />
       )}
       
       <Form {...form}>
@@ -116,7 +122,7 @@ export function LocalFareForm({ vehicleId, initialData, onSuccess }: LocalFareFo
               name="price4hrs40km"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>4 Hours / 40 KM (₹)</FormLabel>
+                  <FormLabel>4 Hours - 40 KM (₹)</FormLabel>
                   <FormControl>
                     <Input type="number" placeholder="e.g. 1500" {...field} />
                   </FormControl>
@@ -130,7 +136,7 @@ export function LocalFareForm({ vehicleId, initialData, onSuccess }: LocalFareFo
               name="price8hrs80km"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>8 Hours / 80 KM (₹)</FormLabel>
+                  <FormLabel>8 Hours - 80 KM (₹)</FormLabel>
                   <FormControl>
                     <Input type="number" placeholder="e.g. 2500" {...field} />
                   </FormControl>
@@ -144,7 +150,7 @@ export function LocalFareForm({ vehicleId, initialData, onSuccess }: LocalFareFo
               name="price10hrs100km"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>10 Hours / 100 KM (₹)</FormLabel>
+                  <FormLabel>10 Hours - 100 KM (₹)</FormLabel>
                   <FormControl>
                     <Input type="number" placeholder="e.g. 3000" {...field} />
                   </FormControl>
@@ -160,7 +166,7 @@ export function LocalFareForm({ vehicleId, initialData, onSuccess }: LocalFareFo
               name="priceExtraKm"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Extra KM Rate (₹)</FormLabel>
+                  <FormLabel>Extra KM Charge (₹)</FormLabel>
                   <FormControl>
                     <Input type="number" placeholder="e.g. 15" {...field} />
                   </FormControl>
@@ -174,7 +180,7 @@ export function LocalFareForm({ vehicleId, initialData, onSuccess }: LocalFareFo
               name="priceExtraHour"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Extra Hour Rate (₹)</FormLabel>
+                  <FormLabel>Extra Hour Charge (₹)</FormLabel>
                   <FormControl>
                     <Input type="number" placeholder="e.g. 200" {...field} />
                   </FormControl>

@@ -5,6 +5,10 @@
  * This script recreates necessary tables if they're missing or have structure issues
  */
 
+// Set error handling to catch issues
+ini_set('display_errors', 0);
+error_reporting(E_ALL);
+
 // Set CORS headers
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
@@ -103,8 +107,8 @@ try {
                 tier3_price DECIMAL(10,2) NOT NULL DEFAULT 0,
                 tier4_price DECIMAL(10,2) NOT NULL DEFAULT 0,
                 extra_km_charge DECIMAL(5,2) NOT NULL DEFAULT 0,
-                night_charges DECIMAL(10,2) DEFAULT 0,
-                extra_waiting_charges DECIMAL(10,2) DEFAULT 0,
+                night_charges DECIMAL(10,2) NOT NULL DEFAULT 0,
+                extra_waiting_charges DECIMAL(10,2) NOT NULL DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 UNIQUE KEY vehicle_id (vehicle_id)
@@ -123,7 +127,7 @@ try {
         $nightChargesExists = ($columnsResult && $columnsResult->num_rows > 0);
         
         if (!$nightChargesExists) {
-            if ($conn->query("ALTER TABLE airport_transfer_fares ADD COLUMN night_charges DECIMAL(10,2) DEFAULT 0")) {
+            if ($conn->query("ALTER TABLE airport_transfer_fares ADD COLUMN night_charges DECIMAL(10,2) NOT NULL DEFAULT 0")) {
                 $fixed[] = "Added night_charges column to airport_transfer_fares";
             }
         }
@@ -132,10 +136,15 @@ try {
         $waitingChargesExists = ($columnsResult && $columnsResult->num_rows > 0);
         
         if (!$waitingChargesExists) {
-            if ($conn->query("ALTER TABLE airport_transfer_fares ADD COLUMN extra_waiting_charges DECIMAL(10,2) DEFAULT 0")) {
+            if ($conn->query("ALTER TABLE airport_transfer_fares ADD COLUMN extra_waiting_charges DECIMAL(10,2) NOT NULL DEFAULT 0")) {
                 $fixed[] = "Added extra_waiting_charges column to airport_transfer_fares";
             }
         }
+        
+        // Make sure the night_charges and extra_waiting_charges are NOT NULL
+        $conn->query("ALTER TABLE airport_transfer_fares MODIFY night_charges DECIMAL(10,2) NOT NULL DEFAULT 0");
+        $conn->query("ALTER TABLE airport_transfer_fares MODIFY extra_waiting_charges DECIMAL(10,2) NOT NULL DEFAULT 0");
+        $fixed[] = "Ensured airport_transfer_fares columns have NOT NULL constraints";
     }
     
     // Check for local_package_fares table and create/fix if needed

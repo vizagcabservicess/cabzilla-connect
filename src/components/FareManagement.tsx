@@ -9,6 +9,7 @@ import { AirportFareForm } from './AirportFareForm';
 import { LocalFare, AirportFare } from '@/types/cab';
 import { getLocalFaresForVehicle, getAirportFaresForVehicle } from '@/services/fareService';
 import { syncLocalFares, syncAirportFares } from '@/services/fareUpdateService';
+import { DatabaseConnectionError } from './DatabaseConnectionError';
 import { toast } from 'sonner';
 
 interface FareManagementProps {
@@ -19,6 +20,7 @@ interface FareManagementProps {
 export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareType }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [databaseError, setDatabaseError] = useState<Error | null>(null);
   const [localFare, setLocalFare] = useState<LocalFare | null>(null);
   const [airportFare, setAirportFare] = useState<AirportFare | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -28,6 +30,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     
     setLoading(true);
     setError(null);
+    setDatabaseError(null);
     
     try {
       if (fareType === 'local') {
@@ -41,7 +44,16 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       }
     } catch (err: any) {
       console.error(`Error loading ${fareType} fares:`, err);
-      setError(`Failed to load ${fareType} fares: ${err.message}`);
+      
+      if (err.message && (
+          err.message.includes('database') || 
+          err.message.includes('SQL') || 
+          err.message.includes('connection')
+        )) {
+        setDatabaseError(err);
+      } else {
+        setError(`Failed to load ${fareType} fares: ${err.message}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -88,6 +100,17 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
     loadFares();
   };
   
+  if (databaseError) {
+    return (
+      <DatabaseConnectionError 
+        error={databaseError}
+        onRetry={loadFares}
+        title={`${fareType.charAt(0).toUpperCase() + fareType.slice(1)} Fares Database Error`}
+        description={`There was an error connecting to the database to load ${fareType} fares.`}
+      />
+    );
+  }
+  
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -114,13 +137,17 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
           </Alert>
         )}
         
-        {fareType === 'local' ? (
+        {loading && <p>Loading {fareType} fares...</p>}
+        
+        {!loading && fareType === 'local' && (
           <LocalFareForm 
             vehicleId={vehicleId} 
             initialData={localFare} 
             onSuccess={handleFareUpdateSuccess} 
           />
-        ) : (
+        )}
+        
+        {!loading && fareType === 'airport' && (
           <AirportFareForm 
             vehicleId={vehicleId} 
             initialData={airportFare} 

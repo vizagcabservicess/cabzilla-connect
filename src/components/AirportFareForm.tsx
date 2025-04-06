@@ -11,6 +11,7 @@ import { AlertCircle, Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AirportFare } from '@/types/cab';
 import { updateAirportFare } from '@/services/fareUpdateService';
+import { FareUpdateError } from './cab-options/FareUpdateError';
 
 const airportFareSchema = z.object({
   basePrice: z.coerce.number().min(0, "Base price must be a positive number"),
@@ -26,6 +27,8 @@ const airportFareSchema = z.object({
   extraWaitingCharges: z.coerce.number().min(0, "Extra waiting charges must be a positive number"),
 });
 
+type AirportFareFormValues = z.infer<typeof airportFareSchema>;
+
 interface AirportFareFormProps {
   vehicleId: string;
   initialData: AirportFare | null;
@@ -34,9 +37,9 @@ interface AirportFareFormProps {
 
 export function AirportFareForm({ vehicleId, initialData, onSuccess }: AirportFareFormProps) {
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Error | null>(null);
 
-  const form = useForm<z.infer<typeof airportFareSchema>>({
+  const form = useForm<AirportFareFormValues>({
     resolver: zodResolver(airportFareSchema),
     defaultValues: {
       basePrice: 0,
@@ -73,9 +76,9 @@ export function AirportFareForm({ vehicleId, initialData, onSuccess }: AirportFa
     }
   }, [initialData, form]);
 
-  async function onSubmit(values: z.infer<typeof airportFareSchema>) {
+  async function onSubmit(values: AirportFareFormValues) {
     if (!vehicleId) {
-      setError("Vehicle ID is required");
+      setError(new Error("Vehicle ID is required"));
       return;
     }
 
@@ -83,6 +86,7 @@ export function AirportFareForm({ vehicleId, initialData, onSuccess }: AirportFa
     setError(null);
 
     try {
+      // Make sure all required fields are included and not undefined
       const updateData = {
         vehicleId,
         basePrice: values.basePrice,
@@ -111,14 +115,14 @@ export function AirportFareForm({ vehicleId, initialData, onSuccess }: AirportFa
         }
       } else {
         const errorMessage = response?.message || "Failed to update airport fares";
-        setError(errorMessage);
+        const newError = new Error(errorMessage);
+        setError(newError);
         toast.error(errorMessage);
       }
     } catch (err: any) {
       console.error("Error updating airport fares:", err);
-      const errorMessage = err?.message || "An unexpected error occurred";
-      setError(errorMessage);
-      toast.error(errorMessage);
+      setError(err);
+      toast.error(err?.message || "An unexpected error occurred");
     } finally {
       setIsLoading(false);
     }
@@ -127,10 +131,11 @@ export function AirportFareForm({ vehicleId, initialData, onSuccess }: AirportFa
   return (
     <div className="space-y-4">
       {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
+        <FareUpdateError 
+          error={error} 
+          onRetry={() => form.handleSubmit(onSubmit)()} 
+          isAdmin={true}
+        />
       )}
       
       <Form {...form}>
