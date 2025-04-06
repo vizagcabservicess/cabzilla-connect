@@ -22,11 +22,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// Error reporting
-ini_set('display_errors', 1);
+// Disable displaying errors directly, but log them
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
 error_reporting(E_ALL);
 
-// Response array
+// Create log directory
+$logDir = dirname(__FILE__) . '/../../logs';
+if (!file_exists($logDir)) {
+    mkdir($logDir, 0755, true);
+}
+
+// Set error log file
+$logFile = $logDir . '/fix-database.log';
+ini_set('error_log', $logFile);
+
+// Initialize response
 $response = [
     'status' => 'error',
     'message' => 'Unknown error occurred',
@@ -38,6 +49,13 @@ $response = [
     ],
     'timestamp' => time()
 ];
+
+// Logging function
+function logMessage($message) {
+    global $logDir;
+    $timestamp = date('Y-m-d H:i:s');
+    error_log("[$timestamp] " . $message . "\n", 3, $logDir . '/fix-database.log');
+}
 
 try {
     // Define database connection - FIXED credentials with proper escaping 
@@ -83,14 +101,8 @@ try {
         throw new Exception("Failed to connect to database after {$maxRetries} attempts: " . $lastError->getMessage());
     }
     
-    // Enable logging
-    $logDir = dirname(__FILE__) . '/../../logs';
-    if (!file_exists($logDir)) {
-        mkdir($logDir, 0755, true);
-    }
-    
-    $logFile = $logDir . '/fix-database.log';
-    error_log(date('Y-m-d H:i:s') . " - Starting database fix\n", 3, $logFile);
+    // Log success
+    logMessage("Database connection successful");
     
     // Begin transaction
     $conn->begin_transaction();
@@ -98,7 +110,7 @@ try {
     try {
         // Fix 1: Check if vehicles table exists and fix night_halt_charge and driver_allowance fields
         if ($conn->query("SHOW TABLES LIKE 'vehicles'")->num_rows > 0) {
-            error_log(date('Y-m-d H:i:s') . " - Fixing vehicles table\n", 3, $logFile);
+            logMessage("Fixing vehicles table");
             
             // Ensure night_halt_charge and driver_allowance are NOT NULL with DEFAULT values
             $conn->query("
@@ -116,7 +128,7 @@ try {
         
         // Fix 2: Check if outstation_fares table exists and fix its columns
         if ($conn->query("SHOW TABLES LIKE 'outstation_fares'")->num_rows > 0) {
-            error_log(date('Y-m-d H:i:s') . " - Fixing outstation_fares table\n", 3, $logFile);
+            logMessage("Fixing outstation_fares table");
             
             // Ensure night_halt_charge and driver_allowance are NOT NULL with DEFAULT values
             $conn->query("
@@ -147,13 +159,13 @@ try {
             }
             
             if (in_array('night_halt_charge', $columns)) {
-                error_log(date('Y-m-d H:i:s') . " - Found night_halt_charge in $table, fixing\n", 3, $logFile);
+                logMessage("Found night_halt_charge in $table, fixing");
                 $conn->query("UPDATE `$table` SET night_halt_charge = 700 WHERE night_halt_charge IS NULL");
                 $response['details']['tables_fixed'][] = "$table - NULL values fixed in night_halt_charge";
             }
             
             if (in_array('driver_allowance', $columns)) {
-                error_log(date('Y-m-d H:i:s') . " - Found driver_allowance in $table, fixing\n", 3, $logFile);
+                logMessage("Found driver_allowance in $table, fixing");
                 $conn->query("UPDATE `$table` SET driver_allowance = 250 WHERE driver_allowance IS NULL");
                 $response['details']['tables_fixed'][] = "$table - NULL values fixed in driver_allowance";
             }
@@ -214,14 +226,31 @@ try {
                     INSERT INTO airport_transfer_fares (
                         vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
                         tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge,
+                        night_charges, extra_waiting_charges,
                         created_at, updated_at
                     ) VALUES (
-                        '$vehicleId', 3000, 12, 800, 800, 600, 800, 1000, 1200, 12, NOW(), NOW()
+                        '$vehicleId', 3000, 12, 800, 800, 600, 800, 1000, 1200, 12, 
+                        150, 100, NOW(), NOW()
                     )
                 ");
                 
                 if ($insertAirport) {
                     $response['details']['vehicle_pricing_entries'][] = "Created airport transfer pricing for $vehicleId";
+                }
+            } else {
+                // Check if night_charges and extra_waiting_charges columns exist
+                $airportColumnsResult = $conn->query("SHOW COLUMNS FROM airport_transfer_fares LIKE 'night_charges'");
+                if ($airportColumnsResult->num_rows == 0) {
+                    // Add night_charges column if it doesn't exist
+                    $conn->query("ALTER TABLE airport_transfer_fares ADD COLUMN night_charges DECIMAL(10,2) DEFAULT 150");
+                    $response['details']['tables_fixed'][] = "Added night_charges column to airport_transfer_fares";
+                }
+                
+                $airportColumnsResult = $conn->query("SHOW COLUMNS FROM airport_transfer_fares LIKE 'extra_waiting_charges'");
+                if ($airportColumnsResult->num_rows == 0) {
+                    // Add extra_waiting_charges column if it doesn't exist
+                    $conn->query("ALTER TABLE airport_transfer_fares ADD COLUMN extra_waiting_charges DECIMAL(10,2) DEFAULT 100");
+                    $response['details']['tables_fixed'][] = "Added extra_waiting_charges column to airport_transfer_fares";
                 }
             }
         }
@@ -244,13 +273,13 @@ try {
     
 } catch (Exception $e) {
     $errorMessage = "Error fixing database tables: " . $e->getMessage();
-    error_log(date('Y-m-d H:i:s') . " - $errorMessage\n", 3, $logFile ?? null);
+    logMessage($errorMessage);
     
     $response['status'] = 'error';
     $response['message'] = $errorMessage;
     $response['details']['errors'][] = $e->getMessage();
 }
 
-// Send response
+// Send response with JSON_PARTIAL_OUTPUT_ON_ERROR to ensure valid JSON even if there's an error
 echo json_encode($response, JSON_PARTIAL_OUTPUT_ON_ERROR | JSON_PRETTY_PRINT);
 exit;

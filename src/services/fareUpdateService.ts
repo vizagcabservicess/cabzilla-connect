@@ -53,12 +53,21 @@ export interface FareUpdateResponse {
 // Use a boolean flag to prevent recursive calls
 let isUpdatingFare = false;
 let isSyncingFares = false;
+let isUpdatingOutstationFare = false;
+let isUpdatingLocalFare = false;
+let clearCacheInProgress = false;
 
 /**
  * Updates the fare for a vehicle with outstation fare data
  */
 export const updateOutstationFare = async (data: OutstationFare): Promise<FareUpdateResponse> => {
+  if (isUpdatingOutstationFare) {
+    console.log('Already updating outstation fare, skipping duplicate call');
+    return { status: 'error', message: 'Update already in progress', timestamp: Date.now() };
+  }
+  
   try {
+    isUpdatingOutstationFare = true;
     console.log('Updating outstation fare for vehicle', data.vehicleId || data.vehicle_id, ':', data);
     const response = await directVehicleOperation(
       'api/admin/outstation-fares-update.php',
@@ -83,6 +92,8 @@ export const updateOutstationFare = async (data: OutstationFare): Promise<FareUp
   } catch (error: any) {
     console.error('Error updating outstation fare:', error);
     throw error;
+  } finally {
+    isUpdatingOutstationFare = false;
   }
 };
 
@@ -108,7 +119,7 @@ export const updateAirportFare = async (data: AirportFare): Promise<FareUpdateRe
     console.log('Updating airport fare for vehicle', fareData.vehicleId, ':', fareData);
     
     const response = await directVehicleOperation(
-      'api/admin/direct-airport-fares-update.php',
+      'api/admin/airport-fares-update.php',
       'POST',
       {
         headers: {
@@ -140,7 +151,14 @@ export const updateAirportFare = async (data: AirportFare): Promise<FareUpdateRe
  * Updates the fare for a vehicle with local fare data
  */
 export const updateLocalFare = async (data: LocalFare): Promise<FareUpdateResponse> => {
+  if (isUpdatingLocalFare) {
+    console.log('Already updating local fare, skipping duplicate call');
+    return { status: 'error', message: 'Update already in progress', timestamp: Date.now() };
+  }
+  
   try {
+    isUpdatingLocalFare = true;
+    
     // Ensure both vehicleId properties are set
     const fareData = {
       ...data,
@@ -174,6 +192,8 @@ export const updateLocalFare = async (data: LocalFare): Promise<FareUpdateRespon
   } catch (error: any) {
     console.error('Error updating local fare:', error);
     throw error;
+  } finally {
+    isUpdatingLocalFare = false;
   }
 };
 
@@ -367,6 +387,41 @@ export const getAllAirportFares = async (): Promise<Record<string, any>> => {
   } catch (error: any) {
     console.error('Error getting all airport fares:', error);
     return {};
+  }
+};
+
+/**
+ * Clear cache safely (prevent recursive calls)
+ */
+export const clearCache = (): void => {
+  if (clearCacheInProgress) {
+    console.log('Cache clearing already in progress, skipping duplicate call');
+    return;
+  }
+  
+  try {
+    clearCacheInProgress = true;
+    console.log('Clearing fare cache');
+    
+    // Clear localStorage items
+    localStorage.removeItem('outstation_fares');
+    localStorage.removeItem('airport_fares');
+    localStorage.removeItem('local_fares');
+    localStorage.removeItem('vehicle_data');
+    
+    // Set a flag to indicate cache has been cleared
+    localStorage.setItem('fare_cache_cleared', Date.now().toString());
+    
+    // Dispatch event safely
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('fare-cache-cleared'));
+    }, 100);
+  } catch (error: any) {
+    console.error('Error clearing cache:', error);
+  } finally {
+    setTimeout(() => {
+      clearCacheInProgress = false;
+    }, 500);
   }
 };
 
