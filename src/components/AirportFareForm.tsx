@@ -151,10 +151,20 @@ export const AirportFareForm: React.FC<AirportFareFormProps> = ({ vehicleId, onF
     try {
       console.log(`Updating airport fare for vehicle ${vehicleId}:`, values);
       
-      // Prepare the fare data for update
+      // Prepare the fare data for update - Fix here: ensuring all required properties are non-optional
       const fareData: AirportFare = {
         vehicleId,
-        ...values
+        basePrice: values.basePrice,
+        pricePerKm: values.pricePerKm,
+        dropPrice: values.dropPrice,
+        pickupPrice: values.pickupPrice,
+        tier1Price: values.tier1Price,
+        tier2Price: values.tier2Price,
+        tier3Price: values.tier3Price,
+        tier4Price: values.tier4Price,
+        extraKmCharge: values.extraKmCharge,
+        nightCharges: values.nightCharges,
+        extraWaitingCharges: values.extraWaitingCharges
       };
       
       // Send update request
@@ -403,3 +413,4 @@ export const AirportFareForm: React.FC<AirportFareFormProps> = ({ vehicleId, onF
     </Card>
   );
 };
+
