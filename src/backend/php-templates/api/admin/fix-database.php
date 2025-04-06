@@ -165,214 +165,27 @@ try {
         }
     }
     
-    // Check for vehicles in the database
-    $vehiclesCountResult = $conn->query("SELECT COUNT(*) as count FROM vehicles");
-    $vehiclesCount = 0;
-    if ($vehiclesCountResult && $row = $vehiclesCountResult->fetch_assoc()) {
-        $vehiclesCount = $row['count'];
-    }
-    
-    file_put_contents($logFile, "[$timestamp] Found $vehiclesCount vehicles in database\n", FILE_APPEND);
-    
-    // Sync airport transfer fares with vehicles
-    $airportSync = "INSERT IGNORE INTO airport_transfer_fares (vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
-                     tier1_price, tier2_price, tier3_price, tier4_price, extra_km_charge, night_charges, extra_waiting_charges)
-                   SELECT 
-                     vehicle_id, 
-                     CASE 
-                       WHEN vehicle_id LIKE '%sedan%' THEN 3000
-                       WHEN vehicle_id LIKE '%ertiga%' THEN 3500
-                       WHEN vehicle_id LIKE '%innova%' AND vehicle_id LIKE '%hycross%' THEN 4500
-                       WHEN vehicle_id LIKE '%innova%' THEN 4000
-                       WHEN vehicle_id LIKE '%crysta%' THEN 4000
-                       WHEN vehicle_id LIKE '%tempo%' THEN 6000
-                       WHEN vehicle_id LIKE '%luxury%' THEN 7000
-                       ELSE 3000
-                     END as base_price,
-                     CASE 
-                       WHEN vehicle_id LIKE '%sedan%' THEN 12
-                       WHEN vehicle_id LIKE '%ertiga%' THEN 15
-                       WHEN vehicle_id LIKE '%innova%' AND vehicle_id LIKE '%hycross%' THEN 18
-                       WHEN vehicle_id LIKE '%innova%' THEN 17
-                       WHEN vehicle_id LIKE '%crysta%' THEN 17
-                       WHEN vehicle_id LIKE '%tempo%' THEN 19
-                       WHEN vehicle_id LIKE '%luxury%' THEN 22
-                       ELSE 14
-                     END as price_per_km,
-                     CASE 
-                       WHEN vehicle_id LIKE '%sedan%' THEN 800
-                       WHEN vehicle_id LIKE '%ertiga%' THEN 1000
-                       WHEN vehicle_id LIKE '%innova%' THEN 1200
-                       WHEN vehicle_id LIKE '%crysta%' THEN 1200
-                       WHEN vehicle_id LIKE '%tempo%' THEN 2000
-                       WHEN vehicle_id LIKE '%luxury%' THEN 2500
-                       ELSE 1000
-                     END as pickup_price,
-                     CASE 
-                       WHEN vehicle_id LIKE '%sedan%' THEN 800
-                       WHEN vehicle_id LIKE '%ertiga%' THEN 1000
-                       WHEN vehicle_id LIKE '%innova%' THEN 1200
-                       WHEN vehicle_id LIKE '%crysta%' THEN 1200
-                       WHEN vehicle_id LIKE '%tempo%' THEN 2000
-                       WHEN vehicle_id LIKE '%luxury%' THEN 2500
-                       ELSE 1000
-                     END as drop_price,
-                     CASE 
-                       WHEN vehicle_id LIKE '%sedan%' THEN 600
-                       WHEN vehicle_id LIKE '%ertiga%' THEN 800
-                       WHEN vehicle_id LIKE '%innova%' THEN 1000
-                       WHEN vehicle_id LIKE '%crysta%' THEN 1000
-                       WHEN vehicle_id LIKE '%tempo%' THEN 1600
-                       WHEN vehicle_id LIKE '%luxury%' THEN 2000
-                       ELSE 800
-                     END as tier1_price,
-                     CASE 
-                       WHEN vehicle_id LIKE '%sedan%' THEN 800
-                       WHEN vehicle_id LIKE '%ertiga%' THEN 1000
-                       WHEN vehicle_id LIKE '%innova%' THEN 1200
-                       WHEN vehicle_id LIKE '%crysta%' THEN 1200
-                       WHEN vehicle_id LIKE '%tempo%' THEN 1800
-                       WHEN vehicle_id LIKE '%luxury%' THEN 2200
-                       ELSE 1000
-                     END as tier2_price,
-                     CASE 
-                       WHEN vehicle_id LIKE '%sedan%' THEN 1000
-                       WHEN vehicle_id LIKE '%ertiga%' THEN 1200
-                       WHEN vehicle_id LIKE '%innova%' THEN 1400
-                       WHEN vehicle_id LIKE '%crysta%' THEN 1400
-                       WHEN vehicle_id LIKE '%tempo%' THEN 2000
-                       WHEN vehicle_id LIKE '%luxury%' THEN 2500
-                       ELSE 1200
-                     END as tier3_price,
-                     CASE 
-                       WHEN vehicle_id LIKE '%sedan%' THEN 1200
-                       WHEN vehicle_id LIKE '%ertiga%' THEN 1400
-                       WHEN vehicle_id LIKE '%innova%' THEN 1600
-                       WHEN vehicle_id LIKE '%crysta%' THEN 1600
-                       WHEN vehicle_id LIKE '%tempo%' THEN 2500
-                       WHEN vehicle_id LIKE '%luxury%' THEN 3000
-                       ELSE 1400
-                     END as tier4_price,
-                     CASE 
-                       WHEN vehicle_id LIKE '%sedan%' THEN 12
-                       WHEN vehicle_id LIKE '%ertiga%' THEN 15
-                       WHEN vehicle_id LIKE '%innova%' AND vehicle_id LIKE '%hycross%' THEN 18
-                       WHEN vehicle_id LIKE '%innova%' THEN 17
-                       WHEN vehicle_id LIKE '%crysta%' THEN 17
-                       WHEN vehicle_id LIKE '%tempo%' THEN 19
-                       WHEN vehicle_id LIKE '%luxury%' THEN 22
-                       ELSE 14
-                     END as extra_km_charge,
-                     CASE 
-                       WHEN vehicle_id LIKE '%sedan%' THEN 250
-                       WHEN vehicle_id LIKE '%ertiga%' THEN 300
-                       WHEN vehicle_id LIKE '%innova%' THEN 350
-                       WHEN vehicle_id LIKE '%crysta%' THEN 350
-                       WHEN vehicle_id LIKE '%tempo%' THEN 400
-                       WHEN vehicle_id LIKE '%luxury%' THEN 450
-                       ELSE 300
-                     END as night_charges,
-                     CASE 
-                       WHEN vehicle_id LIKE '%sedan%' THEN 150
-                       WHEN vehicle_id LIKE '%ertiga%' THEN 200
-                       WHEN vehicle_id LIKE '%innova%' THEN 250
-                       WHEN vehicle_id LIKE '%crysta%' THEN 250
-                       WHEN vehicle_id LIKE '%tempo%' THEN 300
-                       WHEN vehicle_id LIKE '%luxury%' THEN 350
-                       ELSE 200
-                     END as extra_waiting_charges
-                   FROM vehicles";
-                   
-    if ($conn->query($airportSync)) {
-        $affectedRows = $conn->affected_rows;
-        if ($affectedRows > 0) {
-            $fixed[] = "Synced $affectedRows airport fares";
-            file_put_contents($logFile, "[$timestamp] Synced $affectedRows airport fares\n", FILE_APPEND);
-        }
-    }
-    
-    // Sync local package fares with vehicles
-    $localSync = "INSERT IGNORE INTO local_package_fares (vehicle_id, price_4hrs_40km, price_8hrs_80km, price_10hrs_100km, price_extra_km, price_extra_hour)
-                SELECT 
-                  vehicle_id, 
-                  CASE 
-                    WHEN vehicle_id LIKE '%sedan%' THEN 1800
-                    WHEN vehicle_id LIKE '%ertiga%' THEN 2200
-                    WHEN vehicle_id LIKE '%innova%' AND vehicle_id LIKE '%hycross%' THEN 3000
-                    WHEN vehicle_id LIKE '%innova%' THEN 2600
-                    WHEN vehicle_id LIKE '%crysta%' THEN 2600
-                    WHEN vehicle_id LIKE '%tempo%' THEN 4500
-                    WHEN vehicle_id LIKE '%luxury%' THEN 3500
-                    ELSE 2000
-                  END as price_4hrs_40km,
-                  CASE 
-                    WHEN vehicle_id LIKE '%sedan%' THEN 3000
-                    WHEN vehicle_id LIKE '%ertiga%' THEN 3600
-                    WHEN vehicle_id LIKE '%innova%' AND vehicle_id LIKE '%hycross%' THEN 4500
-                    WHEN vehicle_id LIKE '%innova%' THEN 4200
-                    WHEN vehicle_id LIKE '%crysta%' THEN 4200
-                    WHEN vehicle_id LIKE '%tempo%' THEN 7000
-                    WHEN vehicle_id LIKE '%luxury%' THEN 5500
-                    ELSE 3200
-                  END as price_8hrs_80km,
-                  CASE 
-                    WHEN vehicle_id LIKE '%sedan%' THEN 3600
-                    WHEN vehicle_id LIKE '%ertiga%' THEN 4500
-                    WHEN vehicle_id LIKE '%innova%' AND vehicle_id LIKE '%hycross%' THEN 5500
-                    WHEN vehicle_id LIKE '%innova%' THEN 5200
-                    WHEN vehicle_id LIKE '%crysta%' THEN 5200
-                    WHEN vehicle_id LIKE '%tempo%' THEN 8500
-                    WHEN vehicle_id LIKE '%luxury%' THEN 6500
-                    ELSE 4000
-                  END as price_10hrs_100km,
-                  CASE 
-                    WHEN vehicle_id LIKE '%sedan%' THEN 12
-                    WHEN vehicle_id LIKE '%ertiga%' THEN 15
-                    WHEN vehicle_id LIKE '%innova%' AND vehicle_id LIKE '%hycross%' THEN 18
-                    WHEN vehicle_id LIKE '%innova%' THEN 18
-                    WHEN vehicle_id LIKE '%crysta%' THEN 18
-                    WHEN vehicle_id LIKE '%tempo%' THEN 22
-                    WHEN vehicle_id LIKE '%luxury%' THEN 22
-                    ELSE 14
-                  END as price_extra_km,
-                  CASE 
-                    WHEN vehicle_id LIKE '%sedan%' THEN 200
-                    WHEN vehicle_id LIKE '%ertiga%' THEN 250
-                    WHEN vehicle_id LIKE '%innova%' THEN 300
-                    WHEN vehicle_id LIKE '%crysta%' THEN 300
-                    WHEN vehicle_id LIKE '%tempo%' THEN 400
-                    WHEN vehicle_id LIKE '%luxury%' THEN 350
-                    ELSE 250
-                  END as price_extra_hour
-                FROM vehicles";
-                
-    if ($conn->query($localSync)) {
-        $affectedRows = $conn->affected_rows;
-        if ($affectedRows > 0) {
-            $fixed[] = "Synced $affectedRows local fares";
-            file_put_contents($logFile, "[$timestamp] Synced $affectedRows local fares\n", FILE_APPEND);
-        }
-    }
-    
-    // Close the database connection
-    $conn->close();
-    
-    // Return success response with details of what was fixed
-    echo json_encode([
+    // Return success response
+    $response = [
         'status' => 'success',
-        'message' => 'Database fix completed successfully',
-        'fixes' => $fixed,
+        'message' => 'Database tables fixed successfully',
+        'fixed' => $fixed,
         'timestamp' => time()
-    ]);
+    ];
     
-    file_put_contents($logFile, "[$timestamp] Fix database completed successfully\n", FILE_APPEND);
+    echo json_encode($response);
+    file_put_contents($logFile, "[$timestamp] Fix completed successfully: " . json_encode($fixed) . "\n", FILE_APPEND);
+    
 } catch (Exception $e) {
+    // Log error
     file_put_contents($logFile, "[$timestamp] Error: " . $e->getMessage() . "\n", FILE_APPEND);
     
-    echo json_encode([
+    // Return error response
+    $response = [
         'status' => 'error',
         'message' => $e->getMessage(),
         'timestamp' => time()
-    ]);
+    ];
+    
+    echo json_encode($response);
 }
-

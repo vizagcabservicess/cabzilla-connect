@@ -40,6 +40,13 @@ if (preg_match('/\/(api\/)?(airport-fares-sync)(\.php)?$/i', $_SERVER['REQUEST_U
     exit;
 }
 
+// If the path is /api/direct-airport-fares, forward to direct-airport-fares.php
+if (preg_match('/\/(api\/)?(direct-airport-fares)(\.php)?$/i', $_SERVER['REQUEST_URI'])) {
+    error_log("Forwarding to direct-airport-fares.php from path: " . $_SERVER['REQUEST_URI']);
+    require_once __DIR__ . '/direct-airport-fares.php';
+    exit;
+}
+
 // Return API information
 echo json_encode([
     'status' => 'success',
@@ -51,6 +58,7 @@ echo json_encode([
         'status' => '/api/status.php',
         'admin' => '/api/admin/status.php',
         'airport-fares-sync' => '/api/airport-fares-sync.php',
+        'direct-airport-fares' => '/api/direct-airport-fares.php',
     ],
     'requestDetails' => $requestData,
     'serverTime' => date('Y-m-d H:i:s'),

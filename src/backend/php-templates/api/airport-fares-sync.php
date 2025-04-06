@@ -30,10 +30,16 @@ $timestamp = date('Y-m-d H:i:s');
 // Log the redirect for debugging
 file_put_contents($logFile, "[$timestamp] Redirecting airport-fares-sync.php to admin/sync-airport-fares.php\n", FILE_APPEND);
 
+// Get input data
+$inputJSON = file_get_contents('php://input');
+$input = json_decode($inputJSON, true);
+
+// Forward the input data
+$_POST = $input ?: [];
+
 // Forward headers to ensure admin permissions
 $_SERVER['HTTP_X_ADMIN_MODE'] = 'true';
 $_SERVER['HTTP_X_FORCE_CREATION'] = 'true';
 
 // Forward the request to the admin endpoint
 require_once __DIR__ . '/admin/sync-airport-fares.php';
-

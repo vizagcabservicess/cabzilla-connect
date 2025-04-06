@@ -54,4 +54,3 @@ $_SERVER['HTTP_X_FORCE_CREATION'] = 'true';
 
 // Forward the request to the admin endpoint
 require_once __DIR__ . '/admin/direct-airport-fares.php';
-
