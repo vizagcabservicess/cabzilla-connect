@@ -59,7 +59,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
       toast.info(`Syncing ${fareType} fares table...`);
       
       if (fareType === 'local') {
-        const result = await syncLocalFares();
+        const result = await syncLocalFares(true);
         if (result) {
           toast.success('Local fares table synced successfully');
           await loadFares();
@@ -67,7 +67,7 @@ export const FareManagement: React.FC<FareManagementProps> = ({ vehicleId, fareT
           toast.error('Failed to sync local fares table');
         }
       } else if (fareType === 'airport') {
-        const result = await syncAirportFares();
+        const result = await syncAirportFares(true);
         if (result) {
           toast.success('Airport fares table synced successfully');
           await loadFares();

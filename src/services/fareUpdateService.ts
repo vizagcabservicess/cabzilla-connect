@@ -1,3 +1,4 @@
+
 import { directVehicleOperation } from '@/utils/apiHelper';
 import { toast } from 'sonner';
 import { AirportFare, LocalFare, OutstationFare } from '@/types/cab';
@@ -147,7 +148,7 @@ export const updateAirportFare = async (data: AirportFareUpdate): Promise<FareUp
     // First, try the direct API endpoint which matches our local fare logic
     try {
       const response = await directVehicleOperation(
-        'api/direct-airport-fares.php',
+        'api/admin/direct-airport-fares-update.php',
         'POST',
         {
           headers: {
@@ -171,7 +172,7 @@ export const updateAirportFare = async (data: AirportFareUpdate): Promise<FareUp
     
     // Fallback to admin endpoint if direct API fails
     const response = await directVehicleOperation(
-      'api/admin/direct-airport-fares-update.php',
+      'api/admin/airport-fares-update.php',
       'POST',
       {
         headers: {
@@ -205,7 +206,7 @@ export const syncOutstationFares = async (applyDefaults: boolean = true): Promis
     console.log('Syncing outstation fares with applyDefaults =', applyDefaults);
     
     const response = await directVehicleOperation(
-      'api/outstation-fares-sync.php', 
+      'api/admin/sync-outstation-fares.php', 
       'POST',
       {
         headers: {
@@ -238,7 +239,33 @@ export const syncLocalFares = async (applyDefaults: boolean = true): Promise<boo
   try {
     console.log('Syncing local fares with applyDefaults =', applyDefaults);
     
-    const response = await directVehicleOperation(
+    // Attempt to use the dedicated sync endpoint first
+    try {
+      const response = await directVehicleOperation(
+        'api/admin/sync-local-fares.php', 
+        'POST',
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Mode': 'true',
+            'X-Force-Creation': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          },
+          data: JSON.stringify({ applyDefaults })
+        }
+      );
+      
+      console.log('Sync local fares response:', response);
+      
+      if (response && response.status === 'success') {
+        return true;
+      }
+    } catch (err) {
+      console.warn('Primary sync endpoint failed, trying fallback');
+    }
+    
+    // Fallback to the generic sync endpoint
+    const fallbackResponse = await directVehicleOperation(
       'api/local-fares-sync.php', 
       'POST',
       {
@@ -252,9 +279,9 @@ export const syncLocalFares = async (applyDefaults: boolean = true): Promise<boo
       }
     );
     
-    console.log('Sync local fares response:', response);
+    console.log('Fallback sync local fares response:', fallbackResponse);
     
-    if (response && response.status === 'success') {
+    if (fallbackResponse && fallbackResponse.status === 'success') {
       return true;
     }
     
@@ -272,7 +299,33 @@ export const syncAirportFares = async (applyDefaults: boolean = true): Promise<b
   try {
     console.log('Syncing airport fares with applyDefaults =', applyDefaults);
     
-    const response = await directVehicleOperation(
+    // Attempt to use the dedicated sync endpoint first
+    try {
+      const response = await directVehicleOperation(
+        'api/admin/sync-airport-fares.php', 
+        'POST',
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Mode': 'true',
+            'X-Force-Creation': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          },
+          data: JSON.stringify({ applyDefaults })
+        }
+      );
+      
+      console.log('Sync airport fares response:', response);
+      
+      if (response && response.status === 'success') {
+        return true;
+      }
+    } catch (err) {
+      console.warn('Primary sync endpoint failed, trying fallback');
+    }
+    
+    // Fallback to the generic sync endpoint
+    const fallbackResponse = await directVehicleOperation(
       'api/airport-fares-sync.php', 
       'POST',
       {
@@ -286,9 +339,9 @@ export const syncAirportFares = async (applyDefaults: boolean = true): Promise<b
       }
     );
     
-    console.log('Sync airport fares response:', response);
+    console.log('Fallback sync airport fares response:', fallbackResponse);
     
-    if (response && response.status === 'success') {
+    if (fallbackResponse && fallbackResponse.status === 'success') {
       return true;
     }
     
@@ -309,7 +362,7 @@ export const getDirectAirportFare = async (vehicleId: string): Promise<AirportFa
     // First try the direct endpoint
     try {
       const directResponse = await directVehicleOperation(
-        `api/direct-airport-fares.php?vehicleId=${encodeURIComponent(vehicleId)}&_t=${Date.now()}`,
+        `api/admin/direct-airport-fares.php?vehicleId=${encodeURIComponent(vehicleId)}&_t=${Date.now()}`,
         'GET',
         {
           headers: {
@@ -366,7 +419,7 @@ export const getDirectAirportFare = async (vehicleId: string): Promise<AirportFa
   }
 };
 
-// Add the missing functions for VehicleTripFaresForm.tsx
+// Functions for VehicleTripFaresForm.tsx
 export const getAllOutstationFares = async (): Promise<Record<string, any>> => {
   try {
     const response = await directVehicleOperation(
