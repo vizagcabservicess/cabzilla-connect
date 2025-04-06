@@ -19,7 +19,7 @@ header('Expires: 0');
 
 // Add debugging headers
 header('X-Debug-File: airport-fares.php');
-header('X-API-Version: 1.0.3');
+header('X-API-Version: 1.0.4');
 header('X-Timestamp: ' . time());
 
 // Handle preflight OPTIONS request
@@ -51,8 +51,15 @@ try {
         throw new Exception("Database connection failed");
     }
     
-    // Get vehicle_id parameter if present
-    $vehicleId = isset($_GET['vehicle_id']) ? $_GET['vehicle_id'] : (isset($_GET['vehicleId']) ? $_GET['vehicleId'] : null);
+    // Get vehicle_id parameter if present, supporting multiple parameter names
+    $vehicleId = null;
+    if (isset($_GET['vehicle_id'])) {
+        $vehicleId = $_GET['vehicle_id'];
+    } elseif (isset($_GET['vehicleId'])) {
+        $vehicleId = $_GET['vehicleId'];
+    } elseif (isset($_GET['id'])) {
+        $vehicleId = $_GET['id'];
+    }
     
     // Log the request parameters
     file_put_contents($logFile, "[$timestamp] Airport fares request: " . json_encode([
@@ -68,16 +75,13 @@ try {
     // Log which table will be used
     file_put_contents($logFile, "[$timestamp] Checking airport_transfer_fares table exists: " . ($airportTableExists ? 'yes' : 'no') . "\n", FILE_APPEND);
     
-    $query = "";
-    $useAirportTable = false;
-    
+    // If airport_transfer_fares table exists, check if required columns exist
     if ($airportTableExists) {
-        // Check if required columns exist
         $columnCheck = $conn->query("SHOW COLUMNS FROM airport_transfer_fares LIKE 'night_charges'");
         $nightChargesExists = $columnCheck && $columnCheck->num_rows > 0;
         
         if (!$nightChargesExists) {
-            // Add the missing columns if they don't exist
+            // Add the missing column if it doesn't exist
             file_put_contents($logFile, "[$timestamp] Adding missing night_charges column to airport_transfer_fares table\n", FILE_APPEND);
             $conn->query("ALTER TABLE airport_transfer_fares ADD COLUMN night_charges DECIMAL(10,2) DEFAULT 150");
         }
@@ -89,8 +93,14 @@ try {
             file_put_contents($logFile, "[$timestamp] Adding missing extra_waiting_charges column to airport_transfer_fares table\n", FILE_APPEND);
             $conn->query("ALTER TABLE airport_transfer_fares ADD COLUMN extra_waiting_charges DECIMAL(10,2) DEFAULT 100");
         }
-        
-        // First check if the airport_transfer_fares table has data
+    }
+    
+    $query = "";
+    $useAirportTable = false;
+    
+    // Determine which table to use for airport fares
+    if ($airportTableExists) {
+        // Check if the airport_transfer_fares table has data
         $countQuery = "SELECT COUNT(*) as count FROM airport_transfer_fares";
         $countResult = $conn->query($countQuery);
         $row = $countResult->fetch_assoc();
@@ -197,6 +207,7 @@ try {
         
         // Map to standardized properties
         $fares[$id] = [
+            'vehicleId' => $id,
             'basePrice' => floatval($row['basePrice'] ?? 0),
             'pricePerKm' => floatval($row['pricePerKm'] ?? 0),
             'pickupPrice' => floatval($row['pickupPrice'] ?? 0),

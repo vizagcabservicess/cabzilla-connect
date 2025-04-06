@@ -45,16 +45,13 @@ try {
         throw new Exception('Invalid JSON: ' . json_last_error_msg());
     }
     
-    // Log the parsed JSON for debugging
-    file_put_contents($logFile, "[$timestamp] Parsed input: " . print_r($input, true) . "\n", FILE_APPEND);
-    
     // Check for required fields
-    if (!isset($input['vehicleId']) && !isset($input['vehicle_id'])) {
+    if (!isset($input['vehicleId'])) {
         throw new Exception('Vehicle ID is required');
     }
     
-    // Get vehicle ID from either format
-    $vehicleId = $input['vehicleId'] ?? $input['vehicle_id'];
+    // Get vehicle ID
+    $vehicleId = $input['vehicleId'];
     
     // Ensure vehicleId is not empty
     if (empty($vehicleId)) {
@@ -120,7 +117,7 @@ try {
         file_put_contents($logFile, "[$timestamp] Added extra_waiting_charges column\n", FILE_APPEND);
     }
     
-    // Extract values with fallbacks
+    // Extract values with fallbacks to ensure we have valid values
     $basePrice = isset($input['basePrice']) ? floatval($input['basePrice']) : 0;
     $pricePerKm = isset($input['pricePerKm']) ? floatval($input['pricePerKm']) : 0;
     $pickupPrice = isset($input['pickupPrice']) ? floatval($input['pickupPrice']) : 0;
@@ -133,106 +130,11 @@ try {
     $nightCharges = isset($input['nightCharges']) ? floatval($input['nightCharges']) : 0;
     $extraWaitingCharges = isset($input['extraWaitingCharges']) ? floatval($input['extraWaitingCharges']) : 0;
     
-    // Apply default values if any important values are zero
-    if ($basePrice <= 0 || $pricePerKm <= 0 || $pickupPrice <= 0 || $dropPrice <= 0 ||
-        $tier1Price <= 0 || $tier2Price <= 0 || $tier3Price <= 0 || $tier4Price <= 0 || $extraKmCharge <= 0) {
-        
-        $vehicleIdLower = strtolower($vehicleId);
-        
-        // Determine default values based on vehicle type
-        if (strpos($vehicleIdLower, 'sedan') !== false) {
-            if ($basePrice <= 0) $basePrice = 3000;
-            if ($pricePerKm <= 0) $pricePerKm = 12;
-            if ($pickupPrice <= 0) $pickupPrice = 800;
-            if ($dropPrice <= 0) $dropPrice = 800;
-            if ($tier1Price <= 0) $tier1Price = 600;
-            if ($tier2Price <= 0) $tier2Price = 800;
-            if ($tier3Price <= 0) $tier3Price = 1000;
-            if ($tier4Price <= 0) $tier4Price = 1200;
-            if ($extraKmCharge <= 0) $extraKmCharge = 12;
-            if ($nightCharges <= 0) $nightCharges = 250;
-            if ($extraWaitingCharges <= 0) $extraWaitingCharges = 150;
-        } elseif (strpos($vehicleIdLower, 'ertiga') !== false) {
-            if ($basePrice <= 0) $basePrice = 3500;
-            if ($pricePerKm <= 0) $pricePerKm = 15;
-            if ($pickupPrice <= 0) $pickupPrice = 1000;
-            if ($dropPrice <= 0) $dropPrice = 1000;
-            if ($tier1Price <= 0) $tier1Price = 800;
-            if ($tier2Price <= 0) $tier2Price = 1000;
-            if ($tier3Price <= 0) $tier3Price = 1200;
-            if ($tier4Price <= 0) $tier4Price = 1400;
-            if ($extraKmCharge <= 0) $extraKmCharge = 15;
-            if ($nightCharges <= 0) $nightCharges = 300;
-            if ($extraWaitingCharges <= 0) $extraWaitingCharges = 200;
-        } elseif (strpos($vehicleIdLower, 'innova') !== false && strpos($vehicleIdLower, 'hycross') !== false) {
-            if ($basePrice <= 0) $basePrice = 4500;
-            if ($pricePerKm <= 0) $pricePerKm = 18;
-            if ($pickupPrice <= 0) $pickupPrice = 1200;
-            if ($dropPrice <= 0) $dropPrice = 1200;
-            if ($tier1Price <= 0) $tier1Price = 1000;
-            if ($tier2Price <= 0) $tier2Price = 1200;
-            if ($tier3Price <= 0) $tier3Price = 1400;
-            if ($tier4Price <= 0) $tier4Price = 1600;
-            if ($extraKmCharge <= 0) $extraKmCharge = 18;
-            if ($nightCharges <= 0) $nightCharges = 350;
-            if ($extraWaitingCharges <= 0) $extraWaitingCharges = 250;
-        } elseif (strpos($vehicleIdLower, 'innova') !== false || strpos($vehicleIdLower, 'crysta') !== false) {
-            if ($basePrice <= 0) $basePrice = 4000;
-            if ($pricePerKm <= 0) $pricePerKm = 17;
-            if ($pickupPrice <= 0) $pickupPrice = 1200;
-            if ($dropPrice <= 0) $dropPrice = 1200;
-            if ($tier1Price <= 0) $tier1Price = 1000;
-            if ($tier2Price <= 0) $tier2Price = 1200;
-            if ($tier3Price <= 0) $tier3Price = 1400;
-            if ($tier4Price <= 0) $tier4Price = 1600;
-            if ($extraKmCharge <= 0) $extraKmCharge = 17;
-            if ($nightCharges <= 0) $nightCharges = 350;
-            if ($extraWaitingCharges <= 0) $extraWaitingCharges = 250;
-        } elseif (strpos($vehicleIdLower, 'tempo') !== false) {
-            if ($basePrice <= 0) $basePrice = 6000;
-            if ($pricePerKm <= 0) $pricePerKm = 19;
-            if ($pickupPrice <= 0) $pickupPrice = 2000;
-            if ($dropPrice <= 0) $dropPrice = 2000;
-            if ($tier1Price <= 0) $tier1Price = 1600;
-            if ($tier2Price <= 0) $tier2Price = 1800;
-            if ($tier3Price <= 0) $tier3Price = 2000;
-            if ($tier4Price <= 0) $tier4Price = 2500;
-            if ($extraKmCharge <= 0) $extraKmCharge = 19;
-            if ($nightCharges <= 0) $nightCharges = 400;
-            if ($extraWaitingCharges <= 0) $extraWaitingCharges = 300;
-        } elseif (strpos($vehicleIdLower, 'luxury') !== false) {
-            if ($basePrice <= 0) $basePrice = 7000;
-            if ($pricePerKm <= 0) $pricePerKm = 22;
-            if ($pickupPrice <= 0) $pickupPrice = 2500;
-            if ($dropPrice <= 0) $dropPrice = 2500;
-            if ($tier1Price <= 0) $tier1Price = 2000;
-            if ($tier2Price <= 0) $tier2Price = 2200;
-            if ($tier3Price <= 0) $tier3Price = 2500;
-            if ($tier4Price <= 0) $tier4Price = 3000;
-            if ($extraKmCharge <= 0) $extraKmCharge = 22;
-            if ($nightCharges <= 0) $nightCharges = 450;
-            if ($extraWaitingCharges <= 0) $extraWaitingCharges = 350;
-        } else {
-            // Default values for other vehicle types
-            if ($basePrice <= 0) $basePrice = 3000;
-            if ($pricePerKm <= 0) $pricePerKm = 15;
-            if ($pickupPrice <= 0) $pickupPrice = 1000;
-            if ($dropPrice <= 0) $dropPrice = 1000;
-            if ($tier1Price <= 0) $tier1Price = 800;
-            if ($tier2Price <= 0) $tier2Price = 1000;
-            if ($tier3Price <= 0) $tier3Price = 1200;
-            if ($tier4Price <= 0) $tier4Price = 1400;
-            if ($extraKmCharge <= 0) $extraKmCharge = 15;
-            if ($nightCharges <= 0) $nightCharges = 300;
-            if ($extraWaitingCharges <= 0) $extraWaitingCharges = 200;
-        }
-    }
-    
     // Log all values for debugging
     file_put_contents($logFile, "[$timestamp] Using values: base_price=$basePrice, price_per_km=$pricePerKm, pickup_price=$pickupPrice, drop_price=$dropPrice, tier1_price=$tier1Price, tier2_price=$tier2Price, tier3_price=$tier3Price, tier4_price=$tier4Price, extra_km_charge=$extraKmCharge, night_charges=$nightCharges, extra_waiting_charges=$extraWaitingCharges\n", FILE_APPEND);
     
     // Check if record exists
-    $checkQuery = "SELECT * FROM airport_transfer_fares WHERE vehicle_id = ?";
+    $checkQuery = "SELECT id FROM airport_transfer_fares WHERE vehicle_id = ?";
     $stmt = $conn->prepare($checkQuery);
     $stmt->bind_param("s", $vehicleId);
     $stmt->execute();
@@ -240,7 +142,7 @@ try {
     $exists = $result && $result->num_rows > 0;
     $stmt->close();
     
-    // Use INSERT ... ON DUPLICATE KEY UPDATE to handle both insert and update cases
+    // Use INSERT ... ON DUPLICATE KEY UPDATE for both insert and update cases
     $query = "
         INSERT INTO airport_transfer_fares 
         (vehicle_id, base_price, price_per_km, pickup_price, drop_price, 
@@ -269,10 +171,11 @@ try {
         $nightCharges, $extraWaitingCharges);
     
     $success = $stmt->execute();
+    $affected_rows = $stmt->affected_rows;
     $stmt->close();
     
     if ($success) {
-        file_put_contents($logFile, "[$timestamp] Successfully " . ($exists ? "updated" : "created") . " airport fare entry for vehicle: $vehicleId\n", FILE_APPEND);
+        file_put_contents($logFile, "[$timestamp] Successfully " . ($exists ? "updated" : "created") . " airport fare entry for vehicle: $vehicleId (Affected rows: $affected_rows)\n", FILE_APPEND);
         
         // Return success response
         $response = [
@@ -294,15 +197,14 @@ try {
                 'extraWaitingCharges' => $extraWaitingCharges
             ]
         ];
+        
+        echo json_encode($response, JSON_PRETTY_PRINT);
     } else {
         throw new Exception("Failed to " . ($exists ? "update" : "create") . " airport fares: " . $conn->error);
     }
     
     // Close the database connection
     $conn->close();
-    
-    // Output response
-    echo json_encode($response, JSON_PRETTY_PRINT);
     
 } catch (Exception $e) {
     // Log error
