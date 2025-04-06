@@ -1,4 +1,5 @@
 
+import { toast } from 'sonner';
 import axios from 'axios';
 
 // Define the interface for airport fares
@@ -17,227 +18,234 @@ export interface AirportFare {
   extraWaitingCharges?: number;
 }
 
-// Define response type
-type ApiResponse = {
-  success: boolean;
-  message: string;
-  data?: any;
-};
-
-// Cache to store fare data
-type FareCache = {
-  [vehicleId: string]: {
-    data: AirportFare;
-    timestamp: number;
-  };
-};
-
-const fareCache: FareCache = {};
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache lifetime
-
-// Flag to track if we're in a mock data environment
-let useMockData = false;
-let lastApiAttempt = 0;
-const API_RETRY_INTERVAL = 60 * 1000; // Only retry real API after 1 minute
+// Define throttling mechanisms at module level to prevent recursive calls
+let pendingRequests: Record<string, Promise<any>> = {};
+let lastRequestTimes: Record<string, number> = {};
+const THROTTLE_TIME = 2000; // 2 seconds between identical requests
 
 /**
- * Get airport fare for a specific vehicle with fallback to mock data
+ * Get airport fare for a specific vehicle
  */
 export const getAirportFare = async (vehicleId: string): Promise<AirportFare | null> => {
-  // Check cache first
-  const cached = fareCache[vehicleId];
+  // Check if we've made this request recently
   const now = Date.now();
-  
-  if (cached && now - cached.timestamp < CACHE_TTL) {
-    console.log(`Using cached fare data for ${vehicleId}`);
-    return cached.data;
+  const requestKey = `get-${vehicleId}`;
+  if (lastRequestTimes[requestKey] && now - lastRequestTimes[requestKey] < THROTTLE_TIME) {
+    console.log(`Throttling getAirportFare for ${vehicleId} - too recent`);
+    return null;
   }
   
-  try {
-    // If we haven't tried the API recently or we haven't determined to use mock data yet
-    if (!useMockData || now - lastApiAttempt > API_RETRY_INTERVAL) {
-      lastApiAttempt = now;
+  // Check if there's already a pending request for this vehicle
+  if (pendingRequests[requestKey]) {
+    console.log(`Reusing pending getAirportFare request for ${vehicleId}`);
+    try {
+      return await pendingRequests[requestKey];
+    } catch (error) {
+      console.error('Error in reused request:', error);
+      return null;
+    }
+  }
+  
+  // Create and store the promise
+  lastRequestTimes[requestKey] = now;
+  pendingRequests[requestKey] = (async () => {
+    try {
+      console.log(`Fetching airport fare for vehicle: ${vehicleId}`);
       
-      // Try to get real data from the API
       const response = await axios.get(`/api/direct-airport-fares.php`, {
-        params: { id: vehicleId, _t: now },
+        params: {
+          id: vehicleId,
+          _t: now // Cache busting
+        },
         headers: {
           'X-Admin-Mode': 'true',
-          'Cache-Control': 'no-cache',
-          'Accept': 'application/json'
-        },
-        timeout: 5000 // 5 second timeout to fail faster
+          'X-Force-Creation': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
       });
       
-      // Check for valid API response
+      console.log('Airport fare API response:', response.data);
+      
       if (response.data && response.data.status === 'success' && response.data.fare) {
-        const fare = response.data.fare;
-        
-        // Cache the fare data
-        fareCache[vehicleId] = {
-          data: fare,
-          timestamp: now
-        };
-        
-        // We successfully got data from the API, so we don't need mock data
-        useMockData = false;
-        
-        return fare;
+        return response.data.fare as AirportFare;
       }
       
-      // If the API returned valid JSON but without the data we need
-      if (response.data) {
-        console.warn('API returned valid response but no fare data:', response.data);
-        useMockData = true;
+      if (response.data && response.data.status === 'error') {
+        console.warn('API returned error:', response.data.message);
       }
+      
+      return null;
+    } catch (error) {
+      console.error('Error fetching airport fare:', error);
+      return null;
+    } finally {
+      // Clean up after request completes
+      setTimeout(() => {
+        delete pendingRequests[requestKey];
+      }, 100);
     }
+  })();
+  
+  try {
+    return await pendingRequests[requestKey];
   } catch (error) {
-    console.error('Error fetching airport fare from API:', error);
-    // Set flag to use mock data since API failed
-    useMockData = true;
+    console.error('Error in getAirportFare:', error);
+    return null;
   }
-  
-  // If we reach here, either the API failed or we determined we should use mock data
-  if (useMockData) {
-    console.log(`Using mock fare data for ${vehicleId}`);
-    return generateMockFare(vehicleId);
-  }
-  
-  return null;
-};
-
-/**
- * Generate mock fare data for a vehicle
- */
-const generateMockFare = (vehicleId: string): AirportFare => {
-  // Generate a simple hash from vehicle ID to ensure consistent mock data
-  let hash = 0;
-  for (let i = 0; i < vehicleId.length; i++) {
-    hash = ((hash << 5) - hash) + vehicleId.charCodeAt(i);
-    hash |= 0; // Convert to 32bit integer
-  }
-  
-  // Base price between 1500 and 4000
-  const basePrice = Math.abs(hash % 2500) + 1500;
-  
-  const mockFare: AirportFare = {
-    vehicleId,
-    basePrice,
-    pricePerKm: 10 + Math.abs(hash % 20),
-    pickupPrice: basePrice + Math.abs((hash >> 2) % 500),
-    dropPrice: basePrice + Math.abs((hash >> 4) % 400),
-    tier1Price: basePrice - Math.abs((hash >> 6) % 200),
-    tier2Price: basePrice,
-    tier3Price: basePrice + Math.abs((hash >> 8) % 300),
-    tier4Price: basePrice + Math.abs((hash >> 10) % 600),
-    extraKmCharge: 10 + Math.abs((hash >> 12) % 10),
-    nightCharges: 150 + Math.abs((hash >> 14) % 350),
-    extraWaitingCharges: 100 + Math.abs((hash >> 16) % 50),
-  };
-  
-  // Cache the mock fare
-  fareCache[vehicleId] = {
-    data: mockFare,
-    timestamp: Date.now()
-  };
-  
-  return mockFare;
 };
 
 /**
  * Update airport fare for a specific vehicle
  */
-export const updateAirportFare = async (fare: AirportFare): Promise<ApiResponse> => {
-  // Validate required fields
-  if (!fare.vehicleId) {
-    return { success: false, message: 'Vehicle ID is required' };
-  }
-  
-  try {
-    // If we know the API is not working, update the cache but return success message
-    if (useMockData) {
-      console.log('Using mock data mode, storing fare in cache only:', fare);
-      
-      // Update cache
-      fareCache[fare.vehicleId] = {
-        data: fare,
-        timestamp: Date.now()
-      };
-      
-      return { 
-        success: true, 
-        message: 'Airport fare saved locally. API is in offline mode.',
-        data: fare
-      };
-    }
-    
-    // Attempt to update via API
-    const response = await axios.post('/api/admin/direct-airport-fares-update.php', fare, {
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Admin-Mode': 'true',
-        'Cache-Control': 'no-cache'
-      },
-      timeout: 8000 // 8 second timeout
-    });
-    
-    if (response.data && (response.data.status === 'success' || response.data.status === 'ok')) {
-      // Update cache
-      fareCache[fare.vehicleId] = {
-        data: fare,
-        timestamp: Date.now()
-      };
-      
-      return { 
-        success: true, 
-        message: 'Airport fare updated successfully',
-        data: response.data
-      };
-    }
-    
+export const updateAirportFare = async (fare: AirportFare): Promise<{ success: boolean; message: string }> => {
+  // Apply throttling
+  const now = Date.now();
+  const requestKey = `update-${fare.vehicleId}`;
+  if (lastRequestTimes[requestKey] && now - lastRequestTimes[requestKey] < THROTTLE_TIME) {
+    console.log(`Throttling updateAirportFare for ${fare.vehicleId} - too recent`);
     return { 
       success: false, 
-      message: response.data?.message || 'Failed to update airport fare',
-      data: response.data
+      message: 'Please wait a moment before submitting again.' 
     };
-  } catch (error: any) {
-    console.error('Error updating airport fare:', error);
-    
-    // If API fails, update local cache and treat as success in mock mode
-    fareCache[fare.vehicleId] = {
-      data: fare,
-      timestamp: Date.now()
-    };
-    
-    // Switch to mock data mode since API is failing
-    useMockData = true;
-    
+  }
+  
+  // Check for pending request
+  if (pendingRequests[requestKey]) {
+    console.log(`Already updating airport fare for ${fare.vehicleId}`);
     return { 
-      success: true, 
-      message: 'API unavailable. Fare saved in local preview mode.',
-      data: fare
+      success: false, 
+      message: 'An update is already in progress.' 
     };
   }
-};
-
-/**
- * Clear the fare cache for all vehicles or a specific vehicle
- */
-export const clearCache = (vehicleId?: string): void => {
-  if (vehicleId) {
-    delete fareCache[vehicleId];
-    console.log(`Cleared cache for vehicle ${vehicleId}`);
-  } else {
-    Object.keys(fareCache).forEach(id => delete fareCache[id]);
-    console.log('Cleared all fare cache');
+  
+  // Create and store the promise
+  lastRequestTimes[requestKey] = now;
+  pendingRequests[requestKey] = (async () => {
+    try {
+      console.log('Updating airport fare with data:', fare);
+      
+      // Ensure all required fields have valid values
+      const validatedFare = {
+        ...fare,
+        basePrice: Math.max(0, fare.basePrice || 0),
+        pricePerKm: Math.max(0, fare.pricePerKm || 0),
+        pickupPrice: Math.max(0, fare.pickupPrice || 0),
+        dropPrice: Math.max(0, fare.dropPrice || 0),
+        tier1Price: Math.max(0, fare.tier1Price || 0),
+        tier2Price: Math.max(0, fare.tier2Price || 0),
+        tier3Price: Math.max(0, fare.tier3Price || 0),
+        tier4Price: Math.max(0, fare.tier4Price || 0),
+        extraKmCharge: Math.max(0, fare.extraKmCharge || 0),
+        nightCharges: Math.max(0, fare.nightCharges || 0),
+        extraWaitingCharges: Math.max(0, fare.extraWaitingCharges || 0)
+      };
+      
+      const response = await axios.post(
+        '/api/admin/direct-airport-fares-update.php', 
+        validatedFare, 
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Mode': 'true',
+            'X-Force-Creation': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          }
+        }
+      );
+      
+      console.log('Airport fare update response:', response.data);
+      
+      if (response.data && response.data.status === 'success') {
+        return { success: true, message: 'Airport fare updated successfully' };
+      }
+      
+      return { 
+        success: false, 
+        message: response.data?.message || 'Failed to update airport fare' 
+      };
+    } catch (error: any) {
+      console.error('Error updating airport fare:', error);
+      return { 
+        success: false, 
+        message: error.message || 'Failed to update airport fare' 
+      };
+    } finally {
+      // Clean up after request completes
+      setTimeout(() => {
+        delete pendingRequests[requestKey];
+      }, 100);
+    }
+  })();
+  
+  try {
+    return await pendingRequests[requestKey];
+  } catch (error: any) {
+    console.error('Error in updateAirportFare:', error);
+    return { success: false, message: error.message || 'An unexpected error occurred' };
   }
 };
 
 /**
- * Force reset the mock data flag
+ * Sync airport fares from vehicle data
  */
-export const resetMockDataFlag = (): void => {
-  useMockData = false;
-  lastApiAttempt = 0;
-  console.log('Reset mock data flag, will attempt to use real API again');
+export const syncAirportFares = async (): Promise<boolean> => {
+  // Apply throttling
+  const now = Date.now();
+  const requestKey = 'sync-fares';
+  if (lastRequestTimes[requestKey] && now - lastRequestTimes[requestKey] < THROTTLE_TIME * 2) {
+    console.log('Throttling syncAirportFares - too recent');
+    return false;
+  }
+  
+  // Check for pending request
+  if (pendingRequests[requestKey]) {
+    console.log('Sync already in progress');
+    return false;
+  }
+  
+  // Create and store the promise
+  lastRequestTimes[requestKey] = now;
+  pendingRequests[requestKey] = (async () => {
+    try {
+      console.log('Syncing airport fares');
+      
+      const response = await axios.post(
+        '/api/admin/sync-airport-fares.php', 
+        { applyDefaults: true },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Mode': 'true',
+            'X-Force-Creation': 'true'
+          }
+        }
+      );
+      
+      console.log('Sync response:', response.data);
+      
+      if (response.data && response.data.status === 'success') {
+        toast.success('Airport fares synced successfully');
+        return true;
+      } else {
+        toast.error(response.data?.message || 'Failed to sync airport fares');
+        return false;
+      }
+    } catch (error) {
+      console.error('Error syncing airport fares:', error);
+      toast.error('Failed to sync airport fares');
+      return false;
+    } finally {
+      // Clean up after request completes
+      setTimeout(() => {
+        delete pendingRequests[requestKey];
+      }, 100);
+    }
+  })();
+  
+  try {
+    return await pendingRequests[requestKey];
+  } catch (error) {
+    console.error('Error in syncAirportFares:', error);
+    return false;
+  }
 };

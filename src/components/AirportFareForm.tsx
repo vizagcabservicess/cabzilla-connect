@@ -1,34 +1,15 @@
 
 import React, { useState, useEffect } from 'react';
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, Loader2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { RotateCw, Save } from 'lucide-react';
+import { toast } from 'sonner';
+import { AirportFare, getAirportFare, updateAirportFare, syncAirportFares } from '@/services/airportFareService';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AirportFare, getAirportFare, updateAirportFare } from "@/services/airportFareService";
-import { toast } from "sonner";
-
-// Schema for form validation
-const fareSchema = z.object({
-  basePrice: z.coerce.number().min(0, { message: "Base price cannot be negative" }),
-  pricePerKm: z.coerce.number().min(0, { message: "Price per KM cannot be negative" }),
-  pickupPrice: z.coerce.number().min(0, { message: "Pickup price cannot be negative" }),
-  dropPrice: z.coerce.number().min(0, { message: "Drop price cannot be negative" }),
-  tier1Price: z.coerce.number().min(0, { message: "Tier 1 price cannot be negative" }),
-  tier2Price: z.coerce.number().min(0, { message: "Tier 2 price cannot be negative" }),
-  tier3Price: z.coerce.number().min(0, { message: "Tier 3 price cannot be negative" }),
-  tier4Price: z.coerce.number().min(0, { message: "Tier 4 price cannot be negative" }),
-  extraKmCharge: z.coerce.number().min(0, { message: "Extra km charge cannot be negative" }),
-  nightCharges: z.coerce.number().min(0, { message: "Night charges cannot be negative" }),
-  extraWaitingCharges: z.coerce.number().min(0, { message: "Extra waiting charges cannot be negative" }),
-});
-
-// Define the form data type from the schema
-type FareFormValues = z.infer<typeof fareSchema>;
+import { AlertCircle } from "lucide-react";
 
 interface AirportFareFormProps {
   vehicleId: string;
@@ -37,176 +18,146 @@ interface AirportFareFormProps {
 
 export const AirportFareForm: React.FC<AirportFareFormProps> = ({ vehicleId, onFareUpdated }) => {
   const [isLoading, setIsLoading] = useState(false);
-  const [isFetching, setIsFetching] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [useMockData, setUseMockData] = useState(false);
-  const [updateCount, setUpdateCount] = useState(0);
-
-  // Initialize form with default values
-  const form = useForm<FareFormValues>({
-    resolver: zodResolver(fareSchema),
-    defaultValues: {
-      basePrice: 0,
-      pricePerKm: 0,
-      pickupPrice: 0,
-      dropPrice: 0,
-      tier1Price: 0,
-      tier2Price: 0,
-      tier3Price: 0,
-      tier4Price: 0,
-      extraKmCharge: 0,
-      nightCharges: 150,
-      extraWaitingCharges: 100,
-    },
+  const [fare, setFare] = useState<AirportFare>({
+    vehicleId: vehicleId,
+    basePrice: 0,
+    pricePerKm: 0,
+    pickupPrice: 0,
+    dropPrice: 0,
+    tier1Price: 0,
+    tier2Price: 0,
+    tier3Price: 0,
+    tier4Price: 0,
+    extraKmCharge: 0,
+    nightCharges: 0,
+    extraWaitingCharges: 0
   });
 
-  // Function to generate mock fare data based on vehicle ID
-  const generateMockFare = (id: string): FareFormValues => {
-    // Use a simple hash function to generate consistent values for the same vehicle ID
-    let hash = 0;
-    for (let i = 0; i < id.length; i++) {
-      hash = ((hash << 5) - hash) + id.charCodeAt(i);
-      hash |= 0; // Convert to 32bit integer
+  // Load fare data when vehicleId changes
+  useEffect(() => {
+    if (!vehicleId) {
+      setError("Please select a vehicle first");
+      return;
     }
     
-    // Base price between 1500 and 4000
-    const basePrice = Math.abs(hash % 2500) + 1500;
-    
-    return {
-      basePrice: basePrice,
-      pricePerKm: 10 + Math.abs(hash % 20),
-      pickupPrice: basePrice + Math.abs((hash >> 2) % 500),
-      dropPrice: basePrice + Math.abs((hash >> 4) % 400),
-      tier1Price: basePrice - Math.abs((hash >> 6) % 200),
-      tier2Price: basePrice,
-      tier3Price: basePrice + Math.abs((hash >> 8) % 300),
-      tier4Price: basePrice + Math.abs((hash >> 10) % 600),
-      extraKmCharge: 10 + Math.abs((hash >> 12) % 10),
-      nightCharges: 150 + Math.abs((hash >> 14) % 350),
-      extraWaitingCharges: 100 + Math.abs((hash >> 16) % 50),
-    };
-  };
-
-  // Load fare data when vehicle ID changes
-  useEffect(() => {
-    const loadFareData = async () => {
-      if (!vehicleId) {
-        setError("No vehicle selected");
-        return;
-      }
-
-      setError(null);
-      setIsFetching(true);
-      
-      try {
-        console.log(`Loading airport fare data for vehicle: ${vehicleId}`);
-        const fare = await getAirportFare(vehicleId);
-        
-        if (fare) {
-          console.log(`Successfully loaded fare data for ${vehicleId}:`, fare);
-          form.reset({
-            basePrice: fare.basePrice || 0,
-            pricePerKm: fare.pricePerKm || 0,
-            pickupPrice: fare.pickupPrice || 0,
-            dropPrice: fare.dropPrice || 0,
-            tier1Price: fare.tier1Price || 0,
-            tier2Price: fare.tier2Price || 0,
-            tier3Price: fare.tier3Price || 0,
-            tier4Price: fare.tier4Price || 0,
-            extraKmCharge: fare.extraKmCharge || 0,
-            nightCharges: fare.nightCharges || 150,
-            extraWaitingCharges: fare.extraWaitingCharges || 100,
-          });
-          setUseMockData(false);
-        } else {
-          console.log(`No fare data found for ${vehicleId}, using mock data`);
-          // If no fare data is found, use mock data but mark it as such
-          const mockFare = generateMockFare(vehicleId);
-          form.reset(mockFare);
-          setUseMockData(true);
-        }
-      } catch (err) {
-        console.error(`Error loading fare data for ${vehicleId}:`, err);
-        setError(`Failed to load fare data: ${err instanceof Error ? err.message : 'Unknown error'}`);
-        
-        // Fall back to mock data on error
-        const mockFare = generateMockFare(vehicleId);
-        form.reset(mockFare);
-        setUseMockData(true);
-      } finally {
-        setIsFetching(false);
-      }
-    };
-
     loadFareData();
-  }, [vehicleId, form, updateCount]);
+  }, [vehicleId]);
 
-  // Handle form submission
-  const onSubmit = async (values: FareFormValues) => {
-    if (isLoading) return;
-    
-    setIsLoading(true);
-    setError(null);
+  const loadFareData = async () => {
+    if (!vehicleId) return;
     
     try {
-      console.log(`Updating airport fare for vehicle ${vehicleId}:`, values);
+      setIsLoading(true);
+      setError(null);
       
-      // Prepare the fare data for update - Fix here: ensuring all required properties are non-optional
-      const fareData: AirportFare = {
-        vehicleId,
-        basePrice: values.basePrice,
-        pricePerKm: values.pricePerKm,
-        dropPrice: values.dropPrice,
-        pickupPrice: values.pickupPrice,
-        tier1Price: values.tier1Price,
-        tier2Price: values.tier2Price,
-        tier3Price: values.tier3Price,
-        tier4Price: values.tier4Price,
-        extraKmCharge: values.extraKmCharge,
-        nightCharges: values.nightCharges,
-        extraWaitingCharges: values.extraWaitingCharges
-      };
+      const fareData = await getAirportFare(vehicleId);
       
-      // Send update request
-      const result = await updateAirportFare(fareData);
-      
-      if (result.success) {
-        console.log("Airport fare update successful:", result);
-        toast.success("Airport fare updated successfully");
-        
-        // Mark that we're now using real data, not mock data
-        setUseMockData(false);
-        
-        // Trigger the onFareUpdated callback if provided
-        if (onFareUpdated) {
-          onFareUpdated();
-        }
-        
-        // Force a refresh of the data to confirm changes were saved
-        setUpdateCount(prev => prev + 1);
+      if (fareData) {
+        setFare({
+          vehicleId: vehicleId,
+          basePrice: Number(fareData.basePrice) || 0,
+          pricePerKm: Number(fareData.pricePerKm) || 0,
+          pickupPrice: Number(fareData.pickupPrice) || 0,
+          dropPrice: Number(fareData.dropPrice) || 0,
+          tier1Price: Number(fareData.tier1Price) || 0,
+          tier2Price: Number(fareData.tier2Price) || 0,
+          tier3Price: Number(fareData.tier3Price) || 0,
+          tier4Price: Number(fareData.tier4Price) || 0,
+          extraKmCharge: Number(fareData.extraKmCharge) || 0,
+          nightCharges: Number(fareData.nightCharges) || 0,
+          extraWaitingCharges: Number(fareData.extraWaitingCharges) || 0
+        });
       } else {
-        console.error("Airport fare update failed:", result);
-        setError(`Failed to update airport fare: ${result.message}`);
-        toast.error(result.message);
+        setError('No fare data found for this vehicle');
       }
-    } catch (err) {
-      console.error("Error updating airport fare:", err);
-      setError(`An unexpected error occurred: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      toast.error("Failed to update airport fare");
+    } catch (error) {
+      console.error('Error loading fare data:', error);
+      setError('Failed to load fare data');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFare(prev => ({
+      ...prev,
+      [name]: parseFloat(value) || 0
+    }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!vehicleId) {
+      toast.error('Vehicle ID is required');
+      return;
+    }
+    
+    try {
+      setIsSaving(true);
+      setError(null);
+      
+      const result = await updateAirportFare(fare);
+      
+      if (result.success) {
+        toast.success('Airport fare updated successfully');
+        if (onFareUpdated) onFareUpdated();
+      } else {
+        setError(result.message);
+        toast.error(`Failed to update airport fare: ${result.message}`);
+      }
+    } catch (error: any) {
+      console.error('Error saving fare data:', error);
+      setError(error.message || 'An unexpected error occurred');
+      toast.error(`Error saving fare data: ${error.message}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSyncFares = async () => {
+    try {
+      setIsSyncing(true);
+      setError(null);
+      toast.info('Syncing airport fares data...');
+      
+      const success = await syncAirportFares();
+      
+      if (success) {
+        toast.success('Airport fares synced successfully');
+        await loadFareData(); // Reload data after syncing
+      } else {
+        setError('Failed to sync airport fares');
+        toast.error('Failed to sync airport fares');
+      }
+    } catch (error: any) {
+      console.error('Error syncing airport fares:', error);
+      setError(error.message || 'An unexpected error occurred');
+      toast.error(`Error syncing airport fares: ${error.message}`);
+    } finally {
+      setIsSyncing(false);
     }
   };
 
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle>Airport Transfer Fare</CardTitle>
-        <CardDescription>
-          {useMockData 
-            ? "Using preview data. Save to persist changes."
-            : "Manage airport transfer pricing for this vehicle"}
-        </CardDescription>
+        <div className="flex justify-between items-center">
+          <h3 className="text-lg font-medium">Airport Transfer Fare Settings</h3>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleSyncFares}
+            disabled={isSyncing || !vehicleId}
+          >
+            <RotateCw className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? 'Syncing...' : 'Sync Fares'}
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {error && (
@@ -216,201 +167,199 @@ export const AirportFareForm: React.FC<AirportFareFormProps> = ({ vehicleId, onF
           </Alert>
         )}
         
-        {useMockData && (
-          <Alert className="mb-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              Using preview data. Actual fare data could not be loaded.
-            </AlertDescription>
-          </Alert>
-        )}
-        
-        {isFetching ? (
-          <div className="flex justify-center items-center p-8">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <span className="ml-2">Loading fare data...</span>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {isLoading ? (
+              <>
+                {[...Array(9)].map((_, i) => (
+                  <div key={i} className="space-y-2">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-10 w-full" />
+                  </div>
+                ))}
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="basePrice">Base Price</Label>
+                  <Input
+                    id="basePrice"
+                    name="basePrice"
+                    type="number"
+                    min="0"
+                    value={fare.basePrice}
+                    onChange={handleInputChange}
+                    disabled={isLoading || isSaving}
+                    placeholder="Base price"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="pricePerKm">Price Per KM</Label>
+                  <Input
+                    id="pricePerKm"
+                    name="pricePerKm"
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    value={fare.pricePerKm}
+                    onChange={handleInputChange}
+                    disabled={isLoading || isSaving}
+                    placeholder="Price per km"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="pickupPrice">Airport Pickup Price</Label>
+                  <Input
+                    id="pickupPrice"
+                    name="pickupPrice"
+                    type="number"
+                    min="0"
+                    value={fare.pickupPrice}
+                    onChange={handleInputChange}
+                    disabled={isLoading || isSaving}
+                    placeholder="Pickup price"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="dropPrice">Airport Drop Price</Label>
+                  <Input
+                    id="dropPrice"
+                    name="dropPrice"
+                    type="number"
+                    min="0"
+                    value={fare.dropPrice}
+                    onChange={handleInputChange}
+                    disabled={isLoading || isSaving}
+                    placeholder="Drop price"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="tier1Price">Tier 1 Price (0-10 KM)</Label>
+                  <Input
+                    id="tier1Price"
+                    name="tier1Price"
+                    type="number"
+                    min="0"
+                    value={fare.tier1Price}
+                    onChange={handleInputChange}
+                    disabled={isLoading || isSaving}
+                    placeholder="Tier 1 price"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="tier2Price">Tier 2 Price (11-20 KM)</Label>
+                  <Input
+                    id="tier2Price"
+                    name="tier2Price"
+                    type="number"
+                    min="0"
+                    value={fare.tier2Price}
+                    onChange={handleInputChange}
+                    disabled={isLoading || isSaving}
+                    placeholder="Tier 2 price"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="tier3Price">Tier 3 Price (21-30 KM)</Label>
+                  <Input
+                    id="tier3Price"
+                    name="tier3Price"
+                    type="number"
+                    min="0"
+                    value={fare.tier3Price}
+                    onChange={handleInputChange}
+                    disabled={isLoading || isSaving}
+                    placeholder="Tier 3 price"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="tier4Price">Tier 4 Price (31+ KM)</Label>
+                  <Input
+                    id="tier4Price"
+                    name="tier4Price"
+                    type="number"
+                    min="0"
+                    value={fare.tier4Price}
+                    onChange={handleInputChange}
+                    disabled={isLoading || isSaving}
+                    placeholder="Tier 4 price"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="extraKmCharge">Extra KM Charge</Label>
+                  <Input
+                    id="extraKmCharge"
+                    name="extraKmCharge"
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    value={fare.extraKmCharge}
+                    onChange={handleInputChange}
+                    disabled={isLoading || isSaving}
+                    placeholder="Extra km charge"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="nightCharges">Night Charges</Label>
+                  <Input
+                    id="nightCharges"
+                    name="nightCharges"
+                    type="number"
+                    min="0"
+                    value={fare.nightCharges || 0}
+                    onChange={handleInputChange}
+                    disabled={isLoading || isSaving}
+                    placeholder="Night charges"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="extraWaitingCharges">Extra Waiting Charges</Label>
+                  <Input
+                    id="extraWaitingCharges"
+                    name="extraWaitingCharges"
+                    type="number"
+                    min="0"
+                    value={fare.extraWaitingCharges || 0}
+                    onChange={handleInputChange}
+                    disabled={isLoading || isSaving}
+                    placeholder="Extra waiting charges"
+                  />
+                </div>
+              </>
+            )}
           </div>
-        ) : (
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="basePrice"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Base Price (₹)</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="pricePerKm"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Price Per KM (₹)</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="pickupPrice"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Pickup Price (₹)</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="dropPrice"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Drop Price (₹)</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="tier1Price"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tier 1 Price (₹)</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="tier2Price"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tier 2 Price (₹)</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="tier3Price"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tier 3 Price (₹)</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="tier4Price"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tier 4 Price (₹)</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField
-                  control={form.control}
-                  name="extraKmCharge"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Extra KM Charge (₹)</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="nightCharges"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Night Charges (₹)</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="extraWaitingCharges"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Extra Waiting Charges (₹)</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="flex justify-end">
-                <Button type="submit" disabled={isLoading}>
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    'Save Changes'
-                  )}
-                </Button>
-              </div>
-            </form>
-          </Form>
-        )}
+          
+          <div className="pt-4">
+            <Button 
+              type="submit" 
+              className="w-full md:w-auto"
+              disabled={isLoading || isSaving || !vehicleId}
+            >
+              {isSaving ? (
+                <>
+                  <RotateCw className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  Save Airport Fare
+                </>
+              )}
+            </Button>
+          </div>
+        </form>
       </CardContent>
-      <CardFooter className="bg-muted/50 text-sm text-muted-foreground">
-        {useMockData ? 'Preview mode: Changes will be saved when you submit the form.' : 'Last updated: ' + new Date().toLocaleString()}
-      </CardFooter>
     </Card>
   );
 };
-
