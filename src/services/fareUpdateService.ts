@@ -1,10 +1,11 @@
 
 import { directVehicleOperation } from '@/utils/apiHelper';
 import { toast } from 'sonner';
+import { AirportFare, LocalFare, OutstationFare } from '@/types/cab';
 
-interface OutstationFare {
+interface OutstationFareUpdate {
   vehicleId: string;
-  vehicle_id: string;
+  vehicle_id?: string;
   basePrice: number;
   pricePerKm: number;
   roundTripBasePrice: number;
@@ -13,9 +14,19 @@ interface OutstationFare {
   nightHaltCharge: number;
 }
 
-interface AirportFare {
+interface LocalFareUpdate {
   vehicleId: string;
-  vehicle_id: string;
+  vehicle_id?: string;
+  price4hrs40km: number;
+  price8hrs80km: number;
+  price10hrs100km: number;
+  priceExtraKm: number;
+  priceExtraHour: number;
+}
+
+interface AirportFareUpdate {
+  vehicleId: string;
+  vehicle_id?: string;
   basePrice: number;
   pricePerKm: number;
   pickupPrice: number;
@@ -41,9 +52,17 @@ export interface FareUpdateResponse {
 /**
  * Updates the fare for a vehicle with outstation fare data
  */
-export const updateOutstationFare = async (data: OutstationFare): Promise<FareUpdateResponse> => {
+export const updateOutstationFare = async (data: OutstationFareUpdate): Promise<FareUpdateResponse> => {
   try {
     console.log('Updating outstation fare for vehicle', data.vehicleId || data.vehicle_id, ':', data);
+    
+    // Ensure both vehicleId properties are set
+    const fareData = {
+      ...data,
+      vehicleId: data.vehicleId || data.vehicle_id,
+      vehicle_id: data.vehicle_id || data.vehicleId
+    };
+    
     const response = await directVehicleOperation(
       'api/admin/outstation-fares-update.php',
       'POST',
@@ -54,7 +73,7 @@ export const updateOutstationFare = async (data: OutstationFare): Promise<FareUp
           'X-Admin-Mode': 'true',
           'Cache-Control': 'no-cache, no-store, must-revalidate'
         },
-        body: JSON.stringify(data)
+        body: JSON.stringify(fareData)
       }
     );
     
@@ -72,9 +91,50 @@ export const updateOutstationFare = async (data: OutstationFare): Promise<FareUp
 };
 
 /**
+ * Updates the fare for a vehicle with local fare data
+ */
+export const updateLocalFare = async (data: LocalFareUpdate): Promise<FareUpdateResponse> => {
+  try {
+    console.log('Updating local fare for vehicle', data.vehicleId || data.vehicle_id, ':', data);
+    
+    // Ensure both vehicleId properties are set
+    const fareData = {
+      ...data,
+      vehicleId: data.vehicleId || data.vehicle_id,
+      vehicle_id: data.vehicle_id || data.vehicleId
+    };
+    
+    const response = await directVehicleOperation(
+      'api/admin/local-fares-update.php',
+      'POST',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Mode': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        },
+        body: JSON.stringify(fareData)
+      }
+    );
+    
+    console.log('Local fare update response:', response);
+    
+    if (!response || response.status === 'error') {
+      throw new Error(response?.message || 'Unknown error updating local fare');
+    }
+    
+    return response;
+  } catch (error: any) {
+    console.error('Error updating local fare:', error);
+    throw error;
+  }
+};
+
+/**
  * Updates the fare for a vehicle with airport fare data
  */
-export const updateAirportFare = async (data: AirportFare): Promise<FareUpdateResponse> => {
+export const updateAirportFare = async (data: AirportFareUpdate): Promise<FareUpdateResponse> => {
   try {
     // Ensure both vehicleId properties are set
     const fareData = {
@@ -85,6 +145,33 @@ export const updateAirportFare = async (data: AirportFare): Promise<FareUpdateRe
     
     console.log('Updating airport fare for vehicle', fareData.vehicleId, ':', fareData);
     
+    // First, try the direct API endpoint which matches our local fare logic
+    try {
+      const response = await directVehicleOperation(
+        'api/direct-airport-fares.php',
+        'POST',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Mode': 'true',
+            'X-Force-Creation': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          },
+          body: JSON.stringify(fareData)
+        }
+      );
+      
+      console.log('Direct airport fare update response:', response);
+      
+      if (response && response.status === 'success') {
+        return response;
+      }
+    } catch (directApiError) {
+      console.warn('Direct airport fare API failed, falling back to admin API:', directApiError);
+    }
+    
+    // Fallback to admin endpoint if direct API fails
     const response = await directVehicleOperation(
       'api/admin/direct-airport-fares-update.php',
       'POST',
@@ -100,7 +187,7 @@ export const updateAirportFare = async (data: AirportFare): Promise<FareUpdateRe
       }
     );
     
-    console.log('Airport fare update response:', response);
+    console.log('Admin airport fare update response:', response);
     
     if (!response || response.status === 'error') {
       throw new Error(response?.message || 'Unknown error updating airport fare');
@@ -110,6 +197,76 @@ export const updateAirportFare = async (data: AirportFare): Promise<FareUpdateRe
   } catch (error: any) {
     console.error('Error updating airport fare:', error);
     throw error;
+  }
+};
+
+/**
+ * Sync outstation fares from vehicle data
+ */
+export const syncOutstationFares = async (applyDefaults: boolean = true): Promise<boolean> => {
+  try {
+    console.log('Syncing outstation fares with applyDefaults =', applyDefaults);
+    
+    const response = await directVehicleOperation(
+      'api/outstation-fares-sync.php', 
+      'POST',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Mode': 'true',
+          'X-Force-Creation': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        },
+        body: JSON.stringify({ applyDefaults })
+      }
+    );
+    
+    console.log('Sync outstation fares response:', response);
+    
+    if (response && response.status === 'success') {
+      return true;
+    }
+    
+    return false;
+  } catch (error: any) {
+    console.error('Error syncing outstation fares:', error);
+    return false;
+  }
+};
+
+/**
+ * Sync local fares from vehicle data
+ */
+export const syncLocalFares = async (applyDefaults: boolean = true): Promise<boolean> => {
+  try {
+    console.log('Syncing local fares with applyDefaults =', applyDefaults);
+    
+    const response = await directVehicleOperation(
+      'api/local-fares-sync.php', 
+      'POST',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Mode': 'true',
+          'X-Force-Creation': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        },
+        body: JSON.stringify({ applyDefaults })
+      }
+    );
+    
+    console.log('Sync local fares response:', response);
+    
+    if (response && response.status === 'success') {
+      return true;
+    }
+    
+    return false;
+  } catch (error: any) {
+    console.error('Error syncing local fares:', error);
+    return false;
   }
 };
 
@@ -155,21 +312,53 @@ export const getDirectAirportFare = async (vehicleId: string): Promise<AirportFa
   try {
     console.log('Getting direct airport fare for vehicle:', vehicleId);
     
+    // First try the direct endpoint
+    try {
+      const directResponse = await directVehicleOperation(
+        `api/direct-airport-fares.php?vehicleId=${encodeURIComponent(vehicleId)}&_t=${Date.now()}`,
+        'GET',
+        {
+          headers: {
+            'X-Admin-Mode': 'true',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          }
+        }
+      );
+      
+      console.log('Direct airport fare endpoint response:', directResponse);
+      
+      if (directResponse && directResponse.status === 'success' && directResponse.fares) {
+        return {
+          ...(typeof directResponse.fares === 'object' && !Array.isArray(directResponse.fares) 
+            ? directResponse.fares 
+            : {}),
+          vehicleId
+        } as AirportFare;
+      }
+    } catch (directError) {
+      console.warn('Direct airport fare endpoint failed, falling back to admin endpoint:', directError);
+    }
+    
+    // Fallback to admin endpoint if direct API fails
     const response = await directVehicleOperation(
-      `api/direct-airport-fares.php?vehicleId=${encodeURIComponent(vehicleId)}&_t=${Date.now()}`,
+      `api/admin/direct-airport-fares.php?id=${encodeURIComponent(vehicleId)}&_t=${Date.now()}`,
       'GET',
       {
         headers: {
           'X-Admin-Mode': 'true',
+          'X-Force-Creation': 'true',
           'Cache-Control': 'no-cache, no-store, must-revalidate'
         }
       }
     );
     
-    console.log('Direct airport fare response:', response);
+    console.log('Admin direct airport fare response:', response);
     
-    if (response && response.status === 'success' && response.data) {
-      return response.data;
+    if (response && response.status === 'success' && response.fare) {
+      return {
+        ...response.fare,
+        vehicleId
+      } as AirportFare;
     }
     
     return null;
@@ -178,3 +367,7 @@ export const getDirectAirportFare = async (vehicleId: string): Promise<AirportFa
     return null;
   }
 };
+
+export const updateOutstationFares = updateOutstationFare;
+export const updateLocalFares = updateLocalFare;
+export const updateAirportFares = updateAirportFare;
